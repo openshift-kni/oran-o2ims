@@ -1,0 +1,19 @@
+{
+        "version": "0.2.0",
+        "configurations": [
+                {
+                        "name": "run",
+                        "type": "go",
+                        "request": "launch",
+                        "mode": "auto",
+                        "program": "${workspaceFolder}"
+                },
+                {
+                        "name": "test",
+                        "type": "go",
+                        "request": "launch",
+                        "mode": "test",
+                        "program": "${fileDirname}"
+                }
+        ]
+}
