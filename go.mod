@@ -1,6 +1,6 @@
 module github.com/jhernand/o2ims
 
-go 1.21.1
+go 1.21
 
 require (
 	github.com/onsi/ginkgo/v2 v2.12.1
