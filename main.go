@@ -1,63 +1,56 @@
 /*
 Copyright (c) 2023 Red Hat, Inc.
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use
-this file except in compliance with the License. You may obtain a copy of the
-License at
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+compliance with the License. You may obtain a copy of the License at
 
   http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software distributed
-under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-CONDITIONS OF ANY KIND, either express or implied. See the License for the
-specific language governing permissions and limitations under the License.
+Unless required by applicable law or agreed to in writing, software distributed under the License is
+distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing permissions and limitations under the
+License.
 */
 
 package main
 
 import (
+	"context"
 	"fmt"
-	"log/slog"
-	"net/http"
 	"os"
+
+	"github.com/jhernand/o2ims/internal"
+	"github.com/jhernand/o2ims/internal/cmd"
+	"github.com/jhernand/o2ims/internal/exit"
 )
 
 func main() {
-	// Create the logger:
-	options := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}
-	handler := slog.NewJSONHandler(os.Stdout, options)
-	logger := slog.New(handler)
+	// Create a context:
+	ctx := context.Background()
 
-	// Create the server:
-	server, err := NewServer().
-		SetLogger(logger).
-		SetHandler(&echoHandler{}).
+	// Create the tool:
+	tool, err := internal.NewTool().
+		AddArgs(os.Args...).
+		SetIn(os.Stdin).
+		SetOut(os.Stdout).
+		SetErr(os.Stderr).
+		AddCommand(cmd.Start).
+		AddCommand(cmd.Version).
 		Build()
 	if err != nil {
-		logger.Error(
-			"Failed to create server",
-			"error", err,
-		)
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(1)
 	}
 
-	// Start the server:
-	err = http.ListenAndServe(":8080", server)
+	// Run the tool:
+	err = tool.Run(ctx)
 	if err != nil {
-		logger.Error(
-			"server finished with error",
-			"error", err,
-		)
+		exitErr, ok := err.(exit.Error)
+		if ok {
+			os.Exit(exitErr.Code())
+		} else {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			os.Exit(1)
+		}
 	}
-}
-
-type echoHandler struct {
-}
-
-func (h *echoHandler) Serve(w http.ResponseWriter, r *Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "filter=%s", r.Filter)
 }

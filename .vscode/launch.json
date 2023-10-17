@@ -2,11 +2,25 @@
         "version": "0.2.0",
         "configurations": [
                 {
-                        "name": "run",
+                        "name": "version",
                         "type": "go",
                         "request": "launch",
                         "mode": "auto",
-                        "program": "${workspaceFolder}"
+                        "program": "${workspaceFolder}",
+                        "args": [
+                                "version"
+                        ]
+                },
+                {
+                        "name": "start server",
+                        "type": "go",
+                        "request": "launch",
+                        "mode": "auto",
+                        "program": "${workspaceFolder}",
+                        "args": [
+                                "start",
+                                "server"
+                        ]
                 },
                 {
                         "name": "test",
