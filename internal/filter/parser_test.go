@@ -299,5 +299,56 @@ var _ = Describe("Parser", func() {
 				},
 			},
 		),
+		Entry(
+			"Quoted ~ in path",
+			"(eq,my~0attr,myvalue)",
+			&Expr{
+				Terms: []*Term{
+					{
+						Operator: Eq,
+						Path: []string{
+							"my~attr",
+						},
+						Values: []any{
+							"myvalue",
+						},
+					},
+				},
+			},
+		),
+		Entry(
+			"Quoted / in path",
+			"(eq,my~1attr,myvalue)",
+			&Expr{
+				Terms: []*Term{
+					{
+						Operator: Eq,
+						Path: []string{
+							"my/attr",
+						},
+						Values: []any{
+							"myvalue",
+						},
+					},
+				},
+			},
+		),
+		Entry(
+			"Quoted @ in path",
+			"(eq,my~battr,myvalue)",
+			&Expr{
+				Terms: []*Term{
+					{
+						Operator: Eq,
+						Path: []string{
+							"my@attr",
+						},
+						Values: []any{
+							"myvalue",
+						},
+					},
+				},
+			},
+		),
 	)
 })

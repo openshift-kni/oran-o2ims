@@ -192,6 +192,7 @@ func (l *exprLexer) fetchInDefaultMode() (token *exprToken, err error) {
 	const (
 		S0 State = iota
 		S1
+		S2
 	)
 	state := S0
 	lexeme := &bytes.Buffer{}
@@ -235,6 +236,8 @@ func (l *exprLexer) fetchInDefaultMode() (token *exprToken, err error) {
 					Text:   ";",
 				}
 				return
+			case r == '~':
+				state = S2
 			case r == 0:
 				token = &exprToken{
 					Symbol: exprSymbolEnd,
@@ -253,12 +256,33 @@ func (l *exprLexer) fetchInDefaultMode() (token *exprToken, err error) {
 			case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_':
 				lexeme.WriteRune(r)
 				state = S1
+			case r == '~':
+				state = S2
 			default:
 				l.unreadRune()
 				token = &exprToken{
 					Symbol: exprSymbolIdentifier,
 					Text:   lexeme.String(),
 				}
+				return
+			}
+		case S2:
+			switch r {
+			case '0':
+				lexeme.WriteRune('~')
+				state = S0
+			case '1':
+				lexeme.WriteRune('/')
+				state = S0
+			case 'b':
+				lexeme.WriteRune('@')
+				state = S0
+			default:
+				err = fmt.Errorf(
+					"unknown escape sequence '~%c', valid escape sequences "+
+						"are '~0' for '/', '~' for '/' and '~b' for '@'",
+					r,
+				)
 				return
 			}
 		default:
