@@ -27,6 +27,6 @@ func Start() *cobra.Command {
 		Short: "Starts components",
 		Args:  cobra.NoArgs,
 	}
-	result.AddCommand(server.Start())
+	result.AddCommand(server.DeploymentManagerServer())
 	return result
 }

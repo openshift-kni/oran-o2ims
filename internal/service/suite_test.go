@@ -15,19 +15,26 @@ License.
 package service
 
 import (
-	"net/http"
+	"log/slog"
+	"testing"
 
-	"github.com/jhernand/o2ims/internal/filter"
+	. "github.com/onsi/ginkgo/v2/dsl/core"
+	. "github.com/onsi/gomega"
 )
 
-// Request represents a request that includes an optional filter expression.
-type Request struct {
-	HTTP   *http.Request
-	Filter *filter.Expr
+func TestService(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Service")
 }
 
-// Handler is the interface implemented by objects that know how to handle HTTP requests containing
-// filter expressions.
-type Handler interface {
-	Serve(w http.ResponseWriter, r *Request)
-}
+var logger *slog.Logger
+
+var _ = BeforeSuite(func() {
+	// Create a logger that writes to the Ginkgo writer, so that the log messages will be
+	// attached to the output of the right test:
+	options := &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}
+	handler := slog.NewJSONHandler(GinkgoWriter, options)
+	logger = slog.New(handler)
+})

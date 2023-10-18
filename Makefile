@@ -21,6 +21,10 @@ ginkgo_flags:=
 binary:
 	go build
 
+.PHONY: generate
+generate:
+	go generate ./...
+
 .PHONY: test tests
 test tests:
 	ginkgo run -r $(ginkgo_flags)

@@ -3,13 +3,17 @@ module github.com/jhernand/o2ims
 go 1.21
 
 require (
+	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.12.1
 	github.com/onsi/gomega v1.27.10
+	go.uber.org/mock v0.3.0
 )
 
 require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 )
 
