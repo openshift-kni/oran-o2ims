@@ -184,7 +184,7 @@ func (t *parseTask) parsePath() []string {
 		}
 		panic(fmt.Errorf(
 			"unexpected token '%s' while expecting slash or comma",
-			t.currentToken(),
+			t.currentToken().Text,
 		))
 	}
 	return segments
@@ -205,7 +205,7 @@ func (t *parseTask) parseOptionalValues() []any {
 	}
 	panic(fmt.Errorf(
 		"unexpected token '%s' while expecting value or right parenthesis",
-		t.currentToken(),
+		t.currentToken().Text,
 	))
 }
 
@@ -223,7 +223,7 @@ func (t *parseTask) parseValues() []any {
 		}
 		panic(fmt.Errorf(
 			"unexpected token '%s' while expecting comma or right parenthesis",
-			t.currentToken(),
+			t.currentToken().Text,
 		))
 	}
 	return values
@@ -262,7 +262,29 @@ func (t *parseTask) checkToken(symbol exprSymbol) bool {
 func (t *parseTask) consumeToken(symbol exprSymbol) {
 	t.ensureToken()
 	if t.token.Symbol != symbol {
-		panic(fmt.Errorf("unexpected token %s while expecting %s", t.token, symbol))
+		var expected string
+		switch symbol {
+		case exprSymbolEnd:
+			expected = "end of input"
+		case exprSymbolLeftParenthesis:
+			expected = "left parenthesis"
+		case exprSymbolRightParenthesis:
+			expected = "right parenthesis"
+		case exprSymbolIdentifier:
+			expected = "identifier"
+		case exprSymbolComma:
+			expected = "comma"
+		case exprSymbolSlash:
+			expected = "slash"
+		case exprSymbolSemicolon:
+			expected = "semicolon"
+		case exprSymbolString:
+			expected = "string"
+		}
+		panic(fmt.Errorf(
+			"unexpected token '%s' while expecting %s",
+			t.token.Text, expected,
+		))
 	}
 	t.token = nil
 }

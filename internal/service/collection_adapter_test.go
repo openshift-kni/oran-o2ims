@@ -252,10 +252,9 @@ var _ = Describe("Collection adapter", func() {
 		),
 		Entry(
 			"One item with one field",
-			data.Pour(data.Object{{
-				Name:  "myattr",
-				Value: "myvalue",
-			}}),
+			data.Pour(data.Object{
+				"myattr": "myvalue",
+			}),
 			`[{
 				"myattr": "myvalue"
 			}]`,
@@ -263,14 +262,8 @@ var _ = Describe("Collection adapter", func() {
 		Entry(
 			"One item with two fields",
 			data.Pour(data.Object{
-				{
-					Name:  "myattr",
-					Value: "myvalue",
-				},
-				{
-					Name:  "yourattr",
-					Value: 123,
-				},
+				"myattr":   "myvalue",
+				"yourattr": 123,
 			}),
 			`[{
 				"myattr": "myvalue",
@@ -280,14 +273,12 @@ var _ = Describe("Collection adapter", func() {
 		Entry(
 			"Two items with one field each",
 			data.Pour(
-				data.Object{{
-					Name:  "myattr",
-					Value: "myvalue1",
-				}},
-				data.Object{{
-					Name:  "myattr",
-					Value: "myvalue2",
-				}},
+				data.Object{
+					"myattr": "myvalue1",
+				},
+				data.Object{
+					"myattr": "myvalue2",
+				},
 			),
 			`[
 				{ "myattr": "myvalue1" },
@@ -298,24 +289,12 @@ var _ = Describe("Collection adapter", func() {
 			"Two items with two fields each",
 			data.Pour(
 				data.Object{
-					{
-						Name:  "myattr",
-						Value: "myvalue1",
-					},
-					{
-						Name:  "yourattr",
-						Value: 123,
-					},
+					"myattr":   "myvalue1",
+					"yourattr": 123,
 				},
 				data.Object{
-					{
-						Name:  "myattr",
-						Value: "myvalue2",
-					},
-					{
-						Name:  "yourattr",
-						Value: 456,
-					},
+					"myattr":   "myvalue2",
+					"yourattr": 456,
 				},
 			),
 			`[
@@ -338,10 +317,11 @@ var _ = Describe("Collection adapter", func() {
 		Skip("Too slow to run by default")
 
 		// Create an object results in approximately 300 bytes of JSON:
-		object := make(data.Object, 10)
-		for i := range object {
-			object[i].Name = fmt.Sprintf("my_attr_%d", i)
-			object[i].Value = fmt.Sprintf("my_value_%d", i)
+		object := data.Object{}
+		for i := 0; i < 10; i++ {
+			name := fmt.Sprintf("my_attr_%d", i)
+			value := fmt.Sprintf("my_value_%d", i)
+			object[name] = value
 		}
 
 		// Prepare the handler that will return one billion copies of the object.
@@ -370,10 +350,9 @@ var _ = Describe("Collection adapter", func() {
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 
-		// Prepare the server. Note that we can use an HTTP test recorder for this
-		// because it saves the response body in memory, and that would exhaust.
-		// Instead of that we start an HTTP server and will consume the response
-		// body explicitly.
+		// Prepare the server. Note that we can't use an HTTP test recorder for this
+		// because it saves the response body in memory, and that would exhaust. Instead
+		// of that we start an HTTP server and will consume the response body explicitly.
 		server := httptest.NewServer(adapter)
 		defer server.Close()
 
@@ -389,7 +368,7 @@ var _ = Describe("Collection adapter", func() {
 		written, err := io.Copy(io.Discard, response.Body)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Check that this resulted in at least 208 TiB:
+		// Check that this resulted in at least 208 GiB:
 		Expect(written).To(BeNumerically(">", 280*1<<30))
 	})
 })

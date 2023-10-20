@@ -3,6 +3,7 @@ module github.com/jhernand/o2ims
 go 1.21
 
 require (
+	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.12.1
 	github.com/onsi/gomega v1.27.10
@@ -10,6 +11,7 @@ require (
 )
 
 require (
+	github.com/PaesslerAG/gval v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect

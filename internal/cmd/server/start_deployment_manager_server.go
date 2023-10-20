@@ -21,6 +21,7 @@ import (
 
 	"github.com/jhernand/o2ims/internal"
 	"github.com/jhernand/o2ims/internal/exit"
+	"github.com/jhernand/o2ims/internal/logging"
 	"github.com/jhernand/o2ims/internal/service"
 )
 
@@ -35,9 +36,19 @@ func DeploymentManagerServer() *cobra.Command {
 	}
 	flags := result.Flags()
 	_ = flags.String(
-		"cloud-id",
+		cloudIDFlagName,
 		"",
 		"O-Cloud identifier.",
+	)
+	_ = flags.String(
+		backendURLFlagName,
+		"",
+		"URL of the backend server.",
+	)
+	_ = flags.String(
+		backendTokenFlagName,
+		"",
+		"Token for authenticating to the backend server.",
 	)
 	return result
 }
@@ -75,7 +86,10 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	if cloudID == "" {
-		logger.Error("Cloud identifier is empty")
+		logger.Error(
+			"Cloud identifier is empty",
+			"flag", cloudIDFlagName,
+		)
 		return exit.Error(1)
 	}
 	logger.Info(
@@ -83,10 +97,64 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		"value", cloudID,
 	)
 
+	// Get the backend details:
+	backendURL, err := flags.GetString(backendURLFlagName)
+	if err != nil {
+		logger.Error(
+			"Failed to get backend URL flag",
+			"flag", backendURLFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
+	if backendURL == "" {
+		logger.Error(
+			"Backend URL is empty",
+			"flag", backendURLFlagName,
+		)
+		return exit.Error(1)
+	}
+	backendToken, err := flags.GetString(backendTokenFlagName)
+	if err != nil {
+		logger.Error(
+			"Failed to get backend token flag",
+			"flag", backendTokenFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
+	if backendToken == "" {
+		logger.Error(
+			"Backend token is empty",
+			"flag", backendTokenFlagName,
+		)
+		return exit.Error(1)
+	}
+	logger.Info(
+		"Backend details",
+		"url", backendURL,
+		"!token", backendToken,
+	)
+
+	// Create the transport wrapper:
+	transportWrapper, err := logging.NewTransportWrapper().
+		SetLogger(logger).
+		SetFlags(flags).
+		Build()
+	if err != nil {
+		logger.Error(
+			"Failed to create transport wrapper",
+			"error", err.Error(),
+		)
+	}
+
 	// Create the handlers and adapters:
 	handler, err := service.NewDeploymentManagerCollectionHandler().
 		SetLogger(logger).
+		SetTransportWrapper(transportWrapper).
 		SetCloudID(cloudID).
+		SetBackendURL(backendURL).
+		SetBackendToken(backendToken).
 		Build()
 	if err != nil {
 		logger.Error(
@@ -122,5 +190,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 
 // Names of command line flags:
 const (
-	cloudIDFlagName = "cloud-id"
+	backendTokenFlagName = "backend-token"
+	backendURLFlagName   = "backend-url"
+	cloudIDFlagName      = "cloud-id"
 )

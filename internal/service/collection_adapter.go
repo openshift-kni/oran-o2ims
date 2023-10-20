@@ -118,7 +118,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					slog.String("filter", value),
 					slog.String("error", err.Error()),
 				)
-				a.sendError(
+				SendError(
 					w,
 					http.StatusBadRequest,
 					"Failed to parse filter expression '%s': %v",
@@ -148,7 +148,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Failed to get items",
 				"error", err,
 			)
-			a.sendError(
+			SendError(
 				w,
 				http.StatusInternalServerError,
 				"Failed to get items",
@@ -158,7 +158,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.sendItems(ctx, w, response.Items)
 		return
 	default:
-		a.sendError(
+		SendError(
 			w,
 			http.StatusMethodNotAllowed,
 			"Method '%s' is not allowed",
@@ -201,7 +201,7 @@ func (a *CollectionAdapter) writeItems(ctx context.Context, writer *jsoniter.Str
 		if i > 0 {
 			writer.WriteMore()
 		}
-		a.writeObject(ctx, writer, item)
+		writer.WriteVal(item)
 		err = writer.Flush()
 		if err != nil {
 			slog.Error(
@@ -212,30 +212,4 @@ func (a *CollectionAdapter) writeItems(ctx context.Context, writer *jsoniter.Str
 		i++
 	}
 	writer.WriteArrayEnd()
-}
-
-func (a *CollectionAdapter) writeObject(ctx context.Context, writer *jsoniter.Stream, object data.Object) {
-	writer.WriteObjectStart()
-	for i, field := range object {
-		if i > 0 {
-			writer.WriteMore()
-		}
-		a.writeField(ctx, writer, field)
-	}
-	writer.WriteObjectEnd()
-}
-
-func (a *CollectionAdapter) writeField(ctx context.Context, writer *jsoniter.Stream, field data.Field) {
-	writer.WriteObjectField(field.Name)
-	switch value := field.Value.(type) {
-	case data.Object:
-		a.writeObject(ctx, writer, value)
-	default:
-		writer.WriteVal(field.Value)
-	}
-}
-
-func (a *CollectionAdapter) sendError(w http.ResponseWriter, status int, msg string, args ...any) {
-	w.WriteHeader(status)
-	fmt.Fprintf(w, msg, args...)
 }
