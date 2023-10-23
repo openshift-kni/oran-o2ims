@@ -140,32 +140,20 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call the handler:
-	switch r.Method {
-	case http.MethodGet:
-		response, err := a.handler.Get(r.Context(), request)
-		if err != nil {
-			a.logger.Error(
-				"Failed to get items",
-				"error", err,
-			)
-			SendError(
-				w,
-				http.StatusInternalServerError,
-				"Failed to get items",
-			)
-			return
-		}
-		a.sendItems(ctx, w, response.Items)
-		return
-	default:
+	response, err := a.handler.Get(r.Context(), request)
+	if err != nil {
+		a.logger.Error(
+			"Failed to get items",
+			"error", err,
+		)
 		SendError(
 			w,
-			http.StatusMethodNotAllowed,
-			"Method '%s' is not allowed",
-			r.Method,
+			http.StatusInternalServerError,
+			"Failed to get items",
 		)
 		return
 	}
+	a.sendItems(ctx, w, response.Items)
 }
 
 func (a *CollectionAdapter) sendItems(ctx context.Context, w http.ResponseWriter,

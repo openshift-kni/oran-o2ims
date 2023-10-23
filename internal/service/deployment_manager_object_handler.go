@@ -23,15 +23,13 @@ import (
 	"net/http"
 
 	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/filter"
-	"github.com/jhernand/o2ims/internal/k8s"
 	jsoniter "github.com/json-iterator/go"
 )
 
-// DeploymentManagerCollectionHandlerBuilder contains the data and logic needed to create a new
-// deployment manager collection handler. Don't create instances of this type directly, use the
-// NewDeploymentManagerCollectionHandler function instead.
-type DeploymentManagerCollectionHandlerBuilder struct {
+// DeploymentManagerObjectHandlerBuilder contains the data and logic needed to create a new
+// deployment manager object handler. Don't create instances of this type directly, use the
+// NewDeploymentManagerObjectHandler function instead.
+type DeploymentManagerObjectHandlerBuilder struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID          string
@@ -39,65 +37,64 @@ type DeploymentManagerCollectionHandlerBuilder struct {
 	backendToken     string
 }
 
-// DeploymentManagerCollectionHander knows how to respond to requests to list deployment managers.
-// Don't create instances of this type directly, use the NewDeploymentManagerCollectionHandler
+// DeploymentManagerObjectHander knows how to respond to requests to list deployment managers.
+// Don't create instances of this type directly, use the NewDeploymentManagerObjectHandler
 // function instead.
-type DeploymentManagerCollectionHandler struct {
+type DeploymentManagerObjectHandler struct {
 	logger        *slog.Logger
 	cloudID       string
 	backendURL    string
 	backendToken  string
 	backendClient *http.Client
 	api           jsoniter.API
-	evaluator     *filter.Evaluator
 }
 
-// NewDeploymentManagerCollectionHandler creates a builder that can then be used to configure
-// and create a handler for the collection of deployment managers.
-func NewDeploymentManagerCollectionHandler() *DeploymentManagerCollectionHandlerBuilder {
-	return &DeploymentManagerCollectionHandlerBuilder{}
+// NewDeploymentManagerObjectHandler creates a builder that can then be used to configure and
+// create a handler for an individual deployment manager.
+func NewDeploymentManagerObjectHandler() *DeploymentManagerObjectHandlerBuilder {
+	return &DeploymentManagerObjectHandlerBuilder{}
 }
 
 // SetLogger sets the logger that the handler will use to write to the log. This is mandatory.
-func (b *DeploymentManagerCollectionHandlerBuilder) SetLogger(
-	value *slog.Logger) *DeploymentManagerCollectionHandlerBuilder {
+func (b *DeploymentManagerObjectHandlerBuilder) SetLogger(
+	value *slog.Logger) *DeploymentManagerObjectHandlerBuilder {
 	b.logger = value
 	return b
 }
 
 // SetTransportWrapper sets the wrapper that will be used to configure the HTTP clients used to
 // connect to other servers, including the backend server. This is optional.
-func (b *DeploymentManagerCollectionHandlerBuilder) SetTransportWrapper(
-	value func(http.RoundTripper) http.RoundTripper) *DeploymentManagerCollectionHandlerBuilder {
+func (b *DeploymentManagerObjectHandlerBuilder) SetTransportWrapper(
+	value func(http.RoundTripper) http.RoundTripper) *DeploymentManagerObjectHandlerBuilder {
 	b.transportWrapper = value
 	return b
 }
 
 // SetCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
-func (b *DeploymentManagerCollectionHandlerBuilder) SetCloudID(
-	value string) *DeploymentManagerCollectionHandlerBuilder {
+func (b *DeploymentManagerObjectHandlerBuilder) SetCloudID(
+	value string) *DeploymentManagerObjectHandlerBuilder {
 	b.cloudID = value
 	return b
 }
 
 // SetBackendURL sets the URL of the backend server This is mandatory..
-func (b *DeploymentManagerCollectionHandlerBuilder) SetBackendToken(
-	value string) *DeploymentManagerCollectionHandlerBuilder {
+func (b *DeploymentManagerObjectHandlerBuilder) SetBackendToken(
+	value string) *DeploymentManagerObjectHandlerBuilder {
 	b.backendToken = value
 	return b
 }
 
 // SetBackendToken sets the authentication token that will be used to authenticate to the backend
 // server. This is mandatory.
-func (b *DeploymentManagerCollectionHandlerBuilder) SetBackendURL(
-	value string) *DeploymentManagerCollectionHandlerBuilder {
+func (b *DeploymentManagerObjectHandlerBuilder) SetBackendURL(
+	value string) *DeploymentManagerObjectHandlerBuilder {
 	b.backendURL = value
 	return b
 }
 
 // Build uses the data stored in the builder to create and configure a new handler.
-func (b *DeploymentManagerCollectionHandlerBuilder) Build() (
-	result *DeploymentManagerCollectionHandler, err error) {
+func (b *DeploymentManagerObjectHandlerBuilder) Build() (
+	result *DeploymentManagerObjectHandler, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -131,72 +128,45 @@ func (b *DeploymentManagerCollectionHandlerBuilder) Build() (
 	}
 
 	// Prepare the JSON iterator API:
-	cfg := jsoniter.Config{
+	jsonConfig := jsoniter.Config{
 		IndentionStep: 2,
 	}
-	api := cfg.Froze()
-
-	// Create the filter expression evaluator:
-	resolver, err := filter.NewResolver().
-		SetLogger(b.logger).
-		Build()
-	if err != nil {
-		return
-	}
-	evaluator, err := filter.NewEvaluator().
-		SetLogger(b.logger).
-		SetResolver(resolver.Resolve).
-		Build()
-	if err != nil {
-		return
-	}
+	jsonAPI := jsonConfig.Froze()
 
 	// Create and populate the object:
-	result = &DeploymentManagerCollectionHandler{
+	result = &DeploymentManagerObjectHandler{
 		logger:        b.logger,
 		cloudID:       b.cloudID,
 		backendURL:    b.backendURL,
 		backendToken:  b.backendToken,
 		backendClient: backendClient,
-		evaluator:     evaluator,
-		api:           api,
+		api:           jsonAPI,
 	}
 	return
 }
 
 // Get is part of the implementation of the collection handler interface.
-func (h *DeploymentManagerCollectionHandler) Get(ctx context.Context,
-	request *CollectionRequest) (response *CollectionResponse, err error) {
-	// Create the stream that will fetch the items:
-	items, err := h.fetchItems(ctx)
+func (h *DeploymentManagerObjectHandler) Get(ctx context.Context,
+	request *ObjectRequest) (response *ObjectResponse, err error) {
+	// Fetch the object:
+	object, err := h.fetchObject(ctx, request.ID)
 	if err != nil {
 		return
 	}
 
-	// Transfor the items into what we need:
-	items = data.Map(items, h.mapItem)
-
-	// Select only the items that satisfy the filter:
-	if request.Filter != nil {
-		items = data.Select(
-			items,
-			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.evaluator.Evaluate(ctx, request.Filter, item)
-				return
-			},
-		)
-	}
+	// Transform the object into what we need:
+	object, err = h.mapItem(ctx, object)
 
 	// Return the result:
-	response = &CollectionResponse{
-		Items: items,
+	response = &ObjectResponse{
+		Object: object,
 	}
 	return
 }
 
-func (h *DeploymentManagerCollectionHandler) fetchItems(
-	ctx context.Context) (result data.Stream, err error) {
-	url := fmt.Sprintf("%s/global-hub-api/v1/managedclusters", h.backendURL)
+func (h *DeploymentManagerObjectHandler) fetchObject(ctx context.Context,
+	id string) (result data.Object, err error) {
+	url := fmt.Sprintf("%s/global-hub-api/v1/managedcluster/%s", h.backendURL, id)
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
@@ -219,14 +189,26 @@ func (h *DeploymentManagerCollectionHandler) fetchItems(
 		)
 		return
 	}
-	result, err = k8s.NewStream().
-		SetLogger(h.logger).
-		SetReader(response.Body).
-		Build()
+	reader := jsoniter.NewIterator(h.api)
+	value := reader.Read()
+	switch typed := value.(type) {
+	case data.Object:
+		result = typed
+	default:
+		h.logger.Error(
+			"Unexpected object type",
+			"expected", fmt.Sprintf("%T", data.Object{}),
+			"actual", fmt.Sprintf("%T", value),
+		)
+		err = fmt.Errorf(
+			"expected object of type '%T' but received '%T'",
+			data.Object{}, value,
+		)
+	}
 	return
 }
 
-func (h *DeploymentManagerCollectionHandler) mapItem(ctx context.Context,
+func (h *DeploymentManagerObjectHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
 	fromName, err := data.GetString(from, `$.metadata.name`)
 	if err != nil {

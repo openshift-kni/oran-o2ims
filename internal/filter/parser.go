@@ -158,7 +158,7 @@ func (t *parseTask) parseOperator() Operator {
 	case "lt":
 		return Lt
 	case "lte":
-		return Gt
+		return Lte
 	case "ncont":
 		return Ncont
 	case "neq":

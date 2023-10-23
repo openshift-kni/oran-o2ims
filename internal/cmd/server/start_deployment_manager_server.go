@@ -17,6 +17,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 
 	"github.com/jhernand/o2ims/internal"
@@ -148,8 +149,17 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 	}
 
-	// Create the handlers and adapters:
-	handler, err := service.NewDeploymentManagerCollectionHandler().
+	// Create the router:
+	router := mux.NewRouter()
+	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		service.SendError(w, http.StatusNotFound, "Not found")
+	})
+	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		service.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	})
+
+	// Create the collection handler:
+	collectionHandler, err := service.NewDeploymentManagerCollectionHandler().
 		SetLogger(logger).
 		SetTransportWrapper(transportWrapper).
 		SetCloudID(cloudID).
@@ -163,9 +173,9 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
-	adapter, err := service.NewCollectionAdapter().
+	collectionAdapter, err := service.NewCollectionAdapter().
 		SetLogger(logger).
-		SetHandler(handler).
+		SetHandler(collectionHandler).
 		Build()
 	if err != nil {
 		logger.Error(
@@ -174,9 +184,45 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
+	router.Handle(
+		"/O2ims_infrastructureInventory/{version}/deploymentManagers",
+		collectionAdapter,
+	).Methods(http.MethodGet)
+
+	// Create the object handler:
+	objectHandler, err := service.NewDeploymentManagerObjectHandler().
+		SetLogger(logger).
+		SetTransportWrapper(transportWrapper).
+		SetCloudID(cloudID).
+		SetBackendURL(backendURL).
+		SetBackendToken(backendToken).
+		Build()
+	if err != nil {
+		logger.Error(
+			"Failed to create handler",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	objectAdapter, err := service.NewObjectAdapter().
+		SetLogger(logger).
+		SetHandler(objectHandler).
+		SetID("deploymentManagerID").
+		Build()
+	if err != nil {
+		logger.Error(
+			"Failed to create adapter",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	router.Handle(
+		"/O2ims_infrastructureInventory/{version}/deploymentManagers/{deploymentManagerID}",
+		objectAdapter,
+	).Methods(http.MethodGet)
 
 	// Start the server:
-	err = http.ListenAndServe(":8080", adapter)
+	err = http.ListenAndServe(":8080", router)
 	if err != nil {
 		logger.Error(
 			"server finished with error",
