@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/jhernand/o2ims/internal/data"
 	"github.com/jhernand/o2ims/internal/filter"
@@ -139,6 +140,20 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check if there is a projector, and parse it:
+	values, ok = query["fields"]
+	if ok {
+		for _, value := range values {
+			fields := strings.Split(value, ",")
+			a.logger.Info(
+				"Parsed field selector",
+				slog.String("source", value),
+				slog.String("parsed", strings.Join(fields, ",")),
+			)
+			request.Fields = append(request.Fields, fields...)
+		}
+	}
+
 	// Call the handler:
 	response, err := a.handler.Get(r.Context(), request)
 	if err != nil {
@@ -153,6 +168,12 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
+
+	// If there is a projector apply it:
+	if len(request.Fields) > 0 {
+		response.Items = data.Project(response.Items, request.Fields)
+	}
+
 	a.sendItems(ctx, w, response.Items)
 }
 

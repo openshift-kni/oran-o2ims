@@ -173,7 +173,7 @@ func (h *DeploymentManagerCollectionHandler) Get(ctx context.Context,
 		return
 	}
 
-	// Transfor the items into what we need:
+	// Transform the items into what we need:
 	items = data.Map(items, h.mapItem)
 
 	// Select only the items that satisfy the filter:
