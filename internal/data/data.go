@@ -15,7 +15,6 @@ License.
 package data
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/PaesslerAG/jsonpath"
@@ -65,35 +64,3 @@ var Select = streaming.Select[Object]
 // with a mapper. Note that the actual calls to the mapper will not happen when this function is
 // called, they will happen only when the stream is eventually consumed.
 var Map = streaming.Map[Object, Object]
-
-// Project creates a stream that transforms an object removing all the fields that aren't in the
-// given list.
-func Project(source Stream, fields []string) Stream {
-	index := map[string]bool{}
-	for _, field := range fields {
-		index[field] = true
-	}
-	return &projectStream{
-		source: source,
-		fields: index,
-	}
-}
-
-// projectStream is the implementation of the streams returned by the Project function.
-type projectStream struct {
-	source Stream
-	fields map[string]bool
-}
-
-func (s *projectStream) Next(ctx context.Context) (item Object, err error) {
-	item, err = s.source.Next(ctx)
-	if err != nil {
-		return
-	}
-	for name := range item {
-		if !s.fields[name] {
-			delete(item, name)
-		}
-	}
-	return
-}

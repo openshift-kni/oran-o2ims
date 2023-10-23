@@ -228,6 +228,10 @@ func (h *DeploymentManagerCollectionHandler) fetchItems(
 
 func (h *DeploymentManagerCollectionHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
+	fromID, err := data.GetString(from, `$.metadata.labels["clusterID"]`)
+	if err != nil {
+		return
+	}
 	fromName, err := data.GetString(from, `$.metadata.name`)
 	if err != nil {
 		return
@@ -237,7 +241,7 @@ func (h *DeploymentManagerCollectionHandler) mapItem(ctx context.Context,
 		return
 	}
 	to = data.Object{
-		"deploymentManagerId": fromName,
+		"deploymentManagerId": fromID,
 		"name":                fromName,
 		"description":         fromName,
 		"oCloudId":            h.cloudID,

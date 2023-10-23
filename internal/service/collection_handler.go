@@ -23,8 +23,8 @@ import (
 
 // CollectionRequest represents a request for a collection of objects.
 type CollectionRequest struct {
-	Filter *filter.Expr
-	Fields []string
+	Filter   *filter.Expr
+	Selector [][]string
 }
 
 // CollectionResponse represents the response to the request to get the list of items of a collection.

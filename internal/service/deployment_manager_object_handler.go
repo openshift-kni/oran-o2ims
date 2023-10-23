@@ -177,6 +177,15 @@ func (h *DeploymentManagerObjectHandler) fetchObject(ctx context.Context,
 	if err != nil {
 		return
 	}
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			h.logger.Error(
+				"Failed to close response body",
+				"error", err.Error(),
+			)
+		}
+	}()
 	if response.StatusCode != http.StatusOK {
 		h.logger.Error(
 			"Received unexpected status code",
@@ -189,8 +198,12 @@ func (h *DeploymentManagerObjectHandler) fetchObject(ctx context.Context,
 		)
 		return
 	}
-	reader := jsoniter.NewIterator(h.api)
+	reader := jsoniter.Parse(h.api, response.Body, 4096)
 	value := reader.Read()
+	err = reader.Error
+	if err != nil {
+		return
+	}
 	switch typed := value.(type) {
 	case data.Object:
 		result = typed

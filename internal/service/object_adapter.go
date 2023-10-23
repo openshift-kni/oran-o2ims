@@ -149,4 +149,17 @@ func (a *ObjectAdapter) sendObject(ctx context.Context, w http.ResponseWriter,
 	w.WriteHeader(http.StatusOK)
 	writer := jsoniter.NewStream(a.api, w, 0)
 	writer.WriteVal(object)
+	if writer.Error != nil {
+		a.logger.Error(
+			"Failed to send object",
+			"error", writer.Error.Error(),
+		)
+	}
+	writer.Flush()
+	if writer.Error != nil {
+		a.logger.Error(
+			"Failed to flush stream",
+			"error", writer.Error.Error(),
+		)
+	}
 }

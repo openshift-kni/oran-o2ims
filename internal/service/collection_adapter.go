@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/jhernand/o2ims/internal/data"
 	"github.com/jhernand/o2ims/internal/filter"
+	"github.com/jhernand/o2ims/internal/selector"
 	"github.com/jhernand/o2ims/internal/streaming"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -34,10 +34,12 @@ type CollectionAdapterBuilder struct {
 }
 
 type CollectionAdapter struct {
-	logger       *slog.Logger
-	filterParser *filter.Parser
-	jsonAPI      jsoniter.API
-	handler      CollectionHandler
+	logger            *slog.Logger
+	filterParser      *filter.Parser
+	selectorParser    *selector.Parser
+	selectorEvaluator *selector.Evaluator
+	jsonAPI           jsoniter.API
+	handler           CollectionHandler
 }
 
 func NewCollectionAdapter() *CollectionAdapterBuilder {
@@ -69,11 +71,37 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 	}
 
 	// Create the filter expression parser:
-	parser, err := filter.NewParser().
+	filterParser, err := filter.NewParser().
 		SetLogger(b.logger).
 		Build()
 	if err != nil {
 		err = fmt.Errorf("failed to create filter expression parser: %w", err)
+		return
+	}
+
+	// Create the field selector parser:
+	selectorParser, err := selector.NewParser().
+		SetLogger(b.logger).
+		Build()
+	if err != nil {
+		err = fmt.Errorf("failed to create field selector parser: %w", err)
+		return
+	}
+
+	// Create the field selector evaluator:
+	selectorResolver, err := filter.NewResolver().
+		SetLogger(b.logger).
+		Build()
+	if err != nil {
+		err = fmt.Errorf("failed to create selector reolver: %w", err)
+		return
+	}
+	selectorEvaluator, err := selector.NewEvaluator().
+		SetLogger(b.logger).
+		SetResolver(selectorResolver.Resolve).
+		Build()
+	if err != nil {
+		err = fmt.Errorf("failed to create selector evaluator: %w", err)
 		return
 	}
 
@@ -85,10 +113,12 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 
 	// Create and populate the object:
 	result = &CollectionAdapter{
-		logger:       b.logger,
-		filterParser: parser,
-		handler:      b.handler,
-		jsonAPI:      jsonAPI,
+		logger:            b.logger,
+		filterParser:      filterParser,
+		selectorParser:    selectorParser,
+		selectorEvaluator: selectorEvaluator,
+		handler:           b.handler,
+		jsonAPI:           jsonAPI,
 	}
 	return
 }
@@ -144,13 +174,27 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	values, ok = query["fields"]
 	if ok {
 		for _, value := range values {
-			fields := strings.Split(value, ",")
+			selector, err := a.selectorParser.Parse(value)
+			if err != nil {
+				a.logger.Error(
+					"Failed to parse field selector",
+					slog.String("selector", value),
+					slog.String("error", err.Error()),
+				)
+				SendError(
+					w,
+					http.StatusBadRequest,
+					"Failed to parse field selector '%s': %v",
+					value, err,
+				)
+				return
+			}
 			a.logger.Info(
 				"Parsed field selector",
 				slog.String("source", value),
-				slog.String("parsed", strings.Join(fields, ",")),
+				slog.Any("parsed", selector),
 			)
-			request.Fields = append(request.Fields, fields...)
+			request.Selector = append(request.Selector, selector...)
 		}
 	}
 
@@ -170,8 +214,14 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If there is a projector apply it:
-	if len(request.Fields) > 0 {
-		response.Items = data.Project(response.Items, request.Fields)
+	if request.Selector != nil {
+		response.Items = data.Map(
+			response.Items,
+			func(ctx context.Context, item data.Object) (result data.Object, err error) {
+				result, err = a.selectorEvaluator.Evaluate(ctx, request.Selector, item)
+				return
+			},
+		)
 	}
 
 	a.sendItems(ctx, w, response.Items)
