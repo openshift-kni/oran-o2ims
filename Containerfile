@@ -60,4 +60,4 @@ COPY \
  /home/builder/o2ims /usr/bin/o2ims
 
 ENTRYPOINT \
-  /usr/bin/o2ims
+  ["/usr/bin/o2ims"]
