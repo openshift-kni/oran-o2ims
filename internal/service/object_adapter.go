@@ -35,7 +35,7 @@ type ObjectAdapter struct {
 	logger  *slog.Logger
 	handler ObjectHandler
 	id      string
-	api     jsoniter.API
+	jsonAPI jsoniter.API
 }
 
 func NewObjectAdapter() *ObjectAdapterBuilder {
@@ -78,17 +78,17 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 	}
 
 	// Prepare the JSON iterator API:
-	cfg := jsoniter.Config{
+	jsonConfig := jsoniter.Config{
 		IndentionStep: 2,
 	}
-	api := cfg.Froze()
+	jsonAPI := jsonConfig.Froze()
 
 	// Create and populate the object:
 	result = &ObjectAdapter{
 		logger:  b.logger,
 		handler: b.handler,
 		id:      b.id,
-		api:     api,
+		jsonAPI: jsonAPI,
 	}
 	return
 }
@@ -147,7 +147,7 @@ func (a *ObjectAdapter) sendObject(ctx context.Context, w http.ResponseWriter,
 	object data.Object) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	writer := jsoniter.NewStream(a.api, w, 0)
+	writer := jsoniter.NewStream(a.jsonAPI, w, 0)
 	writer.WriteVal(object)
 	if writer.Error != nil {
 		a.logger.Error(

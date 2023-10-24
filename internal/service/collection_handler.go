@@ -18,12 +18,12 @@ import (
 	"context"
 
 	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/filter"
+	"github.com/jhernand/o2ims/internal/search"
 )
 
 // CollectionRequest represents a request for a collection of objects.
 type CollectionRequest struct {
-	Filter   *filter.Expr
+	Filter   *search.Selector
 	Selector [][]string
 }
 

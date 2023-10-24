@@ -12,36 +12,35 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package selector
+package search
 
 import (
 	"context"
 
-	"github.com/jhernand/o2ims/internal/filter"
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/ginkgo/v2/dsl/table"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Evaluator", func() {
-	// nop is a simple resolver that always return nil.
+var _ = Describe("Projector evaluator", func() {
+	// nop is a simple path evaluator that always return nil.
 	var nop = func(context.Context, []string, any) (any, error) {
 		return nil, nil
 	}
 
 	Describe("Creation", func() {
-		It("Can be created with a logger and a resolver", func() {
-			evaluator, err := NewEvaluator().
+		It("Can be created with a logger and a path evaluator", func() {
+			evaluator, err := NewProjectorEvaluator().
 				SetLogger(logger).
-				SetResolver(nop).
+				SetPathEvaluator(nop).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(evaluator).ToNot(BeNil())
 		})
 
 		It("Can't be created without a logger", func() {
-			evaluator, err := NewEvaluator().
-				SetResolver(nop).
+			evaluator, err := NewProjectorEvaluator().
+				SetPathEvaluator(nop).
 				Build()
 			Expect(err).To(HaveOccurred())
 			Expect(evaluator).To(BeNil())
@@ -50,14 +49,15 @@ var _ = Describe("Evaluator", func() {
 			Expect(msg).To(ContainSubstring("mandatory"))
 		})
 
-		It("Can't be created without a resolver", func() {
-			evaluator, err := NewEvaluator().
+		It("Can't be created without a path evaluator", func() {
+			evaluator, err := NewProjectorEvaluator().
 				SetLogger(logger).
 				Build()
 			Expect(err).To(HaveOccurred())
 			Expect(evaluator).To(BeNil())
 			msg := err.Error()
-			Expect(msg).To(ContainSubstring("resolver"))
+			Expect(msg).To(ContainSubstring("path"))
+			Expect(msg).To(ContainSubstring("evaluator"))
 			Expect(msg).To(ContainSubstring("mandatory"))
 		})
 	})
@@ -65,25 +65,25 @@ var _ = Describe("Evaluator", func() {
 	DescribeTable(
 		"Evaluates correctly",
 		func(src string, producer func() any, expected map[string]any) {
-			// Parse the expression:
-			parser, err := NewParser().
+			// Parse the projector:
+			parser, err := NewProjectorParser().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			expr, err := parser.Parse(src)
+			projector, err := parser.Parse(src)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Evaluate the expression:
-			resolver, err := filter.NewResolver().
+			// Evaluate the projector:
+			path, err := NewPathEvaluator().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			evaluator, err := NewEvaluator().
+			evaluator, err := NewProjectorEvaluator().
 				SetLogger(logger).
-				SetResolver(resolver.Resolve).
+				SetPathEvaluator(path.Evaluate).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			actual, err := evaluator.Evaluate(context.Background(), expr, producer())
+			actual, err := evaluator.Evaluate(context.Background(), projector, producer())
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check the results:

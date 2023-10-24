@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package selector
+package search
 
 import (
 	"errors"
@@ -20,40 +20,40 @@ import (
 	"log/slog"
 )
 
-// ParserBuilder contains the logic and data needed to create field selector parsers. Don't
-// create instances of this type directly, use the NewParser function instead.
-type ParserBuilder struct {
+// ProjectorParserBuilder contains the logic and data needed to create field selection parsers.
+// Don't create instances of this type directly, use the NewProjectorParser function instead.
+type ProjectorParserBuilder struct {
 	logger *slog.Logger
 }
 
-// Parser knows how to parse field selectors. Don't create instances of this type directly, use
-// the NewParser function instead.
-type Parser struct {
+// ProjectorParser knows how to parse field selectors. Don't create instances of this type
+// directly, use the NewProjectorParser function instead.
+type ProjectorParser struct {
 	logger *slog.Logger
 }
 
-// parseTask contains the data needed to perform the parsing of one field selector. A new one
-// will be created each time that the Parse method is called.
-type parseTask struct {
+// projectorParserTask contains the data needed to perform the parsing of one field selection
+// specification. A new one will be created each time that the Parse method is called.
+type projectorParserTask struct {
 	logger *slog.Logger
-	lexer  *exprLexer
-	token  *exprToken
+	lexer  *projectorLexer
+	token  *projectorToken
 }
 
-// NewParser creates a builder that can then be used to configure and create field selector
-// parsers.
-func NewParser() *ParserBuilder {
-	return &ParserBuilder{}
+// NewProjectorParser creates a builder that can then be used to configure and create field
+// selector parsers.
+func NewProjectorParser() *ProjectorParserBuilder {
+	return &ProjectorParserBuilder{}
 }
 
 // SetLogger sets the logger that the parser will use to write log messages. This is mandatory.
-func (b *ParserBuilder) SetLogger(value *slog.Logger) *ParserBuilder {
+func (b *ProjectorParserBuilder) SetLogger(value *slog.Logger) *ProjectorParserBuilder {
 	b.logger = value
 	return b
 }
 
 // Build uses the configuration stored in the builder to create a new parser.
-func (b *ParserBuilder) Build() (result *Parser, err error) {
+func (b *ProjectorParserBuilder) Build() (result *ProjectorParser, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -61,7 +61,7 @@ func (b *ParserBuilder) Build() (result *Parser, err error) {
 	}
 
 	// Create and populate the object:
-	result = &Parser{
+	result = &ProjectorParser{
 		logger: b.logger,
 	}
 	return
@@ -69,7 +69,7 @@ func (b *ParserBuilder) Build() (result *Parser, err error) {
 
 // Parse parses the give field selector. If it succeeds it returns the object selector. If it fails
 // it returns an error.
-func (p *Parser) Parse(text string) (result [][]string, err error) {
+func (p *ProjectorParser) Parse(text string) (result [][]string, err error) {
 	// In order to simplify the rest of the parsing code we will panic when an error is
 	// detected. This recovers from those panics and converts them into regular errors.
 	defer func() {
@@ -85,7 +85,7 @@ func (p *Parser) Parse(text string) (result [][]string, err error) {
 	}()
 
 	// Create the lexer:
-	lexer, err := newExprLexer().
+	lexer, err := newProjectorLexer().
 		SetLogger(p.logger).
 		SetSource(text).
 		Build()
@@ -94,24 +94,24 @@ func (p *Parser) Parse(text string) (result [][]string, err error) {
 	}
 
 	// Create and run the parse task:
-	task := &parseTask{
+	task := &projectorParserTask{
 		logger: p.logger,
 		lexer:  lexer,
 	}
-	result = task.parsePaths()
+	result = task.parseProjector()
 	return
 }
 
-func (t *parseTask) parsePaths() [][]string {
+func (t *projectorParserTask) parseProjector() [][]string {
 	var paths [][]string
 	for {
 		path := t.parsePath()
 		paths = append(paths, path)
-		if t.checkToken(exprSymbolComma) {
+		if t.checkToken(projectorSymbolComma) {
 			t.fetchToken()
 			continue
 		}
-		if t.checkToken(exprSymbolEnd) {
+		if t.checkToken(projectorSymbolEnd) {
 			break
 		}
 		panic(fmt.Errorf(
@@ -122,19 +122,19 @@ func (t *parseTask) parsePaths() [][]string {
 	return paths
 }
 
-func (t *parseTask) parsePath() []string {
+func (t *projectorParserTask) parsePath() []string {
 	var segments []string
 	for {
 		segment := t.parseIdentifier()
 		segments = append(segments, segment)
-		if t.checkToken(exprSymbolSlash) {
+		if t.checkToken(projectorSymbolSlash) {
 			t.fetchToken()
 			continue
 		}
-		if t.checkToken(exprSymbolComma) {
+		if t.checkToken(projectorSymbolComma) {
 			break
 		}
-		if t.checkToken(exprSymbolEnd) {
+		if t.checkToken(projectorSymbolEnd) {
 			break
 		}
 		panic(fmt.Errorf(
@@ -145,20 +145,20 @@ func (t *parseTask) parsePath() []string {
 	return segments
 }
 
-func (t *parseTask) parseIdentifier() string {
+func (t *projectorParserTask) parseIdentifier() string {
 	token := t.currentToken()
-	t.consumeToken(exprSymbolIdentifier)
+	t.consumeToken(projectorSymbolIdentifier)
 	return token.Text
 }
 
 // currentToken resturns the current token, fetching it from the lexer if needed.
-func (t *parseTask) currentToken() *exprToken {
+func (t *projectorParserTask) currentToken() *projectorToken {
 	t.ensureToken()
 	return t.token
 }
 
 // fetchToken discard the current token and fetches a new one from the lexer.
-func (t *parseTask) fetchToken() {
+func (t *projectorParserTask) fetchToken() {
 	token, err := t.lexer.FetchToken()
 	if err != nil {
 		panic(err)
@@ -167,7 +167,7 @@ func (t *parseTask) fetchToken() {
 }
 
 // checkToken returns true if the current token has the given symbol.
-func (t *parseTask) checkToken(symbol exprSymbol) bool {
+func (t *projectorParserTask) checkToken(symbol projectorSymbol) bool {
 	t.ensureToken()
 	return t.token.Symbol == symbol
 }
@@ -175,18 +175,18 @@ func (t *parseTask) checkToken(symbol exprSymbol) bool {
 // consumeToken checks that the symbol of the current token and then discards it, so that the next
 // time that a token is needed a new one will be fetched from the lexer. If the symbol is not the
 // given one then it panics.
-func (t *parseTask) consumeToken(symbol exprSymbol) {
+func (t *projectorParserTask) consumeToken(symbol projectorSymbol) {
 	t.ensureToken()
 	if t.token.Symbol != symbol {
 		var expected string
 		switch symbol {
-		case exprSymbolEnd:
+		case projectorSymbolEnd:
 			expected = "end of input"
-		case exprSymbolIdentifier:
+		case projectorSymbolIdentifier:
 			expected = "identifier"
-		case exprSymbolComma:
+		case projectorSymbolComma:
 			expected = "comma"
-		case exprSymbolSlash:
+		case projectorSymbolSlash:
 			expected = "slash"
 		}
 		panic(fmt.Errorf(
@@ -198,7 +198,7 @@ func (t *parseTask) consumeToken(symbol exprSymbol) {
 }
 
 // ensureToken makes sure the current token is populated, fetching it from the lexer if needed.
-func (t *parseTask) ensureToken() {
+func (t *projectorParserTask) ensureToken() {
 	if t.token == nil {
 		t.fetchToken()
 	}

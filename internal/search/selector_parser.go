@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	"errors"
@@ -21,40 +21,41 @@ import (
 	"strings"
 )
 
-// ParserBuilder contains the logic and data needed to create filter expression parsers. Don't
-// create instances of this type directly, use the NewParser function instead.
-type ParserBuilder struct {
+// SelectorParserBuilder contains the logic and data needed to create filter expression parsers.
+// Don't create instances of this type directly, use the NewSelectorParser function instead.
+type SelectorParserBuilder struct {
 	logger *slog.Logger
 }
 
-// Parser knows how to parse filter expressions. Don't create instances of this type directly, use
-// the NewParser function instead.
-type Parser struct {
+// SelectorParser knows how to parse filter expressions. Don't create instances of this type
+// directly, use the NewSelectorParser function instead.
+type SelectorParser struct {
 	logger *slog.Logger
 }
 
-// parseTask contains the data needed to perform the parsing of one filter expression. A new one
-// will be created each time that the Parse method is called.
-type parseTask struct {
+// selectorParserTask contains the data needed to perform the parsing of one filter expression. A
+// new one will be created each time that the Parse method is called.
+type selectorParserTask struct {
 	logger *slog.Logger
-	lexer  *exprLexer
-	token  *exprToken
+	lexer  *selectorLexer
+	token  *selectorToken
 }
 
-// NewParser creates a builder that can then be used to configure and create expression filter
-// parsers. The builder can be reused to create multiple parsers with identical configuration.
-func NewParser() *ParserBuilder {
-	return &ParserBuilder{}
+// NewSelectorParser creates a builder that can then be used to configure and create expression
+// filter // parsers. The builder can be reused to create multiple parsers with identical
+// configuration.
+func NewSelectorParser() *SelectorParserBuilder {
+	return &SelectorParserBuilder{}
 }
 
 // SetLogger sets the logger that the parser will use to write log messages. This is mandatory.
-func (b *ParserBuilder) SetLogger(value *slog.Logger) *ParserBuilder {
+func (b *SelectorParserBuilder) SetLogger(value *slog.Logger) *SelectorParserBuilder {
 	b.logger = value
 	return b
 }
 
 // Build uses the configuration stored in the builder to create a new parser.
-func (b *ParserBuilder) Build() (result *Parser, err error) {
+func (b *SelectorParserBuilder) Build() (result *SelectorParser, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -62,7 +63,7 @@ func (b *ParserBuilder) Build() (result *Parser, err error) {
 	}
 
 	// Create and populate the object:
-	result = &Parser{
+	result = &SelectorParser{
 		logger: b.logger,
 	}
 	return
@@ -70,7 +71,7 @@ func (b *ParserBuilder) Build() (result *Parser, err error) {
 
 // Parse parses the give filter expression. If it succeeds it returns the object representing
 // that expression. If it fails it returns an error.
-func (p *Parser) Parse(text string) (expr *Expr, err error) {
+func (p *SelectorParser) Parse(text string) (selector *Selector, err error) {
 	// In order to simplify the rest of the parsing code we will panic when an error is
 	// detected. This recovers from those panics and converts them into regular errors.
 	defer func() {
@@ -86,7 +87,7 @@ func (p *Parser) Parse(text string) (expr *Expr, err error) {
 	}()
 
 	// Create the lexer:
-	lexer, err := newExprLexer().
+	lexer, err := newSelectorLexer().
 		SetLogger(p.logger).
 		SetSource(text).
 		Build()
@@ -94,25 +95,25 @@ func (p *Parser) Parse(text string) (expr *Expr, err error) {
 		return
 	}
 
-	// Create and run the parse task:
-	task := &parseTask{
+	// Create and run the task:
+	task := &selectorParserTask{
 		logger: p.logger,
 		lexer:  lexer,
 	}
-	expr = task.parseExpr()
+	selector = task.parseSelector()
 	return
 }
 
-func (t *parseTask) parseExpr() *Expr {
+func (t *selectorParserTask) parseSelector() *Selector {
 	var terms []*Term
 	for {
 		term := t.parseTerm()
 		terms = append(terms, term)
-		if t.checkToken(exprSymbolSemicolon) {
+		if t.checkToken(selectorSymbolSemicolon) {
 			t.fetchToken()
 			continue
 		}
-		if t.checkToken(exprSymbolEnd) {
+		if t.checkToken(selectorSymbolEnd) {
 			break
 		}
 		panic(fmt.Errorf(
@@ -120,21 +121,21 @@ func (t *parseTask) parseExpr() *Expr {
 			t.currentToken(),
 		))
 	}
-	return &Expr{
+	return &Selector{
 		Terms: terms,
 	}
 }
 
-func (t *parseTask) parseTerm() *Term {
-	t.consumeToken(exprSymbolLeftParenthesis)
+func (t *selectorParserTask) parseTerm() *Term {
+	t.consumeToken(selectorSymbolLeftParenthesis)
 	operator := t.parseOperator()
-	t.consumeToken(exprSymbolComma)
+	t.consumeToken(selectorSymbolComma)
 	path := t.parsePath()
-	t.consumeToken(exprSymbolComma)
-	t.lexer.SetMode(exprValuesMode)
+	t.consumeToken(selectorSymbolComma)
+	t.lexer.SetMode(selectorLexerValuesMode)
 	values := t.parseOptionalValues()
-	t.lexer.SetMode(exprDefaultMode)
-	t.consumeToken(exprSymbolRightParenthesis)
+	t.lexer.SetMode(selectorLexerDefaultMode)
+	t.consumeToken(selectorSymbolRightParenthesis)
 	return &Term{
 		Operator: operator,
 		Path:     path,
@@ -142,7 +143,7 @@ func (t *parseTask) parseTerm() *Term {
 	}
 }
 
-func (t *parseTask) parseOperator() Operator {
+func (t *selectorParserTask) parseOperator() Operator {
 	name := t.parseIdentifier()
 	switch strings.ToLower(name) {
 	case "cont":
@@ -170,16 +171,16 @@ func (t *parseTask) parseOperator() Operator {
 	}
 }
 
-func (t *parseTask) parsePath() []string {
+func (t *selectorParserTask) parsePath() []string {
 	var segments []string
 	for {
 		segment := t.parseIdentifier()
 		segments = append(segments, segment)
-		if t.checkToken(exprSymbolSlash) {
+		if t.checkToken(selectorSymbolSlash) {
 			t.fetchToken()
 			continue
 		}
-		if t.checkToken(exprSymbolComma) {
+		if t.checkToken(selectorSymbolComma) {
 			break
 		}
 		panic(fmt.Errorf(
@@ -190,17 +191,17 @@ func (t *parseTask) parsePath() []string {
 	return segments
 }
 
-func (t *parseTask) parseIdentifier() string {
+func (t *selectorParserTask) parseIdentifier() string {
 	token := t.currentToken()
-	t.consumeToken(exprSymbolIdentifier)
+	t.consumeToken(selectorSymbolIdentifier)
 	return token.Text
 }
 
-func (t *parseTask) parseOptionalValues() []any {
-	if t.checkToken(exprSymbolRightParenthesis) {
+func (t *selectorParserTask) parseOptionalValues() []any {
+	if t.checkToken(selectorSymbolRightParenthesis) {
 		return []any{}
 	}
-	if t.checkToken(exprSymbolString) {
+	if t.checkToken(selectorSymbolString) {
 		return t.parseValues()
 	}
 	panic(fmt.Errorf(
@@ -209,16 +210,16 @@ func (t *parseTask) parseOptionalValues() []any {
 	))
 }
 
-func (t *parseTask) parseValues() []any {
+func (t *selectorParserTask) parseValues() []any {
 	var values []any
 	for {
 		value := t.parseValue()
 		values = append(values, value)
-		if t.checkToken(exprSymbolComma) {
+		if t.checkToken(selectorSymbolComma) {
 			t.fetchToken()
 			continue
 		}
-		if t.checkToken(exprSymbolRightParenthesis) {
+		if t.checkToken(selectorSymbolRightParenthesis) {
 			break
 		}
 		panic(fmt.Errorf(
@@ -229,20 +230,20 @@ func (t *parseTask) parseValues() []any {
 	return values
 }
 
-func (t *parseTask) parseValue() any {
+func (t *selectorParserTask) parseValue() any {
 	token := t.currentToken()
-	t.consumeToken(exprSymbolString)
+	t.consumeToken(selectorSymbolString)
 	return token.Text
 }
 
 // currentToken resturns the current token, fetching it from the lexer if needed.
-func (t *parseTask) currentToken() *exprToken {
+func (t *selectorParserTask) currentToken() *selectorToken {
 	t.ensureToken()
 	return t.token
 }
 
 // fetchToken discard the current token and fetches a new one from the lexer.
-func (t *parseTask) fetchToken() {
+func (t *selectorParserTask) fetchToken() {
 	token, err := t.lexer.FetchToken()
 	if err != nil {
 		panic(err)
@@ -251,7 +252,7 @@ func (t *parseTask) fetchToken() {
 }
 
 // checkToken returns true if the current token has the given symbol.
-func (t *parseTask) checkToken(symbol exprSymbol) bool {
+func (t *selectorParserTask) checkToken(symbol selectorSymbol) bool {
 	t.ensureToken()
 	return t.token.Symbol == symbol
 }
@@ -259,26 +260,26 @@ func (t *parseTask) checkToken(symbol exprSymbol) bool {
 // consumeToken checks that the symbol of the current token and then discards it, so that the next
 // time that a token is needed a new one will be fetched from the lexer. If the symbol is not the
 // given one then it panics.
-func (t *parseTask) consumeToken(symbol exprSymbol) {
+func (t *selectorParserTask) consumeToken(symbol selectorSymbol) {
 	t.ensureToken()
 	if t.token.Symbol != symbol {
 		var expected string
 		switch symbol {
-		case exprSymbolEnd:
+		case selectorSymbolEnd:
 			expected = "end of input"
-		case exprSymbolLeftParenthesis:
+		case selectorSymbolLeftParenthesis:
 			expected = "left parenthesis"
-		case exprSymbolRightParenthesis:
+		case selectorSymbolRightParenthesis:
 			expected = "right parenthesis"
-		case exprSymbolIdentifier:
+		case selectorSymbolIdentifier:
 			expected = "identifier"
-		case exprSymbolComma:
+		case selectorSymbolComma:
 			expected = "comma"
-		case exprSymbolSlash:
+		case selectorSymbolSlash:
 			expected = "slash"
-		case exprSymbolSemicolon:
+		case selectorSymbolSemicolon:
 			expected = "semicolon"
-		case exprSymbolString:
+		case selectorSymbolString:
 			expected = "string"
 		}
 		panic(fmt.Errorf(
@@ -290,7 +291,7 @@ func (t *parseTask) consumeToken(symbol exprSymbol) {
 }
 
 // ensureToken makes sure the current token is populated, fetching it from the lexer if needed.
-func (t *parseTask) ensureToken() {
+func (t *selectorParserTask) ensureToken() {
 	if t.token == nil {
 		t.fetchToken()
 	}

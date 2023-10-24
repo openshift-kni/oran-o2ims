@@ -27,8 +27,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/filter"
 	"github.com/jhernand/o2ims/internal/logging"
+	"github.com/jhernand/o2ims/internal/search"
 )
 
 var _ = Describe("Collection adapter", func() {
@@ -76,14 +76,14 @@ var _ = Describe("Collection adapter", func() {
 		})
 	})
 
-	Describe("Filter parsing", func() {
-		It("Accepts simple filter", func() {
+	Describe("Selector parsing", func() {
+		It("Accepts simple selector", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *CollectionRequest) (response *CollectionResponse, err error) {
-				Expect(request.Filter).To(Equal(&filter.Expr{
-					Terms: []*filter.Term{{
-						Operator: filter.Eq,
+				Expect(request.Filter).To(Equal(&search.Selector{
+					Terms: []*search.Term{{
+						Operator: search.Eq,
 						Path: []string{
 							"myattr",
 						},
@@ -119,10 +119,10 @@ var _ = Describe("Collection adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *CollectionRequest) (response *CollectionResponse, err error) {
-				Expect(request.Filter).To(Equal(&filter.Expr{
-					Terms: []*filter.Term{
+				Expect(request.Filter).To(Equal(&search.Selector{
+					Terms: []*search.Term{
 						{
-							Operator: filter.Eq,
+							Operator: search.Eq,
 							Path: []string{
 								"myattr",
 							},
@@ -131,7 +131,7 @@ var _ = Describe("Collection adapter", func() {
 							},
 						},
 						{
-							Operator: filter.Neq,
+							Operator: search.Neq,
 							Path: []string{
 								"yourattr",
 							},

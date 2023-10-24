@@ -12,23 +12,23 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	"bytes"
 	"fmt"
 )
 
-// Expr represents an attribute-based filter expression as defined in section
-// 5.2 of [ETSI GS NFV-SOL 013].
+// Selector represents an attribute-based filter expression as defined in section 5.2 of
+// [ETSI GS NFV-SOL 013].
 //
 // [ETSI GS NFV-SOL 013]: https://www.etsi.org/deliver/etsi_gs/NFV-SOL/001_099/013/03.03.01_60/gs_NFV-SOL013v030301p.pdf
-type Expr struct {
+type Selector struct {
 	Terms []*Term
 }
 
-// String generates a string representation of the expression.
-func (e *Expr) String() string {
+// String generates a string representation of the selector.
+func (e *Selector) String() string {
 	buffer := &bytes.Buffer{}
 	for i, term := range e.Terms {
 		if i > 0 {
@@ -39,9 +39,8 @@ func (e *Expr) String() string {
 	return buffer.String()
 }
 
-// Term is each of the terms that compose a filter expression. The expression
-// will match an object when all the terms match it -in other words, terms are
-// connected by the and logical directive.
+// Term is each of the terms that compose a elector The selector will match an object when all the
+// terms match it -in other words, terms are connected by the and logical directive.
 type Term struct {
 	// Operator is the operator that used to compare the attribute to the value.
 	Operator Operator

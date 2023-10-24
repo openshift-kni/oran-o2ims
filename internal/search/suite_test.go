@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	"log/slog"
@@ -22,9 +22,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestFilter(t *testing.T) {
+func TestSearch(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Filter")
+	RunSpecs(t, "Search")
 }
 
 var logger *slog.Logger

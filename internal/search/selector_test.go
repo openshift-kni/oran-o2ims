@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	. "github.com/onsi/ginkgo/v2/dsl/core"
@@ -20,16 +20,16 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Expression", func() {
+var _ = Describe("Selector", func() {
 	DescribeTable(
 		"String representation",
-		func(expr *Expr, expected string) {
-			actual := expr.String()
+		func(selector *Selector, expected string) {
+			actual := selector.String()
 			Expect(actual).To(Equal(expected))
 		},
 		Entry(
 			"Single term",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -46,7 +46,7 @@ var _ = Describe("Expression", func() {
 		),
 		Entry(
 			"Escape ~ in path segment",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -63,7 +63,7 @@ var _ = Describe("Expression", func() {
 		),
 		Entry(
 			"Escape / in path segment",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -80,7 +80,7 @@ var _ = Describe("Expression", func() {
 		),
 		Entry(
 			"Escape @ in path segment",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -97,7 +97,7 @@ var _ = Describe("Expression", func() {
 		),
 		Entry(
 			"Dont't escape @ in @key",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -115,7 +115,7 @@ var _ = Describe("Expression", func() {
 		),
 		Entry(
 			"Multiple terms",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -141,7 +141,7 @@ var _ = Describe("Expression", func() {
 		),
 		Entry(
 			"Multiple path segments",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -159,7 +159,7 @@ var _ = Describe("Expression", func() {
 		),
 		Entry(
 			"Multiple values",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: In,

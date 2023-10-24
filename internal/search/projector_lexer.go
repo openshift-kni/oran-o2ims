@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package selector
+package search
 
 import (
 	"bytes"
@@ -23,86 +23,86 @@ import (
 	"unicode"
 )
 
-// exprLexerBuilder contains the data and logic needed to create a new lexical scanner for field
-// selector expressions. Don't create instances of this directly, use the newExprLexer function
-// instead.
-type exprLexerBuilder struct {
+// projectorLexerBuilder contains the data and logic needed to create a new lexical scanner for
+// field selection expressions. Don't create instances of this directly, use the newProjectorLexer
+// function instead.
+type projectorLexerBuilder struct {
 	logger *slog.Logger
 	source string
 }
 
-// exprLexer is a lexical scanner for the field selector expression language. Don't create
-// instances of this type directly, use the newExprLexer function instead.
-type exprLexer struct {
+// projectorLexer is a lexical scanner for the field selector expression language. Don't create
+// instances of this type directly, use the newProjectorLexer function instead.
+type projectorLexer struct {
 	logger *slog.Logger
 	buffer *bytes.Buffer
 }
 
-// exprSymbol represents the terminal symbols of the field selector language.
-type exprSymbol int
+// projectorSymbol represents the terminal symbols of the field selection language.
+type projectorSymbol int
 
 const (
-	exprSymbolEnd exprSymbol = iota
-	exprSymbolIdentifier
-	exprSymbolComma
-	exprSymbolSlash
+	projectorSymbolEnd projectorSymbol = iota
+	projectorSymbolIdentifier
+	projectorSymbolComma
+	projectorSymbolSlash
 )
 
 // String generates a string representation of the terminal symbol.
-func (s exprSymbol) String() string {
+func (s projectorSymbol) String() string {
 	switch s {
-	case exprSymbolEnd:
+	case projectorSymbolEnd:
 		return "End"
-	case exprSymbolIdentifier:
+	case projectorSymbolIdentifier:
 		return "Identifier"
-	case exprSymbolComma:
+	case projectorSymbolComma:
 		return "Comma"
-	case exprSymbolSlash:
+	case projectorSymbolSlash:
 		return "Slash"
 	default:
 		return fmt.Sprintf("Unknown:%d", s)
 	}
 }
 
-// exprToken represents the tokens returned by the lexical scanner. Each token contains the
+// projectorToken represents the tokens returned by the lexical scanner. Each token contains the
 // terminal symbol and its text.
-type exprToken struct {
-	Symbol exprSymbol
+type projectorToken struct {
+	Symbol projectorSymbol
 	Text   string
 }
 
 // String geneates a string representation of the token.
-func (t *exprToken) String() string {
+func (t *projectorToken) String() string {
 	if t == nil {
 		return "Nil"
 	}
 	switch t.Symbol {
-	case exprSymbolIdentifier:
+	case projectorSymbolIdentifier:
 		return fmt.Sprintf("%s:%s", t.Symbol, t.Text)
 	default:
 		return t.Symbol.String()
 	}
 }
 
-// newExprLexer creates a builder that can then be used to configure and create lexers.
-func newExprLexer() *exprLexerBuilder {
-	return &exprLexerBuilder{}
+// newProjectorLexer creates a builder that can then be used to configure and create lexers.
+func newProjectorLexer() *projectorLexerBuilder {
+	return &projectorLexerBuilder{}
 }
 
 // SetLogger sets the logger that the lexer will use to write log messesages. This is mandatory.
-func (b *exprLexerBuilder) SetLogger(value *slog.Logger) *exprLexerBuilder {
+func (b *projectorLexerBuilder) SetLogger(value *slog.Logger) *projectorLexerBuilder {
 	b.logger = value
 	return b
 }
 
 // SetSource sets the source string to parse. This is mandatory.
-func (b *exprLexerBuilder) SetSource(value string) *exprLexerBuilder {
+func (b *projectorLexerBuilder) SetSource(value string) *projectorLexerBuilder {
 	b.source = value
 	return b
 }
 
 // Build uses the data stored in the builder to create a new lexer.
-func (b *exprLexerBuilder) Build() (result *exprLexer, err error) {
+func (b *projectorLexerBuilder) Build() (result *projectorLexer, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -114,7 +114,7 @@ func (b *exprLexerBuilder) Build() (result *exprLexer, err error) {
 	}
 
 	// Create and populate the object:
-	result = &exprLexer{
+	result = &projectorLexer{
 		logger: b.logger,
 		buffer: bytes.NewBufferString(b.source),
 	}
@@ -122,7 +122,7 @@ func (b *exprLexerBuilder) Build() (result *exprLexer, err error) {
 }
 
 // FetchToken fetches the next token from the source.
-func (l *exprLexer) FetchToken() (token *exprToken, err error) {
+func (l *projectorLexer) FetchToken() (token *projectorToken, err error) {
 	type State int
 	const (
 		S0 State = iota
@@ -142,22 +142,22 @@ func (l *exprLexer) FetchToken() (token *exprToken, err error) {
 				lexeme.WriteRune(r)
 				state = S1
 			case r == ',':
-				token = &exprToken{
-					Symbol: exprSymbolComma,
+				token = &projectorToken{
+					Symbol: projectorSymbolComma,
 					Text:   ",",
 				}
 				return
 			case r == '/':
-				token = &exprToken{
-					Symbol: exprSymbolSlash,
+				token = &projectorToken{
+					Symbol: projectorSymbolSlash,
 					Text:   "/",
 				}
 				return
 			case r == '~':
 				state = S2
 			case r == 0:
-				token = &exprToken{
-					Symbol: exprSymbolEnd,
+				token = &projectorToken{
+					Symbol: projectorSymbolEnd,
 				}
 				return
 			default:
@@ -177,8 +177,8 @@ func (l *exprLexer) FetchToken() (token *exprToken, err error) {
 				state = S2
 			default:
 				l.unreadRune()
-				token = &exprToken{
-					Symbol: exprSymbolIdentifier,
+				token = &projectorToken{
+					Symbol: projectorSymbolIdentifier,
 					Text:   lexeme.String(),
 				}
 				return
@@ -209,7 +209,7 @@ func (l *exprLexer) FetchToken() (token *exprToken, err error) {
 	}
 }
 
-func (l *exprLexer) readRune() rune {
+func (l *projectorLexer) readRune() rune {
 	r, _, err := l.buffer.ReadRune()
 	if errors.Is(err, io.EOF) {
 		return 0
@@ -224,7 +224,7 @@ func (l *exprLexer) readRune() rune {
 	return r
 }
 
-func (l *exprLexer) unreadRune() {
+func (l *projectorLexer) unreadRune() {
 	err := l.buffer.UnreadRune()
 	if err != nil {
 		l.logger.Error(

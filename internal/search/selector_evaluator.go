@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	"context"
@@ -24,46 +24,47 @@ import (
 	"strings"
 )
 
-// EvaluatorBuilder contains the logic and data needed to create filter expression evaluators. Don't
-// create instances of this type directly, use the NewEvaluator function instead.
-type EvaluatorBuilder struct {
-	logger   *slog.Logger
-	resolver func(context.Context, []string, any) (any, error)
+// SelectorEvaluatorBuilder contains the logic and data needed to create filter expression
+// evaluators. Don't create instances of this type directly, use the NewSelectorEvaluator function
+// instead.
+type SelectorEvaluatorBuilder struct {
+	logger        *slog.Logger
+	pathEvaluator func(context.Context, []string, any) (any, error)
 }
 
-// Evaluator knows how to evaluate filter expressions. Don't create instances of this type
-// directly, use the NewEvaluator function instead.
-type Evaluator struct {
-	logger   *slog.Logger
-	resolver func(context.Context, []string, any) (any, error)
+// SelectorEvaluator knows how to evaluate filter expressions. Don't create instances of this type
+// directly, use the NewSelectorEvaluator function instead.
+type SelectorEvaluator struct {
+	logger        *slog.Logger
+	pathEvaluator func(context.Context, []string, any) (any, error)
 }
 
-// NewEvaluator creates a builder that can then be used to configure and create expression filter
-// evaluators.
-func NewEvaluator() *EvaluatorBuilder {
-	return &EvaluatorBuilder{}
+// NewSelectorEvaluator creates a builder that can then be used to configure and create expression
+// filter evaluators.
+func NewSelectorEvaluator() *SelectorEvaluatorBuilder {
+	return &SelectorEvaluatorBuilder{}
 }
 
 // SetLogger sets the logger that the evaluator will use to write log messages. This is mandatory.
-func (b *EvaluatorBuilder) SetLogger(value *slog.Logger) *EvaluatorBuilder {
+func (b *SelectorEvaluatorBuilder) SetLogger(value *slog.Logger) *SelectorEvaluatorBuilder {
 	b.logger = value
 	return b
 }
 
-// SetResolver sets the function that will be used to extract values of attributes from the
+// SetPathEvaluator sets the function that will be used to extract values of attributes from the
 // object. This is mandatory.
 //
-// The resolver function receives the attribute path and the object and should return the value of
-// that attribute. For example, for a simple struct like this:
+// The path evaluator function receives the attribute path and the object and should return the
+// value of that attribute. For example, for a simple struct like this:
 //
 //	type Person struct {
 //		Name string
 //		Age  int
 //	}
 //
-// The resolver function could be like this:
+// The path evaluator function could be like this:
 //
-//	func personResolver(ctx context.Context, path []string, object any) (result any, err error) {
+//	func personPathEvaluator(ctx context.Context, path []string, object any) (result any, err error) {
 //		person, ok := object.(*Person)
 //		if !ok {
 //			err = fmt.Errorf("expected person, but got '%T'", object)
@@ -87,46 +88,46 @@ func (b *EvaluatorBuilder) SetLogger(value *slog.Logger) *EvaluatorBuilder {
 //		}
 //		return
 //
-// The resolver function should return an error if the object isn't of the expected type, of if the
-// path doesn't correspond to a valid attribute.
+// The path evaluator function should return an error if the object isn't of the expected type, of
+// if the path doesn't correspond to a valid attribute.
 //
-// The resolver function should return nil if the path corresponds to a valid optional attribute
-// that hasn't a value.
-func (b *EvaluatorBuilder) SetResolver(
-	value func(context.Context, []string, any) (any, error)) *EvaluatorBuilder {
-	b.resolver = value
+// The path evaluator function should return nil if the path corresponds to a valid optional
+// attribute that hasn't a value.
+func (b *SelectorEvaluatorBuilder) SetPathEvaluator(
+	value func(context.Context, []string, any) (any, error)) *SelectorEvaluatorBuilder {
+	b.pathEvaluator = value
 	return b
 }
 
 // Build uses the configuration stored in the builder to create a new evaluator.
-func (b *EvaluatorBuilder) Build() (result *Evaluator, err error) {
+func (b *SelectorEvaluatorBuilder) Build() (result *SelectorEvaluator, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
 		return
 	}
-	if b.resolver == nil {
-		err = errors.New("resolver is mandatory")
+	if b.pathEvaluator == nil {
+		err = errors.New("path evaluator is mandatory")
 		return
 	}
 
 	// Create and populate the object:
-	result = &Evaluator{
-		logger:   b.logger,
-		resolver: b.resolver,
+	result = &SelectorEvaluator{
+		logger:        b.logger,
+		pathEvaluator: b.pathEvaluator,
 	}
 	return
 }
 
 // Evaluate evaluates the filter expression on the given object. It returns true if the object
 // matches the expression, and false otherwise.
-func (e *Evaluator) Evaluate(ctx context.Context, expr *Expr, object any) (result bool,
-	err error) {
-	result, err = e.evaluateExpr(ctx, expr, object)
+func (e *SelectorEvaluator) Evaluate(ctx context.Context, selector *Selector,
+	object any) (result bool, err error) {
+	result, err = e.evaluateSelector(ctx, selector, object)
 	if e.logger.Enabled(ctx, slog.LevelDebug) {
 		e.logger.Debug(
-			"Evaluated filter expression",
-			"expr", expr.String(),
+			"Evaluated selector",
+			"selector", selector.String(),
 			"object", object,
 			"result", result,
 		)
@@ -134,9 +135,9 @@ func (e *Evaluator) Evaluate(ctx context.Context, expr *Expr, object any) (resul
 	return
 }
 
-func (e *Evaluator) evaluateExpr(ctx context.Context, expr *Expr, object any) (result bool,
-	err error) {
-	for _, term := range expr.Terms {
+func (e *SelectorEvaluator) evaluateSelector(ctx context.Context, selector *Selector,
+	object any) (result bool, err error) {
+	for _, term := range selector.Terms {
 		result, err = e.evaluateTerm(ctx, term, object)
 		if !result || err != nil {
 			return
@@ -146,9 +147,9 @@ func (e *Evaluator) evaluateExpr(ctx context.Context, expr *Expr, object any) (r
 	return
 }
 
-func (e *Evaluator) evaluateTerm(ctx context.Context, term *Term, object any) (result bool,
+func (e *SelectorEvaluator) evaluateTerm(ctx context.Context, term *Term, object any) (result bool,
 	err error) {
-	value, err := e.resolver(ctx, term.Path, object)
+	value, err := e.pathEvaluator(ctx, term.Path, object)
 	if err != nil {
 		return
 	}
@@ -179,7 +180,7 @@ func (e *Evaluator) evaluateTerm(ctx context.Context, term *Term, object any) (r
 	return
 }
 
-func (e *Evaluator) evaluateCont(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateCont(value any, args []any) (result bool,
 	err error) {
 	str, ok := value.(string)
 	if !ok {
@@ -204,7 +205,7 @@ func (e *Evaluator) evaluateCont(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateEq(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateEq(value any, args []any) (result bool,
 	err error) {
 	if len(args) != 1 {
 		err = fmt.Errorf(
@@ -235,7 +236,7 @@ func (e *Evaluator) evaluateEq(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateGt(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateGt(value any, args []any) (result bool,
 	err error) {
 	if len(args) != 1 {
 		err = fmt.Errorf(
@@ -266,7 +267,7 @@ func (e *Evaluator) evaluateGt(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateGte(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateGte(value any, args []any) (result bool,
 	err error) {
 	if len(args) != 1 {
 		err = fmt.Errorf(
@@ -297,7 +298,7 @@ func (e *Evaluator) evaluateGte(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateIn(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateIn(value any, args []any) (result bool,
 	err error) {
 	args, err = e.convertArgs(value, args)
 	if err != nil {
@@ -313,7 +314,7 @@ func (e *Evaluator) evaluateIn(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateLt(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateLt(value any, args []any) (result bool,
 	err error) {
 	if len(args) != 1 {
 		err = fmt.Errorf(
@@ -344,7 +345,7 @@ func (e *Evaluator) evaluateLt(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateLte(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateLte(value any, args []any) (result bool,
 	err error) {
 	if len(args) != 1 {
 		err = fmt.Errorf(
@@ -375,7 +376,7 @@ func (e *Evaluator) evaluateLte(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateNcont(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateNcont(value any, args []any) (result bool,
 	err error) {
 	str, ok := value.(string)
 	if !ok {
@@ -400,7 +401,7 @@ func (e *Evaluator) evaluateNcont(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateNeq(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateNeq(value any, args []any) (result bool,
 	err error) {
 	if len(args) != 1 {
 		err = fmt.Errorf(
@@ -431,7 +432,7 @@ func (e *Evaluator) evaluateNeq(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) evaluateNin(value any, args []any) (result bool,
+func (e *SelectorEvaluator) evaluateNin(value any, args []any) (result bool,
 	err error) {
 	args, err = e.convertArgs(value, args)
 	if err != nil {
@@ -447,7 +448,7 @@ func (e *Evaluator) evaluateNin(value any, args []any) (result bool,
 	return
 }
 
-func (e *Evaluator) convertArgs(value any, args []any) (result []any, err error) {
+func (e *SelectorEvaluator) convertArgs(value any, args []any) (result []any, err error) {
 	result = make([]any, len(args))
 	switch value.(type) {
 	case string:
@@ -463,7 +464,7 @@ func (e *Evaluator) convertArgs(value any, args []any) (result []any, err error)
 	return
 }
 
-func (e *Evaluator) convertStrings(args []any) (result []any, err error) {
+func (e *SelectorEvaluator) convertStrings(args []any) (result []any, err error) {
 	converted := make([]any, len(args))
 	for i, arg := range args {
 		switch arg := arg.(type) {
@@ -483,7 +484,7 @@ func (e *Evaluator) convertStrings(args []any) (result []any, err error) {
 	return
 }
 
-func (e *Evaluator) convertInts(args []any) (result []any, err error) {
+func (e *SelectorEvaluator) convertInts(args []any) (result []any, err error) {
 	converted := make([]any, len(args))
 	for i, arg := range args {
 		switch arg := arg.(type) {

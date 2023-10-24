@@ -46,7 +46,7 @@ type DeploymentManagerObjectHandler struct {
 	backendURL    string
 	backendToken  string
 	backendClient *http.Client
-	api           jsoniter.API
+	jsonAPI       jsoniter.API
 }
 
 // NewDeploymentManagerObjectHandler creates a builder that can then be used to configure and
@@ -140,7 +140,7 @@ func (b *DeploymentManagerObjectHandlerBuilder) Build() (
 		backendURL:    b.backendURL,
 		backendToken:  b.backendToken,
 		backendClient: backendClient,
-		api:           jsonAPI,
+		jsonAPI:       jsonAPI,
 	}
 	return
 }
@@ -198,7 +198,7 @@ func (h *DeploymentManagerObjectHandler) fetchObject(ctx context.Context,
 		)
 		return
 	}
-	reader := jsoniter.Parse(h.api, response.Body, 4096)
+	reader := jsoniter.Parse(h.jsonAPI, response.Body, 4096)
 	value := reader.Read()
 	err = reader.Error
 	if err != nil {

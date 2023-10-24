@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	. "github.com/onsi/ginkgo/v2/dsl/core"
@@ -20,11 +20,11 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Parser", func() {
+var _ = Describe("Selector parser", func() {
 	DescribeTable(
 		"Parses correctly",
-		func(text string, expected *Expr) {
-			parser, err := NewParser().
+		func(text string, expected *Selector) {
+			parser, err := NewSelectorParser().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
@@ -35,7 +35,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Simple equal",
 			"(eq,myattr,myvalue)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -50,7 +50,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Simple contains",
 			"(cont,myattr,myvalue)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Cont,
 					Path: []string{
@@ -65,7 +65,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted value with space",
 			"(eq,myattr,'my value')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -80,7 +80,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted value with multiple spaces",
 			"(eq,myattr,'my  value')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -95,7 +95,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted empty value",
 			"(eq,myattr,'')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -110,7 +110,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted right parenthesis",
 			"(eq,myattr,'my ) value')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -125,7 +125,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted right parenthesis with multiple spaces",
 			"(eq,myattr,'my  )  value')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -140,7 +140,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted comma",
 			"(eq,myattr,'my , value')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -155,7 +155,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted comma with multiple spaces",
 			"(eq,myattr,'my  ,  value')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -170,7 +170,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted single quote",
 			"(eq,myattr,'my''value')",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -185,7 +185,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Multiple unquoted values",
 			"(eq,myattr,my,value)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -201,7 +201,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"No values",
 			"(eq,myattr,)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -214,7 +214,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Unquoted value with one space",
 			"(eq,myattr, )",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -229,7 +229,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Unquoted value with two spaces",
 			"(eq,myattr,  )",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -244,7 +244,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted value sorrounded by spaces",
 			"(eq,myattr,  'my value'  )",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -259,7 +259,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Two path segments",
 			"(eq,myattr/yourattr,yourvalue)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{{
 					Operator: Eq,
 					Path: []string{
@@ -275,7 +275,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Multiple",
 			"(eq,myattr,myvalue);(neq,yourattr,yourvalue)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -301,7 +301,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted ~ in path",
 			"(eq,my~0attr,myvalue)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -318,7 +318,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted / in path",
 			"(eq,my~1attr,myvalue)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,
@@ -335,7 +335,7 @@ var _ = Describe("Parser", func() {
 		Entry(
 			"Quoted @ in path",
 			"(eq,my~battr,myvalue)",
-			&Expr{
+			&Selector{
 				Terms: []*Term{
 					{
 						Operator: Eq,

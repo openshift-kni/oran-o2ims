@@ -21,11 +21,11 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/filter"
-	"github.com/jhernand/o2ims/internal/selector"
-	"github.com/jhernand/o2ims/internal/streaming"
 	jsoniter "github.com/json-iterator/go"
+
+	"github.com/jhernand/o2ims/internal/data"
+	"github.com/jhernand/o2ims/internal/search"
+	"github.com/jhernand/o2ims/internal/streaming"
 )
 
 type CollectionAdapterBuilder struct {
@@ -34,12 +34,12 @@ type CollectionAdapterBuilder struct {
 }
 
 type CollectionAdapter struct {
-	logger            *slog.Logger
-	filterParser      *filter.Parser
-	selectorParser    *selector.Parser
-	selectorEvaluator *selector.Evaluator
-	jsonAPI           jsoniter.API
-	handler           CollectionHandler
+	logger             *slog.Logger
+	selectorParser     *search.SelectorParser
+	projectorParser    *search.ProjectorParser
+	projectorEvaluator *search.ProjectorEvaluator
+	jsonAPI            jsoniter.API
+	handler            CollectionHandler
 }
 
 func NewCollectionAdapter() *CollectionAdapterBuilder {
@@ -71,7 +71,7 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 	}
 
 	// Create the filter expression parser:
-	filterParser, err := filter.NewParser().
+	selectorParser, err := search.NewSelectorParser().
 		SetLogger(b.logger).
 		Build()
 	if err != nil {
@@ -80,7 +80,7 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 	}
 
 	// Create the field selector parser:
-	selectorParser, err := selector.NewParser().
+	projectorParser, err := search.NewProjectorParser().
 		SetLogger(b.logger).
 		Build()
 	if err != nil {
@@ -88,20 +88,20 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 		return
 	}
 
-	// Create the field selector evaluator:
-	selectorResolver, err := filter.NewResolver().
+	// Create the path evaluator:
+	pathEvaluator, err := search.NewPathEvaluator().
 		SetLogger(b.logger).
 		Build()
 	if err != nil {
-		err = fmt.Errorf("failed to create selector reolver: %w", err)
+		err = fmt.Errorf("failed to create projector path evaluator: %w", err)
 		return
 	}
-	selectorEvaluator, err := selector.NewEvaluator().
+	projectorEvaluator, err := search.NewProjectorEvaluator().
 		SetLogger(b.logger).
-		SetResolver(selectorResolver.Resolve).
+		SetPathEvaluator(pathEvaluator.Evaluate).
 		Build()
 	if err != nil {
-		err = fmt.Errorf("failed to create selector evaluator: %w", err)
+		err = fmt.Errorf("failed to create projector evaluator: %w", err)
 		return
 	}
 
@@ -113,12 +113,12 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 
 	// Create and populate the object:
 	result = &CollectionAdapter{
-		logger:            b.logger,
-		filterParser:      filterParser,
-		selectorParser:    selectorParser,
-		selectorEvaluator: selectorEvaluator,
-		handler:           b.handler,
-		jsonAPI:           jsonAPI,
+		logger:             b.logger,
+		selectorParser:     selectorParser,
+		projectorParser:    projectorParser,
+		projectorEvaluator: projectorEvaluator,
+		handler:            b.handler,
+		jsonAPI:            jsonAPI,
 	}
 	return
 }
@@ -142,7 +142,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	values, ok := query["filter"]
 	if ok {
 		for _, value := range values {
-			expr, err := a.filterParser.Parse(value)
+			expr, err := a.selectorParser.Parse(value)
 			if err != nil {
 				a.logger.Error(
 					"Failed to parse filter expression",
@@ -174,7 +174,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	values, ok = query["fields"]
 	if ok {
 		for _, value := range values {
-			selector, err := a.selectorParser.Parse(value)
+			selector, err := a.projectorParser.Parse(value)
 			if err != nil {
 				a.logger.Error(
 					"Failed to parse field selector",
@@ -218,7 +218,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		response.Items = data.Map(
 			response.Items,
 			func(ctx context.Context, item data.Object) (result data.Object, err error) {
-				result, err = a.selectorEvaluator.Evaluate(ctx, request.Selector, item)
+				result, err = a.projectorEvaluator.Evaluate(ctx, request.Selector, item)
 				return
 			},
 		)

@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	"context"
@@ -23,32 +23,32 @@ import (
 	"strings"
 )
 
-// ResolverBuilder contains the logic and data needed to create attribute path resolvers. Don't
-// create instances of this type directly, use the NewResolver function instead.
-type ResolverBuilder struct {
+// PathEvaluatorBuilder contains the logic and data needed to create attribute path evaluators.
+// Don't create instances of this type directly, use the NewPathEvaluator function instead.
+type PathEvaluatorBuilder struct {
 	logger *slog.Logger
 }
 
-// Resolver knows how extract from an object the value of an attribute given its/ path, using the
-// reflect package. Don't create instances of this type directly use the NewResolver function
-// instead.
-type Resolver struct {
+// PathEvaluator knows how extract from an object the value of an attribute given its path. Don't
+// create instances of this type directly use the NewPathEvaluator function instead.
+type PathEvaluator struct {
 	logger *slog.Logger
 }
 
-// NewResolver creates a builder that can then be used to configure and create resolvers.
-func NewResolver() *ResolverBuilder {
-	return &ResolverBuilder{}
+// NewPathEvaluator creates a builder that can then be used to configure and create path
+// evaluators.
+func NewPathEvaluator() *PathEvaluatorBuilder {
+	return &PathEvaluatorBuilder{}
 }
 
-// SetLogger sets the logger that the resolver will use to write log messages. This is mandatory.
-func (b *ResolverBuilder) SetLogger(value *slog.Logger) *ResolverBuilder {
+// SetLogger sets the logger that the evaluator will use to write log messages. This is mandatory.
+func (b *PathEvaluatorBuilder) SetLogger(value *slog.Logger) *PathEvaluatorBuilder {
 	b.logger = value
 	return b
 }
 
-// Build uses the configuration stored in the builder to create a new resolver.
-func (b *ResolverBuilder) Build() (result *Resolver, err error) {
+// Build uses the configuration stored in the builder to create a new evaluator.
+func (b *PathEvaluatorBuilder) Build() (result *PathEvaluator, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -56,18 +56,19 @@ func (b *ResolverBuilder) Build() (result *Resolver, err error) {
 	}
 
 	// Create and populate the object:
-	result = &Resolver{
+	result = &PathEvaluator{
 		logger: b.logger,
 	}
 	return
 }
 
-// Resolve receives the attribute path and the object and returns the value of that attribute.
-func (r *Resolver) Resolve(ctx context.Context, path []string, object any) (result any, err error) {
-	value, err := r.resolve(ctx, path, reflect.ValueOf(object))
+// Evaluate receives the attribute path and the object and returns the value of that attribute.
+func (r *PathEvaluator) Evaluate(ctx context.Context, path []string, object any) (result any,
+	err error) {
+	value, err := r.evaluate(ctx, path, reflect.ValueOf(object))
 	if err != nil {
 		err = fmt.Errorf(
-			"failed to resolve '%s': %w",
+			"failed to evaluate '%s': %w",
 			strings.Join(path, "/"), err,
 		)
 		return
@@ -80,7 +81,7 @@ func (r *Resolver) Resolve(ctx context.Context, path []string, object any) (resu
 	return
 }
 
-func (r *Resolver) resolve(ctx context.Context, path []string,
+func (r *PathEvaluator) evaluate(ctx context.Context, path []string,
 	object reflect.Value) (result reflect.Value, err error) {
 	if len(path) == 0 {
 		result = object
@@ -89,13 +90,13 @@ func (r *Resolver) resolve(ctx context.Context, path []string,
 	kind := object.Kind()
 	switch kind {
 	case reflect.Struct:
-		result, err = r.resolveStruct(ctx, path, object)
+		result, err = r.evaluateStruct(ctx, path, object)
 	case reflect.Pointer:
-		result, err = r.resolvePointer(ctx, path, object)
+		result, err = r.evaluatePointer(ctx, path, object)
 	case reflect.Map:
-		result, err = r.resolveMap(ctx, path, object)
+		result, err = r.evaluateMap(ctx, path, object)
 	case reflect.Interface:
-		result, err = r.resolveInterface(ctx, path, object)
+		result, err = r.evaluateInterface(ctx, path, object)
 	default:
 		err = fmt.Errorf(
 			"expected struct, slice or map, but found '%s'",
@@ -105,7 +106,7 @@ func (r *Resolver) resolve(ctx context.Context, path []string,
 	return
 }
 
-func (r *Resolver) resolveStruct(ctx context.Context, path []string,
+func (r *PathEvaluator) evaluateStruct(ctx context.Context, path []string,
 	object reflect.Value) (result reflect.Value, err error) {
 	field := path[0]
 	value := object.FieldByName(field)
@@ -117,22 +118,22 @@ func (r *Resolver) resolveStruct(ctx context.Context, path []string,
 		)
 		return
 	}
-	result, err = r.resolve(ctx, path[1:], value)
+	result, err = r.evaluate(ctx, path[1:], value)
 	return
 }
 
-func (r *Resolver) resolvePointer(ctx context.Context, path []string,
+func (r *PathEvaluator) evaluatePointer(ctx context.Context, path []string,
 	object reflect.Value) (result reflect.Value, err error) {
 	if object.IsNil() {
 		result = reflect.ValueOf(nil)
 		return
 	}
 	value := object.Elem()
-	result, err = r.resolve(ctx, path, value)
+	result, err = r.evaluate(ctx, path, value)
 	return
 }
 
-func (r *Resolver) resolveMap(ctx context.Context, path []string,
+func (r *PathEvaluator) evaluateMap(ctx context.Context, path []string,
 	object reflect.Value) (result reflect.Value, err error) {
 	key := path[0]
 	value := object.MapIndex(reflect.ValueOf(key))
@@ -140,17 +141,17 @@ func (r *Resolver) resolveMap(ctx context.Context, path []string,
 		err = fmt.Errorf("map doesn't have a '%s' key", path[0])
 		return
 	}
-	result, err = r.resolve(ctx, path[1:], value)
+	result, err = r.evaluate(ctx, path[1:], value)
 	return
 }
 
-func (r *Resolver) resolveInterface(ctx context.Context, path []string,
+func (r *PathEvaluator) evaluateInterface(ctx context.Context, path []string,
 	object reflect.Value) (result reflect.Value, err error) {
 	if object.IsNil() {
 		result = reflect.ValueOf(nil)
 		return
 	}
 	value := object.Elem()
-	result, err = r.resolve(ctx, path, value)
+	result, err = r.evaluate(ctx, path, value)
 	return
 }

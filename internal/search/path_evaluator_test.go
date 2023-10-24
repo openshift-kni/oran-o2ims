@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	"context"
@@ -22,21 +22,21 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Resolver", func() {
+var _ = Describe("Path evaluator", func() {
 	Describe("Creation", func() {
 		It("Can be created with a logger", func() {
-			resolver, err := NewResolver().
+			evaluator, err := NewPathEvaluator().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			Expect(resolver).ToNot(BeNil())
+			Expect(evaluator).ToNot(BeNil())
 		})
 
 		It("Can't be created without a logger", func() {
-			resolver, err := NewResolver().
+			evaluator, err := NewPathEvaluator().
 				Build()
 			Expect(err).To(HaveOccurred())
-			Expect(resolver).To(BeNil())
+			Expect(evaluator).To(BeNil())
 			msg := err.Error()
 			Expect(msg).To(ContainSubstring("logger"))
 			Expect(msg).To(ContainSubstring("mandatory"))
@@ -44,13 +44,13 @@ var _ = Describe("Resolver", func() {
 	})
 
 	DescribeTable(
-		"Resolves correctly",
+		"Evaluates correctly",
 		func(path []string, producer func() any, expected any) {
-			resolver, err := NewResolver().
+			evaluator, err := NewPathEvaluator().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			result, err := resolver.Resolve(context.Background(), path, producer())
+			result, err := evaluator.Evaluate(context.Background(), path, producer())
 			Expect(err).ToNot(HaveOccurred())
 			if expected == nil {
 				Expect(result).To(BeNil())
@@ -153,11 +153,11 @@ var _ = Describe("Resolver", func() {
 	DescribeTable(
 		"Reports errors",
 		func(path []string, producer func() any, expected string) {
-			resolver, err := NewResolver().
+			evaluator, err := NewPathEvaluator().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			_, err = resolver.Resolve(context.Background(), path, producer())
+			_, err = evaluator.Evaluate(context.Background(), path, producer())
 			Expect(err).To(HaveOccurred())
 			msg := err.Error()
 			Expect(msg).To(MatchRegexp(expected))
@@ -169,7 +169,7 @@ var _ = Describe("Resolver", func() {
 				type MyObject struct{}
 				return MyObject{}
 			},
-			"failed to resolve 'MyField': struct 'MyObject' from package '.*' doesn't have a 'MyField' field",
+			"failed to evaluate 'MyField': struct 'MyObject' from package '.*' doesn't have a 'MyField' field",
 		),
 		Entry(
 			"Map key that doesn't exist",
@@ -177,7 +177,7 @@ var _ = Describe("Resolver", func() {
 			func() any {
 				return map[string]any{}
 			},
-			"failed to resolve 'mykey': map doesn't have a 'mykey' key",
+			"failed to evaluate 'mykey': map doesn't have a 'mykey' key",
 		),
 	)
 })

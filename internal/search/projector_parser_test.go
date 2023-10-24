@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package selector
+package search
 
 import (
 	. "github.com/onsi/ginkgo/v2/dsl/core"
@@ -20,11 +20,11 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Parser", func() {
+var _ = Describe("Projector parser", func() {
 	DescribeTable(
 		"Parses correctly",
 		func(text string, expected [][]string) {
-			parser, err := NewParser().
+			parser, err := NewProjectorParser().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())

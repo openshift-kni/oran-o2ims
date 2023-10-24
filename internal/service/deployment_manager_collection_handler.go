@@ -23,8 +23,8 @@ import (
 	"net/http"
 
 	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/filter"
 	"github.com/jhernand/o2ims/internal/k8s"
+	"github.com/jhernand/o2ims/internal/search"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -43,13 +43,13 @@ type DeploymentManagerCollectionHandlerBuilder struct {
 // Don't create instances of this type directly, use the NewDeploymentManagerCollectionHandler
 // function instead.
 type DeploymentManagerCollectionHandler struct {
-	logger        *slog.Logger
-	cloudID       string
-	backendURL    string
-	backendToken  string
-	backendClient *http.Client
-	api           jsoniter.API
-	evaluator     *filter.Evaluator
+	logger            *slog.Logger
+	cloudID           string
+	backendURL        string
+	backendToken      string
+	backendClient     *http.Client
+	jsonAPI           jsoniter.API
+	selectorEvaluator *search.SelectorEvaluator
 }
 
 // NewDeploymentManagerCollectionHandler creates a builder that can then be used to configure
@@ -131,21 +131,21 @@ func (b *DeploymentManagerCollectionHandlerBuilder) Build() (
 	}
 
 	// Prepare the JSON iterator API:
-	cfg := jsoniter.Config{
+	jsonConfig := jsoniter.Config{
 		IndentionStep: 2,
 	}
-	api := cfg.Froze()
+	jsonAPI := jsonConfig.Froze()
 
 	// Create the filter expression evaluator:
-	resolver, err := filter.NewResolver().
+	pathEvaluator, err := search.NewPathEvaluator().
 		SetLogger(b.logger).
 		Build()
 	if err != nil {
 		return
 	}
-	evaluator, err := filter.NewEvaluator().
+	selectorEvaluator, err := search.NewSelectorEvaluator().
 		SetLogger(b.logger).
-		SetResolver(resolver.Resolve).
+		SetPathEvaluator(pathEvaluator.Evaluate).
 		Build()
 	if err != nil {
 		return
@@ -153,13 +153,13 @@ func (b *DeploymentManagerCollectionHandlerBuilder) Build() (
 
 	// Create and populate the object:
 	result = &DeploymentManagerCollectionHandler{
-		logger:        b.logger,
-		cloudID:       b.cloudID,
-		backendURL:    b.backendURL,
-		backendToken:  b.backendToken,
-		backendClient: backendClient,
-		evaluator:     evaluator,
-		api:           api,
+		logger:            b.logger,
+		cloudID:           b.cloudID,
+		backendURL:        b.backendURL,
+		backendToken:      b.backendToken,
+		backendClient:     backendClient,
+		selectorEvaluator: selectorEvaluator,
+		jsonAPI:           jsonAPI,
 	}
 	return
 }
@@ -181,7 +181,7 @@ func (h *DeploymentManagerCollectionHandler) Get(ctx context.Context,
 		items = data.Select(
 			items,
 			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.evaluator.Evaluate(ctx, request.Filter, item)
+				result, err = h.selectorEvaluator.Evaluate(ctx, request.Filter, item)
 				return
 			},
 		)

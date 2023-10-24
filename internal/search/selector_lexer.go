@@ -12,7 +12,7 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package filter
+package search
 
 import (
 	"bytes"
@@ -23,124 +23,125 @@ import (
 	"unicode"
 )
 
-// exprLexerBuilder contains the data and logic needed to create a new lexical scanner for filter
-// expressions. Don't create instances of this directly, use the newExprLexer function instead.
-type exprLexerBuilder struct {
+// selectorLexerBuilder contains the data and logic needed to create a new lexical scanner for
+// filter expressions. Don't create instances of this directly, use the newSelectorLexer function
+// instead.
+type selectorLexerBuilder struct {
 	logger *slog.Logger
 	source string
 }
 
-// exprLexer is a lexical scanner for the filter expression language. Don't create instances of
-// this type directly, use the newExprLexer function instead.
-type exprLexer struct {
+// selectorLexer is a lexical scanner for the filter expression language. Don't create instances of
+// this type directly, use the newSelectorLexer function instead.
+type selectorLexer struct {
 	logger *slog.Logger
-	mode   exprLexerMode
+	mode   selectorLexerMode
 	buffer *bytes.Buffer
 }
 
-// exprSymbol represents the terminal symbols of the expression filter language.
-type exprSymbol int
+// selectorSymbol represents the terminal symbols of the expression filter language.
+type selectorSymbol int
 
 const (
-	exprSymbolEnd exprSymbol = iota
-	exprSymbolLeftParenthesis
-	exprSymbolRightParenthesis
-	exprSymbolIdentifier
-	exprSymbolComma
-	exprSymbolSlash
-	exprSymbolSemicolon
-	exprSymbolString
+	selectorSymbolEnd selectorSymbol = iota
+	selectorSymbolLeftParenthesis
+	selectorSymbolRightParenthesis
+	selectorSymbolIdentifier
+	selectorSymbolComma
+	selectorSymbolSlash
+	selectorSymbolSemicolon
+	selectorSymbolString
 )
 
 // String generates a string representation of the terminal symbol.
-func (s exprSymbol) String() string {
+func (s selectorSymbol) String() string {
 	switch s {
-	case exprSymbolEnd:
+	case selectorSymbolEnd:
 		return "End"
-	case exprSymbolLeftParenthesis:
+	case selectorSymbolLeftParenthesis:
 		return "LeftParenthesis"
-	case exprSymbolRightParenthesis:
+	case selectorSymbolRightParenthesis:
 		return "RightParenthesis"
-	case exprSymbolIdentifier:
+	case selectorSymbolIdentifier:
 		return "Identifier"
-	case exprSymbolComma:
+	case selectorSymbolComma:
 		return "Comma"
-	case exprSymbolSlash:
+	case selectorSymbolSlash:
 		return "Slash"
-	case exprSymbolSemicolon:
+	case selectorSymbolSemicolon:
 		return "Semicolon"
-	case exprSymbolString:
+	case selectorSymbolString:
 		return "String"
 	default:
 		return fmt.Sprintf("Unknown:%d", s)
 	}
 }
 
-// exprToken represents the tokens returned by the lexical scanner. Each token contains the
+// selectorToken represents the tokens returned by the lexical scanner. Each token contains the
 // terminal symbol and its text.
-type exprToken struct {
-	Symbol exprSymbol
+type selectorToken struct {
+	Symbol selectorSymbol
 	Text   string
 }
 
 // String geneates a string representation of the token.
-func (t *exprToken) String() string {
+func (t *selectorToken) String() string {
 	if t == nil {
 		return "Nil"
 	}
 	switch t.Symbol {
-	case exprSymbolIdentifier:
+	case selectorSymbolIdentifier:
 		return fmt.Sprintf("%s:%s", t.Symbol, t.Text)
 	default:
 		return t.Symbol.String()
 	}
 }
 
-// expreLexerMode represents the mode of the lexer. We need two modes because string literals are
+// selectorLexerMode represents the mode of the lexer. We need two modes because string literals are
 // treated differently when they are values: quoting them is optional, so there is no way from the
 // parser distinguish an identifier from a string literal. To address that the parser will
 // explicitly change the mode when it expects values instead of identifiers.
-type exprLexerMode int
+type selectorLexerMode int
 
 const (
-	// exprDefaultMode is used by default when the parser expects identifiers.
-	exprDefaultMode exprLexerMode = iota
+	// selectorLexerDefaultMode is used by default when the parser expects identifiers.
+	selectorLexerDefaultMode selectorLexerMode = iota
 
-	// exprValuesMode is used when the parser expects values instead of identifiers.
-	exprValuesMode
+	// selectorLexerValuesMode is used when the parser expects values instead of identifiers.
+	selectorLexerValuesMode
 )
 
 // String generates a string representation of the mode.
-func (m exprLexerMode) String() string {
+func (m selectorLexerMode) String() string {
 	switch m {
-	case exprDefaultMode:
+	case selectorLexerDefaultMode:
 		return "Default"
-	case exprValuesMode:
+	case selectorLexerValuesMode:
 		return "Values"
 	default:
 		return fmt.Sprintf("Unknown:%d", m)
 	}
 }
 
-// newExprLexer creates a builder that can then be used to configure and create lexers.
-func newExprLexer() *exprLexerBuilder {
-	return &exprLexerBuilder{}
+// newSelectorLexer creates a builder that can then be used to configure and create lexers.
+func newSelectorLexer() *selectorLexerBuilder {
+	return &selectorLexerBuilder{}
 }
 
 // SetLogger sets the logger that the lexer will use to write log messesages. This is mandatory.
-func (b *exprLexerBuilder) SetLogger(value *slog.Logger) *exprLexerBuilder {
+func (b *selectorLexerBuilder) SetLogger(value *slog.Logger) *selectorLexerBuilder {
 	b.logger = value
 	return b
 }
 
 // SetSource sets the source string to parse. This is mandatory.
-func (b *exprLexerBuilder) SetSource(value string) *exprLexerBuilder {
+func (b *selectorLexerBuilder) SetSource(value string) *selectorLexerBuilder {
 	b.source = value
 	return b
 }
 
 // Build uses the data stored in the builder to create a new lexer.
-func (b *exprLexerBuilder) Build() (result *exprLexer, err error) {
+func (b *selectorLexerBuilder) Build() (result *selectorLexer, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -152,25 +153,25 @@ func (b *exprLexerBuilder) Build() (result *exprLexer, err error) {
 	}
 
 	// Create and populate the object:
-	result = &exprLexer{
+	result = &selectorLexer{
 		logger: b.logger,
-		mode:   exprDefaultMode,
+		mode:   selectorLexerDefaultMode,
 		buffer: bytes.NewBufferString(b.source),
 	}
 	return
 }
 
 // SetMode sets the mode. This will be called by the parser to explicitly change the mode.
-func (l *exprLexer) SetMode(mode exprLexerMode) {
+func (l *selectorLexer) SetMode(mode selectorLexerMode) {
 	l.mode = mode
 }
 
 // FetchToken fetches the next token from the source.
-func (l *exprLexer) FetchToken() (token *exprToken, err error) {
+func (l *selectorLexer) FetchToken() (token *selectorToken, err error) {
 	switch l.mode {
-	case exprDefaultMode:
+	case selectorLexerDefaultMode:
 		token, err = l.fetchInDefaultMode()
-	case exprValuesMode:
+	case selectorLexerValuesMode:
 		token, err = l.fetchInValuesMode()
 	default:
 		err = fmt.Errorf("unknown mode %d", l.mode)
@@ -186,7 +187,7 @@ func (l *exprLexer) FetchToken() (token *exprToken, err error) {
 	return
 }
 
-func (l *exprLexer) fetchInDefaultMode() (token *exprToken, err error) {
+func (l *selectorLexer) fetchInDefaultMode() (token *selectorToken, err error) {
 	type State int
 	const (
 		S0 State = iota
@@ -206,40 +207,40 @@ func (l *exprLexer) fetchInDefaultMode() (token *exprToken, err error) {
 				lexeme.WriteRune(r)
 				state = S1
 			case r == '(':
-				token = &exprToken{
-					Symbol: exprSymbolLeftParenthesis,
+				token = &selectorToken{
+					Symbol: selectorSymbolLeftParenthesis,
 					Text:   "(",
 				}
 				return
 			case r == ')':
-				token = &exprToken{
-					Symbol: exprSymbolRightParenthesis,
+				token = &selectorToken{
+					Symbol: selectorSymbolRightParenthesis,
 					Text:   ")",
 				}
 				return
 			case r == ',':
-				token = &exprToken{
-					Symbol: exprSymbolComma,
+				token = &selectorToken{
+					Symbol: selectorSymbolComma,
 					Text:   ",",
 				}
 				return
 			case r == '/':
-				token = &exprToken{
-					Symbol: exprSymbolSlash,
+				token = &selectorToken{
+					Symbol: selectorSymbolSlash,
 					Text:   "/",
 				}
 				return
 			case r == ';':
-				token = &exprToken{
-					Symbol: exprSymbolSemicolon,
+				token = &selectorToken{
+					Symbol: selectorSymbolSemicolon,
 					Text:   ";",
 				}
 				return
 			case r == '~':
 				state = S2
 			case r == 0:
-				token = &exprToken{
-					Symbol: exprSymbolEnd,
+				token = &selectorToken{
+					Symbol: selectorSymbolEnd,
 				}
 				return
 			default:
@@ -259,8 +260,8 @@ func (l *exprLexer) fetchInDefaultMode() (token *exprToken, err error) {
 				state = S2
 			default:
 				l.unreadRune()
-				token = &exprToken{
-					Symbol: exprSymbolIdentifier,
+				token = &selectorToken{
+					Symbol: selectorSymbolIdentifier,
 					Text:   lexeme.String(),
 				}
 				return
@@ -291,7 +292,7 @@ func (l *exprLexer) fetchInDefaultMode() (token *exprToken, err error) {
 	}
 }
 
-func (l *exprLexer) fetchInValuesMode() (token *exprToken, err error) {
+func (l *selectorLexer) fetchInValuesMode() (token *selectorToken, err error) {
 	type State int
 	const (
 		S0 State = iota
@@ -314,14 +315,14 @@ func (l *exprLexer) fetchInValuesMode() (token *exprToken, err error) {
 				lexeme.Reset()
 				state = S3
 			case r == ',':
-				token = &exprToken{
-					Symbol: exprSymbolComma,
+				token = &selectorToken{
+					Symbol: selectorSymbolComma,
 					Text:   ",",
 				}
 				return
 			case r == ')':
-				token = &exprToken{
-					Symbol: exprSymbolRightParenthesis,
+				token = &selectorToken{
+					Symbol: selectorSymbolRightParenthesis,
 					Text:   ")",
 				}
 				return
@@ -345,8 +346,8 @@ func (l *exprLexer) fetchInValuesMode() (token *exprToken, err error) {
 				state = S3
 			case r == ',' || r == ')':
 				l.unreadRune()
-				token = &exprToken{
-					Symbol: exprSymbolString,
+				token = &selectorToken{
+					Symbol: selectorSymbolString,
 					Text:   lexeme.String(),
 				}
 				return
@@ -364,8 +365,8 @@ func (l *exprLexer) fetchInValuesMode() (token *exprToken, err error) {
 			switch {
 			case r == ',' || r == ')':
 				l.unreadRune()
-				token = &exprToken{
-					Symbol: exprSymbolString,
+				token = &selectorToken{
+					Symbol: selectorSymbolString,
 					Text:   lexeme.String(),
 				}
 				lexeme.Reset()
@@ -396,8 +397,8 @@ func (l *exprLexer) fetchInValuesMode() (token *exprToken, err error) {
 				state = S4
 			case r == ',' || r == ')':
 				l.unreadRune()
-				token = &exprToken{
-					Symbol: exprSymbolString,
+				token = &selectorToken{
+					Symbol: selectorSymbolString,
 					Text:   lexeme.String(),
 				}
 				return
@@ -418,7 +419,7 @@ func (l *exprLexer) fetchInValuesMode() (token *exprToken, err error) {
 	}
 }
 
-func (l *exprLexer) readRune() rune {
+func (l *selectorLexer) readRune() rune {
 	r, _, err := l.buffer.ReadRune()
 	if errors.Is(err, io.EOF) {
 		return 0
@@ -433,7 +434,7 @@ func (l *exprLexer) readRune() rune {
 	return r
 }
 
-func (l *exprLexer) unreadRune() {
+func (l *selectorLexer) unreadRune() {
 	err := l.buffer.UnreadRune()
 	if err != nil {
 		l.logger.Error(
