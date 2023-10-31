@@ -21,8 +21,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/jhernand/o2ims/internal/data"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
 )
 
 type ObjectAdapterBuilder struct {

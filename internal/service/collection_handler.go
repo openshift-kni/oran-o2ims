@@ -17,8 +17,8 @@ package service
 import (
 	"context"
 
-	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/search"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 // CollectionRequest represents a request for a collection of objects.

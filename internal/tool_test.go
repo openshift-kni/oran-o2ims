@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
 
-	"github.com/jhernand/o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 var _ = Describe("Tool", func() {

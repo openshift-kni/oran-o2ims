@@ -20,10 +20,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 
-	"github.com/jhernand/o2ims/internal"
-	"github.com/jhernand/o2ims/internal/exit"
-	"github.com/jhernand/o2ims/internal/logging"
-	"github.com/jhernand/o2ims/internal/service"
+	"github.com/openshift-kni/oran-o2ims/internal"
+	"github.com/openshift-kni/oran-o2ims/internal/exit"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
 // Server creates and returns the `start deployment-manager-server` command.

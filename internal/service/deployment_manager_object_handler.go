@@ -22,8 +22,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jhernand/o2ims/internal/data"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
 )
 
 // DeploymentManagerObjectHandlerBuilder contains the data and logic needed to create a new

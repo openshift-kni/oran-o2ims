@@ -1,6 +1,6 @@
-# O2IMS
+# O-RAN O2IMS
 
-This project project is an implementation of the O-RAN O2 IMS API on top of
+This project is an implementation of the O-RAN O2 IMS API on top of
 OpenShift and ACM.
 
 Note that at this point this is just experimental and at its very beginnings,

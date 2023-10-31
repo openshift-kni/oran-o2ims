@@ -19,7 +19,7 @@ import (
 
 	"github.com/PaesslerAG/jsonpath"
 
-	"github.com/jhernand/o2ims/internal/streaming"
+	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
 
 // Object represents an object containing a list of fields, each with a name and a value.
