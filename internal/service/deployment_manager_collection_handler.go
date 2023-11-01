@@ -22,10 +22,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/k8s"
-	"github.com/jhernand/o2ims/internal/search"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/k8s"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 // DeploymentManagerCollectionHandlerBuilder contains the data and logic needed to create a new

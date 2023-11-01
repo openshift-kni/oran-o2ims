@@ -17,7 +17,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/jhernand/o2ims/internal/cmd/server"
+	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 )
 
 // Create creates and returns the `start` command.

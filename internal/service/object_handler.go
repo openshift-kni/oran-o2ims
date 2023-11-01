@@ -17,7 +17,7 @@ package service
 import (
 	"context"
 
-	"github.com/jhernand/o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
 )
 
 // ObjectHandler represents a request for an individual object.

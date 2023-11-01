@@ -20,7 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jhernand/o2ims/internal"
+	"github.com/openshift-kni/oran-o2ims/internal"
 )
 
 // Version creates and returns the `version` command.

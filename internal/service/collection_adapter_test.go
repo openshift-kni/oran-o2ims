@@ -26,9 +26,9 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
-	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/logging"
-	"github.com/jhernand/o2ims/internal/search"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 var _ = Describe("Collection adapter", func() {

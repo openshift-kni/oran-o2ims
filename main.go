@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jhernand/o2ims/internal"
-	"github.com/jhernand/o2ims/internal/cmd"
-	"github.com/jhernand/o2ims/internal/exit"
+	"github.com/openshift-kni/oran-o2ims/internal"
+	"github.com/openshift-kni/oran-o2ims/internal/cmd"
+	"github.com/openshift-kni/oran-o2ims/internal/exit"
 )
 
 func main() {

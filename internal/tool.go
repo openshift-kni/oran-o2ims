@@ -23,7 +23,7 @@ import (
 	"runtime/debug"
 	"slices"
 
-	"github.com/jhernand/o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/spf13/cobra"
 )
 

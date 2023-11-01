@@ -23,9 +23,9 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 
-	"github.com/jhernand/o2ims/internal/data"
-	"github.com/jhernand/o2ims/internal/search"
-	"github.com/jhernand/o2ims/internal/streaming"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
+	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
 
 type CollectionAdapterBuilder struct {

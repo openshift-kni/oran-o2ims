@@ -21,8 +21,8 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/jhernand/o2ims/internal/data"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
 )
 
 // StreamBuilder contains the data and logic needed to create an stream that processes list of
