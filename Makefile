@@ -13,7 +13,7 @@
 #
 
 # Details of the image:
-image_repo:=quay.io/jhernand/o2ims
+image_repo:=quay.io/openshift-kni/oran-o2ims
 image_tag:=latest
 
 # Additional flags to pass to the `ginkgo` command.
@@ -49,6 +49,7 @@ lint:
 	golangci-lint run
 
 .PHONY: clean
-clean: rm -rf \
-	o2ims \
+clean:
+	rm -rf \
+	oran-o2ims \
 	$(NULL)

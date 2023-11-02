@@ -34,7 +34,7 @@ export BACKEND_TOKEN=<backend_token>
 
 #### Using CLI
 ```bash
-./o2ims start deployment-manager-server --cloud-id $CLOUD_ID --backend-url $BACKEND_URL --backend-token $BACKEND_TOKEN
+./oran-o2ims start deployment-manager-server --cloud-id $CLOUD_ID --backend-url $BACKEND_URL --backend-token $BACKEND_TOKEN
 ```
 
 #### Using VS Code
