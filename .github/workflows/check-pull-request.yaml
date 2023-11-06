@@ -45,7 +45,7 @@ jobs:
 
     - name: Install Go tools
       run: |
-        go install github.com/onsi/ginkgo/v2/ginkgo@v2.12.1
+        go install github.com/onsi/ginkgo/v2/ginkgo@$(go list -f '{{.Version}}' -m github.com/onsi/ginkgo/v2)
         go install go.uber.org/mock/mockgen@v0.3.0
 
     - name: Run the tests
