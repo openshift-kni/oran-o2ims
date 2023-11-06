@@ -12,22 +12,9 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package cmd
+package server
 
-import (
-	"github.com/spf13/cobra"
-
-	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
+// Names of command line flags:
+const (
+	cloudIDFlagName = "cloud-id"
 )
-
-// Create creates and returns the `start` command.
-func Start() *cobra.Command {
-	result := &cobra.Command{
-		Use:   "start",
-		Short: "Starts components",
-		Args:  cobra.NoArgs,
-	}
-	result.AddCommand(server.DeploymentManagerServer())
-	result.AddCommand(server.MetadataServer())
-	return result
-}
