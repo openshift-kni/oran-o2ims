@@ -37,16 +37,22 @@ generate:
 
 .PHONY: test tests
 test tests:
+	@echo "=== Run ginkgo... ==="
 	ginkgo run -r $(ginkgo_flags)
 
 .PHONY: fmt
 fmt:
+	@echo "=== Run fmt... ==="
 	gofmt -s -l -w .
 
 .PHONY: lint
 lint:
+	@echo "=== Run lint... ==="
 	golangci-lint --version
 	golangci-lint run
+
+.PHONY: ci-job
+ci-job: lint fmt test
 
 .PHONY: clean
 clean:
