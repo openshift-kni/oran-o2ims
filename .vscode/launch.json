@@ -12,6 +12,19 @@
                         ]
                 },
                 {
+                        "name": "start metadata-server",
+                        "type": "go",
+                        "request": "launch",
+                        "mode": "auto",
+                        "program": "${workspaceFolder}",
+                        "args": [
+                                "start",
+                                "metadata-server",
+                                "--log-level=debug",
+                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb"
+                        ]
+                },
+                {
                         "name": "start deployment-manager-server",
                         "type": "go",
                         "request": "launch",

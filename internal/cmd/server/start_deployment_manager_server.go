@@ -238,7 +238,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	objectAdapter, err := service.NewObjectAdapter().
 		SetLogger(logger).
 		SetHandler(objectHandler).
-		SetID("deploymentManagerID").
+		SetIDVariable("deploymentManagerID").
 		Build()
 	if err != nil {
 		logger.Error(
@@ -269,5 +269,4 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 const (
 	backendTokenFlagName = "backend-token"
 	backendURLFlagName   = "backend-url"
-	cloudIDFlagName      = "cloud-id"
 )

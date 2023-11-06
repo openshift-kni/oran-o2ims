@@ -54,9 +54,9 @@ func (b *ObjectAdapterBuilder) SetHandler(value ObjectHandler) *ObjectAdapterBui
 	return b
 }
 
-// SetID sets the name of the path variable that contains the identifier of the object. This is
-// mandatory.
-func (b *ObjectAdapterBuilder) SetID(value string) *ObjectAdapterBuilder {
+// SetIDVariable sets the name of the path variable that contains the identifier of the object. This is
+// optional. If not specified then no identifier will be passed to the handler.
+func (b *ObjectAdapterBuilder) SetIDVariable(value string) *ObjectAdapterBuilder {
 	b.id = value
 	return b
 }
@@ -70,10 +70,6 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 	}
 	if b.handler == nil {
 		err = errors.New("handler is mandatory")
-		return
-	}
-	if b.id == "" {
-		err = errors.New("name of path variable containing identifier is mandatory")
 		return
 	}
 
@@ -105,19 +101,7 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get the identifier:
-	id, ok := mux.Vars(r)[a.id]
-	if !ok {
-		a.logger.Error(
-			"Failed to find path variable",
-			"var", a.id,
-		)
-		SendError(
-			w,
-			http.StatusInternalServerError,
-			"Failed to find path variable",
-		)
-		return
-	}
+	id := mux.Vars(r)[a.id]
 
 	// Create the request:
 	request := &ObjectRequest{
@@ -134,7 +118,7 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		SendError(
 			w,
 			http.StatusInternalServerError,
-			"Failed to get items",
+			"Internal error",
 		)
 		return
 	}
