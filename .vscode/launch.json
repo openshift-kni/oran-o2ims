@@ -23,7 +23,7 @@
                                 "--log-level=debug",
                                 "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
                                 "--backend-url=${env:BACKEND_URL}",
-                                "--backend-token=${env:BACKEND_TOKEN}",
+                                "--backend-token=${env:BACKEND_TOKEN}"
                         ]
                 },
                 {
