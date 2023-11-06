@@ -1,0 +1,11 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+
+component: "Telco"
+subcomponent: "O-RAN O2-IMS"
+
+filters:
+  ".*":
+    reviewers:
+      - oran-o2ims-reviewers
+    approvers:
+      - oran-o2ims-approvers
