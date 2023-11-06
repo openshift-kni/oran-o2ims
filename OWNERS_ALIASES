@@ -1,0 +1,11 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+
+aliases:
+  oran-o2ims-reviewers:
+    - jhernand
+    - danielerez
+    - irinamihai
+  oran-o2ims-approvers:
+    - jhernand
+    - danielerez
+    - irinamihai
