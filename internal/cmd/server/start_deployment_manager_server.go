@@ -15,12 +15,14 @@ License.
 package server
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 
 	"github.com/openshift-kni/oran-o2ims/internal"
+	"github.com/openshift-kni/oran-o2ims/internal/authentication"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service"
@@ -36,6 +38,7 @@ func DeploymentManagerServer() *cobra.Command {
 		RunE:  c.run,
 	}
 	flags := result.Flags()
+	authentication.AddFlags(flags)
 	_ = flags.String(
 		cloudIDFlagName,
 		"",
@@ -147,6 +150,20 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 			"Failed to create transport wrapper",
 			"error", err.Error(),
 		)
+		return exit.Error(1)
+	}
+
+	// Create the authentication wrapper:
+	authenticationWrapper, err := authentication.NewHandlerWrapper().
+		SetLogger(logger).
+		SetFlags(flags).
+		Build()
+	if err != nil {
+		logger.Error(
+			"Failed to create authentication wrapper",
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
 	}
 
 	// Create the router:
@@ -157,6 +174,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		service.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	})
+	router.Use(authenticationWrapper)
 
 	// Create the collection handler:
 	collectionHandler, err := service.NewDeploymentManagerCollectionHandler().
