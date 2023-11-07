@@ -81,7 +81,7 @@ var _ = Describe("Collection adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *CollectionRequest) (response *CollectionResponse, err error) {
-				Expect(request.Filter).To(Equal(&search.Selector{
+				Expect(request.Selector).To(Equal(&search.Selector{
 					Terms: []*search.Term{{
 						Operator: search.Eq,
 						Path: []string{
@@ -119,7 +119,7 @@ var _ = Describe("Collection adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *CollectionRequest) (response *CollectionResponse, err error) {
-				Expect(request.Filter).To(Equal(&search.Selector{
+				Expect(request.Selector).To(Equal(&search.Selector{
 					Terms: []*search.Term{
 						{
 							Operator: search.Eq,
@@ -168,7 +168,7 @@ var _ = Describe("Collection adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *CollectionRequest) (response *CollectionResponse, err error) {
-				Expect(request.Filter).To(BeNil())
+				Expect(request.Selector).To(BeNil())
 				response = &CollectionResponse{
 					Items: data.Null(),
 				}

@@ -17,25 +17,29 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 type ObjectAdapterBuilder struct {
-	logger  *slog.Logger
-	handler ObjectHandler
-	id      string
+	logger     *slog.Logger
+	handler    ObjectHandler
+	idVariable string
 }
 
 type ObjectAdapter struct {
-	logger  *slog.Logger
-	handler ObjectHandler
-	id      string
-	jsonAPI jsoniter.API
+	logger             *slog.Logger
+	idVariable         string
+	projectorParser    *search.ProjectorParser
+	projectorEvaluator *search.ProjectorEvaluator
+	jsonAPI            jsoniter.API
+	handler            ObjectHandler
 }
 
 func NewObjectAdapter() *ObjectAdapterBuilder {
@@ -57,7 +61,7 @@ func (b *ObjectAdapterBuilder) SetHandler(value ObjectHandler) *ObjectAdapterBui
 // SetIDVariable sets the name of the path variable that contains the identifier of the object. This is
 // optional. If not specified then no identifier will be passed to the handler.
 func (b *ObjectAdapterBuilder) SetIDVariable(value string) *ObjectAdapterBuilder {
-	b.id = value
+	b.idVariable = value
 	return b
 }
 
@@ -73,6 +77,30 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 		return
 	}
 
+	// Create the projector parser and evaluator:
+	projectorParser, err := search.NewProjectorParser().
+		SetLogger(b.logger).
+		Build()
+	if err != nil {
+		err = fmt.Errorf("failed to create field selector parser: %w", err)
+		return
+	}
+	pathEvaluator, err := search.NewPathEvaluator().
+		SetLogger(b.logger).
+		Build()
+	if err != nil {
+		err = fmt.Errorf("failed to create projector path evaluator: %w", err)
+		return
+	}
+	projectorEvaluator, err := search.NewProjectorEvaluator().
+		SetLogger(b.logger).
+		SetPathEvaluator(pathEvaluator.Evaluate).
+		Build()
+	if err != nil {
+		err = fmt.Errorf("failed to create projector evaluator: %w", err)
+		return
+	}
+
 	// Prepare the JSON iterator API:
 	jsonConfig := jsoniter.Config{
 		IndentionStep: 2,
@@ -81,10 +109,12 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 
 	// Create and populate the object:
 	result = &ObjectAdapter{
-		logger:  b.logger,
-		handler: b.handler,
-		id:      b.id,
-		jsonAPI: jsonAPI,
+		logger:             b.logger,
+		handler:            b.handler,
+		idVariable:         b.idVariable,
+		projectorParser:    projectorParser,
+		projectorEvaluator: projectorEvaluator,
+		jsonAPI:            jsonAPI,
 	}
 	return
 }
@@ -100,16 +130,44 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Get the context:
 	ctx := r.Context()
 
-	// Get the identifier:
-	id := mux.Vars(r)[a.id]
+	// Get the query parameters:
+	query := r.URL.Query()
 
 	// Create the request:
 	request := &ObjectRequest{
-		ID: id,
+		ID: mux.Vars(r)[a.idVariable],
+	}
+
+	// Check if there is a projector, and parse it:
+	values, ok := query["fields"]
+	if ok {
+		for _, value := range values {
+			projector, err := a.projectorParser.Parse(value)
+			if err != nil {
+				a.logger.Error(
+					"Failed to parse field selector",
+					slog.String("selector", value),
+					slog.String("error", err.Error()),
+				)
+				SendError(
+					w,
+					http.StatusBadRequest,
+					"Failed to parse field selector '%s': %v",
+					value, err,
+				)
+				return
+			}
+			a.logger.Debug(
+				"Parsed field selector",
+				slog.String("source", value),
+				slog.Any("parsed", projector),
+			)
+			request.Projector = append(request.Projector, projector...)
+		}
 	}
 
 	// Call the handler:
-	response, err := a.handler.Get(r.Context(), request)
+	response, err := a.handler.Get(ctx, request)
 	if err != nil {
 		a.logger.Error(
 			"Failed to get items",
@@ -123,8 +181,26 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If there is a projector apply it:
+	object := response.Object
+	if request.Projector != nil {
+		object, err = a.projectorEvaluator.Evaluate(ctx, request.Projector, response.Object)
+		if err != nil {
+			a.logger.Error(
+				"Failed to evaluate projector",
+				slog.String("error", err.Error()),
+			)
+			SendError(
+				w,
+				http.StatusInternalServerError,
+				"Internal error",
+			)
+			return
+		}
+	}
+
 	// Send the result:
-	a.sendObject(ctx, w, response.Object)
+	a.sendObject(ctx, w, object)
 }
 
 func (a *ObjectAdapter) sendObject(ctx context.Context, w http.ResponseWriter,

@@ -177,11 +177,11 @@ func (h *DeploymentManagerCollectionHandler) Get(ctx context.Context,
 	items = data.Map(items, h.mapItem)
 
 	// Select only the items that satisfy the filter:
-	if request.Filter != nil {
+	if request.Selector != nil {
 		items = data.Select(
 			items,
 			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.selectorEvaluator.Evaluate(ctx, request.Filter, item)
+				result, err = h.selectorEvaluator.Evaluate(ctx, request.Selector, item)
 				return
 			},
 		)

@@ -23,8 +23,11 @@ import (
 
 // CollectionRequest represents a request for a collection of objects.
 type CollectionRequest struct {
-	Filter   *search.Selector
-	Selector [][]string
+	// Selector selects the objects to return.
+	Selector *search.Selector
+
+	// Projector is the list of field paths to return.
+	Projector [][]string
 }
 
 // CollectionResponse represents the response to the request to get the list of items of a collection.
