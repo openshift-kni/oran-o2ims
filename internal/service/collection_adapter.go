@@ -79,7 +79,7 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 		return
 	}
 
-	// Create the field selector parser:
+	// Create the projector parser and evaluator:
 	projectorParser, err := search.NewProjectorParser().
 		SetLogger(b.logger).
 		Build()
@@ -87,8 +87,6 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 		err = fmt.Errorf("failed to create field selector parser: %w", err)
 		return
 	}
-
-	// Create the path evaluator:
 	pathEvaluator, err := search.NewPathEvaluator().
 		SetLogger(b.logger).
 		Build()
@@ -130,19 +128,21 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"from", r.RemoteAddr,
 		"url", r.URL.String(),
 	)
-	query := r.URL.Query()
 
 	// Get the context:
 	ctx := r.Context()
 
+	// Get the query parameters:
+	query := r.URL.Query()
+
 	// Create the request:
 	request := &CollectionRequest{}
 
-	// Check if there is a filter expression, and parse it:
+	// Check if there is a selector, and parse it:
 	values, ok := query["filter"]
 	if ok {
 		for _, value := range values {
-			expr, err := a.selectorParser.Parse(value)
+			selector, err := a.selectorParser.Parse(value)
 			if err != nil {
 				a.logger.Error(
 					"Failed to parse filter expression",
@@ -157,15 +157,15 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				)
 				return
 			}
-			a.logger.Info(
+			a.logger.Debug(
 				"Parsed filter expressions",
 				slog.String("source", value),
-				slog.String("parsed", expr.String()),
+				slog.String("parsed", selector.String()),
 			)
-			if request.Filter == nil {
-				request.Filter = expr
+			if request.Selector == nil {
+				request.Selector = selector
 			} else {
-				request.Filter.Terms = append(request.Filter.Terms, expr.Terms...)
+				request.Selector.Terms = append(request.Selector.Terms, selector.Terms...)
 			}
 		}
 	}
@@ -174,7 +174,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	values, ok = query["fields"]
 	if ok {
 		for _, value := range values {
-			selector, err := a.projectorParser.Parse(value)
+			projector, err := a.projectorParser.Parse(value)
 			if err != nil {
 				a.logger.Error(
 					"Failed to parse field selector",
@@ -192,14 +192,14 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			a.logger.Info(
 				"Parsed field selector",
 				slog.String("source", value),
-				slog.Any("parsed", selector),
+				slog.Any("parsed", projector),
 			)
-			request.Selector = append(request.Selector, selector...)
+			request.Projector = append(request.Projector, projector...)
 		}
 	}
 
 	// Call the handler:
-	response, err := a.handler.Get(r.Context(), request)
+	response, err := a.handler.Get(ctx, request)
 	if err != nil {
 		a.logger.Error(
 			"Failed to get items",
@@ -214,17 +214,18 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If there is a projector apply it:
-	if request.Selector != nil {
-		response.Items = data.Map(
-			response.Items,
+	items := response.Items
+	if request.Projector != nil {
+		items = data.Map(
+			items,
 			func(ctx context.Context, item data.Object) (result data.Object, err error) {
-				result, err = a.projectorEvaluator.Evaluate(ctx, request.Selector, item)
+				result, err = a.projectorEvaluator.Evaluate(ctx, request.Projector, item)
 				return
 			},
 		)
 	}
 
-	a.sendItems(ctx, w, response.Items)
+	a.sendItems(ctx, w, items)
 }
 
 func (a *CollectionAdapter) sendItems(ctx context.Context, w http.ResponseWriter,
@@ -236,7 +237,7 @@ func (a *CollectionAdapter) sendItems(ctx context.Context, w http.ResponseWriter
 	err := writer.Flush()
 	if err != nil {
 		slog.Error(
-			"Faild to flush JSON stream",
+			"Faild to flush stream",
 			"error", err.Error(),
 		)
 	}

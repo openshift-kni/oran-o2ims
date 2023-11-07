@@ -1,0 +1,229 @@
+/*
+Copyright (c) 2023 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+compliance with the License. You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is
+distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing permissions and limitations under the
+License.
+*/
+
+package service
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+
+	. "github.com/onsi/ginkgo/v2/dsl/core"
+	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
+
+	"github.com/openshift-kni/oran-o2ims/internal/data"
+)
+
+var _ = Describe("Object adapter", func() {
+	var ctrl *gomock.Controller
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		DeferCleanup(func() {
+			ctrl.Finish()
+		})
+	})
+
+	Describe("Creation", func() {
+		It("Can be created with a logger and a handler", func() {
+			handler := NewMockObjectHandler(ctrl)
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(adapter).ToNot(BeNil())
+		})
+
+		It("Can't be created without a logger", func() {
+			handler := NewMockObjectHandler(ctrl)
+			adapter, err := NewObjectAdapter().
+				SetHandler(handler).
+				Build()
+			Expect(err).To(HaveOccurred())
+			msg := err.Error()
+			Expect(msg).To(ContainSubstring("logger"))
+			Expect(msg).To(ContainSubstring("mandatory"))
+			Expect(adapter).To(BeNil())
+		})
+
+		It("Can't be created without a handler", func() {
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				Build()
+			Expect(err).To(HaveOccurred())
+			msg := err.Error()
+			Expect(msg).To(ContainSubstring("handler"))
+			Expect(msg).To(ContainSubstring("mandatory"))
+			Expect(adapter).To(BeNil())
+		})
+	})
+
+	Describe("Projection", func() {
+		It("Accepts projector with one field", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ObjectRequest) (response *ObjectResponse, err error) {
+				Expect(request.Projector).To(Equal([][]string{
+					{"myattr"},
+				}))
+				response = &ObjectResponse{
+					Object: data.Object{
+						"myattr":   "myvalue",
+						"yourattr": "yourvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mypath?fields=myattr",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": "myvalue"
+			}`))
+		})
+
+		It("Accepts projector with two fields", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ObjectRequest) (response *ObjectResponse, err error) {
+				Expect(request.Projector).To(Equal([][]string{
+					{"myattr"},
+					{"yourattr"},
+				}))
+				response = &ObjectResponse{
+					Object: data.Object{
+						"myattr":   "myvalue",
+						"yourattr": "yourvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mypath?fields=myattr,yourattr",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": "myvalue",
+				"yourattr": "yourvalue"
+			}`))
+		})
+
+		It("Accepts projector with two path segments", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ObjectRequest) (response *ObjectResponse, err error) {
+				Expect(request.Projector).To(Equal([][]string{
+					{"myattr", "yourattr"},
+				}))
+				response = &ObjectResponse{
+					Object: data.Object{
+						"myattr": data.Object{
+							"yourattr":  "yourvalue",
+							"theirattr": "theirvalue",
+						},
+						"morestuff": 123,
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mypath?fields=myattr/yourattr",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": {
+					"yourattr": "yourvalue"
+				}
+			}`))
+		})
+
+		It("Accepts request without projector", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ObjectRequest) (response *ObjectResponse, err error) {
+				Expect(request.Projector).To(BeNil())
+				response = &ObjectResponse{
+					Object: data.Object{
+						"myattr":   "myvalue",
+						"yourattr": "yourvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(http.MethodGet, "/mypath", nil)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": "myvalue",
+				"yourattr": "yourvalue"
+			}`))
+		})
+	})
+})

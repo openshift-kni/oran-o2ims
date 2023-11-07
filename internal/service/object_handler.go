@@ -22,6 +22,10 @@ import (
 
 // ObjectHandler represents a request for an individual object.
 type ObjectRequest struct {
+	// Projector is the  list of field paths to return.
+	Projector [][]string
+
+	// ID is the identifier of the object.
 	ID string
 }
 
