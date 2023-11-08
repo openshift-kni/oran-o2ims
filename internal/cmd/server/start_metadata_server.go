@@ -23,6 +23,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
+	"github.com/openshift-kni/oran-o2ims/internal/network"
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
@@ -36,6 +37,7 @@ func MetadataServer() *cobra.Command {
 		RunE:  c.run,
 	}
 	flags := result.Flags()
+	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
 	_ = flags.String(
 		cloudIDFlagName,
 		"",
@@ -157,12 +159,31 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		cloudInfoAdapter,
 	).Methods(http.MethodGet)
 
-	// Start the server:
-	err = http.ListenAndServe(":8080", router)
+	// Start the API server:
+	apiListener, err := network.NewListener().
+		SetLogger(logger).
+		SetFlags(flags, network.APIListener).
+		Build()
 	if err != nil {
 		logger.Error(
-			"server finished with error",
-			"error", err,
+			"Failed to to create API listener",
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	logger.Info(
+		"API listening",
+		slog.String("address", apiListener.Addr().String()),
+	)
+	apiServer := http.Server{
+		Addr:    apiListener.Addr().String(),
+		Handler: router,
+	}
+	err = apiServer.Serve(apiListener)
+	if err != nil {
+		logger.Error(
+			"API server finished with error",
+			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
