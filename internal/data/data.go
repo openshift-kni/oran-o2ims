@@ -16,6 +16,7 @@ package data
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/PaesslerAG/jsonpath"
 
@@ -33,6 +34,40 @@ func GetString(o Object, path string) (result string, err error) {
 	result, ok := value.(string)
 	if !ok {
 		err = fmt.Errorf("value of path '%s' isn't a string", path)
+	}
+	return
+}
+
+func GetArray(o Object, path string) (result []any, err error) {
+	value, err := jsonpath.Get(path, o)
+	if err != nil {
+		return
+	}
+	result, ok := value.([]any)
+	if !ok {
+		err = fmt.Errorf("value of path '%s' isn't an array", value)
+	}
+	return
+}
+
+func GetObj(o Object, path string) (result Object, err error) {
+	value, err := jsonpath.Get(path, o)
+	if err != nil {
+		return
+	}
+	result, ok := value.(Object)
+	if !ok {
+		err = fmt.Errorf("value of path '%s' isn't an object", value)
+	}
+	return
+}
+
+func GetLabelsMap(labels string) (labelsMap map[string]string) {
+	labelsArr := strings.Split(labels, "; ")
+	labelsMap = map[string]string{}
+	for _, label := range labelsArr {
+		keyValue := strings.Split(label, "=")
+		labelsMap[keyValue[0]] = keyValue[1]
 	}
 	return
 }
@@ -64,3 +99,6 @@ var Select = streaming.Select[Object]
 // with a mapper. Note that the actual calls to the mapper will not happen when this function is
 // called, they will happen only when the stream is eventually consumed.
 var Map = streaming.Map[Object, Object]
+
+// Collect collects all the items in the given stream and returns an slice containing them.
+var Collect = streaming.Collect[Object]

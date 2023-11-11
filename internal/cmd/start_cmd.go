@@ -29,5 +29,6 @@ func Start() *cobra.Command {
 	}
 	result.AddCommand(server.DeploymentManagerServer())
 	result.AddCommand(server.MetadataServer())
+	result.AddCommand(server.ResourceServer())
 	return result
 }
