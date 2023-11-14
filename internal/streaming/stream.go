@@ -106,7 +106,7 @@ func (s *repeatStream[I]) Size(ctx context.Context) (size int, err error) {
 
 // Collect collects all the items in the given stream and returns an slice containing them.
 func Collect[I any](ctx context.Context, stream Stream[I]) (slice []I, err error) {
-	// If we know the size of the stream we can create the slice with the reuquired capacity
+	// If we know the size of the stream we can create the slice with the required capacity
 	// in advance and avoid the reallocations that will otherwise be done as items are added.
 	var buffer []I
 	sizer, ok := stream.(Sizer)
@@ -133,6 +133,7 @@ func Collect[I any](ctx context.Context, stream Stream[I]) (slice []I, err error
 		item, err = stream.Next(ctx)
 		if errors.Is(err, ErrEnd) {
 			slice = buffer
+			err = nil
 			return
 		}
 		if err != nil {
@@ -142,7 +143,7 @@ func Collect[I any](ctx context.Context, stream Stream[I]) (slice []I, err error
 	}
 }
 
-// Mapper is a function that transofms one object into another.
+// Mapper is a function that transforms one object into another.
 type Mapper[F, T any] func(context.Context, F) (T, error)
 
 // Map creates a stream that contains the result of transforming the objects of the given stream
