@@ -47,6 +47,19 @@ pids="${pids} $!"
 &
 pids="${pids} $!"
 
+# Start the resource server:
+./oran-o2ims start resource-server \
+--log-file="servers.log" \
+--log-level="debug" \
+--log-field="server=resource" \
+--log-field="pid=%p" \
+--api-listener-address="127.0.0.1:8002" \
+--cloud-id="123" \
+--backend-url="${BACKEND_URL}" \
+--backend-token="${BACKEND_TOKEN}" \
+&
+pids="${pids} $!"
+
 # Start the reverse proxy:
 podman run \
 --rm \

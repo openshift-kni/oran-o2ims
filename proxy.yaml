@@ -55,6 +55,20 @@ static_resources:
                 address: 127.0.0.1
                 port_value: 8001
 
+  - name: resource-server
+    connect_timeout: 1s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: resource-server
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 8002
+
   listeners:
 
   - name: ingress
@@ -91,6 +105,14 @@ static_resources:
                   prefix: /O2ims_infrastructureInventory/v1/deploymentManagers
                 route:
                   cluster: deployment-manager-server
+                  timeout: 300s
+
+              # Requests for the resource server:
+              - name: resource-manager
+                match:
+                  prefix: /O2ims_infrastructureInventory/v1/resourcePools
+                route:
+                  cluster: resource-server
                   timeout: 300s
 
               # Everything else goes to the metadata server, which will respond with 404 to most
