@@ -25,7 +25,7 @@ binary:
 
 .PHONY: image
 image:
-	podman build -t "$(image_repo):$(image_tag)" .
+	podman build -t "$(image_repo):$(image_tag)" -f Containerfile .
 
 .PHONY: push
 push: image
