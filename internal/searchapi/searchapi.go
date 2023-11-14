@@ -2,8 +2,6 @@
 
 package searchapi
 
-// SearchFilter and SearchInput types copied from: github.com/stolostron/search-v2-api/graph/model
-
 // A message is used to communicate conditions detected while executing a query on the server.
 type Message struct {
 	// Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
