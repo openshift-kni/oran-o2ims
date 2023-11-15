@@ -15,6 +15,8 @@ so don't try to use it for anything close to a production environment.
 make binary
 ```
 
+### Run tests
+
 ### Run
 
 #### Commands
