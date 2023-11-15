@@ -29,9 +29,6 @@ RUN \
   tar -C /usr/local -xf tarball && \
   rm tarball
 
-WORKDIR /go/src/github.com/openshift-kni/oran-o2ims
-COPY . .
-
 # Update GOPATH and PATH.
 ENV \
   GOPATH=/go
