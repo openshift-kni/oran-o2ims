@@ -14,12 +14,18 @@
 
 FROM registry.access.redhat.com/ubi9/ubi:9.2 AS builder
 
-# Install packages:
+# Install OS packages:
 RUN \
   dnf install -y \
-  make \
+  python3.11 \
+  python3.11-pip \
   && \
   dnf clean all
+
+# In RHEL containers the default is Python 3.9, but we need the version of Python 3.11 that we
+# installed as the default, otherwise our build scripts don't work correctly:
+RUN \
+  ln -sf python3.11 /usr/bin/python3
 
 # Currently RHEL 9 doesn't provide a Go 1.21 compiler, so we need to install it from the Go
 # downloads site:
@@ -39,6 +45,12 @@ WORKDIR \
 ENV \
   PATH="${PATH}:/usr/local/go/bin"
 
+# Install Python packages:
+COPY \
+  dev.txt .
+RUN \
+  pip3.11 install -r dev.txt
+
 # Copy the source:
 COPY \
   --chown=builder:builder \
@@ -51,7 +63,7 @@ RUN \
 
 # Build the binary:
 RUN \
-  make binary
+  ./dev.py build binary
 
 FROM registry.access.redhat.com/ubi9-minimal:9.2 AS runtime
 
