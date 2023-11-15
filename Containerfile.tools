@@ -49,3 +49,6 @@ RUN \
   tar -C /usr/local/bin --strip-components=1 -xf tarball golangci-lint-1.55.2-linux-amd64/golangci-lint && \
   rm tarball
 
+# Install git - required by the ci-operator.
+RUN dnf install git -y
+
