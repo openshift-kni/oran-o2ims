@@ -2,6 +2,17 @@
         "version": "0.2.0",
         "configurations": [
                 {
+                        "name": "setup",
+                        "type": "debugpy",
+                        "request": "launch",
+                        "program": "${workspaceFolder}/dev.py",
+                        "args": [
+                                "setup",
+                        ],
+                        "console": "integratedTerminal",
+                        "justMyCode": true
+                },
+                {
                         "name": "version",
                         "type": "go",
                         "request": "launch",

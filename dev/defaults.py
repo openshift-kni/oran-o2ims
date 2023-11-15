@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
+
 #
-# Copyright (c) 2023 Red Hat, Inc.
+# Copyright (c) 2024 Red Hat Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -12,6 +14,10 @@
 # the License.
 #
 
-# This file lists the Python dependencies used by the GitHub actions.
+# Imane repository and tag:
+IMAGE_REPOSITORY = "quay.io/openshift-kni/oran-o2ims"
+IMAGE_TAG = "latest"
 
-requests
+# Catalog bundle image repository and tag:
+BUNDLE_IMAGE_REPOSITORY = IMAGE_REPOSITORY + "-bundle"
+BUNDLE_IMAGE_TAG = IMAGE_TAG

@@ -28,8 +28,11 @@ jobs:
     - name: Checkout the source
       uses: actions/checkout@v3
 
+    - name: Install tools
+      uses: ./.github/actions/install-tools
+
     - name: Build image
-      run: make image
+      run: ./dev.py build image
 
   unit-tests:
     name: Unit tests
@@ -38,25 +41,14 @@ jobs:
     - name: Checkout the source
       uses: actions/checkout@v3
 
-    - name: Install Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+    - name: Install tools
+      uses: ./.github/actions/install-tools
 
-    - name: Install Go tools
-      run: |
-        go install github.com/onsi/ginkgo/v2/ginkgo@$(go list -f '{{.Version}}' -m github.com/onsi/ginkgo/v2)
-        go install go.uber.org/mock/mockgen@v0.3.0
-
-    - name: Install spectral
-      run: |
-        curl -Lo spectral https://github.com/stoplightio/spectral/releases/download/v6.11.0/spectral-linux-x64
-        echo 0e151d3dc5729750805428f79a152fa01dd4c203f1d9685ef19f4fd4696fcd5f spectral | sha256sum -c
-        chmod +x spectral
-        sudo mv spectral /usr/bin
+    - name: Install tools
+      run: ./dev.py setup
 
     - name: Run the tests
-      run: make tests
+      run: ./dev.py test
 
   check-generated-code:
     name: Check generated code
@@ -65,17 +57,11 @@ jobs:
     - name: Checkout the source
       uses: actions/checkout@v3
 
-    - name: Install Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
-
-    - name: Install Go tools
-      run: |
-        go install go.uber.org/mock/mockgen@v0.3.0
+    - name: Install tools
+      uses: ./.github/actions/install-tools
 
     - name: Generate code
-      run: make generate
+      run: ./dev.py generate
 
     - name: Check differences
       run: git diff --exit-code
@@ -87,13 +73,8 @@ jobs:
     - name: Checkout the source
       uses: actions/checkout@v3
 
-    - name: Install Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+    - name: Install tools
+      uses: ./.github/actions/install-tools
 
     - name: Run the linter
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: v1.54.2
-        args: --timeout=5m
+      run: ./dev.py lint
