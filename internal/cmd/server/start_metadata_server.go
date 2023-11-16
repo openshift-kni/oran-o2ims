@@ -123,11 +123,11 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/O2ims_infrastructureInventory/api_versions",
+		"/o2ims-infrastructureInventory/api_versions",
 		versionsAdapter,
 	).Methods(http.MethodGet)
 	router.Handle(
-		"/O2ims_infrastructureInventory/{version}/api_versions",
+		"/o2ims-infrastructureInventory/{version}/api_versions",
 		versionsAdapter,
 	).Methods(http.MethodGet)
 
@@ -155,7 +155,7 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/O2ims_infrastructureInventory/v1",
+		"/o2ims-infrastructureInventory/v1",
 		cloudInfoAdapter,
 	).Methods(http.MethodGet)
 

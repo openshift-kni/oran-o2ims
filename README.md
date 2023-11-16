@@ -47,5 +47,5 @@ export BACKEND_TOKEN=<backend_token>
 
 ##### GET Deployment Manager List 
 ```bash
-curl http://localhost:8080/O2ims_infrastructureInventory/1.2.3/deploymentManagers
+curl http://localhost:8080/o2ims-infrastructureInventory/1.2.3/deploymentManagers
 ```

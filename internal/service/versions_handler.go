@@ -124,7 +124,7 @@ func (h *VersionsHandler) Get(ctx context.Context, request *ObjectRequest) (resp
 	// Return the result:
 	response = &ObjectResponse{
 		Object: data.Object{
-			"uriPrefix":   "/O2ims_infrastructureInventory/v1",
+			"uriPrefix":   "/o2ims-infrastructureInventory/v1",
 			"apiVersions": selectedVersions,
 		},
 	}

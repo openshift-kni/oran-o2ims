@@ -102,7 +102,7 @@ static_resources:
               # Requests for the deployment manager server:
               - name: deployment-manager
                 match:
-                  prefix: /O2ims_infrastructureInventory/v1/deploymentManagers
+                  prefix: /o2ims-infrastructureInventory/v1/deploymentManagers
                 route:
                   cluster: deployment-manager-server
                   timeout: 300s
@@ -110,7 +110,7 @@ static_resources:
               # Requests for the resource server:
               - name: resource-manager
                 match:
-                  prefix: /O2ims_infrastructureInventory/v1/resourcePools
+                  prefix: /o2ims-infrastructureInventory/v1/resourcePools
                 route:
                   cluster: resource-server
                   timeout: 300s
