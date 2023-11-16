@@ -37,22 +37,28 @@ generate:
 
 .PHONY: test tests
 test tests:
-	@echo "=== Run ginkgo... ==="
+	@echo "Run ginkgo"
 	ginkgo run -r $(ginkgo_flags)
 
 .PHONY: fmt
 fmt:
-	@echo "=== Run fmt... ==="
+	@echo "Run fmt"
 	gofmt -s -l -w .
 
 .PHONY: lint
 lint:
-	@echo "=== Run lint... ==="
+	@echo "Run lint"
 	golangci-lint --version
-	golangci-lint run
+	golangci-lint run --verbose --print-resources-usage --modules-download-mode=vendor --timeout=5m0s
+
+.PHONY: deps-update
+deps-update:
+	@echo "Update dependencies"
+	hack/update_deps.sh
+	hack/install_test_deps.sh
 
 .PHONY: ci-job
-ci-job: lint fmt test
+ci-job: deps-update lint fmt test
 
 .PHONY: clean
 clean:
