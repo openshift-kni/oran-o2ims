@@ -252,7 +252,7 @@ func (c *ResourceServerCommand) createResourcePoolsHandlers(
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/O2ims_infrastructureInventory/{version}/resourcePools",
+		"/o2ims-infrastructureInventory/{version}/resourcePools",
 		collectionAdapter,
 	).Methods(http.MethodGet)
 
@@ -286,7 +286,7 @@ func (c *ResourceServerCommand) createResourcePoolsHandlers(
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/O2ims_infrastructureInventory/{version}/resourcePools/{resourcePoolID}",
+		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}",
 		objectAdapter,
 	).Methods(http.MethodGet)
 

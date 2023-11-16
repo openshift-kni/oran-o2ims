@@ -218,7 +218,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/O2ims_infrastructureInventory/{version}/deploymentManagers",
+		"/o2ims-infrastructureInventory/{version}/deploymentManagers",
 		collectionAdapter,
 	).Methods(http.MethodGet)
 
@@ -250,7 +250,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/O2ims_infrastructureInventory/{version}/deploymentManagers/{deploymentManagerID}",
+		"/o2ims-infrastructureInventory/{version}/deploymentManagers/{deploymentManagerID}",
 		objectAdapter,
 	).Methods(http.MethodGet)
 
