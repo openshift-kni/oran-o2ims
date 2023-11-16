@@ -32,9 +32,13 @@ RUN \
 # Install git - required by the ci-operator.
 RUN dnf install git -y
 
-# Update GOPATH and PATH.
+# Update GOPATH, GOCACHE, GOLANGCI_LINT_CACHE, PATH.
 ENV \
   GOPATH=/go
+ENV \
+  GOCACHE=/tmp/
+ENV \
+  GOLANGCI_LINT_CACHE=/tmp/.cache
 ENV \
   PATH="${PATH}:/usr/local/go/bin:${GOPATH}/bin"
 
