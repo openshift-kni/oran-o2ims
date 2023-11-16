@@ -2,6 +2,9 @@
 !/LICENSE.txt
 !/Makefile
 !/README.md
+!/dev.py
+!/dev.txt
+!/dev/
 !/go.mod
 !/go.sum
 !/internal
