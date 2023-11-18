@@ -31,17 +31,31 @@ import (
 // unchanged as a prefix for the help text. The above example will result in the following flags:
 //
 //	--api-listener-address string API listen address. (default "localhost:8000")
+//	--api-listener-tls-crt string API TLS certificate in PEM format.
+//	--api-listener-tls-key string API TLS key in PEM format.
 func AddListenerFlags(set *pflag.FlagSet, name, addr string) {
 	_ = set.String(
 		listenerFlagName(name, listenerAddrFlagSuffix),
 		addr,
 		fmt.Sprintf("%s listen address.", name),
 	)
+	_ = set.String(
+		listenerFlagName(name, listenerTLSCrtFlagSuffix),
+		"",
+		fmt.Sprintf("%s TLS certificate in PEM format.", name),
+	)
+	_ = set.String(
+		listenerFlagName(name, listenerTLSKeyFlagSuffix),
+		"",
+		fmt.Sprintf("%s TLS key in PEM format.", name),
+	)
 }
 
 // Names of the flags:
 const (
-	listenerAddrFlagSuffix = "listener-address"
+	listenerAddrFlagSuffix   = "listener-address"
+	listenerTLSCrtFlagSuffix = "listener-tls-crt"
+	listenerTLSKeyFlagSuffix = "listener-tls-key"
 )
 
 // listenerFlagName calculates a complete flag name from a listener name and a flag name suffix.
