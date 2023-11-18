@@ -15,11 +15,18 @@ License.
 package testing
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"log"
+	"math/big"
+	"net"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/onsi/gomega/ghttp"
 
@@ -100,3 +107,54 @@ func fetchCACertificate(network, address string) string {
 	// Return the path of the temporary file:
 	return file.Name()
 }
+
+// LocalhostCertificate returns a self signed TLS certificate valid for the name `localhost` DNS
+// name, for the `127.0.0.1` IPv4 address and for the `::1` IPv6 address.
+//
+// A similar certificate can be generated with the following command:
+//
+//	openssl req \
+//	-x509 \
+//	-newkey rsa:4096 \
+//	-nodes \
+//	-keyout tls.key \
+//	-out tls.crt \
+//	-subj '/CN=localhost' \
+//	-addext 'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1' \
+//	-days 1
+func LocalhostCertificate() tls.Certificate {
+	if localhostCertificate == nil {
+		key, err := rsa.GenerateKey(rand.Reader, 4096)
+		Expect(err).ToNot(HaveOccurred())
+		now := time.Now()
+		spec := x509.Certificate{
+			SerialNumber: big.NewInt(0),
+			Subject: pkix.Name{
+				CommonName: "localhost",
+			},
+			DNSNames: []string{
+				"localhost",
+			},
+			IPAddresses: []net.IP{
+				net.ParseIP("127.0.0.1"),
+				net.ParseIP("::1"),
+			},
+			NotBefore: now,
+			NotAfter:  now.Add(24 * time.Hour),
+			KeyUsage:  x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+			ExtKeyUsage: []x509.ExtKeyUsage{
+				x509.ExtKeyUsageServerAuth,
+			},
+		}
+		data, err := x509.CreateCertificate(rand.Reader, &spec, &spec, &key.PublicKey, key)
+		Expect(err).ToNot(HaveOccurred())
+		localhostCertificate = &tls.Certificate{
+			Certificate: [][]byte{data},
+			PrivateKey:  key,
+		}
+	}
+	return *localhostCertificate
+}
+
+// localhostCertificate contains the TLS certificate returned by the LocalhostCertificate function.
+var localhostCertificate *tls.Certificate

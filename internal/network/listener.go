@@ -15,9 +15,11 @@ License.
 package network
 
 import (
-	"fmt"
+	"crypto/tls"
+	"errors"
 	"log/slog"
 	"net"
+	"slices"
 
 	"github.com/spf13/pflag"
 )
@@ -25,9 +27,12 @@ import (
 // ListenerBuilder contains the data and logic needed to create a network listener. Don't create
 // instances of this object directly, use the NewListener function instead.
 type ListenerBuilder struct {
-	logger  *slog.Logger
-	network string
-	address string
+	logger       *slog.Logger
+	network      string
+	address      string
+	tlsCrt       string
+	tlsKey       string
+	tlsProtocols []string
 }
 
 // NewListener creates a builder that can then used to configure and create a network listener.
@@ -51,13 +56,50 @@ func (b *ListenerBuilder) SetLogger(value *slog.Logger) *ListenerBuilder {
 //
 // This is optional.
 func (b *ListenerBuilder) SetFlags(flags *pflag.FlagSet, name string) *ListenerBuilder {
-	if flags != nil {
-		listenerAddrFlagName := listenerFlagName(name, listenerAddrFlagSuffix)
-		value, err := flags.GetString(listenerAddrFlagName)
-		if err == nil {
-			b.SetAddress(value)
-		}
+	if flags == nil {
+		return b
 	}
+
+	var (
+		flag  string
+		value string
+		err   error
+	)
+	failure := func() {
+		b.logger.Error(
+			"Failed to get flag value",
+			slog.String("flag", "flag"),
+			slog.String("error", err.Error()),
+		)
+	}
+
+	// Address:
+	flag = listenerFlagName(name, listenerAddrFlagSuffix)
+	value, err = flags.GetString(flag)
+	if err != nil {
+		failure()
+	} else {
+		b.SetAddress(value)
+	}
+
+	// TLS certificate:
+	flag = listenerFlagName(name, listenerTLSCrtFlagSuffix)
+	value, err = flags.GetString(flag)
+	if err != nil {
+		failure()
+	} else {
+		b.SetTLSCrt(value)
+	}
+
+	// TLS key:
+	flag = listenerFlagName(name, listenerTLSKeyFlagSuffix)
+	value, err = flags.GetString(flag)
+	if err != nil {
+		failure()
+	} else {
+		b.SetTLSKey(value)
+	}
+
 	return b
 }
 
@@ -73,24 +115,79 @@ func (b *ListenerBuilder) SetAddress(value string) *ListenerBuilder {
 	return b
 }
 
+// SetTLSCrt sets the file that contains the certificate file, in PEM format.
+func (b *ListenerBuilder) SetTLSCrt(value string) *ListenerBuilder {
+	b.tlsCrt = value
+	return b
+}
+
+// SetTLSKey sets the file that contains the key file, in PEM format.
+func (b *ListenerBuilder) SetTLSKey(value string) *ListenerBuilder {
+	b.tlsKey = value
+	return b
+}
+
+// AddTLSProtocol adds a protocol that will be supported during the TLS negotiation.
+func (b *ListenerBuilder) AddTLSProtocol(value string) *ListenerBuilder {
+	b.tlsProtocols = append(b.tlsProtocols, value)
+	return b
+}
+
 // Build uses the data stored in the builder to create a new network listener.
 func (b *ListenerBuilder) Build() (result net.Listener, err error) {
 	// Check parameters:
 	if b.logger == nil {
-		err = fmt.Errorf("logger is mandatory")
+		err = errors.New("logger is mandatory")
 		return
 	}
 	if b.network == "" {
-		err = fmt.Errorf("network is mandatory")
+		err = errors.New("network is mandatory")
 		return
 	}
 	if b.address == "" {
-		err = fmt.Errorf("address is mandatory")
+		err = errors.New("address is mandatory")
+		return
+	}
+	if b.tlsCrt != "" && b.tlsKey == "" {
+		err = errors.New("TLS key is mandatory when certificate is specified")
+		return
+	}
+	if b.tlsKey != "" && b.tlsCrt == "" {
+		err = errors.New("TLS certificate is mandatory when key is specified")
 		return
 	}
 
-	// Create and populate the object:
-	result, err = net.Listen(b.network, b.address)
+	// Try to load the certificates
+	var tlsCrt tls.Certificate
+	if b.tlsCrt != "" && b.tlsKey != "" {
+		tlsCrt, err = tls.LoadX509KeyPair(b.tlsCrt, b.tlsKey)
+		if err != nil {
+			return
+		}
+		b.logger.Info(
+			"Loaded TLS key and certificate",
+			"key", b.tlsKey,
+			"crt", b.tlsCrt,
+		)
+	}
+
+	// Create the listener:
+	listener, err := net.Listen(b.network, b.address)
+	if err != nil {
+		return
+	}
+	if tlsCrt.Certificate != nil {
+		listener = tls.NewListener(listener, &tls.Config{
+			Certificates: []tls.Certificate{
+				tlsCrt,
+			},
+			NextProtos: slices.Clone(b.tlsProtocols),
+		})
+	}
+
+	// Return the listener:
+	result = listener
+
 	return
 }
 
