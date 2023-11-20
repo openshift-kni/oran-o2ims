@@ -21,7 +21,7 @@ import (
 )
 
 // ObjectHandler represents a request for an individual object.
-type ObjectRequest struct {
+type GetRequest struct {
 	// Projector is the  list of field paths to return.
 	Projector [][]string
 
@@ -29,8 +29,8 @@ type ObjectRequest struct {
 	ID string
 }
 
-// ObjectResponse represents the response to the request to get an individual object.
-type ObjectResponse struct {
+// GetResponse represents the response to the request to get an individual object.
+type GetResponse struct {
 	Object data.Object
 }
 
@@ -39,5 +39,5 @@ type ObjectResponse struct {
 //
 //go:generate mockgen -source=object_handler.go -package=service -destination=object_handler_mock.go
 type ObjectHandler interface {
-	Get(ctx context.Context, request *ObjectRequest) (response *ObjectResponse, err error)
+	Get(ctx context.Context, request *GetRequest) (response *GetResponse, err error)
 }

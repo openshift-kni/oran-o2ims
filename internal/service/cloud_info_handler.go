@@ -75,9 +75,9 @@ func (b *CloudInfoHandlerBuilder) Build() (result *CloudInfoHandler, err error) 
 }
 
 // Get is part of the implementation of the object handler interface.
-func (h *CloudInfoHandler) Get(ctx context.Context, request *ObjectRequest) (response *ObjectResponse,
+func (h *CloudInfoHandler) Get(ctx context.Context, request *GetRequest) (response *GetResponse,
 	err error) {
-	response = &ObjectResponse{
+	response = &GetResponse{
 		Object: data.Object{
 			"oCloudId":      h.cloudID,
 			"globalCloudId": h.cloudID,

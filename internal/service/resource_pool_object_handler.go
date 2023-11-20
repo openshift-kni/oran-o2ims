@@ -160,7 +160,7 @@ func (b *ResourcePoolObjectHandlerBuilder) Build() (
 
 // Get is part of the implementation of the collection handler interface.
 func (h *ResourcePoolObjectHandler) Get(ctx context.Context,
-	request *ObjectRequest) (response *ObjectResponse, err error) {
+	request *GetRequest) (response *GetResponse, err error) {
 	resourcePoolFetcher, err := NewResourcePoolFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
@@ -181,7 +181,7 @@ func (h *ResourcePoolObjectHandler) Get(ctx context.Context,
 	}
 
 	// Return the result:
-	response = &ObjectResponse{
+	response = &GetResponse{
 		Object: resourcePool,
 	}
 	return

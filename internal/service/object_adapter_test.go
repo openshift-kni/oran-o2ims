@@ -75,11 +75,11 @@ var _ = Describe("Object adapter", func() {
 		It("Accepts projector with one field", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *ObjectRequest) (response *ObjectResponse, err error) {
+				request *GetRequest) (response *GetResponse, err error) {
 				Expect(request.Projector).To(Equal([][]string{
 					{"myattr"},
 				}))
-				response = &ObjectResponse{
+				response = &GetResponse{
 					Object: data.Object{
 						"myattr":   "myvalue",
 						"yourattr": "yourvalue",
@@ -113,12 +113,12 @@ var _ = Describe("Object adapter", func() {
 		It("Accepts projector with two fields", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *ObjectRequest) (response *ObjectResponse, err error) {
+				request *GetRequest) (response *GetResponse, err error) {
 				Expect(request.Projector).To(Equal([][]string{
 					{"myattr"},
 					{"yourattr"},
 				}))
-				response = &ObjectResponse{
+				response = &GetResponse{
 					Object: data.Object{
 						"myattr":   "myvalue",
 						"yourattr": "yourvalue",
@@ -153,11 +153,11 @@ var _ = Describe("Object adapter", func() {
 		It("Accepts projector with two path segments", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *ObjectRequest) (response *ObjectResponse, err error) {
+				request *GetRequest) (response *GetResponse, err error) {
 				Expect(request.Projector).To(Equal([][]string{
 					{"myattr", "yourattr"},
 				}))
-				response = &ObjectResponse{
+				response = &GetResponse{
 					Object: data.Object{
 						"myattr": data.Object{
 							"yourattr":  "yourvalue",
@@ -196,9 +196,9 @@ var _ = Describe("Object adapter", func() {
 		It("Accepts request without projector", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *ObjectRequest) (response *ObjectResponse, err error) {
+				request *GetRequest) (response *GetResponse, err error) {
 				Expect(request.Projector).To(BeNil())
-				response = &ObjectResponse{
+				response = &GetResponse{
 					Object: data.Object{
 						"myattr":   "myvalue",
 						"yourattr": "yourvalue",

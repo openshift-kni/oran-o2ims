@@ -185,9 +185,9 @@ func (b *ResourcePoolCollectionHandlerBuilder) Build() (
 	return
 }
 
-// Get is part of the implementation of the collection handler interface.
-func (h *ResourcePoolCollectionHandler) Get(ctx context.Context,
-	request *CollectionRequest) (response *CollectionResponse, err error) {
+// List is part of the implementation of the collection handler interface.
+func (h *ResourcePoolCollectionHandler) List(ctx context.Context,
+	request *ListRequest) (response *ListResponse, err error) {
 
 	// Transform the items into what we need:
 	resourcePools, err := h.fetchItems(ctx)
@@ -207,7 +207,7 @@ func (h *ResourcePoolCollectionHandler) Get(ctx context.Context,
 	}
 
 	// Return the result:
-	response = &CollectionResponse{
+	response = &ListResponse{
 		Items: resourcePools,
 	}
 	return

@@ -39,10 +39,10 @@ func (m *MockObjectHandler) EXPECT() *MockObjectHandlerMockRecorder {
 }
 
 // Get mocks base method.
-func (m *MockObjectHandler) Get(ctx context.Context, request *ObjectRequest) (*ObjectResponse, error) {
+func (m *MockObjectHandler) Get(ctx context.Context, request *GetRequest) (*GetResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, request)
-	ret0, _ := ret[0].(*ObjectResponse)
+	ret0, _ := ret[0].(*GetResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

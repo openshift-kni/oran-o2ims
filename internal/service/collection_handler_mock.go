@@ -38,17 +38,17 @@ func (m *MockCollectionHandler) EXPECT() *MockCollectionHandlerMockRecorder {
 	return m.recorder
 }
 
-// Get mocks base method.
-func (m *MockCollectionHandler) Get(ctx context.Context, request *CollectionRequest) (*CollectionResponse, error) {
+// List mocks base method.
+func (m *MockCollectionHandler) List(ctx context.Context, request *ListRequest) (*ListResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, request)
-	ret0, _ := ret[0].(*CollectionResponse)
+	ret := m.ctrl.Call(m, "List", ctx, request)
+	ret0, _ := ret[0].(*ListResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get.
-func (mr *MockCollectionHandlerMockRecorder) Get(ctx, request any) *gomock.Call {
+// List indicates an expected call of List.
+func (mr *MockCollectionHandlerMockRecorder) List(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCollectionHandler)(nil).Get), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockCollectionHandler)(nil).List), ctx, request)
 }

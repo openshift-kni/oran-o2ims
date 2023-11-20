@@ -68,7 +68,7 @@ func (b *VersionsHandlerBuilder) Build() (result *VersionsHandler, err error) {
 }
 
 // Get is part of the implementation of the object handler interface.
-func (h *VersionsHandler) Get(ctx context.Context, request *ObjectRequest) (response *ObjectResponse,
+func (h *VersionsHandler) Get(ctx context.Context, request *GetRequest) (response *GetResponse,
 	err error) {
 	// If a specifc major version was included in the URL then we need to select and return
 	// only the ones that match that:
@@ -122,7 +122,7 @@ func (h *VersionsHandler) Get(ctx context.Context, request *ObjectRequest) (resp
 	}
 
 	// Return the result:
-	response = &ObjectResponse{
+	response = &GetResponse{
 		Object: data.Object{
 			"uriPrefix":   "/o2ims-infrastructureInventory/v1",
 			"apiVersions": selectedVersions,
