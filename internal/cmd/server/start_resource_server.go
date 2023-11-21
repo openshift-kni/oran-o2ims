@@ -223,8 +223,8 @@ func (c *ResourceServerCommand) createResourcePoolsHandlers(
 	router *mux.Router,
 	cloudID, backendURL, backendToken string) error {
 
-	// Create the collection handler for resource pools:
-	collectionHandler, err := service.NewResourcePoolCollectionHandler().
+	// Create the handler:
+	handler, err := service.NewResourcePoolHandler().
 		SetLogger(c.logger).
 		SetTransportWrapper(transportWrapper).
 		SetCloudID(cloudID).
@@ -240,9 +240,11 @@ func (c *ResourceServerCommand) createResourcePoolsHandlers(
 		)
 		return exit.Error(1)
 	}
+
+	// Create the collection adapter:
 	collectionAdapter, err := service.NewCollectionAdapter().
 		SetLogger(c.logger).
-		SetHandler(collectionHandler).
+		SetHandler(handler).
 		Build()
 	if err != nil {
 		c.logger.Error(
@@ -256,26 +258,10 @@ func (c *ResourceServerCommand) createResourcePoolsHandlers(
 		collectionAdapter,
 	).Methods(http.MethodGet)
 
-	// Create the object handler:
-	objectHandler, err := service.NewResourcePoolObjectHandler().
-		SetLogger(c.logger).
-		SetTransportWrapper(transportWrapper).
-		SetCloudID(cloudID).
-		SetBackendURL(backendURL).
-		SetBackendToken(backendToken).
-		SetGraphqlQuery(c.getGraphqlQuery()).
-		SetGraphqlVars(c.getGraphqlVars()).
-		Build()
-	if err != nil {
-		c.logger.Error(
-			"Failed to create handler",
-			"error", err,
-		)
-		return exit.Error(1)
-	}
+	// Create the object adapter:
 	objectAdapter, err := service.NewObjectAdapter().
 		SetLogger(c.logger).
-		SetHandler(objectHandler).
+		SetHandler(handler).
 		SetIDVariable("resourcePoolID").
 		Build()
 	if err != nil {
