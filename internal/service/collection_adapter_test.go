@@ -80,7 +80,7 @@ var _ = Describe("Collection adapter", func() {
 		It("Accepts simple selector", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *CollectionRequest) (response *CollectionResponse, err error) {
+				request *ListRequest) (response *ListResponse, err error) {
 				Expect(request.Selector).To(Equal(&search.Selector{
 					Terms: []*search.Term{{
 						Operator: search.Eq,
@@ -92,13 +92,13 @@ var _ = Describe("Collection adapter", func() {
 						},
 					}},
 				}))
-				response = &CollectionResponse{
+				response = &ListResponse{
 					Items: data.Null(),
 				}
 				return
 			}
 			handler := NewMockCollectionHandler(ctrl)
-			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
 
 			// Send the request:
 			request := httptest.NewRequest(
@@ -118,7 +118,7 @@ var _ = Describe("Collection adapter", func() {
 		It("Accepts multiple filters", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *CollectionRequest) (response *CollectionResponse, err error) {
+				request *ListRequest) (response *ListResponse, err error) {
 				Expect(request.Selector).To(Equal(&search.Selector{
 					Terms: []*search.Term{
 						{
@@ -141,13 +141,13 @@ var _ = Describe("Collection adapter", func() {
 						},
 					},
 				}))
-				response = &CollectionResponse{
+				response = &ListResponse{
 					Items: data.Null(),
 				}
 				return
 			}
 			handler := NewMockCollectionHandler(ctrl)
-			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
 
 			// Send the request:
 			request := httptest.NewRequest(
@@ -167,15 +167,15 @@ var _ = Describe("Collection adapter", func() {
 		It("Accepts no filter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *CollectionRequest) (response *CollectionResponse, err error) {
+				request *ListRequest) (response *ListResponse, err error) {
 				Expect(request.Selector).To(BeNil())
-				response = &CollectionResponse{
+				response = &ListResponse{
 					Items: data.Null(),
 				}
 				return
 			}
 			handler := NewMockCollectionHandler(ctrl)
-			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
 
 			// Prepare the request and response:
 			request := httptest.NewRequest(http.MethodGet, "/mypath", nil)
@@ -219,14 +219,14 @@ var _ = Describe("Collection adapter", func() {
 		func(items data.Stream, expected string) {
 			// Prepare the handler:
 			body := func(ctx context.Context,
-				request *CollectionRequest) (response *CollectionResponse, err error) {
-				response = &CollectionResponse{
+				request *ListRequest) (response *ListResponse, err error) {
+				response = &ListResponse{
 					Items: items,
 				}
 				return
 			}
 			handler := NewMockCollectionHandler(ctrl)
-			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
 
 			// Prepare the request and response:
 			request := httptest.NewRequest(http.MethodGet, "/mypath", nil)
@@ -327,14 +327,14 @@ var _ = Describe("Collection adapter", func() {
 		// Prepare the handler that will return one billion copies of the object.
 		// That will be roughtly 280 GiB.
 		body := func(ctx context.Context,
-			request *CollectionRequest) (response *CollectionResponse, err error) {
-			response = &CollectionResponse{
+			request *ListRequest) (response *ListResponse, err error) {
+			response = &ListResponse{
 				Items: data.Repeat(object, 1_000_000_000),
 			}
 			return
 		}
 		handler := NewMockCollectionHandler(ctrl)
-		handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+		handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
 
 		// To avoid flooding the Ginkgo output we need to create a logger that
 		// discards messages:

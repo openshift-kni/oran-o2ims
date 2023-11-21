@@ -136,7 +136,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	// Create the request:
-	request := &CollectionRequest{}
+	request := &ListRequest{}
 
 	// Check if there is a selector, and parse it:
 	values, ok := query["filter"]
@@ -199,7 +199,7 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call the handler:
-	response, err := a.handler.Get(ctx, request)
+	response, err := a.handler.List(ctx, request)
 	if err != nil {
 		a.logger.Error(
 			"Failed to get items",

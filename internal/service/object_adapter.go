@@ -134,7 +134,7 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	// Create the request:
-	request := &ObjectRequest{
+	request := &GetRequest{
 		ID: mux.Vars(r)[a.idVariable],
 	}
 

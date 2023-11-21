@@ -26,6 +26,9 @@ import (
 // Object represents an object containing a list of fields, each with a name and a value.
 type Object = map[string]any
 
+// List represents a list of objecs.
+type List = []any
+
 func GetString(o Object, path string) (result string, err error) {
 	value, err := jsonpath.Get(path, o)
 	if err != nil {

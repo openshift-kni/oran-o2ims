@@ -24,11 +24,13 @@ import (
 	"log"
 	"math/big"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
 
 	"github.com/onsi/gomega/ghttp"
+	"github.com/openshift-kni/oran-o2ims/internal/data"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
@@ -106,6 +108,38 @@ func fetchCACertificate(network, address string) string {
 
 	// Return the path of the temporary file:
 	return file.Name()
+}
+
+// RespondeWithContent responds with the given status code, content type and body.
+func RespondWithContent(status int, contentType, body string) http.HandlerFunc {
+	return ghttp.RespondWith(
+		status,
+		body,
+		http.Header{
+			"Content-Type": []string{
+				contentType,
+			},
+		},
+	)
+}
+
+// RespondWithJSON responds with the given status code and JSON body.
+func RespondWithJSON(status int, body string) http.HandlerFunc {
+	return RespondWithContent(status, "application/json", body)
+}
+
+// RespondWithList returns an HTTP handler that responds with a list of objects.
+func RespondWithList(items ...any) http.HandlerFunc {
+	return ghttp.RespondWithJSONEncoded(http.StatusOK, data.Object{
+		"apiVersion": "v1",
+		"kind":       "List",
+		"items":      items,
+	})
+}
+
+// RespondWithObject returns an HTTP handler that responds with a single object.
+func RespondWithObject(object data.Object) http.HandlerFunc {
+	return ghttp.RespondWithJSONEncoded(http.StatusOK, object)
 }
 
 // LocalhostCertificate returns a self signed TLS certificate valid for the name `localhost` DNS

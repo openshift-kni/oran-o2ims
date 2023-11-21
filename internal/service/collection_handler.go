@@ -21,8 +21,8 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
-// CollectionRequest represents a request for a collection of objects.
-type CollectionRequest struct {
+// ListRequest represents a request for a collection of objects.
+type ListRequest struct {
 	// Selector selects the objects to return.
 	Selector *search.Selector
 
@@ -30,8 +30,8 @@ type CollectionRequest struct {
 	Projector [][]string
 }
 
-// CollectionResponse represents the response to the request to get the list of items of a collection.
-type CollectionResponse struct {
+// ListResponse represents the response to the request to get the list of items of a collection.
+type ListResponse struct {
 	Items data.Stream
 }
 
@@ -40,5 +40,5 @@ type CollectionResponse struct {
 //
 //go:generate mockgen -source=collection_handler.go -package=service -destination=collection_handler_mock.go
 type CollectionHandler interface {
-	Get(ctx context.Context, request *CollectionRequest) (response *CollectionResponse, err error)
+	List(ctx context.Context, request *ListRequest) (response *ListResponse, err error)
 }

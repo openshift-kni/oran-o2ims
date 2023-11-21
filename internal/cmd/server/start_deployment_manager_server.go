@@ -191,8 +191,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	})
 	router.Use(authenticationWrapper, authorizationWrapper)
 
-	// Create the collection handler:
-	collectionHandler, err := service.NewDeploymentManagerCollectionHandler().
+	// Create the handler:
+	handler, err := service.NewDeploymentManagerHandler().
 		SetLogger(logger).
 		SetTransportWrapper(transportWrapper).
 		SetCloudID(cloudID).
@@ -206,9 +206,11 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
+
+	// Create the collection route:
 	collectionAdapter, err := service.NewCollectionAdapter().
 		SetLogger(logger).
-		SetHandler(collectionHandler).
+		SetHandler(handler).
 		Build()
 	if err != nil {
 		logger.Error(
@@ -222,24 +224,10 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		collectionAdapter,
 	).Methods(http.MethodGet)
 
-	// Create the object handler:
-	objectHandler, err := service.NewDeploymentManagerObjectHandler().
-		SetLogger(logger).
-		SetTransportWrapper(transportWrapper).
-		SetCloudID(cloudID).
-		SetBackendURL(backendURL).
-		SetBackendToken(backendToken).
-		Build()
-	if err != nil {
-		logger.Error(
-			"Failed to create handler",
-			"error", err,
-		)
-		return exit.Error(1)
-	}
+	// Create the object route:
 	objectAdapter, err := service.NewObjectAdapter().
 		SetLogger(logger).
-		SetHandler(objectHandler).
+		SetHandler(handler).
 		SetIDVariable("deploymentManagerID").
 		Build()
 	if err != nil {
