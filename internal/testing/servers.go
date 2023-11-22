@@ -128,15 +128,6 @@ func RespondWithJSON(status int, body string) http.HandlerFunc {
 	return RespondWithContent(status, "application/json", body)
 }
 
-// RespondWithList returns an HTTP handler that responds with a list of objects.
-func RespondWithList(items ...any) http.HandlerFunc {
-	return ghttp.RespondWithJSONEncoded(http.StatusOK, data.Object{
-		"apiVersion": "v1",
-		"kind":       "List",
-		"items":      items,
-	})
-}
-
 // RespondWithObject returns an HTTP handler that responds with a single object.
 func RespondWithObject(object data.Object) http.HandlerFunc {
 	return ghttp.RespondWithJSONEncoded(http.StatusOK, object)

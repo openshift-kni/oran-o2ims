@@ -20,17 +20,19 @@ import (
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/ghttp"
 	. "github.com/onsi/gomega/ghttp"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/searchapi"
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
+	"github.com/openshift-kni/oran-o2ims/internal/text"
 )
 
-var _ = Describe("Deployment manager handler", func() {
+var _ = Describe("Resource pool handler", func() {
 	Describe("Creation", func() {
 		It("Can't be created without a logger", func() {
-			handler, err := NewDeploymentManagerHandler().
+			handler, err := NewResourcePoolHandler().
 				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
 				SetBackendToken("my-token").
@@ -43,7 +45,7 @@ var _ = Describe("Deployment manager handler", func() {
 		})
 
 		It("Can't be created without a cloud identifier", func() {
-			handler, err := NewDeploymentManagerHandler().
+			handler, err := NewResourcePoolHandler().
 				SetLogger(logger).
 				SetBackendURL("https://my-backend:6443").
 				SetBackendToken("my-token").
@@ -56,7 +58,7 @@ var _ = Describe("Deployment manager handler", func() {
 		})
 
 		It("Can't be created without a backend URL", func() {
-			handler, err := NewDeploymentManagerHandler().
+			handler, err := NewResourcePoolHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendToken("my-token").
@@ -69,7 +71,7 @@ var _ = Describe("Deployment manager handler", func() {
 		})
 
 		It("Can't be created without a backend token", func() {
-			handler, err := NewDeploymentManagerHandler().
+			handler, err := NewResourcePoolHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
@@ -86,7 +88,7 @@ var _ = Describe("Deployment manager handler", func() {
 		var (
 			ctx     context.Context
 			backend *Server
-			handler *DeploymentManagerHandler
+			handler *ResourcePoolHandler
 		)
 
 		BeforeEach(func() {
@@ -99,11 +101,34 @@ var _ = Describe("Deployment manager handler", func() {
 			backend = MakeTCPServer()
 
 			// Create the handler:
-			handler, err = NewDeploymentManagerHandler().
+			handler, err = NewResourcePoolHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendURL(backend.URL()).
 				SetBackendToken("my-token").
+				SetGraphqlQuery(text.Dedent(`
+					query ($input: [SearchInput]) {
+						searchResult: search(input: $input) {
+							items,
+							related {
+								items
+							},
+						}
+					}
+				`)).
+				SetGraphqlVars(&searchapi.SearchInput{
+					Filters: []*searchapi.SearchFilter{
+						{
+							Property: "kind",
+							Values: []*string{
+								ptr.To("cluster"),
+							},
+						},
+					},
+					RelatedKinds: []*string{
+						ptr.To("Node"),
+					},
+				}).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(handler).ToNot(BeNil())
@@ -113,12 +138,21 @@ var _ = Describe("Deployment manager handler", func() {
 			backend.Close()
 		})
 
-		// RespondWithList creates a handler that responds with the given search results.
-		var RespondWithList = func(items ...data.Object) http.HandlerFunc {
-			return ghttp.RespondWithJSONEncoded(http.StatusOK, data.Object{
-				"apiVersion": "v1",
-				"kind":       "List",
-				"items":      items,
+		// RespondWithItems creates a handler that responds with the given search results.
+		var RespondWithItems = func(items ...data.Object) http.HandlerFunc {
+			return RespondWithObject(data.Object{
+				"data": data.Object{
+					"searchResult": data.Array{
+						data.Object{
+							"items": items,
+							"related": data.Array{
+								data.Object{
+									"items": data.Array{},
+								},
+							},
+						},
+					},
+				},
 			})
 		}
 
@@ -128,7 +162,7 @@ var _ = Describe("Deployment manager handler", func() {
 				backend.AppendHandlers(
 					CombineHandlers(
 						VerifyHeaderKV("Authorization", "Bearer my-token"),
-						RespondWithList(),
+						RespondWithItems(),
 					),
 				)
 
@@ -138,25 +172,10 @@ var _ = Describe("Deployment manager handler", func() {
 				_, _ = handler.List(ctx, &ListRequest{})
 			})
 
-			It("Uses the right path", func() {
-				// Prepare a backend:
-				backend.AppendHandlers(
-					CombineHandlers(
-						VerifyRequest(http.MethodGet, "/global-hub-api/v1/managedclusters"),
-						RespondWithList(),
-					),
-				)
-
-				// Send the request. Note that we ignore the error here because
-				// all we care about here in this test is that it uses the right
-				// URL path, no matter what is the result.
-				_, _ = handler.List(ctx, &ListRequest{})
-			})
-
 			It("Translates empty list of results", func() {
-				// Prepare a backend:
+				// Prepare the backend:
 				backend.AppendHandlers(
-					RespondWithList(),
+					RespondWithItems(),
 				)
 
 				// Send the request and verify the result:
@@ -169,65 +188,45 @@ var _ = Describe("Deployment manager handler", func() {
 			})
 
 			It("Translates non empty list of results", func() {
-				// Prepare a backend:
+				// Prepare the backend:
 				backend.AppendHandlers(
-					CombineHandlers(
-						RespondWithList(
-							data.Object{
-								"metadata": data.Object{
-									"name": "my-cluster",
-									"labels": data.Object{
-										"clusterID": "123",
-									},
-								},
-								"spec": data.Object{
-									"managedClusterClientConfigs": data.Array{
-										data.Object{
-											"url": "https://my-cluster:6443",
-										},
-									},
-								},
-							},
-							data.Object{
-								"metadata": data.Object{
-									"name": "your-cluster",
-									"labels": data.Object{
-										"clusterID": "456",
-									},
-								},
-								"spec": data.Object{
-									"managedClusterClientConfigs": data.Array{
-										data.Object{
-											"url": "https://your-cluster:6443",
-										},
-									},
-								},
-							},
-						),
+					RespondWithItems(
+						data.Object{
+							"cluster": "0",
+							"label":   "a=b; c=d",
+							"name":    "my-cluster-0",
+						},
+						data.Object{
+							"cluster": "1",
+							"label":   "a=b; c=d",
+							"name":    "my-cluster-1",
+						},
 					),
 				)
 
-				// Send the request and verify the result:
+				// Send the request:
 				response, err := handler.List(ctx, &ListRequest{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
 				items, err := data.Collect(ctx, response.Items)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(items).To(HaveLen(2))
-				Expect(items[0]).To(Equal(data.Object{
-					"deploymentManagerId": "123",
-					"description":         "my-cluster",
-					"name":                "my-cluster",
-					"oCloudId":            "123",
-					"serviceUri":          "https://my-cluster:6443",
-				}))
-				Expect(items[1]).To(Equal(data.Object{
-					"deploymentManagerId": "456",
-					"description":         "your-cluster",
-					"name":                "your-cluster",
-					"oCloudId":            "123",
-					"serviceUri":          "https://your-cluster:6443",
-				}))
+
+				// Verify first result:
+				Expect(items[0]).To(MatchJQ(`.description`, ""))
+				Expect(items[0]).To(MatchJQ(`.globalLocationID`, ""))
+				Expect(items[0]).To(MatchJQ(`.location`, ""))
+				Expect(items[0]).To(MatchJQ(`.name`, "my-cluster-0"))
+				Expect(items[0]).To(MatchJQ(`.oCloudID`, "123"))
+				Expect(items[0]).To(MatchJQ(`.resourcePoolID`, "0"))
+
+				// Verify second result:
+				Expect(items[1]).To(MatchJQ(`.description`, ""))
+				Expect(items[1]).To(MatchJQ(`.globalLocationID`, ""))
+				Expect(items[1]).To(MatchJQ(`.location`, ""))
+				Expect(items[1]).To(MatchJQ(`.name`, "my-cluster-1"))
+				Expect(items[1]).To(MatchJQ(`.oCloudID`, "123"))
+				Expect(items[1]).To(MatchJQ(`.resourcePoolID`, "1"))
 			})
 		})
 
@@ -237,7 +236,7 @@ var _ = Describe("Deployment manager handler", func() {
 				backend.AppendHandlers(
 					CombineHandlers(
 						VerifyHeaderKV("Authorization", "Bearer my-token"),
-						RespondWithObject(data.Object{}),
+						RespondWithItems(),
 					),
 				)
 
@@ -249,58 +248,34 @@ var _ = Describe("Deployment manager handler", func() {
 				})
 			})
 
-			It("Uses the right path", func() {
-				// Prepare a backend:
-				backend.AppendHandlers(
-					CombineHandlers(
-						VerifyRequest(http.MethodGet, "/global-hub-api/v1/managedcluster/123"),
-						RespondWithObject(data.Object{}),
-					),
-				)
-
-				// Send the request. Note that we ignore the error here because
-				// all we care about in this test is that it uses the right URL
-				// path, no matter what is the response.
-				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
-				})
-			})
-
 			It("Translates result", func() {
 				// Prepare a backend:
 				backend.AppendHandlers(
 					CombineHandlers(
-						RespondWithObject(data.Object{
-							"metadata": data.Object{
-								"name": "my-cluster",
-								"labels": data.Object{
-									"clusterID": "123",
-								},
+						RespondWithItems(
+							data.Object{
+								"cluster": "0",
+								"label":   "a=b; c=d",
+								"name":    "my-cluster-0",
 							},
-							"spec": data.Object{
-								"managedClusterClientConfigs": data.Array{
-									data.Object{
-										"url": "https://my-cluster:6443",
-									},
-								},
-							},
-						}),
+						),
 					),
 				)
 
-				// Send the request and verify the result:
+				// Send the request:
 				response, err := handler.Get(ctx, &GetRequest{
-					ID: "123",
+					ID: "0",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
-				Expect(response.Object).To(Equal(data.Object{
-					"deploymentManagerId": "123",
-					"description":         "my-cluster",
-					"name":                "my-cluster",
-					"oCloudId":            "123",
-					"serviceUri":          "https://my-cluster:6443",
-				}))
+
+				// Verify the result:
+				Expect(response.Object).To(MatchJQ(`.description`, ""))
+				Expect(response.Object).To(MatchJQ(`.globalLocationID`, ""))
+				Expect(response.Object).To(MatchJQ(`.location`, ""))
+				Expect(response.Object).To(MatchJQ(`.name`, "my-cluster-0"))
+				Expect(response.Object).To(MatchJQ(`.oCloudID`, "123"))
+				Expect(response.Object).To(MatchJQ(`.resourcePoolID`, "0"))
 			})
 		})
 	})
