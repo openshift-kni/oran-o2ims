@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/gorilla/mux v1.8.0
+	github.com/itchyny/gojq v0.12.13
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.29.0
