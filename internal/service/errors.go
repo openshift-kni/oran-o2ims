@@ -15,11 +15,14 @@ License.
 package service
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
 )
+
+var ErrNotFound = errors.New("not found")
 
 func SendError(w http.ResponseWriter, status int, msg string, args ...any) {
 	w.Header().Set("Content-Type", "application/problem+json")

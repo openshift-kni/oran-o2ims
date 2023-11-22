@@ -17,14 +17,24 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
+	neturl "net/url"
+	"sync"
 
-	"github.com/itchyny/gojq"
+	"github.com/imdario/mergo"
 	jsoniter "github.com/json-iterator/go"
+	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	clnt "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -33,11 +43,12 @@ import (
 // manager collection handler. Don't create instances of this type directly, use the
 // NewDeploymentManagerHandler function instead.
 type DeploymentManagerHandlerBuilder struct {
-	logger           *slog.Logger
-	transportWrapper func(http.RoundTripper) http.RoundTripper
-	cloudID          string
-	backendURL       string
-	backendToken     string
+	logger         *slog.Logger
+	loggingWrapper func(http.RoundTripper) http.RoundTripper
+	cloudID        string
+	backendURL     string
+	backendToken   string
+	enableHack     bool
 }
 
 // DeploymentManagerCollectionHander knows how to respond to requests to list deployment managers.
@@ -45,13 +56,18 @@ type DeploymentManagerHandlerBuilder struct {
 // instead.
 type DeploymentManagerHandler struct {
 	logger            *slog.Logger
+	loggingWrapper    func(http.RoundTripper) http.RoundTripper
 	cloudID           string
 	backendURL        string
 	backendToken      string
 	backendClient     *http.Client
 	jsonAPI           jsoniter.API
 	selectorEvaluator *search.SelectorEvaluator
-	fieldMappers      map[string]*gojq.Code
+	jqTool            *jq.Tool
+	globalHubClient   *k8s.Client
+	enableHack        bool
+	profileCacheLock  *sync.Mutex
+	profileCache      map[string]data.Object
 }
 
 // NewDeploymentManagerHandler creates a builder that can then be used to configure and create a
@@ -67,11 +83,11 @@ func (b *DeploymentManagerHandlerBuilder) SetLogger(
 	return b
 }
 
-// SetTransportWrapper sets the wrapper that will be used to configure the HTTP clients used to
-// connect to other servers, including the backend server. This is optional.
-func (b *DeploymentManagerHandlerBuilder) SetTransportWrapper(
+// SetLoggingWrapper sets the wrapper that will be used to configure logging for the HTTP clients
+// used to connect to other servers, including the backend server. This is optional.
+func (b *DeploymentManagerHandlerBuilder) SetLoggingWrapper(
 	value func(http.RoundTripper) http.RoundTripper) *DeploymentManagerHandlerBuilder {
-	b.transportWrapper = value
+	b.loggingWrapper = value
 	return b
 }
 
@@ -94,6 +110,15 @@ func (b *DeploymentManagerHandlerBuilder) SetBackendToken(
 func (b *DeploymentManagerHandlerBuilder) SetBackendURL(
 	value string) *DeploymentManagerHandlerBuilder {
 	b.backendURL = value
+	return b
+}
+
+// SetEnableHack sets or clears the flag that indicates if the hack used to fetch authentication
+// details from clusters should be enabled. This is intended for unit tests, where we don't currently
+// have a way to test that hack. By the default the hack is disabled.
+func (b *DeploymentManagerHandlerBuilder) SetEnableHack(
+	value bool) *DeploymentManagerHandlerBuilder {
+	b.enableHack = value
 	return b
 }
 
@@ -125,8 +150,8 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 			InsecureSkipVerify: true,
 		},
 	}
-	if b.transportWrapper != nil {
-		backendTransport = b.transportWrapper(backendTransport)
+	if b.loggingWrapper != nil {
+		backendTransport = b.loggingWrapper(backendTransport)
 	}
 	backendClient := &http.Client{
 		Transport: backendTransport,
@@ -153,56 +178,41 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 		return
 	}
 
-	// Compile the field mappers:
-	fieldMappers, err := b.compileFieldMappers()
+	// Create the jq tool:
+	jqTool, err := jq.NewTool().
+		SetLogger(b.logger).
+		Build()
 	if err != nil {
 		return
+	}
+
+	// Create the Kubernetes API client only if the hack is enabled:
+	var globalHubClient *k8s.Client
+	if b.enableHack {
+		globalHubClient, err = k8s.NewClient().
+			SetLogger(b.logger).
+			SetLoggingWrapper(b.loggingWrapper).
+			Build()
+		if err != nil {
+			return
+		}
 	}
 
 	// Create and populate the object:
 	result = &DeploymentManagerHandler{
 		logger:            b.logger,
+		loggingWrapper:    b.loggingWrapper,
 		cloudID:           b.cloudID,
 		backendURL:        b.backendURL,
 		backendToken:      b.backendToken,
 		backendClient:     backendClient,
 		selectorEvaluator: selectorEvaluator,
 		jsonAPI:           jsonAPI,
-		fieldMappers:      fieldMappers,
-	}
-	return
-}
-
-// compileFieldMappers compiles the jq queries that are used to calculate the values of fields. This
-// compilation happens when the object is created so that we don't need to compile those queries
-// with every request.
-func (b *DeploymentManagerHandlerBuilder) compileFieldMappers() (result map[string]*gojq.Code,
-	err error) {
-	result = map[string]*gojq.Code{}
-	for field, source := range deploymentManagerFieldMappers {
-		var query *gojq.Query
-		query, err = gojq.Parse(source)
-		if err != nil {
-			b.logger.Error(
-				"Failed to parse mapping",
-				slog.String("field", field),
-				slog.String("source", source),
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-		var code *gojq.Code
-		code, err = gojq.Compile(query, gojq.WithVariables([]string{"$cloud_id"}))
-		if err != nil {
-			b.logger.Error(
-				"Failed to compile mapping",
-				slog.String("field", field),
-				slog.String("source", source),
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-		result[field] = code
+		jqTool:            jqTool,
+		globalHubClient:   globalHubClient,
+		enableHack:        b.enableHack,
+		profileCacheLock:  &sync.Mutex{},
+		profileCache:      map[string]data.Object{},
 	}
 	return
 }
@@ -211,7 +221,7 @@ func (b *DeploymentManagerHandlerBuilder) compileFieldMappers() (result map[stri
 func (h *DeploymentManagerHandler) List(ctx context.Context,
 	request *ListRequest) (response *ListResponse, err error) {
 	// Create the stream that will fetch the items:
-	items, err := h.fetchItems(ctx)
+	items, err := h.fetchItems(ctx, nil)
 	if err != nil {
 		return
 	}
@@ -240,28 +250,34 @@ func (h *DeploymentManagerHandler) List(ctx context.Context,
 // Get is the implementation of the object handler interface.
 func (h *DeploymentManagerHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
-	// Fetch the object:
-	object, err := h.fetchItem(ctx, request.ID)
+	// Fetch the item:
+	item, err := h.fetchItem(ctx, request.ID, nil)
 	if err != nil {
 		return
 	}
 
 	// Transform the object into what we need:
-	object, err = h.mapItem(ctx, object)
+	item, err = h.mapItem(ctx, item)
+	if err != nil {
+		return
+	}
 
 	// Return the result:
 	response = &GetResponse{
-		Object: object,
+		Object: item,
 	}
 	return
 }
 
-func (h *DeploymentManagerHandler) fetchItems(ctx context.Context) (result data.Stream,
-	err error) {
+func (h *DeploymentManagerHandler) fetchItems(ctx context.Context,
+	query neturl.Values) (result data.Stream, err error) {
 	url := fmt.Sprintf("%s/global-hub-api/v1/managedclusters", h.backendURL)
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
+	}
+	if query != nil {
+		request.URL.RawQuery = query.Encode()
 	}
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.backendToken))
 	request.Header.Set("Accept", "application/json")
@@ -288,83 +304,327 @@ func (h *DeploymentManagerHandler) fetchItems(ctx context.Context) (result data.
 	return
 }
 
-func (h *DeploymentManagerHandler) fetchItem(ctx context.Context, id string) (result data.Object,
-	err error) {
-	url := fmt.Sprintf("%s/global-hub-api/v1/managedcluster/%s", h.backendURL, id)
-	request, err := http.NewRequest(http.MethodGet, url, nil)
+func (h *DeploymentManagerHandler) fetchItem(ctx context.Context, id string,
+	query neturl.Values) (result data.Object, err error) {
+	// Currently the ACM API that we use doesn't have a specific endpoint for retrieving a
+	// specific object, instead of that we need to fetch a list filtering with a label
+	// selector.
+	if query == nil {
+		query = neturl.Values{}
+	} else {
+		query = maps.Clone(query)
+	}
+	query.Set("labelSelector", fmt.Sprintf("clusterID=%s", id))
+	query.Set("limit", "1")
+	stream, err := h.fetchItems(ctx, query)
 	if err != nil {
 		return
 	}
-	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.backendToken))
-	request.Header.Set("Accept", "application/json")
-	response, err := h.backendClient.Do(request)
+	items, err := data.Collect(ctx, stream)
 	if err != nil {
 		return
 	}
-	defer func() {
-		err := response.Body.Close()
-		if err != nil {
-			h.logger.Error(
-				"Failed to close response body",
-				"error", err.Error(),
-			)
-		}
-	}()
-	if response.StatusCode != http.StatusOK {
-		h.logger.Error(
-			"Received unexpected status code",
-			"code", response.StatusCode,
-			"url", url,
-		)
-		err = fmt.Errorf(
-			"received unexpected status code %d from '%s'",
-			response.StatusCode, url,
-		)
+	if len(items) == 0 {
+		err = ErrNotFound
 		return
 	}
-	reader := jsoniter.Parse(h.jsonAPI, response.Body, 4096)
-	value := reader.Read()
-	err = reader.Error
-	if err != nil {
-		return
-	}
-	switch typed := value.(type) {
-	case data.Object:
-		result = typed
-	default:
-		h.logger.Error(
-			"Unexpected object type",
-			"expected", fmt.Sprintf("%T", data.Object{}),
-			"actual", fmt.Sprintf("%T", value),
-		)
-		err = fmt.Errorf(
-			"expected object of type '%T' but received '%T'",
-			data.Object{}, value,
-		)
-	}
+	result = items[0]
 	return
 }
 
 func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
-	from data.Object) (to data.Object, err error) {
-	to = data.Object{}
-	for name, code := range h.fieldMappers {
-		iterator := code.RunWithContext(ctx, from, h.cloudID)
-		value, ok := iterator.Next()
-		if !ok {
-			continue
+	input data.Object) (output data.Object, err error) {
+	// Get the name of the hub and the name of the cluster:
+	var hub string
+	err = h.jqTool.Evaluate(
+		`.metadata.annotations["global-hub.open-cluster-management.io/managed-by"]`,
+		input, &hub,
+	)
+	if err != nil {
+		return
+	}
+	var cluster string
+	err = h.jqTool.Evaluate(`.metadata.name`, input, &cluster)
+	if err != nil {
+		return
+	}
+
+	// Get the basic attributes:
+	err = h.jqTool.Evaluate(
+		`{
+			"deploymentManagerId": .metadata.labels["clusterID"],
+			"description": $cluster,
+			"name": $cluster,
+			"oCloudId": $cloud,
+			"serviceUri": .spec.managedClusterClientConfigs[0].url
+		}`,
+		input, &output,
+		jq.String("$cloud", h.cloudID),
+		jq.String("$cluster", cluster),
+	)
+	if err != nil {
+		return
+	}
+
+	// Add the profile:
+	profile, err := h.getProfile(ctx, hub, cluster)
+	if err != nil {
+		h.logger.Warn(
+			"Failed to fetch profile",
+			slog.String("hub", hub),
+			slog.String("cluster", cluster),
+			slog.String("error", err.Error()),
+		)
+		err = nil
+	}
+	if profile != nil {
+		err = mergo.Merge(
+			&output,
+			data.Object{
+				"extensions": data.Object{
+					"profileName": "k8s",
+					"profileData": profile,
+				},
+			},
+			mergo.WithOverride,
+		)
+		if err != nil {
+			h.logger.Warn(
+				"Failed to merge profile",
+				slog.String("hub", hub),
+				slog.String("cluster", cluster),
+				slog.String("error", err.Error()),
+			)
+			err = nil
 		}
-		to[name] = value
+	}
+
+	return
+}
+
+func (h *DeploymentManagerHandler) getProfile(ctx context.Context,
+	hub, cluster string) (result data.Object, err error) {
+	h.profileCacheLock.Lock()
+	defer h.profileCacheLock.Unlock()
+	result, ok := h.profileCache[cluster]
+	if !ok {
+		result, err = h.fetchProfile(ctx, hub, cluster)
+		if err != nil {
+			return
+		}
+		if result != nil {
+			h.profileCache[cluster] = result
+		}
 	}
 	return
 }
 
-// deploymentManagerFieldMappers contains the correspondence between fields of the output objects
-// and the jq queries that are used to extract their value from the input object.
-var deploymentManagerFieldMappers = map[string]string{
-	"deploymentManagerId": `.metadata.labels["clusterID"]`,
-	"name":                `.metadata.name`,
-	"description":         `.metadata.name`,
-	"serviceUri":          `.spec.managedClusterClientConfigs[0].url`,
-	"oCloudId":            `$cloud_id`,
+func (h *DeploymentManagerHandler) fetchProfile(ctx context.Context,
+	hub, cluster string) (result data.Object, err error) {
+	// What we do here is slow and fragile, we are doing it only temporarely because there
+	// is no way to get the authentiation details from the backend server. In addition there
+	// is no simple way to test it, so we will only do it when enabled.
+	if !h.enableHack {
+		return
+	}
+
+	// Fetch the kubeconfig that was used to register the hub, and then use it to fetch the
+	// admin kubeconfig of the hub:
+	hubRegKC, err := h.fetchRegKC(ctx, h.globalHubClient, hub)
+	if err != nil {
+		return
+	}
+	hubRegClient, err := k8s.NewClient().
+		SetLogger(h.logger).
+		SetLoggingWrapper(h.loggingWrapper).
+		SetKubeconfig(hubRegKC).
+		Build()
+	if err != nil {
+		return
+	}
+	hubAdminKC, err := h.fetchAdminKC(ctx, hubRegClient)
+	if err != nil {
+		return
+	}
+
+	// Use the admin kubeconfig of the hub to fetch the kubeconfig that was used to register
+	// the cluster, and then use it to fetch the admin kubeconfig of the cluster:
+	hubAdminClient, err := k8s.NewClient().
+		SetLogger(h.logger).
+		SetLoggingWrapper(h.loggingWrapper).
+		SetKubeconfig(hubAdminKC).
+		Build()
+	if err != nil {
+		return
+	}
+	clusteRegKC, err := h.fetchRegKC(ctx, hubAdminClient, cluster)
+	if err != nil {
+		return
+	}
+	clusterRegClient, err := k8s.NewClient().
+		SetLogger(h.logger).
+		SetLoggingWrapper(h.loggingWrapper).
+		SetKubeconfig(clusteRegKC).
+		Build()
+	if err != nil {
+		return
+	}
+	clusterAdminKC, err := h.fetchAdminKC(ctx, clusterRegClient)
+	if err != nil {
+		return
+	}
+
+	// Make the profile data from the cluster admin kubeconfig:
+	result, err = h.makeProfile(clusterAdminKC)
+	return
+}
+
+// fetchRegKC uses the given Kubernetes API client to fetch the kubeconfig that was used to
+// register a cluster. Returns the serialized kubeconfig, or nil if there is no such kubeconfig.
+func (h *DeploymentManagerHandler) fetchRegKC(ctx context.Context,
+	client clnt.Client, clusterName string) (result []byte, err error) {
+	// Try to fetch the secret that contains the credentials that were used when the cluster
+	// was registered.
+	secret := &corev1.Secret{}
+	key := clnt.ObjectKey{
+		Namespace: clusterName,
+		Name:      fmt.Sprintf("%s-cluster-secret", clusterName),
+	}
+	err = client.Get(ctx, key, secret)
+	if apierrors.IsNotFound(err) {
+		h.logger.Info(
+			"Cluster secret doesn't exist",
+			slog.String("cluster", clusterName),
+			slog.String("namespace", key.Namespace),
+			slog.String("secret", key.Name),
+		)
+		err = nil
+		return
+	}
+	if err != nil {
+		return
+	}
+
+	// The secret should contain a 'server' entry with the URL of the API server:
+	content, ok := secret.Data["server"]
+	if !ok {
+		h.logger.Warn(
+			"Cluster secret exists but doesn't contain the server URL",
+			slog.String("cluster", clusterName),
+			slog.String("namespace", key.Namespace),
+			slog.String("secret", key.Name),
+		)
+		return
+	}
+	server := string(content)
+
+	// The secret should contain a 'config' entry that contains a JSON document containing the
+	// credentials, something like this:
+	//
+	//	{
+	//		"bearerToken": "ey...",
+	//		"tlsClientConfig": {
+	//			"insecure": true
+	//		},
+	//	}
+	//
+	// We need to parse and extract the values.
+	content, ok = secret.Data["config"]
+	if !ok {
+		h.logger.Warn(
+			"Cluster secret exists but doesn't contain the configuration",
+			slog.String("cluster", clusterName),
+			slog.String("namespace", key.Namespace),
+			slog.String("secret", key.Name),
+		)
+		return
+	}
+	type Config struct {
+		BearerToken string `json:"bearerToken"`
+	}
+	var config Config
+	err = json.Unmarshal(content, &config)
+	if err != nil {
+		return
+	}
+	kubeConfigObject := data.Object{
+		"apiVersion": "v1",
+		"kind":       "Config",
+		"clusters": data.Array{
+			data.Object{
+				"name": "default",
+				"cluster": data.Object{
+					"server":                   server,
+					"insecure-skip-tls-verify": true,
+				},
+			},
+		},
+		"users": data.Array{
+			data.Object{
+				"name": "default",
+				"user": data.Object{
+					"token": config.BearerToken,
+				},
+			},
+		},
+		"contexts": data.Array{
+			data.Object{
+				"name": "default",
+				"context": data.Object{
+					"cluster": "default",
+					"user":    "default",
+				},
+			},
+		},
+		"current-context": "default",
+	}
+	result, err = yaml.Marshal(kubeConfigObject)
+	return
+}
+
+// fetchAdminKC uses the given Kubernetes API client to fetch the administrator kubeconfig. Returns
+// the serialized kubeconfig, or nil if it doesn't exist.
+func (h *DeploymentManagerHandler) fetchAdminKC(ctx context.Context,
+	client clnt.Client) (result []byte, err error) {
+	secret := &corev1.Secret{}
+	key := clnt.ObjectKey{
+		Namespace: "openshift-kube-apiserver",
+		Name:      "node-kubeconfigs",
+	}
+	err = client.Get(ctx, key, secret)
+	if apierrors.IsNotFound(err) {
+		err = nil
+		return
+	}
+	if err != nil {
+		return
+	}
+	result = secret.Data["lb-ext.kubeconfig"]
+	return
+}
+
+func (h *DeploymentManagerHandler) makeProfile(kubeconfigBytes []byte) (result data.Object,
+	err error) {
+	var kubeconfig data.Object
+	err = yaml.Unmarshal(kubeconfigBytes, &kubeconfig)
+	if err != nil {
+		return
+	}
+	err = h.jqTool.Evaluate(
+		`
+		."current-context" as $current |
+		(.contexts[] | select(.name == $current) | .context) as $context |
+		(.clusters[] | select(.name == $context.cluster) | .cluster) as $cluster |
+		(.users[] | select(.name == $context.user) | .user) as $user |
+		{
+			"cluster_api_endpoint": $cluster."server",
+			"cluster_ca_cert": $cluster."certificate-authority-data",
+			"admin_user": $context."user",
+			"admin_client_cert": $user."client-certificate-data",
+			"admin_client_key": $user."client-key-data"
+		}
+		`,
+		kubeconfig, &result,
+	)
+	return
 }

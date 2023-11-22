@@ -246,7 +246,8 @@ func (a *CollectionAdapter) sendItems(ctx context.Context, w http.ResponseWriter
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	writer := jsoniter.NewStream(a.jsonAPI, w, 0)
-	a.writeItems(ctx, writer, items)
+	flusher, _ := w.(http.Flusher)
+	a.writeItems(ctx, writer, flusher, items)
 	err := writer.Flush()
 	if err != nil {
 		slog.Error(
@@ -254,12 +255,15 @@ func (a *CollectionAdapter) sendItems(ctx context.Context, w http.ResponseWriter
 			"error", err.Error(),
 		)
 	}
+	if flusher != nil {
+		flusher.Flush()
+	}
 }
 
-func (a *CollectionAdapter) writeItems(ctx context.Context, writer *jsoniter.Stream,
-	items data.Stream) {
+func (a *CollectionAdapter) writeItems(ctx context.Context, stream *jsoniter.Stream,
+	flusher http.Flusher, items data.Stream) {
 	i := 0
-	writer.WriteArrayStart()
+	stream.WriteArrayStart()
 	for {
 		item, err := items.Next(ctx)
 		if err != nil {
@@ -272,17 +276,20 @@ func (a *CollectionAdapter) writeItems(ctx context.Context, writer *jsoniter.Str
 			break
 		}
 		if i > 0 {
-			writer.WriteMore()
+			stream.WriteMore()
 		}
-		writer.WriteVal(item)
-		err = writer.Flush()
+		stream.WriteVal(item)
+		err = stream.Flush()
 		if err != nil {
 			slog.Error(
 				"Faild to flush JSON stream",
 				"error", err.Error(),
 			)
 		}
+		if flusher != nil {
+			flusher.Flush()
+		}
 		i++
 	}
-	writer.WriteArrayEnd()
+	stream.WriteArrayEnd()
 }

@@ -144,8 +144,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		"!token", backendToken,
 	)
 
-	// Create the transport wrapper:
-	transportWrapper, err := logging.NewTransportWrapper().
+	// Create the logging wrapper:
+	loggingWrapper, err := logging.NewTransportWrapper().
 		SetLogger(logger).
 		SetFlags(flags).
 		Build()
@@ -194,10 +194,11 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Create the handler:
 	handler, err := service.NewDeploymentManagerHandler().
 		SetLogger(logger).
-		SetTransportWrapper(transportWrapper).
+		SetLoggingWrapper(loggingWrapper).
 		SetCloudID(cloudID).
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
+		SetEnableHack(true).
 		Build()
 	if err != nil {
 		logger.Error(
