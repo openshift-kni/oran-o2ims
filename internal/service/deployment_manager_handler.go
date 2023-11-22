@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/itchyny/gojq"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
@@ -50,6 +51,7 @@ type DeploymentManagerHandler struct {
 	backendClient     *http.Client
 	jsonAPI           jsoniter.API
 	selectorEvaluator *search.SelectorEvaluator
+	fieldMappers      map[string]*gojq.Code
 }
 
 // NewDeploymentManagerHandler creates a builder that can then be used to configure and create a
@@ -151,6 +153,12 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 		return
 	}
 
+	// Compile the field mappers:
+	fieldMappers, err := b.compileFieldMappers()
+	if err != nil {
+		return
+	}
+
 	// Create and populate the object:
 	result = &DeploymentManagerHandler{
 		logger:            b.logger,
@@ -160,6 +168,41 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 		backendClient:     backendClient,
 		selectorEvaluator: selectorEvaluator,
 		jsonAPI:           jsonAPI,
+		fieldMappers:      fieldMappers,
+	}
+	return
+}
+
+// compileFieldMappers compiles the jq queries that are used to calculate the values of fields. This
+// compilation happens when the object is created so that we don't need to compile those queries
+// with every request.
+func (b *DeploymentManagerHandlerBuilder) compileFieldMappers() (result map[string]*gojq.Code,
+	err error) {
+	result = map[string]*gojq.Code{}
+	for field, source := range deploymentManagerFieldMappers {
+		var query *gojq.Query
+		query, err = gojq.Parse(source)
+		if err != nil {
+			b.logger.Error(
+				"Failed to parse mapping",
+				slog.String("field", field),
+				slog.String("source", source),
+				slog.String("error", err.Error()),
+			)
+			return
+		}
+		var code *gojq.Code
+		code, err = gojq.Compile(query, gojq.WithVariables([]string{"$cloud_id"}))
+		if err != nil {
+			b.logger.Error(
+				"Failed to compile mapping",
+				slog.String("field", field),
+				slog.String("source", source),
+				slog.String("error", err.Error()),
+			)
+			return
+		}
+		result[field] = code
 	}
 	return
 }
@@ -304,24 +347,24 @@ func (h *DeploymentManagerHandler) fetchItem(ctx context.Context, id string) (re
 
 func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
-	fromID, err := data.GetString(from, `$.metadata.labels["clusterID"]`)
-	if err != nil {
-		return
-	}
-	fromName, err := data.GetString(from, `$.metadata.name`)
-	if err != nil {
-		return
-	}
-	fromURL, err := data.GetString(from, `$.spec.managedClusterClientConfigs[0].url`)
-	if err != nil {
-		return
-	}
-	to = data.Object{
-		"deploymentManagerId": fromID,
-		"name":                fromName,
-		"description":         fromName,
-		"oCloudId":            h.cloudID,
-		"serviceUri":          fromURL,
+	to = data.Object{}
+	for name, code := range h.fieldMappers {
+		iterator := code.RunWithContext(ctx, from, h.cloudID)
+		value, ok := iterator.Next()
+		if !ok {
+			continue
+		}
+		to[name] = value
 	}
 	return
+}
+
+// deploymentManagerFieldMappers contains the correspondence between fields of the output objects
+// and the jq queries that are used to extract their value from the input object.
+var deploymentManagerFieldMappers = map[string]string{
+	"deploymentManagerId": `.metadata.labels["clusterID"]`,
+	"name":                `.metadata.name`,
+	"description":         `.metadata.name`,
+	"serviceUri":          `.spec.managedClusterClientConfigs[0].url`,
+	"oCloudId":            `$cloud_id`,
 }
