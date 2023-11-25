@@ -27,8 +27,8 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/network"
-	"github.com/openshift-kni/oran-o2ims/internal/searchapi"
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
@@ -179,8 +179,15 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		)
 	}
 
-	// Create the handlers for resource pools:
-	if err := c.createResourcePoolsHandlers(
+	// Create the handler for resource pools:
+	if err := c.createResourcePoolHandler(
+		transportWrapper, router,
+		cloudID, backendURL, backendToken); err != nil {
+		return err
+	}
+
+	// Create the handler for resources:
+	if err := c.createResourceHandler(
 		transportWrapper, router,
 		cloudID, backendURL, backendToken); err != nil {
 		return err
@@ -218,7 +225,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	return nil
 }
 
-func (c *ResourceServerCommand) createResourcePoolsHandlers(
+func (c *ResourceServerCommand) createResourcePoolHandler(
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
 	cloudID, backendURL, backendToken string) error {
@@ -231,7 +238,7 @@ func (c *ResourceServerCommand) createResourcePoolsHandlers(
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
 		SetGraphqlQuery(c.getGraphqlQuery()).
-		SetGraphqlVars(c.getGraphqlVars()).
+		SetGraphqlVars(c.getClusterGraphqlVars()).
 		Build()
 	if err != nil {
 		c.logger.Error(
@@ -279,6 +286,69 @@ func (c *ResourceServerCommand) createResourcePoolsHandlers(
 	return nil
 }
 
+func (c *ResourceServerCommand) createResourceHandler(
+	transportWrapper func(http.RoundTripper) http.RoundTripper,
+	router *mux.Router,
+	cloudID, backendURL, backendToken string) error {
+
+	// Create the handler:
+	handler, err := service.NewResourceHandler().
+		SetLogger(c.logger).
+		SetTransportWrapper(transportWrapper).
+		SetCloudID(cloudID).
+		SetBackendURL(backendURL).
+		SetBackendToken(backendToken).
+		SetGraphqlQuery(c.getGraphqlQuery()).
+		SetGraphqlVars(c.getNodeGraphqlVars()).
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create handler",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+
+	// Create the collection adapter:
+	collectionAdapter, err := service.NewCollectionAdapter().
+		SetLogger(c.logger).
+		SetHandler(handler).
+		SetParentIDVariable("resourcePoolID").
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create adapter",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	router.Handle(
+		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}/resources",
+		collectionAdapter,
+	).Methods(http.MethodGet)
+
+	// Create the object adapter:
+	objectAdapter, err := service.NewObjectAdapter().
+		SetLogger(c.logger).
+		SetHandler(handler).
+		SetIDVariable("resourceID").
+		SetParentIDVariable("resourcePoolID").
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create adapter",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	router.Handle(
+		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}/resources/{resourceID}",
+		objectAdapter,
+	).Methods(http.MethodGet)
+
+	return nil
+}
+
 func (c *ResourceServerCommand) generateSearchApiUrl(backendURL string) (string, error) {
 	u, err := url.Parse(backendURL)
 	if err != nil {
@@ -299,24 +369,31 @@ func (c *ResourceServerCommand) generateSearchApiUrl(backendURL string) (string,
 func (c *ResourceServerCommand) getGraphqlQuery() string {
 	return `query ($input: [SearchInput]) {
 				searchResult: search(input: $input) {
-						items,
-						related {
-							items
-						},       
+						items,    
 					}
 			}`
 }
 
-func (c *ResourceServerCommand) getGraphqlVars() *searchapi.SearchInput {
-	input := searchapi.SearchInput{}
+func (c *ResourceServerCommand) getClusterGraphqlVars() *model.SearchInput {
+	input := model.SearchInput{}
 	itemKind := "Cluster"
-	relatedItemKind := "Node"
-	input.Filters = []*searchapi.SearchFilter{
+	input.Filters = []*model.SearchFilter{
 		{
 			Property: "kind",
 			Values:   []*string{&itemKind},
 		},
 	}
-	input.RelatedKinds = []*string{&relatedItemKind}
+	return &input
+}
+
+func (c *ResourceServerCommand) getNodeGraphqlVars() *model.SearchInput {
+	input := model.SearchInput{}
+	itemKind := "Node"
+	input.Filters = []*model.SearchFilter{
+		{
+			Property: "kind",
+			Values:   []*string{&itemKind},
+		},
+	}
 	return &input
 }

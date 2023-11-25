@@ -25,17 +25,20 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
+	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
 
 type ObjectAdapterBuilder struct {
-	logger     *slog.Logger
-	handler    ObjectHandler
-	idVariable string
+	logger           *slog.Logger
+	handler          ObjectHandler
+	idVariable       string
+	parentIdVariable string
 }
 
 type ObjectAdapter struct {
 	logger             *slog.Logger
 	idVariable         string
+	parentIdVariable   string
 	projectorParser    *search.ProjectorParser
 	projectorEvaluator *search.ProjectorEvaluator
 	jsonAPI            jsoniter.API
@@ -62,6 +65,13 @@ func (b *ObjectAdapterBuilder) SetHandler(value ObjectHandler) *ObjectAdapterBui
 // optional. If not specified then no identifier will be passed to the handler.
 func (b *ObjectAdapterBuilder) SetIDVariable(value string) *ObjectAdapterBuilder {
 	b.idVariable = value
+	return b
+}
+
+// SetCollectionIDVariable sets the name of the path variable that contains the identifier of the parent collection.
+// This is optional. If not specified then no identifier will be passed to the handler.
+func (b *ObjectAdapterBuilder) SetParentIDVariable(value string) *ObjectAdapterBuilder {
+	b.parentIdVariable = value
 	return b
 }
 
@@ -112,6 +122,7 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 		logger:             b.logger,
 		handler:            b.handler,
 		idVariable:         b.idVariable,
+		parentIdVariable:   b.parentIdVariable,
 		projectorParser:    projectorParser,
 		projectorEvaluator: projectorEvaluator,
 		jsonAPI:            jsonAPI,
@@ -135,7 +146,8 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Create the request:
 	request := &GetRequest{
-		ID: mux.Vars(r)[a.idVariable],
+		ID:       mux.Vars(r)[a.idVariable],
+		ParentID: mux.Vars(r)[a.parentIdVariable],
 	}
 
 	// Check if there is a projector, and parse it:
@@ -173,6 +185,14 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"Failed to get items",
 			"error", err,
 		)
+		if errors.Is(err, streaming.ErrEnd) {
+			SendError(
+				w,
+				http.StatusNotFound,
+				"Not found",
+			)
+			return
+		}
 		SendError(
 			w,
 			http.StatusInternalServerError,

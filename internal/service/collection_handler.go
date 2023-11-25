@@ -28,6 +28,9 @@ type ListRequest struct {
 
 	// Projector is the list of field paths to return.
 	Projector [][]string
+
+	// ParentID is the identifier of the parent collection.
+	ParentID string
 }
 
 // ListResponse represents the response to the request to get the list of items of a collection.
