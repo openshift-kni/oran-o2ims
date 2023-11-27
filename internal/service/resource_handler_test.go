@@ -29,10 +29,10 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/text"
 )
 
-var _ = Describe("Resource pool handler", func() {
+var _ = Describe("Resource handler", func() {
 	Describe("Creation", func() {
 		It("Can't be created without a logger", func() {
-			handler, err := NewResourcePoolHandler().
+			handler, err := NewResourceHandler().
 				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
 				SetBackendToken("my-token").
@@ -45,7 +45,7 @@ var _ = Describe("Resource pool handler", func() {
 		})
 
 		It("Can't be created without a cloud identifier", func() {
-			handler, err := NewResourcePoolHandler().
+			handler, err := NewResourceHandler().
 				SetLogger(logger).
 				SetBackendURL("https://my-backend:6443").
 				SetBackendToken("my-token").
@@ -58,7 +58,7 @@ var _ = Describe("Resource pool handler", func() {
 		})
 
 		It("Can't be created without a backend URL", func() {
-			handler, err := NewResourcePoolHandler().
+			handler, err := NewResourceHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendToken("my-token").
@@ -71,7 +71,7 @@ var _ = Describe("Resource pool handler", func() {
 		})
 
 		It("Can't be created without a backend token", func() {
-			handler, err := NewResourcePoolHandler().
+			handler, err := NewResourceHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
@@ -88,7 +88,7 @@ var _ = Describe("Resource pool handler", func() {
 		var (
 			ctx     context.Context
 			backend *Server
-			handler *ResourcePoolHandler
+			handler *ResourceHandler
 		)
 
 		BeforeEach(func() {
@@ -101,7 +101,7 @@ var _ = Describe("Resource pool handler", func() {
 			backend = MakeTCPServer()
 
 			// Create the handler:
-			handler, err = NewResourcePoolHandler().
+			handler, err = NewResourceHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendURL(backend.URL()).
@@ -118,7 +118,7 @@ var _ = Describe("Resource pool handler", func() {
 						{
 							Property: "kind",
 							Values: []*string{
-								ptr.To("cluster"),
+								ptr.To("node"),
 							},
 						},
 					},
@@ -181,14 +181,18 @@ var _ = Describe("Resource pool handler", func() {
 				backend.AppendHandlers(
 					RespondWithItems(
 						data.Object{
-							"cluster": "0",
-							"label":   "a=b; c=d",
-							"name":    "my-cluster-0",
+							"cluster":     "0",
+							"label":       "a=b; c=d",
+							"name":        "my-node-0",
+							"_systemUUID": "node-0-system-uuid",
+							"_uid":        "node-0-global-uuid",
 						},
 						data.Object{
-							"cluster": "1",
-							"label":   "a=b; c=d",
-							"name":    "my-cluster-1",
+							"cluster":     "1",
+							"label":       "a=b; c=d",
+							"name":        "my-node-1",
+							"_systemUUID": "node-1-system-uuid",
+							"_uid":        "node-1-global-uuid",
 						},
 					),
 				)
@@ -202,19 +206,17 @@ var _ = Describe("Resource pool handler", func() {
 				Expect(items).To(HaveLen(2))
 
 				// Verify first result:
-				Expect(items[0]).To(MatchJQ(`.description`, ""))
-				Expect(items[0]).To(MatchJQ(`.globalLocationID`, ""))
-				Expect(items[0]).To(MatchJQ(`.location`, ""))
-				Expect(items[0]).To(MatchJQ(`.name`, "my-cluster-0"))
-				Expect(items[0]).To(MatchJQ(`.oCloudID`, "123"))
+				Expect(items[0]).To(MatchJQ(`.resourceID`, "node-0-system-uuid"))
+				Expect(items[0]).To(MatchJQ(`.description`, "my-node-0"))
+				Expect(items[0]).To(MatchJQ(`.globalAssetID`, "node-0-global-uuid"))
+				Expect(items[0]).To(MatchJQ(`.description`, "my-node-0"))
 				Expect(items[0]).To(MatchJQ(`.resourcePoolID`, "0"))
 
 				// Verify second result:
-				Expect(items[1]).To(MatchJQ(`.description`, ""))
-				Expect(items[1]).To(MatchJQ(`.globalLocationID`, ""))
-				Expect(items[1]).To(MatchJQ(`.location`, ""))
-				Expect(items[1]).To(MatchJQ(`.name`, "my-cluster-1"))
-				Expect(items[1]).To(MatchJQ(`.oCloudID`, "123"))
+				Expect(items[1]).To(MatchJQ(`.resourceID`, "node-1-system-uuid"))
+				Expect(items[1]).To(MatchJQ(`.description`, "my-node-1"))
+				Expect(items[1]).To(MatchJQ(`.globalAssetID`, "node-1-global-uuid"))
+				Expect(items[1]).To(MatchJQ(`.description`, "my-node-1"))
 				Expect(items[1]).To(MatchJQ(`.resourcePoolID`, "1"))
 			})
 		})
@@ -243,9 +245,11 @@ var _ = Describe("Resource pool handler", func() {
 					CombineHandlers(
 						RespondWithItems(
 							data.Object{
-								"cluster": "0",
-								"label":   "a=b; c=d",
-								"name":    "my-cluster-0",
+								"cluster":     "0",
+								"label":       "a=b; c=d",
+								"name":        "my-node-0",
+								"_uid":        "node-0-uuid",
+								"_systemUUID": "node-0-system-uuid",
 							},
 						),
 					),
@@ -259,12 +263,10 @@ var _ = Describe("Resource pool handler", func() {
 				Expect(response).ToNot(BeNil())
 
 				// Verify the result:
-				Expect(response.Object).To(MatchJQ(`.description`, ""))
-				Expect(response.Object).To(MatchJQ(`.globalLocationID`, ""))
-				Expect(response.Object).To(MatchJQ(`.location`, ""))
-				Expect(response.Object).To(MatchJQ(`.name`, "my-cluster-0"))
-				Expect(response.Object).To(MatchJQ(`.oCloudID`, "123"))
+				Expect(response.Object).To(MatchJQ(`.resourceID`, "node-0-system-uuid"))
+				Expect(response.Object).To(MatchJQ(`.description`, "my-node-0"))
 				Expect(response.Object).To(MatchJQ(`.resourcePoolID`, "0"))
+				Expect(response.Object).To(MatchJQ(`.globalAssetID`, "node-0-uuid"))
 			})
 		})
 	})

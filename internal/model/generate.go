@@ -12,11 +12,10 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
-package searchapi
+package model
 
 // The models used by the ACM search GraphQL server are part of the 'stolostron/search-v2-api'
 // project, but we don't want to import it because that would bring many other dependencies
 // that may be problematic in the future. Instead of that we copy that code into our project.
 //
 //go:generate curl -Lso searchapi.go https://raw.githubusercontent.com/stolostron/search-v2-api/234de1a26d82b3de2af74cf21aa1226db8e5f26a/graph/model/models_gen.go
-//go:generate sed -i "s/^package model$/package searchapi/" searchapi.go

@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
@@ -29,12 +30,14 @@ import (
 )
 
 type CollectionAdapterBuilder struct {
-	logger  *slog.Logger
-	handler CollectionHandler
+	logger           *slog.Logger
+	handler          CollectionHandler
+	parentIdVariable string
 }
 
 type CollectionAdapter struct {
 	logger             *slog.Logger
+	parentIdVariable   string
 	selectorParser     *search.SelectorParser
 	projectorParser    *search.ProjectorParser
 	projectorEvaluator *search.ProjectorEvaluator
@@ -55,6 +58,13 @@ func (b *CollectionAdapterBuilder) SetLogger(logger *slog.Logger) *CollectionAda
 // SetHandler sets the object that will handle the requests. This is mandatory.
 func (b *CollectionAdapterBuilder) SetHandler(value CollectionHandler) *CollectionAdapterBuilder {
 	b.handler = value
+	return b
+}
+
+// SetParentIDVariable sets the name of the path variable that contains the identifier of the collection.
+// This is optional. If not specified then no identifier will be passed to the handler.
+func (b *CollectionAdapterBuilder) SetParentIDVariable(value string) *CollectionAdapterBuilder {
+	b.parentIdVariable = value
 	return b
 }
 
@@ -116,6 +126,7 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 		projectorParser:    projectorParser,
 		projectorEvaluator: projectorEvaluator,
 		handler:            b.handler,
+		parentIdVariable:   b.parentIdVariable,
 		jsonAPI:            jsonAPI,
 	}
 	return
@@ -136,7 +147,9 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	// Create the request:
-	request := &ListRequest{}
+	request := &ListRequest{
+		ParentID: mux.Vars(r)[a.parentIdVariable],
+	}
 
 	// Check if there is a selector, and parse it:
 	values, ok := query["filter"]

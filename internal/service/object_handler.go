@@ -27,6 +27,9 @@ type GetRequest struct {
 
 	// ID is the identifier of the object.
 	ID string
+
+	// ParentID is the identifier of the parent collection.
+	ParentID string
 }
 
 // GetResponse represents the response to the request to get an individual object.

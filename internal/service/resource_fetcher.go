@@ -29,7 +29,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 )
 
-type ResourcePoolFetcher struct {
+type ResourceFetcher struct {
 	logger        *slog.Logger
 	cloudID       string
 	backendURL    string
@@ -39,8 +39,8 @@ type ResourcePoolFetcher struct {
 	graphqlVars   *model.SearchInput
 }
 
-// ResourcePoolFetcherBuilder contains the data and logic needed to create a new ResourcePoolFetcher.
-type ResourcePoolFetcherBuilder struct {
+// ResourceFetcherBuilder contains the data and logic needed to create a new ResourceFetcher.
+type ResourceFetcherBuilder struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID          string
@@ -50,66 +50,66 @@ type ResourcePoolFetcherBuilder struct {
 	graphqlVars      *model.SearchInput
 }
 
-// NewResourcePoolFetcher creates a builder that can then be used to configure
-// and create a handler for the ResourcePoolFetcher.
-func NewResourcePoolFetcher() *ResourcePoolFetcherBuilder {
-	return &ResourcePoolFetcherBuilder{}
+// NewResourceFetcher creates a builder that can then be used to configure
+// and create a handler for the ResourceFetcher.
+func NewResourceFetcher() *ResourceFetcherBuilder {
+	return &ResourceFetcherBuilder{}
 }
 
 // SetLogger sets the logger that the handler will use to write to the log. This is mandatory.
-func (b *ResourcePoolFetcherBuilder) SetLogger(
-	value *slog.Logger) *ResourcePoolFetcherBuilder {
+func (b *ResourceFetcherBuilder) SetLogger(
+	value *slog.Logger) *ResourceFetcherBuilder {
 	b.logger = value
 	return b
 }
 
 // SetTransportWrapper sets the wrapper that will be used to configure the HTTP clients used to
 // connect to other servers, including the backend server. This is optional.
-func (b *ResourcePoolFetcherBuilder) SetTransportWrapper(
-	value func(http.RoundTripper) http.RoundTripper) *ResourcePoolFetcherBuilder {
+func (b *ResourceFetcherBuilder) SetTransportWrapper(
+	value func(http.RoundTripper) http.RoundTripper) *ResourceFetcherBuilder {
 	b.transportWrapper = value
 	return b
 }
 
 // SetCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
-func (b *ResourcePoolFetcherBuilder) SetCloudID(
-	value string) *ResourcePoolFetcherBuilder {
+func (b *ResourceFetcherBuilder) SetCloudID(
+	value string) *ResourceFetcherBuilder {
 	b.cloudID = value
 	return b
 }
 
 // SetBackendURL sets the URL of the backend server This is mandatory.
-func (b *ResourcePoolFetcherBuilder) SetBackendToken(
-	value string) *ResourcePoolFetcherBuilder {
+func (b *ResourceFetcherBuilder) SetBackendToken(
+	value string) *ResourceFetcherBuilder {
 	b.backendToken = value
 	return b
 }
 
 // SetBackendToken sets the authentication token that will be used to authenticate to the backend
 // server. This is mandatory.
-func (b *ResourcePoolFetcherBuilder) SetBackendURL(
-	value string) *ResourcePoolFetcherBuilder {
+func (b *ResourceFetcherBuilder) SetBackendURL(
+	value string) *ResourceFetcherBuilder {
 	b.backendURL = value
 	return b
 }
 
 // SetGraphqlQuery sets the query to send to the search API server. This is mandatory.
-func (b *ResourcePoolFetcherBuilder) SetGraphqlQuery(
-	value string) *ResourcePoolFetcherBuilder {
+func (b *ResourceFetcherBuilder) SetGraphqlQuery(
+	value string) *ResourceFetcherBuilder {
 	b.graphqlQuery = value
 	return b
 }
 
 // SetGraphqlVars sets the query vars to send to the search API server. This is mandatory.
-func (b *ResourcePoolFetcherBuilder) SetGraphqlVars(
-	value *model.SearchInput) *ResourcePoolFetcherBuilder {
+func (b *ResourceFetcherBuilder) SetGraphqlVars(
+	value *model.SearchInput) *ResourceFetcherBuilder {
 	b.graphqlVars = value
 	return b
 }
 
 // Build uses the data stored in the builder to create and configure a new handler.
-func (b *ResourcePoolFetcherBuilder) Build() (
-	result *ResourcePoolFetcher, err error) {
+func (b *ResourceFetcherBuilder) Build() (
+	result *ResourceFetcher, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -143,7 +143,7 @@ func (b *ResourcePoolFetcherBuilder) Build() (
 	}
 
 	// Create and populate the object:
-	result = &ResourcePoolFetcher{
+	result = &ResourceFetcher{
 		logger:        b.logger,
 		cloudID:       b.cloudID,
 		backendURL:    b.backendURL,
@@ -155,11 +155,11 @@ func (b *ResourcePoolFetcherBuilder) Build() (
 	return
 }
 
-// FetchItems returns a data stream of O2 ResourcePools.
-// The items are converted from Clusters fetched from the search API.
-func (r *ResourcePoolFetcher) FetchItems(
-	ctx context.Context) (resourcePools data.Stream, err error) {
-	// Search Clusters
+// FetchItems returns a data stream of O2 Resources.
+// The items are converted from Nodes fetched from the search API.
+func (r *ResourceFetcher) FetchItems(
+	ctx context.Context, resourcePoolID string) (resources data.Stream, err error) {
+	// Search Nodes
 	resultArr, err := r.getSearchResults(ctx)
 	if err != nil {
 		return
@@ -175,8 +175,8 @@ func (r *ResourcePoolFetcher) FetchItems(
 	}
 	itemsReader := bytes.NewReader(items)
 
-	// Create reader for Clusters
-	clusters, err := k8s.NewStream().
+	// Create reader for Nodes
+	nodes, err := k8s.NewStream().
 		SetLogger(r.logger).
 		SetReader(itemsReader).
 		Build()
@@ -184,13 +184,13 @@ func (r *ResourcePoolFetcher) FetchItems(
 		return
 	}
 
-	// Transform Clusters to ResourcePools
-	resourcePools = data.Map(clusters, r.mapClusterItem)
+	// Transform Nodes to Resources
+	resources = data.Map(nodes, r.mapNodeItem)
 
 	return
 }
 
-func (r *ResourcePoolFetcher) getSearchResults(ctx context.Context) (result []any, err error) {
+func (r *ResourceFetcher) getSearchResults(ctx context.Context) (result []any, err error) {
 	// Convert GraphQL vars to a map
 	var graphqlVars data.Object
 	varsBytes, err := json.Marshal(r.graphqlVars)
@@ -201,6 +201,7 @@ func (r *ResourcePoolFetcher) getSearchResults(ctx context.Context) (result []an
 	if err != nil {
 		return
 	}
+	r.logger.Error(fmt.Sprintf("%v", graphqlVars))
 
 	// Build GraphQL request body
 	var requestBody bytes.Buffer
@@ -260,15 +261,15 @@ func (r *ResourcePoolFetcher) getSearchResults(ctx context.Context) (result []an
 	return
 }
 
-// Map Cluster to an O2 ResourcePool object.
-func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
+// Map a Node to an O2 Resource object.
+func (r *ResourceFetcher) mapNodeItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
-	resourcePoolID, err := data.GetString(from, "cluster")
+	description, err := data.GetString(from, "name")
 	if err != nil {
 		return
 	}
 
-	name, err := data.GetString(from, "name")
+	resourcePoolID, err := data.GetString(from, "cluster")
 	if err != nil {
 		return
 	}
@@ -279,15 +280,23 @@ func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 	}
 	labelsMap := data.GetLabelsMap(labels)
 
+	globalAssetID, err := data.GetString(from, "_uid")
+	if err != nil {
+		return
+	}
+
+	resourceID, err := data.GetString(from, "_systemUUID")
+	if err != nil {
+		return
+	}
+
 	to = data.Object{
-		"resourcePoolID": resourcePoolID,
-		"name":           name,
-		"oCloudID":       r.cloudID,
+		"resourceID":     resourceID,
+		"resourceTypeID": "",
+		"description":    description,
 		"extensions":     labelsMap,
-		// TODO: no direct mapping to a property in Cluster object
-		"description":      "",
-		"location":         "",
-		"globalLocationID": "",
+		"resourcePoolID": resourcePoolID,
+		"globalAssetID":  globalAssetID,
 	}
 	return
 }
