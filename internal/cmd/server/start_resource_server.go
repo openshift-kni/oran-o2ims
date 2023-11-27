@@ -193,6 +193,13 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return err
 	}
 
+	// Create the handlers for resource types:
+	if err := c.createResourceTypeHandler(
+		transportWrapper, router,
+		cloudID, backendURL, backendToken); err != nil {
+		return err
+	}
+
 	// Start the API server:
 	apiListener, err := network.NewListener().
 		SetLogger(c.logger).
@@ -299,7 +306,7 @@ func (c *ResourceServerCommand) createResourceHandler(
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
 		SetGraphqlQuery(c.getGraphqlQuery()).
-		SetGraphqlVars(c.getNodeGraphqlVars()).
+		SetGraphqlVars(c.getResourceGraphqlVars()).
 		Build()
 	if err != nil {
 		c.logger.Error(
@@ -349,6 +356,67 @@ func (c *ResourceServerCommand) createResourceHandler(
 	return nil
 }
 
+func (c *ResourceServerCommand) createResourceTypeHandler(
+	transportWrapper func(http.RoundTripper) http.RoundTripper,
+	router *mux.Router,
+	cloudID, backendURL, backendToken string) error {
+
+	// Create the handler:
+	handler, err := service.NewResourceTypeHandler().
+		SetLogger(c.logger).
+		SetTransportWrapper(transportWrapper).
+		SetCloudID(cloudID).
+		SetBackendURL(backendURL).
+		SetBackendToken(backendToken).
+		SetGraphqlQuery(c.getGraphqlQuery()).
+		SetGraphqlVars(c.getResourceGraphqlVars()).
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create handler",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+
+	// Create the collection adapter:
+	collectionAdapter, err := service.NewCollectionAdapter().
+		SetLogger(c.logger).
+		SetHandler(handler).
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create adapter",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	router.Handle(
+		"/o2ims-infrastructureInventory/{version}/resourceTypes",
+		collectionAdapter,
+	).Methods(http.MethodGet)
+
+	// Create the object adapter:
+	objectAdapter, err := service.NewObjectAdapter().
+		SetLogger(c.logger).
+		SetHandler(handler).
+		SetIDVariable("resourceTypeID").
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create adapter",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	router.Handle(
+		"/o2ims-infrastructureInventory/{version}/resourceTypes/{resourceTypeID}",
+		objectAdapter,
+	).Methods(http.MethodGet)
+
+	return nil
+}
+
 func (c *ResourceServerCommand) generateSearchApiUrl(backendURL string) (string, error) {
 	u, err := url.Parse(backendURL)
 	if err != nil {
@@ -386,13 +454,16 @@ func (c *ResourceServerCommand) getClusterGraphqlVars() *model.SearchInput {
 	return &input
 }
 
-func (c *ResourceServerCommand) getNodeGraphqlVars() *model.SearchInput {
+func (c *ResourceServerCommand) getResourceGraphqlVars() *model.SearchInput {
 	input := model.SearchInput{}
-	itemKind := "Node"
+	kindNode := service.KindNode
 	input.Filters = []*model.SearchFilter{
 		{
 			Property: "kind",
-			Values:   []*string{&itemKind},
+			Values: []*string{
+				&kindNode,
+				// Add more kinds here if required
+			},
 		},
 	}
 	return &input
