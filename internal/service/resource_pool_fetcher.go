@@ -169,6 +169,7 @@ func (r *ResourcePoolFetcher) FetchItems(
 	searchResult := resultArr[0].(map[string]any)
 
 	// Convert response to json
+	// TODO: avoid json conversions (see: MGMT-16292)
 	items, err := json.Marshal(searchResult)
 	if err != nil {
 		return

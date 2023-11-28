@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -28,10 +29,21 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
-// ResourceHandlerBuilder contains the data and logic needed to create a new resource
-// collection handler. Don't create instances of this type directly, use the NewResourceHandler
+const (
+	ResourceClassCompute    = "COMPUTE"
+	ResourceClassNetworking = "NETWORKING"
+	ResourceClassStorage    = "STORAGE"
+	ResourceClassUndefined  = "UNDEFINED"
+
+	ResourceKindPhysical  = "PHYSICAL"
+	ResourceKindLogical   = "LOGICAL"
+	ResourcekindUndefined = "UNDEFINED"
+)
+
+// ResourceTypeHandlerBuilder contains the data and logic needed to create a new resource type
+// collection handler. Don't create instances of this type directly, use the NewResourceTypeHandler
 // function instead.
-type ResourceHandlerBuilder struct {
+type ResourceTypeHandlerBuilder struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID          string
@@ -41,9 +53,9 @@ type ResourceHandlerBuilder struct {
 	graphqlVars      *model.SearchInput
 }
 
-// ResourceHandler knows how to respond to requests to list resources. Don't create
-// instances of this type directly, use the NewResourceHandler function instead.
-type ResourceHandler struct {
+// ResourceTypeHandler knows how to respond to requests to list resource types. Don't create
+// instances of this type directly, use the NewResourceTypeHandler function instead.
+type ResourceTypeHandler struct {
 	logger            *slog.Logger
 	transportWrapper  func(http.RoundTripper) http.RoundTripper
 	cloudID           string
@@ -57,66 +69,66 @@ type ResourceHandler struct {
 	resourceFetcher   *ResourceFetcher
 }
 
-// NewResourceHandler creates a builder that can then be used to configure and create a
-// handler for the collection of resources.
-func NewResourceHandler() *ResourceHandlerBuilder {
-	return &ResourceHandlerBuilder{}
+// NewResourceTypeHandler creates a builder that can then be used to configure and create a
+// handler for the collection of resource types.
+func NewResourceTypeHandler() *ResourceTypeHandlerBuilder {
+	return &ResourceTypeHandlerBuilder{}
 }
 
 // SetLogger sets the logger that the handler will use to write to the log. This is mandatory.
-func (b *ResourceHandlerBuilder) SetLogger(
-	value *slog.Logger) *ResourceHandlerBuilder {
+func (b *ResourceTypeHandlerBuilder) SetLogger(
+	value *slog.Logger) *ResourceTypeHandlerBuilder {
 	b.logger = value
 	return b
 }
 
 // SetTransportWrapper sets the wrapper that will be used to configure the HTTP clients used to
 // connect to other servers, including the backend server. This is optional.
-func (b *ResourceHandlerBuilder) SetTransportWrapper(
-	value func(http.RoundTripper) http.RoundTripper) *ResourceHandlerBuilder {
+func (b *ResourceTypeHandlerBuilder) SetTransportWrapper(
+	value func(http.RoundTripper) http.RoundTripper) *ResourceTypeHandlerBuilder {
 	b.transportWrapper = value
 	return b
 }
 
 // SetCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
-func (b *ResourceHandlerBuilder) SetCloudID(
-	value string) *ResourceHandlerBuilder {
+func (b *ResourceTypeHandlerBuilder) SetCloudID(
+	value string) *ResourceTypeHandlerBuilder {
 	b.cloudID = value
 	return b
 }
 
 // SetBackendURL sets the URL of the backend server This is mandatory.
-func (b *ResourceHandlerBuilder) SetBackendToken(
-	value string) *ResourceHandlerBuilder {
+func (b *ResourceTypeHandlerBuilder) SetBackendToken(
+	value string) *ResourceTypeHandlerBuilder {
 	b.backendToken = value
 	return b
 }
 
 // SetBackendToken sets the authentication token that will be used to authenticate to the backend
 // server. This is mandatory.
-func (b *ResourceHandlerBuilder) SetBackendURL(
-	value string) *ResourceHandlerBuilder {
+func (b *ResourceTypeHandlerBuilder) SetBackendURL(
+	value string) *ResourceTypeHandlerBuilder {
 	b.backendURL = value
 	return b
 }
 
 // SetGraphqlQuery sets the query to send to the search API server.
-func (b *ResourceHandlerBuilder) SetGraphqlQuery(
-	value string) *ResourceHandlerBuilder {
+func (b *ResourceTypeHandlerBuilder) SetGraphqlQuery(
+	value string) *ResourceTypeHandlerBuilder {
 	b.graphqlQuery = value
 	return b
 }
 
 // SetGraphqlVars sets the query vars to send to the search API server.
-func (b *ResourceHandlerBuilder) SetGraphqlVars(
-	value *model.SearchInput) *ResourceHandlerBuilder {
+func (b *ResourceTypeHandlerBuilder) SetGraphqlVars(
+	value *model.SearchInput) *ResourceTypeHandlerBuilder {
 	b.graphqlVars = value
 	return b
 }
 
 // Build uses the data stored in the builder to create and configure a new handler.
-func (b *ResourceHandlerBuilder) Build() (
-	result *ResourceHandler, err error) {
+func (b *ResourceTypeHandlerBuilder) Build() (
+	result *ResourceTypeHandler, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -171,7 +183,7 @@ func (b *ResourceHandlerBuilder) Build() (
 	}
 
 	// Create and populate the object:
-	result = &ResourceHandler{
+	result = &ResourceTypeHandler{
 		logger:            b.logger,
 		transportWrapper:  b.transportWrapper,
 		cloudID:           b.cloudID,
@@ -187,18 +199,19 @@ func (b *ResourceHandlerBuilder) Build() (
 }
 
 // List is part of the implementation of the collection handler interface.
-func (h *ResourceHandler) List(ctx context.Context,
+func (h *ResourceTypeHandler) List(ctx context.Context,
 	request *ListRequest) (response *ListResponse, err error) {
+
 	// Transform the items into what we need:
-	resources, err := h.fetchItems(ctx, request.ParentID)
+	resourceTypes, err := h.fetchItems(ctx)
 	if err != nil {
 		return
 	}
 
 	// Select only the items that satisfy the filter:
 	if request.Selector != nil {
-		resources = data.Select(
-			resources,
+		resourceTypes = data.Select(
+			resourceTypes,
 			func(ctx context.Context, item data.Object) (result bool, err error) {
 				result, err = h.selectorEvaluator.Evaluate(ctx, request.Selector, item)
 				return
@@ -208,42 +221,44 @@ func (h *ResourceHandler) List(ctx context.Context,
 
 	// Return the result:
 	response = &ListResponse{
-		Items: resources,
+		Items: resourceTypes,
 	}
 	return
 }
 
 // Get is part of the implementation of the object handler interface.
-func (h *ResourceHandler) Get(ctx context.Context,
+func (h *ResourceTypeHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
-	h.resourceFetcher, err = NewResourceFetcher().
+
+	resourceFetcher, err := NewResourceFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
 		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.getObjectGraphqlVars(ctx, request.ID, request.ParentID)).
+		SetGraphqlVars(h.getGraphqlVars(ctx)).
 		Build()
 	if err != nil {
 		return
 	}
 
 	// Fetch the object:
-	resource, err := h.fetchItem(ctx, request.ID, request.ParentID, h.resourceFetcher)
+	resourceType, err := h.fetchItem(ctx, request.ID, resourceFetcher)
 	if err != nil {
 		return
 	}
 
 	// Return the result:
 	response = &GetResponse{
-		Object: resource,
+		Object: resourceType,
 	}
+
 	return
 }
 
-func (h *ResourceHandler) fetchItems(
-	ctx context.Context, parentID string) (result data.Stream, err error) {
+func (h *ResourceTypeHandler) fetchItems(
+	ctx context.Context) (result data.Stream, err error) {
 	h.resourceFetcher, err = NewResourceFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
@@ -251,7 +266,7 @@ func (h *ResourceHandler) fetchItems(
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.getCollectionGraphqlVars(ctx, parentID)).
+		SetGraphqlVars(h.getGraphqlVars(ctx)).
 		Build()
 	if err != nil {
 		return
@@ -263,50 +278,59 @@ func (h *ResourceHandler) fetchItems(
 	}
 
 	// Transform Items to Resources
-	result = data.Map(items, h.mapItem)
+	resources := data.Map(items, h.mapItem)
+
+	// TODO: find a better solution to remove duplicates
+	resSlice, err := data.Collect(ctx, resources)
+	result = data.Pour(h.getUniqueSlice(resSlice)...)
 
 	return
 }
 
-func (h *ResourceHandler) fetchItem(ctx context.Context,
-	id, parentID string, resourceFetcher *ResourceFetcher) (resource data.Object, err error) {
+func (h *ResourceTypeHandler) getUniqueSlice(items []data.Object) []data.Object {
+	allKeys := make(map[string]bool)
+	list := []data.Object{}
+	for _, item := range items {
+		id := item["resourceTypeID"].(string)
+		if _, value := allKeys[id]; !value {
+			allKeys[id] = true
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
+func (h *ResourceTypeHandler) fetchItem(ctx context.Context,
+	id string, resourceFetcher *ResourceFetcher) (resourceType data.Object, err error) {
 	// Fetch items
 	items, err := resourceFetcher.FetchItems(ctx)
 	if err != nil {
 		return
 	}
 
-	// Transform Items to Resources
-	resources := data.Map(items, h.mapItem)
+	// Transform Items to ResourcesTypes
+	resourceTypes := data.Map(items, h.mapItem)
+	h.logger.Error(fmt.Sprintf("%v", resourceTypes))
+
+	// Filter by ID
+	resourceTypes = data.Select(
+		resourceTypes,
+		func(ctx context.Context, item data.Object) (result bool, err error) {
+			result = item["resourceTypeID"] == id
+			return
+		},
+	)
 
 	// Get first result
-	resource, err = resources.Next(ctx)
+	resourceType, err = resourceTypes.Next(ctx)
 
 	return
 }
 
-func (h *ResourceHandler) getObjectGraphqlVars(ctx context.Context, id, parentId string) (graphqlVars *model.SearchInput) {
-	graphqlVars = h.getCollectionGraphqlVars(ctx, parentId)
-
-	// Filter results by resource ID
-	graphqlVars.Filters = append(graphqlVars.Filters, &model.SearchFilter{
-		Property: "_systemUUID",
-		Values:   []*string{&id},
-	})
-	return
-}
-
-func (h *ResourceHandler) getCollectionGraphqlVars(ctx context.Context, id string) (graphqlVars *model.SearchInput) {
+func (h *ResourceTypeHandler) getGraphqlVars(ctx context.Context) (graphqlVars *model.SearchInput) {
 	graphqlVars = &model.SearchInput{}
 	graphqlVars.Keywords = h.graphqlVars.Keywords
 	graphqlVars.Filters = h.graphqlVars.Filters
-
-	// Filter results by 'cluster' property
-	// TODO: handle filtering for global hub search API when applicable
-	graphqlVars.Filters = append(graphqlVars.Filters, &model.SearchFilter{
-		Property: "cluster",
-		Values:   []*string{&id},
-	})
 
 	// Filter results without '_systemUUID' property (could happen with stale objects)
 	nonEmpty := "!"
@@ -319,62 +343,34 @@ func (h *ResourceHandler) getCollectionGraphqlVars(ctx context.Context, id strin
 }
 
 // Map an item to and O2 Resource object.
-func (h *ResourceHandler) mapItem(ctx context.Context,
+func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
 	kind, err := data.GetString(from, "kind")
 	if err != nil {
 		return
 	}
 
+	var resourceClass, resourceKind, resourceTypeID string
 	switch kind {
 	case KindNode:
-		return h.mapNodeItem(ctx, from)
-	}
-
-	return
-}
-
-// Map a Node to an O2 Resource object.
-func (h *ResourceHandler) mapNodeItem(ctx context.Context,
-	from data.Object) (to data.Object, err error) {
-	description, err := data.GetString(from, "name")
-	if err != nil {
-		return
-	}
-
-	resourcePoolID, err := data.GetString(from, "cluster")
-	if err != nil {
-		return
-	}
-
-	labels, err := data.GetString(from, "label")
-	if err != nil {
-		return
-	}
-	labelsMap := data.GetLabelsMap(labels)
-
-	globalAssetID, err := data.GetString(from, "_uid")
-	if err != nil {
-		return
-	}
-
-	resourceID, err := data.GetString(from, "_systemUUID")
-	if err != nil {
-		return
-	}
-
-	resourceTypeID, err := h.resourceFetcher.GetResourceTypeID(from)
-	if err != nil {
-		return
+		resourceClass = ResourceClassCompute
+		resourceKind = ResourceKindPhysical
+		resourceTypeID, err = h.resourceFetcher.GetResourceTypeID(from)
+		if err != nil {
+			return
+		}
 	}
 
 	to = data.Object{
-		"resourceID":     resourceID,
 		"resourceTypeID": resourceTypeID,
-		"description":    description,
-		"extensions":     labelsMap,
-		"resourcePoolID": resourcePoolID,
-		"globalAssetID":  globalAssetID,
+		"name":           resourceTypeID,
+		"resourceKind":   resourceKind,
+		"resourceClass":  resourceClass,
+		// TODO: no direct mapping
+		"extensions": "",
+		"vendor":     "",
+		"model":      "",
+		"version":    "",
 	}
 	return
 }

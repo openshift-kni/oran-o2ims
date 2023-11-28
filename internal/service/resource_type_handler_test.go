@@ -29,10 +29,10 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/text"
 )
 
-var _ = Describe("Resource handler", func() {
+var _ = Describe("Resource type handler", func() {
 	Describe("Creation", func() {
 		It("Can't be created without a logger", func() {
-			handler, err := NewResourceHandler().
+			handler, err := NewResourceTypeHandler().
 				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
 				SetBackendToken("my-token").
@@ -45,7 +45,7 @@ var _ = Describe("Resource handler", func() {
 		})
 
 		It("Can't be created without a cloud identifier", func() {
-			handler, err := NewResourceHandler().
+			handler, err := NewResourceTypeHandler().
 				SetLogger(logger).
 				SetBackendURL("https://my-backend:6443").
 				SetBackendToken("my-token").
@@ -58,7 +58,7 @@ var _ = Describe("Resource handler", func() {
 		})
 
 		It("Can't be created without a backend URL", func() {
-			handler, err := NewResourceHandler().
+			handler, err := NewResourceTypeHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendToken("my-token").
@@ -71,7 +71,7 @@ var _ = Describe("Resource handler", func() {
 		})
 
 		It("Can't be created without a backend token", func() {
-			handler, err := NewResourceHandler().
+			handler, err := NewResourceTypeHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
@@ -88,7 +88,7 @@ var _ = Describe("Resource handler", func() {
 		var (
 			ctx     context.Context
 			backend *Server
-			handler *ResourceHandler
+			handler *ResourceTypeHandler
 		)
 
 		BeforeEach(func() {
@@ -101,7 +101,7 @@ var _ = Describe("Resource handler", func() {
 			backend = MakeTCPServer()
 
 			// Create the handler:
-			handler, err = NewResourceHandler().
+			handler, err = NewResourceTypeHandler().
 				SetLogger(logger).
 				SetCloudID("123").
 				SetBackendURL(backend.URL()).
@@ -118,7 +118,7 @@ var _ = Describe("Resource handler", func() {
 						{
 							Property: "kind",
 							Values: []*string{
-								ptr.To("node"),
+								ptr.To("cluster"),
 							},
 						},
 					},
@@ -181,23 +181,13 @@ var _ = Describe("Resource handler", func() {
 				backend.AppendHandlers(
 					RespondWithItems(
 						data.Object{
-							"cluster":      "0",
-							"label":        "a=b; c=d",
-							"name":         "my-node-0",
-							"_systemUUID":  "node-0-system-uuid",
-							"_uid":         "node-0-global-uuid",
 							"architecture": "amd64",
 							"cpu":          "8",
 							"kind":         "Node",
 						},
 						data.Object{
-							"cluster":      "1",
-							"label":        "a=b; c=d",
-							"name":         "my-node-1",
-							"_systemUUID":  "node-1-system-uuid",
-							"_uid":         "node-1-global-uuid",
-							"architecture": "amd64",
-							"cpu":          "8",
+							"architecture": "arm64",
+							"cpu":          "4",
 							"kind":         "Node",
 						},
 					),
@@ -212,18 +202,16 @@ var _ = Describe("Resource handler", func() {
 				Expect(items).To(HaveLen(2))
 
 				// Verify first result:
-				Expect(items[0]).To(MatchJQ(`.resourceID`, "node-0-system-uuid"))
-				Expect(items[0]).To(MatchJQ(`.description`, "my-node-0"))
-				Expect(items[0]).To(MatchJQ(`.globalAssetID`, "node-0-global-uuid"))
-				Expect(items[0]).To(MatchJQ(`.description`, "my-node-0"))
-				Expect(items[0]).To(MatchJQ(`.resourcePoolID`, "0"))
+				Expect(items[0]).To(MatchJQ(`.resourceTypeID`, "node_8_cores_amd64"))
+				Expect(items[0]).To(MatchJQ(`.name`, "node_8_cores_amd64"))
+				Expect(items[0]).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
+				Expect(items[0]).To(MatchJQ(`.resourceClass`, "COMPUTE"))
 
 				// Verify second result:
-				Expect(items[1]).To(MatchJQ(`.resourceID`, "node-1-system-uuid"))
-				Expect(items[1]).To(MatchJQ(`.description`, "my-node-1"))
-				Expect(items[1]).To(MatchJQ(`.globalAssetID`, "node-1-global-uuid"))
-				Expect(items[1]).To(MatchJQ(`.description`, "my-node-1"))
-				Expect(items[1]).To(MatchJQ(`.resourcePoolID`, "1"))
+				Expect(items[1]).To(MatchJQ(`.resourceTypeID`, "node_4_cores_arm64"))
+				Expect(items[1]).To(MatchJQ(`.name`, "node_4_cores_arm64"))
+				Expect(items[1]).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
+				Expect(items[1]).To(MatchJQ(`.resourceClass`, "COMPUTE"))
 			})
 		})
 
@@ -251,11 +239,6 @@ var _ = Describe("Resource handler", func() {
 					CombineHandlers(
 						RespondWithItems(
 							data.Object{
-								"cluster":      "0",
-								"label":        "a=b; c=d",
-								"name":         "my-node-0",
-								"_uid":         "node-0-uuid",
-								"_systemUUID":  "node-0-system-uuid",
 								"architecture": "amd64",
 								"cpu":          "8",
 								"kind":         "Node",
@@ -266,16 +249,16 @@ var _ = Describe("Resource handler", func() {
 
 				// Send the request:
 				response, err := handler.Get(ctx, &GetRequest{
-					ID: "0",
+					ID: "node_8_cores_amd64",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
 
 				// Verify the result:
-				Expect(response.Object).To(MatchJQ(`.resourceID`, "node-0-system-uuid"))
-				Expect(response.Object).To(MatchJQ(`.description`, "my-node-0"))
-				Expect(response.Object).To(MatchJQ(`.resourcePoolID`, "0"))
-				Expect(response.Object).To(MatchJQ(`.globalAssetID`, "node-0-uuid"))
+				Expect(response.Object).To(MatchJQ(`.resourceTypeID`, "node_8_cores_amd64"))
+				Expect(response.Object).To(MatchJQ(`.name`, "node_8_cores_amd64"))
+				Expect(response.Object).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
+				Expect(response.Object).To(MatchJQ(`.resourceClass`, "COMPUTE"))
 			})
 		})
 	})

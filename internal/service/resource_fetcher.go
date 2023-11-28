@@ -29,6 +29,10 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 )
 
+const (
+	KindNode = "Node"
+)
+
 type ResourceFetcher struct {
 	logger        *slog.Logger
 	cloudID       string
@@ -155,11 +159,35 @@ func (b *ResourceFetcherBuilder) Build() (
 	return
 }
 
+// GetResourceTypeID generates a typeID from a search API object.
+func (h *ResourceFetcher) GetResourceTypeID(from data.Object) (resourceTypeID string, err error) {
+	kind, err := data.GetString(from, "kind")
+	if err != nil {
+		return
+	}
+
+	switch kind {
+	case KindNode:
+		var architecture, cpu string
+		cpu, err = data.GetString(from, "cpu")
+		if err != nil {
+			return
+		}
+		architecture, err = data.GetString(from, "architecture")
+		if err != nil {
+			return
+		}
+		resourceTypeID = fmt.Sprintf("node_%s_cores_%s", cpu, architecture)
+	}
+
+	return
+}
+
 // FetchItems returns a data stream of O2 Resources.
-// The items are converted from Nodes fetched from the search API.
+// The items are converted from objects fetched using the search API.
 func (r *ResourceFetcher) FetchItems(
-	ctx context.Context, resourcePoolID string) (resources data.Stream, err error) {
-	// Search Nodes
+	ctx context.Context) (items data.Stream, err error) {
+	// Search objects
 	resultArr, err := r.getSearchResults(ctx)
 	if err != nil {
 		return
@@ -169,23 +197,21 @@ func (r *ResourceFetcher) FetchItems(
 	searchResult := resultArr[0].(map[string]any)
 
 	// Convert response to json
-	items, err := json.Marshal(searchResult)
+	// TODO: avoid json conversions (see: MGMT-16292)
+	itemsArr, err := json.Marshal(searchResult)
 	if err != nil {
 		return
 	}
-	itemsReader := bytes.NewReader(items)
+	itemsReader := bytes.NewReader(itemsArr)
 
-	// Create reader for Nodes
-	nodes, err := k8s.NewStream().
+	// Create reader for items
+	items, err = k8s.NewStream().
 		SetLogger(r.logger).
 		SetReader(itemsReader).
 		Build()
 	if err != nil {
 		return
 	}
-
-	// Transform Nodes to Resources
-	resources = data.Map(nodes, r.mapNodeItem)
 
 	return
 }
@@ -257,46 +283,6 @@ func (r *ResourceFetcher) getSearchResults(ctx context.Context) (result []any, e
 	result, err = data.GetArray(responseData, "searchResult")
 	if err != nil {
 		return
-	}
-	return
-}
-
-// Map a Node to an O2 Resource object.
-func (r *ResourceFetcher) mapNodeItem(ctx context.Context,
-	from data.Object) (to data.Object, err error) {
-	description, err := data.GetString(from, "name")
-	if err != nil {
-		return
-	}
-
-	resourcePoolID, err := data.GetString(from, "cluster")
-	if err != nil {
-		return
-	}
-
-	labels, err := data.GetString(from, "label")
-	if err != nil {
-		return
-	}
-	labelsMap := data.GetLabelsMap(labels)
-
-	globalAssetID, err := data.GetString(from, "_uid")
-	if err != nil {
-		return
-	}
-
-	resourceID, err := data.GetString(from, "_systemUUID")
-	if err != nil {
-		return
-	}
-
-	to = data.Object{
-		"resourceID":     resourceID,
-		"resourceTypeID": "",
-		"description":    description,
-		"extensions":     labelsMap,
-		"resourcePoolID": resourcePoolID,
-		"globalAssetID":  globalAssetID,
 	}
 	return
 }
