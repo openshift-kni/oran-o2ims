@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -310,7 +309,6 @@ func (h *ResourceTypeHandler) fetchItem(ctx context.Context,
 
 	// Transform Items to ResourcesTypes
 	resourceTypes := data.Map(items, h.mapItem)
-	h.logger.Error(fmt.Sprintf("%v", resourceTypes))
 
 	// Filter by ID
 	resourceTypes = data.Select(
