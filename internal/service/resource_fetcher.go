@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -187,27 +188,16 @@ func (h *ResourceFetcher) GetResourceTypeID(from data.Object) (resourceTypeID st
 // The items are converted from objects fetched using the search API.
 func (r *ResourceFetcher) FetchItems(
 	ctx context.Context) (items data.Stream, err error) {
-	// Search objects
-	resultArr, err := r.getSearchResults(ctx)
+	// Search resources
+	response, err := r.getSearchResponse(ctx)
 	if err != nil {
 		return
 	}
-
-	// Extract 'searchResult' object
-	searchResult := resultArr[0].(map[string]any)
-
-	// Convert response to json
-	// TODO: avoid json conversions (see: MGMT-16292)
-	itemsArr, err := json.Marshal(searchResult)
-	if err != nil {
-		return
-	}
-	itemsReader := bytes.NewReader(itemsArr)
 
 	// Create reader for items
 	items, err = k8s.NewStream().
 		SetLogger(r.logger).
-		SetReader(itemsReader).
+		SetReader(response).
 		Build()
 	if err != nil {
 		return
@@ -216,7 +206,7 @@ func (r *ResourceFetcher) FetchItems(
 	return
 }
 
-func (r *ResourceFetcher) getSearchResults(ctx context.Context) (result []any, err error) {
+func (r *ResourceFetcher) getSearchResponse(ctx context.Context) (result io.ReadCloser, err error) {
 	// Convert GraphQL vars to a map
 	var graphqlVars data.Object
 	varsBytes, err := json.Marshal(r.graphqlVars)
@@ -268,21 +258,7 @@ func (r *ResourceFetcher) getSearchResults(ctx context.Context) (result []any, e
 		return
 	}
 
-	var responseMap data.Object
-	if err := json.NewDecoder(response.Body).Decode(&responseMap); err != nil {
-		return nil, err
-	}
+	result = response.Body
 
-	// Extract 'data' obj
-	responseData, err := data.GetObj(responseMap, "data")
-	if err != nil {
-		return
-	}
-
-	// Extract 'searchResult' array
-	result, err = data.GetArray(responseData, "searchResult")
-	if err != nil {
-		return
-	}
 	return
 }

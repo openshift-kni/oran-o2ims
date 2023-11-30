@@ -131,6 +131,17 @@ func (s *Stream) find(ctx context.Context) error {
 			s.found = true
 			return nil
 		}
+		if field == "data" {
+			// Handle GraphQL results
+			if s.iterator.ReadObject() == "searchResult" {
+				if s.iterator.ReadArray() {
+					if s.iterator.ReadObject() == "items" {
+						s.found = true
+					}
+				}
+			}
+			return nil
+		}
 		s.iterator.Skip()
 		if s.iterator.Error != nil {
 			return s.iterator.Error
