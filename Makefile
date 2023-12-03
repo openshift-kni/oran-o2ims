@@ -57,6 +57,27 @@ deps-update:
 	hack/update_deps.sh
 	hack/install_test_deps.sh
 
+.PHONY: template.json
+template.json: template.yaml
+	oc process \
+	--filename="$<" \
+	--local="true" \
+	--ignore-unknown-parameters="true" \
+	--param="IMAGE=$(image_repo):$(image_tag)" \
+	--param="INGRESS_CLASS=openshift-default" \
+	--param="INGRESS_HOST=$$(oc get ingresscontroller -n openshift-ingress-operator default -o json | jq -r '.status.domain')" \
+	--param="BACKEND_TOKEN=$$(oc create token -n multicluster-global-hub multicluster-global-hub-manager --duration=24h)" \
+	> "$@"
+
+.PHONY: deploy
+deploy: template.json
+	oc project "o2ims" || oc new-project "o2ims"
+	oc apply --filename="$<"
+
+.PHONY: undeploy
+undeploy: template.json
+	oc delete --filename="$<" --ignore-not-found="true"
+
 .PHONY: ci-job
 ci-job: deps-update lint fmt test
 

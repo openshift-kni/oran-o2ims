@@ -214,6 +214,9 @@ func (e *SelectorEvaluator) evaluateEq(value any, args []any) (result bool,
 		)
 		return
 	}
+	if value == nil {
+		return
+	}
 	args, err = e.convertArgs(value, args)
 	if err != nil {
 		return

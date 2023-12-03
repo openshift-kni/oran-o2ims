@@ -25,15 +25,17 @@ import (
 // CloudInfoHandlerBuilder contains the data and logic needed to create a new handler for the application
 // root. Don't create instances of this type directly, use the NewCloudInfoHandler function instead.
 type CloudInfoHandlerBuilder struct {
-	logger  *slog.Logger
-	cloudID string
+	logger          *slog.Logger
+	cloudID         string
+	externalAddress string
 }
 
 // RootHander knows how to respond to requests for the application root. Don't create instances of
 // this type directly, use the NewCloudInfoHandler function instead.
 type CloudInfoHandler struct {
-	logger  *slog.Logger
-	cloudID string
+	logger          *slog.Logger
+	cloudID         string
+	externalAddress string
 }
 
 // NewCloudInfoHandler creates a builder that can then be used to configure and create a handler for the
@@ -54,6 +56,12 @@ func (b *CloudInfoHandlerBuilder) SetCloudID(value string) *CloudInfoHandlerBuil
 	return b
 }
 
+// SetExternalAddress set the URL of the service as seen by external users.
+func (b *CloudInfoHandlerBuilder) SetExternalAddress(value string) *CloudInfoHandlerBuilder {
+	b.externalAddress = value
+	return b
+}
+
 // Build uses the data stored in the builder to create and configure a new handler.
 func (b *CloudInfoHandlerBuilder) Build() (result *CloudInfoHandler, err error) {
 	// Check parameters:
@@ -68,8 +76,9 @@ func (b *CloudInfoHandlerBuilder) Build() (result *CloudInfoHandler, err error) 
 
 	// Create and populate the object:
 	result = &CloudInfoHandler{
-		logger:  b.logger,
-		cloudID: b.cloudID,
+		logger:          b.logger,
+		cloudID:         b.cloudID,
+		externalAddress: b.externalAddress,
 	}
 	return
 }
@@ -83,7 +92,7 @@ func (h *CloudInfoHandler) Get(ctx context.Context, request *GetRequest) (respon
 			"globalCloudId": h.cloudID,
 			"name":          "OpenShift O-Cloud",
 			"description":   "OpenShift O-Cloud",
-			"serviceUri":    "https://localhost:8080",
+			"serviceUri":    h.externalAddress,
 			"extensions":    data.Object{},
 		},
 	}

@@ -166,7 +166,6 @@ func (e *ProjectorEvaluator) setPath(path []string, object map[string]any, value
 	if ok {
 		switch next := next.(type) {
 		case map[string]any:
-			next[head] = value
 			return e.setPath(tail, next, value)
 		default:
 			empty := map[string]any{}
