@@ -253,7 +253,41 @@ var _ = Describe("Deployment manager handler", func() {
 				// Prepare a backend:
 				backend.AppendHandlers(
 					CombineHandlers(
-						VerifyRequest(http.MethodGet, "/global-hub-api/v1/managedcluster/123"),
+						VerifyRequest(http.MethodGet, "/global-hub-api/v1/managedclusters"),
+						RespondWithObject(data.Object{}),
+					),
+				)
+
+				// Send the request. Note that we ignore the error here because
+				// all we care about in this test is that it uses the right URL
+				// path, no matter what is the response.
+				_, _ = handler.Get(ctx, &GetRequest{
+					ID: "123",
+				})
+			})
+
+			It("Uses the right label selector", func() {
+				// Prepare a backend:
+				backend.AppendHandlers(
+					CombineHandlers(
+						VerifyFormKV("labelSelector", "clusterID=123"),
+						RespondWithObject(data.Object{}),
+					),
+				)
+
+				// Send the request. Note that we ignore the error here because
+				// all we care about in this test is that it uses the right URL
+				// path, no matter what is the response.
+				_, _ = handler.Get(ctx, &GetRequest{
+					ID: "123",
+				})
+			})
+
+			It("Uses the right label limit", func() {
+				// Prepare a backend:
+				backend.AppendHandlers(
+					CombineHandlers(
+						VerifyFormKV("limit", "1"),
 						RespondWithObject(data.Object{}),
 					),
 				)
@@ -270,7 +304,7 @@ var _ = Describe("Deployment manager handler", func() {
 				// Prepare a backend:
 				backend.AppendHandlers(
 					CombineHandlers(
-						RespondWithObject(data.Object{
+						RespondWithList(data.Object{
 							"metadata": data.Object{
 								"name": "my-cluster",
 								"labels": data.Object{

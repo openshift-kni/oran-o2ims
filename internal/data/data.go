@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/PaesslerAG/jsonpath"
+	"github.com/itchyny/gojq"
 
 	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
@@ -38,6 +39,33 @@ func GetString(o Object, path string) (result string, err error) {
 	if !ok {
 		err = fmt.Errorf("value of path '%s' isn't a string", path)
 	}
+	return
+}
+
+func JQString(o Object, source string) (result string, err error) {
+	query, err := gojq.Parse(source)
+	if err != nil {
+		return
+	}
+	code, err := gojq.Compile(query)
+	if err != nil {
+		return
+	}
+	iter := code.Run(o)
+	value, ok := iter.Next()
+	if !ok {
+		err = fmt.Errorf("query '%s' didn't return a value", source)
+		return
+	}
+	text, ok := value.(string)
+	if !ok {
+		err = fmt.Errorf(
+			"query '%s' returned a value of type '%T' instead of a string",
+			source, value,
+		)
+		return
+	}
+	result = text
 	return
 }
 
