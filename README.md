@@ -24,7 +24,7 @@ API. It doesn't require any backend, only the O-Cloud identifier. You can start
 it wih a command like this:
 
 ```
-$ ./orna-o2ims start metadata-server \
+$ ./oran-o2ims start metadata-server \
 --log-level=debug \
 --log-file=stdout \
 --api-listener-address=localhost:8000 \
