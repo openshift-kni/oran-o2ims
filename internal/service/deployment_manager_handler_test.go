@@ -86,27 +86,14 @@ var _ = Describe("Deployment manager handler", func() {
 		var (
 			ctx     context.Context
 			backend *Server
-			handler *DeploymentManagerHandler
 		)
 
 		BeforeEach(func() {
-			var err error
-
 			// Create a context:
 			ctx = context.Background()
 
 			// Create the backend server:
 			backend = MakeTCPServer()
-
-			// Create the handler:
-			handler, err = NewDeploymentManagerHandler().
-				SetLogger(logger).
-				SetCloudID("123").
-				SetBackendURL(backend.URL()).
-				SetBackendToken("my-token").
-				Build()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(handler).ToNot(BeNil())
 		})
 
 		AfterEach(func() {
@@ -132,6 +119,16 @@ var _ = Describe("Deployment manager handler", func() {
 					),
 				)
 
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(handler).ToNot(BeNil())
+
 				// Send the request. Note that we ignore the error here because
 				// all we care about in this test is that it sends the token, no
 				// matter what is the result.
@@ -147,6 +144,16 @@ var _ = Describe("Deployment manager handler", func() {
 					),
 				)
 
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(handler).ToNot(BeNil())
+
 				// Send the request. Note that we ignore the error here because
 				// all we care about here in this test is that it uses the right
 				// URL path, no matter what is the result.
@@ -158,6 +165,16 @@ var _ = Describe("Deployment manager handler", func() {
 				backend.AppendHandlers(
 					RespondWithList(),
 				)
+
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(handler).ToNot(BeNil())
 
 				// Send the request and verify the result:
 				response, err := handler.List(ctx, &ListRequest{})
@@ -207,6 +224,16 @@ var _ = Describe("Deployment manager handler", func() {
 					),
 				)
 
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(handler).ToNot(BeNil())
+
 				// Send the request and verify the result:
 				response, err := handler.List(ctx, &ListRequest{})
 				Expect(err).ToNot(HaveOccurred())
@@ -229,6 +256,60 @@ var _ = Describe("Deployment manager handler", func() {
 					"serviceUri":          "https://your-cluster:6443",
 				}))
 			})
+
+			It("Adds configurable extensions", func() {
+				// Prepare a backend:
+				backend.AppendHandlers(
+					CombineHandlers(
+						RespondWithList(data.Object{
+							"metadata": data.Object{
+								"name": "my-cluster",
+								"labels": data.Object{
+									"clusterID": "123",
+									"country":   "ES",
+								},
+								"annotations": data.Object{
+									"region": "Madrid",
+								},
+							},
+							"spec": data.Object{
+								"managedClusterClientConfigs": data.Array{
+									data.Object{
+										"url": "https://my-cluster:6443",
+									},
+								},
+							},
+						}),
+					),
+				)
+
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					SetExtensions(
+						`{
+							"country": .metadata.labels["country"],
+							"region": .metadata.annotations["region"]
+						}`,
+						`{
+							"fixed": 123
+						}`).
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Send the request and verify the result:
+				response, err := handler.List(ctx, &ListRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				items, err := data.Collect(ctx, response.Items)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(items).To(HaveLen(1))
+				Expect(items[0]).To(MatchJQ(`.extensions.country`, "ES"))
+				Expect(items[0]).To(MatchJQ(`.extensions.region`, "Madrid"))
+				Expect(items[0]).To(MatchJQ(`.extensions.fixed`, 123))
+			})
 		})
 
 		Describe("Get", func() {
@@ -240,6 +321,15 @@ var _ = Describe("Deployment manager handler", func() {
 						RespondWithObject(data.Object{}),
 					),
 				)
+
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
 
 				// Send the request. Note that we ignore the error here because
 				// all we care about in this test is that it sends the token, no
@@ -258,6 +348,15 @@ var _ = Describe("Deployment manager handler", func() {
 					),
 				)
 
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+
 				// Send the request. Note that we ignore the error here because
 				// all we care about in this test is that it uses the right URL
 				// path, no matter what is the response.
@@ -275,6 +374,15 @@ var _ = Describe("Deployment manager handler", func() {
 					),
 				)
 
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+
 				// Send the request. Note that we ignore the error here because
 				// all we care about in this test is that it uses the right URL
 				// path, no matter what is the response.
@@ -291,6 +399,15 @@ var _ = Describe("Deployment manager handler", func() {
 						RespondWithObject(data.Object{}),
 					),
 				)
+
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
 
 				// Send the request. Note that we ignore the error here because
 				// all we care about in this test is that it uses the right URL
@@ -322,6 +439,15 @@ var _ = Describe("Deployment manager handler", func() {
 					),
 				)
 
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+
 				// Send the request and verify the result:
 				response, err := handler.Get(ctx, &GetRequest{
 					ID: "123",
@@ -335,6 +461,60 @@ var _ = Describe("Deployment manager handler", func() {
 					"oCloudId":            "123",
 					"serviceUri":          "https://my-cluster:6443",
 				}))
+			})
+
+			It("Adds configurable extensions", func() {
+				// Prepare a backend:
+				backend.AppendHandlers(
+					CombineHandlers(
+						RespondWithList(data.Object{
+							"metadata": data.Object{
+								"name": "my-cluster",
+								"labels": data.Object{
+									"clusterID": "123",
+									"country":   "ES",
+								},
+								"annotations": data.Object{
+									"region": "Madrid",
+								},
+							},
+							"spec": data.Object{
+								"managedClusterClientConfigs": data.Array{
+									data.Object{
+										"url": "https://my-cluster:6443",
+									},
+								},
+							},
+						}),
+					),
+				)
+
+				// Create the handler:
+				handler, err := NewDeploymentManagerHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					SetExtensions(
+						`{
+							"country": .metadata.labels["country"],
+							"region": .metadata.annotations["region"]
+						}`,
+						`{
+							"fixed": 123
+						}`).
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Send the request and verify the result:
+				response, err := handler.Get(ctx, &GetRequest{
+					ID: "123",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+				Expect(response.Object).To(MatchJQ(`.extensions.country`, "ES"))
+				Expect(response.Object).To(MatchJQ(`.extensions.region`, "Madrid"))
+				Expect(response.Object).To(MatchJQ(`.extensions.fixed`, 123))
 			})
 		})
 	})
