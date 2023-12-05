@@ -59,7 +59,7 @@ $ export BACKEND_TOKEN=$(
 )
 ```
 
-The start the deployment manager server with a command like this:
+Start the deployment manager server with a command like this:
 
 ```
 $ ./oran-o2ims start deployment-manager-server \
