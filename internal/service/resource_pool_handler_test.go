@@ -182,12 +182,12 @@ var _ = Describe("Resource pool handler", func() {
 					RespondWithItems(
 						data.Object{
 							"cluster": "0",
-							"label":   "a=b; c=d",
+							"label":   "a=b; c=d; region=US",
 							"name":    "my-cluster-0",
 						},
 						data.Object{
 							"cluster": "1",
-							"label":   "a=b; c=d",
+							"label":   "a=b; c=d; region=EU",
 							"name":    "my-cluster-1",
 						},
 					),
@@ -204,7 +204,7 @@ var _ = Describe("Resource pool handler", func() {
 				// Verify first result:
 				Expect(items[0]).To(MatchJQ(`.description`, ""))
 				Expect(items[0]).To(MatchJQ(`.globalLocationID`, ""))
-				Expect(items[0]).To(MatchJQ(`.location`, ""))
+				Expect(items[0]).To(MatchJQ(`.location`, "US"))
 				Expect(items[0]).To(MatchJQ(`.name`, "my-cluster-0"))
 				Expect(items[0]).To(MatchJQ(`.oCloudID`, "123"))
 				Expect(items[0]).To(MatchJQ(`.resourcePoolID`, "0"))
@@ -212,7 +212,7 @@ var _ = Describe("Resource pool handler", func() {
 				// Verify second result:
 				Expect(items[1]).To(MatchJQ(`.description`, ""))
 				Expect(items[1]).To(MatchJQ(`.globalLocationID`, ""))
-				Expect(items[1]).To(MatchJQ(`.location`, ""))
+				Expect(items[1]).To(MatchJQ(`.location`, "EU"))
 				Expect(items[1]).To(MatchJQ(`.name`, "my-cluster-1"))
 				Expect(items[1]).To(MatchJQ(`.oCloudID`, "123"))
 				Expect(items[1]).To(MatchJQ(`.resourcePoolID`, "1"))
@@ -244,7 +244,7 @@ var _ = Describe("Resource pool handler", func() {
 						RespondWithItems(
 							data.Object{
 								"cluster": "0",
-								"label":   "a=b; c=d",
+								"label":   "a=b; c=d; region.open-cluster-management.io=US",
 								"name":    "my-cluster-0",
 							},
 						),
@@ -261,7 +261,7 @@ var _ = Describe("Resource pool handler", func() {
 				// Verify the result:
 				Expect(response.Object).To(MatchJQ(`.description`, ""))
 				Expect(response.Object).To(MatchJQ(`.globalLocationID`, ""))
-				Expect(response.Object).To(MatchJQ(`.location`, ""))
+				Expect(response.Object).To(MatchJQ(`.location`, "US"))
 				Expect(response.Object).To(MatchJQ(`.name`, "my-cluster-0"))
 				Expect(response.Object).To(MatchJQ(`.oCloudID`, "123"))
 				Expect(response.Object).To(MatchJQ(`.resourcePoolID`, "0"))

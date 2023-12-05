@@ -24,10 +24,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
+	"github.com/thoas/go-funk"
 )
 
 type ResourcePoolFetcher struct {
@@ -256,15 +258,25 @@ func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 	}
 	labelsMap := data.GetLabelsMap(labels)
 
+	// Find location according to a 'region' label
+	labelsKeys := funk.Keys(labelsMap)
+	regionKey := funk.Find(labelsKeys, func(key string) bool {
+		return strings.Contains(key, "region")
+	})
+	var location string
+	if regionKey != nil {
+		location = labelsMap[regionKey.(string)]
+	}
+
 	to = data.Object{
 		"resourcePoolID": resourcePoolID,
 		"name":           name,
 		"oCloudID":       r.cloudID,
 		"extensions":     labelsMap,
+		"location":       location,
 		// TODO: no direct mapping to a property in Cluster object
-		"description":      "",
-		"location":         "",
 		"globalLocationID": "",
+		"description":      "",
 	}
 	return
 }
