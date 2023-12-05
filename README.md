@@ -17,35 +17,78 @@ make binary
 
 ### Run
 
-#### Commands
-* start deployment-manager-server
+#### Metadata server
 
-#### Flags
-* --backend-token string   Token for authenticating to the backend server.
-* --backend-url string     URL of the backend server.
-* --cloud-id string        O-Cloud identifier.
+The metadata server returns information about the supported versions of the
+API. It doesn't require any backend, only the O-Cloud identifier. You can start
+it wih a command like this:
 
-#### Set Env Variables
-``` bash
-export CLOUD_ID=<cloud_id>
-export BACKEND_URL=<backend_url>
-export BACKEND_TOKEN=<backend_token>
+```
+$ ./oran-o2ims start metadata-server \
+--log-level=debug \
+--log-file=stdout \
+--api-listener-address=localhost:8000 \
+--cloud-id=123
 ```
 
-#### Using CLI
-```bash
-./oran-o2ims start deployment-manager-server --cloud-id $CLOUD_ID --backend-url $BACKEND_URL --backend-token $BACKEND_TOKEN
+You can send requests with commands like these:
+
+```
+$ curl -s http://localhost:8000/o2ims-infrastructureInventory/api_versions | jq
+
+$ curl -s http://localhost:8000/o2ims-infrastructureInventory/v1 | jq
 ```
 
-#### Using VS Code
+Inside _VS Code_ use the _Run and Debug_ option with the `start
+metadata-server` [configuration](.vscode/launch.json).
 
-`Run and Debug` with the `start deployment-manager-server` [configuration](.vscode/launch.json).
+#### Deployment manager server
 
-### Usage
+The deployment manager server needs to connect to the non-kubernetes API of the
+ACM global hub. If you are already connected to an OpenShift cluster that has
+that global hub installed and configured you can obtain the required URL and
+token like this:
 
-#### Examples
-
-##### GET Deployment Manager List 
-```bash
-curl http://localhost:8080/o2ims-infrastructureInventory/1.2.3/deploymentManagers
 ```
+$ export BACKEND_URL=$(
+  oc get route -n multicluster-global-hub multicluster-global-hub-manager -o json |
+  jq -r '"https://" + .spec.host'
+)
+$ export BACKEND_TOKEN=$(
+  oc create token -n multicluster-global-hub multicluster-global-hub-manager --duration=24h
+)
+```
+
+Start the deployment manager server with a command like this:
+
+```
+$ ./oran-o2ims start deployment-manager-server \
+--log-level=debug \
+--log-file=stdout \
+--api-listener-address=localhost:8001 \
+--cloud-id=123 \
+--backend-url="${BACKEND_URL}" \
+--backend-token="${BACKEND_TOKEN}"
+```
+
+Note that by default all the servers listen on `localhost:8000`, so there will
+be conflicts if you try to run multiple servers in the same machine. The
+`--api-listener-address` option is used to select a port number that isn't in
+use.
+
+The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
+
+For more information about other command line flags use the `--help` command:
+
+```
+$ ./oran-o2ims start deployment-manager-server --help
+```
+
+You can send requests with commands like this:
+
+```
+$ curl -s http://localhost:8001/o2ims-infrastructureInventory/v1/deploymentManagers | jq
+```
+
+Inside _VS Code_ use the _Run and Debug_ option with the `start
+deployment-manager-server` [configuration](.vscode/launch.json).
