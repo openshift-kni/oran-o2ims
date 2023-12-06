@@ -126,5 +126,27 @@ var _ = Describe("Projector evaluator", func() {
 				},
 			},
 		),
+		Entry(
+			"Multiple subfields",
+			"extensions/country,extensions/version,extensions/hub",
+			func() any {
+				return map[string]any{
+					"extensions": map[string]any{
+						"cert":    "my-cert",
+						"key":     "my-key",
+						"country": "ES",
+						"version": "1.2.3",
+						"hub":     "hub0",
+					},
+				}
+			},
+			map[string]any{
+				"extensions": map[string]any{
+					"country": "ES",
+					"version": "1.2.3",
+					"hub":     "hub0",
+				},
+			},
+		),
 	)
 })
