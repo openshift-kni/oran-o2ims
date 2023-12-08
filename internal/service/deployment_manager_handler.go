@@ -24,6 +24,7 @@ import (
 	"maps"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"sync"
 
 	"github.com/imdario/mergo"
@@ -46,6 +47,7 @@ type DeploymentManagerHandlerBuilder struct {
 	logger         *slog.Logger
 	loggingWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID        string
+	extensions     []string
 	backendURL     string
 	backendToken   string
 	enableHack     bool
@@ -58,6 +60,7 @@ type DeploymentManagerHandler struct {
 	logger            *slog.Logger
 	loggingWrapper    func(http.RoundTripper) http.RoundTripper
 	cloudID           string
+	extensions        []string
 	backendURL        string
 	backendToken      string
 	backendClient     *http.Client
@@ -95,6 +98,12 @@ func (b *DeploymentManagerHandlerBuilder) SetLoggingWrapper(
 func (b *DeploymentManagerHandlerBuilder) SetCloudID(
 	value string) *DeploymentManagerHandlerBuilder {
 	b.cloudID = value
+	return b
+}
+
+// SetExtensions sets the fields that will be added to the extensions.
+func (b *DeploymentManagerHandlerBuilder) SetExtensions(values ...string) *DeploymentManagerHandlerBuilder {
+	b.extensions = values
 	return b
 }
 
@@ -186,6 +195,14 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 		return
 	}
 
+	// Check that extensions are at least sintactically valid:
+	for _, extension := range b.extensions {
+		_, err = jqTool.Compile(extension)
+		if err != nil {
+			return
+		}
+	}
+
 	// Create the Kubernetes API client only if the hack is enabled:
 	var globalHubClient *k8s.Client
 	if b.enableHack {
@@ -203,6 +220,7 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 		logger:            b.logger,
 		loggingWrapper:    b.loggingWrapper,
 		cloudID:           b.cloudID,
+		extensions:        slices.Clone(b.extensions),
 		backendURL:        b.backendURL,
 		backendToken:      b.backendToken,
 		backendClient:     backendClient,
@@ -364,6 +382,38 @@ func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 	)
 	if err != nil {
 		return
+	}
+
+	// Add the extensions:
+	for _, extension := range h.extensions {
+		var value any
+		err = h.jqTool.Evaluate(extension, input, &value)
+		if err != nil {
+			h.logger.Error(
+				"Failed to evaluate extension",
+				slog.String("cluster", cluster),
+				slog.String("extension", extension),
+				slog.String("error", err.Error()),
+			)
+		}
+		if value != nil {
+			err = mergo.Merge(
+				&output,
+				data.Object{
+					"extensions": value,
+				},
+				mergo.WithOverride,
+			)
+			if err != nil {
+				h.logger.Warn(
+					"Failed to merge extension",
+					slog.String("cluster", cluster),
+					slog.String("extension", extension),
+					slog.String("error", err.Error()),
+				)
+				err = nil
+			}
+		}
 	}
 
 	// Add the profile:

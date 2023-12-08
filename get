@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Make sure we have a bearer token:
+if [ ! -f "token" ]
+then
+  oc create token -n o2ims client --duration=24h > token
+fi
+
+# Send the request:
+curl \
+--insecure \
+--silent \
+--header "Authorization: Bearer $(cat token)" \
+"https://o2ims.apps.global-hub.oran.home.arpa$1" \
+| \
+jq

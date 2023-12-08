@@ -21,7 +21,8 @@
                                 "start",
                                 "metadata-server",
                                 "--log-level=debug",
-                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb"
+                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
+                                "--external-address=https://o2ims.example.com"
                         ]
                 },
                 {
@@ -36,7 +37,8 @@
                                 "--log-level=debug",
                                 "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
                                 "--backend-url=${env:BACKEND_URL}",
-                                "--backend-token=${env:BACKEND_TOKEN}"
+                                "--backend-token=${env:BACKEND_TOKEN}",
+                                "--extensions={ \"country\": .metadata.labels[\"country\"], \"version\": .metadata.labels[\"openshiftVersion\"] }"
                         ]
                 },
                 {

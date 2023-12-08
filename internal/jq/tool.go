@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -98,7 +97,7 @@ func (t *Tool) lookup(source string, variables []string) (result *Query, err err
 	if !ok {
 		return
 	}
-	if !reflect.DeepEqual(variables, query.variables) {
+	if !slices.Equal(variables, query.variables) {
 		err = fmt.Errorf(
 			"query was compiled with variables %s but used with %s",
 			logging.All(query.variables), logging.All(variables),

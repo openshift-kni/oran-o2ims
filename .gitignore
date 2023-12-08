@@ -1,4 +1,6 @@
 *.log
 /__debug*
 /oran-o2ims
+/template.json
+/token
 /vendor
