@@ -58,6 +58,11 @@ func DeploymentManagerServer() *cobra.Command {
 		"",
 		"Token for authenticating to the backend server.",
 	)
+	_ = flags.StringArray(
+		extensionsFlagName,
+		[]string{},
+		"Extension to add to deployment managers.",
+	)
 	return result
 }
 
@@ -138,10 +143,20 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
+	extensions, err := flags.GetStringArray(extensionsFlagName)
+	if err != nil {
+		logger.Error(
+			"Failed to extension flag",
+			"flag", extensionsFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
 	logger.Info(
 		"Backend details",
-		"url", backendURL,
-		"!token", backendToken,
+		slog.String("url", backendURL),
+		slog.String("!token", backendToken),
+		slog.Any("extensions", extensions),
 	)
 
 	// Create the logging wrapper:
@@ -196,6 +211,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetLogger(logger).
 		SetLoggingWrapper(loggingWrapper).
 		SetCloudID(cloudID).
+		SetExtensions(extensions...).
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
 		SetEnableHack(true).
