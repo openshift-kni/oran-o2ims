@@ -25,26 +25,38 @@ import (
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
 
+// CollectionAdapterBuilder contains the data and logic needed to create collection adapters. Don't
+// create instances of this type directly, use the NewCollectionAdapter function instead.
 type CollectionAdapterBuilder struct {
 	logger           *slog.Logger
 	handler          CollectionHandler
 	parentIdVariable string
+	defaultInclude   []string
+	defaultExclude   []string
 }
 
+// CollectionAdapter knows how to translate an HTTP request into a request for a collection of
+// objects. Don't create instances of this type directly, use the NewCollectionAdapter function
+// instead.
 type CollectionAdapter struct {
 	logger             *slog.Logger
 	parentIdVariable   string
+	pathsParser        *search.PathsParser
 	selectorParser     *search.SelectorParser
-	projectorParser    *search.ProjectorParser
 	projectorEvaluator *search.ProjectorEvaluator
+	defaultInclude     []search.Path
+	defaultExclude     []search.Path
 	jsonAPI            jsoniter.API
 	handler            CollectionHandler
 }
 
+// NewCollectionAdapter creates a builder that can be used to configure and create a collection
+// adatper.
 func NewCollectionAdapter() *CollectionAdapterBuilder {
 	return &CollectionAdapterBuilder{}
 }
@@ -68,6 +80,20 @@ func (b *CollectionAdapterBuilder) SetParentIDVariable(value string) *Collection
 	return b
 }
 
+// SetDefaultInclude set the collection of fields that will be included by default from the
+// response. Each field is specified using the same syntax accepted by paths parsers.
+func (b *CollectionAdapterBuilder) SetDefaultInclude(values ...string) *CollectionAdapterBuilder {
+	b.defaultInclude = append(b.defaultExclude, values...)
+	return b
+}
+
+// SetDefaultExclude sets the collection of fields that will be excluded by default from the
+// response. Each field is specified using the same syntax accepted by paths parsers.
+func (b *CollectionAdapterBuilder) SetDefaultExclude(values ...string) *CollectionAdapterBuilder {
+	b.defaultExclude = append(b.defaultExclude, values...)
+	return b
+}
+
 // Build uses the data stored in the builder to create and configure a new adapter.
 func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error) {
 	// Check parameters:
@@ -80,6 +106,14 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 		return
 	}
 
+	// Create the paths parser:
+	pathsParser, err := search.NewPathsParser().
+		SetLogger(b.logger).
+		Build()
+	if err != nil {
+		return
+	}
+
 	// Create the filter expression parser:
 	selectorParser, err := search.NewSelectorParser().
 		SetLogger(b.logger).
@@ -89,14 +123,7 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 		return
 	}
 
-	// Create the projector parser and evaluator:
-	projectorParser, err := search.NewProjectorParser().
-		SetLogger(b.logger).
-		Build()
-	if err != nil {
-		err = fmt.Errorf("failed to create field selector parser: %w", err)
-		return
-	}
+	// Create the projector evaluator:
 	pathEvaluator, err := search.NewPathEvaluator().
 		SetLogger(b.logger).
 		Build()
@@ -113,6 +140,16 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 		return
 	}
 
+	// Parse the default paths:
+	defaultInclude, err := pathsParser.Parse(b.defaultInclude...)
+	if err != nil {
+		return
+	}
+	defaultExclude, err := pathsParser.Parse(b.defaultExclude...)
+	if err != nil {
+		return
+	}
+
 	// Prepare the JSON iterator API:
 	jsonConfig := jsoniter.Config{
 		IndentionStep: 2,
@@ -122,9 +159,11 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 	// Create and populate the object:
 	result = &CollectionAdapter{
 		logger:             b.logger,
+		pathsParser:        pathsParser,
 		selectorParser:     selectorParser,
-		projectorParser:    projectorParser,
 		projectorEvaluator: projectorEvaluator,
+		defaultInclude:     defaultInclude,
+		defaultExclude:     defaultExclude,
 		handler:            b.handler,
 		parentIdVariable:   b.parentIdVariable,
 		jsonAPI:            jsonAPI,
@@ -134,11 +173,7 @@ func (b *CollectionAdapterBuilder) Build() (result *CollectionAdapter, err error
 
 // Serve is the implementation of the http.Handler interface.
 func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.logger.Info(
-		"Received request",
-		"from", r.RemoteAddr,
-		"url", r.URL.String(),
-	)
+	var err error
 
 	// Get the context:
 	ctx := r.Context()
@@ -149,6 +184,10 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Create the request:
 	request := &ListRequest{
 		ParentID: mux.Vars(r)[a.parentIdVariable],
+		Projector: &search.Projector{
+			Include: a.defaultInclude,
+			Exclude: a.defaultExclude,
+		},
 	}
 
 	// Check if there is a selector, and parse it:
@@ -184,31 +223,43 @@ func (a *CollectionAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if there is a projector, and parse it:
-	values, ok = query["fields"]
+	includeFields, ok := query["fields"]
 	if ok {
-		for _, value := range values {
-			projector, err := a.projectorParser.Parse(value)
-			if err != nil {
-				a.logger.Error(
-					"Failed to parse field selector",
-					slog.String("selector", value),
-					slog.String("error", err.Error()),
-				)
-				SendError(
-					w,
-					http.StatusBadRequest,
-					"Failed to parse field selector '%s': %v",
-					value, err,
-				)
-				return
-			}
-			a.logger.Info(
-				"Parsed field selector",
-				slog.String("source", value),
-				slog.Any("parsed", projector),
+		request.Projector.Include, err = a.pathsParser.Parse(includeFields...)
+		if err != nil {
+			a.logger.Error(
+				"Failed to parse included fields",
+				slog.Any("fields", includeFields),
+				slog.String("error", err.Error()),
 			)
-			request.Projector = append(request.Projector, projector...)
+			SendError(
+				w,
+				http.StatusBadRequest,
+				"Failed to parse 'fields' parameter with values %s: %v",
+				logging.All(includeFields), err,
+			)
+			return
 		}
+	}
+	excludeFields, ok := query["exclude_fields"]
+	if ok {
+		request.Projector.Exclude, err = a.pathsParser.Parse(excludeFields...)
+		if err != nil {
+			a.logger.Error(
+				"Failed to parse excluded fields",
+				slog.Any("fields", excludeFields),
+				slog.String("error", err.Error()),
+			)
+			SendError(
+				w,
+				http.StatusBadRequest,
+				"Failed to parse 'exclude_fields' parameter with values %s: %v",
+				logging.All(includeFields), err,
+			)
+		}
+	}
+	if request.Projector.Empty() {
+		request.Projector = nil
 	}
 
 	// Call the handler:

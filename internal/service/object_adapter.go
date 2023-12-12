@@ -24,6 +24,7 @@ import (
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
@@ -31,6 +32,8 @@ import (
 type ObjectAdapterBuilder struct {
 	logger           *slog.Logger
 	handler          ObjectHandler
+	defaultInclude   []string
+	defaultExclude   []string
 	idVariable       string
 	parentIdVariable string
 }
@@ -39,8 +42,10 @@ type ObjectAdapter struct {
 	logger             *slog.Logger
 	idVariable         string
 	parentIdVariable   string
-	projectorParser    *search.ProjectorParser
+	pathsParser        *search.PathsParser
 	projectorEvaluator *search.ProjectorEvaluator
+	defaultInclude     []search.Path
+	defaultExclude     []search.Path
 	jsonAPI            jsoniter.API
 	handler            ObjectHandler
 }
@@ -58,6 +63,20 @@ func (b *ObjectAdapterBuilder) SetLogger(logger *slog.Logger) *ObjectAdapterBuil
 // SetHandler sets the object that will handle the requests. This is mandatory.
 func (b *ObjectAdapterBuilder) SetHandler(value ObjectHandler) *ObjectAdapterBuilder {
 	b.handler = value
+	return b
+}
+
+// SetDefaultInclude sets the collection of fields that will be included by default from the
+// response. Each field is specified using the same syntax accepted by projector parsers.
+func (b *ObjectAdapterBuilder) SetDefaultInclude(values ...string) *ObjectAdapterBuilder {
+	b.defaultInclude = append(b.defaultExclude, values...)
+	return b
+}
+
+// SetDefaultExclude sets the collection of fields that will be excluded by default from the
+// response. Each field is specified using the same syntax accepted by projector parsers.
+func (b *ObjectAdapterBuilder) SetDefaultExclude(values ...string) *ObjectAdapterBuilder {
+	b.defaultExclude = append(b.defaultExclude, values...)
 	return b
 }
 
@@ -87,14 +106,15 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 		return
 	}
 
-	// Create the projector parser and evaluator:
-	projectorParser, err := search.NewProjectorParser().
+	// Create the paths parser:
+	pathsParser, err := search.NewPathsParser().
 		SetLogger(b.logger).
 		Build()
 	if err != nil {
-		err = fmt.Errorf("failed to create field selector parser: %w", err)
 		return
 	}
+
+	// Create the projector evaluator:
 	pathEvaluator, err := search.NewPathEvaluator().
 		SetLogger(b.logger).
 		Build()
@@ -111,6 +131,16 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 		return
 	}
 
+	// Parse the default paths:
+	defaultInclude, err := pathsParser.Parse(b.defaultInclude...)
+	if err != nil {
+		return
+	}
+	defaultExclude, err := pathsParser.Parse(b.defaultExclude...)
+	if err != nil {
+		return
+	}
+
 	// Prepare the JSON iterator API:
 	jsonConfig := jsoniter.Config{
 		IndentionStep: 2,
@@ -123,8 +153,10 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 		handler:            b.handler,
 		idVariable:         b.idVariable,
 		parentIdVariable:   b.parentIdVariable,
-		projectorParser:    projectorParser,
+		pathsParser:        pathsParser,
 		projectorEvaluator: projectorEvaluator,
+		defaultInclude:     defaultInclude,
+		defaultExclude:     defaultExclude,
 		jsonAPI:            jsonAPI,
 	}
 	return
@@ -132,11 +164,7 @@ func (b *ObjectAdapterBuilder) Build() (result *ObjectAdapter, err error) {
 
 // Serve is the implementation of the http.Handler interface.
 func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.logger.Info(
-		"Received request",
-		"from", r.RemoteAddr,
-		"url", r.URL.String(),
-	)
+	var err error
 
 	// Get the context:
 	ctx := r.Context()
@@ -148,34 +176,50 @@ func (a *ObjectAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	request := &GetRequest{
 		ID:       mux.Vars(r)[a.idVariable],
 		ParentID: mux.Vars(r)[a.parentIdVariable],
+		Projector: &search.Projector{
+			Include: a.defaultInclude,
+			Exclude: a.defaultExclude,
+		},
 	}
 
 	// Check if there is a projector, and parse it:
-	values, ok := query["fields"]
+	includeFields, ok := query["fields"]
 	if ok {
-		for _, value := range values {
-			projector, err := a.projectorParser.Parse(value)
-			if err != nil {
-				a.logger.Error(
-					"Failed to parse field selector",
-					slog.String("selector", value),
-					slog.String("error", err.Error()),
-				)
-				SendError(
-					w,
-					http.StatusBadRequest,
-					"Failed to parse field selector '%s': %v",
-					value, err,
-				)
-				return
-			}
-			a.logger.Debug(
-				"Parsed field selector",
-				slog.String("source", value),
-				slog.Any("parsed", projector),
+		request.Projector.Include, err = a.pathsParser.Parse(includeFields...)
+		if err != nil {
+			a.logger.Error(
+				"Failed to parse included fields",
+				slog.Any("fields", includeFields),
+				slog.String("error", err.Error()),
 			)
-			request.Projector = append(request.Projector, projector...)
+			SendError(
+				w,
+				http.StatusBadRequest,
+				"Failed to parse 'fields' parameter with values %s: %v",
+				logging.All(includeFields), err,
+			)
+			return
 		}
+	}
+	excludeFields, ok := query["exclude_fields"]
+	if ok {
+		request.Projector.Exclude, err = a.pathsParser.Parse(excludeFields...)
+		if err != nil {
+			a.logger.Error(
+				"Failed to parse excluded fields",
+				slog.Any("fields", excludeFields),
+				slog.String("error", err.Error()),
+			)
+			SendError(
+				w,
+				http.StatusBadRequest,
+				"Failed to parse 'exclude_fields' parameter with values %s: %v",
+				logging.All(includeFields), err,
+			)
+		}
+	}
+	if request.Projector.Empty() {
+		request.Projector = nil
 	}
 
 	// Call the handler:

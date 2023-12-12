@@ -23,64 +23,127 @@ import (
 var _ = Describe("Projector parser", func() {
 	DescribeTable(
 		"Parses correctly",
-		func(text string, expected [][]string) {
+		func(include, exclude string, expected *Projector) {
 			parser, err := NewProjectorParser().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			actual, err := parser.Parse(text)
+			actual, err := parser.Parse(include, exclude)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(actual).To(Equal(expected))
 		},
 		Entry(
-			"One segment",
+			"Include one segment",
 			"myattr",
-			[][]string{
-				{"myattr"},
+			"",
+			&Projector{
+				Include: []Path{
+					{"myattr"},
+				},
+				Exclude: nil,
 			},
 		),
 		Entry(
-			"Two segments",
+			"Include two segments",
 			"myattr/yourattr",
-			[][]string{
-				{"myattr", "yourattr"},
+			"",
+			&Projector{
+				Include: []Path{
+					{"myattr", "yourattr"},
+				},
+				Exclude: nil,
 			},
 		),
 		Entry(
-			"Quoted ~ in path",
+			"Include quoted ~ in path",
 			"my~0attr",
-			[][]string{
-				{"my~attr"},
+			"",
+			&Projector{
+				Include: []Path{
+					{"my~attr"},
+				},
+				Exclude: nil,
 			},
 		),
 		Entry(
-			"Quoted slash in path",
+			"Include quoted slash in path",
 			"my~1attr",
-			[][]string{
-				{"my/attr"},
+			"",
+			&Projector{
+				Include: []Path{
+					{"my/attr"},
+				},
+				Exclude: nil,
 			},
 		),
 		Entry(
-			"Quoted comma in path",
+			"Include quoted comma in path",
 			"my~aattr",
-			[][]string{
-				{"my,attr"},
+			"",
+			&Projector{
+				Include: []Path{
+					{"my,attr"},
+				},
+				Exclude: nil,
 			},
 		),
 		Entry(
-			"Multiple paths",
+			"Include multiple paths",
 			"myattr,yourattr",
-			[][]string{
-				{"myattr"},
-				{"yourattr"},
+			"",
+			&Projector{
+				Include: []Path{
+					{"myattr"},
+					{"yourattr"},
+				},
+				Exclude: nil,
 			},
 		),
 		Entry(
-			"Multiple paths with multiple segments",
+			"Include multiple paths with multiple segments",
 			"myattr/yourattr,myfield/yourfield",
-			[][]string{
-				{"myattr", "yourattr"},
-				{"myfield", "yourfield"},
+			"",
+			&Projector{
+				Include: []Path{
+					{"myattr", "yourattr"},
+					{"myfield", "yourfield"},
+				},
+				Exclude: nil,
+			},
+		),
+		Entry(
+			"Exclude one segment",
+			"",
+			"myattr",
+			&Projector{
+				Include: nil,
+				Exclude: []Path{
+					{"myattr"},
+				},
+			},
+		),
+		Entry(
+			"Exclude two segments",
+			"",
+			"myattr/yourattr",
+			&Projector{
+				Include: nil,
+				Exclude: []Path{
+					{"myattr", "yourattr"},
+				},
+			},
+		),
+		Entry(
+			"Include one field and exclude another",
+			"myattr",
+			"yourattr",
+			&Projector{
+				Include: []Path{
+					{"myattr"},
+				},
+				Exclude: []Path{
+					{"yourattr"},
+				},
 			},
 		),
 	)

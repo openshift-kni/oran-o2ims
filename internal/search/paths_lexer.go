@@ -23,86 +23,86 @@ import (
 	"unicode"
 )
 
-// projectorLexerBuilder contains the data and logic needed to create a new lexical scanner for
-// field selection expressions. Don't create instances of this directly, use the newProjectorLexer
+// pathsLexerBuilder contains the data and logic needed to create a new lexical scanner for field
+// paths. Don't create instances of this directly, use the newPthsLexer
 // function instead.
-type projectorLexerBuilder struct {
+type pathsLexerBuilder struct {
 	logger *slog.Logger
 	source string
 }
 
-// projectorLexer is a lexical scanner for the field selector expression language. Don't create
-// instances of this type directly, use the newProjectorLexer function instead.
-type projectorLexer struct {
+// pathsLexer is a lexical scanner for the fields paths. Don't create instances of this type
+// directly, use the newPthsLexer function instead.
+type pathsLexer struct {
 	logger *slog.Logger
 	buffer *bytes.Buffer
 }
 
-// projectorSymbol represents the terminal symbols of the field selection language.
-type projectorSymbol int
+// pathsSymbol represents the terminal symbols of the field selection language.
+type pathsSymbol int
 
 const (
-	projectorSymbolEnd projectorSymbol = iota
-	projectorSymbolIdentifier
-	projectorSymbolComma
-	projectorSymbolSlash
+	pathsSymbolEnd pathsSymbol = iota
+	pathsSymbolIdentifier
+	pathsSymbolComma
+	pathsSymbolSlash
 )
 
 // String generates a string representation of the terminal symbol.
-func (s projectorSymbol) String() string {
+func (s pathsSymbol) String() string {
 	switch s {
-	case projectorSymbolEnd:
+	case pathsSymbolEnd:
 		return "End"
-	case projectorSymbolIdentifier:
+	case pathsSymbolIdentifier:
 		return "Identifier"
-	case projectorSymbolComma:
+	case pathsSymbolComma:
 		return "Comma"
-	case projectorSymbolSlash:
+	case pathsSymbolSlash:
 		return "Slash"
 	default:
 		return fmt.Sprintf("Unknown:%d", s)
 	}
 }
 
-// projectorToken represents the tokens returned by the lexical scanner. Each token contains the
+// pathsToken represents the tokens returned by the lexical scanner. Each token contains the
 // terminal symbol and its text.
-type projectorToken struct {
-	Symbol projectorSymbol
+type pathsToken struct {
+	Symbol pathsSymbol
 	Text   string
 }
 
 // String geneates a string representation of the token.
-func (t *projectorToken) String() string {
+func (t *pathsToken) String() string {
 	if t == nil {
 		return "Nil"
 	}
 	switch t.Symbol {
-	case projectorSymbolIdentifier:
+	case pathsSymbolIdentifier:
 		return fmt.Sprintf("%s:%s", t.Symbol, t.Text)
 	default:
 		return t.Symbol.String()
 	}
 }
 
-// newProjectorLexer creates a builder that can then be used to configure and create lexers.
-func newProjectorLexer() *projectorLexerBuilder {
-	return &projectorLexerBuilder{}
+// newPathsLexer creates a builder that can then be used to configure and create lexers.
+func newPathsLexer() *pathsLexerBuilder {
+	return &pathsLexerBuilder{}
 }
 
 // SetLogger sets the logger that the lexer will use to write log messesages. This is mandatory.
-func (b *projectorLexerBuilder) SetLogger(value *slog.Logger) *projectorLexerBuilder {
+func (b *pathsLexerBuilder) SetLogger(value *slog.Logger) *pathsLexerBuilder {
 	b.logger = value
 	return b
 }
 
 // SetSource sets the source string to parse. This is mandatory.
-func (b *projectorLexerBuilder) SetSource(value string) *projectorLexerBuilder {
+func (b *pathsLexerBuilder) SetSource(value string) *pathsLexerBuilder {
 	b.source = value
 	return b
 }
 
 // Build uses the data stored in the builder to create a new lexer.
-func (b *projectorLexerBuilder) Build() (result *projectorLexer, err error) {
+func (b *pathsLexerBuilder) Build() (result *pathsLexer, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -114,7 +114,7 @@ func (b *projectorLexerBuilder) Build() (result *projectorLexer, err error) {
 	}
 
 	// Create and populate the object:
-	result = &projectorLexer{
+	result = &pathsLexer{
 		logger: b.logger,
 		buffer: bytes.NewBufferString(b.source),
 	}
@@ -122,7 +122,7 @@ func (b *projectorLexerBuilder) Build() (result *projectorLexer, err error) {
 }
 
 // FetchToken fetches the next token from the source.
-func (l *projectorLexer) FetchToken() (token *projectorToken, err error) {
+func (l *pathsLexer) FetchToken() (token *pathsToken, err error) {
 	type State int
 	const (
 		S0 State = iota
@@ -142,22 +142,22 @@ func (l *projectorLexer) FetchToken() (token *projectorToken, err error) {
 				lexeme.WriteRune(r)
 				state = S1
 			case r == ',':
-				token = &projectorToken{
-					Symbol: projectorSymbolComma,
+				token = &pathsToken{
+					Symbol: pathsSymbolComma,
 					Text:   ",",
 				}
 				return
 			case r == '/':
-				token = &projectorToken{
-					Symbol: projectorSymbolSlash,
+				token = &pathsToken{
+					Symbol: pathsSymbolSlash,
 					Text:   "/",
 				}
 				return
 			case r == '~':
 				state = S2
 			case r == 0:
-				token = &projectorToken{
-					Symbol: projectorSymbolEnd,
+				token = &pathsToken{
+					Symbol: pathsSymbolEnd,
 				}
 				return
 			default:
@@ -177,8 +177,8 @@ func (l *projectorLexer) FetchToken() (token *projectorToken, err error) {
 				state = S2
 			default:
 				l.unreadRune()
-				token = &projectorToken{
-					Symbol: projectorSymbolIdentifier,
+				token = &pathsToken{
+					Symbol: pathsSymbolIdentifier,
 					Text:   lexeme.String(),
 				}
 				return
@@ -209,7 +209,7 @@ func (l *projectorLexer) FetchToken() (token *projectorToken, err error) {
 	}
 }
 
-func (l *projectorLexer) readRune() rune {
+func (l *pathsLexer) readRune() rune {
 	r, _, err := l.buffer.ReadRune()
 	if errors.Is(err, io.EOF) {
 		return 0
@@ -224,7 +224,7 @@ func (l *projectorLexer) readRune() rune {
 	return r
 }
 
-func (l *projectorLexer) unreadRune() {
+func (l *pathsLexer) unreadRune() {
 	err := l.buffer.UnreadRune()
 	if err != nil {
 		l.logger.Error(

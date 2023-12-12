@@ -29,14 +29,14 @@ import (
 // instead.
 type SelectorEvaluatorBuilder struct {
 	logger        *slog.Logger
-	pathEvaluator func(context.Context, []string, any) (any, error)
+	pathEvaluator func(context.Context, Path, any) (any, error)
 }
 
 // SelectorEvaluator knows how to evaluate filter expressions. Don't create instances of this type
 // directly, use the NewSelectorEvaluator function instead.
 type SelectorEvaluator struct {
 	logger        *slog.Logger
-	pathEvaluator func(context.Context, []string, any) (any, error)
+	pathEvaluator func(context.Context, Path, any) (any, error)
 }
 
 // NewSelectorEvaluator creates a builder that can then be used to configure and create expression
@@ -94,7 +94,7 @@ func (b *SelectorEvaluatorBuilder) SetLogger(value *slog.Logger) *SelectorEvalua
 // The path evaluator function should return nil if the path corresponds to a valid optional
 // attribute that hasn't a value.
 func (b *SelectorEvaluatorBuilder) SetPathEvaluator(
-	value func(context.Context, []string, any) (any, error)) *SelectorEvaluatorBuilder {
+	value func(context.Context, Path, any) (any, error)) *SelectorEvaluatorBuilder {
 	b.pathEvaluator = value
 	return b
 }
