@@ -24,6 +24,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/graphql"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -44,16 +45,17 @@ type ResourcePoolHandlerBuilder struct {
 // ResourcePoolHandler knows how to respond to requests to list resource pools. Don't create
 // instances of this type directly, use the NewResourcePoolHandler function instead.
 type ResourcePoolHandler struct {
-	logger            *slog.Logger
-	transportWrapper  func(http.RoundTripper) http.RoundTripper
-	cloudID           string
-	backendURL        string
-	backendToken      string
-	backendClient     *http.Client
-	jsonAPI           jsoniter.API
-	selectorEvaluator *search.SelectorEvaluator
-	graphqlQuery      string
-	graphqlVars       *model.SearchInput
+	logger              *slog.Logger
+	transportWrapper    func(http.RoundTripper) http.RoundTripper
+	cloudID             string
+	backendURL          string
+	backendToken        string
+	backendClient       *http.Client
+	jsonAPI             jsoniter.API
+	selectorEvaluator   *search.SelectorEvaluator
+	graphqlQuery        string
+	graphqlVars         *model.SearchInput
+	resourcePoolFetcher *ResourcePoolFetcher
 }
 
 // NewResourcePoolHandler creates a builder that can then be used to configure and create a
@@ -190,7 +192,7 @@ func (h *ResourcePoolHandler) List(ctx context.Context,
 	request *ListRequest) (response *ListResponse, err error) {
 
 	// Transform the items into what we need:
-	resourcePools, err := h.fetchItems(ctx)
+	resourcePools, err := h.fetchItems(ctx, request.Selector)
 	if err != nil {
 		return
 	}
@@ -217,7 +219,7 @@ func (h *ResourcePoolHandler) List(ctx context.Context,
 func (h *ResourcePoolHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
 
-	resourcePoolFetcher, err := NewResourcePoolFetcher().
+	h.resourcePoolFetcher, err = NewResourcePoolFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
 		SetCloudID(h.cloudID).
@@ -231,7 +233,7 @@ func (h *ResourcePoolHandler) Get(ctx context.Context,
 	}
 
 	// Fetch the object:
-	resourcePool, err := h.fetchItem(ctx, request.ID, resourcePoolFetcher)
+	resourcePool, err := h.fetchItem(ctx, request.ID)
 	if err != nil {
 		return
 	}
@@ -245,32 +247,64 @@ func (h *ResourcePoolHandler) Get(ctx context.Context,
 }
 
 func (h *ResourcePoolHandler) fetchItems(
-	ctx context.Context) (result data.Stream, err error) {
-	resourcePoolFetcher, err := NewResourcePoolFetcher().
+	ctx context.Context, selector *search.Selector) (result data.Stream, err error) {
+	h.resourcePoolFetcher, err = NewResourcePoolFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
 		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.graphqlVars).
+		SetGraphqlVars(h.getCollectionGraphqlVars(ctx, selector)).
 		Build()
 	if err != nil {
 		return
 	}
-	return resourcePoolFetcher.FetchItems(ctx)
+	return h.resourcePoolFetcher.FetchItems(ctx)
 }
 
 func (h *ResourcePoolHandler) fetchItem(ctx context.Context,
-	id string, resourcePoolFetcher *ResourcePoolFetcher) (resourcePool data.Object, err error) {
+	id string) (resourcePool data.Object, err error) {
 	// Fetch resource pools
-	resourcePools, err := resourcePoolFetcher.FetchItems(ctx)
+	resourcePools, err := h.resourcePoolFetcher.FetchItems(ctx)
 	if err != nil {
 		return
 	}
 
 	// Get first result
 	resourcePool, err = resourcePools.Next(ctx)
+
+	return
+}
+
+func (h *ResourcePoolHandler) getCollectionGraphqlVars(ctx context.Context, selector *search.Selector) (graphqlVars *model.SearchInput) {
+	graphqlVars = &model.SearchInput{}
+	graphqlVars.Keywords = h.graphqlVars.Keywords
+	graphqlVars.Filters = h.graphqlVars.Filters
+
+	// Add filters from the request params
+	if selector != nil {
+		for _, term := range selector.Terms {
+			searchFilter, err := graphql.FilterTerm(*term).MapFilter(func(s string) string {
+				return graphql.PropertyCluster(s).MapProperty()
+			})
+			if err != nil {
+				h.logger.Error(
+					"Failed to map GraphQL filter term (fallback to selector filtering).",
+					slog.String("term", term.String()),
+					slog.String("error", err.Error()),
+				)
+				continue
+			}
+			h.logger.Debug(
+				"Mapped filter term to GraphQL SearchFilter",
+				slog.String("term", term.String()),
+				slog.String("mapped property", searchFilter.Property),
+				slog.String("mapped value", *searchFilter.Values[0]),
+			)
+			graphqlVars.Filters = append(graphqlVars.Filters, searchFilter)
+		}
+	}
 
 	return
 }

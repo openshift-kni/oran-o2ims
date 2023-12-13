@@ -24,6 +24,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/graphql"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -190,7 +191,7 @@ func (b *ResourceHandlerBuilder) Build() (
 func (h *ResourceHandler) List(ctx context.Context,
 	request *ListRequest) (response *ListResponse, err error) {
 	// Transform the items into what we need:
-	resources, err := h.fetchItems(ctx, request.ParentID)
+	resources, err := h.fetchItems(ctx, request.ParentID, request.Selector)
 	if err != nil {
 		return
 	}
@@ -230,7 +231,7 @@ func (h *ResourceHandler) Get(ctx context.Context,
 	}
 
 	// Fetch the object:
-	resource, err := h.fetchItem(ctx, request.ID, request.ParentID, h.resourceFetcher)
+	resource, err := h.fetchItem(ctx, request.ID, request.ParentID)
 	if err != nil {
 		return
 	}
@@ -243,7 +244,7 @@ func (h *ResourceHandler) Get(ctx context.Context,
 }
 
 func (h *ResourceHandler) fetchItems(
-	ctx context.Context, parentID string) (result data.Stream, err error) {
+	ctx context.Context, parentID string, selector *search.Selector) (result data.Stream, err error) {
 	h.resourceFetcher, err = NewResourceFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
@@ -251,7 +252,7 @@ func (h *ResourceHandler) fetchItems(
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.getCollectionGraphqlVars(ctx, parentID)).
+		SetGraphqlVars(h.getCollectionGraphqlVars(ctx, parentID, selector)).
 		Build()
 	if err != nil {
 		return
@@ -269,14 +270,14 @@ func (h *ResourceHandler) fetchItems(
 }
 
 func (h *ResourceHandler) fetchItem(ctx context.Context,
-	id, parentID string, resourceFetcher *ResourceFetcher) (resource data.Object, err error) {
+	id, parentID string) (resource data.Object, err error) {
 	// Fetch items
-	items, err := resourceFetcher.FetchItems(ctx)
+	items, err := h.resourceFetcher.FetchItems(ctx)
 	if err != nil {
 		return
 	}
 
-	// Transform Items to Resources
+	// Transform Items to O2 Resources
 	resources := data.Map(items, h.mapItem)
 
 	// Get first result
@@ -286,7 +287,7 @@ func (h *ResourceHandler) fetchItem(ctx context.Context,
 }
 
 func (h *ResourceHandler) getObjectGraphqlVars(ctx context.Context, id, parentId string) (graphqlVars *model.SearchInput) {
-	graphqlVars = h.getCollectionGraphqlVars(ctx, parentId)
+	graphqlVars = h.getCollectionGraphqlVars(ctx, parentId, nil)
 
 	// Filter results by resource ID
 	graphqlVars.Filters = append(graphqlVars.Filters, &model.SearchFilter{
@@ -296,7 +297,7 @@ func (h *ResourceHandler) getObjectGraphqlVars(ctx context.Context, id, parentId
 	return
 }
 
-func (h *ResourceHandler) getCollectionGraphqlVars(ctx context.Context, id string) (graphqlVars *model.SearchInput) {
+func (h *ResourceHandler) getCollectionGraphqlVars(ctx context.Context, id string, selector *search.Selector) (graphqlVars *model.SearchInput) {
 	graphqlVars = &model.SearchInput{}
 	graphqlVars.Keywords = h.graphqlVars.Keywords
 	graphqlVars.Filters = h.graphqlVars.Filters
@@ -315,11 +316,35 @@ func (h *ResourceHandler) getCollectionGraphqlVars(ctx context.Context, id strin
 		Values:   []*string{&nonEmpty},
 	})
 
+	// Add filters from the request params
+	if selector != nil {
+		for _, term := range selector.Terms {
+			searchFilter, err := graphql.FilterTerm(*term).MapFilter(func(s string) string {
+				return graphql.PropertyNode(s).MapProperty()
+			})
+			if err != nil {
+				h.logger.Error(
+					"Failed to map GraphQL filter term (fallback to selector filtering).",
+					slog.String("filter", term.String()),
+					slog.String("error", err.Error()),
+				)
+				continue
+			}
+			h.logger.Debug(
+				"Mapped filter term to GraphQL SearchFilter",
+				slog.String("term", term.String()),
+				slog.String("mapped property", searchFilter.Property),
+				slog.String("mapped value", *searchFilter.Values[0]),
+			)
+			graphqlVars.Filters = append(graphqlVars.Filters, searchFilter)
+		}
+	}
+
 	return
 }
 
-// Map an item to and O2 Resource object.
-func (h *ResourceHandler) mapItem(ctx context.Context,
+// Map an item to an O2 Resource object.
+func (r *ResourceHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
 	kind, err := data.GetString(from, "kind")
 	if err != nil {
@@ -328,21 +353,23 @@ func (h *ResourceHandler) mapItem(ctx context.Context,
 
 	switch kind {
 	case KindNode:
-		return h.mapNodeItem(ctx, from)
+		return r.mapNodeItem(ctx, from)
 	}
 
 	return
 }
 
 // Map a Node to an O2 Resource object.
-func (h *ResourceHandler) mapNodeItem(ctx context.Context,
+func (r *ResourceHandler) mapNodeItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
-	description, err := data.GetString(from, "name")
+	description, err := data.GetString(from,
+		graphql.PropertyNode("description").MapProperty())
 	if err != nil {
 		return
 	}
 
-	resourcePoolID, err := data.GetString(from, "cluster")
+	resourcePoolID, err := data.GetString(from,
+		graphql.PropertyNode("resourcePoolID").MapProperty())
 	if err != nil {
 		return
 	}
@@ -353,17 +380,19 @@ func (h *ResourceHandler) mapNodeItem(ctx context.Context,
 	}
 	labelsMap := data.GetLabelsMap(labels)
 
-	globalAssetID, err := data.GetString(from, "_uid")
+	globalAssetID, err := data.GetString(from,
+		graphql.PropertyNode("globalAssetID").MapProperty())
 	if err != nil {
 		return
 	}
 
-	resourceID, err := data.GetString(from, "_systemUUID")
+	resourceID, err := data.GetString(from,
+		graphql.PropertyNode("resourceID").MapProperty())
 	if err != nil {
 		return
 	}
 
-	resourceTypeID, err := h.resourceFetcher.GetResourceTypeID(from)
+	resourceTypeID, err := r.resourceFetcher.GetResourceTypeID(from)
 	if err != nil {
 		return
 	}

@@ -10,6 +10,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.29.0
+	github.com/thoas/go-funk v0.9.3
 	go.uber.org/mock v0.3.0
 	k8s.io/api v0.28.4
 	k8s.io/apimachinery v0.28.4
@@ -39,7 +40,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/thoas/go-funk v0.9.3 // indirect
 	golang.org/x/exp v0.0.0-20230118134722-a68e582fa157 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/term v0.14.0 // indirect

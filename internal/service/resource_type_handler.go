@@ -340,7 +340,7 @@ func (h *ResourceTypeHandler) getGraphqlVars(ctx context.Context) (graphqlVars *
 	return
 }
 
-// Map an item to and O2 Resource object.
+// Map an item to an O2 Resource object.
 func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
 	kind, err := data.GetString(from, "kind")
