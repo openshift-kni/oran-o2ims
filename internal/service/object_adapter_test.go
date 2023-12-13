@@ -24,6 +24,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 var _ = Describe("Object adapter", func() {
@@ -76,7 +77,7 @@ var _ = Describe("Object adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *GetRequest) (response *GetResponse, err error) {
-				Expect(request.Projector).To(Equal([][]string{
+				Expect(request.Projector.Include).To(Equal([]search.Path{
 					{"myattr"},
 				}))
 				response = &GetResponse{
@@ -114,7 +115,7 @@ var _ = Describe("Object adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *GetRequest) (response *GetResponse, err error) {
-				Expect(request.Projector).To(Equal([][]string{
+				Expect(request.Projector.Include).To(Equal([]search.Path{
 					{"myattr"},
 					{"yourattr"},
 				}))
@@ -154,7 +155,7 @@ var _ = Describe("Object adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *GetRequest) (response *GetResponse, err error) {
-				Expect(request.Projector).To(Equal([][]string{
+				Expect(request.Projector.Include).To(Equal([]search.Path{
 					{"myattr", "yourattr"},
 				}))
 				response = &GetResponse{
@@ -197,7 +198,6 @@ var _ = Describe("Object adapter", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *GetRequest) (response *GetResponse, err error) {
-				Expect(request.Projector).To(BeNil())
 				response = &GetResponse{
 					Object: data.Object{
 						"myattr":   "myvalue",
@@ -224,6 +224,159 @@ var _ = Describe("Object adapter", func() {
 				"myattr": "myvalue",
 				"yourattr": "yourvalue"
 			}`))
+		})
+
+		It("Removes default excluded fields when no query parameter is used", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *GetRequest) (response *GetResponse, err error) {
+				response = &GetResponse{
+					Object: data.Object{
+						"myattr":   "myvalue",
+						"yourattr": "yourvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(http.MethodGet, "/mypath", nil)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				SetDefaultExclude("yourattr").
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": "myvalue"
+			}`))
+		})
+
+		It("Removes explicitly excluded parameter", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *GetRequest) (response *GetResponse, err error) {
+				response = &GetResponse{
+					Object: data.Object{
+						"myattr":   "myvalue",
+						"yourattr": "yourvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(http.MethodGet, "/mypath?exclude_fields=yourattr", nil)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": "myvalue"
+			}`))
+		})
+
+		It("Doesn't remove default excluded parameter if others are explicitly excluded", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *GetRequest) (response *GetResponse, err error) {
+				response = &GetResponse{
+					Object: data.Object{
+						"myattr":   "myvalue",
+						"yourattr": "yourvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(http.MethodGet, "/mypath?exclude_fields=yourattr", nil)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				SetDefaultExclude("myattr").
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": "myvalue"
+			}`))
+		})
+
+		It("Removes default excluded field even if it is also included by default", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *GetRequest) (response *GetResponse, err error) {
+				response = &GetResponse{
+					Object: data.Object{
+						"myattr": "myvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(http.MethodGet, "/mypath", nil)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				SetDefaultInclude("myattr").
+				SetDefaultExclude("myattr").
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{}`))
+		})
+
+		It("Removes explicitly excluded field even if it is also explicitly included", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *GetRequest) (response *GetResponse, err error) {
+				response = &GetResponse{
+					Object: data.Object{
+						"myattr": "myvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockObjectHandler(ctrl)
+			handler.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Send the request:
+			request := httptest.NewRequest(http.MethodGet, "/mypath?fields=myattr&exclude_fields=myattr", nil)
+			recorder := httptest.NewRecorder()
+			adapter, err := NewObjectAdapter().
+				SetLogger(logger).
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{}`))
 		})
 	})
 })

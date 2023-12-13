@@ -24,7 +24,7 @@ import (
 
 var _ = Describe("Projector evaluator", func() {
 	// nop is a simple path evaluator that always return nil.
-	var nop = func(context.Context, []string, any) (any, error) {
+	var nop = func(context.Context, Path, any) (any, error) {
 		return nil, nil
 	}
 
@@ -64,13 +64,13 @@ var _ = Describe("Projector evaluator", func() {
 
 	DescribeTable(
 		"Evaluates correctly",
-		func(src string, producer func() any, expected map[string]any) {
+		func(include, exclude string, producer func() any, expected map[string]any) {
 			// Parse the projector:
 			parser, err := NewProjectorParser().
 				SetLogger(logger).
 				Build()
 			Expect(err).ToNot(HaveOccurred())
-			projector, err := parser.Parse(src)
+			projector, err := parser.Parse(include, exclude)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Evaluate the projector:
@@ -90,8 +90,28 @@ var _ = Describe("Projector evaluator", func() {
 			Expect(actual).To(Equal(expected))
 		},
 		Entry(
-			"Top level string",
+			"Include everything by default",
+			"",
+			"",
+			func() any {
+				type MyObject struct {
+					MyField   string
+					YourField string
+				}
+				return MyObject{
+					MyField:   "myvalue",
+					YourField: "yourvalue",
+				}
+			},
+			map[string]any{
+				"MyField":   "myvalue",
+				"YourField": "yourvalue",
+			},
+		),
+		Entry(
+			"Include top level string",
 			"MyField",
+			"",
 			func() any {
 				type MyObject struct {
 					MyField string
@@ -105,8 +125,9 @@ var _ = Describe("Projector evaluator", func() {
 			},
 		),
 		Entry(
-			"Nested string",
+			"Include nested string",
 			"MyField/YourField",
+			"",
 			func() any {
 				type YourObject struct {
 					YourField string
@@ -127,8 +148,9 @@ var _ = Describe("Projector evaluator", func() {
 			},
 		),
 		Entry(
-			"Multiple subfields",
+			"Include multiple subfields",
 			"extensions/country,extensions/version,extensions/hub",
+			"",
 			func() any {
 				return map[string]any{
 					"extensions": map[string]any{
@@ -146,6 +168,79 @@ var _ = Describe("Projector evaluator", func() {
 					"version": "1.2.3",
 					"hub":     "hub0",
 				},
+			},
+		),
+		Entry(
+			"Exclude top level string",
+			"",
+			"YourField",
+			func() any {
+				type MyObject struct {
+					MyField   string
+					YourField string
+				}
+				return MyObject{
+					MyField:   "myvalue",
+					YourField: "yourvalue",
+				}
+			},
+			map[string]any{
+				"MyField": "myvalue",
+			},
+		),
+		Entry(
+			"Exclude nested string",
+			"",
+			"MyField/YourField",
+			func() any {
+				type YourObject struct {
+					YourField  string
+					TheirField string
+				}
+				type MyObject struct {
+					MyField YourObject
+				}
+				return MyObject{
+					MyField: YourObject{
+						YourField:  "yourvalue",
+						TheirField: "theirvalue",
+					},
+				}
+			},
+			map[string]any{
+				"MyField": map[string]any{
+					"TheirField": "theirvalue",
+				},
+			},
+		),
+		Entry(
+			"Include and then exclude",
+			"MyField",
+			"MyField",
+			func() any {
+				type MyObject struct {
+					MyField string
+				}
+				return MyObject{
+					MyField: "myvalue",
+				}
+			},
+			map[string]any{},
+		),
+		Entry(
+			"Exclude non existing field",
+			"MyField",
+			"YourField",
+			func() any {
+				type MyObject struct {
+					MyField string
+				}
+				return MyObject{
+					MyField: "myvalue",
+				}
+			},
+			map[string]any{
+				"MyField": "myvalue",
 			},
 		),
 	)

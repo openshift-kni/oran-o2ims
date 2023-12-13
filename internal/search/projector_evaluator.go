@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // ProjectorEvaluatorBuilder contains the logic and data needed to create field projection
@@ -26,14 +28,14 @@ import (
 // function instead.
 type ProjectorEvaluatorBuilder struct {
 	logger        *slog.Logger
-	pathEvaluator func(context.Context, []string, any) (any, error)
+	pathEvaluator func(context.Context, Path, any) (any, error)
 }
 
 // ProjectorEvaluator knows how to evaluate field projection. Don't create instances of this type
 // directly, use the NewProjectionEvaluator function instead.
 type ProjectorEvaluator struct {
 	logger        *slog.Logger
-	pathEvaluator func(context.Context, []string, any) (any, error)
+	pathEvaluator func(context.Context, Path, any) (any, error)
 }
 
 // NewProjectorEvaluator creates a builder that can then be used to configure and create field
@@ -61,7 +63,7 @@ func (b *ProjectorEvaluatorBuilder) SetLogger(value *slog.Logger) *ProjectorEval
 //
 // The path evaluator function could be like this:
 //
-//	func personPathEvaluator(ctx context.Context, path []string, object any) (result any, err error) {
+//	func personPathEvaluator(ctx context.Context, path Path, object any) (result any, err error) {
 //		person, ok := object.(*Person)
 //		if !ok {
 //			err = fmt.Errorf("expected person, but got '%T'", object)
@@ -91,7 +93,7 @@ func (b *ProjectorEvaluatorBuilder) SetLogger(value *slog.Logger) *ProjectorEval
 // The path evaluator function should return nil if the path corresponds to a valid optional
 // attribute that hasn't a value.
 func (b *ProjectorEvaluatorBuilder) SetPathEvaluator(
-	value func(context.Context, []string, any) (any, error)) *ProjectorEvaluatorBuilder {
+	value func(context.Context, Path, any) (any, error)) *ProjectorEvaluatorBuilder {
 	b.pathEvaluator = value
 	return b
 }
@@ -118,13 +120,13 @@ func (b *ProjectorEvaluatorBuilder) Build() (result *ProjectorEvaluator, err err
 
 // Evaluate evaluates the projector on the given object. It returns a map containing only the
 // fields that match the projector.
-func (e *ProjectorEvaluator) Evaluate(ctx context.Context, selector [][]string,
+func (e *ProjectorEvaluator) Evaluate(ctx context.Context, projector *Projector,
 	object any) (result map[string]any, err error) {
-	result, err = e.evaluateProjector(ctx, selector, object)
+	result, err = e.evaluateProjector(ctx, projector, object)
 	if e.logger.Enabled(ctx, slog.LevelDebug) {
 		e.logger.Debug(
 			"Evaluated projector",
-			slog.String("projector", fmt.Sprintf("%v", selector)),
+			slog.String("projector", fmt.Sprintf("%v", projector)),
 			slog.Any("object", object),
 			slog.Any("result", result),
 		)
@@ -132,11 +134,29 @@ func (e *ProjectorEvaluator) Evaluate(ctx context.Context, selector [][]string,
 	return
 }
 
-func (e *ProjectorEvaluator) evaluateProjector(ctx context.Context, selector [][]string,
+func (e *ProjectorEvaluator) evaluateProjector(ctx context.Context, projector *Projector,
 	object any) (result map[string]any, err error) {
 	result = map[string]any{}
-	for _, path := range selector {
-		err = e.evaluatePath(ctx, path, object, result)
+	if len(projector.Include) == 0 {
+		var data []byte
+		data, err = jsoniter.Marshal(object)
+		if err != nil {
+			return
+		}
+		err = jsoniter.Unmarshal(data, &result)
+		if err != nil {
+			return
+		}
+	} else {
+		for _, path := range projector.Include {
+			err = e.includePath(ctx, path, object, result)
+			if err != nil {
+				return
+			}
+		}
+	}
+	for _, path := range projector.Exclude {
+		err = e.excludePath(ctx, path, object, result)
 		if err != nil {
 			return
 		}
@@ -144,7 +164,7 @@ func (e *ProjectorEvaluator) evaluateProjector(ctx context.Context, selector [][
 	return
 }
 
-func (e *ProjectorEvaluator) evaluatePath(ctx context.Context, path []string, object any, result map[string]any) error {
+func (e *ProjectorEvaluator) includePath(ctx context.Context, path Path, object any, result map[string]any) error {
 	value, err := e.pathEvaluator(ctx, path, object)
 	if err != nil {
 		return err
@@ -152,7 +172,7 @@ func (e *ProjectorEvaluator) evaluatePath(ctx context.Context, path []string, ob
 	return e.setPath(path, result, value)
 }
 
-func (e *ProjectorEvaluator) setPath(path []string, object map[string]any, value any) error {
+func (e *ProjectorEvaluator) setPath(path Path, object map[string]any, value any) error {
 	if len(path) == 0 {
 		return fmt.Errorf("path must have at least one element")
 	}
@@ -176,5 +196,36 @@ func (e *ProjectorEvaluator) setPath(path []string, object map[string]any, value
 		next := map[string]any{}
 		object[head] = next
 		return e.setPath(tail, next, value)
+	}
+}
+
+func (e *ProjectorEvaluator) excludePath(ctx context.Context, path Path, object any, result map[string]any) error {
+	return e.clearPath(path, result)
+}
+
+func (e *ProjectorEvaluator) clearPath(path Path, object map[string]any) error {
+	if len(path) == 0 {
+		return fmt.Errorf("path must have at least one element")
+	}
+	head := path[0]
+	tail := path[1:]
+	if len(tail) == 0 {
+		delete(object, head)
+		return nil
+	}
+	next, ok := object[head]
+	if ok {
+		switch next := next.(type) {
+		case map[string]any:
+			return e.clearPath(tail, next)
+		default:
+			empty := map[string]any{}
+			object[head] = empty
+			return e.clearPath(tail, empty)
+		}
+	} else {
+		next := map[string]any{}
+		object[head] = next
+		return e.clearPath(tail, next)
 	}
 }

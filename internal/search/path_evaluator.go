@@ -63,7 +63,7 @@ func (b *PathEvaluatorBuilder) Build() (result *PathEvaluator, err error) {
 }
 
 // Evaluate receives the attribute path and the object and returns the value of that attribute.
-func (r *PathEvaluator) Evaluate(ctx context.Context, path []string, object any) (result any,
+func (r *PathEvaluator) Evaluate(ctx context.Context, path Path, object any) (result any,
 	err error) {
 	value, err := r.evaluate(ctx, path, reflect.ValueOf(object))
 	if err != nil {

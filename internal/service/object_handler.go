@@ -18,12 +18,13 @@ import (
 	"context"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 // ObjectHandler represents a request for an individual object.
 type GetRequest struct {
 	// Projector is the  list of field paths to return.
-	Projector [][]string
+	Projector *search.Projector
 
 	// ID is the identifier of the object.
 	ID string

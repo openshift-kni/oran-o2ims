@@ -27,7 +27,7 @@ type ListRequest struct {
 	Selector *search.Selector
 
 	// Projector is the list of field paths to return.
-	Projector [][]string
+	Projector *search.Projector
 
 	// ParentID is the identifier of the parent collection.
 	ParentID string
