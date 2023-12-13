@@ -159,7 +159,9 @@ var _ = Describe("Resource handler", func() {
 				// Send the request. Note that we ignore the error here because
 				// all we care about in this test is that it sends the token, no
 				// matter what is the result.
-				_, _ = handler.List(ctx, &ListRequest{})
+				_, _ = handler.List(ctx, &ListRequest{
+					Variables: []string{"0", "123"},
+				})
 			})
 
 			It("Translates empty list of results", func() {
@@ -169,7 +171,9 @@ var _ = Describe("Resource handler", func() {
 				)
 
 				// Send the request and verify the result:
-				response, err := handler.List(ctx, &ListRequest{})
+				response, err := handler.List(ctx, &ListRequest{
+					Variables: []string{"0", "123"},
+				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
 				items, err := data.Collect(ctx, response.Items)
@@ -205,7 +209,9 @@ var _ = Describe("Resource handler", func() {
 				)
 
 				// Send the request:
-				response, err := handler.List(ctx, &ListRequest{})
+				response, err := handler.List(ctx, &ListRequest{
+					Variables: []string{"0", "123"},
+				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
 				items, err := data.Collect(ctx, response.Items)
@@ -235,6 +241,9 @@ var _ = Describe("Resource handler", func() {
 
 				// Send the request:
 				response, err := handler.List(ctx, &ListRequest{
+					Variables: []string{
+						"my-pool",
+					},
 					Selector: &search.Selector{
 						Terms: []*search.Term{{
 							Operator: search.Eq,
@@ -268,6 +277,9 @@ var _ = Describe("Resource handler", func() {
 
 				// Send the request:
 				response, err := handler.List(ctx, &ListRequest{
+					Variables: []string{
+						"my-pool",
+					},
 					Selector: &search.Selector{
 						Terms: []*search.Term{
 							{
@@ -316,6 +328,9 @@ var _ = Describe("Resource handler", func() {
 
 				// Send the request:
 				response, err := handler.List(ctx, &ListRequest{
+					Variables: []string{
+						"my-pool",
+					},
 					Selector: &search.Selector{
 						Terms: []*search.Term{
 							{
@@ -362,7 +377,7 @@ var _ = Describe("Resource handler", func() {
 				// all we care about in this test is that it sends the token, no
 				// matter what is the response.
 				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"0", "123"},
 				})
 			})
 
@@ -387,7 +402,7 @@ var _ = Describe("Resource handler", func() {
 
 				// Send the request:
 				response, err := handler.Get(ctx, &GetRequest{
-					ID: "0",
+					Variables: []string{"0", "123"},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())

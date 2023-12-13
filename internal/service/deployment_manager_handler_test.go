@@ -335,7 +335,7 @@ var _ = Describe("Deployment manager handler", func() {
 				// all we care about in this test is that it sends the token, no
 				// matter what is the response.
 				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 			})
 
@@ -361,7 +361,7 @@ var _ = Describe("Deployment manager handler", func() {
 				// all we care about in this test is that it uses the right URL
 				// path, no matter what is the response.
 				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 			})
 
@@ -387,7 +387,7 @@ var _ = Describe("Deployment manager handler", func() {
 				// all we care about in this test is that it uses the right URL
 				// path, no matter what is the response.
 				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 			})
 
@@ -413,7 +413,7 @@ var _ = Describe("Deployment manager handler", func() {
 				// all we care about in this test is that it uses the right URL
 				// path, no matter what is the response.
 				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 			})
 
@@ -450,7 +450,7 @@ var _ = Describe("Deployment manager handler", func() {
 
 				// Send the request and verify the result:
 				response, err := handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
@@ -508,7 +508,7 @@ var _ = Describe("Deployment manager handler", func() {
 
 				// Send the request and verify the result:
 				response, err := handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())

@@ -354,7 +354,7 @@ var _ = Describe("Resource pool handler", func() {
 				// all we care about in this test is that it sends the token, no
 				// matter what is the response.
 				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 			})
 
@@ -374,7 +374,7 @@ var _ = Describe("Resource pool handler", func() {
 
 				// Send the request:
 				response, err := handler.Get(ctx, &GetRequest{
-					ID: "0",
+					Variables: []string{"0"},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())

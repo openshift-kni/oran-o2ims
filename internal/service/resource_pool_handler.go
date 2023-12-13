@@ -226,14 +226,14 @@ func (h *ResourcePoolHandler) Get(ctx context.Context,
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.getObjectGraphqlVars(ctx, request.ID)).
+		SetGraphqlVars(h.getObjectGraphqlVars(ctx, request.Variables[0])).
 		Build()
 	if err != nil {
 		return
 	}
 
 	// Fetch the object:
-	resourcePool, err := h.fetchItem(ctx, request.ID)
+	resourcePool, err := h.fetchItem(ctx, request.Variables[0])
 	if err != nil {
 		return
 	}

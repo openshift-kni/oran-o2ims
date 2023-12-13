@@ -191,7 +191,7 @@ func (b *ResourceHandlerBuilder) Build() (
 func (h *ResourceHandler) List(ctx context.Context,
 	request *ListRequest) (response *ListResponse, err error) {
 	// Transform the items into what we need:
-	resources, err := h.fetchItems(ctx, request.ParentID, request.Selector)
+	resources, err := h.fetchItems(ctx, request.Variables[0], request.Selector)
 	if err != nil {
 		return
 	}
@@ -224,14 +224,14 @@ func (h *ResourceHandler) Get(ctx context.Context,
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.getObjectGraphqlVars(ctx, request.ID, request.ParentID)).
+		SetGraphqlVars(h.getObjectGraphqlVars(ctx, request.Variables[0], request.Variables[1])).
 		Build()
 	if err != nil {
 		return
 	}
 
 	// Fetch the object:
-	resource, err := h.fetchItem(ctx, request.ID, request.ParentID)
+	resource, err := h.fetchItem(ctx, request.Variables[0], request.Variables[1])
 	if err != nil {
 		return
 	}

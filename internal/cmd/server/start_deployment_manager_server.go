@@ -224,9 +224,10 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 
-	// Create the collection route:
-	collectionAdapter, err := service.NewCollectionAdapter().
+	// Create the routes:
+	adapter, err := service.NewAdapter().
 		SetLogger(logger).
+		SetPathVariables("deploymentManagerID").
 		SetHandler(handler).
 		Build()
 	if err != nil {
@@ -238,25 +239,11 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/deploymentManagers",
-		collectionAdapter,
+		adapter,
 	).Methods(http.MethodGet)
-
-	// Create the object route:
-	objectAdapter, err := service.NewObjectAdapter().
-		SetLogger(logger).
-		SetHandler(handler).
-		SetIDVariable("deploymentManagerID").
-		Build()
-	if err != nil {
-		logger.Error(
-			"Failed to create adapter",
-			"error", err,
-		)
-		return exit.Error(1)
-	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/deploymentManagers/{deploymentManagerID}",
-		objectAdapter,
+		adapter,
 	).Methods(http.MethodGet)
 
 	// Start the API server:

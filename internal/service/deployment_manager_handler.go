@@ -269,7 +269,7 @@ func (h *DeploymentManagerHandler) List(ctx context.Context,
 func (h *DeploymentManagerHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
 	// Fetch the item:
-	item, err := h.fetchItem(ctx, request.ID, nil)
+	item, err := h.fetchItem(ctx, request.Variables[0], nil)
 	if err != nil {
 		return
 	}
