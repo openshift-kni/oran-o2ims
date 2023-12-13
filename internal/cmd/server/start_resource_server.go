@@ -255,9 +255,10 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 		return exit.Error(1)
 	}
 
-	// Create the collection adapter:
-	collectionAdapter, err := service.NewCollectionAdapter().
+	// Create the routes:
+	adapter, err := service.NewAdapter().
 		SetLogger(c.logger).
+		SetPathVariables("resourcePoolID").
 		SetHandler(handler).
 		Build()
 	if err != nil {
@@ -269,25 +270,11 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/resourcePools",
-		collectionAdapter,
+		adapter,
 	).Methods(http.MethodGet)
-
-	// Create the object adapter:
-	objectAdapter, err := service.NewObjectAdapter().
-		SetLogger(c.logger).
-		SetHandler(handler).
-		SetIDVariable("resourcePoolID").
-		Build()
-	if err != nil {
-		c.logger.Error(
-			"Failed to create adapter",
-			"error", err,
-		)
-		return exit.Error(1)
-	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}",
-		objectAdapter,
+		adapter,
 	).Methods(http.MethodGet)
 
 	return nil
@@ -316,11 +303,11 @@ func (c *ResourceServerCommand) createResourceHandler(
 		return exit.Error(1)
 	}
 
-	// Create the collection adapter:
-	collectionAdapter, err := service.NewCollectionAdapter().
+	// Create the routes:
+	adapter, err := service.NewAdapter().
 		SetLogger(c.logger).
+		SetPathVariables("resourcePoolID").
 		SetHandler(handler).
-		SetParentIDVariable("resourcePoolID").
 		Build()
 	if err != nil {
 		c.logger.Error(
@@ -331,26 +318,11 @@ func (c *ResourceServerCommand) createResourceHandler(
 	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}/resources",
-		collectionAdapter,
+		adapter,
 	).Methods(http.MethodGet)
-
-	// Create the object adapter:
-	objectAdapter, err := service.NewObjectAdapter().
-		SetLogger(c.logger).
-		SetHandler(handler).
-		SetIDVariable("resourceID").
-		SetParentIDVariable("resourcePoolID").
-		Build()
-	if err != nil {
-		c.logger.Error(
-			"Failed to create adapter",
-			"error", err,
-		)
-		return exit.Error(1)
-	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}/resources/{resourceID}",
-		objectAdapter,
+		adapter,
 	).Methods(http.MethodGet)
 
 	return nil
@@ -380,8 +352,9 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 	}
 
 	// Create the collection adapter:
-	collectionAdapter, err := service.NewCollectionAdapter().
+	adapter, err := service.NewAdapter().
 		SetLogger(c.logger).
+		SetPathVariables("resourceTypeID").
 		SetHandler(handler).
 		Build()
 	if err != nil {
@@ -393,25 +366,11 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/resourceTypes",
-		collectionAdapter,
+		adapter,
 	).Methods(http.MethodGet)
-
-	// Create the object adapter:
-	objectAdapter, err := service.NewObjectAdapter().
-		SetLogger(c.logger).
-		SetHandler(handler).
-		SetIDVariable("resourceTypeID").
-		Build()
-	if err != nil {
-		c.logger.Error(
-			"Failed to create adapter",
-			"error", err,
-		)
-		return exit.Error(1)
-	}
 	router.Handle(
 		"/o2ims-infrastructureInventory/{version}/resourceTypes/{resourceTypeID}",
-		objectAdapter,
+		adapter,
 	).Methods(http.MethodGet)
 
 	return nil

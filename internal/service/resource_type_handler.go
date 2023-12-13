@@ -243,7 +243,7 @@ func (h *ResourceTypeHandler) Get(ctx context.Context,
 	}
 
 	// Fetch the object:
-	resourceType, err := h.fetchItem(ctx, request.ID, resourceFetcher)
+	resourceType, err := h.fetchItem(ctx, request.Variables[0], resourceFetcher)
 	if err != nil {
 		return
 	}
