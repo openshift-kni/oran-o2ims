@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/graphql"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/thoas/go-funk"
@@ -242,12 +243,14 @@ func (r *ResourcePoolFetcher) getSearchResponse(ctx context.Context) (result io.
 // Map Cluster to an O2 ResourcePool object.
 func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
-	resourcePoolID, err := data.GetString(from, "cluster")
+	resourcePoolID, err := data.GetString(from,
+		graphql.PropertyCluster("resourcePoolID").MapProperty())
 	if err != nil {
 		return
 	}
 
-	name, err := data.GetString(from, "name")
+	name, err := data.GetString(from,
+		graphql.PropertyCluster("name").MapProperty())
 	if err != nil {
 		return
 	}

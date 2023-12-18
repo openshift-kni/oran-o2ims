@@ -217,7 +217,6 @@ func (r *ResourceFetcher) getSearchResponse(ctx context.Context) (result io.Read
 	if err != nil {
 		return
 	}
-	r.logger.Error(fmt.Sprintf("%v", graphqlVars))
 
 	// Build GraphQL request body
 	var requestBody bytes.Buffer

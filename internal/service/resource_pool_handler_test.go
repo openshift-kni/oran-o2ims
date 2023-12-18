@@ -25,6 +25,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
 	"github.com/openshift-kni/oran-o2ims/internal/text"
 )
@@ -216,6 +217,126 @@ var _ = Describe("Resource pool handler", func() {
 				Expect(items[1]).To(MatchJQ(`.name`, "my-cluster-1"))
 				Expect(items[1]).To(MatchJQ(`.oCloudID`, "123"))
 				Expect(items[1]).To(MatchJQ(`.resourcePoolID`, "1"))
+			})
+
+			It("Accepts a filter", func() {
+				// Prepare the backend:
+				backend.AppendHandlers(
+					RespondWithItems(),
+				)
+
+				// Send the request:
+				response, err := handler.List(ctx, &ListRequest{
+					Selector: &search.Selector{
+						Terms: []*search.Term{{
+							Operator: search.Eq,
+							Path: []string{
+								"resourcePoolID",
+							},
+							Values: []any{
+								"spoke0",
+							},
+						}},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+
+				// Verify GraphQL filters:
+				Expect(handler.resourcePoolFetcher.graphqlVars.Filters).To(HaveLen(2))
+				Expect(handler.resourcePoolFetcher.graphqlVars.Filters).To(ContainElement(
+					&model.SearchFilter{
+						Property: "cluster",
+						Values:   []*string{ptr.To("=spoke0")},
+					},
+				))
+			})
+
+			It("Accepts multiple filters", func() {
+				// Prepare the backend:
+				backend.AppendHandlers(
+					RespondWithItems(),
+				)
+
+				// Send the request:
+				response, err := handler.List(ctx, &ListRequest{
+					Selector: &search.Selector{
+						Terms: []*search.Term{
+							{
+								Operator: search.Eq,
+								Path: []string{
+									"resourcePoolID",
+								},
+								Values: []any{
+									"spoke0",
+								},
+							},
+							{
+								Operator: search.Neq,
+								Path: []string{
+									"name",
+								},
+								Values: []any{
+									"cluster0",
+								},
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+
+				// Verify GraphQL filters:
+				Expect(handler.resourcePoolFetcher.graphqlVars.Filters).To(HaveLen(3))
+				Expect(handler.resourcePoolFetcher.graphqlVars.Filters).To(ContainElements(
+					&model.SearchFilter{
+						Property: "cluster",
+						Values:   []*string{ptr.To("=spoke0")},
+					},
+					&model.SearchFilter{
+						Property: "name",
+						Values:   []*string{ptr.To("!=cluster0")},
+					},
+				))
+			})
+
+			It("Ignore invalid filters", func() {
+				// Prepare the backend:
+				backend.AppendHandlers(
+					RespondWithItems(),
+				)
+
+				// Send the request:
+				response, err := handler.List(ctx, &ListRequest{
+					Selector: &search.Selector{
+						Terms: []*search.Term{
+							{
+								Operator: search.Cont,
+								Path: []string{
+									"resourcePoolID",
+								},
+								Values: []any{
+									"spoke0",
+								},
+							},
+							{
+								Operator: search.In,
+								Path: []string{
+									"name",
+								},
+								Values: []any{
+									"cluster0",
+								},
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+
+				// Verify GraphQL filters:
+				// (1 filter is added by default)
+				Expect(handler.resourcePoolFetcher.graphqlVars.Filters).To(HaveLen(1))
 			})
 		})
 
