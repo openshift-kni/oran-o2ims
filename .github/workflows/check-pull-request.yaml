@@ -48,6 +48,13 @@ jobs:
         go install github.com/onsi/ginkgo/v2/ginkgo@$(go list -f '{{.Version}}' -m github.com/onsi/ginkgo/v2)
         go install go.uber.org/mock/mockgen@v0.3.0
 
+    - name: Install spectral
+      run: |
+        curl -Lo spectral https://github.com/stoplightio/spectral/releases/download/v6.11.0/spectral-linux-x64
+        echo 0e151d3dc5729750805428f79a152fa01dd4c203f1d9685ef19f4fd4696fcd5f spectral | sha256sum -c
+        chmod +x spectral
+        sudo mv spectral /usr/bin
+
     - name: Run the tests
       run: make tests
 

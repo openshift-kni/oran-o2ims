@@ -19,6 +19,9 @@ import (
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/ginkgo/v2/dsl/decorators"
@@ -74,6 +77,42 @@ var _ = Describe("Handler", func() {
 			// Parse the response:
 			Expect(recorder.Code).To(Equal(http.StatusOK))
 			err = json.Unmarshal(recorder.Body.Bytes(), &spec)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Passes 'spectral' checks", func() {
+			// Save the spec to a temporary file:
+			tmp, err := os.MkdirTemp("", "*.test")
+			Expect(err).ToNot(HaveOccurred())
+			defer func() {
+				err := os.RemoveAll(tmp)
+				Expect(err).ToNot(HaveOccurred())
+			}()
+			file := filepath.Join(tmp, "spec.yaml")
+			data, err := json.Marshal(spec)
+			Expect(err).ToNot(HaveOccurred())
+			err = os.WriteFile(file, data, 0600)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the spectral command is available:
+			binary, err := exec.LookPath("spectral")
+			if err != nil {
+				Expect(err).ToNot(HaveOccurred(), "The 'spectral' command isn't available")
+			}
+
+			// Run the spectral command:
+			command := exec.Cmd{
+				Path: binary,
+				Args: []string{
+					"spectral",
+					"lint",
+					"--ruleset", "lint.yaml",
+					file,
+				},
+				Stdout: GinkgoWriter,
+				Stderr: GinkgoWriter,
+			}
+			err = command.Run()
 			Expect(err).ToNot(HaveOccurred())
 		})
 
