@@ -24,6 +24,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/openshift-kni/oran-o2ims/internal/network"
+	"github.com/openshift-kni/oran-o2ims/internal/openapi"
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
@@ -98,6 +99,21 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		service.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	})
+
+	// Create the handler that serves the OpenAPI metadata:
+	openapiHandler, err := openapi.NewHandler().
+		SetLogger(logger).
+		Build()
+	if err != nil {
+		logger.Error(
+			"Failed to create OpenAPI handler",
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	router.PathPrefix(
+		"/o2ims-infrastructureInventory/v1/openapi",
+	).Handler(openapiHandler)
 
 	// Create the handler that servers the information about the versions of the API:
 	versionsHandler, err := service.NewVersionsHandler().

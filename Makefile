@@ -51,6 +51,11 @@ lint:
 	golangci-lint --version
 	golangci-lint run --verbose --print-resources-usage --modules-download-mode=vendor --timeout=5m0s
 
+.PHONY: lint-openapi
+lint-openapi:
+	@echo "Run lint OpenAPI"
+	spectral lint --ruleset internal/openapi/lint.yaml internal/openapi/spec.yaml
+
 .PHONY: deps-update
 deps-update:
 	@echo "Update dependencies"
