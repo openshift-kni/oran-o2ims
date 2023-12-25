@@ -27,13 +27,16 @@ git clone https://github.com/karmab/kcli-openshift4-baremetal
 
 ### Create parameters yaml
 In the cloned repo, create a kcli_parameters.yaml file and set values as required.
+Ensure the following exist in the machine:
+* `pullsecret`: path to the pull secret file
+* `pool`: libvirt storage pool to store the images
 
 E.g.
 *kcli_parameters.yaml*
 ```yaml
 lab: true
-pull_secret: /root/pull-secret.json
-pool: oooq_pool
+pullsecret: /root/pull-secret.json
+pool: oran_pool
 virtual_ctlplanes: true
 version: stable
 tag: "4.14"
