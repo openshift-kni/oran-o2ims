@@ -186,6 +186,9 @@ sudo firewall-cmd --reload
 
 ## Operators configuration
 
+### Advanced Cluster Management
+Create a MultiClusterHub CR (e.g. using the web console)
+
 ### [Search Query API](https://github.com/stolostron/search-v2-operator/wiki/Search-Query-API)
 
 #### Create the search-api route
@@ -204,6 +207,11 @@ metadata:
 spec:
   searchCollector:
     enabled: true
+```
+
+#### Create a token for accessing the API
+```bash
+oc create token oauth-apiserver-sa -n openshift-oauth-apiserver --duration=8760h
 ```
 
 #### Query the API
@@ -229,12 +237,13 @@ query mySearch($input: [SearchInput]) {
 ### [Multicluster Global Hub](https://github.com/stolostron/multicluster-global-hub)
 
 #### Install
-OperatorHub > Multicluster Global Hub Operator
+* OperatorHub > Multicluster Global Hub Operator
+* Create a MulticlusterGlobalHub CR (e.g. using the web console)
 
 #### Config
 Edit the CSV:
 ```bash
-oc -n multicluster-global-hub edit csv multicluster-global-hub-operator.v1.0.0-dev
+oc -n multicluster-global-hub edit csv multicluster-global-hub-operator.v1.1.0-dev
 ```
 
 Add the following under 'containers.args':
