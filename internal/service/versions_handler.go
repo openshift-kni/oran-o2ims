@@ -67,23 +67,24 @@ func (b *VersionsHandlerBuilder) Build() (result *VersionsHandler, err error) {
 	return
 }
 
-// Get is part of the implementation of the object handler interface.
+// Get is part of the implementation of the handler interface.
 func (h *VersionsHandler) Get(ctx context.Context, request *GetRequest) (response *GetResponse,
 	err error) {
 	// If a specifc major version was included in the URL then we need to select and return
 	// only the ones that match that:
 	var selectedVersions []data.Object
-	if request.ID != "" {
+	versionID := request.Variables[0]
+	if versionID != "" {
 		selectedVersions = make([]data.Object, 0, 1)
-		if !strings.HasPrefix(request.ID, "v") {
+		if !strings.HasPrefix(versionID, "v") {
 			err = fmt.Errorf(
 				"version identifier '%s' isn't valid, it should start with 'v'",
-				request.ID,
+				versionID,
 			)
 			return
 		}
 		var majorNumber int
-		majorNumber, err = strconv.Atoi(request.ID[1:])
+		majorNumber, err = strconv.Atoi(versionID[1:])
 		if err != nil {
 			return
 		}

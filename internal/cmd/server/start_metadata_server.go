@@ -126,9 +126,9 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		)
 		return exit.Error(1)
 	}
-	versionsAdapter, err := service.NewObjectAdapter().
+	versionsAdapter, err := service.NewAdapter().
 		SetLogger(logger).
-		SetIDVariable("version").
+		SetPathVariables("version").
 		SetHandler(versionsHandler).
 		Build()
 	if err != nil {
@@ -159,7 +159,7 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		)
 		return exit.Error(1)
 	}
-	cloudInfoAdapter, err := service.NewObjectAdapter().
+	cloudInfoAdapter, err := service.NewAdapter().
 		SetLogger(logger).
 		SetHandler(cloudInfoHandler).
 		Build()
