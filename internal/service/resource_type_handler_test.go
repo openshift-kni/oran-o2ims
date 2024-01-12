@@ -229,7 +229,7 @@ var _ = Describe("Resource type handler", func() {
 				// all we care about in this test is that it sends the token, no
 				// matter what is the response.
 				_, _ = handler.Get(ctx, &GetRequest{
-					ID: "123",
+					Variables: []string{"123"},
 				})
 			})
 
@@ -249,7 +249,7 @@ var _ = Describe("Resource type handler", func() {
 
 				// Send the request:
 				response, err := handler.Get(ctx, &GetRequest{
-					ID: "node_8_cores_amd64",
+					Variables: []string{"node_8_cores_amd64"},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
