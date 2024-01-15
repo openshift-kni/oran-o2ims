@@ -202,10 +202,18 @@ For every managed cluster, create a `KlusterletAddonConfig` with enabled `search
 apiVersion: agent.open-cluster-management.io/v1
 kind: KlusterletAddonConfig
 metadata:
-  name: spoke1
-  namespace: spoke1
+  name: mgmt-spoke1
+  namespace: mgmt-spoke1
 spec:
   searchCollector:
+    enabled: true
+  applicationManager:
+    enabled: true
+  certPolicyController:
+    enabled: true
+  iamPolicyController:
+    enabled: true
+  policyController:
     enabled: true
 ```
 
