@@ -20,11 +20,14 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 
+	"github.com/itchyny/gojq"
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
+	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -36,6 +39,7 @@ type ResourceHandlerBuilder struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID          string
+	extensions       []string
 	backendURL       string
 	backendToken     string
 	graphqlQuery     string
@@ -48,6 +52,7 @@ type ResourceHandler struct {
 	logger            *slog.Logger
 	transportWrapper  func(http.RoundTripper) http.RoundTripper
 	cloudID           string
+	extensions        []string
 	backendURL        string
 	backendToken      string
 	backendClient     *http.Client
@@ -56,6 +61,7 @@ type ResourceHandler struct {
 	graphqlQuery      string
 	graphqlVars       *model.SearchInput
 	resourceFetcher   *ResourceFetcher
+	jqTool            *jq.Tool
 }
 
 // NewResourceHandler creates a builder that can then be used to configure and create a
@@ -83,6 +89,12 @@ func (b *ResourceHandlerBuilder) SetTransportWrapper(
 func (b *ResourceHandlerBuilder) SetCloudID(
 	value string) *ResourceHandlerBuilder {
 	b.cloudID = value
+	return b
+}
+
+// SetExtensions sets the fields that will be added to the extensions.
+func (b *ResourceHandlerBuilder) SetExtensions(values ...string) *ResourceHandlerBuilder {
+	b.extensions = values
 	return b
 }
 
@@ -171,11 +183,37 @@ func (b *ResourceHandlerBuilder) Build() (
 		return
 	}
 
+	// Create a jq compiler function for parsing labels
+	compilerFunc := gojq.WithFunction("parse_labels", 0, 1, func(x any, _ []any) any {
+		if labels, ok := x.(string); ok {
+			return data.GetLabelsMap(labels)
+		}
+		return nil
+	})
+
+	// Create the jq tool:
+	jqTool, err := jq.NewTool().
+		SetLogger(b.logger).
+		SetCompilerOption(&compilerFunc).
+		Build()
+	if err != nil {
+		return
+	}
+
+	// Check that extensions are at least syntactically valid:
+	for _, extension := range b.extensions {
+		_, err = jqTool.Compile(extension)
+		if err != nil {
+			return
+		}
+	}
+
 	// Create and populate the object:
 	result = &ResourceHandler{
 		logger:            b.logger,
 		transportWrapper:  b.transportWrapper,
 		cloudID:           b.cloudID,
+		extensions:        slices.Clone(b.extensions),
 		backendURL:        b.backendURL,
 		backendToken:      b.backendToken,
 		backendClient:     backendClient,
@@ -183,6 +221,7 @@ func (b *ResourceHandlerBuilder) Build() (
 		jsonAPI:           jsonAPI,
 		graphqlQuery:      b.graphqlQuery,
 		graphqlVars:       b.graphqlVars,
+		jqTool:            jqTool,
 	}
 	return
 }
@@ -374,12 +413,6 @@ func (r *ResourceHandler) mapNodeItem(ctx context.Context,
 		return
 	}
 
-	labels, err := data.GetString(from, "label")
-	if err != nil {
-		return
-	}
-	labelsMap := data.GetLabelsMap(labels)
-
 	globalAssetID, err := data.GetString(from,
 		graphql.PropertyNode("globalAssetID").MapProperty())
 	if err != nil {
@@ -397,11 +430,27 @@ func (r *ResourceHandler) mapNodeItem(ctx context.Context,
 		return
 	}
 
+	labels, err := data.GetString(from, "label")
+	if err != nil {
+		return
+	}
+	labelsMap := data.GetLabelsMap(labels)
+
+	// Add the extensions:
+	extensionsMap, err := data.GetExtensions(from, r.extensions, r.jqTool)
+	if err != nil {
+		return
+	}
+	if len(extensionsMap) == 0 {
+		// Fallback to all labels
+		extensionsMap = labelsMap
+	}
+
 	to = data.Object{
 		"resourceID":     resourceID,
 		"resourceTypeID": resourceTypeID,
 		"description":    description,
-		"extensions":     labelsMap,
+		"extensions":     extensionsMap,
 		"resourcePoolID": resourcePoolID,
 		"globalAssetID":  globalAssetID,
 	}

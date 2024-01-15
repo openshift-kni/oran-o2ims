@@ -62,6 +62,11 @@ func ResourceServer() *cobra.Command {
 		"",
 		"Token for authenticating to the backend server.",
 	)
+	_ = flags.StringArray(
+		extensionsFlagName,
+		[]string{},
+		"Extension to add to deployment managers.",
+	)
 	return result
 }
 
@@ -143,10 +148,20 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		)
 		return exit.Error(1)
 	}
+	extensions, err := flags.GetStringArray(extensionsFlagName)
+	if err != nil {
+		c.logger.Error(
+			"Failed to extension flag",
+			"flag", extensionsFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
 	c.logger.Info(
 		"Backend details",
-		"url", backendURL,
-		"!token", backendToken,
+		slog.String("url", backendURL),
+		slog.String("!token", backendToken),
+		slog.Any("extensions", extensions),
 	)
 
 	// Create the transport wrapper:
@@ -182,14 +197,14 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Create the handler for resource pools:
 	if err := c.createResourcePoolHandler(
 		transportWrapper, router,
-		cloudID, backendURL, backendToken); err != nil {
+		cloudID, backendURL, backendToken, extensions); err != nil {
 		return err
 	}
 
 	// Create the handler for resources:
 	if err := c.createResourceHandler(
 		transportWrapper, router,
-		cloudID, backendURL, backendToken); err != nil {
+		cloudID, backendURL, backendToken, extensions); err != nil {
 		return err
 	}
 
@@ -235,7 +250,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 func (c *ResourceServerCommand) createResourcePoolHandler(
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
-	cloudID, backendURL, backendToken string) error {
+	cloudID, backendURL, backendToken string, extensions []string) error {
 
 	// Create the handler:
 	handler, err := service.NewResourcePoolHandler().
@@ -244,6 +259,7 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 		SetCloudID(cloudID).
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
+		SetExtensions(extensions...).
 		SetGraphqlQuery(c.getGraphqlQuery()).
 		SetGraphqlVars(c.getClusterGraphqlVars()).
 		Build()
@@ -283,7 +299,7 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 func (c *ResourceServerCommand) createResourceHandler(
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
-	cloudID, backendURL, backendToken string) error {
+	cloudID, backendURL, backendToken string, extensions []string) error {
 
 	// Create the handler:
 	handler, err := service.NewResourceHandler().
@@ -292,6 +308,7 @@ func (c *ResourceServerCommand) createResourceHandler(
 		SetCloudID(cloudID).
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
+		SetExtensions(extensions...).
 		SetGraphqlQuery(c.getGraphqlQuery()).
 		SetGraphqlVars(c.getResourceGraphqlVars()).
 		Build()

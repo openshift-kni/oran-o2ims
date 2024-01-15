@@ -338,6 +338,65 @@ var _ = Describe("Resource pool handler", func() {
 				// (1 filter is added by default)
 				Expect(handler.resourcePoolFetcher.graphqlVars.Filters).To(HaveLen(1))
 			})
+
+			It("Adds configurable extensions", func() {
+				// Prepare a backend:
+				backend.AppendHandlers(
+					CombineHandlers(
+						RespondWithItems(
+							data.Object{
+								"cluster": "0",
+								"label":   "openshiftVersion=4.16.1; clusterset=spokes",
+								"name":    "my-cluster-0",
+							},
+						),
+					),
+				)
+
+				// Create the handler:
+				handler, err := NewResourcePoolHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					SetGraphqlQuery(text.Dedent(`
+						query ($input: [SearchInput]) {
+							searchResult: search(input: $input) {
+								items,
+							}
+						}
+					`)).
+					SetGraphqlVars(&model.SearchInput{
+						Filters: []*model.SearchFilter{
+							{
+								Property: "kind",
+								Values: []*string{
+									ptr.To("cluster"),
+								},
+							},
+						},
+					}).
+					SetExtensions(
+						`{
+							"openshift_version": .label|parse_labels|.openshiftVersion,
+							"cluster_set": .label|parse_labels|.clusterset
+						}`,
+						`{
+							"fixed": 123
+						}`).
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Send the request and verify the result:
+				response, err := handler.Get(ctx, &GetRequest{
+					Variables: []string{"123"},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+				Expect(response.Object).To(MatchJQ(`.extensions.openshift_version`, "4.16.1"))
+				Expect(response.Object).To(MatchJQ(`.extensions.cluster_set`, "spokes"))
+				Expect(response.Object).To(MatchJQ(`.extensions.fixed`, 123))
+			})
 		})
 
 		Describe("Get", func() {

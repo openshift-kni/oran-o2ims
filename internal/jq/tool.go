@@ -32,15 +32,17 @@ import (
 // ToolBuilder contains the data needed to build a tool that knows how to run JQ queries. Don't
 // create instances of this directly, use the NewTool function instead.
 type ToolBuilder struct {
-	logger *slog.Logger
+	logger        *slog.Logger
+	compileOption *gojq.CompilerOption
 }
 
 // Tool knows how to run JQ queries. Don't create instances of this directly, use the NewTool
 // function instead.
 type Tool struct {
-	logger *slog.Logger
-	lock   *sync.Mutex
-	cache  map[string]*Query
+	logger        *slog.Logger
+	lock          *sync.Mutex
+	cache         map[string]*Query
+	compileOption *gojq.CompilerOption
 }
 
 // NewTool creates a builder that can then be used to create a JQ tool.
@@ -54,6 +56,12 @@ func (b *ToolBuilder) SetLogger(value *slog.Logger) *ToolBuilder {
 	return b
 }
 
+// SetCompilerOption sets the CompileOption to pass to gojq.Compile. This is optional.
+func (b *ToolBuilder) SetCompilerOption(value *gojq.CompilerOption) *ToolBuilder {
+	b.compileOption = value
+	return b
+}
+
 // Build uses the information stored in the builder to create a new JQ tool.
 func (b *ToolBuilder) Build() (result *Tool, err error) {
 	// Check parameters:
@@ -64,9 +72,10 @@ func (b *ToolBuilder) Build() (result *Tool, err error) {
 
 	// Create and populate the object:
 	result = &Tool{
-		logger: b.logger,
-		lock:   &sync.Mutex{},
-		cache:  map[string]*Query{},
+		logger:        b.logger,
+		lock:          &sync.Mutex{},
+		cache:         map[string]*Query{},
+		compileOption: b.compileOption,
 	}
 	return
 }
@@ -113,9 +122,18 @@ func (t *Tool) compile(source string, variables []string) (query *Query, err err
 	if err != nil {
 		return
 	}
-	code, err := gojq.Compile(parsed, gojq.WithVariables(variables))
-	if err != nil {
-		return
+
+	var code *gojq.Code
+	if t.compileOption != nil {
+		code, err = gojq.Compile(parsed, gojq.WithVariables(variables), *t.compileOption)
+		if err != nil {
+			return
+		}
+	} else {
+		code, err = gojq.Compile(parsed, gojq.WithVariables(variables))
+		if err != nil {
+			return
+		}
 	}
 	query = &Query{
 		logger:    t.logger,

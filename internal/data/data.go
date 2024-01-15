@@ -19,8 +19,11 @@ import (
 	"strings"
 
 	"github.com/PaesslerAG/jsonpath"
+	"github.com/imdario/mergo"
 	"github.com/itchyny/gojq"
+	"github.com/thoas/go-funk"
 
+	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
 
@@ -93,12 +96,38 @@ func GetObj(o Object, path string) (result Object, err error) {
 	return
 }
 
-func GetLabelsMap(labels string) (labelsMap map[string]string) {
+func GetLabelsMap(labels string) (labelsMap Object) {
 	labelsArr := strings.Split(labels, "; ")
-	labelsMap = map[string]string{}
+	labelsMap = Object{}
 	for _, label := range labelsArr {
 		keyValue := strings.Split(label, "=")
 		labelsMap[keyValue[0]] = keyValue[1]
+	}
+	return
+}
+
+func GetExtensions(input Object, extensions []string, jqTool *jq.Tool) (output Object, err error) {
+	for _, extension := range extensions {
+		var value Object
+		err = jqTool.Evaluate(extension, input, &value)
+		if err != nil {
+			continue
+		}
+		if value != nil {
+			if funk.Contains(funk.Values(value), nil) {
+				// Ignore 'nil' values
+				continue
+			}
+			// Append value to output
+			err = mergo.Merge(
+				&output,
+				value,
+				mergo.WithOverride,
+			)
+			if err != nil {
+				continue
+			}
+		}
 	}
 	return
 }
