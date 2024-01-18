@@ -26,8 +26,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/itchyny/gojq"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
+	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/thoas/go-funk"
@@ -39,8 +41,10 @@ type ResourcePoolFetcher struct {
 	backendURL    string
 	backendToken  string
 	backendClient *http.Client
+	extensions    []string
 	graphqlQuery  string
 	graphqlVars   *model.SearchInput
+	jqTool        *jq.Tool
 }
 
 // ResourcePoolFetcherBuilder contains the data and logic needed to create a new ResourcePoolFetcher.
@@ -50,6 +54,7 @@ type ResourcePoolFetcherBuilder struct {
 	cloudID          string
 	backendURL       string
 	backendToken     string
+	extensions       []string
 	graphqlQuery     string
 	graphqlVars      *model.SearchInput
 }
@@ -111,6 +116,12 @@ func (b *ResourcePoolFetcherBuilder) SetGraphqlVars(
 	return b
 }
 
+// SetExtensions sets the fields that will be added to the extensions.
+func (b *ResourcePoolFetcherBuilder) SetExtensions(values ...string) *ResourcePoolFetcherBuilder {
+	b.extensions = values
+	return b
+}
+
 // Build uses the data stored in the builder to create and configure a new handler.
 func (b *ResourcePoolFetcherBuilder) Build() (
 	result *ResourcePoolFetcher, err error) {
@@ -146,6 +157,31 @@ func (b *ResourcePoolFetcherBuilder) Build() (
 		Transport: backendTransport,
 	}
 
+	// Create a jq compiler function for parsing labels
+	compilerFunc := gojq.WithFunction("parse_labels", 0, 1, func(x any, _ []any) any {
+		if labels, ok := x.(string); ok {
+			return data.GetLabelsMap(labels)
+		}
+		return nil
+	})
+
+	// Create the jq tool:
+	jqTool, err := jq.NewTool().
+		SetLogger(b.logger).
+		SetCompilerOption(&compilerFunc).
+		Build()
+	if err != nil {
+		return
+	}
+
+	// Check that extensions are at least syntactically valid:
+	for _, extension := range b.extensions {
+		_, err = jqTool.Compile(extension)
+		if err != nil {
+			return
+		}
+	}
+
 	// Create and populate the object:
 	result = &ResourcePoolFetcher{
 		logger:        b.logger,
@@ -153,8 +189,10 @@ func (b *ResourcePoolFetcherBuilder) Build() (
 		backendURL:    b.backendURL,
 		backendToken:  b.backendToken,
 		backendClient: backendClient,
+		extensions:    b.extensions,
 		graphqlQuery:  b.graphqlQuery,
 		graphqlVars:   b.graphqlVars,
+		jqTool:        jqTool,
 	}
 	return
 }
@@ -268,18 +306,29 @@ func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 	})
 	var location string
 	if regionKey != nil {
-		location = labelsMap[regionKey.(string)]
+		location = labelsMap[regionKey.(string)].(string)
+	}
+
+	// Add the extensions:
+	extensionsMap, err := data.GetExtensions(from, r.extensions, r.jqTool)
+	if err != nil {
+		return
+	}
+	if len(extensionsMap) == 0 {
+		// Fallback to all labels
+		extensionsMap = labelsMap
 	}
 
 	to = data.Object{
 		"resourcePoolID": resourcePoolID,
 		"name":           name,
 		"oCloudID":       r.cloudID,
-		"extensions":     labelsMap,
+		"extensions":     extensionsMap,
 		"location":       location,
 		// TODO: no direct mapping to a property in Cluster object
 		"globalLocationID": "",
 		"description":      "",
 	}
+
 	return
 }

@@ -195,7 +195,7 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 		return
 	}
 
-	// Check that extensions are at least sintactically valid:
+	// Check that extensions are at least syntactically valid:
 	for _, extension := range b.extensions {
 		_, err = jqTool.Compile(extension)
 		if err != nil {

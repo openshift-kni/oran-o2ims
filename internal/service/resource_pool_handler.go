@@ -20,6 +20,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	jsoniter "github.com/json-iterator/go"
 
@@ -36,6 +37,7 @@ type ResourcePoolHandlerBuilder struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID          string
+	extensions       []string
 	backendURL       string
 	backendToken     string
 	graphqlQuery     string
@@ -48,6 +50,7 @@ type ResourcePoolHandler struct {
 	logger              *slog.Logger
 	transportWrapper    func(http.RoundTripper) http.RoundTripper
 	cloudID             string
+	extensions          []string
 	backendURL          string
 	backendToken        string
 	backendClient       *http.Client
@@ -83,6 +86,12 @@ func (b *ResourcePoolHandlerBuilder) SetTransportWrapper(
 func (b *ResourcePoolHandlerBuilder) SetCloudID(
 	value string) *ResourcePoolHandlerBuilder {
 	b.cloudID = value
+	return b
+}
+
+// SetExtensions sets the fields that will be added to the extensions.
+func (b *ResourcePoolHandlerBuilder) SetExtensions(values ...string) *ResourcePoolHandlerBuilder {
+	b.extensions = values
 	return b
 }
 
@@ -176,6 +185,7 @@ func (b *ResourcePoolHandlerBuilder) Build() (
 		logger:            b.logger,
 		transportWrapper:  b.transportWrapper,
 		cloudID:           b.cloudID,
+		extensions:        slices.Clone(b.extensions),
 		backendURL:        b.backendURL,
 		backendToken:      b.backendToken,
 		backendClient:     backendClient,
@@ -225,6 +235,7 @@ func (h *ResourcePoolHandler) Get(ctx context.Context,
 		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
+		SetExtensions(h.extensions...).
 		SetGraphqlQuery(h.graphqlQuery).
 		SetGraphqlVars(h.getObjectGraphqlVars(ctx, request.Variables[0])).
 		Build()
@@ -253,6 +264,7 @@ func (h *ResourcePoolHandler) fetchItems(
 		SetTransportWrapper(h.transportWrapper).
 		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
+		SetExtensions(h.extensions...).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
 		SetGraphqlVars(h.getCollectionGraphqlVars(ctx, selector)).

@@ -361,6 +361,70 @@ var _ = Describe("Resource handler", func() {
 				// (3 filters are added by default)
 				Expect(handler.resourceFetcher.graphqlVars.Filters).To(HaveLen(3))
 			})
+
+			It("Adds configurable extensions", func() {
+				// Prepare a backend:
+				backend.AppendHandlers(
+					CombineHandlers(
+						RespondWithItems(
+							data.Object{
+								"cluster":      "0",
+								"label":        "os=linux; arch=amd64",
+								"name":         "my-node-0",
+								"_uid":         "node-0-uuid",
+								"_systemUUID":  "node-0-system-uuid",
+								"architecture": "amd64",
+								"cpu":          "8",
+								"kind":         "Node",
+							},
+						),
+					),
+				)
+
+				// Create the handler:
+				handler, err := NewResourceHandler().
+					SetLogger(logger).
+					SetCloudID("123").
+					SetBackendURL(backend.URL()).
+					SetBackendToken("my-token").
+					SetGraphqlQuery(text.Dedent(`
+						query ($input: [SearchInput]) {
+							searchResult: search(input: $input) {
+								items,
+							}
+						}
+					`)).
+					SetGraphqlVars(&model.SearchInput{
+						Filters: []*model.SearchFilter{
+							{
+								Property: "kind",
+								Values: []*string{
+									ptr.To("node"),
+								},
+							},
+						},
+					}).
+					SetExtensions(
+						`{
+							"operation_system": .label|parse_labels|.os,
+							"architecture": .label|parse_labels|.arch
+						}`,
+						`{
+							"fixed": 123
+						}`).
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Send the request and verify the result:
+				response, err := handler.Get(ctx, &GetRequest{
+					Variables: []string{"0", "1"},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+				Expect(response.Object).To(MatchJQ(`.extensions.operation_system`, "linux"))
+				Expect(response.Object).To(MatchJQ(`.extensions.architecture`, "amd64"))
+				Expect(response.Object).To(MatchJQ(`.extensions.fixed`, 123))
+			})
 		})
 
 		Describe("Get", func() {
