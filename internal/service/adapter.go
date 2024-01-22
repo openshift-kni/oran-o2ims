@@ -250,7 +250,7 @@ func (a *Adapter) serveObject(w http.ResponseWriter, r *http.Request, pathVariab
 			"Failed to get object",
 			"error", err,
 		)
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, ErrNotFound) || errors.Is(err, streaming.ErrEnd) {
 			SendError(
 				w,
 				http.StatusNotFound,
