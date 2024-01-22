@@ -15,6 +15,7 @@ License.
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -52,6 +53,15 @@ func DeploymentManagerServer() *cobra.Command {
 		backendURLFlagName,
 		"",
 		"URL of the backend server.",
+	)
+	_ = flags.String(
+		backendTypeFlagName,
+		string(service.DeploymentManagerBackendTypeRegularHub),
+		fmt.Sprintf(
+			"Type of backend. Possible values are '%s' and '%s'.",
+			service.DeploymentManagerBackendTypeGlobalHub,
+			service.DeploymentManagerBackendTypeRegularHub,
+		),
 	)
 	_ = flags.String(
 		backendTokenFlagName,
@@ -111,6 +121,26 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	)
 
 	// Get the backend details:
+	backendTypeText, err := flags.GetString(backendTypeFlagName)
+	if err != nil {
+		logger.Error(
+			"Failed to get backend type flag",
+			"flag", backendTypeFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
+	backendType := service.DeploymentManagerBackendType(backendTypeText)
+	switch backendType {
+	case service.DeploymentManagerBackendTypeGlobalHub:
+	case service.DeploymentManagerBackendTypeRegularHub:
+	default:
+		logger.Error(
+			"Unknown backend type",
+			slog.String("type", backendTypeText),
+		)
+		return exit.Error(1)
+	}
 	backendURL, err := flags.GetString(backendURLFlagName)
 	if err != nil {
 		logger.Error(
@@ -154,6 +184,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	logger.Info(
 		"Backend details",
+		slog.String("type", string(backendType)),
 		slog.String("url", backendURL),
 		slog.String("!token", backendToken),
 		slog.Any("extensions", extensions),
@@ -212,6 +243,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetLoggingWrapper(loggingWrapper).
 		SetCloudID(cloudID).
 		SetExtensions(extensions...).
+		SetBackendType(backendType).
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
 		SetEnableHack(true).
@@ -280,6 +312,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 
 // Names of command line flags:
 const (
+	backendTypeFlagName  = "backend-type"
 	backendTokenFlagName = "backend-token"
 	backendURLFlagName   = "backend-url"
 )

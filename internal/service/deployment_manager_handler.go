@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"net/http"
 	neturl "net/url"
 	"slices"
@@ -40,6 +39,14 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
+// DeploymentManagerBackendType defines the types of backends supported by the deployment manager: global or regular ACM hub.
+type DeploymentManagerBackendType string
+
+const (
+	DeploymentManagerBackendTypeGlobalHub  DeploymentManagerBackendType = "global-hub"
+	DeploymentManagerBackendTypeRegularHub DeploymentManagerBackendType = "regular-hub"
+)
+
 // DeploymentManagerHandlerBuilder contains the data and logic needed to create a new deployment
 // manager collection handler. Don't create instances of this type directly, use the
 // NewDeploymentManagerHandler function instead.
@@ -48,6 +55,7 @@ type DeploymentManagerHandlerBuilder struct {
 	loggingWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID        string
 	extensions     []string
+	backendType    DeploymentManagerBackendType
 	backendURL     string
 	backendToken   string
 	enableHack     bool
@@ -61,13 +69,14 @@ type DeploymentManagerHandler struct {
 	loggingWrapper    func(http.RoundTripper) http.RoundTripper
 	cloudID           string
 	extensions        []string
+	backendType       DeploymentManagerBackendType
 	backendURL        string
 	backendToken      string
 	backendClient     *http.Client
 	jsonAPI           jsoniter.API
 	selectorEvaluator *search.SelectorEvaluator
 	jqTool            *jq.Tool
-	globalHubClient   *k8s.Client
+	hubClient         *k8s.Client
 	enableHack        bool
 	profileCacheLock  *sync.Mutex
 	profileCache      map[string]data.Object
@@ -76,7 +85,9 @@ type DeploymentManagerHandler struct {
 // NewDeploymentManagerHandler creates a builder that can then be used to configure and create a
 // handler for the collection of deployment managers.
 func NewDeploymentManagerHandler() *DeploymentManagerHandlerBuilder {
-	return &DeploymentManagerHandlerBuilder{}
+	return &DeploymentManagerHandlerBuilder{
+		backendType: defaultDeploymentManagerBackendType,
+	}
 }
 
 // SetLogger sets the logger that the handler will use to write to the log. This is mandatory.
@@ -102,8 +113,16 @@ func (b *DeploymentManagerHandlerBuilder) SetCloudID(
 }
 
 // SetExtensions sets the fields that will be added to the extensions.
-func (b *DeploymentManagerHandlerBuilder) SetExtensions(values ...string) *DeploymentManagerHandlerBuilder {
+func (b *DeploymentManagerHandlerBuilder) SetExtensions(
+	values ...string) *DeploymentManagerHandlerBuilder {
 	b.extensions = values
+	return b
+}
+
+// SetBackendType sets the type of backend: global or regular ACM hub.
+func (b *DeploymentManagerHandlerBuilder) SetBackendType(
+	value DeploymentManagerBackendType) *DeploymentManagerHandlerBuilder {
+	b.backendType = value
 	return b
 }
 
@@ -141,6 +160,10 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 	}
 	if b.cloudID == "" {
 		err = errors.New("cloud identifier is mandatory")
+		return
+	}
+	if b.backendType == "" {
+		err = errors.New("backend type is mandatory")
 		return
 	}
 	if b.backendURL == "" {
@@ -204,9 +227,9 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 	}
 
 	// Create the Kubernetes API client only if the hack is enabled:
-	var globalHubClient *k8s.Client
+	var hubClient *k8s.Client
 	if b.enableHack {
-		globalHubClient, err = k8s.NewClient().
+		hubClient, err = k8s.NewClient().
 			SetLogger(b.logger).
 			SetLoggingWrapper(b.loggingWrapper).
 			Build()
@@ -221,13 +244,14 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 		loggingWrapper:    b.loggingWrapper,
 		cloudID:           b.cloudID,
 		extensions:        slices.Clone(b.extensions),
+		backendType:       b.backendType,
 		backendURL:        b.backendURL,
 		backendToken:      b.backendToken,
 		backendClient:     backendClient,
 		selectorEvaluator: selectorEvaluator,
 		jsonAPI:           jsonAPI,
 		jqTool:            jqTool,
-		globalHubClient:   globalHubClient,
+		hubClient:         hubClient,
 		enableHack:        b.enableHack,
 		profileCacheLock:  &sync.Mutex{},
 		profileCache:      map[string]data.Object{},
@@ -239,7 +263,15 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 func (h *DeploymentManagerHandler) List(ctx context.Context,
 	request *ListRequest) (response *ListResponse, err error) {
 	// Create the stream that will fetch the items:
-	items, err := h.fetchItems(ctx, nil)
+	var items data.Stream
+	switch h.backendType {
+	case DeploymentManagerBackendTypeGlobalHub:
+		items, err = h.fetchItemsFromGlobalHub(ctx)
+	case DeploymentManagerBackendTypeRegularHub:
+		items, err = h.fetchItemsFromRegularHub(ctx)
+	default:
+		err = fmt.Errorf("unknown backend type '%s'", h.backendType)
+	}
 	if err != nil {
 		return
 	}
@@ -269,7 +301,16 @@ func (h *DeploymentManagerHandler) List(ctx context.Context,
 func (h *DeploymentManagerHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
 	// Fetch the item:
-	item, err := h.fetchItem(ctx, request.Variables[0], nil)
+	id := request.Variables[0]
+	var item data.Object
+	switch h.backendType {
+	case DeploymentManagerBackendTypeGlobalHub:
+		item, err = h.fetchItemFromGlobalHub(ctx, id)
+	case DeploymentManagerBackendTypeRegularHub:
+		item, err = h.fetchItemFromRegularHub(ctx, id)
+	default:
+		err = fmt.Errorf("unknown backend type '%s'", h.backendType)
+	}
 	if err != nil {
 		return
 	}
@@ -287,32 +328,10 @@ func (h *DeploymentManagerHandler) Get(ctx context.Context,
 	return
 }
 
-func (h *DeploymentManagerHandler) fetchItems(ctx context.Context,
-	query neturl.Values) (result data.Stream, err error) {
-	url := fmt.Sprintf("%s/global-hub-api/v1/managedclusters", h.backendURL)
-	request, err := http.NewRequest(http.MethodGet, url, nil)
+func (h *DeploymentManagerHandler) fetchItemsFromGlobalHub(
+	ctx context.Context) (result data.Stream, err error) {
+	response, err := h.doGet(ctx, "/global-hub-api/v1/managedclusters", nil)
 	if err != nil {
-		return
-	}
-	if query != nil {
-		request.URL.RawQuery = query.Encode()
-	}
-	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.backendToken))
-	request.Header.Set("Accept", "application/json")
-	response, err := h.backendClient.Do(request)
-	if err != nil {
-		return
-	}
-	if response.StatusCode != http.StatusOK {
-		h.logger.Error(
-			"Received unexpected status code",
-			"code", response.StatusCode,
-			"url", url,
-		)
-		err = fmt.Errorf(
-			"received unexpected status code %d from '%s'",
-			response.StatusCode, url,
-		)
 		return
 	}
 	result, err = k8s.NewStream().
@@ -322,19 +341,22 @@ func (h *DeploymentManagerHandler) fetchItems(ctx context.Context,
 	return
 }
 
-func (h *DeploymentManagerHandler) fetchItem(ctx context.Context, id string,
-	query neturl.Values) (result data.Object, err error) {
-	// Currently the ACM API that we use doesn't have a specific endpoint for retrieving a
-	// specific object, instead of that we need to fetch a list filtering with a label
-	// selector.
-	if query == nil {
-		query = neturl.Values{}
-	} else {
-		query = maps.Clone(query)
-	}
+func (h *DeploymentManagerHandler) fetchItemFromGlobalHub(ctx context.Context,
+	id string) (result data.Object, err error) {
+	// Currently the ACM global hub API that we use doesn't have a specific endpoint for
+	// retrieving a specific object, instead of that we need to fetch a list filtering with a
+	// label selector.
+	query := neturl.Values{}
 	query.Set("labelSelector", fmt.Sprintf("clusterID=%s", id))
 	query.Set("limit", "1")
-	stream, err := h.fetchItems(ctx, query)
+	response, err := h.doGet(ctx, "/global-hub-api/v1/managedclusters", query)
+	if err != nil {
+		return
+	}
+	stream, err := k8s.NewStream().
+		SetLogger(h.logger).
+		SetReader(response.Body).
+		Build()
 	if err != nil {
 		return
 	}
@@ -350,6 +372,70 @@ func (h *DeploymentManagerHandler) fetchItem(ctx context.Context, id string,
 	return
 }
 
+func (h *DeploymentManagerHandler) fetchItemsFromRegularHub(
+	ctx context.Context) (result data.Stream, err error) {
+	response, err := h.doGet(
+		ctx,
+		"/apis/cluster.open-cluster-management.io/v1/managedclusters",
+		nil,
+	)
+	if err != nil {
+		return
+	}
+	result, err = k8s.NewStream().
+		SetLogger(h.logger).
+		SetReader(response.Body).
+		Build()
+	return
+}
+
+func (h *DeploymentManagerHandler) fetchItemFromRegularHub(ctx context.Context,
+	id string) (result data.Object, err error) {
+	response, err := h.doGet(
+		ctx,
+		fmt.Sprintf("/apis/cluster.open-cluster-management.io/v1/managedclusters/%s", id),
+		nil,
+	)
+	if err != nil {
+		return
+	}
+	defer response.Body.Close()
+	decoder := h.jsonAPI.NewDecoder(response.Body)
+	err = decoder.Decode(&result)
+	return
+}
+
+func (h *DeploymentManagerHandler) doGet(ctx context.Context, path string,
+	query neturl.Values) (response *http.Response, err error) {
+	url := h.backendURL + path
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+	if query != nil {
+		request.URL.RawQuery = query.Encode()
+	}
+	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.backendToken))
+	request.Header.Set("Accept", "application/json")
+	response, err = h.backendClient.Do(request)
+	if err != nil {
+		return
+	}
+	if response.StatusCode != http.StatusOK {
+		h.logger.Error(
+			"Received unexpected status code",
+			"code", response.StatusCode,
+			"url", request.URL,
+		)
+		err = fmt.Errorf(
+			"received unexpected status code %d from '%s'",
+			response.StatusCode, request.URL,
+		)
+		return
+	}
+	return
+}
+
 func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 	input data.Object) (output data.Object, err error) {
 	// Get the name of the hub and the name of the cluster:
@@ -361,24 +447,39 @@ func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 	if err != nil {
 		return
 	}
-	var cluster string
-	err = h.jqTool.Evaluate(`.metadata.name`, input, &cluster)
+	var name string
+	err = h.jqTool.Evaluate(`.metadata.name`, input, &name)
 	if err != nil {
 		return
+	}
+
+	// When working with a global hub we have to use the 'clusterID' label as the identifier,
+	// because the name isn't unique. But for a regular hub the name is unique, so we can
+	// use it.
+	id := name
+	if h.backendType == DeploymentManagerBackendTypeGlobalHub {
+		err = h.jqTool.Evaluate(
+			`.metadata.labels["clusterID"]`,
+			input, &id,
+		)
+		if err != nil {
+			return
+		}
 	}
 
 	// Get the basic attributes:
 	err = h.jqTool.Evaluate(
 		`{
-			"deploymentManagerId": .metadata.labels["clusterID"],
-			"description": $cluster,
-			"name": $cluster,
+			"deploymentManagerId": $id,
+			"description": $name,
+			"name": $name,
 			"oCloudId": $cloud,
 			"serviceUri": .spec.managedClusterClientConfigs[0].url
 		}`,
 		input, &output,
 		jq.String("$cloud", h.cloudID),
-		jq.String("$cluster", cluster),
+		jq.String("$name", name),
+		jq.String("$id", id),
 	)
 	if err != nil {
 		return
@@ -391,7 +492,7 @@ func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 		if err != nil {
 			h.logger.Error(
 				"Failed to evaluate extension",
-				slog.String("cluster", cluster),
+				slog.String("cluster", name),
 				slog.String("extension", extension),
 				slog.String("error", err.Error()),
 			)
@@ -407,7 +508,7 @@ func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 			if err != nil {
 				h.logger.Warn(
 					"Failed to merge extension",
-					slog.String("cluster", cluster),
+					slog.String("cluster", name),
 					slog.String("extension", extension),
 					slog.String("error", err.Error()),
 				)
@@ -417,12 +518,12 @@ func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 	}
 
 	// Add the profile:
-	profile, err := h.getProfile(ctx, hub, cluster)
+	profile, err := h.getProfile(ctx, hub, name)
 	if err != nil {
 		h.logger.Warn(
 			"Failed to fetch profile",
 			slog.String("hub", hub),
-			slog.String("cluster", cluster),
+			slog.String("cluster", name),
 			slog.String("error", err.Error()),
 		)
 		err = nil
@@ -442,7 +543,7 @@ func (h *DeploymentManagerHandler) mapItem(ctx context.Context,
 			h.logger.Warn(
 				"Failed to merge profile",
 				slog.String("hub", hub),
-				slog.String("cluster", cluster),
+				slog.String("cluster", name),
 				slog.String("error", err.Error()),
 			)
 			err = nil
@@ -480,19 +581,33 @@ func (h *DeploymentManagerHandler) fetchProfile(ctx context.Context,
 
 	// Fetch the kubeconfig that was used to register the hub, and then use it to fetch the
 	// admin kubeconfig of the hub:
-	hubRegKC, err := h.fetchRegKC(ctx, h.globalHubClient, hub)
-	if err != nil {
+
+	// When using a global hub we need first to fetch the admin Kubeconfig of the regular hub.
+	// For that we use the Kubeconfig that was used to register that regular hub.
+	var hubAdminKubeconfig []byte
+	switch h.backendType {
+	case DeploymentManagerBackendTypeGlobalHub:
+		var hubRegistrationKubeconfig []byte
+		hubRegistrationKubeconfig, err = h.fetchRegistrationKubeconfig(ctx, h.hubClient, hub)
+		if err != nil {
+			return
+		}
+		var hubRegistrationClient *k8s.Client
+		hubRegistrationClient, err = k8s.NewClient().
+			SetLogger(h.logger).
+			SetLoggingWrapper(h.loggingWrapper).
+			SetKubeconfig(hubRegistrationKubeconfig).
+			Build()
+		if err != nil {
+			return
+		}
+		hubAdminKubeconfig, err = h.fetchAdminKubeconfig(ctx, hubRegistrationClient)
+	case DeploymentManagerBackendTypeRegularHub:
+		hubAdminKubeconfig, err = h.fetchAdminKubeconfig(ctx, h.hubClient)
+	default:
+		err = fmt.Errorf("unknown backend type '%s'", h.backendType)
 		return
 	}
-	hubRegClient, err := k8s.NewClient().
-		SetLogger(h.logger).
-		SetLoggingWrapper(h.loggingWrapper).
-		SetKubeconfig(hubRegKC).
-		Build()
-	if err != nil {
-		return
-	}
-	hubAdminKC, err := h.fetchAdminKC(ctx, hubRegClient)
 	if err != nil {
 		return
 	}
@@ -502,36 +617,37 @@ func (h *DeploymentManagerHandler) fetchProfile(ctx context.Context,
 	hubAdminClient, err := k8s.NewClient().
 		SetLogger(h.logger).
 		SetLoggingWrapper(h.loggingWrapper).
-		SetKubeconfig(hubAdminKC).
+		SetKubeconfig(hubAdminKubeconfig).
 		Build()
 	if err != nil {
 		return
 	}
-	clusteRegKC, err := h.fetchRegKC(ctx, hubAdminClient, cluster)
+	clusterRegistrationKubeconfig, err := h.fetchRegistrationKubeconfig(ctx, hubAdminClient, cluster)
 	if err != nil {
 		return
 	}
-	clusterRegClient, err := k8s.NewClient().
+	clusterRegistrationClient, err := k8s.NewClient().
 		SetLogger(h.logger).
 		SetLoggingWrapper(h.loggingWrapper).
-		SetKubeconfig(clusteRegKC).
+		SetKubeconfig(clusterRegistrationKubeconfig).
 		Build()
 	if err != nil {
 		return
 	}
-	clusterAdminKC, err := h.fetchAdminKC(ctx, clusterRegClient)
+	clusterAdminKubeconfig, err := h.fetchAdminKubeconfig(ctx, clusterRegistrationClient)
 	if err != nil {
 		return
 	}
 
 	// Make the profile data from the cluster admin kubeconfig:
-	result, err = h.makeProfile(clusterAdminKC)
+	result, err = h.makeProfile(clusterAdminKubeconfig)
 	return
 }
 
-// fetchRegKC uses the given Kubernetes API client to fetch the kubeconfig that was used to
-// register a cluster. Returns the serialized kubeconfig, or nil if there is no such kubeconfig.
-func (h *DeploymentManagerHandler) fetchRegKC(ctx context.Context,
+// fetchRegstrationKubeconfig uses the given Kubernetes API client to fetch the kubeconfig that was
+// used to register a cluster. Returns the serialized kubeconfig, or nil if there is no such
+// kubeconfig.
+func (h *DeploymentManagerHandler) fetchRegistrationKubeconfig(ctx context.Context,
 	client clnt.Client, clusterName string) (result []byte, err error) {
 	// Try to fetch the secret that contains the credentials that were used when the cluster
 	// was registered.
@@ -632,9 +748,9 @@ func (h *DeploymentManagerHandler) fetchRegKC(ctx context.Context,
 	return
 }
 
-// fetchAdminKC uses the given Kubernetes API client to fetch the administrator kubeconfig. Returns
-// the serialized kubeconfig, or nil if it doesn't exist.
-func (h *DeploymentManagerHandler) fetchAdminKC(ctx context.Context,
+// fetchAdminKubeconfig uses the given Kubernetes API client to fetch the administrator kubeconfig.
+// Returns the serialized kubeconfig, or nil if it doesn't exist.
+func (h *DeploymentManagerHandler) fetchAdminKubeconfig(ctx context.Context,
 	client clnt.Client) (result []byte, err error) {
 	secret := &corev1.Secret{}
 	key := clnt.ObjectKey{
@@ -678,3 +794,8 @@ func (h *DeploymentManagerHandler) makeProfile(kubeconfigBytes []byte) (result d
 	)
 	return
 }
+
+// default values.
+const (
+	defaultDeploymentManagerBackendType = DeploymentManagerBackendTypeRegularHub
+)
