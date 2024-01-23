@@ -33,6 +33,15 @@ tags:
 - name: metadata
   description: |
     Service metadata, including versions and O-Cloud information.
+- name: resourceTypes
+  description: |
+    Information about resource types.
+- name: resourcePools
+  description: |
+    Information about resource pools.
+- name: resources
+  description: |
+    Information about resources.
 
 paths:
 
@@ -141,6 +150,140 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeploymentManagers"
 
+  /o2ims-infrastructureInventory/{version}/resourceTypes:
+    get:
+      operationId: getResourceTypes
+      summary: Get resource types
+      description: |
+        Returns the list of resource types.
+      parameters:
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/filter"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - resourceTypes
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of resource types.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceTypes"
+
+  /o2ims-infrastructureInventory/{version}/resourceTypes/{resourceTypeId}:
+    get:
+      operationId: getResourceType
+      summary: Get a resource type
+      description: |
+        Returns the details of a resource type.
+      parameters:
+      - $ref: "#/components/parameters/resourceTypeId"
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - resourceTypes
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the resource type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceType"
+
+  /o2ims-infrastructureInventory/{version}/resourcePools:
+    get:
+      operationId: getResourcePools
+      summary: Get resource pools
+      description: |
+        Returns the list of resource pools.
+      parameters:
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/filter"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - resourcePools
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of resource pools.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourcePools"
+
+  /o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolId}:
+    get:
+      operationId: getResourcePool
+      summary: Get a resource pool
+      description: |
+        Returns the details of a resource pool.
+      parameters:
+      - $ref: "#/components/parameters/resourcePoolId"
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - resourcePools
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the resource pool.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourcePool"
+
+  /o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolId}/resources:
+    get:
+      operationId: getResources
+      summary: Get resources in a resource pool
+      description: |
+        Returns the details of resources in a resource pool.
+      parameters:
+      - $ref: "#/components/parameters/resourcePoolId"
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/filter"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - resources
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of resources.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resources"
+
+  /o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolId}/resources/{resourceId}:
+    get:
+      operationId: getResource
+      summary: Get a resource in a resource pool
+      description: |
+        Returns the details of a resource in a resource pool.
+      parameters:
+      - $ref: "#/components/parameters/resourcePoolId"
+      - $ref: "#/components/parameters/resourceId"
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - resources
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resource"
+
 components:
 
   parameters:
@@ -164,6 +307,36 @@ components:
       schema:
         type: string
       example: 65221564-8b05-416a-bfc3-c250bc64e1aa
+
+    resourcePoolId:
+      name: resourcePoolId
+      description: |
+        Unique identifier of a resource pool.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
+
+    resourceId:
+      name: resourceId
+      description: |
+        Unique identifier of a resource.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
+
+    resourceTypeId:
+      name: resourceTypeId
+      description: |
+        Unique identifier of a resource type.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: node_8_cores_amd64
 
     fields:
       name: fields
@@ -342,3 +515,81 @@ components:
           example:
             hub: "hub0"
             country: "ES"
+
+    ResourceType:
+      description: |
+        Information about a resource type.
+      type: object
+      properties:
+        resourceTypeID:
+          type: string
+          example: "node_8_cores_amd64"
+        name:
+          type: string
+          example: "medium"
+        resourceKind:
+          type: string
+          example: "PHYSICAL"
+        resourceClass:
+          type: string
+          example: "COMPUTE"
+
+    ResourceTypes:
+      description: |
+        List of resource types.
+      type: array
+      items:
+        $ref: "#/components/schemas/ResourceType"
+
+    ResourcePool:
+      description: |
+        Information about a resource pool.
+      type: object
+      properties:
+        resourcePoolId:
+          type: string
+          example: "my-cluster"
+        name:
+          type: string
+          example: "my-cluster"
+        oCloudId:
+          type: string
+          example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
+        location:
+          type: string
+          example: "EU"
+
+    ResourcePools:
+      description: |
+        List of resource pools.
+      type: array
+      items:
+        $ref: "#/components/schemas/ResourcePool"
+
+    Resource:
+      description: |
+        Information about a resource.
+      type: object
+      properties:
+        resourcePoolId:
+          type: string
+          example: "my-cluster"
+        description:
+          type: string
+          example: "my-node"
+        resourceTypeID:
+          type: string
+          example: "node_8_cores_amd64"
+        resourceID:
+          type: string
+          example: "7c757ebe-559f-450a-9c87-32fc45af7a38"
+        globalAssetID:
+          type: string
+          example: "b6f67c72-8915-474b-b369-6198ea1f7b6f"
+
+    Resources:
+      description: |
+        List of resources.
+      type: array
+      items:
+        $ref: "#/components/schemas/Resources"
