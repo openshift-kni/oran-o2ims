@@ -323,7 +323,7 @@ func (c *ResourceServerCommand) createResourceHandler(
 	// Create the routes:
 	adapter, err := service.NewAdapter().
 		SetLogger(c.logger).
-		SetPathVariables("resourcePoolID").
+		SetPathVariables("resourcePoolID", "resourceID").
 		SetHandler(handler).
 		Build()
 	if err != nil {
