@@ -23,6 +23,7 @@ import (
 	"os"
 
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -20,9 +20,10 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
+
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
-	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 var _ = Describe("Context", func() {

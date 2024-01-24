@@ -99,7 +99,7 @@ func (t FilterTerm) MapFilter(mapPropertyFunc func(string) string) (searchFilter
 
 	// Convert to GraphQL property
 	searchProperty := mapPropertyFunc(t.Path[0])
-	
+
 	// Build search filter
 	searchFilter = &model.SearchFilter{
 		Property: searchProperty,

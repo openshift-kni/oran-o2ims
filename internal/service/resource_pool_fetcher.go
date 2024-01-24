@@ -26,12 +26,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/itchyny/gojq"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
+
+	"github.com/itchyny/gojq"
 	"github.com/thoas/go-funk"
 )
 

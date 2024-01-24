@@ -15,11 +15,12 @@ License.
 package graphql
 
 import (
+	"github.com/openshift-kni/oran-o2ims/internal/model"
+	"github.com/openshift-kni/oran-o2ims/internal/search"
+
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/ginkgo/v2/dsl/table"
 	. "github.com/onsi/gomega"
-	"github.com/openshift-kni/oran-o2ims/internal/model"
-	"github.com/openshift-kni/oran-o2ims/internal/search"
 	"k8s.io/utils/ptr"
 )
 
