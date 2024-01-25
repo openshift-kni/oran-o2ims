@@ -139,7 +139,10 @@ var _ = Describe("Deployment manager handler", func() {
 				// Prepare a backend:
 				backend.AppendHandlers(
 					CombineHandlers(
-						VerifyRequest(http.MethodGet, "/global-hub-api/v1/managedclusters"),
+						VerifyRequest(
+							http.MethodGet,
+							"/apis/cluster.open-cluster-management.io/v1/managedclusters",
+						),
 						RespondWithList(),
 					),
 				)
@@ -193,9 +196,6 @@ var _ = Describe("Deployment manager handler", func() {
 							data.Object{
 								"metadata": data.Object{
 									"name": "my-cluster",
-									"labels": data.Object{
-										"clusterID": "123",
-									},
 								},
 								"spec": data.Object{
 									"managedClusterClientConfigs": data.Array{
@@ -208,9 +208,6 @@ var _ = Describe("Deployment manager handler", func() {
 							data.Object{
 								"metadata": data.Object{
 									"name": "your-cluster",
-									"labels": data.Object{
-										"clusterID": "456",
-									},
 								},
 								"spec": data.Object{
 									"managedClusterClientConfigs": data.Array{
@@ -242,14 +239,14 @@ var _ = Describe("Deployment manager handler", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(items).To(HaveLen(2))
 				Expect(items[0]).To(Equal(data.Object{
-					"deploymentManagerId": "123",
+					"deploymentManagerId": "my-cluster",
 					"description":         "my-cluster",
 					"name":                "my-cluster",
 					"oCloudId":            "123",
 					"serviceUri":          "https://my-cluster:6443",
 				}))
 				Expect(items[1]).To(Equal(data.Object{
-					"deploymentManagerId": "456",
+					"deploymentManagerId": "your-cluster",
 					"description":         "your-cluster",
 					"name":                "your-cluster",
 					"oCloudId":            "123",
@@ -265,8 +262,7 @@ var _ = Describe("Deployment manager handler", func() {
 							"metadata": data.Object{
 								"name": "my-cluster",
 								"labels": data.Object{
-									"clusterID": "123",
-									"country":   "ES",
+									"country": "ES",
 								},
 								"annotations": data.Object{
 									"region": "Madrid",
@@ -343,59 +339,10 @@ var _ = Describe("Deployment manager handler", func() {
 				// Prepare a backend:
 				backend.AppendHandlers(
 					CombineHandlers(
-						VerifyRequest(http.MethodGet, "/global-hub-api/v1/managedclusters"),
-						RespondWithObject(data.Object{}),
-					),
-				)
-
-				// Create the handler:
-				handler, err := NewDeploymentManagerHandler().
-					SetLogger(logger).
-					SetCloudID("123").
-					SetBackendURL(backend.URL()).
-					SetBackendToken("my-token").
-					Build()
-				Expect(err).ToNot(HaveOccurred())
-
-				// Send the request. Note that we ignore the error here because
-				// all we care about in this test is that it uses the right URL
-				// path, no matter what is the response.
-				_, _ = handler.Get(ctx, &GetRequest{
-					Variables: []string{"123"},
-				})
-			})
-
-			It("Uses the right label selector", func() {
-				// Prepare a backend:
-				backend.AppendHandlers(
-					CombineHandlers(
-						VerifyFormKV("labelSelector", "clusterID=123"),
-						RespondWithObject(data.Object{}),
-					),
-				)
-
-				// Create the handler:
-				handler, err := NewDeploymentManagerHandler().
-					SetLogger(logger).
-					SetCloudID("123").
-					SetBackendURL(backend.URL()).
-					SetBackendToken("my-token").
-					Build()
-				Expect(err).ToNot(HaveOccurred())
-
-				// Send the request. Note that we ignore the error here because
-				// all we care about in this test is that it uses the right URL
-				// path, no matter what is the response.
-				_, _ = handler.Get(ctx, &GetRequest{
-					Variables: []string{"123"},
-				})
-			})
-
-			It("Uses the right label limit", func() {
-				// Prepare a backend:
-				backend.AppendHandlers(
-					CombineHandlers(
-						VerifyFormKV("limit", "1"),
+						VerifyRequest(
+							http.MethodGet,
+							"/apis/cluster.open-cluster-management.io/v1/managedclusters/123",
+						),
 						RespondWithObject(data.Object{}),
 					),
 				)
@@ -421,12 +368,9 @@ var _ = Describe("Deployment manager handler", func() {
 				// Prepare a backend:
 				backend.AppendHandlers(
 					CombineHandlers(
-						RespondWithList(data.Object{
+						RespondWithObject(data.Object{
 							"metadata": data.Object{
 								"name": "my-cluster",
-								"labels": data.Object{
-									"clusterID": "123",
-								},
 							},
 							"spec": data.Object{
 								"managedClusterClientConfigs": data.Array{
@@ -455,7 +399,7 @@ var _ = Describe("Deployment manager handler", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
 				Expect(response.Object).To(Equal(data.Object{
-					"deploymentManagerId": "123",
+					"deploymentManagerId": "my-cluster",
 					"description":         "my-cluster",
 					"name":                "my-cluster",
 					"oCloudId":            "123",
@@ -467,12 +411,11 @@ var _ = Describe("Deployment manager handler", func() {
 				// Prepare a backend:
 				backend.AppendHandlers(
 					CombineHandlers(
-						RespondWithList(data.Object{
+						RespondWithObject(data.Object{
 							"metadata": data.Object{
 								"name": "my-cluster",
 								"labels": data.Object{
-									"clusterID": "123",
-									"country":   "ES",
+									"country": "ES",
 								},
 								"annotations": data.Object{
 									"region": "Madrid",
