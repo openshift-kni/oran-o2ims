@@ -92,3 +92,72 @@ $ curl -s http://localhost:8001/o2ims-infrastructureInventory/v1/deploymentManag
 
 Inside _VS Code_ use the _Run and Debug_ option with the `start
 deployment-manager-server` [configuration](.vscode/launch.json).
+
+#### Resource server
+
+The resource server exposes endpoints for retrieving resource types, resource pools
+and resources objects. The server relies on the Search Query API of ACM hub.
+Follow the these [instructions](docs/dev/env.md#search-query-api) to enable
+and configure the search API access.
+
+The required URL and token can be obtained
+as follows:
+
+```
+$ export BACKEND_URL=$(
+  oc get route -n open-cluster-management search-api -o json |
+  jq -r '"https://" + .spec.host'
+)
+$ export BACKEND_TOKEN=$(
+  oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
+)
+```
+
+Start the resource server with a command like this:
+
+```
+$ ./oran-o2ims start resource-server \
+--log-level=debug \
+--log-file=stdout \
+--api-listener-address=localhost:8002 \
+--cloud-id=123 \
+--backend-url="${BACKEND_URL}" \
+--backend-token="${BACKEND_TOKEN}"
+```
+
+Note: see more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
+
+For more information about other command line flags use the `--help` command:
+
+```
+$ ./oran-o2ims start resource-server --help
+```
+
+##### Run and Debug
+
+Inside _VS Code_ use the _Run and Debug_ option with the `start
+resource-server` [configuration](.vscode/launch.json).
+
+##### Requests Examples
+
+###### GET Resource Type List
+
+To get a list of resource types:
+```
+$ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourceTypes | jq
+```
+
+###### GET Resource Pool List
+
+To get a list of resource pools:
+```
+$ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourcePools | jq
+```
+
+###### GET Resource List
+
+To get a list of resources in a resource pool:
+```
+$ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}
+/resources | jq
+```
