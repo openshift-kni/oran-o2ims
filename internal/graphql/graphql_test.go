@@ -15,6 +15,8 @@ License.
 package graphql
 
 import (
+	"errors"
+
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 
@@ -27,10 +29,14 @@ import (
 var _ = Describe("GraphQL filters", func() {
 	DescribeTable(
 		"Map a filter term to a SearchFilter",
-		func(term search.Term, expected *model.SearchFilter, mapPropertyFunc func(string) string) {
+		func(term search.Term, expectedFilter *model.SearchFilter, expectedErr error, mapPropertyFunc func(string) string) {
 			actual, err := FilterTerm(term).MapFilter(mapPropertyFunc)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(actual).To(Equal(expected))
+			Expect(actual).To(Equal(expectedFilter))
+			if expectedErr != nil {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+			}
 		},
 		Entry(
 			"Filter term for Cluster",
@@ -47,6 +53,7 @@ var _ = Describe("GraphQL filters", func() {
 				Property: "cluster",
 				Values:   []*string{ptr.To("=spoke0")},
 			},
+			nil,
 			func(s string) string {
 				return PropertyCluster(s).MapProperty()
 			},
@@ -66,6 +73,24 @@ var _ = Describe("GraphQL filters", func() {
 				Property: "cluster",
 				Values:   []*string{ptr.To("=spoke0")},
 			},
+			nil,
+			func(s string) string {
+				return PropertyNode(s).MapProperty()
+			},
+		),
+		Entry(
+			"Fail when an unknown property is specified",
+			search.Term{
+				Operator: search.Eq,
+				Path: []string{
+					"location",
+				},
+				Values: []any{
+					"EU",
+				},
+			},
+			nil,
+			errors.New("unknown GraphQL property"),
 			func(s string) string {
 				return PropertyNode(s).MapProperty()
 			},

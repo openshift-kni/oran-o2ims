@@ -15,6 +15,7 @@ License.
 package graphql
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/openshift-kni/oran-o2ims/internal/model"
@@ -99,6 +100,9 @@ func (t FilterTerm) MapFilter(mapPropertyFunc func(string) string) (searchFilter
 
 	// Convert to GraphQL property
 	searchProperty := mapPropertyFunc(t.Path[0])
+	if searchProperty == "" {
+		return nil, errors.New("unknown GraphQL property")
+	}
 
 	// Build search filter
 	searchFilter = &model.SearchFilter{
