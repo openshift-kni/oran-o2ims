@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- oran_v1alpha1_orano2ims.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

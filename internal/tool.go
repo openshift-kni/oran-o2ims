@@ -24,6 +24,7 @@ import (
 	"slices"
 
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+
 	"github.com/spf13/cobra"
 )
 

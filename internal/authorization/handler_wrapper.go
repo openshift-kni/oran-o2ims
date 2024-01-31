@@ -21,8 +21,9 @@ import (
 	"os"
 	"regexp"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/openshift-kni/oran-o2ims/internal/authentication"
+
+	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 )

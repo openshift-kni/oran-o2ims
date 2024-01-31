@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - orano2ims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - orano2ims/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - orano2ims/status
+  verbs:
+  - get
+  - patch
+  - update

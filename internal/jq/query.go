@@ -22,9 +22,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
+
 	"github.com/itchyny/gojq"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 // Query contains the data and logic needed to evaluate a query. Instances are created using the

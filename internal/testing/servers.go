@@ -29,8 +29,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/onsi/gomega/ghttp"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+
+	"github.com/onsi/gomega/ghttp"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
