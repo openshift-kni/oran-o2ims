@@ -218,7 +218,7 @@ func (r *ORANO2IMSReconciler) deployMetadataServer(ctx context.Context, orano2im
 							"--api-listener-tls-crt=/secrets/tls/tls.crt",
 							"--api-listener-tls-key=/secrets/tls/tls.key",
 							fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-							//fmt.Sprintf("--external-address=https://%s", orano2ims.Spec.IngressHost),
+							fmt.Sprintf("--external-address=https://%s", orano2ims.Spec.IngressHost),
 						},
 						Ports: []corev1.ContainerPort{
 							{
