@@ -44,6 +44,11 @@ func MetadataServer() *cobra.Command {
 		"",
 		"O-Cloud identifier.",
 	)
+	_ = flags.String(
+		externalAddressFlagName,
+		"",
+		"External address.",
+	)
 	return result
 }
 
@@ -89,6 +94,21 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	logger.Info(
 		"Cloud identifier",
 		"value", cloudID,
+	)
+
+	// Get the external address:
+	externalAddress, err := flags.GetString(externalAddressFlagName)
+	if err != nil {
+		logger.Error(
+			"Failed to get external address flag",
+			slog.String("flag", externalAddressFlagName),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	logger.Info(
+		"External address",
+		slog.String("value", externalAddress),
 	)
 
 	// Create the router:
@@ -151,6 +171,7 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	cloudInfoHandler, err := service.NewCloudInfoHandler().
 		SetLogger(logger).
 		SetCloudID(cloudID).
+		SetExternalAddress(externalAddress).
 		Build()
 	if err != nil {
 		logger.Error(

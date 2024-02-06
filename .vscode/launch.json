@@ -21,7 +21,8 @@
                                 "start",
                                 "metadata-server",
                                 "--log-level=debug",
-                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb"
+                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
+                                "--external-address=https://o2ims.example.com"
                         ]
                 },
                 {

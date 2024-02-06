@@ -16,6 +16,7 @@ package server
 
 // Names of command line flags:
 const (
-	cloudIDFlagName    = "cloud-id"
-	extensionsFlagName = "extensions"
+	cloudIDFlagName         = "cloud-id"
+	extensionsFlagName      = "extensions"
+	externalAddressFlagName = "external-address"
 )
