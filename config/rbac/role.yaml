@@ -5,9 +5,57 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - oran.openshift.io
+  - ""
   resources:
-  - orano2ims
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
   verbs:
   - create
   - delete
@@ -19,13 +67,25 @@ rules:
 - apiGroups:
   - oran.openshift.io
   resources:
-  - orano2ims/finalizers
+  - orano2imses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - orano2imses/finalizers
   verbs:
   - update
 - apiGroups:
   - oran.openshift.io
   resources:
-  - orano2ims/status
+  - orano2imses/status
   verbs:
   - get
   - patch

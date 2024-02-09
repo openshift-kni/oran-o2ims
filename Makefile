@@ -19,8 +19,16 @@ image_tag:=latest
 # Additional flags to pass to the `ginkgo` command.
 ginkgo_flags:=
 
+# VERSION
+VERSION ?= latest
+
+# IMAGE_TAG_BASE
+# TODO: change this once the operator images are mirrored to quay
+IMAGE_TAG_BASE ?= quay.io/imihai/oran-o2ims-operator
+
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.0
 
@@ -86,7 +94,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
