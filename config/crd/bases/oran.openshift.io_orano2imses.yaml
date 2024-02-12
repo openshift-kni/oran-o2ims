@@ -54,6 +54,9 @@ spec:
                 items:
                   type: string
                 type: array
+              alarmSubscriptionServer:
+                default: false
+                type: boolean
               ingressHost:
                 type: string
               metadataServer:
@@ -67,6 +70,7 @@ spec:
             required:
             - cloudId
             - deploymentManagerServer
+            - AlarmSubscriptionServer
             - metadataServer
             - resourceServer
             type: object

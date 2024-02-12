@@ -60,6 +60,17 @@ pids="${pids} $!"
 &
 pids="${pids} $!"
 
+# Start the alert subscription server:
+./oran-o2ims start alarm-subscription-server \
+--log-file="servers.log" \
+--log-level="debug" \
+--log-field="server=alarm-subscription" \
+--log-field="pid=%p" \
+--api-listener-address="127.0.0.1:8000" \
+--cloud-id="123" \
+&
+pids="${pids} $!"
+
 # Start the reverse proxy:
 podman run \
 --rm \
