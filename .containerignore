@@ -6,3 +6,5 @@
 !/go.sum
 !/internal
 !/main.go
+!/cmd
+!/api

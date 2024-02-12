@@ -34,7 +34,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
-	controller "github.com/openshift-kni/oran-o2ims/internal/controllers"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -102,7 +102,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.ORANO2IMSReconciler{
+	if err = (&controllers.ORANO2IMSReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controller").WithName("ORAN-O2IMS"),
 		Scheme: mgr.GetScheme(),

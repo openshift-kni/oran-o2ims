@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package controllers
 
 import (
 	"context"
@@ -52,9 +52,14 @@ type ORANO2IMSReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2ims,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2ims/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2ims/finalizers,verbs=update
+//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2imses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2imses/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2imses/finalizers,verbs=update
+//+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="networking.k8s.io",resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
