@@ -10,4 +10,4 @@ generatorOptions:
 images:
 - name: controller
   newName: quay.io/imihai/oran-o2ims-operator
-  newTag: latest
+  newTag: 4.16.0
