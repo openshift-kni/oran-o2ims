@@ -1,0 +1,46 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: oran-o2ims.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions: {}
+  description: Deploys the ORAN O2IMS services
+  displayName: ORAN O2IMS Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - ORAN
+  - O2IMS
+  links:
+  - name: Oran O2ims
+    url: https://oran-o2ims.domain
+  maintainers:
+  - email: jhernand@redhat.com
+    name: JuanHernandez
+  - email: derez@redhat.com
+    name: DanielErez
+  - email: imihai@redhat.com
+    name: IrinaMihai
+  maturity: alpha
+  provider:
+    name: Red Hat
+  version: 0.0.0
