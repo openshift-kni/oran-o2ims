@@ -2,7 +2,7 @@
 
 Follow these instructions to deploy an ACM hub cluster with additional managed clusters.
 The deployment is done using a [kci](https://github.com/karmab/kcli-openshift4-baremetal) script that installs a 3-nodes cluster ACM hub and 2 spoke clusters.
-Note: the spoke clusters should be manually imported to the ACM hub.
+Note: if the spoke clusters auto-import fails, the clusters should be manually imported to the ACM hub.
 
 ## Deployment 
 
