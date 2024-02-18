@@ -46,7 +46,7 @@ export MASTER_VCPU=16
 # Extra nodes
 export NUM_EXTRA_WORKERS=2
 export EXTRA_WORKER_VCPU=8
-export EXTRA_WORKER_MEMORY=16384
+export EXTRA_WORKER_MEMORY=32768
 export EXTRA_WORKER_DISK=120
 # General
 export OPENSHIFT_RELEASE_STREAM=4.14
@@ -198,12 +198,6 @@ Note: if an Agent is not discovered for a while, ssh to the machine and start ag
 export IP=$(virsh net-dhcp-leases ostestbm | grep extraworker-0 | awk '{print $5}' | head -c -4)
 ssh core@$IP
 sudo systemctl start agent
-```
-
-### Patch BMHs (if stuck in 'provisioning' state)
-```bash
-oc -n spoke0 patch bmh ostest-extraworker-0 --type='merge' -p '{"spec":{"online":false}}'
-oc -n spoke1 patch bmh ostest-extraworker-1 --type='merge' -p '{"spec":{"online":false}}'
 ```
 
 ### Import a spoke cluster
