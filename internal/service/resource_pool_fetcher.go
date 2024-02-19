@@ -299,15 +299,24 @@ func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 		return
 	}
 	labelsMap := data.GetLabelsMap(labels)
-
-	// Find location according to a 'region' label
 	labelsKeys := funk.Keys(labelsMap)
+
+	// Set 'location' according to the 'region' label
 	regionKey := funk.Find(labelsKeys, func(key string) bool {
 		return strings.Contains(key, "region")
 	})
 	var location string
 	if regionKey != nil {
 		location = labelsMap[regionKey.(string)].(string)
+	}
+
+	// Set 'description' according to the 'clusterID' label
+	clusterIDKey := funk.Find(labelsKeys, func(key string) bool {
+		return strings.Contains(key, "clusterID")
+	})
+	var description string
+	if clusterIDKey != nil {
+		description = labelsMap[clusterIDKey.(string)].(string)
 	}
 
 	// Add the extensions:
@@ -326,9 +335,9 @@ func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 		"oCloudID":       r.cloudID,
 		"extensions":     extensionsMap,
 		"location":       location,
+		"description":    description,
 		// TODO: no direct mapping to a property in Cluster object
 		"globalLocationID": "",
-		"description":      "",
 	}
 
 	return
