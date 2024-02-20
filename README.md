@@ -21,7 +21,7 @@ make binary
 
 The metadata server returns information about the supported versions of the
 API. It doesn't require any backend, only the O-Cloud identifier. You can start
-it wih a command like this:
+it with a command like this:
 
 ```
 $ ./oran-o2ims start metadata-server \
