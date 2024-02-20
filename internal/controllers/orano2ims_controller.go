@@ -262,6 +262,8 @@ func (r *ORANO2IMSReconciler) deployManagerServer(ctx context.Context, orano2ims
 		},
 	}
 
+	deploymentManagerServerContainerArgs := utils.BuildDeploymentManagerServerContainerArgs(orano2ims)
+
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
 		Replicas: k8sptr.To(int32(1)),
@@ -312,30 +314,7 @@ func (r *ORANO2IMSReconciler) deployManagerServer(ctx context.Context, orano2ims
 							},
 						},
 						Command: []string{"/usr/bin/oran-o2ims"},
-						Args: []string{
-							"start",
-							"deployment-manager-server",
-							"--log-level=debug",
-							"--log-file=stdout",
-							"--api-listener-address=0.0.0.0:8000",
-							"--api-listener-tls-crt=/secrets/tls/tls.crt",
-							"--api-listener-tls-key=/secrets/tls/tls.key",
-							"--authn-jwks-url=https://kubernetes.default.svc/openid/v1/jwks",
-							"--authn-jwks-token-file=/run/secrets/kubernetes.io/serviceaccount/token",
-							"--authn-jwks-ca-file=/run/secrets/kubernetes.io/serviceaccount/ca.crt",
-							"--authz-acl-file=/configmaps/authz/acl.yaml",
-							fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-							fmt.Sprintf("--backend-url=%s", orano2ims.Spec.BackendURL),
-							fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
-							fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType),
-							fmt.Sprintln(
-								// TODO: properly hold the extensions instead of hardcoding them.
-								"--extensions={\n",
-								"\"country\": .metadata.labels[\"country\"],\n",
-								"\"version\": .metadata.labels[\"openshiftVersion\"],\n",
-								"\"hub\": .metadata.annotations[\"global-hub.open-cluster-management.io/managed-by\"],",
-								"}"),
-						},
+						Args:    deploymentManagerServerContainerArgs,
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          "api",

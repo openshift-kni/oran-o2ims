@@ -49,6 +49,11 @@ spec:
               deploymentManagerServer:
                 default: false
                 type: boolean
+              extensions:
+                description: This field allows the addition of extra O-Cloud information
+                items:
+                  type: string
+                type: array
               ingressHost:
                 type: string
               metadataServer:

@@ -42,6 +42,9 @@ type ORANO2IMSSpec struct {
 	//+kubebuilder:default=regular-hub
 	//+kubebuilder:validation:Enum=regular-hub;global-hub
 	BackendType string `json:"backendType,omitempty"`
+	// This field allows the addition of extra O-Cloud information
+	//+optional
+	Extensions []string `json:"extensions,omitempty"`
 }
 
 type DeploymentsStatus struct {
