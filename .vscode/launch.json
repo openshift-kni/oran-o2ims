@@ -56,6 +56,22 @@
                         ]
                 },
                 {
+                        "name": "start alarm-server",
+                        "type": "go",
+                        "request": "launch",
+                        "mode": "auto",
+                        "program": "${workspaceFolder}",
+                        "args": [
+                                "start",
+                                "alarm-server",
+                                "--log-level=debug",
+                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
+                                "--backend-url=${env:BACKEND_URL}",
+                                "--backend-token=${env:BACKEND_TOKEN}",
+                                "--resource-server-url=${env:RESOURCE_SERVER_URL}",
+                        ]
+                },
+                {
                         "name": "test",
                         "type": "go",
                         "request": "launch",
