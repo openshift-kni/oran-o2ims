@@ -54,6 +54,12 @@ type ListResponse struct {
 	Items data.Stream
 }
 
+// ListHandler is the interface implemented by objects that know how to get list
+// of items of a collection of objects.
+type ListHandler interface {
+	List(ctx context.Context, request *ListRequest) (response *ListResponse, err error)
+}
+
 // GetRequest represents a request for an individual object.
 type GetRequest struct {
 	// Variables contains the values of the path variables. For example, if the request path is
@@ -78,21 +84,46 @@ type GetResponse struct {
 	Object data.Object
 }
 
-// CollectionHandler is the interface implemented by objects that know how to handle requests to
-// list the items of a collection of objects.
-type CollectionHandler interface {
-	List(ctx context.Context, request *ListRequest) (response *ListResponse, err error)
-}
-
-// ObjectHandler is the interface implemented by objects that now how to handle requests to get the
-// details of an object.
-type ObjectHandler interface {
+// GetHandler is the interface implemented by objects that now how to get the details of an object.
+type GetHandler interface {
 	Get(ctx context.Context, request *GetRequest) (response *GetResponse, err error)
 }
 
-// Handler is the interface implemented by objects that knows how to handle requests to list the
-// items of a collection, as well as requests to get a specific object.
+// AddRequest represents a request to create a new object inside a collection.
+type AddRequest struct {
+	// Variables contains the values of the path variables. For example, if the request path is
+	// like this:
+	//
+	//	/o2ims-infrastructureInventory/v1/resourcePools/123/resources/456
+	//
+	// Then it will contain '456' and '123'.
+	//
+	// These path variables are ordered from more specific to less specific, the opposite of
+	// what appears in the request path. This is intended to simplify things because most
+	// handlers will only be interested in the most specific identifier and therefore they
+	// can just use index zero.
+	Variables []string
+
+	// Object is the definition of the object.
+	Object data.Object
+}
+
+// AddResponse represents the response to the request to create a new object inside a collection.
+type AddResponse struct {
+	// Object is the definition of the object that was created.
+	Object data.Object
+}
+
+// AddHandler is the interface implemented by objects that know how add items to a collection
+// of objects.
+type AddHandler interface {
+	Add(ctx context.Context, request *AddRequest) (response *AddResponse, err error)
+}
+
+// Handler aggregates all the other specific handlers. This is intended for unit/ tests, where it
+// is convenient to have a single mock that implements all the operations.
 type Handler interface {
-	CollectionHandler
-	ObjectHandler
+	ListHandler
+	GetHandler
+	AddHandler
 }

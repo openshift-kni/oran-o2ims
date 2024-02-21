@@ -19,8 +19,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
@@ -46,8 +48,9 @@ type AdapterBuilder struct {
 type Adapter struct {
 	logger             *slog.Logger
 	pathVariables      []string
-	collectionHandler  CollectionHandler
-	objectHandler      ObjectHandler
+	listHandler        ListHandler
+	getHandler         GetHandler
+	addHandler         AddHandler
 	includeFields      []search.Path
 	excludeFields      []search.Path
 	pathsParser        *search.PathsParser
@@ -114,20 +117,21 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 	}
 
 	// Check that the handler implements at least one of the handler interfaces:
-	collectionHandler, _ := b.handler.(CollectionHandler)
-	objectHandler, _ := b.handler.(ObjectHandler)
-	if collectionHandler == nil && objectHandler == nil {
+	listHandler, _ := b.handler.(ListHandler)
+	getHandler, _ := b.handler.(GetHandler)
+	addHandler, _ := b.handler.(AddHandler)
+	if listHandler == nil && getHandler == nil && addHandler == nil {
 		err = errors.New("handler doesn't implement any of the handler interfaces")
 		return
 	}
 
-	// If the handler implements the collection and object handler interfaces then we need to
-	// have at least one path variable because we use it to decide if the request is for the
-	// collection or for a specific object.
-	if collectionHandler != nil && objectHandler != nil && len(b.pathVariables) == 0 {
+	// If the handler implements the list and get handler interfaces then we need to have at
+	// least one path variable because we use it to decide if the request is for the collection
+	// or for a specific object.
+	if listHandler != nil && getHandler != nil && len(b.pathVariables) == 0 {
 		err = errors.New(
-			"at least one path variable is required when both the collection and " +
-				"object handlers are implemented",
+			"at least one path variable is required when both the list and " +
+				"get handlers are implemented",
 		)
 		return
 	}
@@ -193,8 +197,9 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 		logger:             b.logger,
 		pathVariables:      variables,
 		pathsParser:        pathsParser,
-		collectionHandler:  collectionHandler,
-		objectHandler:      objectHandler,
+		listHandler:        listHandler,
+		getHandler:         getHandler,
+		addHandler:         addHandler,
 		includeFields:      includePaths,
 		excludeFields:      excludePaths,
 		selectorParser:     selectorParser,
@@ -213,21 +218,50 @@ func (a *Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pathVariables[i] = muxVariables[name]
 	}
 
-	// If the handler only implements one of the interfaces then we use it unconditionally.
-	// Otherwise we select the collection handler only if the first variable is empty.
-	switch {
-	case a.collectionHandler != nil && a.objectHandler == nil:
-		a.serveCollection(w, r, pathVariables)
-	case a.collectionHandler == nil && a.objectHandler != nil:
-		a.serveObject(w, r, pathVariables)
-	case pathVariables[0] == "":
-		a.serveCollection(w, r, pathVariables[1:])
+	// Serve according to the HTTP method:
+	switch r.Method {
+	case http.MethodGet:
+		a.serveGetMethod(w, r, pathVariables)
+	case http.MethodPost:
+		a.servePostMethod(w, r, pathVariables)
 	default:
-		a.serveObject(w, r, pathVariables)
+		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
 	}
 }
 
-func (a *Adapter) serveObject(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+func (a *Adapter) serveGetMethod(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+	// Check that we have a compatible handler:
+	if a.listHandler == nil && a.getHandler == nil {
+		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
+		return
+	}
+
+	// If the handler only implements one of the interfaces then we use it unconditionally.
+	// Otherwise we select the collection handler only if the first variable is empty.
+	switch {
+	case a.listHandler != nil && a.getHandler == nil:
+		a.serveList(w, r, pathVariables)
+	case a.listHandler == nil && a.getHandler != nil:
+		a.serveGet(w, r, pathVariables)
+	case pathVariables[0] == "":
+		a.serveList(w, r, pathVariables[1:])
+	default:
+		a.serveGet(w, r, pathVariables)
+	}
+}
+
+func (a *Adapter) servePostMethod(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+	// Check that we have a compatible handler:
+	if a.addHandler == nil {
+		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
+		return
+	}
+
+	// Call the handler:
+	a.serveAdd(w, r, pathVariables)
+}
+
+func (a *Adapter) serveGet(w http.ResponseWriter, r *http.Request, pathVariables []string) {
 	// Get the context:
 	ctx := r.Context()
 
@@ -244,7 +278,7 @@ func (a *Adapter) serveObject(w http.ResponseWriter, r *http.Request, pathVariab
 	}
 
 	// Call the handler:
-	response, err := a.objectHandler.Get(ctx, request)
+	response, err := a.getHandler.Get(ctx, request)
 	if err != nil {
 		a.logger.Error(
 			"Failed to get object",
@@ -288,7 +322,7 @@ func (a *Adapter) serveObject(w http.ResponseWriter, r *http.Request, pathVariab
 	a.sendObject(ctx, w, object)
 }
 
-func (a *Adapter) serveCollection(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+func (a *Adapter) serveList(w http.ResponseWriter, r *http.Request, pathVariables []string) {
 	// Get the context:
 	ctx := r.Context()
 
@@ -309,7 +343,7 @@ func (a *Adapter) serveCollection(w http.ResponseWriter, r *http.Request, pathVa
 	}
 
 	// Call the handler:
-	response, err := a.collectionHandler.List(ctx, request)
+	response, err := a.listHandler.List(ctx, request)
 	if err != nil {
 		a.logger.Error(
 			"Failed to get items",
@@ -336,6 +370,83 @@ func (a *Adapter) serveCollection(w http.ResponseWriter, r *http.Request, pathVa
 	}
 
 	a.sendItems(ctx, w, items)
+}
+
+func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+	// Get the context:
+	ctx := r.Context()
+
+	// Check that the content type is acceptable:
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		a.logger.Error(
+			"Received empty content type header",
+		)
+		SendError(
+			w, http.StatusBadRequest,
+			"Content type is mandatory, use 'application/json'",
+		)
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		a.logger.Error(
+			"Failed to parse content type",
+			slog.String("header", contentType),
+			slog.String("error", err.Error()),
+		)
+		SendError(w, http.StatusBadRequest, "Failed to parse content type '%s'", contentType)
+	}
+	if !strings.EqualFold(mediaType, "application/json") {
+		a.logger.Error(
+			"Unsupported content type",
+			slog.String("header", contentType),
+			slog.String("media", mediaType),
+		)
+		SendError(
+			w, http.StatusBadRequest,
+			"Content type '%s' isn't supported, use 'application/json'",
+			mediaType,
+		)
+		return
+	}
+
+	// Parse the request body:
+	decoder := a.jsonAPI.NewDecoder(r.Body)
+	var object data.Object
+	err = decoder.Decode(&object)
+	if err != nil {
+		a.logger.Error(
+			"Failed to decode input",
+			slog.String("error", err.Error()),
+		)
+		SendError(w, http.StatusBadRequest, "Failed to decode input")
+		return
+	}
+
+	// Create the request:
+	request := &AddRequest{
+		Variables: pathVariables,
+		Object:    object,
+	}
+
+	// Call the handler:
+	response, err := a.addHandler.Add(ctx, request)
+	if err != nil {
+		a.logger.Error(
+			"Failed to add item",
+			"error", err,
+		)
+		SendError(
+			w,
+			http.StatusInternalServerError,
+			"Failed to add item",
+		)
+		return
+	}
+
+	// Send the added object:
+	a.sendObject(ctx, w, response.Object)
 }
 
 // extractSelector tries to extract the selector from the request. It return the selector and a

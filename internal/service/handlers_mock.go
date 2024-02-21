@@ -15,31 +15,31 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockCollectionHandler is a mock of CollectionHandler interface.
-type MockCollectionHandler struct {
+// MockListHandler is a mock of ListHandler interface.
+type MockListHandler struct {
 	ctrl     *gomock.Controller
-	recorder *MockCollectionHandlerMockRecorder
+	recorder *MockListHandlerMockRecorder
 }
 
-// MockCollectionHandlerMockRecorder is the mock recorder for MockCollectionHandler.
-type MockCollectionHandlerMockRecorder struct {
-	mock *MockCollectionHandler
+// MockListHandlerMockRecorder is the mock recorder for MockListHandler.
+type MockListHandlerMockRecorder struct {
+	mock *MockListHandler
 }
 
-// NewMockCollectionHandler creates a new mock instance.
-func NewMockCollectionHandler(ctrl *gomock.Controller) *MockCollectionHandler {
-	mock := &MockCollectionHandler{ctrl: ctrl}
-	mock.recorder = &MockCollectionHandlerMockRecorder{mock}
+// NewMockListHandler creates a new mock instance.
+func NewMockListHandler(ctrl *gomock.Controller) *MockListHandler {
+	mock := &MockListHandler{ctrl: ctrl}
+	mock.recorder = &MockListHandlerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockCollectionHandler) EXPECT() *MockCollectionHandlerMockRecorder {
+func (m *MockListHandler) EXPECT() *MockListHandlerMockRecorder {
 	return m.recorder
 }
 
 // List mocks base method.
-func (m *MockCollectionHandler) List(ctx context.Context, request *ListRequest) (*ListResponse, error) {
+func (m *MockListHandler) List(ctx context.Context, request *ListRequest) (*ListResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ctx, request)
 	ret0, _ := ret[0].(*ListResponse)
@@ -48,36 +48,36 @@ func (m *MockCollectionHandler) List(ctx context.Context, request *ListRequest) 
 }
 
 // List indicates an expected call of List.
-func (mr *MockCollectionHandlerMockRecorder) List(ctx, request any) *gomock.Call {
+func (mr *MockListHandlerMockRecorder) List(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockCollectionHandler)(nil).List), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockListHandler)(nil).List), ctx, request)
 }
 
-// MockObjectHandler is a mock of ObjectHandler interface.
-type MockObjectHandler struct {
+// MockGetHandler is a mock of GetHandler interface.
+type MockGetHandler struct {
 	ctrl     *gomock.Controller
-	recorder *MockObjectHandlerMockRecorder
+	recorder *MockGetHandlerMockRecorder
 }
 
-// MockObjectHandlerMockRecorder is the mock recorder for MockObjectHandler.
-type MockObjectHandlerMockRecorder struct {
-	mock *MockObjectHandler
+// MockGetHandlerMockRecorder is the mock recorder for MockGetHandler.
+type MockGetHandlerMockRecorder struct {
+	mock *MockGetHandler
 }
 
-// NewMockObjectHandler creates a new mock instance.
-func NewMockObjectHandler(ctrl *gomock.Controller) *MockObjectHandler {
-	mock := &MockObjectHandler{ctrl: ctrl}
-	mock.recorder = &MockObjectHandlerMockRecorder{mock}
+// NewMockGetHandler creates a new mock instance.
+func NewMockGetHandler(ctrl *gomock.Controller) *MockGetHandler {
+	mock := &MockGetHandler{ctrl: ctrl}
+	mock.recorder = &MockGetHandlerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockObjectHandler) EXPECT() *MockObjectHandlerMockRecorder {
+func (m *MockGetHandler) EXPECT() *MockGetHandlerMockRecorder {
 	return m.recorder
 }
 
 // Get mocks base method.
-func (m *MockObjectHandler) Get(ctx context.Context, request *GetRequest) (*GetResponse, error) {
+func (m *MockGetHandler) Get(ctx context.Context, request *GetRequest) (*GetResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, request)
 	ret0, _ := ret[0].(*GetResponse)
@@ -86,9 +86,47 @@ func (m *MockObjectHandler) Get(ctx context.Context, request *GetRequest) (*GetR
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockObjectHandlerMockRecorder) Get(ctx, request any) *gomock.Call {
+func (mr *MockGetHandlerMockRecorder) Get(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockObjectHandler)(nil).Get), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockGetHandler)(nil).Get), ctx, request)
+}
+
+// MockAddHandler is a mock of AddHandler interface.
+type MockAddHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MockAddHandlerMockRecorder
+}
+
+// MockAddHandlerMockRecorder is the mock recorder for MockAddHandler.
+type MockAddHandlerMockRecorder struct {
+	mock *MockAddHandler
+}
+
+// NewMockAddHandler creates a new mock instance.
+func NewMockAddHandler(ctrl *gomock.Controller) *MockAddHandler {
+	mock := &MockAddHandler{ctrl: ctrl}
+	mock.recorder = &MockAddHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockAddHandler) EXPECT() *MockAddHandlerMockRecorder {
+	return m.recorder
+}
+
+// Add mocks base method.
+func (m *MockAddHandler) Add(ctx context.Context, request *AddRequest) (*AddResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Add", ctx, request)
+	ret0, _ := ret[0].(*AddResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Add indicates an expected call of Add.
+func (mr *MockAddHandlerMockRecorder) Add(ctx, request any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockAddHandler)(nil).Add), ctx, request)
 }
 
 // MockHandler is a mock of Handler interface.
@@ -112,6 +150,21 @@ func NewMockHandler(ctrl *gomock.Controller) *MockHandler {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 	return m.recorder
+}
+
+// Add mocks base method.
+func (m *MockHandler) Add(ctx context.Context, request *AddRequest) (*AddResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Add", ctx, request)
+	ret0, _ := ret[0].(*AddResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Add indicates an expected call of Add.
+func (mr *MockHandlerMockRecorder) Add(ctx, request any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockHandler)(nil).Add), ctx, request)
 }
 
 // Get mocks base method.

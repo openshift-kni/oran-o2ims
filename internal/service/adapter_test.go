@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/gorilla/mux"
 	. "github.com/onsi/ginkgo/v2/dsl/core"
@@ -1037,6 +1038,48 @@ var _ = Describe("Adapter", func() {
 
 			// Verify the response:
 			Expect(recorder.Body).To(MatchJSON(`{}`))
+		})
+	})
+
+	Describe("Object creation", func() {
+		It("Creates object that doesn't exist", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *AddRequest) (response *AddResponse, err error) {
+				response = &AddResponse{
+					Object: data.Object{
+						"myattr": "myvalue",
+					},
+				}
+				return
+			}
+			handler := NewMockAddHandler(ctrl)
+			handler.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			router := mux.NewRouter()
+			router.Handle("/mycollection/{id}", adapter)
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/mycollection/123",
+				strings.NewReader("{}"),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Body).To(MatchJSON(`{
+				"myattr": "myvalue"
+			}`))
 		})
 	})
 
