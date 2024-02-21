@@ -98,15 +98,15 @@ func (b *ResourceHandlerBuilder) SetExtensions(values ...string) *ResourceHandle
 	return b
 }
 
-// SetBackendURL sets the URL of the backend server This is mandatory.
+// SetBackendToken sets the authentication token that will be used to authenticate to the backend
+// server. This is mandatory.
 func (b *ResourceHandlerBuilder) SetBackendToken(
 	value string) *ResourceHandlerBuilder {
 	b.backendToken = value
 	return b
 }
 
-// SetBackendToken sets the authentication token that will be used to authenticate to the backend
-// server. This is mandatory.
+// SetBackendURL sets the URL of the backend server This is mandatory.
 func (b *ResourceHandlerBuilder) SetBackendURL(
 	value string) *ResourceHandlerBuilder {
 	b.backendURL = value
