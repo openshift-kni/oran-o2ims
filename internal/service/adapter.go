@@ -51,6 +51,7 @@ type Adapter struct {
 	listHandler        ListHandler
 	getHandler         GetHandler
 	addHandler         AddHandler
+	deleteHandler      DeleteHandler
 	includeFields      []search.Path
 	excludeFields      []search.Path
 	pathsParser        *search.PathsParser
@@ -120,7 +121,8 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 	listHandler, _ := b.handler.(ListHandler)
 	getHandler, _ := b.handler.(GetHandler)
 	addHandler, _ := b.handler.(AddHandler)
-	if listHandler == nil && getHandler == nil && addHandler == nil {
+	deleteHandler, _ := b.handler.(DeleteHandler)
+	if listHandler == nil && getHandler == nil && addHandler == nil && deleteHandler == nil {
 		err = errors.New("handler doesn't implement any of the handler interfaces")
 		return
 	}
@@ -200,6 +202,7 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 		listHandler:        listHandler,
 		getHandler:         getHandler,
 		addHandler:         addHandler,
+		deleteHandler:      deleteHandler,
 		includeFields:      includePaths,
 		excludeFields:      excludePaths,
 		selectorParser:     selectorParser,
@@ -224,6 +227,8 @@ func (a *Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.serveGetMethod(w, r, pathVariables)
 	case http.MethodPost:
 		a.servePostMethod(w, r, pathVariables)
+	case http.MethodDelete:
+		a.serveDeleteMethod(w, r, pathVariables)
 	default:
 		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
 	}
@@ -259,6 +264,17 @@ func (a *Adapter) servePostMethod(w http.ResponseWriter, r *http.Request, pathVa
 
 	// Call the handler:
 	a.serveAdd(w, r, pathVariables)
+}
+
+func (a *Adapter) serveDeleteMethod(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+	// Check that we have a compatible handler:
+	if a.deleteHandler == nil {
+		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
+		return
+	}
+
+	// Call the handler:
+	a.serveDelete(w, r, pathVariables)
 }
 
 func (a *Adapter) serveGet(w http.ResponseWriter, r *http.Request, pathVariables []string) {
@@ -447,6 +463,34 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 
 	// Send the added object:
 	a.sendObject(ctx, w, response.Object)
+}
+
+func (a *Adapter) serveDelete(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+	// Get the context:
+	ctx := r.Context()
+
+	// Create the request:
+	request := &DeleteRequest{
+		Variables: pathVariables,
+	}
+
+	// Call the handler:
+	_, err := a.deleteHandler.Delete(ctx, request)
+	if err != nil {
+		a.logger.Error(
+			"Failed to delete item",
+			"error", err,
+		)
+		SendError(
+			w,
+			http.StatusInternalServerError,
+			"Failed to delete item",
+		)
+		return
+	}
+
+	// Send the result:
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // extractSelector tries to extract the selector from the request. It return the selector and a

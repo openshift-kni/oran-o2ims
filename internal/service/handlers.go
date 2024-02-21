@@ -120,10 +120,37 @@ type AddHandler interface {
 	Add(ctx context.Context, request *AddRequest) (response *AddResponse, err error)
 }
 
+// DeleteRequest represents a request to delete an object from a collection.
+type DeleteRequest struct {
+	// Variables contains the values of the path variables. For example, if the request path is
+	// like this:
+	//
+	//	/o2ims-infrastructureInventory/v1/resourcePools/123/resources/456
+	//
+	// Then it will contain '456' and '123'.
+	//
+	// These path variables are ordered from more specific to less specific, the opposite of
+	// what appears in the request path. This is intended to simplify things because most
+	// handlers will only be interested in the most specific identifier and therefore they
+	// can just use index zero.
+	Variables []string
+}
+
+// DeleteResponse represents the response to the request to delete an object from a collection.
+type DeleteResponse struct {
+}
+
+// DeleteHandler is the interface implemented by objects that know how delete items from a
+// collection of objects.
+type DeleteHandler interface {
+	Delete(ctx context.Context, request *DeleteRequest) (response *DeleteResponse, err error)
+}
+
 // Handler aggregates all the other specific handlers. This is intended for unit/ tests, where it
 // is convenient to have a single mock that implements all the operations.
 type Handler interface {
 	ListHandler
 	GetHandler
 	AddHandler
+	DeleteHandler
 }
