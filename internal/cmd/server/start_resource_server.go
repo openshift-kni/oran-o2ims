@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	SearchApiUrlPrefix = "search-api-open-cluster-management"
+	searchApiUrlPrefix = "search-api-open-cluster-management"
 )
 
 // Server creates and returns the `start resource-server` command.
@@ -65,7 +65,7 @@ func ResourceServer() *cobra.Command {
 	_ = flags.StringArray(
 		extensionsFlagName,
 		[]string{},
-		"Extension to add to deployment managers.",
+		"Extension to add to resources and resource pools.",
 	)
 	return result
 }
@@ -403,7 +403,7 @@ func (c *ResourceServerCommand) generateSearchApiUrl(backendURL string) (string,
 	hostArr := strings.Split(u.Host, ".")
 
 	// Replace with search API prefix
-	hostArr[0] = SearchApiUrlPrefix
+	hostArr[0] = searchApiUrlPrefix
 
 	// Generate search API URL
 	searchUri := strings.Join(hostArr, ".")

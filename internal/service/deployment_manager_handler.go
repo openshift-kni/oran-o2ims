@@ -126,15 +126,15 @@ func (b *DeploymentManagerHandlerBuilder) SetBackendType(
 	return b
 }
 
-// SetBackendURL sets the URL of the backend server This is mandatory..
+// SetBackendToken sets the authentication token that will be used to authenticate to the backend
+// server. This is mandatory.
 func (b *DeploymentManagerHandlerBuilder) SetBackendToken(
 	value string) *DeploymentManagerHandlerBuilder {
 	b.backendToken = value
 	return b
 }
 
-// SetBackendToken sets the authentication token that will be used to authenticate to the backend
-// server. This is mandatory.
+// SetBackendURL sets the URL of the backend server This is mandatory.
 func (b *DeploymentManagerHandlerBuilder) SetBackendURL(
 	value string) *DeploymentManagerHandlerBuilder {
 	b.backendURL = value
