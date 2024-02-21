@@ -129,6 +129,44 @@ func (mr *MockAddHandlerMockRecorder) Add(ctx, request any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockAddHandler)(nil).Add), ctx, request)
 }
 
+// MockDeleteHandler is a mock of DeleteHandler interface.
+type MockDeleteHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MockDeleteHandlerMockRecorder
+}
+
+// MockDeleteHandlerMockRecorder is the mock recorder for MockDeleteHandler.
+type MockDeleteHandlerMockRecorder struct {
+	mock *MockDeleteHandler
+}
+
+// NewMockDeleteHandler creates a new mock instance.
+func NewMockDeleteHandler(ctrl *gomock.Controller) *MockDeleteHandler {
+	mock := &MockDeleteHandler{ctrl: ctrl}
+	mock.recorder = &MockDeleteHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDeleteHandler) EXPECT() *MockDeleteHandlerMockRecorder {
+	return m.recorder
+}
+
+// Delete mocks base method.
+func (m *MockDeleteHandler) Delete(ctx context.Context, request *DeleteRequest) (*DeleteResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, request)
+	ret0, _ := ret[0].(*DeleteResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockDeleteHandlerMockRecorder) Delete(ctx, request any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockDeleteHandler)(nil).Delete), ctx, request)
+}
+
 // MockHandler is a mock of Handler interface.
 type MockHandler struct {
 	ctrl     *gomock.Controller
@@ -165,6 +203,21 @@ func (m *MockHandler) Add(ctx context.Context, request *AddRequest) (*AddRespons
 func (mr *MockHandlerMockRecorder) Add(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockHandler)(nil).Add), ctx, request)
+}
+
+// Delete mocks base method.
+func (m *MockHandler) Delete(ctx context.Context, request *DeleteRequest) (*DeleteResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, request)
+	ret0, _ := ret[0].(*DeleteResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockHandlerMockRecorder) Delete(ctx, request any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockHandler)(nil).Delete), ctx, request)
 }
 
 // Get mocks base method.

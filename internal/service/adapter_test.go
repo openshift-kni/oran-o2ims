@@ -1083,6 +1083,41 @@ var _ = Describe("Adapter", func() {
 		})
 	})
 
+	Describe("Object deletion", func() {
+		It("Deletes an object", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *DeleteRequest) (response *DeleteResponse, err error) {
+				response = &DeleteResponse{}
+				return
+			}
+			handler := NewMockDeleteHandler(ctrl)
+			handler.EXPECT().Delete(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			router := mux.NewRouter()
+			router.Handle("/mycollection/{id}", adapter)
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodDelete,
+				"/mycollection/123",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			Expect(recorder.Code).To(Equal(http.StatusNoContent))
+		})
+	})
+
 	DescribeTable(
 		"JSON generation",
 		func(items data.Stream, expected string) {
