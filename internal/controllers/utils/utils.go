@@ -2,10 +2,12 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -72,4 +74,30 @@ func DoesK8SResourceExist(ctx context.Context, c client.Client, Name string, Nam
 			"Type: ", reflect.TypeOf(obj), "Name: ", Name, "Namespace: ", Namespace)
 		return true, nil
 	}
+}
+
+func extensionsToExtensionArgs(extensions []string) []string {
+	var extensionsArgsArray []string
+	for _, crtExt := range extensions {
+		newExtensionFlag := "--extensions=" + crtExt
+		extensionsArgsArray = append(extensionsArgsArray, newExtensionFlag)
+	}
+
+	return extensionsArgsArray
+}
+
+func BuildDeploymentManagerServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS) []string {
+	containerArgs := DeploymentManagerServerArgs
+
+	containerArgs = append(containerArgs,
+		fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+		fmt.Sprintf("--backend-url=%s", orano2ims.Spec.BackendURL),
+		fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
+		fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType),
+	)
+
+	extensionsArgsArray := extensionsToExtensionArgs(orano2ims.Spec.Extensions)
+	containerArgs = append(containerArgs, extensionsArgsArray...)
+
+	return containerArgs
 }
