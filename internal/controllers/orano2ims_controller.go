@@ -85,10 +85,34 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
 	// Create the needed Ingress if at least one server is required by the Spec.
-	if orano2ims.Spec.MetadataServer || orano2ims.Spec.DeploymentManagerServer {
+	if orano2ims.Spec.MetadataServer || orano2ims.Spec.DeploymentManagerServer || orano2ims.Spec.ResourceServer {
 		err = r.createIngress(ctx, orano2ims)
 		if err != nil {
-			r.Log.Error(err, "Failed to deploy Service for Metadata server.")
+			r.Log.Error(err, "Failed to deploy Ingress.")
+			return
+		}
+	}
+
+	// Start the resource server if required by the Spec.
+	if orano2ims.Spec.ResourceServer {
+		// Create the needed ServiceAccount.
+		err = r.createServiceAccount(ctx, orano2ims, utils.ORANO2IMSResourceServerName)
+		if err != nil {
+			r.Log.Error(err, "Failed to deploy ServiceAccount for the Resource server.")
+			return
+		}
+
+		// Create the Service needed for the Resource server.
+		err = r.createService(ctx, orano2ims, utils.ORANO2IMSResourceServerName)
+		if err != nil {
+			r.Log.Error(err, "Failed to deploy Service for Resource server.")
+			return
+		}
+
+		// Create the resource-server deployment.
+		err = r.deployServer(ctx, orano2ims, utils.ORANO2IMSResourceServerName)
+		if err != nil {
+			r.Log.Error(err, "Failed to deploy the Resource server.")
 			return
 		}
 	}
@@ -110,7 +134,7 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		// Create the metadata-server deployment.
-		err = r.deployMetadataServer(ctx, orano2ims)
+		err = r.deployServer(ctx, orano2ims, utils.ORANO2IMSMetadataServerName)
 		if err != nil {
 			r.Log.Error(err, "Failed to deploy the Metadata server.")
 			return
@@ -140,15 +164,15 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return
 		}
 
-		// Create the Service needed for the Metadata server.
+		// Create the Service needed for the Deployment Manager server.
 		err = r.createService(ctx, orano2ims, utils.ORANO2IMSDeploymentManagerServerName)
 		if err != nil {
 			r.Log.Error(err, "Failed to deploy Service for Deployment Manager server.")
 			return
 		}
 
-		// Create the metadata-server deployment.
-		err = r.deployManagerServer(ctx, orano2ims)
+		// Create the deployment-manager-server deployment.
+		err = r.deployServer(ctx, orano2ims, utils.ORANO2IMSDeploymentManagerServerName)
 		if err != nil {
 			r.Log.Error(err, "Failed to deploy the Deployment Manager server.")
 			return
@@ -163,158 +187,50 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return
 }
 
-func (r *ORANO2IMSReconciler) deployMetadataServer(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS) error {
-	r.Log.Info("[deployMetadataServer]")
+func (r *ORANO2IMSReconciler) deployServer(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, serverName string) error {
+	r.Log.Info("[deploy server]", "Name", serverName)
+
+	// Server variables.
+	deploymentVolumes := utils.GetDeploymentVolumes(serverName)
+	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName)
 
 	// Build the deployment's metadata.
 	deploymentMeta := metav1.ObjectMeta{
-		Name:      utils.ORANO2IMSMetadataServerName,
-		Namespace: utils.ORANO2IMSNamespace,
-		Labels: map[string]string{
-			"oran-o2ims": orano2ims.Name,
-			"app":        utils.ORANO2IMSMetadataServerName,
-		},
-	}
-
-	// Build the deployment's spec.
-	deploymentSpec := appsv1.DeploymentSpec{
-		Replicas: k8sptr.To(int32(1)),
-		Selector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"app": utils.ORANO2IMSMetadataServerName,
-			},
-		},
-		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					"app": utils.ORANO2IMSMetadataServerName,
-				},
-			},
-			Spec: corev1.PodSpec{
-				ServiceAccountName: utils.ORANO2IMSMetadataServerName,
-				Volumes: []corev1.Volume{
-					{
-						Name: "tls",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: fmt.Sprintf("%s-tls", utils.ORANO2IMSMetadataServerName),
-							},
-						},
-					},
-				},
-				Containers: []corev1.Container{
-					{
-						Name:            "server",
-						Image:           utils.ORANImage,
-						ImagePullPolicy: "Always",
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      "tls",
-								MountPath: "/secrets/tls",
-							},
-						},
-						Command: []string{"/usr/bin/oran-o2ims"},
-						Args: []string{
-							"start",
-							"metadata-server",
-							"--log-level=debug",
-							"--log-file=stdout",
-							"--api-listener-address=0.0.0.0:8000",
-							"--api-listener-tls-crt=/secrets/tls/tls.crt",
-							"--api-listener-tls-key=/secrets/tls/tls.key",
-							fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-							fmt.Sprintf("--external-address=https://%s", orano2ims.Spec.IngressHost),
-						},
-						Ports: []corev1.ContainerPort{
-							{
-								Name:          "api",
-								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: 8000,
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Build the deployment.
-	newDeployment := &appsv1.Deployment{
-		ObjectMeta: deploymentMeta,
-		Spec:       deploymentSpec,
-	}
-
-	r.Log.Info("[deployMetadataServer] Create/Update/Patch the Metadata Server")
-	return utils.CreateK8sCR(ctx, r.Client, utils.ORANO2IMSMetadataServerName, utils.ORANO2IMSNamespace,
-		newDeployment, orano2ims, &appsv1.Deployment{}, r.Scheme, utils.UPDATE)
-}
-
-func (r *ORANO2IMSReconciler) deployManagerServer(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS) error {
-	r.Log.Info("[deployManagerServer]")
-
-	// Build the deployment's metadata.
-	deploymentMeta := metav1.ObjectMeta{
-		Name:      utils.ORANO2IMSDeploymentManagerServerName,
+		Name:      serverName,
 		Namespace: utils.ORANO2IMSNamespace,
 		Labels: map[string]string{
 			"oran/o2ims": orano2ims.Name,
-			"app":        utils.ORANO2IMSDeploymentManagerServerName,
+			"app":        serverName,
 		},
 	}
 
-	deploymentManagerServerContainerArgs := utils.BuildDeploymentManagerServerContainerArgs(orano2ims)
+	deploymentContainerArgs := utils.BuildServerContainerArgs(orano2ims, serverName)
 
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
 		Replicas: k8sptr.To(int32(1)),
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				"app": utils.ORANO2IMSDeploymentManagerServerName,
+				"app": serverName,
 			},
 		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
-					"app": utils.ORANO2IMSDeploymentManagerServerName,
+					"app": serverName,
 				},
 			},
 			Spec: corev1.PodSpec{
-				ServiceAccountName: utils.ORANO2IMSDeploymentManagerServerName,
-				Volumes: []corev1.Volume{
-					{
-						Name: "tls",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: fmt.Sprintf("%s-tls", utils.ORANO2IMSDeploymentManagerServerName),
-							},
-						},
-					},
-					{
-						Name: "authz",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{Name: "authz"},
-							},
-						},
-					},
-				},
+				ServiceAccountName: serverName,
+				Volumes:            deploymentVolumes,
 				Containers: []corev1.Container{
 					{
 						Name:            "server",
 						Image:           utils.ORANImage,
 						ImagePullPolicy: "Always",
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      "tls",
-								MountPath: "/secrets/tls",
-							},
-							{
-								Name:      "authz",
-								MountPath: "/configmaps/authz",
-							},
-						},
-						Command: []string{"/usr/bin/oran-o2ims"},
-						Args:    deploymentManagerServerContainerArgs,
+						VolumeMounts:    deploymentVolumeMounts,
+						Command:         []string{"/usr/bin/oran-o2ims"},
+						Args:            deploymentContainerArgs,
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          "api",
@@ -334,9 +250,9 @@ func (r *ORANO2IMSReconciler) deployManagerServer(ctx context.Context, orano2ims
 		Spec:       deploymentSpec,
 	}
 
-	r.Log.Info("[deployManagerServer] Create/Update/Patch the Manager Server")
-	return utils.CreateK8sCR(ctx, r.Client, utils.ORANO2IMSDeploymentManagerServerName, orano2ims.Namespace,
-		newDeployment, orano2ims, &appsv1.Deployment{}, r.Scheme, utils.UPDATE)
+	r.Log.Info("[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
+	return utils.CreateK8sCR(ctx, r.Client, serverName, orano2ims.Namespace, newDeployment,
+		orano2ims, &appsv1.Deployment{}, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createConfigMap(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -436,6 +352,36 @@ func (r *ORANO2IMSReconciler) createIngress(ctx context.Context, orano2ims *oran
 				IngressRuleValue: networkingv1.IngressRuleValue{
 					HTTP: &networkingv1.HTTPIngressRuleValue{
 						Paths: []networkingv1.HTTPIngressPath{
+							{
+								Path: "/o2ims-infrastructureInventory/v1/resourcePools",
+								PathType: func() *networkingv1.PathType {
+									pathType := networkingv1.PathTypePrefix
+									return &pathType
+								}(),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "resource-server",
+										Port: networkingv1.ServiceBackendPort{
+											Name: utils.ORANO2IMSIngressName,
+										},
+									},
+								},
+							},
+							{
+								Path: "/o2ims-infrastructureInventory/v1/resourceTypes",
+								PathType: func() *networkingv1.PathType {
+									pathType := networkingv1.PathTypePrefix
+									return &pathType
+								}(),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "resource-server",
+										Port: networkingv1.ServiceBackendPort{
+											Name: utils.ORANO2IMSIngressName,
+										},
+									},
+								},
+							},
 							{
 								Path: "/o2ims-infrastructureInventory/v1/deploymentManagers",
 								PathType: func() *networkingv1.PathType {
