@@ -59,10 +59,16 @@ spec:
               metadataServer:
                 default: false
                 type: boolean
+              resourceServer:
+                default: false
+                type: boolean
+              searchAPIBackendURL:
+                type: string
             required:
             - cloudId
             - deploymentManagerServer
             - metadataServer
+            - resourceServer
             type: object
           status:
             description: ORANO2IMSStatus defines the observed state of ORANO2IMS
@@ -146,6 +152,8 @@ spec:
                   deploymentServerStatus:
                     type: string
                   metadataServerStatus:
+                    type: string
+                  resourceServerStatus:
                     type: string
                 type: object
             type: object

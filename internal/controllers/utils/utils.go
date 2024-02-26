@@ -8,6 +8,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -58,7 +59,6 @@ func CreateK8sCR(ctx context.Context, c client.Client, Name string, Namespace st
 }
 
 func DoesK8SResourceExist(ctx context.Context, c client.Client, Name string, Namespace string, obj client.Object) (resourceExists bool, err error) {
-
 	err = c.Get(ctx, types.NamespacedName{Name: Name, Namespace: Namespace}, obj)
 
 	if err != nil {
@@ -86,18 +86,104 @@ func extensionsToExtensionArgs(extensions []string) []string {
 	return extensionsArgsArray
 }
 
-func BuildDeploymentManagerServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS) []string {
-	containerArgs := DeploymentManagerServerArgs
+func GetDeploymentVolumes(serverName string) []corev1.Volume {
+	if serverName == ORANO2IMSMetadataServerName || serverName == ORANO2IMSResourceServerName {
+		return []corev1.Volume{
+			{
+				Name: "tls",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: fmt.Sprintf("%s-tls", serverName),
+					},
+				},
+			},
+		}
+	}
 
-	containerArgs = append(containerArgs,
-		fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-		fmt.Sprintf("--backend-url=%s", orano2ims.Spec.BackendURL),
-		fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
-		fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType),
-	)
+	if serverName == ORANO2IMSDeploymentManagerServerName {
+		return []corev1.Volume{
+			{
+				Name: "tls",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: fmt.Sprintf("%s-tls", serverName),
+					},
+				},
+			},
+			{
+				Name: "authz",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "authz"},
+					},
+				},
+			},
+		}
+	}
 
-	extensionsArgsArray := extensionsToExtensionArgs(orano2ims.Spec.Extensions)
-	containerArgs = append(containerArgs, extensionsArgsArray...)
+	return []corev1.Volume{}
+}
 
-	return containerArgs
+func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
+	if serverName == ORANO2IMSMetadataServerName || serverName == ORANO2IMSResourceServerName {
+		return []corev1.VolumeMount{
+			{
+				Name:      "tls",
+				MountPath: "/secrets/tls",
+			},
+		}
+	}
+
+	if serverName == ORANO2IMSDeploymentManagerServerName {
+		return []corev1.VolumeMount{
+			{
+				Name:      "tls",
+				MountPath: "/secrets/tls",
+			},
+			{
+				Name:      "authz",
+				MountPath: "/configmaps/authz",
+			},
+		}
+	}
+
+	return []corev1.VolumeMount{}
+}
+
+func BuildServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS, serverName string) []string {
+	if serverName == ORANO2IMSMetadataServerName {
+		containerArgs := MetadataServerArgs
+		containerArgs = append(containerArgs,
+			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+			fmt.Sprintf("--external-address=https://%s", orano2ims.Spec.IngressHost))
+
+		return containerArgs
+	}
+
+	if serverName == ORANO2IMSResourceServerName {
+		containerArgs := ResourceServerArgs
+		containerArgs = append(containerArgs,
+			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+			fmt.Sprintf("--backend-url=%s", orano2ims.Spec.SearchAPIBackendURL),
+			fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken))
+
+		return containerArgs
+	}
+
+	if serverName == ORANO2IMSDeploymentManagerServerName {
+		containerArgs := DeploymentManagerServerArgs
+
+		containerArgs = append(containerArgs,
+			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+			fmt.Sprintf("--backend-url=%s", orano2ims.Spec.BackendURL),
+			fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
+			fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType))
+
+		extensionsArgsArray := extensionsToExtensionArgs(orano2ims.Spec.Extensions)
+		containerArgs = append(containerArgs, extensionsArgsArray...)
+
+		return containerArgs
+	}
+
+	return nil
 }

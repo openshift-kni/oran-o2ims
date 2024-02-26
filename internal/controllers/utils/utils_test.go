@@ -74,7 +74,7 @@ var _ = Describe("ExtensionUtils", func() {
 				},
 			},
 		}
-		actualArgs := BuildDeploymentManagerServerContainerArgs(orano2ims)
+		actualArgs := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
@@ -100,7 +100,7 @@ var _ = Describe("ExtensionUtils", func() {
 			},
 		}
 
-		actualArgs := BuildDeploymentManagerServerContainerArgs(orano2ims)
+		actualArgs := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),

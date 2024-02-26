@@ -10,10 +10,18 @@ const (
 	ORANO2IMSNamespace = "oran-o2ims"
 )
 
+// Base resource names
+const (
+	ORANO2IMSMetadata          = "metadata"
+	ORANO2IMSDeploymentManager = "deployment-manager"
+	ORANO2IMSResource          = "resource"
+)
+
 // Deployment names
 const (
-	ORANO2IMSMetadataServerName          = "metadata-server"
-	ORANO2IMSDeploymentManagerServerName = "deployment-manager-server"
+	ORANO2IMSMetadataServerName          = ORANO2IMSMetadata + "-server"
+	ORANO2IMSDeploymentManagerServerName = ORANO2IMSDeploymentManager + "-server"
+	ORANO2IMSResourceServerName          = ORANO2IMSResource + "-server"
 )
 
 // CR default names
@@ -31,6 +39,15 @@ const (
 
 // Container arguments
 var (
+	MetadataServerArgs = []string{
+		"start",
+		"metadata-server",
+		"--log-level=debug",
+		"--log-file=stdout",
+		"--api-listener-address=0.0.0.0:8000",
+		"--api-listener-tls-crt=/secrets/tls/tls.crt",
+		"--api-listener-tls-key=/secrets/tls/tls.key",
+	}
 	DeploymentManagerServerArgs = []string{
 		"start",
 		"deployment-manager-server",
@@ -43,5 +60,14 @@ var (
 		"--authn-jwks-token-file=/run/secrets/kubernetes.io/serviceaccount/token",
 		"--authn-jwks-ca-file=/run/secrets/kubernetes.io/serviceaccount/ca.crt",
 		"--authz-acl-file=/configmaps/authz/acl.yaml",
+	}
+	ResourceServerArgs = []string{
+		"start",
+		"resource-server",
+		"--log-level=debug",
+		"--log-file=stdout",
+		"--api-listener-address=0.0.0.0:8000",
+		"--api-listener-tls-crt=/secrets/tls/tls.crt",
+		"--api-listener-tls-key=/secrets/tls/tls.key",
 	}
 )

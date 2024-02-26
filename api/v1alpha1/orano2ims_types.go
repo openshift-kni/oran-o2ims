@@ -33,10 +33,14 @@ type ORANO2IMSSpec struct {
 	MetadataServer bool `json:"metadataServer"`
 	//+kubebuilder:default=false
 	DeploymentManagerServer bool `json:"deploymentManagerServer"`
+	//+kubebuilder:default=false
+	ResourceServer bool `json:"resourceServer"`
 	//+optional
 	IngressHost string `json:"ingressHost,omitempty"`
 	//+optional
 	BackendURL string `json:"backendURL,omitempty"`
+	//+optional
+	SearchAPIBackendURL string `json:"searchAPIBackendURL,omitempty"`
 	//+optional
 	BackendToken string `json:"backendToken,omitempty"`
 	//+kubebuilder:default=regular-hub
@@ -48,10 +52,12 @@ type ORANO2IMSSpec struct {
 }
 
 type DeploymentsStatus struct {
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deploymeny Server Status"
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployment Server Status"
 	DeploymentServerStatus string `json:"deploymentServerStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Metadata Server Status"
 	MetadataServerStatus string `json:"metadataServerStatus,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Resource Server Status"
+	ResourceServerStatus string `json:"resourceServerStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
