@@ -120,6 +120,11 @@ func (s *Stream) Next(ctx context.Context) (item data.Object, err error) {
 
 // find reads from the input until it finds the `items` field, ignoring everything before that.
 func (s *Stream) find(ctx context.Context) error {
+	if s.iterator.WhatIsNext() == jsoniter.ArrayValue {
+		// Found items array in root element
+		s.found = true
+		return nil
+	}
 	for {
 		field := s.iterator.ReadObject()
 		if s.iterator.Error != nil {
