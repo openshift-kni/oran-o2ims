@@ -1,5 +1,7 @@
 *.log
+*.pyc
 /__debug*
+/bin/*
 /oran-o2ims
 /vendor
-/bin/*
+__pycache__
