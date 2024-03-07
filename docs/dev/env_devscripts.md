@@ -32,7 +32,7 @@ Go to https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com/, clic
 right, copy the login command, extract the token from the command and use it to set `CI_TOKEN` in `config_$USER.sh`.
 
 #### Get pull secret
-Save the secret obtained from [cloud.openshift.com](https://cloud.redhat.com/openshift/install/pull-secret) to `pull_secret.json`.
+Convert the secret obtained from [cloud.openshift.com](https://cloud.redhat.com/openshift/install/pull-secret), originally in text format, into JSON format and save it as `pull_secret,json`. 
 
 #### Set config vars
 Add the following the `config_$USER.sh` file:
