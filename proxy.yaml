@@ -69,6 +69,21 @@ static_resources:
                 address: 127.0.0.1
                 port_value: 8002
 
+  - name: alert-subscription-server
+    connect_timeout: 1s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: alert-subscription-server
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 8001
+
+
   listeners:
 
   - name: ingress

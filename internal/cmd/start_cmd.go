@@ -31,5 +31,6 @@ func Start() *cobra.Command {
 	result.AddCommand(server.MetadataServer())
 	result.AddCommand(server.ResourceServer())
 	result.AddCommand(server.AlarmServer())
+	result.AddCommand(server.AlarmSubscriptionServer())
 	return result
 }
