@@ -194,20 +194,6 @@ func (h *alarmSubscriptionHandler) List(ctx context.Context,
 	return
 }
 
-/* to be deleted
-func (h *alarmSubscriptionHandler) RetrieveSubscriptionMapValue(
-	request *GetRequest) (item data.Object, err error) {
-	h.subscritionMapMemoryLock.Lock()
-	defer h.subscritionMapMemoryLock.Unlock()
-	item, ok := h.subscriptionMap[request.Variables[0]]
-	if !ok {
-		err = ErrNotFound
-		return
-	}
-	return
-}
-*/
-
 // Get is the implementation of the object handler interface.
 func (h *alarmSubscriptionHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
@@ -300,11 +286,12 @@ func (h *alarmSubscriptionHandler) getSubcriptionId() (subId string) {
 // add it for now for the test purpose
 func (h *alarmSubscriptionHandler) encodeSubId(ctx context.Context,
 	subId string, input data.Object) (output data.Object, err error) {
-	//get cluster name, subscriptions
+	//get consumer name, subscriptions
 	err = h.jqTool.Evaluate(
 		`{
 			"alarmSubscriptionId": $alarmSubId,
-			"clustomerId": .customerId,
+			"consumerSubscriptionId": .consumerSubscriptionId,
+			"callback": .callback,
 			"filter": .filter
 		}`,
 		input, &output,
