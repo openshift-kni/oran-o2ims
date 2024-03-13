@@ -23,6 +23,7 @@ import (
 	"net/http"
 	neturl "net/url"
 
+	"github.com/imdario/mergo"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
@@ -31,23 +32,27 @@ import (
 )
 
 type AlarmFetcher struct {
-	logger        *slog.Logger
-	cloudID       string
-	backendURL    string
-	backendToken  string
-	backendClient *http.Client
-	extensions    []string
-	jqTool        *jq.Tool
+	logger              *slog.Logger
+	cloudID             string
+	backendURL          string
+	backendToken        string
+	backendClient       *http.Client
+	resourceServerURL   string
+	resourceServerToken string
+	extensions          []string
+	jqTool              *jq.Tool
 }
 
 // AlarmFetcherBuilder contains the data and logic needed to create a new AlarmFetcher.
 type AlarmFetcherBuilder struct {
-	logger           *slog.Logger
-	transportWrapper func(http.RoundTripper) http.RoundTripper
-	cloudID          string
-	backendURL       string
-	backendToken     string
-	extensions       []string
+	logger              *slog.Logger
+	transportWrapper    func(http.RoundTripper) http.RoundTripper
+	cloudID             string
+	backendURL          string
+	backendToken        string
+	resourceServerURL   string
+	resourceServerToken string
+	extensions          []string
 }
 
 // NewAlarmFetcher creates a builder that can then be used to configure
@@ -90,6 +95,22 @@ func (b *AlarmFetcherBuilder) SetBackendURL(
 func (b *AlarmFetcherBuilder) SetBackendToken(
 	value string) *AlarmFetcherBuilder {
 	b.backendToken = value
+	return b
+}
+
+// SetResourceServerURL sets the URL of the resource server. This is mandatory.
+// The resource server is used for mapping Alarms to Resources.
+func (b *AlarmFetcherBuilder) SetResourceServerURL(
+	value string) *AlarmFetcherBuilder {
+	b.resourceServerURL = value
+	return b
+}
+
+// SetResourceServerToken sets the authentication token that will be used to authenticate
+// with to the resource server. This is mandatory.
+func (b *AlarmFetcherBuilder) SetResourceServerToken(
+	value string) *AlarmFetcherBuilder {
+	b.resourceServerToken = value
 	return b
 }
 
@@ -161,13 +182,15 @@ func (b *AlarmFetcherBuilder) Build() (
 
 	// Create and populate the object:
 	result = &AlarmFetcher{
-		logger:        b.logger,
-		cloudID:       b.cloudID,
-		backendURL:    b.backendURL,
-		backendToken:  b.backendToken,
-		backendClient: backendClient,
-		extensions:    b.extensions,
-		jqTool:        jqTool,
+		logger:              b.logger,
+		cloudID:             b.cloudID,
+		backendURL:          b.backendURL,
+		backendToken:        b.backendToken,
+		backendClient:       backendClient,
+		resourceServerURL:   b.resourceServerURL,
+		resourceServerToken: b.resourceServerToken,
+		extensions:          b.extensions,
+		jqTool:              jqTool,
 	}
 	return
 }
@@ -177,12 +200,13 @@ func (b *AlarmFetcherBuilder) Build() (
 func (r *AlarmFetcher) FetchItems(
 	ctx context.Context) (alarms data.Stream, err error) {
 	query := neturl.Values{}
-	response, err := r.doGet(ctx, "/alerts", query)
+	url := r.backendURL + "/alerts"
+	response, err := r.doGet(ctx, url, r.backendToken, query)
 	if err != nil {
 		return
 	}
 
-	// Create reader for Alerts
+	// Create a reader for Alerts
 	alerts, err := k8s.NewStream().
 		SetLogger(r.logger).
 		SetReader(response.Body).
@@ -197,9 +221,8 @@ func (r *AlarmFetcher) FetchItems(
 	return
 }
 
-func (h *AlarmFetcher) doGet(ctx context.Context, path string,
+func (r *AlarmFetcher) doGet(ctx context.Context, url, token string,
 	query neturl.Values) (response *http.Response, err error) {
-	url := h.backendURL + path
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
@@ -207,14 +230,14 @@ func (h *AlarmFetcher) doGet(ctx context.Context, path string,
 	if query != nil {
 		request.URL.RawQuery = query.Encode()
 	}
-	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.backendToken))
+	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	request.Header.Set("Accept", "application/json")
-	response, err = h.backendClient.Do(request)
+	response, err = r.backendClient.Do(request)
 	if err != nil {
 		return
 	}
 	if response.StatusCode != http.StatusOK {
-		h.logger.Error(
+		r.logger.Error(
 			"Received unexpected status code",
 			"code", response.StatusCode,
 			"url", request.URL,
@@ -232,8 +255,157 @@ func (h *AlarmFetcher) doGet(ctx context.Context, path string,
 func (r *AlarmFetcher) mapAlertItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
 
-	// TODO: implement mapping
-	to = from
+	alertName, err := data.GetString(from, "labels.alertname")
+	if err != nil {
+		return
+	}
+
+	alarmRaisedTime, err := data.GetString(from, "startsAt")
+	if err != nil {
+		return
+	}
+
+	alarmChangedTime, err := data.GetString(from, "updatedAt")
+	if err != nil {
+		return
+	}
+
+	severity, err := data.GetString(from, "labels.severity")
+	if err != nil {
+		return
+	}
+
+	clusterId, err := data.GetString(from, "labels.managed_cluster")
+	if err != nil {
+		return
+	}
+
+	resourcePool, err := r.fetchResourcePool(ctx, clusterId)
+	if err != nil {
+		return
+	}
+	resourcePoolName, err := data.GetString(resourcePool, "name")
+	if err != nil {
+		return
+	}
+
+	var alarmEventRecordId, resourceID, resourceTypeID string
+	alertInstance, err := data.GetString(from, "labels.instance")
+	if err != nil {
+		// Instance is not available for cluster global alerts
+		alarmEventRecordId = fmt.Sprintf("%s_%s", alertName, resourcePoolName)
+		resourceID = resourcePool["resourcePoolID"].(string)
+	} else {
+		alarmEventRecordId = fmt.Sprintf("%s_%s_%s", alertName, resourcePoolName, alertInstance)
+		resource, err := r.fetchResource(ctx, resourcePoolName, alertInstance)
+		if err == nil {
+			resourceID = resource["resourceID"].(string)
+			resourceTypeID = resource["resourceTypeID"].(string)
+		}
+	}
+
+	// Add the extensions:
+	extensionsMap, err := data.GetExtensions(from, r.extensions, r.jqTool)
+	if err != nil {
+		return
+	}
+	if len(extensionsMap) == 0 {
+		// Fallback to all labels and annotations
+		var labels, annotations data.Object
+		labels, err = data.GetObj(from, "labels")
+		if err != nil {
+			return
+		}
+		annotations, err = data.GetObj(from, "annotations")
+		if err != nil {
+			return
+		}
+		err = mergo.Map(&extensionsMap, labels, mergo.WithOverride)
+		if err != nil {
+			return
+		}
+		err = mergo.Map(&extensionsMap, annotations, mergo.WithOverride)
+		if err != nil {
+			return
+		}
+	}
+
+	to = data.Object{
+		"alarmEventRecordId": alarmEventRecordId,
+		"resourceID":         resourceID,
+		"resourceTypeID":     resourceTypeID,
+		"alarmRaisedTime":    alarmRaisedTime,
+		"alarmChangedTime":   alarmChangedTime,
+		"alarmDefinitionID":  alertName,
+		"probableCauseID":    alertName,
+		"perceivedSeverity":  AlarmSeverity(severity).mapProperty(),
+		"extensions":         extensionsMap,
+	}
 
 	return
+}
+
+func (r *AlarmFetcher) fetchResourcePool(ctx context.Context, clusterId string) (resourcePool data.Object, err error) {
+	query := neturl.Values{}
+	query.Add("filter", fmt.Sprintf("(eq,description,%s)", clusterId))
+	url := r.resourceServerURL + "/resourcePools"
+	response, err := r.doGet(ctx, url, r.resourceServerToken, query)
+	if err != nil {
+		return
+	}
+
+	// Create a reader for Resource pools
+	resourcePools, err := k8s.NewStream().
+		SetLogger(r.logger).
+		SetReader(response.Body).
+		Build()
+	if err != nil {
+		return
+	}
+
+	resourcePool, err = resourcePools.Next(ctx)
+
+	return
+}
+
+func (r *AlarmFetcher) fetchResource(ctx context.Context, clusterName, resourceName string) (resource data.Object, err error) {
+	query := neturl.Values{}
+	query.Add("filter", fmt.Sprintf("(eq,description,%s)", resourceName))
+	path := fmt.Sprintf("/resourcePools/%s/resources", clusterName)
+	url := r.resourceServerURL + path
+	response, err := r.doGet(ctx, url, r.resourceServerToken, query)
+	if err != nil {
+		return
+	}
+
+	// Create a reader for Resources
+	resources, err := k8s.NewStream().
+		SetLogger(r.logger).
+		SetReader(response.Body).
+		Build()
+	if err != nil {
+		return
+	}
+
+	resource, err = resources.Next(ctx)
+
+	return
+}
+
+type AlarmSeverity string
+
+func (p AlarmSeverity) mapProperty() string {
+	switch p {
+	case "critical":
+		return "CRITICAL"
+	case "info":
+		return "MINOR"
+	case "warning":
+		return "WARNING"
+	case "none":
+		return "INDETERMINATE"
+	default:
+		// unknown property
+		return "CLEARED"
+	}
 }

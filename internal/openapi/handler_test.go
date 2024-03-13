@@ -131,7 +131,7 @@ var _ = Describe("Handler", func() {
 		})
 
 		It("All paths start with the expected prefix", func() {
-			Expect(spec).To(MatchJQ(`[.paths | keys[] | select(startswith("/o2ims-infrastructureInventory/") | not)] | length`, 0))
+			Expect(spec).To(MatchJQ(`[.paths | keys[] | select(startswith("/o2ims-infrastructure") | not)] | length`, 0))
 		})
 
 		It("Contains the expected schemas", func() {

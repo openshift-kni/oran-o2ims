@@ -116,7 +116,7 @@ func (b *AlarmHandlerBuilder) SetResourceServerURL(
 	return b
 }
 
-// SetBackendToken sets the authentication token that will be used to authenticate
+// SetResourceServerToken sets the authentication token that will be used to authenticate
 // with to the resource server. This is mandatory.
 func (b *AlarmHandlerBuilder) SetResourceServerToken(
 	value string) *AlarmHandlerBuilder {
@@ -239,6 +239,8 @@ func (h *AlarmHandler) Get(ctx context.Context,
 		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
+		SetResourceServerURL(h.resourceServerURL).
+		SetResourceServerToken(h.resourceServerToken).
 		SetExtensions(h.extensions...).
 		Build()
 	if err != nil {
@@ -267,6 +269,8 @@ func (h *AlarmHandler) fetchItems(
 		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
+		SetResourceServerURL(h.resourceServerURL).
+		SetResourceServerToken(h.resourceServerToken).
 		SetExtensions(h.extensions...).
 		Build()
 	if err != nil {
@@ -282,6 +286,15 @@ func (h *AlarmHandler) fetchItem(ctx context.Context,
 	if err != nil {
 		return
 	}
+
+	// Filter by ID
+	alarms = data.Select(
+		alarms,
+		func(ctx context.Context, item data.Object) (result bool, err error) {
+			result = item["alarmEventRecordId"] == id
+			return
+		},
+	)
 
 	// Get first result
 	alarm, err = alarms.Next(ctx)
