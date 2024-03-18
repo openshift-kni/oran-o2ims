@@ -42,6 +42,9 @@ tags:
 - name: resources
   description: |
     Information about resources.
+- name: alarms
+  description: |
+    Information about alarms.
 
 paths:
 
@@ -284,6 +287,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/Resource"
 
+  /o2ims-infrastructureMonitoring/{version}/alarms:
+    get:
+      operationId: getAlarms
+      summary: Get alarms
+      description: |
+        Returns the list of AlarmEventRecords.
+      parameters:
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/filter"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - alrams
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of alarms.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alarms"
+
+  /o2ims-infrastructureMonitoring/{version}/alarms/{alarmEventRecordId}:
+    get:
+      operationId: getAlarm
+      summary: Get an alarm
+      description: |
+        Returns the details of an AlarmEventRecord.
+      parameters:
+      - $ref: "#/components/parameters/alarmEventRecordId"
+      - $ref: "#/components/parameters/excludeFields"
+      - $ref: "#/components/parameters/fields"
+      - $ref: "#/components/parameters/version"
+      tags:
+      - alarms
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the alarm.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alarm"
+
 components:
 
   parameters:
@@ -337,6 +384,16 @@ components:
       schema:
         type: string
       example: node_8_cores_amd64
+
+    alarmEventRecordId:
+      name: alarmEventRecordId
+      description: |
+        Unique identifier of an AlarmEventRecord.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: ClusterNotUpgradeable_spoke1
 
     fields:
       name: fields
@@ -593,3 +650,44 @@ components:
       type: array
       items:
         $ref: "#/components/schemas/Resources"
+
+    Alarm:
+      description: |
+        Information about an AlarmEventRecord.
+      type: object
+      properties:
+        alarmEventRecordId:
+          type: string
+          example: "ClusterNotUpgradeable_spoke1"
+        resourceID:
+          type: string
+          example: "my-node"
+        resourceTypeID:
+          type: string
+          example: "node_8_cores_amd64"
+        alarmRaisedTime:
+          type: string
+          example: "2024-03-10T13:21:33.613Z"
+        alarmChangedTime:
+          type: string
+          example: "2024-03-14T12:18:35.487Z"
+        alarmDefinitionID:
+          type: string
+          example: "ClusterNotUpgradeable"
+        probableCauseID:
+          type: string
+          example: "ClusterNotUpgradeable"
+        perceivedSeverity:
+          type: string
+          example: "info"
+        extensions:
+          type: object
+          example:
+            cluster: "spoke0"
+
+    Alarms:
+      description: |
+        List of alarms.
+      type: array
+      items:
+        $ref: "#/components/schemas/Alarms"

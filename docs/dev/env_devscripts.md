@@ -57,14 +57,15 @@ export REDFISH_EMULATOR_IGNORE_BOOT_DEVICE=True
 
 ### Installation
 
-#### Run
+#### Deploy env
 ```bash
 cd dev-scripts
 make
 ```
 
-#### Clean
+#### Destroy env
 ```bash
+cd dev-scripts
 make clean
 ```
 
@@ -93,7 +94,7 @@ sudo dnf install xinetd
 ```bash
 cat /etc/NetworkManager/dnsmasq.d/openshift-ostest.conf
 ```
-E.g. address=/api.ostest.test.metalkube.org/11.0.0.5
+E.g. address=/.apps.ostest.test.metalkube.org/11.0.0.4
 
 ##### Add config file
 */etc/xinetd.d/openshift*
@@ -108,9 +109,11 @@ service openshift-ingress-ssl
     protocol        = tcp
     user            = root
     wait            = no
-    redirect        = 10.0.0.5 443
+    redirect        = 10.0.0.4 443
     port            = 443
     only_from       = 0.0.0.0/0
+    cps             = 1000 0
+    instances       = 1000
     per_source      = UNLIMITED
 }
 ```
@@ -202,7 +205,7 @@ sudo systemctl start agent
 
 ### Import a spoke cluster
 Navigate to web console:
-* All Clusters > Infrastructure > Clusters > Cluster list > spoke0 > Import cluster
+* All Clusters > Infrastructure > Clusters > Cluster list > spoke0 > Actions > Import cluster
 
 ### Access a spoke cluster
 ```bash

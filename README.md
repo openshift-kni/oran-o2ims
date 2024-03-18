@@ -97,7 +97,7 @@ deployment-manager-server` [configuration](.vscode/launch.json).
 
 The resource server exposes endpoints for retrieving resource types, resource pools
 and resources objects. The server relies on the Search Query API of ACM hub.
-Follow the these [instructions](docs/dev/env.md#search-query-api) to enable
+Follow the these [instructions](docs/dev/env_acm.md#search-query-api) to enable
 and configure the search API access.
 
 The required URL and token can be obtained
@@ -161,3 +161,80 @@ To get a list of resources in a resource pool:
 $ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}
 /resources | jq
 ```
+
+#### Alarm server
+
+The alarm server exposes endpoints for retrieving alarms (AlarmEventRecord objects).
+The server relies on the Alertmanager API from Observability operator.
+Follow the these [instructions](docs/dev/env_acm.md#observability) to enable
+and configure Observability.
+
+The required URL and token can be obtained
+as follows:
+
+```
+$ export BACKEND_URL=$(
+  oc get route -n open-cluster-management-observability alertmanager -o json |
+  jq -r '"https://" + .spec.host'
+)
+$ export BACKEND_TOKEN=$(
+  oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
+)
+$ export RESOURCE_SERVER_URL=http://localhost:8002/o2ims-infrastructureInventory/v1/
+```
+
+Start the resource server with a command like this:
+
+```
+$ ./oran-o2ims start alarm-server \
+--log-level=debug \
+--log-file=stdout \
+--api-listener-address=localhost:8003 \
+--cloud-id=123 \
+--backend-url="${BACKEND_URL}" \
+--backend-token="${BACKEND_TOKEN}" \
+--resource-server-url="${RESOURCE_SERVER_URL}"
+```
+
+Notes: 
+* See more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
+* The alarm server requires the `resource-server-url`, which is needed for fetching information about resources that are associated with retrieved alarms.
+
+For more information about other command line flags use the `--help` command:
+
+```
+$ ./oran-o2ims start alarm-server --help
+```
+
+##### Run and Debug
+
+Inside _VS Code_ use the _Run and Debug_ option with the `start
+alarm-server` [configuration](.vscode/launch.json).
+
+##### Requests Examples
+
+###### GET Alarm List
+
+To get a list of alarms:
+```
+$ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms | jq
+```
+
+###### GET an Alarm
+
+To get a list of resource pools:
+```
+$ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId} | jq
+```
+
+###### GET Alarm Probable Causes
+
+To get a list of alarm probable causes:
+```
+$ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarmProbableCauses | jq
+```
+
+Notes:
+* This API is not defined by O2ims Interface Specification.
+* The server supports the `alarmProbableCauses` endpoint for exposing a custom list of probable causes.
+* The list is available in [data folder](data/alarms/probable_causes.json). Can be customized and maintained as required.

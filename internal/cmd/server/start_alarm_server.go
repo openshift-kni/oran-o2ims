@@ -237,6 +237,11 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return err
 	}
 
+	// Create the handler for alarms probable causes:
+	if err := c.createAlarmProbableCausesHandler(router); err != nil {
+		return err
+	}
+
 	// Start the API server:
 	apiListener, err := network.NewListener().
 		SetLogger(c.logger).
@@ -313,6 +318,49 @@ func (c *AlarmServerCommand) createAlarmHandler(
 	).Methods(http.MethodGet)
 	router.Handle(
 		"/o2ims-infrastructureMonitoring/{version}/alarms/{alarmEventRecordId}",
+		adapter,
+	).Methods(http.MethodGet)
+
+	return nil
+}
+
+// This API is not defined by O2ims Interface Specification.
+// It is used for exposing the custom list of alarm probable causes.
+func (c *AlarmServerCommand) createAlarmProbableCausesHandler(router *mux.Router) error {
+
+	// This API is not defined by
+
+	// Create the handler:
+	handler, err := service.NewAlarmProbableCauseHandler().
+		SetLogger(c.logger).
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create handler",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+
+	// Create the routes:
+	adapter, err := service.NewAdapter().
+		SetLogger(c.logger).
+		SetPathVariables("probableCauseID").
+		SetHandler(handler).
+		Build()
+	if err != nil {
+		c.logger.Error(
+			"Failed to create adapter",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	router.Handle(
+		"/o2ims-infrastructureMonitoring/{version}/alarmProbableCauses",
+		adapter,
+	).Methods(http.MethodGet)
+	router.Handle(
+		"/o2ims-infrastructureMonitoring/{version}/alarmProbableCauses/{probableCauseID}",
 		adapter,
 	).Methods(http.MethodGet)
 
