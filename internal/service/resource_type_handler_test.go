@@ -24,6 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
 	"github.com/openshift-kni/oran-o2ims/internal/text"
@@ -206,12 +207,14 @@ var _ = Describe("Resource type handler", func() {
 				Expect(items[0]).To(MatchJQ(`.name`, "node_8_cores_amd64"))
 				Expect(items[0]).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
 				Expect(items[0]).To(MatchJQ(`.resourceClass`, "COMPUTE"))
+				Expect(items[0]).To(HaveKey("alarmDictionary"))
 
 				// Verify second result:
 				Expect(items[1]).To(MatchJQ(`.resourceTypeID`, "node_4_cores_arm64"))
 				Expect(items[1]).To(MatchJQ(`.name`, "node_4_cores_arm64"))
 				Expect(items[1]).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
 				Expect(items[1]).To(MatchJQ(`.resourceClass`, "COMPUTE"))
+				Expect(items[1]).To(HaveKey("alarmDictionary"))
 			})
 		})
 
@@ -259,6 +262,14 @@ var _ = Describe("Resource type handler", func() {
 				Expect(response.Object).To(MatchJQ(`.name`, "node_8_cores_amd64"))
 				Expect(response.Object).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
 				Expect(response.Object).To(MatchJQ(`.resourceClass`, "COMPUTE"))
+				Expect(response.Object).To(HaveKey("alarmDictionary"))
+				Expect(response.Object["alarmDictionary"]).To(HaveKey("alarmDefinition"))
+				Expect(response.Object["alarmDictionary"]).To(HaveKey("pkNotificationField"))
+				Expect(response.Object["alarmDictionary"]).To(HaveKey("alarmDictionarySchemaVersion"))
+				Expect(response.Object["alarmDictionary"]).To(HaveKey("entityType"))
+				Expect(response.Object["alarmDictionary"]).To(HaveKey("vendor"))
+				Expect(response.Object["alarmDictionary"]).To(MatchJQ(`.managementInterfaceId`, "O2IMS"))
+				Expect(response.Object["alarmDictionary"]).To(MatchJQ(`.alarmDictionaryVersion`, files.AlarmDictionaryVersion))
 			})
 		})
 	})
