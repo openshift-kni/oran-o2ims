@@ -1,0 +1,13 @@
+diff --git a/sushy/connector.py b/sushy/connector.py
+index 75b341c..efa2e6d 100644
+--- a/sushy/connector.py
++++ b/sushy/connector.py
+@@ -59,7 +59,7 @@ class Connector(object):
+         # interaction with the BMC. Setting to identity basically means
+         # "without modification or compression". By default, python-requests
+         # indicates responses can be compressed.
+-        self._session.headers['Accept-Encoding'] = 'identity'
++        #self._session.headers['Accept-Encoding'] = 'identity'
+ 
+         if username or password:
+             LOG.warning('Passing username and password to Connector is '
