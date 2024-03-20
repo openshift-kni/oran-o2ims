@@ -9,3 +9,5 @@
 !/cmd
 !/api
 !/bundle
+!/ironic-hack.patch
+!/ironic-hack-2.patch

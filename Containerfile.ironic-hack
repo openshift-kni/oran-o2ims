@@ -1,0 +1,35 @@
+# This is a hack to enable compression in the Ironic container used by the baremetal operator of
+# OpenShift. To use it build and push the image to your registry server:
+#
+# $ podman build -t quay.io/myuser/ironic-hack:1 -f Containerfile.ironic-hack
+# $ podman push quay.io/myuser/ironic-hack:1
+#
+# Then change the `cluster-baremetal-operator-images` configmap in the `openshift-machine-api`
+# namespace. It contains a JSON document with a `baremetalIrinic` field that needs to be changed to
+# `quay.io/myuser/ironic-hack:1`. Then delete the `metal3` deployment to force the operator to
+# recreate it with the new image:
+#
+# $ oc edit configmap -n openshift-machine-api cluster-baremetal-operator-images
+# $ oc delete deployment -n openshift-machine-api metal3
+
+# Start from the Ironic image currently used by the baremetal operator, so that we don't need to
+# fully rebuild it.
+FROM \
+    quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:42a7f567c3fdb76b2020f1a3ea95543e02b7c0234b1697b7c7301cbbd5074012
+
+# Install required packages:
+RUN \
+    dnf -y install patch && \
+    dnf -y clean all
+
+# Apply the patch that enables compression for the communication with the BMC. This is necessary
+# because HPE iLO currently requires compression support for retrieving certain registries, in
+# particular the BIOS attributes registry.
+COPY \
+    ironic-hack.patch \
+    ironic-hack-2.patch \
+    /tmp
+RUN \
+    cd /usr/lib/python3.9/site-packages; \
+    patch -p1 < /tmp/ironic-hack.patch; \
+    patch -p1 < /tmp/ironic-hack-2.patch

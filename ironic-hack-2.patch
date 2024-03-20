@@ -1,0 +1,58 @@
+From b5529df5ca24fecc8844503b6e4ed48a91189fed Mon Sep 17 00:00:00 2001
+From: Jacob Anders <janders@redhat.com>
+Date: Fri, 05 Apr 2024 08:26:17 +1000
+Subject: [PATCH] [WIP] Wait for BIOS configuration job to complete
+
+When reconfiguring BIOS on iDRAC nodes, there can be a conflict between
+Lifecycle Controller job implementing the actual BIOS change and another
+job implementing boot sequence override. This change adds a way of handling this issue by adding a long wait if an existing LC job is detected. This allows the reboot or reboots required to complete the change to complete before requesting the boot sequence override.
+
+Change-Id: Ib57a330d267f573c8481e4823b0f5ee14556fde3
+---
+
+diff --git a/sushy_oem_idrac/resources/manager/manager.py b/sushy_oem_idrac/resources/manager/manager.py
+index 4c4c1a2..d696109 100644
+--- a/sushy_oem_idrac/resources/manager/manager.py
++++ b/sushy_oem_idrac/resources/manager/manager.py
+@@ -123,6 +123,10 @@
+ 
+     RETRY_COUNT = 35
+     RETRY_DELAY = 15
++    # NOTE(janders) as measured on a bare metal machine it takes about
++    # 600 seconds for the requested BIOS configuration change to take
++    # effect. Adding 20% safety margin, hence 720
++    REBOOT_WAIT = 720
+ 
+     _IDRAC_IS_READY_RETRIES = 96
+     _IDRAC_IS_READY_RETRY_DELAY_SEC = 10
+@@ -252,8 +256,12 @@
+ 
+                     LOG.warning('iDRAC error: %s',
+                                 error.get('Message', 'Unknown error'))
+-
+-                    if constants.IDRAC_CONFIG_PENDING in message_id:
++                    # NOTE(janders) in case of encountering these problematic
++                    # iDRAC states, request reboot and wait
++                    # TODO(janders) if this were to be a longer term solution
++                    # we need to add polling so it can be finer grained
++                    if (constants.IDRAC_CONFIG_PENDING in message_id
++                       or constants.IDRAC_JOB_RUNNING in message_id):
+                         if not rebooted:
+                             LOG.warning(
+                                 'Let\'s try to turn it off and on again... '
+@@ -261,11 +269,12 @@
+                                 'set previously!')
+                             utils.reboot_system(system)
+                             rebooted = True
++                            LOG.warning("Requested a reboot, waiting for"
++                                        " %s seconds", self.REBOOT_WAIT)
++                            time.sleep(self.REBOOT_WAIT)
++                            LOG.warning("Done waiting for reboot, continuing")
+                             break
+ 
+-                    elif constants.IDRAC_JOB_RUNNING in message_id:
+-                        pass
+-
+                 else:
+                     time.sleep(self.RETRY_DELAY)
+ 
