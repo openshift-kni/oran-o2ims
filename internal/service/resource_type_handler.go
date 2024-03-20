@@ -24,6 +24,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -236,7 +237,7 @@ func (h *ResourceTypeHandler) Get(ctx context.Context,
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.getGraphqlVars(ctx)).
+		SetGraphqlVars(h.getGraphqlVars()).
 		Build()
 	if err != nil {
 		return
@@ -265,7 +266,7 @@ func (h *ResourceTypeHandler) fetchItems(
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
-		SetGraphqlVars(h.getGraphqlVars(ctx)).
+		SetGraphqlVars(h.getGraphqlVars()).
 		Build()
 	if err != nil {
 		return
@@ -325,7 +326,7 @@ func (h *ResourceTypeHandler) fetchItem(ctx context.Context,
 	return
 }
 
-func (h *ResourceTypeHandler) getGraphqlVars(ctx context.Context) (graphqlVars *model.SearchInput) {
+func (h *ResourceTypeHandler) getGraphqlVars() (graphqlVars *model.SearchInput) {
 	graphqlVars = &model.SearchInput{}
 	graphqlVars.Keywords = h.graphqlVars.Keywords
 	graphqlVars.Filters = h.graphqlVars.Filters
@@ -336,6 +337,58 @@ func (h *ResourceTypeHandler) getGraphqlVars(ctx context.Context) (graphqlVars *
 		Property: "_systemUUID",
 		Values:   []*string{&nonEmpty},
 	})
+
+	return
+}
+
+func (h *ResourceTypeHandler) getAlarmDictionary(ctx context.Context, resourceClass string) (result data.Object, err error) {
+	handler, err := NewAlarmDefinitionHandler().
+		SetLogger(h.logger).
+		Build()
+	if err != nil {
+		h.logger.Error(
+			"Failed to create handler",
+			"error", err,
+		)
+		return
+	}
+
+	response, err := handler.List(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	// Filter by 'resourceClass'
+	definitions := data.Select(
+		response.Items,
+		func(ctx context.Context, item data.Object) (result bool, err error) {
+			itemResourceClass, err := data.GetString(item, "alarmAdditionalFields.resourceClass")
+			if err != nil {
+				// Missing optional 'resourceClass' property in item
+				return false, nil
+			}
+			result = itemResourceClass == resourceClass
+
+			return
+		},
+	)
+
+	alarmDefinitions, err := data.Collect(ctx, definitions)
+	if err != nil {
+		return
+	}
+
+	result = data.Object{
+		"alarmDefinition":        alarmDefinitions,
+		"pkNotificationField":    "alarmDefinitionID",
+		"managementInterfaceId":  "O2IMS",
+		"alarmDictionaryVersion": files.AlarmDictionaryVersion,
+		// Constant string value - not yet defined by O2IMS spec
+		"alarmDictionarySchemaVersion": "",
+		// TODO: no direct mapping
+		"entityType": "",
+		"vendor":     "",
+	}
 
 	return
 }
@@ -359,11 +412,17 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 		}
 	}
 
+	alarmDictionary, err := h.getAlarmDictionary(ctx, resourceClass)
+	if err != nil {
+		return
+	}
+
 	to = data.Object{
-		"resourceTypeID": resourceTypeID,
-		"name":           resourceTypeID,
-		"resourceKind":   resourceKind,
-		"resourceClass":  resourceClass,
+		"resourceTypeID":  resourceTypeID,
+		"name":            resourceTypeID,
+		"resourceKind":    resourceKind,
+		"resourceClass":   resourceClass,
+		"alarmDictionary": alarmDictionary,
 		// TODO: no direct mapping
 		"extensions": "",
 		"vendor":     "",

@@ -237,4 +237,7 @@ $ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarmProbableC
 Notes:
 * This API is not defined by O2ims Interface Specification.
 * The server supports the `alarmProbableCauses` endpoint for exposing a custom list of probable causes.
-* The list is available in [data folder](data/alarms/probable_causes.json). Can be customized and maintained as required.
+* The list is available in [files folder](internal/files/alarms/definition.json). Can be customized and maintained as required. The properties are mapped as follows:
+  * alarmDefinitionId -> probableCauseId
+  * alarmName -> name
+  * alarmDescription -> description
