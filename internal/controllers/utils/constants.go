@@ -11,6 +11,7 @@ const (
 	ORANO2IMSDeploymentManager = "deployment-manager"
 	ORANO2IMSResource          = "resource"
 	ORANO2IMSAlarmSubscription = "alarm-subscription"
+	ORANO2IMSAlarmNotification = "alarm-notification"
 )
 
 // Deployment names
@@ -19,6 +20,7 @@ const (
 	ORANO2IMSDeploymentManagerServerName = ORANO2IMSDeploymentManager + "-server"
 	ORANO2IMSResourceServerName          = ORANO2IMSResource + "-server"
 	ORANO2IMSAlarmSubscriptionServerName = ORANO2IMSAlarmSubscription + "-server"
+	ORANO2IMSAlarmNotificationServerName = ORANO2IMSAlarmNotification + "-server"
 )
 
 // CR default names

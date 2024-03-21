@@ -2,6 +2,7 @@ package persiststorage
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	jsoniter "github.com/json-iterator/go"
@@ -14,45 +15,86 @@ import (
 	clnt "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type KubeConfigMapStore struct {
-	Name       string
+type KubeConfigMapStoreBuilder struct {
 	namespace  string
+	name       string
 	fieldOwner string
-	jsonAPI    *jsoniter.API
+	jsonAPI    jsoniter.API
 	client     *k8s.Client
 }
 
-func NewKubeConfigMapStore() *KubeConfigMapStore {
-	return &KubeConfigMapStore{}
+func NewKubeConfigMapStoreBuilder() *KubeConfigMapStoreBuilder {
+	return &KubeConfigMapStoreBuilder{}
 }
 
-func (b *KubeConfigMapStore) SetNameSpace(
-	ns string) *KubeConfigMapStore {
-	b.namespace = ns
-	return b
-}
-func (b *KubeConfigMapStore) SetName(
-	name string) *KubeConfigMapStore {
-	b.Name = name
+func (b *KubeConfigMapStoreBuilder) SetNamespace(
+	namespace string) *KubeConfigMapStoreBuilder {
+	b.namespace = namespace
 	return b
 }
 
-func (b *KubeConfigMapStore) SetFieldOwner(
-	owner string) *KubeConfigMapStore {
-	b.fieldOwner = owner
+func (b *KubeConfigMapStoreBuilder) SetName(
+	name string) *KubeConfigMapStoreBuilder {
+	b.name = name
 	return b
 }
 
-func (b *KubeConfigMapStore) SetJsonAPI(
-	jsonAPI *jsoniter.API) *KubeConfigMapStore {
-	b.jsonAPI = jsonAPI
+func (b *KubeConfigMapStoreBuilder) SetFieldOwner(
+	fieldOwner string) *KubeConfigMapStoreBuilder {
+	b.fieldOwner = fieldOwner
 	return b
 }
 
-func (b *KubeConfigMapStore) SetClient(
-	client *k8s.Client) *KubeConfigMapStore {
+func (b *KubeConfigMapStoreBuilder) SetJsonAPI(
+	api jsoniter.API) *KubeConfigMapStoreBuilder {
+	b.jsonAPI = api
+	return b
+}
+
+func (b *KubeConfigMapStoreBuilder) SetClient(
+	client *k8s.Client) *KubeConfigMapStoreBuilder {
 	b.client = client
 	return b
+}
+func (b *KubeConfigMapStoreBuilder) Build() (storage *KubeConfigMapStore,
+	err error) {
+	if b.namespace == "" {
+		err = errors.New("namespace is empty")
+		return
+	}
+	if b.name == "" {
+		err = errors.New("name is empty")
+		return
+	}
+	if b.fieldOwner == "" {
+		err = errors.New("fieldOwner is empty")
+		return
+	}
+	if b.client == nil {
+		err = errors.New("k8s client could not be nil")
+	}
+
+	storage = &KubeConfigMapStore{
+		namespace:  b.namespace,
+		name:       b.name,
+		fieldOwner: b.fieldOwner,
+		jsonAPI:    b.jsonAPI,
+		client:     b.client,
+	}
+
+	return
+}
+
+type KubeConfigMapStore struct {
+	namespace  string
+	name       string
+	fieldOwner string
+	jsonAPI    jsoniter.API
+	client     *k8s.Client
+}
+
+func (s *KubeConfigMapStore) GetName() (name string) {
+	return s.name
 }
 
 // k8s configmap methods
@@ -62,7 +104,7 @@ func (s *KubeConfigMapStore) AddEntry(ctx context.Context, entryKey string, valu
 
 	key := clnt.ObjectKey{
 		Namespace: s.namespace,
-		Name:      s.Name,
+		Name:      s.name,
 	}
 	err = (*s.client).Get(ctx, key, configmap)
 
@@ -85,7 +127,7 @@ func (s *KubeConfigMapStore) AddEntry(ctx context.Context, entryKey string, valu
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: s.namespace,
-			Name:      s.Name,
+			Name:      s.name,
 		},
 		Data: savedData,
 	}
@@ -101,7 +143,7 @@ func (s *KubeConfigMapStore) DeleteEntry(ctx context.Context, entryKey string) (
 
 	key := clnt.ObjectKey{
 		Namespace: s.namespace,
-		Name:      s.Name,
+		Name:      s.name,
 	}
 	err = (*s.client).Get(ctx, key, configmap)
 
@@ -130,7 +172,7 @@ func (s *KubeConfigMapStore) DeleteEntry(ctx context.Context, entryKey string) (
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: s.namespace,
-			Name:      s.Name,
+			Name:      s.name,
 		},
 		Data: configmap.Data,
 	}
@@ -146,7 +188,7 @@ func (s *KubeConfigMapStore) ReadEntry(ctx context.Context, entryKey string) (va
 
 	key := clnt.ObjectKey{
 		Namespace: s.namespace,
-		Name:      s.Name,
+		Name:      s.name,
 	}
 	err = (*s.client).Get(ctx, key, configmap)
 
@@ -177,7 +219,7 @@ func (s *KubeConfigMapStore) ReadAllEntries(ctx context.Context) (result map[str
 
 	key := clnt.ObjectKey{
 		Namespace: s.namespace,
-		Name:      s.Name,
+		Name:      s.name,
 	}
 	err = (*s.client).Get(ctx, key, configmap)
 
@@ -195,7 +237,7 @@ func (s *KubeConfigMapStore) ReadAllEntries(ctx context.Context) (result map[str
 
 	for mapKey, value := range configmap.Data {
 		var object data.Object
-		err = (*s.jsonAPI).Unmarshal([]byte(value), &object)
+		err = s.jsonAPI.Unmarshal([]byte(value), &object)
 		if err != nil {
 			continue
 		}
@@ -205,45 +247,82 @@ func (s *KubeConfigMapStore) ReadAllEntries(ctx context.Context) (result map[str
 }
 
 func (s *KubeConfigMapStore) ProcessChanges(ctx context.Context, dataMap **map[string]data.Object, lock *sync.Mutex) (err error) {
-	raw_opt := metav1.SingleObject(metav1.ObjectMeta{
+	rawOpt := metav1.SingleObject(metav1.ObjectMeta{
 		Namespace: s.namespace,
-		Name:      s.Name,
+		Name:      s.name,
 	})
 	opt := clnt.ListOptions{}
-	opt.Raw = &raw_opt
+	opt.Raw = &rawOpt
 
 	watcher, err := s.client.Watch(ctx, &corev1.ConfigMapList{}, &opt)
 
 	go func() {
 		for {
-			event, open := <-watcher.ResultChan()
-			if open {
-				switch event.Type {
-				case watch.Added, watch.Modified:
-					configmap, _ := event.Object.(*corev1.ConfigMap)
-					newMap := map[string]data.Object{}
-					for k, value := range configmap.Data {
-						var object data.Object
-						err = (*s.jsonAPI).Unmarshal([]byte(value), &object)
-						if err != nil {
-							continue
-						}
-						newMap[k] = object
+			event := <-watcher.ResultChan()
+			switch event.Type {
+			case watch.Added, watch.Modified:
+				configmap, _ := event.Object.(*corev1.ConfigMap)
+				newMap := map[string]data.Object{}
+				for k, value := range configmap.Data {
+					var object data.Object
+					err = s.jsonAPI.Unmarshal([]byte(value), &object)
+					if err != nil {
+						continue
 					}
-
-					lock.Lock()
-					*dataMap = &newMap
-					lock.Unlock()
-				case watch.Deleted:
-					lock.Lock()
-					*dataMap = &map[string]data.Object{}
-					lock.Unlock()
-
-				default:
-
+					newMap[k] = object
 				}
 
+				lock.Lock()
+				*dataMap = &newMap
+				lock.Unlock()
+			case watch.Deleted:
+				lock.Lock()
+				*dataMap = &map[string]data.Object{}
+				lock.Unlock()
+
+			default:
+
 			}
+		}
+	}()
+
+	return
+}
+
+func (s *KubeConfigMapStore) ProcessChangesWithFunction(ctx context.Context, function ProcessFunc) (err error) {
+	rawOpt := metav1.SingleObject(metav1.ObjectMeta{
+		Namespace: s.namespace,
+		Name:      s.name,
+	})
+	opt := clnt.ListOptions{}
+	opt.Raw = &rawOpt
+
+	watcher, err := s.client.Watch(ctx, &corev1.ConfigMapList{}, &opt)
+
+	go func() {
+		for {
+			event := <-watcher.ResultChan()
+			switch event.Type {
+			case watch.Added, watch.Modified:
+				configmap, _ := event.Object.(*corev1.ConfigMap)
+				newMap := map[string]data.Object{}
+				for k, value := range configmap.Data {
+					var object data.Object
+					err = s.jsonAPI.Unmarshal([]byte(value), &object)
+					if err != nil {
+						continue
+					}
+					newMap[k] = object
+				}
+				function(&newMap)
+
+			case watch.Deleted:
+				function(&map[string]data.Object{})
+
+			default:
+
+			}
+
 		}
 	}()
 
