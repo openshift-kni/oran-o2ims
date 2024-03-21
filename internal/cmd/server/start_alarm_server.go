@@ -36,9 +36,7 @@ import (
 )
 
 const (
-	alartmanagerApiUrlPrefix    = "alertmanager-open-cluster-management-observability"
-	resourceServerURLFlagName   = "resource-server-url"
-	resourceServerTokenFlagName = "resource-server-token"
+	alartmanagerApiUrlPrefix = "alertmanager-open-cluster-management-observability"
 )
 
 // Server creates and returns the `start alarm-server` command.
