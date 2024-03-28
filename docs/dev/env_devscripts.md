@@ -32,7 +32,7 @@ Go to https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com/, clic
 right, copy the login command, extract the token from the command and use it to set `CI_TOKEN` in `config_$USER.sh`.
 
 #### Get pull secret
-Convert the secret obtained from [cloud.openshift.com](https://cloud.redhat.com/openshift/install/pull-secret), originally in text format, into JSON format and save it as `pull_secret,json`. 
+Rename the secret obtained from [cloud.openshift.com](https://cloud.redhat.com/openshift/install/pull-secret), originally pull_secret.txt into JSON format as `pull_secret.json`. 
 
 #### Set config vars
 Add the following the `config_$USER.sh` file:
@@ -73,7 +73,7 @@ make clean
 
 ### kubeconfig
 ```bash
-export KUBECONFIG=/home/git/dev-scripts/ocp/ostest/auth/kubeconfig
+export KUBECONFIG=/home/$USER/dev-scripts/ocp/ostest/auth/kubeconfig
 ```
 
 ### Web Console
@@ -126,7 +126,7 @@ sudo systemctl restart xinetd
 #### Access the Web Console
 Navigate to: https://console-openshift-console.apps.ostest.test.metalkube.org
 * User: kubeadmin
-* Password: `cat /home/git/dev-scripts/ocp/ostest/auth/kubeadmin-password`
+* Password: `cat /home/$USER/dev-scripts/ocp/ostest/auth/kubeadmin-password`
 
 ## ACM configuration
 See details [here](./env_acm.md).
@@ -161,8 +161,12 @@ spec:
         storage: 10Gi
 ```
 
-### Create a deploy script
-/assisted-service/deploy/operator/ztp/deploy.sh
+### Clone assited-service repo and create a deploy.sh script
+Clone assited-service repo
+```bash
+git clone https://github.com/openshift/assisted-service.git
+```
+Under the cloned repo path create and populate: /assisted-service/deploy/operator/ztp/deploy.sh.
 ```bash
 # Spoke
 export SPOKE_NAME="spoke$1"
@@ -175,10 +179,10 @@ export ASSISTED_INFRAENV_NAME=$SPOKE_NAME
 export ASSISTED_OPENSHIFT_VERSION=openshift-v4.14
 export ASSISTED_OPENSHIFT_INSTALL_RELEASE_IMAGE=quay.io/openshift-release-dev/ocp-release:4.14.12-x86_64
 # Pull secret
-export ASSISTED_PULLSECRET_JSON=/home/git/dev-scripts/pull_secret.json
+export ASSISTED_PULLSECRET_JSON=/home/$USER/dev-scripts/pull_secret.json
 # Extra hosts
-cat /home/git/dev-scripts/ocp/ostest/extra_baremetalhosts.json | jq "[nth($1)]" > /home/git/dev-scripts/ocp/ostest/bmh.json
-export EXTRA_BAREMETALHOSTS_FILE=/home/git/dev-scripts/ocp/ostest/bmh.json
+cat /home/$USER/dev-scripts/ocp/ostest/extra_baremetalhosts.json | jq "[nth($1)]" > /home/$USER/dev-scripts/ocp/ostest/bmh.json
+export EXTRA_BAREMETALHOSTS_FILE=/home/$USER/dev-scripts/ocp/ostest/bmh.json
 
 ./deploy_spoke_cluster.sh
 ```
