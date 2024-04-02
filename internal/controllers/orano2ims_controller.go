@@ -241,7 +241,10 @@ func (r *ORANO2IMSReconciler) deployServer(ctx context.Context, orano2ims *oranv
 		},
 	}
 
-	deploymentContainerArgs := utils.BuildServerContainerArgs(orano2ims, serverName)
+	deploymentContainerArgs, err := utils.BuildServerContainerArgs(orano2ims, serverName)
+	if err != nil {
+		return err
+	}
 
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{

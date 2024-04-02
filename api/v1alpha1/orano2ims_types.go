@@ -34,7 +34,7 @@ type ORANO2IMSSpec struct {
 	//+kubebuilder:default=false
 	DeploymentManagerServer bool `json:"deploymentManagerServer"`
 	//+kubebuilder:default=false
-	ResourceServer bool `json:"resourceServer"`
+	ResourceServer          bool `json:"resourceServer"`
 	AlarmSubscriptionServer bool `json:"alarmSubscriptionServer"`
 	//+optional
 	IngressHost string `json:"ingressHost,omitempty"`

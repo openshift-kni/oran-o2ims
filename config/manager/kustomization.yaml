@@ -9,5 +9,5 @@ generatorOptions:
 
 images:
 - name: controller
-  newName: quay.io/imihai/oran-o2ims-operator
-  newTag: 4.16.0
+  newName: quay.io/jhernand/o2ims-operator
+  newTag: "2"

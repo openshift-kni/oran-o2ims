@@ -74,13 +74,13 @@ var _ = Describe("ExtensionUtils", func() {
 				},
 			},
 		}
-		actualArgs := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
+		actualArgs, err := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
+		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-			fmt.Sprintf("--backend-url=%s", orano2ims.Spec.BackendURL),
-			fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
-			fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType),
+			fmt.Sprintf("--backend-url=%s", defaultBackendURL),
+			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
 		)
 		expectedArgs = append(expectedArgs,
 			"--extensions=.metadata.labels[\"name\"] as $name |\n{\n  name: $name,\n  alias: $name\n}\n",
@@ -100,13 +100,13 @@ var _ = Describe("ExtensionUtils", func() {
 			},
 		}
 
-		actualArgs := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
+		actualArgs, err := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
+		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-			fmt.Sprintf("--backend-url=%s", orano2ims.Spec.BackendURL),
-			fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
-			fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType),
+			fmt.Sprintf("--backend-url=%s", defaultBackendURL),
+			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
 		)
 		Expect(actualArgs).To(Equal(expectedArgs))
 	})

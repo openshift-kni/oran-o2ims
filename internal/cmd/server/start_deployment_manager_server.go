@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
@@ -67,6 +69,11 @@ func DeploymentManagerServer() *cobra.Command {
 		backendTokenFlagName,
 		"",
 		"Token for authenticating to the backend server.",
+	)
+	_ = flags.String(
+		backendTokenFileFlagName,
+		"",
+		"File containing the token for authenticating to the backend server.",
 	)
 	_ = flags.StringArray(
 		extensionsFlagName,
@@ -173,6 +180,15 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
+	backendTokenFile, err := flags.GetString(backendTokenFileFlagName)
+	if err != nil {
+		logger.Error(
+			"Failed to get backend token file flag",
+			slog.String("flag", backendTokenFileFlagName),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
 	extensions, err := flags.GetStringArray(extensionsFlagName)
 	if err != nil {
 		logger.Error(
@@ -182,11 +198,56 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
+
+	// Check that the backend token and token file haven't been simultaneously provided:
+	if backendToken != "" && backendTokenFile != "" {
+		logger.Error(
+			"Backend token and token file have both been provided, but they are incompatible",
+			slog.Any(
+				"flags",
+				[]string{
+					backendTokenFlagName,
+					backendTokenFileFlagName,
+				},
+			),
+			slog.String("!token", backendToken),
+			slog.String("token_file", backendTokenFile),
+		)
+		return exit.Error(1)
+	}
+
+	// Read the backend token file if needed:
+	if backendToken == "" && backendTokenFile != "" {
+		backendTokenData, err := os.ReadFile(backendTokenFile)
+		if err != nil {
+			logger.Error(
+				"Failed to read backend token file",
+				slog.String("file", backendTokenFile),
+				slog.String("error", err.Error()),
+			)
+			return exit.Error(1)
+		}
+		backendToken = strings.TrimSpace(string(backendTokenData))
+		logger.Info(
+			"Loaded backend token from file",
+			slog.String("file", backendTokenFile),
+			slog.String("!token", backendToken),
+		)
+	}
+
+	// Check that we have a token:
+	if backendToken == "" {
+		logger.Error("Backend token or token file must be provided")
+		return exit.Error(1)
+	}
+
+	// Write the backend details to the log:
 	logger.Info(
 		"Backend details",
 		slog.String("type", string(backendType)),
 		slog.String("url", backendURL),
 		slog.String("!token", backendToken),
+		slog.String("token_file", backendTokenFile),
 		slog.Any("extensions", extensions),
 	)
 
@@ -312,7 +373,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 
 // Names of command line flags:
 const (
-	backendTypeFlagName  = "backend-type"
-	backendTokenFlagName = "backend-token"
-	backendURLFlagName   = "backend-url"
+	backendTypeFlagName      = "backend-type"
+	backendTokenFlagName     = "backend-token"
+	backendTokenFileFlagName = "backend-token-file"
+	backendURLFlagName       = "backend-url"
 )

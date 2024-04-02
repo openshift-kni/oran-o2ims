@@ -34,6 +34,8 @@ spec:
           spec:
             description: ORANO2IMSSpec defines the desired state of ORANO2IMS
             properties:
+              alarmSubscriptionServer:
+                type: boolean
               backendToken:
                 type: string
               backendType:
@@ -54,9 +56,6 @@ spec:
                 items:
                   type: string
                 type: array
-              alarmSubscriptionServer:
-                default: false
-                type: boolean
               ingressHost:
                 type: string
               metadataServer:
@@ -68,9 +67,9 @@ spec:
               searchAPIBackendURL:
                 type: string
             required:
+            - alarmSubscriptionServer
             - cloudId
             - deploymentManagerServer
-            - AlarmSubscriptionServer
             - metadataServer
             - resourceServer
             type: object
