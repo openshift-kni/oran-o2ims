@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -150,40 +151,78 @@ func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
 	return []corev1.VolumeMount{}
 }
 
-func BuildServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS, serverName string) []string {
+func BuildServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS,
+	serverName string) (result []string, err error) {
 	if serverName == ORANO2IMSMetadataServerName {
-		containerArgs := MetadataServerArgs
-		containerArgs = append(containerArgs,
+		result = slices.Clone(MetadataServerArgs)
+		result = append(
+			result,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
 			fmt.Sprintf("--external-address=https://%s", orano2ims.Spec.IngressHost))
 
-		return containerArgs
+		return
 	}
 
 	if serverName == ORANO2IMSResourceServerName {
-		containerArgs := ResourceServerArgs
-		containerArgs = append(containerArgs,
+		result = slices.Clone(ResourceServerArgs)
+		result = append(
+			result,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
 			fmt.Sprintf("--backend-url=%s", orano2ims.Spec.SearchAPIBackendURL),
 			fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken))
 
-		return containerArgs
+		return
 	}
 
 	if serverName == ORANO2IMSDeploymentManagerServerName {
-		containerArgs := DeploymentManagerServerArgs
+		result = slices.Clone(DeploymentManagerServerArgs)
 
-		containerArgs = append(containerArgs,
+		// Set the cloud identifier:
+		result = append(
+			result,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-			fmt.Sprintf("--backend-url=%s", orano2ims.Spec.BackendURL),
-			fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
-			fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType))
+		)
 
+		// Set the backend type:
+		if orano2ims.Spec.BackendType != "" {
+			result = append(
+				result,
+				fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType),
+			)
+		}
+
+		// If no backend URL has been provided then use the default URL of the Kubernetes
+		// API server of the cluster:
+		backendURL := orano2ims.Spec.BackendURL
+		if backendURL == "" {
+			backendURL = defaultBackendURL
+		}
+		result = append(
+			result,
+			fmt.Sprintf("--backend-url=%s", backendURL),
+		)
+
+		// If no backend token has been provided then use the token of the service account
+		// that will eventually execute the server. Note that the file may not exist,
+		// but we can't check it here as that will be a different pod.
+		if orano2ims.Spec.BackendToken != "" {
+			result = append(
+				result,
+				fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
+			)
+		} else {
+			result = append(
+				result,
+				fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
+			)
+		}
+
+		// Add the extensions:
 		extensionsArgsArray := extensionsToExtensionArgs(orano2ims.Spec.Extensions)
-		containerArgs = append(containerArgs, extensionsArgsArray...)
+		result = append(result, extensionsArgsArray...)
 
-		return containerArgs
+		return
 	}
 
-	return nil
+	return
 }

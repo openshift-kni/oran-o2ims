@@ -73,3 +73,9 @@ var (
 		"--api-listener-tls-key=/secrets/tls/tls.key",
 	}
 )
+
+// Default values for backend URL and token:
+const (
+	defaultBackendURL       = "https://kubernetes.default.svc"
+	defaultBackendTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token"
+)
