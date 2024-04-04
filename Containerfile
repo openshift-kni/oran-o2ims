@@ -34,15 +34,18 @@ RUN \
   useradd -c "Builder" builder
 USER \
   builder
-WORKDIR \
-  /home/builder
 ENV \
   PATH="${PATH}:/usr/local/go/bin"
 
-# Copy the source:
+# Run the rest of the steps inside the directory containing the source code of the project. Note
+# that it is important to use a directory that is not the home of the user. Go will create`go/pkg`
+# directory inside that home directory, and tools like `conroller-gen` get very confused and fail
+# when they find the `go.mod` and `go.sum` files inside that package cache.
+WORKDIR \
+  /home/builder/project
 COPY \
   --chown=builder:builder \
-  . /home/builder
+  . .
 
 # Download the Go dependencies. We do this in a separate step so that hopefully that large set of
 # dependencies will be in a cached layer, and we will not need to download them for every build.
@@ -57,7 +60,7 @@ FROM registry.access.redhat.com/ubi9-minimal:9.2 AS runtime
 
 COPY \
   --from=builder \
- /home/builder/oran-o2ims /usr/bin/oran-o2ims
+ /home/builder/project/oran-o2ims /usr/bin/oran-o2ims
 
 ENTRYPOINT \
   ["/usr/bin/oran-o2ims"]
