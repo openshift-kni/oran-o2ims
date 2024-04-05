@@ -80,7 +80,7 @@ export KUBECONFIG=/home/$USER/dev-scripts/ocp/ostest/auth/kubeconfig
 
 #### Configure the local /etc/hosts
 ```bash
-<host_ip> console-openshift-console.apps.ostest.test.metalkube.org grafana-open-cluster-management-observability.apps.ostest.test.metalkube.org observatorium-api-open-cluster-management-observability.apps.ostest.test.metalkube.org alertmanager-open-cluster-management-observability.apps.ostest.test.metalkube.org
+<host_ip> console-openshift-console.apps.ostest.test.metalkube.org oauth-openshift.apps.ostest.test.metalkube.org grafana-open-cluster-management-observability.apps.ostest.test.metalkube.org observatorium-api-open-cluster-management-observability.apps.ostest.test.metalkube.org alertmanager-open-cluster-management-observability.apps.ostest.test.metalkube.org
 ```
 
 #### Install and configure xinetd
