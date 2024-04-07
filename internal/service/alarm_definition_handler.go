@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	jsoniter "github.com/json-iterator/go"
@@ -27,36 +28,41 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 )
 
-// AlarmProbableCauseHandlerBuilder contains the data and logic needed to create a new alarm
-// probable cause collection handler. Don't create instances of this type directly, use the NewAlarmProbableCauseHandler
+const (
+	alarmsDefinitionsPath    = "alarms/definitions.json"
+	alarmsProbableCausesPath = "alarms/probable_causes.json"
+)
+
+// AlarmDefinitionHandlerBuilder contains the data and logic needed to create a new alarm
+// definition collection handler. Don't create instances of this type directly, use the NewAlarmDefinitionHandler
 // function instead.
-type AlarmProbableCauseHandlerBuilder struct {
+type AlarmDefinitionHandlerBuilder struct {
 	logger *slog.Logger
 }
 
-// AlarmProbableCauseHandler knows how to respond to requests to list alarms. Don't create
-// instances of this type directly, use the NewAlarmProbableCauseHandler function instead.
-type AlarmProbableCauseHandler struct {
+// AlarmDefinitionHandler knows how to respond to requests to list alarms. Don't create
+// instances of this type directly, use the NewAlarmDefinitionHandler function instead.
+type AlarmDefinitionHandler struct {
 	logger  *slog.Logger
 	jsonAPI jsoniter.API
 }
 
-// NewAlarmProbableCauseHandler creates a builder that can then be used to configure and create a
+// NewAlarmDefinitionHandler creates a builder that can then be used to configure and create a
 // handler for the collection of alarms.
-func NewAlarmProbableCauseHandler() *AlarmProbableCauseHandlerBuilder {
-	return &AlarmProbableCauseHandlerBuilder{}
+func NewAlarmDefinitionHandler() *AlarmDefinitionHandlerBuilder {
+	return &AlarmDefinitionHandlerBuilder{}
 }
 
 // SetLogger sets the logger that the handler will use to write to the log. This is mandatory.
-func (b *AlarmProbableCauseHandlerBuilder) SetLogger(
-	value *slog.Logger) *AlarmProbableCauseHandlerBuilder {
+func (b *AlarmDefinitionHandlerBuilder) SetLogger(
+	value *slog.Logger) *AlarmDefinitionHandlerBuilder {
 	b.logger = value
 	return b
 }
 
 // Build uses the data stored in the builder to create and configure a new handler.
-func (b *AlarmProbableCauseHandlerBuilder) Build() (
-	result *AlarmProbableCauseHandler, err error) {
+func (b *AlarmDefinitionHandlerBuilder) Build() (
+	result *AlarmDefinitionHandler, err error) {
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -70,7 +76,7 @@ func (b *AlarmProbableCauseHandlerBuilder) Build() (
 	jsonAPI := jsonConfig.Froze()
 
 	// Create and populate the object:
-	result = &AlarmProbableCauseHandler{
+	result = &AlarmDefinitionHandler{
 		logger:  b.logger,
 		jsonAPI: jsonAPI,
 	}
@@ -78,7 +84,7 @@ func (b *AlarmProbableCauseHandlerBuilder) Build() (
 }
 
 // List is part of the implementation of the collection handler interface.
-func (h *AlarmProbableCauseHandler) List(ctx context.Context,
+func (h *AlarmDefinitionHandler) List(ctx context.Context,
 	request *ListRequest) (response *ListResponse, err error) {
 
 	// Transform the items into what we need:
@@ -95,7 +101,7 @@ func (h *AlarmProbableCauseHandler) List(ctx context.Context,
 }
 
 // Get is part of the implementation of the object handler interface.
-func (h *AlarmProbableCauseHandler) Get(ctx context.Context,
+func (h *AlarmDefinitionHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
 
 	// Fetch the object:
@@ -112,8 +118,8 @@ func (h *AlarmProbableCauseHandler) Get(ctx context.Context,
 	return
 }
 
-func (h *AlarmProbableCauseHandler) fetchItems() (result data.Stream, err error) {
-	jsonFile, err := files.Alarms.ReadFile(alarmsProbableCausesPath)
+func (h *AlarmDefinitionHandler) fetchItems() (result data.Stream, err error) {
+	jsonFile, err := files.Alarms.ReadFile(alarmsDefinitionsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -124,13 +130,13 @@ func (h *AlarmProbableCauseHandler) fetchItems() (result data.Stream, err error)
 		SetReader(reader).
 		Build()
 
-	// Transform AlarmProbableCauses
+	// Transform to AlarmDefinitions objects
 	result = data.Map(definitions, h.mapItem)
 
 	return
 }
 
-func (h *AlarmProbableCauseHandler) fetchItem(ctx context.Context,
+func (h *AlarmDefinitionHandler) fetchItem(ctx context.Context,
 	id string) (probableCause data.Object, err error) {
 
 	probableCauses, err := h.fetchItems()
@@ -153,29 +159,46 @@ func (h *AlarmProbableCauseHandler) fetchItem(ctx context.Context,
 	return
 }
 
-// Map Definition to an O2 AlarmProbableCause object.
-func (h *AlarmProbableCauseHandler) mapItem(ctx context.Context,
+// Map Definition to an O2 AlarmDefinitions object.
+func (h *AlarmDefinitionHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
 
-	probableCauseId, err := data.GetString(from, "probableCauseId")
+	alarmDefinitionId, err := data.GetString(from, "alarmDefinitionId")
 	if err != nil {
 		return
 	}
 
-	name, err := data.GetString(from, "name")
+	alarmName, err := data.GetString(from, "alarmName")
 	if err != nil {
 		return
 	}
 
-	description, err := data.GetString(from, "description")
+	alarmDescription, err := data.GetString(from, "alarmDescription")
 	if err != nil {
 		return
+	}
+
+	proposedRepairActions, err := data.GetString(from, "proposedRepairActions")
+	if err != nil {
+		// Property is optional
+		h.logger.Debug(fmt.Sprintf("'%s' is missing from alarm definition (optional)", "proposedRepairActions"))
+	}
+
+	alarmAdditionalFields, err := data.GetObj(from, "alarmAdditionalFields")
+	if err != nil {
+		// Property is optional
+		h.logger.Debug(fmt.Sprintf("'%s' is missing from alarm definition (optional)", "alarmAdditionalFields"))
+		err = nil
 	}
 
 	to = data.Object{
-		"probableCauseId": probableCauseId,
-		"name":            name,
-		"description":     description,
+		"alarmDefinitionId":     alarmDefinitionId,
+		"alarmName":             alarmName,
+		"alarmDescription":      alarmDescription,
+		"proposedRepairActions": proposedRepairActions,
+		"managementInterfaceId": "O2IMS",
+		"pkNotificationField":   "alarmDefinitionID",
+		"alarmAdditionalFields": alarmAdditionalFields,
 	}
 
 	return
