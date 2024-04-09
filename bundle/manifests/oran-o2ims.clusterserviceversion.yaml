@@ -29,7 +29,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-04-09T18:38:21Z"
+    createdAt: "2024-04-09T18:40:03Z"
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: oran-o2ims.v4.16.0
@@ -61,6 +61,14 @@ spec:
           - list
           - patch
           - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
           - watch
         - apiGroups:
           - ""
@@ -97,6 +105,14 @@ spec:
           - list
           - patch
           - update
+          - watch
+        - apiGroups:
+          - cluster.open-cluster-management.io
+          resources:
+          - managedclusters
+          verbs:
+          - get
+          - list
           - watch
         - apiGroups:
           - networking.k8s.io
@@ -136,6 +152,30 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterrolebindings
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterroles
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - authentication.k8s.io
           resources:
@@ -202,7 +242,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/imihai/oran-o2ims-operator:4.16.0
+                image: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
                 livenessProbe:
                   httpGet:
                     path: /healthz

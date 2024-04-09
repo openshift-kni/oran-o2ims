@@ -36,6 +36,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -60,6 +61,10 @@ type ORANO2IMSReconciler struct {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="cluster.open-cluster-management.io",resources=managedclusters,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -91,6 +96,13 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			r.Log.Error(err, "Failed to deploy Ingress.")
 			return
 		}
+	}
+
+	// Create the client service account.
+	err = r.createServiceAccount(ctx, orano2ims, utils.ORANO2IMSClientSAName)
+	if err != nil {
+		r.Log.Error(err, "Failed to create client service account")
+		return
 	}
 
 	// Start the resource server if required by the Spec.
@@ -143,10 +155,20 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Start the deployment server if required by the Spec.
 	if orano2ims.Spec.DeploymentManagerServer {
-		// Create the client ServiceAccount.
-		err = r.createServiceAccount(ctx, orano2ims, utils.ORANO2IMSClientSAName)
+		// Create the service account, role and binding:
+		err = r.createServiceAccount(ctx, orano2ims, utils.ORANO2IMSDeploymentManagerServerName)
 		if err != nil {
-			r.Log.Error(err, fmt.Sprintf("Failed to deploy ServiceAccount %s for Deployment Manager server.", utils.ORANO2IMSClientSAName))
+			r.Log.Error(err, "Failed to create deployment manager service account")
+			return
+		}
+		err = r.createDeploymentManagerClusterRole(ctx, orano2ims)
+		if err != nil {
+			r.Log.Error(err, "Failed to create deployment manager cluster role")
+			return
+		}
+		err = r.createDeploymentManagerClusterRoleBinding(ctx, orano2ims)
+		if err != nil {
+			r.Log.Error(err, "Failed to create deployment manager cluster role binding")
 			return
 		}
 
@@ -154,13 +176,6 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		err = r.createConfigMap(ctx, orano2ims, utils.ORANO2IMSConfigMapName)
 		if err != nil {
 			r.Log.Error(err, "Failed to deploy ConfigMap for Deployment Manager server.")
-			return
-		}
-
-		// Create the needed ServiceAccount.
-		err = r.createServiceAccount(ctx, orano2ims, utils.ORANO2IMSDeploymentManagerServerName)
-		if err != nil {
-			r.Log.Error(err, "Failed to deploy ServiceAccount for Deployment Manager server.")
 			return
 		}
 
@@ -180,13 +195,6 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	// Start the alert subscription server if required by the Spec.
 	if orano2ims.Spec.AlarmSubscriptionServer {
-		// Create the client ServiceAccount.
-		err = r.createServiceAccount(ctx, orano2ims, utils.ORANO2IMSClientSAName)
-		if err != nil {
-			r.Log.Error(err, fmt.Sprintf("Failed to deploy ServiceAccount %s for alert subscription server.", utils.ORANO2IMSClientSAName))
-			return
-		}
-
 		// Create authz ConfigMap.
 		err = r.createConfigMap(ctx, orano2ims, utils.ORANO2IMSConfigMapName)
 		if err != nil {
@@ -222,6 +230,79 @@ func (r *ORANO2IMSReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
 	}
 	return
+}
+
+func (r *ORANO2IMSReconciler) createDeploymentManagerClusterRole(ctx context.Context,
+	orano2ims *oranv1alpha1.ORANO2IMS) error {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", orano2ims.Namespace, utils.ORANO2IMSDeploymentManagerServerName,
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			// We need to read manged clusters, as that is the main source for the
+			// information about clusters.
+			{
+				APIGroups: []string{
+					"cluster.open-cluster-management.io",
+				},
+				Resources: []string{
+					"managedclusters",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+
+			// We also need to read the secrets containing the admin kubeconfigs of the
+			// clusters.
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"secrets",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+		},
+	}
+	return utils.CreateK8sCR(ctx, r.Client, role, orano2ims, r.Scheme, utils.UPDATE)
+}
+
+func (r *ORANO2IMSReconciler) createDeploymentManagerClusterRoleBinding(ctx context.Context,
+	orano2ims *oranv1alpha1.ORANO2IMS) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				orano2ims.Namespace, utils.ORANO2IMSDeploymentManagerServerName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				orano2ims.Namespace, utils.ORANO2IMSDeploymentManagerServerName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: orano2ims.Namespace,
+				Name:      utils.ORANO2IMSDeploymentManagerServerName,
+			},
+		},
+	}
+	return utils.CreateK8sCR(ctx, r.Client, binding, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) deployServer(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, serverName string) error {
@@ -291,8 +372,7 @@ func (r *ORANO2IMSReconciler) deployServer(ctx context.Context, orano2ims *oranv
 	}
 
 	r.Log.Info("[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
-	return utils.CreateK8sCR(ctx, r.Client, newDeployment,
-		orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, newDeployment, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createConfigMap(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -310,8 +390,7 @@ func (r *ORANO2IMSReconciler) createConfigMap(ctx context.Context, orano2ims *or
 	}
 
 	r.Log.Info("[createService] Create/Update/Patch Service: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, r.Client,
-		configMap, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, configMap, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createServiceAccount(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -333,8 +412,7 @@ func (r *ORANO2IMSReconciler) createServiceAccount(ctx context.Context, orano2im
 	}
 
 	r.Log.Info("[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, r.Client,
-		newServiceAccount, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, newServiceAccount, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createService(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -370,8 +448,7 @@ func (r *ORANO2IMSReconciler) createService(ctx context.Context, orano2ims *oran
 	}
 
 	r.Log.Info("[createService] Create/Update/Patch Service: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, r.Client,
-		newService, orano2ims, r.Scheme, utils.PATCH)
+	return utils.CreateK8sCR(ctx, r.Client, newService, orano2ims, r.Scheme, utils.PATCH)
 }
 
 func (r *ORANO2IMSReconciler) createIngress(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS) error {
@@ -480,8 +557,7 @@ func (r *ORANO2IMSReconciler) createIngress(ctx context.Context, orano2ims *oran
 	}
 
 	r.Log.Info("[createIngress] Create/Update/Patch Ingress: ", "name", utils.ORANO2IMSIngressName)
-	return utils.CreateK8sCR(ctx, r.Client,
-		newIngress, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, newIngress, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) updateORANO2ISMStatusConditions(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, deploymentName string) {
