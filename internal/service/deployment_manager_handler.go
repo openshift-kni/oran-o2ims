@@ -579,8 +579,24 @@ func (h *DeploymentManagerHandler) fetchProfile(ctx context.Context,
 		return
 	}
 
-	// Fetch the kubeconfig that was used to register the hub, and then use it to fetch the
-	// admin kubeconfig of the hub:
+	// First we will try to get the admin Kubeconfig from the namespace of the cluster. This
+	// will work if the cluster was provisioned using ACM and assisted installer.
+	assistedInstallerAdminKubeconfig, err := h.fetchAssistedInstallerAdminKubeconfig(
+		ctx,
+		h.hubClient,
+		cluster,
+	)
+	if err != nil {
+		return
+	}
+	if assistedInstallerAdminKubeconfig != nil {
+		h.logger.Info(
+			"Using assisted installer admin kubeconfig",
+			slog.String("cluster", cluster),
+		)
+		result, err = h.makeProfile(assistedInstallerAdminKubeconfig)
+		return
+	}
 
 	// When using a global hub we need first to fetch the admin Kubeconfig of the regular hub.
 	// For that we use the Kubeconfig that was used to register that regular hub.
@@ -638,9 +654,55 @@ func (h *DeploymentManagerHandler) fetchProfile(ctx context.Context,
 	if err != nil {
 		return
 	}
+	h.logger.Info(
+		"Using registration admin kubeconfig",
+		slog.String("cluster", cluster),
+	)
 
 	// Make the profile data from the cluster admin kubeconfig:
 	result, err = h.makeProfile(clusterAdminKubeconfig)
+	return
+}
+
+// fetchAssistedInstallerAdminKubeconfig uses the given Kubernetes API client to fetch the admin
+// kubeconfig that is created by the assisted installer when cluster installation finishes. It
+// returns the serialized kubeconfig, or nil if it doesn't exist, for example if the cluster
+// was created with some other mechanism and then manually registered.
+func (h *DeploymentManagerHandler) fetchAssistedInstallerAdminKubeconfig(ctx context.Context,
+	client clnt.Client, clusterName string) (result []byte, err error) {
+	// The assisted installer stores the kubeconfig in a secret inside the namespace of the
+	// cluster:
+	secret := &corev1.Secret{}
+	key := clnt.ObjectKey{
+		Namespace: clusterName,
+		Name:      fmt.Sprintf("%s-admin-kubeconfig", clusterName),
+	}
+	err = client.Get(ctx, key, secret)
+	if apierrors.IsNotFound(err) {
+		h.logger.Info(
+			"Assisted installer kubeconfig secret doesn't exist",
+			slog.String("cluster", clusterName),
+			slog.String("namespace", key.Namespace),
+			slog.String("secret", key.Name),
+		)
+		err = nil
+		return
+	}
+
+	// The secret should contain a `kubeconfig` entry with the YAML text of the kubeconfig:
+	content, ok := secret.Data["kubeconfig"]
+	if !ok {
+		h.logger.Warn(
+			"Assisted installer kubeconfig secret doesn't contain the kubeconfig text",
+			slog.String("cluster", clusterName),
+			slog.String("namespace", key.Namespace),
+			slog.String("secret", key.Name),
+		)
+		return
+	}
+
+	// Return the YAML text:
+	result = content
 	return
 }
 
