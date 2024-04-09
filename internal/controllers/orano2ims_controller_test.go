@@ -77,7 +77,7 @@ var _ = BeforeSuite(func() {
 
 var _ = DescribeTable(
 	"Reconciler",
-	func(objs []client.Object, request reconcile.Request, validate func(result ctrl.Result, reconciler ORANO2IMSReconciler)) {
+	func(objs []client.Object, request reconcile.Request, validate func(result ctrl.Result, reconciler Reconciler)) {
 		// Declare the Namespace for the O-RAN O2IMS resource.
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -93,9 +93,9 @@ var _ = DescribeTable(
 		Expect(err).ToNot(HaveOccurred())
 
 		// Initialize the O-RAN O2IMS reconciler.
-		r := &ORANO2IMSReconciler{
+		r := &Reconciler{
 			Client: fakeClient,
-			Log:    logr.Discard(),
+			Logger: logr.Discard(),
 		}
 
 		// Reconcile.
@@ -125,7 +125,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler ORANO2IMSReconciler) {
+		func(result ctrl.Result, reconciler Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check that the metadata server deployment exists.
@@ -189,7 +189,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler ORANO2IMSReconciler) {
+		func(result ctrl.Result, reconciler Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check the metadata server deployment exists.
@@ -270,7 +270,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler ORANO2IMSReconciler) {
+		func(result ctrl.Result, reconciler Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check that the metadata deployment exists.
@@ -317,7 +317,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler ORANO2IMSReconciler) {
+		func(result ctrl.Result, reconciler Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 			// Check the metadata server deployment does not exist.
 			metadataDeployment := &appsv1.Deployment{}
