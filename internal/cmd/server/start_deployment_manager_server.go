@@ -173,13 +173,6 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
-	if backendToken == "" {
-		logger.Error(
-			"Backend token is empty",
-			"flag", backendTokenFlagName,
-		)
-		return exit.Error(1)
-	}
 	backendTokenFile, err := flags.GetString(backendTokenFileFlagName)
 	if err != nil {
 		logger.Error(
