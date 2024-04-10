@@ -67,8 +67,10 @@ spec:
         #   type: RuntimeDefault
       containers:
       - command:
-        - /manager
+        - /oran-o2ims
         args:
+        - start
+        - controller-manager
         - --leader-elect
         image: controller:latest
         name: manager

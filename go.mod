@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/coreos/go-semver v0.3.1
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.4.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.1
