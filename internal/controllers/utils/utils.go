@@ -19,18 +19,20 @@ import (
 
 var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
-func CreateK8sCR(ctx context.Context, c client.Client, Name string, Namespace string,
+func CreateK8sCR(ctx context.Context, c client.Client,
 	newObject client.Object, ownerObject client.Object, oldObject client.Object,
 	runtimeScheme *runtime.Scheme, operation string) (err error) {
 
-	oranUtilsLog.Info("[CreateK8sCR] Resource", "name", Name)
+	// Get the name and namespace of the object:
+	key := client.ObjectKeyFromObject(newObject)
+	oranUtilsLog.Info("[CreateK8sCR] Resource", "name", key.Name)
 	// Set owner reference.
 	if err = controllerutil.SetControllerReference(ownerObject, newObject, runtimeScheme); err != nil {
 		return err
 	}
 
 	// Check if the CR already exists.
-	err = c.Get(ctx, types.NamespacedName{Name: Name, Namespace: Namespace}, oldObject)
+	err = c.Get(ctx, key, oldObject)
 
 	// If there was an error obtaining the CR and the error was "Not found", create the object.
 	// If any other other occurred, return the error.
