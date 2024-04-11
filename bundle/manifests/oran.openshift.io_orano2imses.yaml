@@ -34,6 +34,8 @@ spec:
           spec:
             description: ORANO2IMSSpec defines the desired state of ORANO2IMS
             properties:
+              alarmSubscriptionServer:
+                type: boolean
               backendToken:
                 type: string
               backendType:
@@ -49,15 +51,27 @@ spec:
               deploymentManagerServer:
                 default: false
                 type: boolean
+              extensions:
+                description: This field allows the addition of extra O-Cloud information
+                items:
+                  type: string
+                type: array
               ingressHost:
                 type: string
               metadataServer:
                 default: false
                 type: boolean
+              resourceServer:
+                default: false
+                type: boolean
+              searchAPIBackendURL:
+                type: string
             required:
+            - alarmSubscriptionServer
             - cloudId
             - deploymentManagerServer
             - metadataServer
+            - resourceServer
             type: object
           status:
             description: ORANO2IMSStatus defines the observed state of ORANO2IMS
@@ -141,6 +155,8 @@ spec:
                   deploymentServerStatus:
                     type: string
                   metadataServerStatus:
+                    type: string
+                  resourceServerStatus:
                     type: string
                 type: object
             type: object

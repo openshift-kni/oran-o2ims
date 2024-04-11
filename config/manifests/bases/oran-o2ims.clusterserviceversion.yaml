@@ -8,7 +8,22 @@ metadata:
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
-  customresourcedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: ORANO2IMS is the Schema for the orano2ims API
+      displayName: ORANO2 IMS
+      kind: ORANO2IMS
+      name: orano2ims.oran.openshift.io
+      statusDescriptors:
+      - displayName: Conditions
+        path: deploymentStatus.conditions
+      - displayName: Deployment Server Status
+        path: deploymentStatus.deploymentServerStatus
+      - displayName: Metadata Server Status
+        path: deploymentStatus.metadataServerStatus
+      - displayName: Resource Server Status
+        path: deploymentStatus.resourceServerStatus
+      version: v1alpha1
   description: Deploys the ORAN O2IMS services
   displayName: ORAN O2IMS Operator
   icon:
