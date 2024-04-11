@@ -26,9 +26,16 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	// Get the name and namespace of the object:
 	key := client.ObjectKeyFromObject(newObject)
 	oranUtilsLog.Info("[CreateK8sCR] Resource", "name", key.Name)
-	// Set owner reference.
-	if err = controllerutil.SetControllerReference(ownerObject, newObject, runtimeScheme); err != nil {
-		return err
+
+	// We can set the owner reference only for objects that live in the same namespace, as cross
+	// namespace owners are forbidden. This also applies to non-namespaced objects like cluster
+	// roles or cluster role bindings; those have empty namespaces so the equals comparison
+	// should also work.
+	if ownerObject.GetNamespace() == key.Namespace {
+		err = controllerutil.SetControllerReference(ownerObject, newObject, runtimeScheme)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Check if the CR already exists.
