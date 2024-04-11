@@ -292,7 +292,7 @@ func (r *ORANO2IMSReconciler) deployServer(ctx context.Context, orano2ims *oranv
 
 	r.Log.Info("[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
 	return utils.CreateK8sCR(ctx, r.Client, newDeployment,
-		orano2ims, &appsv1.Deployment{}, r.Scheme, utils.UPDATE)
+		orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createConfigMap(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -311,7 +311,7 @@ func (r *ORANO2IMSReconciler) createConfigMap(ctx context.Context, orano2ims *or
 
 	r.Log.Info("[createService] Create/Update/Patch Service: ", "name", resourceName)
 	return utils.CreateK8sCR(ctx, r.Client,
-		configMap, orano2ims, &corev1.ConfigMap{}, r.Scheme, utils.UPDATE)
+		configMap, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createServiceAccount(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -334,7 +334,7 @@ func (r *ORANO2IMSReconciler) createServiceAccount(ctx context.Context, orano2im
 
 	r.Log.Info("[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
 	return utils.CreateK8sCR(ctx, r.Client,
-		newServiceAccount, orano2ims, &corev1.ServiceAccount{}, r.Scheme, utils.UPDATE)
+		newServiceAccount, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createService(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -371,7 +371,7 @@ func (r *ORANO2IMSReconciler) createService(ctx context.Context, orano2ims *oran
 
 	r.Log.Info("[createService] Create/Update/Patch Service: ", "name", resourceName)
 	return utils.CreateK8sCR(ctx, r.Client,
-		newService, orano2ims, &corev1.Service{}, r.Scheme, utils.PATCH)
+		newService, orano2ims, r.Scheme, utils.PATCH)
 }
 
 func (r *ORANO2IMSReconciler) createIngress(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS) error {
@@ -481,7 +481,7 @@ func (r *ORANO2IMSReconciler) createIngress(ctx context.Context, orano2ims *oran
 
 	r.Log.Info("[createIngress] Create/Update/Patch Ingress: ", "name", utils.ORANO2IMSIngressName)
 	return utils.CreateK8sCR(ctx, r.Client,
-		newIngress, orano2ims, &networkingv1.Ingress{}, r.Scheme, utils.UPDATE)
+		newIngress, orano2ims, r.Scheme, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) updateORANO2ISMStatusConditions(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, deploymentName string) {
