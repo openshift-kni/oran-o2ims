@@ -23,7 +23,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
@@ -49,8 +48,7 @@ import (
 // ORANO2IMSReconciler reconciles a ORANO2IMS object
 type ORANO2IMSReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log logr.Logger
 }
 
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2imses,verbs=get;list;watch;create;update;patch;delete
@@ -274,7 +272,7 @@ func (r *ORANO2IMSReconciler) createDeploymentManagerClusterRole(ctx context.Con
 			},
 		},
 	}
-	return utils.CreateK8sCR(ctx, r.Client, role, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, role, orano2ims, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createDeploymentManagerClusterRoleBinding(ctx context.Context,
@@ -302,7 +300,7 @@ func (r *ORANO2IMSReconciler) createDeploymentManagerClusterRoleBinding(ctx cont
 			},
 		},
 	}
-	return utils.CreateK8sCR(ctx, r.Client, binding, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, binding, orano2ims, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) deployServer(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, serverName string) error {
@@ -372,7 +370,7 @@ func (r *ORANO2IMSReconciler) deployServer(ctx context.Context, orano2ims *oranv
 	}
 
 	r.Log.Info("[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
-	return utils.CreateK8sCR(ctx, r.Client, newDeployment, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, newDeployment, orano2ims, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createConfigMap(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -390,7 +388,7 @@ func (r *ORANO2IMSReconciler) createConfigMap(ctx context.Context, orano2ims *or
 	}
 
 	r.Log.Info("[createService] Create/Update/Patch Service: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, r.Client, configMap, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, configMap, orano2ims, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createServiceAccount(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -412,7 +410,7 @@ func (r *ORANO2IMSReconciler) createServiceAccount(ctx context.Context, orano2im
 	}
 
 	r.Log.Info("[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, r.Client, newServiceAccount, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, newServiceAccount, orano2ims, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) createService(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, resourceName string) error {
@@ -448,7 +446,7 @@ func (r *ORANO2IMSReconciler) createService(ctx context.Context, orano2ims *oran
 	}
 
 	r.Log.Info("[createService] Create/Update/Patch Service: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, r.Client, newService, orano2ims, r.Scheme, utils.PATCH)
+	return utils.CreateK8sCR(ctx, r.Client, newService, orano2ims, utils.PATCH)
 }
 
 func (r *ORANO2IMSReconciler) createIngress(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS) error {
@@ -557,7 +555,7 @@ func (r *ORANO2IMSReconciler) createIngress(ctx context.Context, orano2ims *oran
 	}
 
 	r.Log.Info("[createIngress] Create/Update/Patch Ingress: ", "name", utils.ORANO2IMSIngressName)
-	return utils.CreateK8sCR(ctx, r.Client, newIngress, orano2ims, r.Scheme, utils.UPDATE)
+	return utils.CreateK8sCR(ctx, r.Client, newIngress, orano2ims, utils.UPDATE)
 }
 
 func (r *ORANO2IMSReconciler) updateORANO2ISMStatusConditions(ctx context.Context, orano2ims *oranv1alpha1.ORANO2IMS, deploymentName string) {

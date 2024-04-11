@@ -96,7 +96,6 @@ var _ = DescribeTable(
 		r := &ORANO2IMSReconciler{
 			Client: fakeClient,
 			Log:    logr.Discard(),
-			Scheme: fakeClient.Scheme(),
 		}
 
 		// Reconcile.
