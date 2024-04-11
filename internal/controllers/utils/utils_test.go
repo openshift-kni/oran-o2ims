@@ -162,8 +162,8 @@ var _ = Describe("DoesK8SResourceExist", func() {
 		Expect(k8sResourceExists).To(Equal(false))
 
 		// Create the deployment.
-		err = CreateK8sCR(context.TODO(), fakeClient, deployment.Name,
-			deployment.Namespace, deployment, orano2ims, &appsv1.Deployment{}, suitescheme, UPDATE)
+		err = CreateK8sCR(context.TODO(), fakeClient,
+			deployment, orano2ims, &appsv1.Deployment{}, suitescheme, UPDATE)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check that the deployment has been created.
@@ -210,8 +210,8 @@ var _ = Describe("DoesK8SResourceExist", func() {
 		Expect(err).To(MatchError("deployments.apps \"deployment-server-2\" not found"))
 
 		// Create the deployment.
-		err = CreateK8sCR(context.TODO(), fakeClient, deployment.Name,
-			deployment.Namespace, deployment, orano2ims, &appsv1.Deployment{}, suitescheme, UPDATE)
+		err = CreateK8sCR(context.TODO(), fakeClient,
+			deployment, orano2ims, &appsv1.Deployment{}, suitescheme, UPDATE)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check that the deployment has been created.
@@ -226,8 +226,8 @@ var _ = Describe("DoesK8SResourceExist", func() {
 
 		// Update the SA Name.
 		newDeployment.Spec.Template.Spec.ServiceAccountName = "new-sa-name"
-		err = CreateK8sCR(context.TODO(), fakeClient, newDeployment.Name,
-			newDeployment.Namespace, newDeployment, orano2ims, &appsv1.Deployment{}, suitescheme, UPDATE)
+		err = CreateK8sCR(context.TODO(), fakeClient,
+			newDeployment, orano2ims, &appsv1.Deployment{}, suitescheme, UPDATE)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Get the deployment and check that the SA Name has been updated.
