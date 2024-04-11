@@ -20,7 +20,7 @@ import (
 var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
 func CreateK8sCR(ctx context.Context, c client.Client,
-	newObject client.Object, ownerObject client.Object, oldObject client.Object,
+	newObject client.Object, ownerObject client.Object,
 	runtimeScheme *runtime.Scheme, operation string) (err error) {
 
 	// Get the name and namespace of the object:
@@ -31,7 +31,11 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 		return err
 	}
 
-	// Check if the CR already exists.
+	// Create an empty object of the same type of the new object. We will use it to fetch the
+	// current state.
+	objectType := reflect.TypeOf(newObject).Elem()
+	oldObject := reflect.New(objectType).Interface().(client.Object)
+
 	err = c.Get(ctx, key, oldObject)
 
 	// If there was an error obtaining the CR and the error was "Not found", create the object.
