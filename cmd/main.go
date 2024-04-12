@@ -105,7 +105,6 @@ func main() {
 	if err = (&controllers.ORANO2IMSReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controller").WithName("ORAN-O2IMS"),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ORANO2IMS")
 		os.Exit(1)

@@ -11,7 +11,6 @@ import (
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -21,7 +20,7 @@ var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
 func CreateK8sCR(ctx context.Context, c client.Client,
 	newObject client.Object, ownerObject client.Object,
-	runtimeScheme *runtime.Scheme, operation string) (err error) {
+	operation string) (err error) {
 
 	// Get the name and namespace of the object:
 	key := client.ObjectKeyFromObject(newObject)
@@ -32,7 +31,7 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	// roles or cluster role bindings; those have empty namespaces so the equals comparison
 	// should also work.
 	if ownerObject.GetNamespace() == key.Namespace {
-		err = controllerutil.SetControllerReference(ownerObject, newObject, runtimeScheme)
+		err = controllerutil.SetControllerReference(ownerObject, newObject, c.Scheme())
 		if err != nil {
 			return err
 		}
