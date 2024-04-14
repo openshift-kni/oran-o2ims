@@ -14,13 +14,16 @@ oc create route passthrough search-api --service=search-search-api -n open-clust
 ```
 
 ### Enable the search collector
-For every managed cluster, create a `KlusterletAddonConfig` with enabled `searchCollector`:
-```yaml
+For every managed cluster, create a namespace and a `KlusterletAddonConfig` with enabled `searchCollector`:
+```bash
+for i in {1..2}; do
+oc new-project mgmt-spoke$i
+oc apply -f - <<-EOF
 apiVersion: agent.open-cluster-management.io/v1
 kind: KlusterletAddonConfig
 metadata:
-  name: mgmt-spoke1
-  namespace: mgmt-spoke1
+  name: mgmt-spoke$i
+  namespace: mgmt-spoke$i
 spec:
   searchCollector:
     enabled: true
@@ -32,6 +35,9 @@ spec:
     enabled: true
   policyController:
     enabled: true
+EOF
+done
+oc project default
 ```
 
 ### Create a token for accessing the API
