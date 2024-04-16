@@ -212,12 +212,12 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 			return
 		}
 	}
-	// Start the alert subscription server if required by the Spec.
+	// Start the alarm subscription server if required by the Spec.
 	if t.object.Spec.AlarmSubscriptionServer {
 		// Create authz ConfigMap.
 		err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
 		if err != nil {
-			t.logger.Error(err, "Failed to deploy ConfigMap for alert subscription server.")
+			t.logger.Error(err, "Failed to deploy ConfigMap for alarm subscription server.")
 			return
 		}
 
@@ -228,17 +228,17 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 			return
 		}
 
-		// Create the Service needed for the alert subscription server.
+		// Create the Service needed for the alarm subscription server.
 		err = t.createService(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
 		if err != nil {
 			t.logger.Error(err, "Failed to deploy Service for Alarm Subscription server.")
 			return
 		}
 
-		// Create the alert subscription-server deployment.
+		// Create the alarm subscription-server deployment.
 		err = t.deployServer(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
 		if err != nil {
-			t.logger.Error(err, "Failed to deploy the alert subscription server.")
+			t.logger.Error(err, "Failed to deploy the alarm subscription server.")
 			return
 		}
 	}
@@ -547,14 +547,14 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureMonitoring/v1/alertSubscriptions",
+								Path: "/o2ims-infrastructureMonitoring/v1/alarmSubscriptions",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "alert-subscription-server",
+										Name: "alarm-subscription-server",
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.ORANO2IMSIngressName,
 										},
