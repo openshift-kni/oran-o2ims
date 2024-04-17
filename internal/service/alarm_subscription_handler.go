@@ -24,20 +24,30 @@ import (
 
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
+	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
-	"golang.org/x/exp/maps"
+
+	"github.com/openshift-kni/oran-o2ims/internal/persiststorage"
 )
 
-// DeploymentManagerHandlerBuilder contains the data and logic needed to create a new deployment
+const (
+	TestNamespace     = "orantest"
+	TestConfigmapName = "orantestconfigmapalarmsub"
+	FieldOwner        = "oran-o2ims"
+)
+
+// alarmSubscriptionHandlerBuilder contains the data and logic needed to create a new deployment
 // manager collection handler. Don't create instances of this type directly, use the
-// NewDeploymentManagerHandler function instead.
+// NewAlarmSubscriptionHandler function instead.
 type alarmSubscriptionHandlerBuilder struct {
 	logger         *slog.Logger
 	loggingWrapper func(http.RoundTripper) http.RoundTripper
 	cloudID        string
 	extensions     []string
+	kubeClient     *k8s.Client
 }
 
 // alarmSubscriptionHander knows how to respond to requests to list deployment managers.
@@ -48,11 +58,13 @@ type alarmSubscriptionHandler struct {
 	loggingWrapper           func(http.RoundTripper) http.RoundTripper
 	cloudID                  string
 	extensions               []string
+	kubeClient               *k8s.Client
 	jsonAPI                  jsoniter.API
 	selectorEvaluator        *search.SelectorEvaluator
 	jqTool                   *jq.Tool
 	subscritionMapMemoryLock *sync.Mutex
-	subscriptionMap          map[string]data.Object
+	subscriptionMap          *map[string]data.Object
+	persistStore             *persiststorage.KubeConfigMapStore
 }
 
 // NewAlarmSubscriptionHandler creates a builder that can then be used to configure and create a
@@ -90,8 +102,15 @@ func (b *alarmSubscriptionHandlerBuilder) SetExtensions(
 	return b
 }
 
+// SetExtensions sets the fields that will be added to the extensions.
+func (b *alarmSubscriptionHandlerBuilder) SetKubeClient(
+	kubeClient *k8s.Client) *alarmSubscriptionHandlerBuilder {
+	b.kubeClient = kubeClient
+	return b
+}
+
 // Build uses the data stored in the builder to create anad configure a new handler.
-func (b *alarmSubscriptionHandlerBuilder) Build() (
+func (b *alarmSubscriptionHandlerBuilder) Build(ctx context.Context) (
 	result *alarmSubscriptionHandler, err error) {
 	// Check parameters:
 	if b.logger == nil {
@@ -100,6 +119,11 @@ func (b *alarmSubscriptionHandlerBuilder) Build() (
 	}
 	if b.cloudID == "" {
 		err = errors.New("cloud identifier is mandatory")
+		return
+	}
+
+	if b.kubeClient == nil {
+		err = errors.New("kubeClient is mandatory")
 		return
 	}
 
@@ -140,23 +164,47 @@ func (b *alarmSubscriptionHandlerBuilder) Build() (
 		}
 	}
 
+	// create persist storeage option
+	persistStore := persiststorage.NewKubeConfigMapStore().
+		SetNameSpace(TestNamespace).
+		SetName(TestConfigmapName).
+		SetFieldOwnder(FieldOwner).
+		SetJsonAPI(&jsonAPI).
+		SetClient(b.kubeClient)
+
 	// Create and populate the object:
 	result = &alarmSubscriptionHandler{
 		logger:                   b.logger,
 		loggingWrapper:           b.loggingWrapper,
 		cloudID:                  b.cloudID,
+		kubeClient:               b.kubeClient,
 		extensions:               slices.Clone(b.extensions),
 		selectorEvaluator:        selectorEvaluator,
 		jsonAPI:                  jsonAPI,
 		jqTool:                   jqTool,
 		subscritionMapMemoryLock: &sync.Mutex{},
-		subscriptionMap:          map[string]data.Object{},
+		subscriptionMap:          &map[string]data.Object{},
+		persistStore:             persistStore,
 	}
 
 	b.logger.Debug(
 		"alarmSubscriptionHandler build:",
 		"CloudID", b.cloudID,
 	)
+
+	err = result.recoveryFromPersistStore(ctx)
+	if err != nil {
+		b.logger.Error(
+			"alarmSubscriptionHandler failed to recovery from persistStore ", err,
+		)
+	}
+
+	err = result.watchPersistStore(ctx)
+	if err != nil {
+		b.logger.Error(
+			"alarmSubscriptionHandler failed to watch persist store changes ", err,
+		)
+	}
 
 	return
 }
@@ -222,6 +270,10 @@ func (h *alarmSubscriptionHandler) Add(ctx context.Context,
 	id, err := h.addItem(ctx, *request)
 
 	if err != nil {
+		h.logger.Debug(
+			"alarmSubscriptionHandler Add:",
+			"err", err.Error(),
+		)
 		return
 	}
 
@@ -249,6 +301,7 @@ func (h *alarmSubscriptionHandler) Delete(ctx context.Context,
 		ctx,
 		"alarmSubscriptionHandler delete:",
 	)
+
 	err = h.deleteItem(ctx, *request)
 
 	// Return the result:
@@ -260,18 +313,26 @@ func (h *alarmSubscriptionHandler) fetchItem(ctx context.Context,
 	id string) (result data.Object, err error) {
 	h.subscritionMapMemoryLock.Lock()
 	defer h.subscritionMapMemoryLock.Unlock()
-	result, ok := h.subscriptionMap[id]
+	obj, ok := (*h.subscriptionMap)[id]
 	if !ok {
 		err = ErrNotFound
 		return
 	}
+
+	result, _ = h.encodeSubId(ctx, id, obj)
 	return
 }
 
 func (h *alarmSubscriptionHandler) fetchItems(ctx context.Context) (result data.Stream, err error) {
 	h.subscritionMapMemoryLock.Lock()
 	defer h.subscritionMapMemoryLock.Unlock()
-	ar := maps.Values(h.subscriptionMap)
+
+	ar := make([]data.Object, 0, len(*h.subscriptionMap))
+
+	for key, value := range *h.subscriptionMap {
+		obj, _ := h.encodeSubId(ctx, key, value)
+		ar = append(ar, obj)
+	}
 	h.logger.DebugContext(
 		ctx,
 		"alarmSubscriptionHandler fetchItems:",
@@ -280,13 +341,79 @@ func (h *alarmSubscriptionHandler) fetchItems(ctx context.Context) (result data.
 	return
 }
 
+func (h *alarmSubscriptionHandler) addItem(
+	ctx context.Context, input_data AddRequest) (subId string, err error) {
+
+	subId = h.getSubcriptionId()
+
+	//save the subscription in configuration map
+	//value, err := jsoniter.MarshalIndent(&input_data.Object, "", " ")
+	value, err := h.jsonAPI.MarshalIndent(&input_data.Object, "", " ")
+	if err != nil {
+		return
+	}
+	err = h.persistStoreAddEntry(ctx, subId, string(value))
+	if err != nil {
+		h.logger.Debug(
+			"alarmSubscriptionHandler addItem:",
+			"err", err.Error(),
+		)
+		return
+	}
+
+	h.addToSubscriptionMap(subId, input_data.Object)
+
+	return
+}
+
+func (h *alarmSubscriptionHandler) deleteItem(
+	ctx context.Context, delete_req DeleteRequest) (err error) {
+
+	err = h.persistStoreDeleteEntry(ctx, delete_req.Variables[0])
+	if err != nil {
+		return
+	}
+
+	h.deleteToSubscriptionMap(delete_req.Variables[0])
+
+	return
+}
+
+func (h *alarmSubscriptionHandler) mapItem(ctx context.Context,
+	input data.Object) (output data.Object, err error) {
+
+	//TBD only save related attributes in the future
+	return input, nil
+}
+func (h *alarmSubscriptionHandler) addToSubscriptionMap(key string, value data.Object) {
+	h.subscritionMapMemoryLock.Lock()
+	defer h.subscritionMapMemoryLock.Unlock()
+	(*h.subscriptionMap)[key] = value
+}
+func (h *alarmSubscriptionHandler) deleteToSubscriptionMap(key string) {
+	h.subscritionMapMemoryLock.Lock()
+	defer h.subscritionMapMemoryLock.Unlock()
+	//test if the key in the map
+	_, ok := (*h.subscriptionMap)[key]
+
+	if !ok {
+		return
+	}
+
+	delete(*h.subscriptionMap, key)
+}
+
+func (h *alarmSubscriptionHandler) assignSubscriptionMap(newMap map[string]data.Object) {
+	h.subscritionMapMemoryLock.Lock()
+	defer h.subscritionMapMemoryLock.Unlock()
+	h.subscriptionMap = &newMap
+}
+
 func (h *alarmSubscriptionHandler) getSubcriptionId() (subId string) {
 	subId = uuid.New().String()
 	return
 }
 
-// Not sure if we need this in the future
-// add it for now for the test purpose
 func (h *alarmSubscriptionHandler) encodeSubId(ctx context.Context,
 	subId string, input data.Object) (output data.Object, err error) {
 	//get consumer name, subscriptions
@@ -316,45 +443,32 @@ func (h *alarmSubscriptionHandler) decodeSubId(ctx context.Context,
 	}
 	return
 }
-func (h *alarmSubscriptionHandler) addItem(
-	ctx context.Context, input_data AddRequest) (subId string, err error) {
 
-	subId = h.getSubcriptionId()
-	object, err := h.encodeSubId(ctx, subId, input_data.Object)
+func (h *alarmSubscriptionHandler) persistStoreAddEntry(
+	ctx context.Context, entryKey string, value string) (err error) {
+	return persiststorage.Add(h.persistStore, ctx, entryKey, value)
+}
+
+func (h *alarmSubscriptionHandler) persistStoreDeleteEntry(
+	ctx context.Context, entryKey string) (err error) {
+	err = persiststorage.Delete(h.persistStore, ctx, entryKey)
+	return
+}
+
+func (h *alarmSubscriptionHandler) recoveryFromPersistStore(ctx context.Context) (err error) {
+	newMap, err := persiststorage.GetAll(h.persistStore, ctx)
 	if err != nil {
 		return
 	}
-
-	object, err = h.mapItem(ctx, object)
-	h.subscritionMapMemoryLock.Lock()
-	defer h.subscritionMapMemoryLock.Unlock()
-	h.subscriptionMap[subId] = object
-
+	h.assignSubscriptionMap(newMap)
 	return
 }
 
-func (h *alarmSubscriptionHandler) deleteItem(
-	ctx context.Context, delete_req DeleteRequest) (err error) {
+func (h *alarmSubscriptionHandler) watchPersistStore(ctx context.Context) (err error) {
+	err = persiststorage.ProcessChanges(h.persistStore, ctx, &h.subscriptionMap, h.subscritionMapMemoryLock)
 
-	h.subscritionMapMemoryLock.Lock()
-	defer h.subscritionMapMemoryLock.Unlock()
-
-	//test if the key in the map
-	_, ok := h.subscriptionMap[delete_req.Variables[0]]
-
-	if !ok {
-		err = ErrNotFound
-		return
+	if err != nil {
+		panic("failed to launch watcher")
 	}
-
-	delete(h.subscriptionMap, delete_req.Variables[0])
-
 	return
-}
-
-func (h *alarmSubscriptionHandler) mapItem(ctx context.Context,
-	input data.Object) (output data.Object, err error) {
-
-	//TBD only save related attributes in the future
-	return input, nil
 }

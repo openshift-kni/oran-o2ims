@@ -19,15 +19,32 @@ import (
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift-kni/oran-o2ims/internal/data"
+	"github.com/openshift-kni/oran-o2ims/internal/k8s"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("alarm Subscription handler", func() {
 	Describe("Creation", func() {
+		var (
+			ctx        context.Context
+			fakeClient *k8s.Client
+		)
+
+		BeforeEach(func() {
+			// Create a context:
+			ctx = context.TODO()
+			fakeClient = k8s.NewFakeClient()
+		})
+
 		It("Can't be created without a logger", func() {
 			handler, err := NewAlarmSubscriptionHandler().
 				SetCloudID("123").
-				Build()
+				SetKubeClient(fakeClient).
+				Build(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(handler).To(BeNil())
 			msg := err.Error()
@@ -38,7 +55,8 @@ var _ = Describe("alarm Subscription handler", func() {
 		It("Can't be created without a cloud identifier", func() {
 			handler, err := NewAlarmSubscriptionHandler().
 				SetLogger(logger).
-				Build()
+				SetKubeClient(fakeClient).
+				Build(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(handler).To(BeNil())
 			msg := err.Error()
@@ -49,13 +67,35 @@ var _ = Describe("alarm Subscription handler", func() {
 
 	Describe("Behaviour", func() {
 		var (
-			ctx context.Context
+			ctx        context.Context
+			fakeClient *k8s.Client
 		)
 
 		BeforeEach(func() {
 			// Create a context:
-			ctx = context.Background()
-
+			ctx = context.TODO()
+			fakeClient = k8s.NewFakeClient()
+			//create fake namespace
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: TestNamespace,
+				},
+			}
+			err := fakeClient.Create(ctx, namespace, &client.CreateOptions{}, client.FieldOwner(FieldOwner))
+			Expect(err).ToNot(HaveOccurred())
+			configmap := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: TestNamespace,
+					Name:      TestConfigmapName,
+				},
+				Data: nil,
+			}
+			err = fakeClient.Create(ctx, configmap, &client.CreateOptions{}, client.FieldOwner(FieldOwner))
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Describe("List", func() {
@@ -66,7 +106,8 @@ var _ = Describe("alarm Subscription handler", func() {
 				handler, err := NewAlarmSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
-					Build()
+					SetKubeClient(fakeClient).
+					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(handler).ToNot(BeNil())
 
@@ -84,7 +125,8 @@ var _ = Describe("alarm Subscription handler", func() {
 				handler, err := NewAlarmSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
-					Build()
+					SetKubeClient(fakeClient).
+					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(handler).ToNot(BeNil())
 
@@ -146,7 +188,8 @@ var _ = Describe("alarm Subscription handler", func() {
 				handler, err := NewAlarmSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
-					Build()
+					SetKubeClient(fakeClient).
+					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Send the request. Note that we ignore the error here because
@@ -167,7 +210,8 @@ var _ = Describe("alarm Subscription handler", func() {
 				handler, err := NewAlarmSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
-					Build()
+					SetKubeClient(fakeClient).
+					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				obj_1 := data.Object{
 					"customerId": "test_custer_id",
@@ -202,7 +246,8 @@ var _ = Describe("alarm Subscription handler", func() {
 				handler, err := NewAlarmSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
-					Build()
+					SetKubeClient(fakeClient).
+					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				obj := data.Object{
 					"customerId": "test_custer_id",
