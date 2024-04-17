@@ -17,6 +17,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/openshift-kni/oran-o2ims/internal/cmd/operator"
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 )
 
@@ -32,5 +33,6 @@ func Start() *cobra.Command {
 	result.AddCommand(server.ResourceServer())
 	result.AddCommand(server.AlarmServer())
 	result.AddCommand(server.AlarmSubscriptionServer())
+	result.AddCommand(operator.ControllerManager())
 	return result
 }

@@ -61,6 +61,3 @@ FROM registry.access.redhat.com/ubi9-minimal:9.2 AS runtime
 COPY \
   --from=builder \
  /home/builder/project/oran-o2ims /usr/bin/oran-o2ims
-
-ENTRYPOINT \
-  ["/usr/bin/oran-o2ims"]
