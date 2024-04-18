@@ -153,7 +153,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
-		Logger: ctrl.Log.WithName("controller").WithName("ORAN-O2IMS"),
+		Logger: slog.With("controller", "ORAN-O2IMS"),
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(
 			"Unable to create controller",

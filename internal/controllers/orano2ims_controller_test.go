@@ -19,10 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -31,12 +29,9 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
@@ -47,33 +42,9 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var suitescheme = scheme.Scheme
-
 func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
-	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
 }
-
-func TestORANO2IMSReconciler(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Controller Suite")
-}
-
-var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-
-	By("Bootstrapping test environment")
-
-	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMS{})
-	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMSList{})
-	suitescheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.Ingress{})
-	suitescheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.IngressList{})
-	suitescheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceAccount{})
-	suitescheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceAccountList{})
-	suitescheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Service{})
-	suitescheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceList{})
-	suitescheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.Deployment{})
-	suitescheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
-})
 
 var _ = DescribeTable(
 	"Reconciler",
@@ -95,7 +66,7 @@ var _ = DescribeTable(
 		// Initialize the O-RAN O2IMS reconciler.
 		r := &Reconciler{
 			Client: fakeClient,
-			Logger: logr.Discard(),
+			Logger: logger,
 		}
 
 		// Reconcile.
