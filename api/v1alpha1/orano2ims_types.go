@@ -28,6 +28,13 @@ type ORANO2IMSSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// Image is the full reference of the container image that contains the binary. This is
+	// optional and the default will be the value passed to the `--image` command line flag of
+	// the controller manager.
+	//
+	//+optional
+	Image string `json:"image"`
+
 	CloudId string `json:"cloudId"`
 	//+kubebuilder:default=false
 	MetadataServer bool `json:"metadataServer"`

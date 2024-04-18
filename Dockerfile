@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/oran-o2ims .
+COPY --from=builder /workspace/oran-o2ims /usr/bin
 USER 65532:65532
 
-ENTRYPOINT ["/oran-o2ims"]
+ENTRYPOINT ["/usr/bin/oran-o2ims"]

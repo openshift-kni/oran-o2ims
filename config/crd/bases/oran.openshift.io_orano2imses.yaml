@@ -56,6 +56,12 @@ spec:
                 items:
                   type: string
                 type: array
+              image:
+                description: Image is the full reference of the container image that
+                  contains the binary. This is optional and the default will be the
+                  value passed to the `--image` command line flag of the controller
+                  manager.
+                type: string
               ingressHost:
                 type: string
               metadataServer:
