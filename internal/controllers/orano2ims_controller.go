@@ -62,6 +62,7 @@ import (
 type Reconciler struct {
 	client.Client
 	Logger *slog.Logger
+	Image  string
 }
 
 // reconcilerTask contains the information and logic needed to perform a single reconciliation
@@ -69,6 +70,7 @@ type Reconciler struct {
 // parameters.
 type reconcilerTask struct {
 	logger *slog.Logger
+	image  string
 	client client.Client
 	object *oranv1alpha1.ORANO2IMS
 }
@@ -101,6 +103,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 	task := &reconcilerTask{
 		logger: r.Logger,
 		client: r.Client,
+		image:  r.Image,
 		object: object,
 	}
 	result, err = task.run(ctx)
@@ -404,6 +407,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) er
 		return err
 	}
 
+	// Select the container image to use:
+	image := t.object.Spec.Image
+	if image == "" {
+		image = t.image
+	}
+
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
 		Replicas: k8sptr.To(int32(1)),
@@ -424,7 +433,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) er
 				Containers: []corev1.Container{
 					{
 						Name:            "server",
-						Image:           utils.ORANImage,
+						Image:           image,
 						ImagePullPolicy: "Always",
 						VolumeMounts:    deploymentVolumeMounts,
 						Command:         []string{"/usr/bin/oran-o2ims"},

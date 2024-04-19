@@ -58,6 +58,14 @@ RUN \
 
 FROM registry.access.redhat.com/ubi9-minimal:9.2 AS runtime
 
+# Install the binary:
 COPY \
   --from=builder \
  /home/builder/project/oran-o2ims /usr/bin/oran-o2ims
+
+# We need to explictly run the servers a a non-root user, otherwise if the container is in a pod
+# with `runAsNonRoot: true` in the security context it will fail to start. In addition the user
+# needs to be specified numerically, not with a user name like `nobody`, because otherwise the
+# cluster can't verify if it is root or not.
+USER \
+  65534:65534

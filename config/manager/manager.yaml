@@ -66,13 +66,28 @@ spec:
         # seccompProfile:
         #   type: RuntimeDefault
       containers:
-      - command:
-        - /oran-o2ims
-        - start
-        - controller-manager
-        - --leader-elect
+      - name: manager
         image: controller:latest
-        name: manager
+        env:
+        # Note that we have a kustomization replacement that copies the above `image` into this
+        # environment variable.
+        - name: IMAGE
+          value: controller:latest
+        command:
+        # We use a shell script here in order to be able to pass the value of the `IMAGE`
+        # environment variable in the `--image` flag. We don't wan to read environment variables
+        # directly from the binary because all the other command use flags as their main
+        # configuration mechanism, and we don't want to deviate from that.
+        #
+        # Please keep the `exec` before the command, it removes the shell from the picture once
+        # the controller manager starts.
+        - /usr/bin/bash
+        - -c
+        - |
+          exec \
+          /usr/bin/oran-o2ims start controller-manager \
+          --leader-elect \
+          --image="${IMAGE}"
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

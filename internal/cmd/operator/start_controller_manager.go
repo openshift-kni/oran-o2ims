@@ -69,8 +69,8 @@ func ControllerManager() *cobra.Command {
 	)
 	flags.StringVar(
 		&c.image,
-		"image",
-		"quay.io/openshift-kni:latest",
+		imageFlagName,
+		"quay.io/openshift-kni/oran-o2ims:latest",
 		"Reference of the container image containing the servers.",
 	)
 	return result
@@ -113,6 +113,16 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	ctrl.SetLogger(adapter)
 	klog.SetLogger(adapter)
 
+	// Check the flags:
+	if c.image == "" {
+		logger.ErrorContext(
+			ctx,
+			"Image flag is mandatory",
+			slog.String("flag", imageFlagName),
+		)
+		return exit.Error(1)
+	}
+
 	// Restrict to the following namespaces - subject to change.
 	namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
 	defaultNamespaces := make(map[string]cache.Config)
@@ -154,6 +164,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
 		Logger: slog.With("controller", "ORAN-O2IMS"),
+		Image:  c.image,
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(
 			"Unable to create controller",
@@ -178,7 +189,10 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	logger.Info("Starting manager")
+	logger.Info(
+		"Starting manager",
+		slog.String("image", c.image),
+	)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Error(
 			"Problem running manager",
@@ -189,3 +203,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	return nil
 }
+
+// Names of command line flags:
+const (
+	imageFlagName = "image"
+)
