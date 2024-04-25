@@ -80,6 +80,11 @@ func DeploymentManagerServer() *cobra.Command {
 		[]string{},
 		"Extension to add to deployment managers.",
 	)
+	_ = flags.String(
+		externalAddressFlagName,
+		"",
+		"External address.",
+	)
 	return result
 }
 
@@ -242,6 +247,21 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		slog.String("!token", backendToken),
 		slog.String("token_file", backendTokenFile),
 		slog.Any("extensions", extensions),
+	)
+
+	// Get the external address:
+	externalAddress, err := flags.GetString(externalAddressFlagName)
+	if err != nil {
+		logger.Error(
+			"Failed to get external address flag",
+			slog.String("flag", externalAddressFlagName),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	logger.Info(
+		"External address",
+		slog.String("value", externalAddress),
 	)
 
 	// Create the logging wrapper:

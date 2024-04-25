@@ -20,12 +20,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"strings"
 
 	"github.com/gorilla/mux"
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/ginkgo/v2/dsl/table"
 	. "github.com/onsi/gomega"
+	"github.com/peterhellberg/link"
 	"go.uber.org/mock/gomock"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
@@ -675,6 +677,248 @@ var _ = Describe("Adapter", func() {
 
 			// Verify the response:
 			Expect(recorder.Body).To(MatchJSON(`[{}]`))
+		})
+	})
+
+	Describe("Paging", func() {
+		It("Adds next page marker link", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ListRequest) (response *ListResponse, err error) {
+				response = &ListResponse{
+					Items:          data.Pour(),
+					NextPageMarker: []byte("mymarker"),
+				}
+				return
+			}
+			handler := NewMockHandler(ctrl)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			nonce := make([]byte, 12)
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				SetNextPageMarkerNonce(nonce).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mycollection",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify the response:
+			links := link.ParseHeader(recorder.Header())
+			Expect(links).ToNot(BeEmpty())
+			next := links["next"]
+			Expect(next).ToNot(BeNil())
+			url, err := neturl.Parse(next.URI)
+			Expect(err).ToNot(HaveOccurred())
+			query := url.Query()
+			text := query.Get("nextpage_opaque_marker")
+			Expect(text).To(Equal(
+				"AAAAAAAAAAAAAAAAft-pCX6aW3oPQfuRD8TT4mspJeJ9hXNc",
+			))
+		})
+
+		It("Preserves existing links", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ListRequest) (response *ListResponse, err error) {
+				response = &ListResponse{
+					Items:          data.Pour(),
+					NextPageMarker: []byte("mymarker"),
+				}
+				return
+			}
+			handler := NewMockHandler(ctrl)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			nonce := make([]byte, 12)
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				SetNextPageMarkerNonce(nonce).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Prepare an HTTP handler that adds a link to the header before calling
+			// the adapter:
+			linker := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Link", `<http://icons.com/myicon>; rel="icon"; color="red"`)
+				adapter.ServeHTTP(w, r)
+			})
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mycollection",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			linker.ServeHTTP(recorder, request)
+
+			// Verify that the response contains both the new `next` link and the
+			// previous `icon` link:
+			links := link.ParseHeader(recorder.Header())
+			Expect(links).ToNot(BeEmpty())
+			Expect(links).To(HaveKey("next"))
+			Expect(links).To(HaveKey("icon"))
+
+			// Verify that the previous `icon` link hasn't been modified:
+			icon := links["icon"]
+			Expect(icon.URI).To(Equal("http://icons.com/myicon"))
+			Expect(icon.Rel).To(Equal("icon"))
+			Expect(icon.Extra).To(HaveLen(1))
+			Expect(icon.Extra).To(HaveKeyWithValue("color", "red"))
+		})
+
+		It("Uses provided external address", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ListRequest) (response *ListResponse, err error) {
+				response = &ListResponse{
+					Items:          data.Pour(),
+					NextPageMarker: []byte("mymarker"),
+				}
+				return
+			}
+			handler := NewMockHandler(ctrl)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				SetExternalAddress("https://myserver.com").
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mycollection",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify that the link uses the external address:
+			links := link.ParseHeader(recorder.Header())
+			next := links["next"]
+			Expect(next).ToNot(BeNil())
+			url, err := neturl.Parse(next.URI)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(url.Scheme).To(Equal("https"))
+			Expect(url.Host).To(Equal("myserver.com"))
+		})
+
+		It("Doesn't add next page marker if not set", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ListRequest) (response *ListResponse, err error) {
+				response = &ListResponse{
+					Items: data.Pour(),
+				}
+				return
+			}
+			handler := NewMockHandler(ctrl)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mycollection",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter.ServeHTTP(recorder, request)
+
+			// Verify that there is no `next` link:
+			links := link.ParseHeader(recorder.Header())
+			Expect(links).ToNot(HaveKey("next"))
+		})
+
+		It("Extracts next page marker", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ListRequest) (response *ListResponse, err error) {
+				Expect(request.NextPageMarker).To(Equal([]byte("mymarker")))
+				response = &ListResponse{
+					Items: data.Pour(),
+				}
+				return
+			}
+			handler := NewMockHandler(ctrl)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			nonce := make([]byte, 12)
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				SetNextPageMarkerNonce(nonce).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mycollection?nextpage_opaque_marker="+
+					"AAAAAAAAAAAAAAAAft-pCX6aW3oPQfuRD8TT4mspJeJ9hXNc",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter.ServeHTTP(recorder, request)
+		})
+
+		It("Doesn't extract next page marker if not set", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ListRequest) (response *ListResponse, err error) {
+				Expect(request.NextPageMarker).To(BeNil())
+				response = &ListResponse{
+					Items: data.Pour(),
+				}
+				return
+			}
+			handler := NewMockHandler(ctrl)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mycollection",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			adapter.ServeHTTP(recorder, request)
 		})
 	})
 

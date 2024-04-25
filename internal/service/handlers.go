@@ -47,11 +47,20 @@ type ListRequest struct {
 
 	// Projector is the list of field paths to return.
 	Projector *search.Projector
+
+	// NextPageMarker contains the next page marker extracted from the `nextpage_opaque_marker`
+	// of the request.
+	NextPageMarker []byte
 }
 
 // ListResponse represents the response to the request to get the list of items of a collection.
 type ListResponse struct {
+	// Items is the stream of results.
 	Items data.Stream
+
+	// NextPageMarker is the information that will be added to the next page marker link. It
+	// encrypted and added to the `next` link in the response header.
+	NextPageMarker []byte
 }
 
 // ListHandler is the interface implemented by objects that know how to get list
