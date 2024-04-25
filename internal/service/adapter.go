@@ -15,17 +15,24 @@ License.
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
 	"mime"
 	"net/http"
+	neturl "net/url"
 	"slices"
 	"strings"
 
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/peterhellberg/link"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
@@ -36,33 +43,41 @@ import (
 // AdapterBuilder contains the data and logic needed to create adapters. Don't create instances of
 // this type directly, use the NewAdapter function instead.
 type AdapterBuilder struct {
-	logger        *slog.Logger
-	pathVariables []string
-	handler       any
-	includeFields []string
-	excludeFields []string
+	logger              *slog.Logger
+	pathVariables       []string
+	handler             any
+	includeFields       []string
+	excludeFields       []string
+	externalAddress     string
+	nextPageMarkerKey   []byte
+	nextPageMarkerNonce []byte
 }
 
 // Adapter knows how to translate an HTTP request into a request for a collection of objects. Don't
 // create instances of this type directly, use the NewAdapter function instead.
 type Adapter struct {
-	logger             *slog.Logger
-	pathVariables      []string
-	listHandler        ListHandler
-	getHandler         GetHandler
-	addHandler         AddHandler
-	deleteHandler      DeleteHandler
-	includeFields      []search.Path
-	excludeFields      []search.Path
-	pathsParser        *search.PathsParser
-	selectorParser     *search.SelectorParser
-	projectorEvaluator *search.ProjectorEvaluator
-	jsonAPI            jsoniter.API
+	logger               *slog.Logger
+	pathVariables        []string
+	listHandler          ListHandler
+	getHandler           GetHandler
+	addHandler           AddHandler
+	deleteHandler        DeleteHandler
+	includeFields        []search.Path
+	excludeFields        []search.Path
+	pathsParser          *search.PathsParser
+	selectorParser       *search.SelectorParser
+	projectorEvaluator   *search.ProjectorEvaluator
+	externalAddress      *neturl.URL
+	nextPageMarkerCipher cipher.AEAD
+	nextPageMarkerNonce  []byte
+	jsonAPI              jsoniter.API
 }
 
 // NewAdapter creates a builder that can be used to configure and create an adatper.
 func NewAdapter() *AdapterBuilder {
-	return &AdapterBuilder{}
+	return &AdapterBuilder{
+		nextPageMarkerKey: slices.Clone(defaultAdapdterNextPageMarkerKey[:]),
+	}
 }
 
 // SetLogger sets the logger that the adapter will use to write to the log. This is mandatory.
@@ -105,6 +120,32 @@ func (b *AdapterBuilder) SetExcludeFields(values ...string) *AdapterBuilder {
 	return b
 }
 
+// SetExternalAddress set the URL of the service as seen by external users.
+func (b *AdapterBuilder) SetExternalAddress(value string) *AdapterBuilder {
+	b.externalAddress = value
+	return b
+}
+
+// SetNextPageMarkerKey sets the key that is used to encrypt and decrypt the next page opaque
+// tokens. The purpose of this encryption is to discourage clients from assuming the format of the
+// marker. By default a hard coded key is used. That key is effectively public because it is part
+// of the source code. There is usually no reason to change it, but you can use this method if you
+// really need.
+func (b *AdapterBuilder) SetNextPageMarkerKey(value []byte) *AdapterBuilder {
+	b.nextPageMarkerKey = slices.Clone(value)
+	return b
+}
+
+// SetNextPageMarkerNonce sets the nonce that is used to encrypt and decrypt the next page opaque
+// tokens. The purpose of this encryption is to discourage clients from assuming the format of the
+// marker. By default a random nonce is usually each time that a marker is encrypted, but for unit
+// tests it is convenient to be able to explicitly specify it, so that the resulting encrypted
+// marker will be predictable.
+func (b *AdapterBuilder) SetNextPageMarkerNonce(value []byte) *AdapterBuilder {
+	b.nextPageMarkerNonce = slices.Clone(value)
+	return b
+}
+
 // Build uses the data stored in the builder to create and configure a new adapter.
 func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 	// Check parameters:
@@ -115,6 +156,20 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 	if b.handler == nil {
 		err = errors.New("handler is mandatory")
 		return
+	}
+	if b.nextPageMarkerKey == nil {
+		err = errors.New("next page marker key is mandatory")
+		return
+	}
+
+	// Parse the external address once, so that when we need to use it later we only
+	// need to copy it.
+	var externalAddress *neturl.URL
+	if b.externalAddress != "" {
+		externalAddress, err = neturl.Parse(b.externalAddress)
+		if err != nil {
+			return
+		}
 	}
 
 	// Check that the handler implements at least one of the handler interfaces:
@@ -188,6 +243,12 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 		return
 	}
 
+	// Create the cipher for the next page markers:
+	nextPageMarkerCipher, err := b.createNextPageMarkerCipher()
+	if err != nil {
+		return
+	}
+
 	// Prepare the JSON iterator API:
 	jsonConfig := jsoniter.Config{
 		IndentionStep: 2,
@@ -196,19 +257,54 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 
 	// Create and populate the object:
 	result = &Adapter{
-		logger:             b.logger,
-		pathVariables:      variables,
-		pathsParser:        pathsParser,
-		listHandler:        listHandler,
-		getHandler:         getHandler,
-		addHandler:         addHandler,
-		deleteHandler:      deleteHandler,
-		includeFields:      includePaths,
-		excludeFields:      excludePaths,
-		selectorParser:     selectorParser,
-		projectorEvaluator: projectorEvaluator,
-		jsonAPI:            jsonAPI,
+		logger:               b.logger,
+		pathVariables:        variables,
+		pathsParser:          pathsParser,
+		listHandler:          listHandler,
+		getHandler:           getHandler,
+		addHandler:           addHandler,
+		deleteHandler:        deleteHandler,
+		includeFields:        includePaths,
+		excludeFields:        excludePaths,
+		selectorParser:       selectorParser,
+		projectorEvaluator:   projectorEvaluator,
+		externalAddress:      externalAddress,
+		nextPageMarkerCipher: nextPageMarkerCipher,
+		nextPageMarkerNonce:  slices.Clone(b.nextPageMarkerNonce),
+		jsonAPI:              jsonAPI,
 	}
+	return
+}
+
+// createNextPageMarkerCipher creates the cipher that will be used to encrypt the next page
+// markers. Currently this creates an AES cipher with Galois counter mode.
+func (b *AdapterBuilder) createNextPageMarkerCipher() (result cipher.AEAD, err error) {
+	// Create the cipher:
+	blockCipher, err := aes.NewCipher(b.nextPageMarkerKey)
+	if err != nil {
+		return
+	}
+	gcmCipher, err := cipher.NewGCM(blockCipher)
+	if err != nil {
+		return
+	}
+
+	// If the nonce has been explicitly specified then check that it has the required size:
+	if b.nextPageMarkerNonce != nil {
+		requiredSize := gcmCipher.NonceSize()
+		actualSize := len(b.nextPageMarkerNonce)
+		if actualSize != requiredSize {
+			err = fmt.Errorf(
+				"nonce has been explicitly specified, and it is %d bytes long, "+
+					"but the cipher requires %d",
+				actualSize, requiredSize,
+			)
+			return
+		}
+	}
+
+	// Return the cipher:
+	result = gcmCipher
 	return
 }
 
@@ -347,13 +443,17 @@ func (a *Adapter) serveList(w http.ResponseWriter, r *http.Request, pathVariable
 		Variables: pathVariables,
 	}
 
-	// Try to extract the selector and projector:
+	// Try to extract, projector and next page marker:
 	var ok bool
 	request.Selector, ok = a.extractSelector(w, r)
 	if !ok {
 		return
 	}
 	request.Projector, ok = a.extractProjector(w, r)
+	if !ok {
+		return
+	}
+	request.NextPageMarker, ok = a.extractNextPageMarker(w, r)
 	if !ok {
 		return
 	}
@@ -383,6 +483,12 @@ func (a *Adapter) serveList(w http.ResponseWriter, r *http.Request, pathVariable
 				return
 			},
 		)
+	}
+
+	// Set the next page marker:
+	ok = a.addNextPageMarker(w, r, response.NextPageMarker)
+	if !ok {
+		return
 	}
 
 	a.sendItems(ctx, w, items)
@@ -603,6 +709,183 @@ func (a *Adapter) extractProjector(w http.ResponseWriter,
 	return
 }
 
+// extractNextPageMarker tries to extract the next page marker from the `nextpage_opaque_marker`
+// query parameter. It returns the marker and a flag indicating if it is okay to continue
+// processing the request. When this flag is false the error response was already sent to the
+// client, and request processing should stop.
+func (a *Adapter) extractNextPageMarker(w http.ResponseWriter, r *http.Request) (result []byte,
+	ok bool) {
+	// Get the context:
+	ctx := r.Context()
+
+	// Get the marker text:
+	text := r.URL.Query().Get(adapterNextPageOpaqueMarkerQueryParameterName)
+	if text == "" {
+		ok = true
+		return
+	}
+
+	// Decrypt the marker:
+	data, err := a.decryptNextPageMarker(text)
+	if err != nil {
+		a.logger.ErrorContext(
+			ctx,
+			"Failed to decrypt next page marker",
+			slog.String("text", text),
+			slog.String("error", err.Error()),
+		)
+		SendError(
+			w,
+			http.StatusBadRequest,
+			"Failed to decrypt next page marker '%s'",
+			text,
+		)
+		ok = false
+		return
+	}
+
+	// Return the value:
+	result = data
+	ok = true
+	return
+}
+
+// setNextPageMarker generates the next page marker data and adds it to the response header as a
+// link. It returns a flag indicating if it is okay to continue processing the request. When this
+// flag is false the error response has already been sent to the client, and the request processing
+// should stop.
+func (a *Adapter) addNextPageMarker(w http.ResponseWriter, r *http.Request, value []byte) bool {
+	// Get the context:
+	ctx := r.Context()
+
+	// Do nothing if there is no marker:
+	if value == nil {
+		return true
+	}
+
+	// Encrypt the marker:
+	text, err := a.encryptNextPageMarker(value)
+	if err != nil {
+		a.logger.ErrorContext(
+			ctx,
+			"Failed to encrypt next page marker",
+			slog.Any("value", value),
+			slog.String("error", err.Error()),
+		)
+		SendError(
+			w,
+			http.StatusInternalServerError,
+			"Failed to encrypt next page marker",
+		)
+		return false
+	}
+
+	// Generate the complete link, preserving existing query parameters and replacing any
+	// possible existing next page marker with the one that we just generated.
+	url := *r.URL
+	if a.externalAddress != nil {
+		url.Scheme = a.externalAddress.Scheme
+		url.Host = a.externalAddress.Host
+	}
+	url.Path = r.URL.Path
+	query := neturl.Values{}
+	for name, values := range r.URL.Query() {
+		if name != adapterNextPageOpaqueMarkerQueryParameterName {
+			query[name] = slices.Clone(values)
+		}
+	}
+	query.Set(adapterNextPageOpaqueMarkerQueryParameterName, text)
+	url.RawQuery = query.Encode()
+
+	// Add the link to the header:
+	header := w.Header()
+	links := link.ParseHeader(header)
+	if links == nil {
+		links = link.Group{}
+	}
+	next, ok := links["next"]
+	if ok {
+		a.logger.WarnContext(
+			r.Context(),
+			"Next page link is already set, will replace it",
+			"link", next.String(),
+			"text", text,
+		)
+	}
+	links["next"] = &link.Link{
+		URI: url.String(),
+		Rel: "next",
+	}
+	buffer := &bytes.Buffer{}
+	i := 0
+	for _, current := range links {
+		if i > 0 {
+			buffer.WriteString(", ")
+		}
+		fmt.Fprintf(buffer, `<%s>; rel="%s"`, current.URI, current.Rel)
+		for extraName, extraValue := range current.Extra {
+			buffer.WriteString(";")
+			fmt.Fprintf(buffer, `%s="%s"`, extraName, extraValue)
+		}
+		i++
+	}
+	header.Set("Link", buffer.String())
+	return true
+}
+
+func (a *Adapter) encryptNextPageMarker(value []byte) (result string, err error) {
+	// If a nonce has been explicitly provided then use it, otherwise generate a random one:
+	var nonce []byte
+	if a.nextPageMarkerNonce != nil {
+		nonce = a.nextPageMarkerNonce
+	} else {
+		nonce = make([]byte, a.nextPageMarkerCipher.NonceSize())
+		_, err = rand.Read(nonce)
+		if err != nil {
+			return
+		}
+	}
+
+	// Encrypt the marker:
+	data := a.nextPageMarkerCipher.Seal(nil, nonce, value, nil)
+
+	// We will need the nonce to decrypt, so the marker will contain the result of
+	// concatenating it with the encrypted data.
+	data = append(nonce, data...)
+
+	// Encode the as text safe for use in a query parameter:
+	result = base64.RawURLEncoding.EncodeToString(data)
+	return
+}
+
+func (a *Adapter) decryptNextPageMarker(text string) (result []byte, err error) {
+	// Decode the text:
+	data, err := base64.RawURLEncoding.DecodeString(text)
+	if err != nil {
+		return
+	}
+
+	// The data should contain the nonce contatenated with the encrypted data, so it needs
+	// to be at least as long as the nonce size required by the cipher.
+	dataSize := len(data)
+	nonceSize := a.nextPageMarkerCipher.NonceSize()
+	if dataSize < nonceSize {
+		err = fmt.Errorf(
+			"marker size (%d bytes) is smaller than nonce size (%d bytes)",
+			dataSize, nonceSize,
+		)
+		return
+	}
+
+	// Separate the nonce and the encrypted data:
+	nonce := data[0:nonceSize]
+	data = data[nonceSize:]
+
+	// Decrypt the data:
+	result, err = a.nextPageMarkerCipher.Open(nil, nonce, data, nil)
+	return
+}
+
 func (a *Adapter) sendItems(ctx context.Context, w http.ResponseWriter,
 	items data.Stream) {
 	w.Header().Set("Content-Type", "application/json")
@@ -675,4 +958,19 @@ func (a *Adapter) sendObject(ctx context.Context, w http.ResponseWriter,
 			"error", writer.Error.Error(),
 		)
 	}
+}
+
+// Names of query parameters:
+const (
+	adapterNextPageOpaqueMarkerQueryParameterName = "nextpage_opaque_marker"
+)
+
+// defaultAdapterNextPageMarkerKey is the key used to encrypt and decrypt next page markers by
+// default. It is OK to have it in clear text here because its only purpose is to discourage
+// users from messing with the contents.
+var defaultAdapdterNextPageMarkerKey = [...]byte{
+	0x44, 0x48, 0xb5, 0x2c, 0xa5, 0x11, 0x4e, 0xea,
+	0x7e, 0x37, 0xcf, 0x85, 0x34, 0x5b, 0x5f, 0xd7,
+	0x04, 0xc7, 0x37, 0x3a, 0x5b, 0x9f, 0x49, 0x63,
+	0x54, 0xa9, 0xb0, 0xbd, 0x2d, 0x5e, 0xcc, 0x37,
 }
