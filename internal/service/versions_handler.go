@@ -91,7 +91,8 @@ func (h *VersionsHandler) Get(ctx context.Context, request *GetRequest) (respons
 		for _, currentVersion := range allVersions {
 			versionValue, ok := currentVersion["version"]
 			if !ok {
-				h.logger.Error(
+				h.logger.ErrorContext(
+					ctx,
 					"Version doesn't have a version number, will ignore it",
 					slog.Any("version", currentVersion),
 				)
@@ -99,7 +100,8 @@ func (h *VersionsHandler) Get(ctx context.Context, request *GetRequest) (respons
 			}
 			versionText, ok := versionValue.(string)
 			if !ok {
-				h.logger.Error(
+				h.logger.ErrorContext(
+					ctx,
 					"Version number isn't a string, will ignore it",
 					slog.Any("version", versionValue),
 				)
@@ -107,7 +109,8 @@ func (h *VersionsHandler) Get(ctx context.Context, request *GetRequest) (respons
 			}
 			versionNumber, err := semver.NewVersion(versionText)
 			if err != nil {
-				h.logger.Error(
+				h.logger.ErrorContext(
+					ctx,
 					"Version number isn't a valid semantic version, will ignore it",
 					slog.String("version", versionText),
 					slog.String("error", err.Error()),

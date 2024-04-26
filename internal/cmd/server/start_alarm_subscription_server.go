@@ -83,7 +83,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Get the cloud identifier:
 	cloudID, err := flags.GetString(cloudIDFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get cloud identifier flag",
 			"flag", cloudIDFlagName,
 			"error", err.Error(),
@@ -91,13 +92,15 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	if cloudID == "" {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Cloud identifier is empty",
 			"flag", cloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"Cloud identifier",
 		"value", cloudID,
 	)
@@ -105,14 +108,16 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Get the extensions details:
 	extensions, err := flags.GetStringArray(extensionsFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to extension flag",
 			"flag", extensionsFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"alarm subscription extensions details",
 		slog.Any("extensions", extensions),
 	)
@@ -123,7 +128,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create transport wrapper",
 			"error", err.Error(),
 		)
@@ -136,7 +142,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create authentication wrapper",
 			slog.String("error", err.Error()),
 		)
@@ -147,7 +154,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create authorization wrapper",
 			slog.String("error", err.Error()),
 		)
@@ -171,7 +179,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetExtensions(extensions...).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)
@@ -185,7 +194,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetHandler(handler).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create adapter",
 			"error", err,
 		)
@@ -207,13 +217,15 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags, network.APIListener).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to to create API listener",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"API listening",
 		slog.String("address", apiListener.Addr().String()),
 	)
@@ -223,7 +235,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	err = apiServer.Serve(apiListener)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"API server finished with error",
 			slog.String("error", err.Error()),
 		)

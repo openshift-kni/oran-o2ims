@@ -91,11 +91,16 @@ func (b *HandlerBuilder) loadSpec() (result []byte, err error) {
 
 // ServeHTTP is the implementation of the object HTTP handler interface.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Get the context:
+	ctx := r.Context()
+
+	// Send the response:
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write(h.spec)
 	if err != nil {
-		h.logger.Error(
+		h.logger.ErrorContext(
+			ctx,
 			"Failed to send data",
 			slog.String("error", err.Error()),
 		)

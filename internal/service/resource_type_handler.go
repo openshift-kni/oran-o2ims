@@ -346,7 +346,8 @@ func (h *ResourceTypeHandler) getAlarmDictionary(ctx context.Context, resourceCl
 		SetLogger(h.logger).
 		Build()
 	if err != nil {
-		h.logger.Error(
+		h.logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)

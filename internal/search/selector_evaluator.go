@@ -125,7 +125,8 @@ func (e *SelectorEvaluator) Evaluate(ctx context.Context, selector *Selector,
 	object any) (result bool, err error) {
 	result, err = e.evaluateSelector(ctx, selector, object)
 	if e.logger.Enabled(ctx, slog.LevelDebug) {
-		e.logger.Debug(
+		e.logger.DebugContext(
+			ctx,
 			"Evaluated selector",
 			"selector", selector.String(),
 			"object", object,

@@ -590,7 +590,8 @@ func (h *DeploymentManagerHandler) fetchProfile(ctx context.Context,
 		return
 	}
 	if assistedInstallerAdminKubeconfig != nil {
-		h.logger.Info(
+		h.logger.InfoContext(
+			ctx,
 			"Using assisted installer admin kubeconfig",
 			slog.String("cluster", cluster),
 		)
@@ -654,7 +655,8 @@ func (h *DeploymentManagerHandler) fetchProfile(ctx context.Context,
 	if err != nil {
 		return
 	}
-	h.logger.Info(
+	h.logger.InfoContext(
+		ctx,
 		"Using registration admin kubeconfig",
 		slog.String("cluster", cluster),
 	)
@@ -679,7 +681,8 @@ func (h *DeploymentManagerHandler) fetchAssistedInstallerAdminKubeconfig(ctx con
 	}
 	err = client.Get(ctx, key, secret)
 	if apierrors.IsNotFound(err) {
-		h.logger.Info(
+		h.logger.InfoContext(
+			ctx,
 			"Assisted installer kubeconfig secret doesn't exist",
 			slog.String("cluster", clusterName),
 			slog.String("namespace", key.Namespace),
@@ -720,7 +723,8 @@ func (h *DeploymentManagerHandler) fetchRegistrationKubeconfig(ctx context.Conte
 	}
 	err = client.Get(ctx, key, secret)
 	if apierrors.IsNotFound(err) {
-		h.logger.Info(
+		h.logger.InfoContext(
+			ctx,
 			"Cluster secret doesn't exist",
 			slog.String("cluster", clusterName),
 			slog.String("namespace", key.Namespace),

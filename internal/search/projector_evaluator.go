@@ -124,7 +124,8 @@ func (e *ProjectorEvaluator) Evaluate(ctx context.Context, projector *Projector,
 	object any) (result map[string]any, err error) {
 	result, err = e.evaluateProjector(ctx, projector, object)
 	if e.logger.Enabled(ctx, slog.LevelDebug) {
-		e.logger.Debug(
+		e.logger.DebugContext(
+			ctx,
 			"Evaluated projector",
 			slog.String("projector", fmt.Sprintf("%v", projector)),
 			slog.Any("object", object),

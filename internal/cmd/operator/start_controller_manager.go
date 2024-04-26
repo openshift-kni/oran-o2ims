@@ -154,7 +154,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		// LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Unable to start manager",
 			slog.String("error", err.Error()),
 		)
@@ -166,7 +167,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		Logger: slog.With("controller", "ORAN-O2IMS"),
 		Image:  c.image,
 	}).SetupWithManager(mgr); err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Unable to create controller",
 			slog.String("controller", "ORANO2IMS"),
 			slog.String("error", err.Error()),
@@ -175,26 +177,30 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Unable to set up health check",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Unable to set up ready check",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
 
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"Starting manager",
 		slog.String("image", c.image),
 	)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Problem running manager",
 			slog.String("error", err.Error()),
 		)

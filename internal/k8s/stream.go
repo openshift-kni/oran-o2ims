@@ -97,22 +97,23 @@ func (s *Stream) Next(ctx context.Context) (item data.Object, err error) {
 	if !s.found {
 		err = s.find(ctx)
 		if err != nil {
-			s.close()
+			s.close(ctx)
 			return
 		}
 	}
 	if s.iterator.ReadArray() {
 		item, err = s.readObject()
 		if err != nil {
-			s.close()
+			s.close(ctx)
 			return
 		}
-		s.logger.Info(
+		s.logger.InfoContext(
+			ctx,
 			"Read item",
 			"item", item,
 		)
 	} else {
-		s.close()
+		s.close(ctx)
 		err = data.ErrEnd
 	}
 	return
@@ -152,7 +153,8 @@ func (s *Stream) find(ctx context.Context) error {
 		if s.iterator.Error != nil {
 			return s.iterator.Error
 		}
-		s.logger.Debug(
+		s.logger.DebugContext(
+			ctx,
 			"Ignored field while looking for items",
 			"field", field,
 		)
@@ -160,12 +162,13 @@ func (s *Stream) find(ctx context.Context) error {
 }
 
 // close closes the input reader, if it is closeable.
-func (s *Stream) close() {
+func (s *Stream) close(ctx context.Context) {
 	closer, ok := s.reader.(io.ReadCloser)
 	if ok {
 		err := closer.Close()
 		if err != nil {
-			s.logger.Error(
+			s.logger.ErrorContext(
+				ctx,
 				"Failed to close reader",
 				"error", err,
 			)

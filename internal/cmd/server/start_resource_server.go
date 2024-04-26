@@ -15,6 +15,7 @@ License.
 package server
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -96,7 +97,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the cloud identifier:
 	cloudID, err := flags.GetString(cloudIDFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to get cloud identifier flag",
 			"flag", cloudIDFlagName,
 			"error", err.Error(),
@@ -104,13 +106,15 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if cloudID == "" {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Cloud identifier is empty",
 			"flag", cloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
-	c.logger.Info(
+	c.logger.InfoContext(
+		ctx,
 		"Cloud identifier",
 		"value", cloudID,
 	)
@@ -118,7 +122,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the backend details:
 	backendURL, err := flags.GetString(backendURLFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to get backend URL flag",
 			"flag", backendURLFlagName,
 			"error", err.Error(),
@@ -126,7 +131,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if backendURL == "" {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Backend URL is empty",
 			"flag", backendURLFlagName,
 		)
@@ -134,7 +140,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 	backendToken, err := flags.GetString(backendTokenFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to get backend token flag",
 			"flag", backendTokenFlagName,
 			"error", err.Error(),
@@ -142,7 +149,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if backendToken == "" {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Backend token is empty",
 			"flag", backendTokenFlagName,
 		)
@@ -150,14 +158,16 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 	extensions, err := flags.GetStringArray(extensionsFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to extension flag",
 			"flag", extensionsFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
 	}
-	c.logger.Info(
+	c.logger.InfoContext(
+		ctx,
 		"Backend details",
 		slog.String("url", backendURL),
 		slog.String("!token", backendToken),
@@ -170,7 +180,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create transport wrapper",
 			"error", err.Error(),
 		)
@@ -188,7 +199,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Generate the search API URL according the backend URL
 	backendURL, err = c.generateSearchApiUrl(backendURL)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to generate search API URL",
 			"error", err.Error(),
 		)
@@ -196,6 +208,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 
 	// Create the handler for resource pools:
 	if err := c.createResourcePoolHandler(
+		ctx,
 		transportWrapper, router,
 		cloudID, backendURL, backendToken, extensions); err != nil {
 		return err
@@ -203,6 +216,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 
 	// Create the handler for resources:
 	if err := c.createResourceHandler(
+		ctx,
 		transportWrapper, router,
 		cloudID, backendURL, backendToken, extensions); err != nil {
 		return err
@@ -210,6 +224,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 
 	// Create the handlers for resource types:
 	if err := c.createResourceTypeHandler(
+		ctx,
 		transportWrapper, router,
 		cloudID, backendURL, backendToken); err != nil {
 		return err
@@ -221,13 +236,15 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetFlags(flags, network.APIListener).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to to create API listener",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
-	c.logger.Info(
+	c.logger.InfoContext(
+		ctx,
 		"API listening",
 		slog.String("address", apiListener.Addr().String()),
 	)
@@ -237,7 +254,8 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 	err = apiServer.Serve(apiListener)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"API server finished with error",
 			slog.String("error", err.Error()),
 		)
@@ -248,6 +266,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 }
 
 func (c *ResourceServerCommand) createResourcePoolHandler(
+	ctx context.Context,
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
 	cloudID, backendURL, backendToken string, extensions []string) error {
@@ -264,7 +283,8 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 		SetGraphqlVars(c.getClusterGraphqlVars()).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)
@@ -278,7 +298,8 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 		SetHandler(handler).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create adapter",
 			"error", err,
 		)
@@ -297,6 +318,7 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 }
 
 func (c *ResourceServerCommand) createResourceHandler(
+	ctx context.Context,
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
 	cloudID, backendURL, backendToken string, extensions []string) error {
@@ -313,7 +335,8 @@ func (c *ResourceServerCommand) createResourceHandler(
 		SetGraphqlVars(c.getResourceGraphqlVars()).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)
@@ -327,7 +350,8 @@ func (c *ResourceServerCommand) createResourceHandler(
 		SetHandler(handler).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create adapter",
 			"error", err,
 		)
@@ -346,6 +370,7 @@ func (c *ResourceServerCommand) createResourceHandler(
 }
 
 func (c *ResourceServerCommand) createResourceTypeHandler(
+	ctx context.Context,
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
 	cloudID, backendURL, backendToken string) error {
@@ -361,7 +386,8 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 		SetGraphqlVars(c.getResourceGraphqlVars()).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)
@@ -375,7 +401,8 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 		SetHandler(handler).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create adapter",
 			"error", err,
 		)

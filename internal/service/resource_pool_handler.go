@@ -301,14 +301,16 @@ func (h *ResourcePoolHandler) getCollectionGraphqlVars(ctx context.Context, sele
 				return graphql.PropertyCluster(s).MapProperty()
 			})
 			if err != nil {
-				h.logger.Error(
+				h.logger.ErrorContext(
+					ctx,
 					"Failed to map GraphQL filter term (fallback to selector filtering).",
 					slog.String("term", term.String()),
 					slog.String("error", err.Error()),
 				)
 				continue
 			}
-			h.logger.Debug(
+			h.logger.DebugContext(
+				ctx,
 				"Mapped filter term to GraphQL SearchFilter",
 				slog.String("term", term.String()),
 				slog.String("mapped property", searchFilter.Property),
