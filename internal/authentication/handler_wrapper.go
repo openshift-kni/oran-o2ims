@@ -562,13 +562,15 @@ type setData struct {
 func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 	// Load keys from the files given in the configuration:
 	for _, keysFile := range h.keysFiles {
-		h.logger.Info(
+		h.logger.InfoContext(
+			ctx,
 			"Loading keys from file", keysFile,
 			slog.String("file", keysFile),
 		)
 		err := h.loadKeysFile(ctx, keysFile)
 		if err != nil {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Can't load keys from file",
 				slog.String("file", keysFile),
 				slog.String("error", err.Error()),
@@ -578,13 +580,15 @@ func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 
 	// Load keys from URLs given in the configuration:
 	for _, keysURL := range h.keysURLs {
-		h.logger.Info(
+		h.logger.InfoContext(
+			ctx,
 			"Loading keys from URL",
 			slog.String("url", keysURL),
 		)
 		err := h.loadKeysURL(ctx, keysURL)
 		if err != nil {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Can't load keys from URL",
 				slog.String("url", keysURL),
 				slog.String("error", err.Error()),
@@ -610,7 +614,7 @@ func (h *handlerWrapper) loadKeysURL(ctx context.Context, addr string) error {
 	if err != nil {
 		return err
 	}
-	token := h.selectKeysToken()
+	token := h.selectKeysToken(ctx)
 	if token != "" {
 		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	}
@@ -622,7 +626,8 @@ func (h *handlerWrapper) loadKeysURL(ctx context.Context, addr string) error {
 	defer func() {
 		err := response.Body.Close()
 		if err != nil {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Can't close response body",
 				slog.String("url", addr),
 				slog.String("error", err.Error()),
@@ -641,12 +646,13 @@ func (h *handlerWrapper) loadKeysURL(ctx context.Context, addr string) error {
 // selectKeysToken selects the token that should be for authentication to the server that contains
 // the JSON web key set. Note that this will never return an error; if something fails it will
 // report it in the log and will return an empty string.
-func (h *handlerWrapper) selectKeysToken() string {
+func (h *handlerWrapper) selectKeysToken(ctx context.Context) string {
 	// First try to read the token from the configured file:
 	if h.keysTokenFile != "" {
 		data, err := os.ReadFile(h.keysTokenFile)
 		if err != nil {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Failed to read keys token from file",
 				slog.String("file", h.keysTokenFile),
 				slog.String("error", err.Error()),
@@ -679,7 +685,8 @@ func (h *handlerWrapper) readKeys(ctx context.Context, reader io.Reader) error {
 	// Convert the key data to actual keys that can be used to verify the signatures of the
 	// tokens:
 	for _, keyData := range setData.Keys {
-		h.logger.Debug(
+		h.logger.DebugContext(
+			ctx,
 			"Key data",
 			slog.String("kid", keyData.Kid),
 			slog.String("kty", keyData.Kty),
@@ -688,32 +695,39 @@ func (h *handlerWrapper) readKeys(ctx context.Context, reader io.Reader) error {
 			slog.String("n", keyData.N),
 		)
 		if keyData.Kid == "" {
-			h.logger.Error("Can't read key because 'kid' is empty")
+			h.logger.ErrorContext(
+				ctx,
+				"Can't read key because 'kid' is empty",
+			)
 			continue
 		}
 		if keyData.Kty == "" {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Can't read key because 'kty' is empty",
 				slog.String("kid", keyData.Kid),
 			)
 			continue
 		}
 		if keyData.Alg == "" {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Can't read key because 'alg' is empty",
 				slog.String("kid", keyData.Kid),
 			)
 			continue
 		}
 		if keyData.E == "" {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Can't read key because 'e' is empty",
 				slog.String("kid", keyData.Kid),
 			)
 			continue
 		}
 		if keyData.E == "" {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Can't read key because 'n' is empty",
 				slog.String("kid", keyData.Kid),
 			)
@@ -722,7 +736,8 @@ func (h *handlerWrapper) readKeys(ctx context.Context, reader io.Reader) error {
 		var key any
 		key, err = h.parseKey(keyData)
 		if err != nil {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				ctx,
 				"Key will be ignored because it can't be parsed",
 				slog.String("kid", keyData.Kid),
 				slog.String("error", err.Error()),
@@ -730,7 +745,8 @@ func (h *handlerWrapper) readKeys(ctx context.Context, reader io.Reader) error {
 			continue
 		}
 		h.keys.Store(keyData.Kid, key)
-		h.logger.Info(
+		h.logger.InfoContext(
+			ctx,
 			"Loaded key",
 			slog.String("kid", keyData.Kid),
 		)
@@ -777,7 +793,8 @@ func (h *handlerWrapper) checkToken(ctx context.Context, bearer string) (token *
 		},
 	)
 	if err != nil {
-		h.logger.Error(
+		h.logger.ErrorContext(
+			ctx,
 			"Failed to parse token",
 			slog.String("!token", bearer),
 			slog.String("error", err.Error()),
@@ -798,7 +815,8 @@ func (h *handlerWrapper) checkToken(ctx context.Context, bearer string) (token *
 					var remaining time.Duration
 					_, remaining, err = tokenRemaining(token, time.Now())
 					if err != nil {
-						h.logger.Error(
+						h.logger.ErrorContext(
+							ctx,
 							"Failed to check token duration",
 							slog.String("error", err.Error()),
 						)
@@ -921,11 +939,15 @@ func (h *handlerWrapper) checkClaim(ctx context.Context, claims jwt.MapClaims,
 
 // sendError sends an error response to the client with the message of the given error.
 func (h *handlerWrapper) sendError(w http.ResponseWriter, r *http.Request, err error) {
+	// Get the context:
+	ctx := r.Context()
+
 	// Convert to upper case the first letter of the error message:
 	detail := err.Error()
 	first, length := utf8.DecodeRuneInString(detail)
 	if first == utf8.RuneError {
-		h.logger.Error(
+		h.logger.ErrorContext(
+			ctx,
 			"Failed to get first rune of error message",
 			slog.String("message", detail),
 		)

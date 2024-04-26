@@ -15,6 +15,7 @@ License.
 package server
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -107,7 +108,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the cloud identifier:
 	cloudID, err := flags.GetString(cloudIDFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to get cloud identifier flag",
 			"flag", cloudIDFlagName,
 			"error", err.Error(),
@@ -115,13 +117,15 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if cloudID == "" {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Cloud identifier is empty",
 			"flag", cloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
-	c.logger.Info(
+	c.logger.InfoContext(
+		ctx,
 		"Cloud identifier",
 		"value", cloudID,
 	)
@@ -129,7 +133,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the backend details:
 	backendURL, err := flags.GetString(backendURLFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to get backend URL flag",
 			"flag", backendURLFlagName,
 			"error", err.Error(),
@@ -137,7 +142,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if backendURL == "" {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Backend URL is empty",
 			"flag", backendURLFlagName,
 		)
@@ -145,7 +151,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 	backendToken, err := flags.GetString(backendTokenFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to get backend token flag",
 			"flag", backendTokenFlagName,
 			"error", err.Error(),
@@ -153,7 +160,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if backendToken == "" {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Backend token is empty",
 			"flag", backendTokenFlagName,
 		)
@@ -163,7 +171,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the resource server details:
 	resourceServerURL, err := flags.GetString(resourceServerURLFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to get resource server URL flag",
 			"flag", resourceServerURLFlagName,
 			"error", err.Error(),
@@ -171,7 +180,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if resourceServerURL == "" {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Resource server URL is empty",
 			"flag", resourceServerURLFlagName,
 		)
@@ -180,20 +190,25 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	resourceServerToken, err := flags.GetString(resourceServerTokenFlagName)
 	if err != nil || resourceServerToken == "" {
 		// Fallbacks to backend token
-		c.logger.Info("Resource server token wasn't specified, using backend token instead.")
+		c.logger.InfoContext(
+			ctx,
+			"Resource server token wasn't specified, using backend token instead.",
+		)
 		resourceServerToken = backendToken
 	}
 
 	extensions, err := flags.GetStringArray(extensionsFlagName)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to extension flag",
 			"flag", extensionsFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
 	}
-	c.logger.Info(
+	c.logger.InfoContext(
+		ctx,
 		"Backend details",
 		slog.String("url", backendURL),
 		slog.String("!token", backendToken),
@@ -206,7 +221,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create transport wrapper",
 			"error", err.Error(),
 		)
@@ -224,7 +240,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Generate the search API URL according the backend URL
 	backendURL, err = c.generateAlarmmanagerApiUrl(backendURL)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to generate search API URL",
 			"error", err.Error(),
 		)
@@ -232,13 +249,14 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 
 	// Create the handler for alarms:
 	if err := c.createAlarmHandler(
+		ctx,
 		transportWrapper, router,
 		cloudID, backendURL, backendToken, resourceServerURL, resourceServerToken, extensions); err != nil {
 		return err
 	}
 
 	// Create the handler for alarms probable causes:
-	if err := c.createAlarmProbableCausesHandler(router); err != nil {
+	if err := c.createAlarmProbableCausesHandler(ctx, router); err != nil {
 		return err
 	}
 
@@ -248,13 +266,15 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetFlags(flags, network.APIListener).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to to create API listener",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
-	c.logger.Info(
+	c.logger.InfoContext(
+		ctx,
 		"API listening",
 		slog.String("address", apiListener.Addr().String()),
 	)
@@ -264,7 +284,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 	err = apiServer.Serve(apiListener)
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"API server finished with error",
 			slog.String("error", err.Error()),
 		)
@@ -275,6 +296,7 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 }
 
 func (c *AlarmServerCommand) createAlarmHandler(
+	ctx context.Context,
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
 	cloudID, backendURL, backendToken, resourceServerUrl, resourceServerToken string,
@@ -292,7 +314,8 @@ func (c *AlarmServerCommand) createAlarmHandler(
 		SetExtensions(extensions...).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)
@@ -306,7 +329,8 @@ func (c *AlarmServerCommand) createAlarmHandler(
 		SetHandler(handler).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create adapter",
 			"error", err,
 		)
@@ -326,7 +350,8 @@ func (c *AlarmServerCommand) createAlarmHandler(
 
 // This API is not defined by O2ims Interface Specification.
 // It is used for exposing the custom list of alarm probable causes.
-func (c *AlarmServerCommand) createAlarmProbableCausesHandler(router *mux.Router) error {
+func (c *AlarmServerCommand) createAlarmProbableCausesHandler(ctx context.Context,
+	router *mux.Router) error {
 
 	// This API is not defined by
 
@@ -335,7 +360,8 @@ func (c *AlarmServerCommand) createAlarmProbableCausesHandler(router *mux.Router
 		SetLogger(c.logger).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)
@@ -349,7 +375,8 @@ func (c *AlarmServerCommand) createAlarmProbableCausesHandler(router *mux.Router
 		SetHandler(handler).
 		Build()
 	if err != nil {
-		c.logger.Error(
+		c.logger.ErrorContext(
+			ctx,
 			"Failed to create adapter",
 			"error", err,
 		)

@@ -237,7 +237,8 @@ func (r *AlarmFetcher) doGet(ctx context.Context, url, token string,
 		return
 	}
 	if response.StatusCode != http.StatusOK {
-		r.logger.Error(
+		r.logger.ErrorContext(
+			ctx,
 			"Received unexpected status code",
 			"code", response.StatusCode,
 			"url", request.URL,

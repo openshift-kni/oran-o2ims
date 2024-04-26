@@ -198,7 +198,8 @@ func (h *alarmSubscriptionHandler) List(ctx context.Context,
 func (h *alarmSubscriptionHandler) Get(ctx context.Context,
 	request *GetRequest) (response *GetResponse, err error) {
 
-	h.logger.Debug(
+	h.logger.DebugContext(
+		ctx,
 		"alarmSubscriptionHandler Get:",
 	)
 	item, err := h.fetchItem(ctx, request.Variables[0])
@@ -214,7 +215,8 @@ func (h *alarmSubscriptionHandler) Get(ctx context.Context,
 func (h *alarmSubscriptionHandler) Add(ctx context.Context,
 	request *AddRequest) (response *AddResponse, err error) {
 
-	h.logger.Debug(
+	h.logger.DebugContext(
+		ctx,
 		"alarmSubscriptionHandler Add:",
 	)
 	id, err := h.addItem(ctx, *request)
@@ -243,7 +245,8 @@ func (h *alarmSubscriptionHandler) Add(ctx context.Context,
 func (h *alarmSubscriptionHandler) Delete(ctx context.Context,
 	request *DeleteRequest) (response *DeleteResponse, err error) {
 
-	h.logger.Debug(
+	h.logger.DebugContext(
+		ctx,
 		"alarmSubscriptionHandler delete:",
 	)
 	err = h.deleteItem(ctx, *request)
@@ -265,12 +268,12 @@ func (h *alarmSubscriptionHandler) fetchItem(ctx context.Context,
 	return
 }
 
-func (h *alarmSubscriptionHandler) fetchItems(
-	ctx context.Context) (result data.Stream, err error) {
+func (h *alarmSubscriptionHandler) fetchItems(ctx context.Context) (result data.Stream, err error) {
 	h.subscritionMapMemoryLock.Lock()
 	defer h.subscritionMapMemoryLock.Unlock()
 	ar := maps.Values(h.subscriptionMap)
-	h.logger.Debug(
+	h.logger.DebugContext(
+		ctx,
 		"alarmSubscriptionHandler fetchItems:",
 	)
 	result = data.Pour(ar...)

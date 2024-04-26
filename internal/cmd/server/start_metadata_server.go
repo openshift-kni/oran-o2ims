@@ -77,7 +77,8 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the cloud identifier:
 	cloudID, err := flags.GetString(cloudIDFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get cloud identifier flag",
 			"flag", cloudIDFlagName,
 			"error", err.Error(),
@@ -85,13 +86,15 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		return exit.Error(1)
 	}
 	if cloudID == "" {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Cloud identifier is empty",
 			"flag", cloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"Cloud identifier",
 		"value", cloudID,
 	)
@@ -99,14 +102,16 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the external address:
 	externalAddress, err := flags.GetString(externalAddressFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get external address flag",
 			slog.String("flag", externalAddressFlagName),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"External address",
 		slog.String("value", externalAddress),
 	)
@@ -125,7 +130,8 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetLogger(logger).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create OpenAPI handler",
 			slog.String("error", err.Error()),
 		)
@@ -140,7 +146,8 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetLogger(logger).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create versions handler",
 			slog.String("error", err.Error()),
 		)
@@ -152,7 +159,8 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetHandler(versionsHandler).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create versions adapter",
 			slog.String("error", err.Error()),
 		)
@@ -174,7 +182,8 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetExternalAddress(externalAddress).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create cloud info handler",
 			slog.String("error", err.Error()),
 		)
@@ -185,7 +194,8 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetHandler(cloudInfoHandler).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create cloud info adapter",
 			slog.String("error", err.Error()),
 		)
@@ -202,13 +212,15 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		SetFlags(flags, network.APIListener).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to to create API listener",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"API listening",
 		slog.String("address", apiListener.Addr().String()),
 	)
@@ -218,7 +230,8 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 	err = apiServer.Serve(apiListener)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"API server finished with error",
 			slog.String("error", err.Error()),
 		)

@@ -68,7 +68,8 @@ func (c *VersionCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 
 	// Print the values:
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"Version",
 		slog.String("commit", buildCommit),
 		slog.String("time", buildTime),

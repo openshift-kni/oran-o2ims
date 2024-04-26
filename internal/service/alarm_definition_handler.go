@@ -181,13 +181,19 @@ func (h *AlarmDefinitionHandler) mapItem(ctx context.Context,
 	proposedRepairActions, err := data.GetString(from, "proposedRepairActions")
 	if err != nil {
 		// Property is optional
-		h.logger.Debug(fmt.Sprintf("'%s' is missing from alarm definition (optional)", "proposedRepairActions"))
+		h.logger.DebugContext(
+			ctx,
+			fmt.Sprintf("'%s' is missing from alarm definition (optional)", "proposedRepairActions"),
+		)
 	}
 
 	alarmAdditionalFields, err := data.GetObj(from, "alarmAdditionalFields")
 	if err != nil {
 		// Property is optional
-		h.logger.Debug(fmt.Sprintf("'%s' is missing from alarm definition (optional)", "alarmAdditionalFields"))
+		h.logger.DebugContext(
+			ctx,
+			fmt.Sprintf("'%s' is missing from alarm definition (optional)", "alarmAdditionalFields"),
+		)
 		err = nil
 	}
 

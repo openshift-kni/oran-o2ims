@@ -212,7 +212,8 @@ func (h *handlerWrapper) serve(handler http.Handler, w http.ResponseWriter, r *h
 	// Get the subject and check the ACL and send an error response if there is no match:
 	subject := authentication.SubjectFromContext(ctx)
 	if !h.checkACL(subject.Claims) {
-		h.logger.Info(
+		h.logger.InfoContext(
+			ctx,
 			"Access denied",
 			slog.String("subject", subject.Name),
 			slog.Any("claims", subject.Claims),

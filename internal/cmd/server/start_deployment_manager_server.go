@@ -113,7 +113,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Get the cloud identifier:
 	cloudID, err := flags.GetString(cloudIDFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get cloud identifier flag",
 			"flag", cloudIDFlagName,
 			"error", err.Error(),
@@ -121,13 +122,15 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	if cloudID == "" {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Cloud identifier is empty",
 			"flag", cloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"Cloud identifier",
 		"value", cloudID,
 	)
@@ -135,7 +138,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Get the backend details:
 	backendTypeText, err := flags.GetString(backendTypeFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get backend type flag",
 			"flag", backendTypeFlagName,
 			"error", err.Error(),
@@ -147,7 +151,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	case service.DeploymentManagerBackendTypeGlobalHub:
 	case service.DeploymentManagerBackendTypeRegularHub:
 	default:
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Unknown backend type",
 			slog.String("type", backendTypeText),
 		)
@@ -155,7 +160,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	backendURL, err := flags.GetString(backendURLFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get backend URL flag",
 			"flag", backendURLFlagName,
 			"error", err.Error(),
@@ -163,7 +169,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	if backendURL == "" {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Backend URL is empty",
 			"flag", backendURLFlagName,
 		)
@@ -171,7 +178,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	backendToken, err := flags.GetString(backendTokenFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get backend token flag",
 			"flag", backendTokenFlagName,
 			"error", err.Error(),
@@ -180,7 +188,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	backendTokenFile, err := flags.GetString(backendTokenFileFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get backend token file flag",
 			slog.String("flag", backendTokenFileFlagName),
 			slog.String("error", err.Error()),
@@ -189,7 +198,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	extensions, err := flags.GetStringArray(extensionsFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to extension flag",
 			"flag", extensionsFlagName,
 			"error", err.Error(),
@@ -199,7 +209,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 
 	// Check that the backend token and token file haven't been simultaneously provided:
 	if backendToken != "" && backendTokenFile != "" {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Backend token and token file have both been provided, but they are incompatible",
 			slog.Any(
 				"flags",
@@ -218,7 +229,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	if backendToken == "" && backendTokenFile != "" {
 		backendTokenData, err := os.ReadFile(backendTokenFile)
 		if err != nil {
-			logger.Error(
+			logger.ErrorContext(
+				ctx,
 				"Failed to read backend token file",
 				slog.String("file", backendTokenFile),
 				slog.String("error", err.Error()),
@@ -226,7 +238,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 			return exit.Error(1)
 		}
 		backendToken = strings.TrimSpace(string(backendTokenData))
-		logger.Info(
+		logger.InfoContext(
+			ctx,
 			"Loaded backend token from file",
 			slog.String("file", backendTokenFile),
 			slog.String("!token", backendToken),
@@ -235,12 +248,13 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 
 	// Check that we have a token:
 	if backendToken == "" {
-		logger.Error("Backend token or token file must be provided")
+		logger.ErrorContext(ctx, "Backend token or token file must be provided")
 		return exit.Error(1)
 	}
 
 	// Write the backend details to the log:
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"Backend details",
 		slog.String("type", string(backendType)),
 		slog.String("url", backendURL),
@@ -252,14 +266,16 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Get the external address:
 	externalAddress, err := flags.GetString(externalAddressFlagName)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to get external address flag",
 			slog.String("flag", externalAddressFlagName),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"External address",
 		slog.String("value", externalAddress),
 	)
@@ -270,7 +286,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create transport wrapper",
 			"error", err.Error(),
 		)
@@ -283,7 +300,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create authentication wrapper",
 			slog.String("error", err.Error()),
 		)
@@ -294,7 +312,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create authorization wrapper",
 			slog.String("error", err.Error()),
 		)
@@ -323,7 +342,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetEnableHack(true).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create handler",
 			"error", err,
 		)
@@ -337,7 +357,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetHandler(handler).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to create adapter",
 			"error", err,
 		)
@@ -358,13 +379,15 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags, network.APIListener).
 		Build()
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"Failed to to create API listener",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
-	logger.Info(
+	logger.InfoContext(
+		ctx,
 		"API listening",
 		slog.String("address", apiListener.Addr().String()),
 	)
@@ -374,7 +397,8 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	err = apiServer.Serve(apiListener)
 	if err != nil {
-		logger.Error(
+		logger.ErrorContext(
+			ctx,
 			"API server finished with error",
 			slog.String("error", err.Error()),
 		)

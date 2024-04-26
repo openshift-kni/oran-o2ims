@@ -310,6 +310,9 @@ func (b *AdapterBuilder) createNextPageMarkerCipher() (result cipher.AEAD, err e
 
 // Serve is the implementation of the http.Handler interface.
 func (a *Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Get the context:
+	ctx := r.Context()
+
 	// Get the values of the path variables:
 	pathVariables := make([]string, len(a.pathVariables))
 	muxVariables := mux.Vars(r)
@@ -320,17 +323,18 @@ func (a *Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Serve according to the HTTP method:
 	switch r.Method {
 	case http.MethodGet:
-		a.serveGetMethod(w, r, pathVariables)
+		a.serveGetMethod(ctx, w, r, pathVariables)
 	case http.MethodPost:
-		a.servePostMethod(w, r, pathVariables)
+		a.servePostMethod(ctx, w, r, pathVariables)
 	case http.MethodDelete:
-		a.serveDeleteMethod(w, r, pathVariables)
+		a.serveDeleteMethod(ctx, w, r, pathVariables)
 	default:
 		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
 	}
 }
 
-func (a *Adapter) serveGetMethod(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+func (a *Adapter) serveGetMethod(ctx context.Context, w http.ResponseWriter, r *http.Request,
+	pathVariables []string) {
 	// Check that we have a compatible handler:
 	if a.listHandler == nil && a.getHandler == nil {
 		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
@@ -341,17 +345,18 @@ func (a *Adapter) serveGetMethod(w http.ResponseWriter, r *http.Request, pathVar
 	// Otherwise we select the collection handler only if the first variable is empty.
 	switch {
 	case a.listHandler != nil && a.getHandler == nil:
-		a.serveList(w, r, pathVariables)
+		a.serveList(ctx, w, r, pathVariables)
 	case a.listHandler == nil && a.getHandler != nil:
-		a.serveGet(w, r, pathVariables)
+		a.serveGet(ctx, w, r, pathVariables)
 	case pathVariables[0] == "":
-		a.serveList(w, r, pathVariables[1:])
+		a.serveList(ctx, w, r, pathVariables[1:])
 	default:
-		a.serveGet(w, r, pathVariables)
+		a.serveGet(ctx, w, r, pathVariables)
 	}
 }
 
-func (a *Adapter) servePostMethod(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+func (a *Adapter) servePostMethod(ctx context.Context, w http.ResponseWriter, r *http.Request,
+	pathVariables []string) {
 	// Check that we have a compatible handler:
 	if a.addHandler == nil {
 		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
@@ -362,7 +367,8 @@ func (a *Adapter) servePostMethod(w http.ResponseWriter, r *http.Request, pathVa
 	a.serveAdd(w, r, pathVariables)
 }
 
-func (a *Adapter) serveDeleteMethod(w http.ResponseWriter, r *http.Request, pathVariables []string) {
+func (a *Adapter) serveDeleteMethod(ctx context.Context, w http.ResponseWriter, r *http.Request,
+	pathVariables []string) {
 	// Check that we have a compatible handler:
 	if a.deleteHandler == nil {
 		SendError(w, http.StatusMethodNotAllowed, "Method '%s' is not allowed", r.Method)
@@ -370,13 +376,11 @@ func (a *Adapter) serveDeleteMethod(w http.ResponseWriter, r *http.Request, path
 	}
 
 	// Call the handler:
-	a.serveDelete(w, r, pathVariables)
+	a.serveDelete(ctx, w, r, pathVariables)
 }
 
-func (a *Adapter) serveGet(w http.ResponseWriter, r *http.Request, pathVariables []string) {
-	// Get the context:
-	ctx := r.Context()
-
+func (a *Adapter) serveGet(ctx context.Context, w http.ResponseWriter, r *http.Request,
+	pathVariables []string) {
 	// Create the request:
 	request := &GetRequest{
 		Variables: pathVariables,
@@ -384,7 +388,7 @@ func (a *Adapter) serveGet(w http.ResponseWriter, r *http.Request, pathVariables
 
 	// Try to extract the projector:
 	var ok bool
-	request.Projector, ok = a.extractProjector(w, r)
+	request.Projector, ok = a.extractProjector(ctx, w, r)
 	if !ok {
 		return
 	}
@@ -392,7 +396,8 @@ func (a *Adapter) serveGet(w http.ResponseWriter, r *http.Request, pathVariables
 	// Call the handler:
 	response, err := a.getHandler.Get(ctx, request)
 	if err != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to get object",
 			"error", err,
 		)
@@ -417,7 +422,8 @@ func (a *Adapter) serveGet(w http.ResponseWriter, r *http.Request, pathVariables
 	if request.Projector != nil {
 		object, err = a.projectorEvaluator.Evaluate(ctx, request.Projector, response.Object)
 		if err != nil {
-			a.logger.Error(
+			a.logger.ErrorContext(
+				ctx,
 				"Failed to evaluate projector",
 				slog.String("error", err.Error()),
 			)
@@ -434,10 +440,8 @@ func (a *Adapter) serveGet(w http.ResponseWriter, r *http.Request, pathVariables
 	a.sendObject(ctx, w, object)
 }
 
-func (a *Adapter) serveList(w http.ResponseWriter, r *http.Request, pathVariables []string) {
-	// Get the context:
-	ctx := r.Context()
-
+func (a *Adapter) serveList(ctx context.Context, w http.ResponseWriter, r *http.Request,
+	pathVariables []string) {
 	// Create the request:
 	request := &ListRequest{
 		Variables: pathVariables,
@@ -445,15 +449,15 @@ func (a *Adapter) serveList(w http.ResponseWriter, r *http.Request, pathVariable
 
 	// Try to extract, projector and next page marker:
 	var ok bool
-	request.Selector, ok = a.extractSelector(w, r)
+	request.Selector, ok = a.extractSelector(ctx, w, r)
 	if !ok {
 		return
 	}
-	request.Projector, ok = a.extractProjector(w, r)
+	request.Projector, ok = a.extractProjector(ctx, w, r)
 	if !ok {
 		return
 	}
-	request.NextPageMarker, ok = a.extractNextPageMarker(w, r)
+	request.NextPageMarker, ok = a.extractNextPageMarker(ctx, w, r)
 	if !ok {
 		return
 	}
@@ -461,7 +465,8 @@ func (a *Adapter) serveList(w http.ResponseWriter, r *http.Request, pathVariable
 	// Call the handler:
 	response, err := a.listHandler.List(ctx, request)
 	if err != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to get items",
 			"error", err,
 		)
@@ -501,7 +506,8 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 	// Check that the content type is acceptable:
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "" {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Received empty content type header",
 		)
 		SendError(
@@ -512,7 +518,8 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 	}
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to parse content type",
 			slog.String("header", contentType),
 			slog.String("error", err.Error()),
@@ -520,7 +527,8 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 		SendError(w, http.StatusBadRequest, "Failed to parse content type '%s'", contentType)
 	}
 	if !strings.EqualFold(mediaType, "application/json") {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Unsupported content type",
 			slog.String("header", contentType),
 			slog.String("media", mediaType),
@@ -538,7 +546,8 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 	var object data.Object
 	err = decoder.Decode(&object)
 	if err != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to decode input",
 			slog.String("error", err.Error()),
 		)
@@ -555,7 +564,8 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 	// Call the handler:
 	response, err := a.addHandler.Add(ctx, request)
 	if err != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to add item",
 			"error", err,
 		)
@@ -571,10 +581,8 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 	a.sendObject(ctx, w, response.Object)
 }
 
-func (a *Adapter) serveDelete(w http.ResponseWriter, r *http.Request, pathVariables []string) {
-	// Get the context:
-	ctx := r.Context()
-
+func (a *Adapter) serveDelete(ctx context.Context, w http.ResponseWriter, r *http.Request,
+	pathVariables []string) {
 	// Create the request:
 	request := &DeleteRequest{
 		Variables: pathVariables,
@@ -583,7 +591,8 @@ func (a *Adapter) serveDelete(w http.ResponseWriter, r *http.Request, pathVariab
 	// Call the handler:
 	_, err := a.deleteHandler.Delete(ctx, request)
 	if err != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to delete item",
 			"error", err,
 		)
@@ -602,7 +611,7 @@ func (a *Adapter) serveDelete(w http.ResponseWriter, r *http.Request, pathVariab
 // extractSelector tries to extract the selector from the request. It return the selector and a
 // flag indicating if it is okay to continue processing the request. When this flag is false the
 // error response was already sent to the client, and request processing should stop.
-func (a *Adapter) extractSelector(w http.ResponseWriter,
+func (a *Adapter) extractSelector(ctx context.Context, w http.ResponseWriter,
 	r *http.Request) (result *search.Selector, ok bool) {
 	query := r.URL.Query()
 
@@ -612,7 +621,8 @@ func (a *Adapter) extractSelector(w http.ResponseWriter,
 		for _, value := range values {
 			selector, err := a.selectorParser.Parse(value)
 			if err != nil {
-				a.logger.Error(
+				a.logger.ErrorContext(
+					ctx,
 					"Failed to parse filter expression",
 					slog.String("filter", value),
 					slog.String("error", err.Error()),
@@ -641,7 +651,7 @@ func (a *Adapter) extractSelector(w http.ResponseWriter,
 // extractProjector tries to extract the projector from the request. It return the selector and a
 // flag indicating if it is okay to continue processing the request. When this flag is false the
 // error response was already sent to the client, and request processing should stop.
-func (a *Adapter) extractProjector(w http.ResponseWriter,
+func (a *Adapter) extractProjector(ctx context.Context, w http.ResponseWriter,
 	r *http.Request) (result *search.Projector, ok bool) {
 	query := r.URL.Query()
 
@@ -650,7 +660,8 @@ func (a *Adapter) extractProjector(w http.ResponseWriter,
 	if present {
 		paths, err := a.pathsParser.Parse(includeFields...)
 		if err != nil {
-			a.logger.Error(
+			a.logger.ErrorContext(
+				ctx,
 				"Failed to parse included fields",
 				slog.Any("fields", includeFields),
 				slog.String("error", err.Error()),
@@ -680,7 +691,8 @@ func (a *Adapter) extractProjector(w http.ResponseWriter,
 	if present {
 		paths, err := a.pathsParser.Parse(excludeFields...)
 		if err != nil {
-			a.logger.Error(
+			a.logger.ErrorContext(
+				ctx,
 				"Failed to parse excluded fields",
 				slog.Any("fields", excludeFields),
 				slog.String("error", err.Error()),
@@ -713,11 +725,8 @@ func (a *Adapter) extractProjector(w http.ResponseWriter,
 // query parameter. It returns the marker and a flag indicating if it is okay to continue
 // processing the request. When this flag is false the error response was already sent to the
 // client, and request processing should stop.
-func (a *Adapter) extractNextPageMarker(w http.ResponseWriter, r *http.Request) (result []byte,
-	ok bool) {
-	// Get the context:
-	ctx := r.Context()
-
+func (a *Adapter) extractNextPageMarker(ctx context.Context, w http.ResponseWriter,
+	r *http.Request) (result []byte, ok bool) {
 	// Get the marker text:
 	text := r.URL.Query().Get(adapterNextPageOpaqueMarkerQueryParameterName)
 	if text == "" {
@@ -895,7 +904,8 @@ func (a *Adapter) sendItems(ctx context.Context, w http.ResponseWriter,
 	a.writeItems(ctx, writer, flusher, items)
 	err := writer.Flush()
 	if err != nil {
-		slog.Error(
+		slog.ErrorContext(
+			ctx,
 			"Faild to flush stream",
 			"error", err.Error(),
 		)
@@ -913,7 +923,8 @@ func (a *Adapter) writeItems(ctx context.Context, stream *jsoniter.Stream,
 		item, err := items.Next(ctx)
 		if err != nil {
 			if !errors.Is(err, streaming.ErrEnd) {
-				slog.Error(
+				slog.ErrorContext(
+					ctx,
 					"Failed to get next item",
 					"error", err.Error(),
 				)
@@ -926,7 +937,8 @@ func (a *Adapter) writeItems(ctx context.Context, stream *jsoniter.Stream,
 		stream.WriteVal(item)
 		err = stream.Flush()
 		if err != nil {
-			slog.Error(
+			slog.ErrorContext(
+				ctx,
 				"Faild to flush JSON stream",
 				"error", err.Error(),
 			)
@@ -946,14 +958,16 @@ func (a *Adapter) sendObject(ctx context.Context, w http.ResponseWriter,
 	writer := jsoniter.NewStream(a.jsonAPI, w, 0)
 	writer.WriteVal(object)
 	if writer.Error != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to send object",
 			"error", writer.Error.Error(),
 		)
 	}
 	writer.Flush()
 	if writer.Error != nil {
-		a.logger.Error(
+		a.logger.ErrorContext(
+			ctx,
 			"Failed to flush stream",
 			"error", writer.Error.Error(),
 		)

@@ -262,7 +262,8 @@ func (r *ResourcePoolFetcher) getSearchResponse(ctx context.Context) (result io.
 		return
 	}
 	if response.StatusCode != http.StatusOK {
-		r.logger.Error(
+		r.logger.ErrorContext(
+			ctx,
 			"Received unexpected status code",
 			"code", response.StatusCode,
 			"url", r.backendURL,

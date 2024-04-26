@@ -168,14 +168,16 @@ func (t *Tool) Run(ctx context.Context) error {
 	}
 
 	// Execute the main command:
-	t.logger.Info(
+	t.logger.InfoContext(
+		ctx,
 		"Command",
 		"args", t.args,
 	)
 	t.cmd.SetArgs(t.args[1:])
 	err = t.cmd.ExecuteContext(ctx)
 	if err != nil {
-		t.logger.Error(
+		t.logger.ErrorContext(
+			ctx,
 			"Failed to run command",
 			"args", t.args,
 			"error", err,
@@ -202,7 +204,7 @@ func (t *Tool) run(cmd *cobra.Command, args []string) error {
 	cmd.SetContext(ctx)
 
 	// Write build information:
-	t.writeBuildInfo()
+	t.writeBuildInfo(ctx)
 
 	return nil
 }
@@ -246,11 +248,11 @@ func (t *Tool) createConfiguredLogger() (result *slog.Logger, err error) {
 	return
 }
 
-func (t *Tool) writeBuildInfo() {
+func (t *Tool) writeBuildInfo(ctx context.Context) {
 	// Retrieve the information:
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
-		t.logger.Info("Build information isn't available")
+		t.logger.InfoContext(ctx, "Build information isn't available")
 		return
 	}
 
@@ -270,7 +272,7 @@ func (t *Tool) writeBuildInfo() {
 	}
 
 	// Write the information:
-	t.logger.Info("Build", logFields...)
+	t.logger.InfoContext(ctx, "Build", logFields...)
 }
 
 // In returns the input stream of the tool.

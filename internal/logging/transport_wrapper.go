@@ -15,6 +15,7 @@ License.
 package logging
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -56,11 +57,13 @@ type roundTripper struct {
 }
 
 type requestReader struct {
+	ctx    context.Context
 	logger *slog.Logger
 	reader io.ReadCloser
 }
 
 type responseReader struct {
+	ctx    context.Context
 	logger *slog.Logger
 	reader io.ReadCloser
 }
@@ -229,6 +232,9 @@ var _ http.RoundTripper = (*roundTripper)(nil)
 
 // RoundTrip is he implementation of the http.RoundTripper interface.
 func (t *roundTripper) RoundTrip(request *http.Request) (response *http.Response, err error) {
+	// Get the context:
+	ctx := request.Context()
+
 	// Call the wrapped transport and return inmediately if the request should be excluded:
 	if t.excludeFunc(request) {
 		response, err = t.wrapped.RoundTrip(request)
@@ -236,11 +242,12 @@ func (t *roundTripper) RoundTrip(request *http.Request) (response *http.Response
 	}
 
 	// Write the details of the request:
-	t.dumpRequest(request)
+	t.dumpRequest(ctx, request)
 
 	// Replace the request body with a reader that writes to the log:
 	if t.bodies && request.Body != nil {
 		request.Body = &requestReader{
+			ctx:    ctx,
 			logger: t.logger,
 			reader: request.Body,
 		}
@@ -255,18 +262,19 @@ func (t *roundTripper) RoundTrip(request *http.Request) (response *http.Response
 	// Replace the response body with a reader that writes to the log:
 	if t.bodies && response.Body != nil {
 		response.Body = &responseReader{
+			ctx:    ctx,
 			logger: t.logger,
 			reader: response.Body,
 		}
 	}
 
 	// Write the details of the response:
-	t.dumpResponse(response)
+	t.dumpResponse(ctx, response)
 
 	return
 }
 
-func (t *roundTripper) dumpRequest(request *http.Request) {
+func (t *roundTripper) dumpRequest(ctx context.Context, request *http.Request) {
 	fields := []any{
 		"method", request.Method,
 		"url", request.URL.String(),
@@ -274,24 +282,25 @@ func (t *roundTripper) dumpRequest(request *http.Request) {
 	if t.headers {
 		fields = append(fields, "headers", request.Header)
 	}
-	t.logger.Debug("Sending request", fields...)
+	t.logger.DebugContext(ctx, "Sending request", fields...)
 }
 
-func (t *roundTripper) dumpResponse(response *http.Response) {
+func (t *roundTripper) dumpResponse(ctx context.Context, response *http.Response) {
 	fields := []any{
 		"code", response.StatusCode,
 	}
 	if t.headers {
 		fields = append(fields, "headers", response.Header)
 	}
-	t.logger.Debug("Received response", fields...)
+	t.logger.DebugContext(ctx, "Received response", fields...)
 }
 
 func (r *requestReader) Read(p []byte) (n int, err error) {
 	n, err = r.reader.Read(p)
 	eof := errors.Is(err, io.EOF)
 	if err == nil || eof {
-		r.logger.Debug(
+		r.logger.DebugContext(
+			r.ctx,
 			"Sending body",
 			"n", n,
 			"eof", eof,
@@ -308,7 +317,8 @@ func (r *responseReader) Read(p []byte) (n int, err error) {
 	n, err = r.reader.Read(p)
 	eof := errors.Is(err, io.EOF)
 	if err == nil || eof {
-		r.logger.Debug(
+		r.logger.DebugContext(
+			r.ctx,
 			"Received body",
 			"n", n,
 			"eof", eof,
