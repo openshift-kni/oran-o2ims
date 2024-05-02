@@ -193,10 +193,12 @@ func (b *ListenerBuilder) Build() (result net.Listener, err error) {
 
 // Common listener names:
 const (
-	APIListener = "API"
+	APIListener     = "API"
+	MetricsListener = "Metrics"
 )
 
 // Common listener addresses:
 const (
-	APIAddress = "localhost:8000"
+	APIAddress     = "localhost:8000"
+	MetricsAddress = "localhost:8001"
 )

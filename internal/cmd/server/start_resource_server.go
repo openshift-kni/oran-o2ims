@@ -16,6 +16,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -23,11 +24,13 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/metrics"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/network"
 	"github.com/openshift-kni/oran-o2ims/internal/service"
@@ -48,6 +51,7 @@ func ResourceServer() *cobra.Command {
 	}
 	flags := result.Flags()
 	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
+	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
 	_ = flags.String(
 		cloudIDFlagName,
 		"",
@@ -93,6 +97,19 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 
 	// Get the flags:
 	flags := cmd.Flags()
+
+	// Create the exit handler:
+	exitHandler, err := exit.NewHandler().
+		SetLogger(c.logger).
+		Build()
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to create exit handler",
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
 
 	// Get the cloud identifier:
 	cloudID, err := flags.GetString(cloudIDFlagName)
@@ -187,6 +204,23 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		)
 	}
 
+	// Create the metrics wrapper:
+	metricsWrapper, err := metrics.NewHandlerWrapper().
+		AddPaths(
+			"/o2ims-infrastructureInventory/-/resourceTypes/-",
+			"/o2ims-infrastructureInventory/-/resourcePools/-/resources/-",
+		).
+		SetSubsystem("inbound").
+		Build()
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to create metrics wrapper",
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
 	// Create the router:
 	router := mux.NewRouter()
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +229,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		service.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	})
+	router.Use(metricsWrapper)
 
 	// Generate the search API URL according the backend URL
 	backendURL, err = c.generateSearchApiUrl(backendURL)
@@ -245,24 +280,62 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 	c.logger.InfoContext(
 		ctx,
-		"API listening",
+		"API server listening",
 		slog.String("address", apiListener.Addr().String()),
 	)
-	apiServer := http.Server{
+	apiServer := &http.Server{
 		Addr:    apiListener.Addr().String(),
 		Handler: router,
 	}
-	err = apiServer.Serve(apiListener)
+	exitHandler.AddServer(apiServer)
+	go func() {
+		err = apiServer.Serve(apiListener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			c.logger.ErrorContext(
+				ctx,
+				"API server finished with error",
+				slog.String("error", err.Error()),
+			)
+		}
+	}()
+
+	// Start the metrics server:
+	metricsListener, err := network.NewListener().
+		SetLogger(c.logger).
+		SetFlags(flags, network.MetricsListener).
+		Build()
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
-			"API server finished with error",
+			"Failed to create metrics listener",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
+	c.logger.InfoContext(
+		ctx,
+		"Metrics server listening",
+		slog.String("address", metricsListener.Addr().String()),
+	)
+	metricsHandler := promhttp.Handler()
+	metricsServer := &http.Server{
+		Addr:    metricsListener.Addr().String(),
+		Handler: metricsHandler,
+	}
+	exitHandler.AddServer(metricsServer)
+	go func() {
+		err = metricsServer.Serve(metricsListener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			c.logger.ErrorContext(
+				ctx,
+				"Metrics server finished with error",
+				slog.String("error", err.Error()),
+			)
+		}
+	}()
 
-	return nil
+	// Wait for exit signals:
+	return exitHandler.Wait(ctx)
 }
 
 func (c *ResourceServerCommand) createResourcePoolHandler(
