@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -272,6 +273,7 @@ func (h *AlarmHandler) fetchItems(
 		SetResourceServerURL(h.resourceServerURL).
 		SetResourceServerToken(h.resourceServerToken).
 		SetExtensions(h.extensions...).
+		SetFilters(h.getQueryFilters(ctx, selector)).
 		Build()
 	if err != nil {
 		return
@@ -300,4 +302,118 @@ func (h *AlarmHandler) fetchItem(ctx context.Context,
 	alarm, err = alarms.Next(ctx)
 
 	return
+}
+
+func (h *AlarmHandler) getQueryFilters(ctx context.Context, selector *search.Selector) (filters []string) {
+	filters = []string{}
+
+	// Add filters from the request params
+	if selector != nil {
+		for _, term := range selector.Terms {
+			filter, err := h.getAlertFilter(ctx, term)
+			if err != nil || filter == "" {
+				// fallback to selector filtering
+				continue
+			}
+			h.logger.DebugContext(
+				ctx,
+				"Mapped filter term to Alertmanager filter",
+				slog.String("term", term.String()),
+				slog.String("mapped filter", filter),
+			)
+
+			filters = append(filters, filter)
+		}
+	}
+
+	return
+}
+
+func (h *AlarmHandler) getAlertFilter(ctx context.Context, term *search.Term) (filter string, err error) {
+	// Get filter operator
+	var operator string
+	operator, err = AlertFilterOp(term.Operator).String()
+	if err != nil {
+		h.logFallbackError(
+			ctx,
+			slog.String("filter", term.String()),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Validate term values
+	if len(term.Values) != 1 {
+		h.logFallbackError(
+			ctx,
+			slog.Any("term values", term.Values),
+		)
+		return
+	}
+
+	// Map filter property for Alertmanager
+	var property string
+	if len(term.Path) == 1 {
+		property = AlertFilterProperty(term.Path[0]).MapProperty()
+		if property == "" {
+			h.logFallbackError(
+				ctx,
+				slog.Any("term path", term.Path),
+			)
+			return
+		}
+	} else if term.Path[0] == "extensions" {
+		// Support filtering by an extension (e.g. 'extensions/severity')
+		property = term.Path[1]
+	} else {
+		// No filter
+		return
+	}
+
+	filter = fmt.Sprintf("%s%s%s", property, operator, term.Values[0])
+
+	return
+}
+
+func (h *AlarmHandler) logFallbackError(ctx context.Context, messages ...any) {
+	h.logger.ErrorContext(
+		ctx,
+		"Failed to map Alertmanager filter term (fallback to selector filtering)",
+		messages...,
+	)
+}
+
+type AlertFilterOp search.Operator
+
+// String generates an Alertmanager string representation of the operator.
+// It panics if used on an unknown operator.
+func (o AlertFilterOp) String() (result string, err error) {
+	switch search.Operator(o) {
+	case search.Eq:
+		result = "="
+	case search.Neq:
+		result = "!="
+	case search.Cont:
+		result = "=~"
+	case search.Ncont:
+		result = "!~"
+	default:
+		err = fmt.Errorf("unknown operator %d", o)
+	}
+	return
+}
+
+type AlertFilterProperty string
+
+// MapProperty maps a specified O2 property to the Alertmanager property
+func (p AlertFilterProperty) MapProperty() string {
+	switch p {
+	case "alarmDefinitionID":
+		return "alertname"
+	case "probableCauseID":
+		return "alertname"
+	default:
+		// unknown property
+		return ""
+	}
 }

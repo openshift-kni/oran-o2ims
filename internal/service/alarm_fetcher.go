@@ -40,6 +40,7 @@ type AlarmFetcher struct {
 	resourceServerURL   string
 	resourceServerToken string
 	extensions          []string
+	filters             []string
 	jqTool              *jq.Tool
 }
 
@@ -53,6 +54,7 @@ type AlarmFetcherBuilder struct {
 	resourceServerURL   string
 	resourceServerToken string
 	extensions          []string
+	filters             []string
 }
 
 // NewAlarmFetcher creates a builder that can then be used to configure
@@ -117,6 +119,13 @@ func (b *AlarmFetcherBuilder) SetResourceServerToken(
 // SetExtensions sets the fields that will be added to the extensions.
 func (b *AlarmFetcherBuilder) SetExtensions(values ...string) *AlarmFetcherBuilder {
 	b.extensions = values
+	return b
+}
+
+// SetFilters sets the query filter to send to the Alertmanager server. This is optional.
+func (b *AlarmFetcherBuilder) SetFilters(
+	value []string) *AlarmFetcherBuilder {
+	b.filters = value
 	return b
 }
 
@@ -190,6 +199,7 @@ func (b *AlarmFetcherBuilder) Build() (
 		resourceServerURL:   b.resourceServerURL,
 		resourceServerToken: b.resourceServerToken,
 		extensions:          b.extensions,
+		filters:             b.filters,
 		jqTool:              jqTool,
 	}
 	return
@@ -201,7 +211,7 @@ func (r *AlarmFetcher) FetchItems(
 	ctx context.Context) (alarms data.Stream, err error) {
 	query := neturl.Values{}
 	url := r.backendURL + "/alerts"
-	response, err := r.doGet(ctx, url, r.backendToken, query)
+	response, err := r.doGet(ctx, url, r.backendToken, query, r.filters)
 	if err != nil {
 		return
 	}
@@ -222,16 +232,23 @@ func (r *AlarmFetcher) FetchItems(
 }
 
 func (r *AlarmFetcher) doGet(ctx context.Context, url, token string,
-	query neturl.Values) (response *http.Response, err error) {
+	query neturl.Values, filters []string) (response *http.Response, err error) {
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
 	if query != nil {
+		// Add filters (if specified)
+		if filters != nil {
+			for _, filter := range r.filters {
+				query.Add("filter", filter)
+			}
+		}
 		request.URL.RawQuery = query.Encode()
 	}
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	request.Header.Set("Accept", "application/json")
+
 	response, err = r.backendClient.Do(request)
 	if err != nil {
 		return
@@ -350,7 +367,7 @@ func (r *AlarmFetcher) fetchResourcePool(ctx context.Context, clusterId string) 
 	query := neturl.Values{}
 	query.Add("filter", fmt.Sprintf("(eq,description,%s)", clusterId))
 	url := r.resourceServerURL + "/resourcePools"
-	response, err := r.doGet(ctx, url, r.resourceServerToken, query)
+	response, err := r.doGet(ctx, url, r.resourceServerToken, query, nil)
 	if err != nil {
 		return
 	}
@@ -374,7 +391,7 @@ func (r *AlarmFetcher) fetchResource(ctx context.Context, clusterName, resourceN
 	query.Add("filter", fmt.Sprintf("(eq,description,%s)", resourceName))
 	path := fmt.Sprintf("/resourcePools/%s/resources", clusterName)
 	url := r.resourceServerURL + path
-	response, err := r.doGet(ctx, url, r.resourceServerToken, query)
+	response, err := r.doGet(ctx, url, r.resourceServerToken, query, nil)
 	if err != nil {
 		return
 	}
