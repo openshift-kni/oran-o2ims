@@ -284,16 +284,21 @@ var _ = Describe("Alarm handler", func() {
 						Terms: []*search.Term{{
 							Operator: search.Eq,
 							Path: []string{
-								"alarmEventRecordId",
+								"alarmDefinitionID",
 							},
 							Values: []any{
-								"alert_spoke0",
+								"ClusterNotUpgradeable",
 							},
 						}},
 					},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
+
+				// Verify filters
+				Expect(handler.alarmFetcher.filters).To(ContainElement(
+					"alertname=ClusterNotUpgradeable",
+				))
 			})
 
 			It("Accepts multiple filters", func() {
@@ -309,19 +314,19 @@ var _ = Describe("Alarm handler", func() {
 							{
 								Operator: search.Eq,
 								Path: []string{
-									"alarmEventRecordId",
+									"alarmDefinitionID",
 								},
 								Values: []any{
-									"alert_spoke0",
+									"ClusterNotUpgradeable",
 								},
 							},
 							{
 								Operator: search.Neq,
 								Path: []string{
-									"perceivedSeverity",
+									"probableCauseID",
 								},
 								Values: []any{
-									"CRITICAL",
+									"NodeClockNotSynchronising",
 								},
 							},
 						},
@@ -329,6 +334,71 @@ var _ = Describe("Alarm handler", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
+
+				// Verify filters
+				Expect(handler.alarmFetcher.filters).To(ContainElement(
+					"alertname=ClusterNotUpgradeable",
+				))
+				Expect(handler.alarmFetcher.filters).To(ContainElement(
+					"alertname!=NodeClockNotSynchronising",
+				))
+			})
+
+			It("Accepts a filter by extension", func() {
+				// Prepare the backend:
+				backend.AppendHandlers(
+					RespondWithItems(),
+				)
+
+				// Send the request:
+				response, err := handler.List(ctx, &ListRequest{
+					Selector: &search.Selector{
+						Terms: []*search.Term{{
+							Operator: search.Eq,
+							Path: []string{
+								"extensions",
+								"severity",
+							},
+							Values: []any{
+								"critical",
+							},
+						}},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+
+				// Verify filters
+				Expect(handler.alarmFetcher.filters).To(ContainElement(
+					"severity=critical",
+				))
+			})
+
+			It("No filter for unknown property", func() {
+				// Prepare the backend:
+				backend.AppendHandlers(
+					RespondWithItems(),
+				)
+
+				// Send the request:
+				response, err := handler.List(ctx, &ListRequest{
+					Selector: &search.Selector{
+						Terms: []*search.Term{{
+							Operator: search.Eq,
+							Path: []string{
+								"unknown",
+							},
+							Values: []any{
+								"value",
+							},
+						}},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response).ToNot(BeNil())
+
+				// Verify filters
+				Expect(handler.alarmFetcher.filters).To(HaveLen(0))
 			})
 
 			It("Adds configurable extensions", func() {
