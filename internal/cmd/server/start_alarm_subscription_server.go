@@ -27,6 +27,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/authentication"
 	"github.com/openshift-kni/oran-o2ims/internal/authorization"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
+	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/metrics"
 	"github.com/openshift-kni/oran-o2ims/internal/network"
@@ -205,13 +206,28 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	})
 	router.Use(metricsWrapper, authenticationWrapper, authorizationWrapper)
 
+	// create k8s client with kube(from env first)
+	//var config *rest.Config
+	kubeClient, err := k8s.NewClient().SetLogger(logger).SetLoggingWrapper(loggingWrapper).Build()
+
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to create kubeClient",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+
 	// Create the handler:
 	handler, err := service.NewAlarmSubscriptionHandler().
 		SetLogger(logger).
 		SetLoggingWrapper(loggingWrapper).
 		SetCloudID(cloudID).
 		SetExtensions(extensions...).
-		Build()
+		SetKubeClient(kubeClient).
+		Build(ctx)
+
 	if err != nil {
 		logger.ErrorContext(
 			ctx,

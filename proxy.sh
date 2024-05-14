@@ -66,7 +66,7 @@ pids="${pids} $!"
 --log-level="debug" \
 --log-field="server=alarm-subscription" \
 --log-field="pid=%p" \
---api-listener-address="127.0.0.1:8000" \
+--api-listener-address="127.0.0.1:8006" \
 --cloud-id="123" \
 &
 pids="${pids} $!"

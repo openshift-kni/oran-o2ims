@@ -29,9 +29,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clnt "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 // Client builder contains the data and logic needed to create a Kubernetes API client that
@@ -51,6 +53,13 @@ type ClientBuilder struct {
 type Client struct {
 	logger   *slog.Logger
 	delegate clnt.WithWatch
+}
+
+// set fake client to be used for test.go
+func NewFakeClient() *Client {
+	client := Client{}
+	client.delegate = fake.NewFakeClient()
+	return &client
 }
 
 // NewClient creates a builder that can then be used to configure and create a Kubernetes API client
@@ -283,6 +292,11 @@ func (c *Client) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKin
 
 func (c *Client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	return c.delegate.IsObjectNamespaced(obj)
+}
+
+// watch
+func (c *Client) Watch(ctx context.Context, obj clnt.ObjectList, opts ...clnt.ListOption) (watch.Interface, error) {
+	return c.delegate.Watch(ctx, obj, opts...)
 }
 
 // Close closes the client and releases all the resources it is using. It is specially important to
