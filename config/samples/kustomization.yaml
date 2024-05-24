@@ -1,4 +1,11 @@
-## Append samples of your project ##
 resources:
+
+# Operator:
 - oran_v1alpha1_orano2ims.yaml
-#+kubebuilder:scaffold:manifestskustomizesamples
+
+# Hardware management:
+- deployment_manager_template_1.yaml
+- deployment_manager_template_2.yaml
+- deployment_manager_order_1.yaml
+- node_allocation_request_1.yaml
+- node_release_request_1.yaml
