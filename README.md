@@ -28,6 +28,7 @@ $ ./oran-o2ims start metadata-server \
 --log-level=debug \
 --log-file=stdout \
 --api-listener-address=localhost:8000 \
+--metrics-listener-address="127.0.0.1:8008" \
 --cloud-id=123
 ```
 
@@ -66,6 +67,7 @@ $ ./oran-o2ims start deployment-manager-server \
 --log-level=debug \
 --log-file=stdout \
 --api-listener-address=localhost:8001 \
+--metrics-listener-address="127.0.0.1:8008" \
 --cloud-id=123 \
 --backend-url="${BACKEND_URL}" \
 --backend-token="${BACKEND_TOKEN}"
@@ -73,7 +75,7 @@ $ ./oran-o2ims start deployment-manager-server \
 
 Note that by default all the servers listen on `localhost:8000`, so there will
 be conflicts if you try to run multiple servers in the same machine. The
-`--api-listener-address` option is used to select a port number that isn't in
+`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in
 use.
 
 The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
@@ -120,6 +122,7 @@ $ ./oran-o2ims start resource-server \
 --log-level=debug \
 --log-file=stdout \
 --api-listener-address=localhost:8002 \
+--metrics-listener-address="127.0.0.1:8008" \
 --cloud-id=123 \
 --backend-url="${BACKEND_URL}" \
 --backend-token="${BACKEND_TOKEN}"
@@ -190,6 +193,7 @@ $ ./oran-o2ims start alarm-server \
 --log-level=debug \
 --log-file=stdout \
 --api-listener-address=localhost:8003 \
+--metrics-listener-address="127.0.0.1:8008" \
 --cloud-id=123 \
 --backend-url="${BACKEND_URL}" \
 --backend-token="${BACKEND_TOKEN}" \
@@ -238,3 +242,42 @@ Notes:
 * This API is not defined by O2ims Interface Specification.
 * The server supports the `alarmProbableCauses` endpoint for exposing a custom list of probable causes.
 * The list is available in [data folder](internal/files/alarms/probable_causes.json). Can be customized and maintained as required.
+
+#### Alarm Subscription server
+
+To use the configmap to persist the subscriptions, the namespace "orantest" should be created at hub cluster for now.
+
+Start the alarm subscription server with a command like this:
+
+```
+$./oran-o2ims start alarm-subscription-server \
+--log-file="servers.log" \
+--log-level="debug" \
+--log-field="server=alarm-subscription" \
+--log-field="pid=%p" \
+--api-listener-address="127.0.0.1:8006" \
+--metrics-listener-address="127.0.0.1:8008" \
+--cloud-id="123" 
+```
+
+Note that by default all the servers listen on `localhost:8000`, so there will
+be conflicts if you try to run multiple servers in the same machine. The
+`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in use.
+
+The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
+
+For more information about other command line flags use the `--help` command:
+
+```
+$ ./oran-o2ims start alarm-subscription-server --help
+```
+
+You can send requests with commands like this:
+
+```
+$ curl -s http://localhost:8001/o2ims-infrastructureMonitoring/v1/alarmSubscriptions | jq
+```
+Above example will get a list of existing alarm subscriptions
+
+Inside _VS Code_ use the _Run and Debug_ option with the `start
+alarm-subscription-server` [configuration](.vscode/launch.json).
