@@ -12,12 +12,12 @@ images:
   newName: quay.io/openshift-kni/oran-o2ims-operator
   newTag: 4.16.0
 
-replacements:
 
 # This replacment copies the controller image into the `IMAGE` environment variable of the pod,
 # which is in turn passed to the `--image` command line flag of the `start controller-manager`
 # command. The net result is that the operator knows what is its image and can use it as the
 # default for the servers.
+replacements:
 - source:
     fieldPath: spec.template.spec.containers.[name=manager].image
     kind: Deployment
