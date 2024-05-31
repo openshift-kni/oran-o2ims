@@ -23,6 +23,54 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type ServerConfig struct {
+	// Enabled indicates if the server should be started.
+	//
+	//+kubebuilder:default=true
+	Enabled bool `json:"enabled"`
+}
+
+// MetdataServerConfig contains the configuration for the metadata server.
+type MetadataServerConfig struct {
+	//+kubebuilder:default:={enabled:true}
+	ServerConfig `json:",inline"`
+}
+
+// DeploymentManagerServerConfig contains the configuration for the deployment manager server.
+type DeploymentManagerServerConfig struct {
+	//+kubebuilder:default:={enabled:true}
+	ServerConfig `json:",inline"`
+	//+optional
+	BackendURL string `json:"backendURL,omitempty"`
+	//+optional
+	BackendToken string `json:"backendToken,omitempty"`
+	//+kubebuilder:default=regular-hub
+	//+kubebuilder:validation:Enum=regular-hub;global-hub
+	BackendType string `json:"backendType,omitempty"`
+	// This field allows the addition of extra O-Cloud information for the deployment manager server.
+	//+optional
+	Extensions []string `json:"extensions,omitempty"`
+}
+
+// ResourceServerConfig contains the configuration for the resource server.
+type ResourceServerConfig struct {
+	//+kubebuilder:default:={enabled:true}
+	ServerConfig `json:",inline"`
+	//+optional
+	BackendURL string `json:"backendURL,omitempty"`
+	//+optional
+	BackendToken string `json:"backendToken,omitempty"`
+	// This field allows the addition of extra O-Cloud information for the resource server.
+	//+optional
+	Extensions []string `json:"extensions,omitempty"`
+}
+
+// AlarmSubscriptionServerConfig contains the configuration for the alarm subscription server.
+type AlarmSubscriptionServerConfig struct {
+	//+kubebuilder:default:={enabled:true}
+	ServerConfig `json:",inline"`
+}
+
 // ORANO2IMSSpec defines the desired state of ORANO2IMS
 type ORANO2IMSSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -33,30 +81,17 @@ type ORANO2IMSSpec struct {
 	// the controller manager.
 	//
 	//+optional
-	Image string `json:"image"`
-
+	Image   string `json:"image"`
 	CloudId string `json:"cloudId"`
-	//+kubebuilder:default=false
-	MetadataServer bool `json:"metadataServer"`
-	//+kubebuilder:default=false
-	DeploymentManagerServer bool `json:"deploymentManagerServer"`
-	//+kubebuilder:default=false
-	ResourceServer          bool `json:"resourceServer"`
-	AlarmSubscriptionServer bool `json:"alarmSubscriptionServer"`
+	//+optional
+	MetadataServerConfig MetadataServerConfig `json:"metadataServerConfig"`
+	//+optional
+	DeploymentManagerServerConfig DeploymentManagerServerConfig `json:"deploymentManagerServerConfig"`
+	ResourceServerConfig          ResourceServerConfig          `json:"resourceServerConfig,omitempty"`
+	//+optional
+	AlarmSubscriptionServerConfig AlarmSubscriptionServerConfig `json:"alarmSubscriptionServerConfig"`
 	//+optional
 	IngressHost string `json:"ingressHost,omitempty"`
-	//+optional
-	BackendURL string `json:"backendURL,omitempty"`
-	//+optional
-	SearchAPIBackendURL string `json:"searchAPIBackendURL,omitempty"`
-	//+optional
-	BackendToken string `json:"backendToken,omitempty"`
-	//+kubebuilder:default=regular-hub
-	//+kubebuilder:validation:Enum=regular-hub;global-hub
-	BackendType string `json:"backendType,omitempty"`
-	// This field allows the addition of extra O-Cloud information
-	//+optional
-	Extensions []string `json:"extensions,omitempty"`
 }
 
 type DeploymentsStatus struct {
@@ -70,11 +105,18 @@ type DeploymentsStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+type UsedServerConfig struct {
+	MetadataServerUsedConfig          []string `json:"metadataServerUsedConfig,omitempty"`
+	ResourceServerUsedConfig          []string `json:"resourceServerUsedConfig,omitempty"`
+	DeploymentManagerServerUsedConfig []string `json:"deploymentManagerServerUsedConfig,omitempty"`
+}
+
 // ORANO2IMSStatus defines the observed state of ORANO2IMS
 type ORANO2IMSStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	DeploymentsStatus DeploymentsStatus `json:"deploymentStatus,omitempty"`
+	UsedServerConfig  UsedServerConfig  `json:"usedServerConfig,omitempty"`
 }
 
 //+kubebuilder:object:root=true

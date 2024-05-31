@@ -36,10 +36,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
-const (
-	searchApiUrlPrefix = "search-api-open-cluster-management"
-)
-
 // Server creates and returns the `start resource-server` command.
 func ResourceServer() *cobra.Command {
 	c := NewResourceServer()
@@ -52,6 +48,7 @@ func ResourceServer() *cobra.Command {
 	flags := result.Flags()
 	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
+	AddTokenFlags(flags)
 	_ = flags.String(
 		cloudIDFlagName,
 		"",
@@ -61,11 +58,6 @@ func ResourceServer() *cobra.Command {
 		backendURLFlagName,
 		"",
 		"URL of the backend server.",
-	)
-	_ = flags.String(
-		backendTokenFlagName,
-		"",
-		"Token for authenticating to the backend server.",
 	)
 	_ = flags.StringArray(
 		extensionsFlagName,
@@ -155,24 +147,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		)
 		return exit.Error(1)
 	}
-	backendToken, err := flags.GetString(backendTokenFlagName)
-	if err != nil {
-		c.logger.ErrorContext(
-			ctx,
-			"Failed to get backend token flag",
-			"flag", backendTokenFlagName,
-			"error", err.Error(),
-		)
-		return exit.Error(1)
-	}
-	if backendToken == "" {
-		c.logger.ErrorContext(
-			ctx,
-			"Backend token is empty",
-			"flag", backendTokenFlagName,
-		)
-		return exit.Error(1)
-	}
+
 	extensions, err := flags.GetStringArray(extensionsFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
@@ -183,6 +158,12 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		)
 		return exit.Error(1)
 	}
+
+	backendToken, err := GetTokenFlag(ctx, flags, c.logger)
+	if err != nil {
+		return exit.Error(1)
+	}
+
 	c.logger.InfoContext(
 		ctx,
 		"Backend details",
@@ -501,9 +482,6 @@ func (c *ResourceServerCommand) generateSearchApiUrl(backendURL string) (string,
 
 	// Split URL address
 	hostArr := strings.Split(u.Host, ".")
-
-	// Replace with search API prefix
-	hostArr[0] = searchApiUrlPrefix
 
 	// Generate search API URL
 	searchUri := strings.Join(hostArr, ".")

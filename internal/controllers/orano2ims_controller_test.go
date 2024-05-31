@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
@@ -41,10 +40,6 @@ import (
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
-func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
-}
 
 var _ = DescribeTable(
 	"Reconciler",
@@ -85,8 +80,16 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.ORANO2IMSSpec{
-					MetadataServer:          true,
-					DeploymentManagerServer: false,
+					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: true,
+						},
+					},
+					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: false,
+						},
+					},
 				},
 			},
 		},
@@ -149,8 +152,16 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.ORANO2IMSSpec{
-					MetadataServer:          true,
-					DeploymentManagerServer: false,
+					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: true,
+						},
+					},
+					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: false,
+						},
+					},
 				},
 			},
 		},
@@ -230,8 +241,16 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.ORANO2IMSSpec{
-					MetadataServer:          true,
-					DeploymentManagerServer: true,
+					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: true,
+						},
+					},
+					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: true,
+						},
+					},
 				},
 			},
 		},
@@ -277,8 +296,16 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.ORANO2IMSSpec{
-					MetadataServer:          false,
-					DeploymentManagerServer: false,
+					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: false,
+						},
+					},
+					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: oranv1alpha1.ServerConfig{
+							Enabled: false,
+						},
+					},
 				},
 			},
 		},

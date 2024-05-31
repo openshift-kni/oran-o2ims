@@ -116,7 +116,8 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
 	// Create the needed Ingress if at least one server is required by the Spec.
-	if t.object.Spec.MetadataServer || t.object.Spec.DeploymentManagerServer || t.object.Spec.ResourceServer || t.object.Spec.AlarmSubscriptionServer {
+	if t.object.Spec.MetadataServerConfig.Enabled || t.object.Spec.DeploymentManagerServerConfig.Enabled ||
+		t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmSubscriptionServerConfig.Enabled {
 		err = t.createIngress(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -140,7 +141,8 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 
 	// Start the resource server if required by the Spec.
-	if t.object.Spec.ResourceServer {
+	if t.object.Spec.ResourceServerConfig.Enabled {
+		// The ResourceServer requires the searchAPIBackendURL. Check it has been defined.
 		// Create the needed ServiceAccount.
 		err = t.createServiceAccount(ctx, utils.ORANO2IMSResourceServerName)
 		if err != nil {
@@ -164,19 +166,22 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 
 		// Create the resource-server deployment.
-		err = t.deployServer(ctx, utils.ORANO2IMSResourceServerName)
+		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSResourceServerName)
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx,
 				"Failed to deploy the Resource server.",
 				slog.String("error", err.Error()),
 			)
-			return
+			if errorReason == "" {
+				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+				return nextReconcile, err
+			}
 		}
 	}
 
 	// Start the metadata server if required by the Spec.
-	if t.object.Spec.MetadataServer {
+	if t.object.Spec.MetadataServerConfig.Enabled {
 		// Create the needed ServiceAccount.
 		err = t.createServiceAccount(ctx, utils.ORANO2IMSMetadataServerName)
 		if err != nil {
@@ -200,19 +205,22 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 
 		// Create the metadata-server deployment.
-		err = t.deployServer(ctx, utils.ORANO2IMSMetadataServerName)
+		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSMetadataServerName)
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx,
 				"Failed to deploy the Metadata server.",
 				slog.String("error", err.Error()),
 			)
-			return
+			if errorReason == "" {
+				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+				return nextReconcile, err
+			}
 		}
 	}
 
 	// Start the deployment server if required by the Spec.
-	if t.object.Spec.DeploymentManagerServer {
+	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
 		// Create the service account, role and binding:
 		err = t.createServiceAccount(ctx, utils.ORANO2IMSDeploymentManagerServerName)
 		if err != nil {
@@ -265,18 +273,21 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 
 		// Create the deployment-manager-server deployment.
-		err = t.deployServer(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSDeploymentManagerServerName)
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx,
 				"Failed to deploy the Deployment Manager server.",
 				slog.String("error", err.Error()),
 			)
-			return
+			if errorReason == "" {
+				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+				return nextReconcile, err
+			}
 		}
 	}
 	// Start the alarm subscription server if required by the Spec.
-	if t.object.Spec.AlarmSubscriptionServer {
+	if t.object.Spec.AlarmSubscriptionServerConfig.Enabled {
 		// Create authz ConfigMap.
 		err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
 		if err != nil {
@@ -311,18 +322,21 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 
 		// Create the alarm subscription-server deployment.
-		err = t.deployServer(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
+		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx,
 				"Failed to deploy the alarm subscription server.",
 				slog.String("error", err.Error()),
 			)
-			return
+			if errorReason == "" {
+				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+				return nextReconcile, err
+			}
 		}
 	}
 
-	err = t.updateORANO2ISMStatus(ctx)
+	err = t.updateORANO2ISMDeploymentStatus(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -405,7 +419,7 @@ func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.C
 	return utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE)
 }
 
-func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) error {
+func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (utils.ORANO2IMSConditionReason, error) {
 	t.logger.InfoContext(ctx, "[deploy server]", "Name", serverName)
 
 	// Server variables.
@@ -422,9 +436,19 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) er
 		},
 	}
 
-	deploymentContainerArgs, err := utils.BuildServerContainerArgs(t.object, serverName)
+	deploymentContainerArgs, err := utils.GetServerArgs(ctx, t.client, t.object, serverName)
 	if err != nil {
-		return err
+		err2 := t.updateORANO2ISMUsedConfigStatus(
+			ctx, serverName, deploymentContainerArgs,
+			utils.ORANO2IMSConditionReasons.ServerArgumentsError, err)
+		if err2 != nil {
+			return "", err2
+		}
+		return utils.ORANO2IMSConditionReasons.ServerArgumentsError, err
+	}
+	err = t.updateORANO2ISMUsedConfigStatus(ctx, serverName, deploymentContainerArgs, "", nil)
+	if err != nil {
+		return "", err
 	}
 
 	// Select the container image to use:
@@ -478,7 +502,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) er
 	}
 
 	t.logger.InfoContext(ctx, "[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
-	return utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE)
+	return "", utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE)
 }
 
 func (t *reconcilerTask) createConfigMap(ctx context.Context, resourceName string) error {
@@ -695,12 +719,19 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 			},
 		)
 	} else {
+		meta.RemoveStatusCondition(
+			&t.object.Status.DeploymentsStatus.Conditions,
+			string(utils.ORANO2IMSConditionTypes.Error))
+		meta.RemoveStatusCondition(
+			&t.object.Status.DeploymentsStatus.Conditions,
+			string(utils.ORANO2IMSConditionTypes.Ready))
 		for _, condition := range deployment.Status.Conditions {
+			// Obtain the status directly from the Deployment resources.
 			if condition.Type == "Available" {
 				meta.SetStatusCondition(
 					&t.object.Status.DeploymentsStatus.Conditions,
 					metav1.Condition{
-						Type:    string(utils.MapDeploymentNameConditionType[deploymentName]),
+						Type:    string(utils.MapAvailableDeploymentNameConditionType[deploymentName]),
 						Status:  metav1.ConditionStatus(condition.Status),
 						Reason:  condition.Reason,
 						Message: condition.Message,
@@ -712,16 +743,6 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 }
 
 func (t *reconcilerTask) updateORANO2ISMStatus(ctx context.Context) error {
-
-	t.logger.InfoContext(ctx, "[updateORANO2ISMStatus]")
-	if t.object.Spec.MetadataServer {
-		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSMetadataServerName)
-	}
-
-	if t.object.Spec.DeploymentManagerServer {
-		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSDeploymentManagerServerName)
-	}
-
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		err := t.client.Status().Update(ctx, t.object)
 		return err
@@ -732,6 +753,65 @@ func (t *reconcilerTask) updateORANO2ISMStatus(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
+	ctx context.Context, serverName string, deploymentArgs []string,
+	errorReason utils.ORANO2IMSConditionReason, err error) error {
+	t.logger.InfoContext(ctx, "[updateORANO2ISMUsedConfigStatus]")
+
+	if serverName == utils.ORANO2IMSMetadataServerName {
+		t.object.Status.UsedServerConfig.MetadataServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.ORANO2IMSDeploymentManagerServerName {
+		t.object.Status.UsedServerConfig.DeploymentManagerServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.ORANO2IMSResourceServerName {
+		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
+	}
+
+	// If there is an error passed, include it in the condition.
+	if err != nil {
+		meta.SetStatusCondition(
+			&t.object.Status.DeploymentsStatus.Conditions,
+			metav1.Condition{
+				Type:    string(utils.MapErrorDeploymentNameConditionType[serverName]),
+				Status:  "True",
+				Reason:  string(errorReason),
+				Message: err.Error(),
+			},
+		)
+
+		meta.RemoveStatusCondition(
+			&t.object.Status.DeploymentsStatus.Conditions,
+			string(utils.MapAvailableDeploymentNameConditionType[serverName]))
+	} else {
+		meta.RemoveStatusCondition(
+			&t.object.Status.DeploymentsStatus.Conditions,
+			string(utils.MapErrorDeploymentNameConditionType[serverName]))
+	}
+
+	return t.updateORANO2ISMStatus(ctx)
+}
+
+func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) error {
+
+	t.logger.InfoContext(ctx, "[updateORANO2ISMDeploymentStatus]")
+	if t.object.Spec.MetadataServerConfig.Enabled {
+		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSMetadataServerName)
+	}
+
+	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
+		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+	}
+
+	if t.object.Spec.ResourceServerConfig.Enabled {
+		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSResourceServerName)
+	}
+
+	return t.updateORANO2ISMStatus(ctx)
 }
 
 // SetupWithManager sets up the controller with the Manager.

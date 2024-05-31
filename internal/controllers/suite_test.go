@@ -27,6 +27,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 )
@@ -34,6 +36,10 @@ import (
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controllers")
+}
+
+func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
 }
 
 // Logger used for tests:

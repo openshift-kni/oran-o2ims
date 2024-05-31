@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -163,8 +166,90 @@ func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
 	return []corev1.VolumeMount{}
 }
 
-func BuildServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS,
+func GetBackendTokenArg(backendToken string) string {
+	// If no backend token has been provided then use the token of the service account
+	// that will eventually execute the server. Note that the file may not exist,
+	// but we can't check it here as that will be a different pod.
+	if backendToken != "" {
+		return fmt.Sprintf("--backend-token=%s", backendToken)
+	}
+
+	return fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile)
+}
+
+// getACMNamespace will determine the ACM namespace from the multiclusterengine object.
+//
+// multiclusterengine object sample:
+//
+//	apiVersion: multicluster.openshift.io/v1
+//	kind: MultiClusterEngine
+//	metadata:
+//	  labels:
+//	    installer.name: multiclusterhub
+//	    installer.namespace: open-cluster-management
+func getACMNamespace(ctx context.Context, c client.Client) (string, error) {
+	// Get the multiclusterengine object.
+	multiClusterEngine := &unstructured.Unstructured{}
+	multiClusterEngine.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "multicluster.openshift.io",
+		Kind:    "MultiClusterEngine",
+		Version: "v1",
+	})
+	err := c.Get(ctx, client.ObjectKey{
+		Name: "multiclusterengine",
+	}, multiClusterEngine)
+
+	if err != nil {
+		oranUtilsLog.Info("[getACMNamespace] multiclusterengine object not found")
+		return "", fmt.Errorf("multiclusterengine object not found")
+	}
+
+	// Get the ACM namespace by looking at the installer.namespace label.
+	multiClusterEngineMetadata := multiClusterEngine.Object["metadata"].(map[string]interface{})
+	multiClusterEngineLabels, labelsOk := multiClusterEngineMetadata["labels"]
+
+	if labelsOk {
+		acmNamespace, acmNamespaceOk := multiClusterEngineLabels.(map[string]interface{})["installer.namespace"]
+
+		if !acmNamespaceOk {
+			return "", fmt.Errorf("multiclusterengine labels do not contain the installer.namespace key")
+		}
+		return acmNamespace.(string), nil
+	}
+
+	return "", fmt.Errorf("multiclusterengine object does not have expected labels")
+}
+
+// getSearchAPI will dynamically obtain the search API.
+func getSearchAPI(ctx context.Context, c client.Client, orano2ims *oranv1alpha1.ORANO2IMS) (string, error) {
+	// Find the ACM namespace.
+	acmNamespace, err := getACMNamespace(ctx, c)
+	if err != nil {
+		return "", err
+	}
+
+	// Split the Ingress to obtain the domain for the Search API.
+	// searchAPIBackendURL example: https://search-api-open-cluster-management.apps.lab.karmalabs.corp
+	// IngressHost example:         o2ims.apps.lab.karmalabs.corp
+	// Note: The domain could also be obtained from the spec.host of the search-api route in the
+	// ACM namespace.
+	ingressSplit := strings.Split(orano2ims.Spec.IngressHost, ".apps")
+	if len(ingressSplit) != 2 {
+		return "", fmt.Errorf("the searchAPIBackendURL could not be obtained from the IngressHost. " +
+			"Directly specify the searchAPIBackendURL in the ORANO2IMS CR or update the IngressHost")
+	}
+	domain := ".apps" + ingressSplit[len(ingressSplit)-1]
+
+	// The searchAPI is obtained from the "search-api" string and the ACM namespace.
+	searchAPI := "https://" + "search-api-" + acmNamespace + domain
+
+	return searchAPI, nil
+}
+
+func GetServerArgs(ctx context.Context, c client.Client,
+	orano2ims *oranv1alpha1.ORANO2IMS,
 	serverName string) (result []string, err error) {
+	// MetadataServer:
 	if serverName == ORANO2IMSMetadataServerName {
 		result = slices.Clone(MetadataServerArgs)
 		result = append(
@@ -175,17 +260,33 @@ func BuildServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS,
 		return
 	}
 
+	// ResourceServer:
 	if serverName == ORANO2IMSResourceServerName {
+		searchAPI := orano2ims.Spec.ResourceServerConfig.BackendURL
+		if searchAPI == "" {
+			searchAPI, err = getSearchAPI(ctx, c, orano2ims)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		result = slices.Clone(ResourceServerArgs)
+
+		// Add the cloud-id and backend-url args:
 		result = append(
 			result,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-			fmt.Sprintf("--backend-url=%s", orano2ims.Spec.SearchAPIBackendURL),
-			fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken))
+			fmt.Sprintf("--backend-url=%s", searchAPI))
 
-		return
+		// Add the token arg:
+		result = append(
+			result,
+			GetBackendTokenArg(orano2ims.Spec.ResourceServerConfig.BackendToken))
+
+		return result, nil
 	}
 
+	// DeploymentManagerServer:
 	if serverName == ORANO2IMSDeploymentManagerServerName {
 		result = slices.Clone(DeploymentManagerServerArgs)
 
@@ -196,16 +297,16 @@ func BuildServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS,
 		)
 
 		// Set the backend type:
-		if orano2ims.Spec.BackendType != "" {
+		if orano2ims.Spec.DeploymentManagerServerConfig.BackendType != "" {
 			result = append(
 				result,
-				fmt.Sprintf("--backend-type=%s", orano2ims.Spec.BackendType),
+				fmt.Sprintf("--backend-type=%s", orano2ims.Spec.DeploymentManagerServerConfig.BackendType),
 			)
 		}
 
 		// If no backend URL has been provided then use the default URL of the Kubernetes
 		// API server of the cluster:
-		backendURL := orano2ims.Spec.BackendURL
+		backendURL := orano2ims.Spec.DeploymentManagerServerConfig.BackendURL
 		if backendURL == "" {
 			backendURL = defaultBackendURL
 		}
@@ -214,23 +315,13 @@ func BuildServerContainerArgs(orano2ims *oranv1alpha1.ORANO2IMS,
 			fmt.Sprintf("--backend-url=%s", backendURL),
 		)
 
-		// If no backend token has been provided then use the token of the service account
-		// that will eventually execute the server. Note that the file may not exist,
-		// but we can't check it here as that will be a different pod.
-		if orano2ims.Spec.BackendToken != "" {
-			result = append(
-				result,
-				fmt.Sprintf("--backend-token=%s", orano2ims.Spec.BackendToken),
-			)
-		} else {
-			result = append(
-				result,
-				fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
-			)
-		}
+		// Add the token argument:
+		result = append(
+			result,
+			GetBackendTokenArg(orano2ims.Spec.DeploymentManagerServerConfig.BackendToken))
 
 		// Add the extensions:
-		extensionsArgsArray := extensionsToExtensionArgs(orano2ims.Spec.Extensions)
+		extensionsArgsArray := extensionsToExtensionArgs(orano2ims.Spec.DeploymentManagerServerConfig.Extensions)
 		result = append(result, extensionsArgsArray...)
 
 		return
