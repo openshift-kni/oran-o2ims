@@ -12,7 +12,6 @@ metadata:
 spec:
   cloudId: f7fd171f-57b5-4a17-b176-9a73bf6064a4
   ingressHost: o2ims.apps.global-hub.karmalabs.corp
-  metadataServer: true
-  deploymentManagerServer: true
-  backendType: global-hub
-  backendURL: "https://multicluster-global-hub-manager-multicluster-global-hub.apps.global-hub.karmalabs.corp"
+  resourceServerConfig:
+    enabled: false
+

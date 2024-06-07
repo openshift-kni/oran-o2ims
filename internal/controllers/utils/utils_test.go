@@ -24,57 +24,65 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 )
 
-var suitescheme = scheme.Scheme
-
-func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
-	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
-}
+// Scheme used for the tests:
+var suitescheme = clientgoscheme.Scheme
 
 func TestORANO2IMSControllerUtils(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controller Utils Suite")
 }
 
+func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
+	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
+}
+
 var _ = Describe("ExtensionUtils", func() {
 	It("The container args contain all the extensions args", func() {
+
 		orano2ims := &oranv1alpha1.ORANO2IMS{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: ORANO2IMSNamespace,
 			},
 			Spec: oranv1alpha1.ORANO2IMSSpec{
-				MetadataServer:          true,
-				DeploymentManagerServer: true,
-				// The below extension matches the following CRD extensions entry:
-				//
-				// extensions:
-				// - "{\"my\": {memory: .status.capacity.memory, k8s_version: .status.version.kubernetes}}"
-				// - |
-				//     .metadata.labels["name"] as $name |
-				// 	   {
-				// 	     name: $name,
-				// 	     alias: $name
-				// 	   }
-				Extensions: []string{
-					fmt.Sprintf(
-						".metadata.labels[\"name\"] as $name |\n" +
-							"{\n" +
-							"  name: $name,\n" +
-							"  alias: $name\n" +
-							"}\n"),
-					"{\"my\": {memory: .status.capacity.memory, k8s_version: .status.version.kubernetes}}",
+				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
+					// The below extension matches the following CRD extensions entry:
+					//
+					// extensions:
+					// - "{\"my\": {memory: .status.capacity.memory, k8s_version: .status.version.kubernetes}}"
+					// - |
+					//     .metadata.labels["name"] as $name |
+					// 	   {
+					// 	     name: $name,
+					// 	     alias: $name
+					// 	   }
+					Extensions: []string{
+						fmt.Sprintf(
+							".metadata.labels[\"name\"] as $name |\n" +
+								"{\n" +
+								"  name: $name,\n" +
+								"  alias: $name\n" +
+								"}\n"),
+						"{\"my\": {memory: .status.capacity.memory, k8s_version: .status.version.kubernetes}}",
+					},
 				},
 			},
 		}
-		actualArgs, err := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
+		objs := []client.Object{orano2ims}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+
+		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, orano2ims, ORANO2IMSDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
@@ -95,12 +103,15 @@ var _ = Describe("ExtensionUtils", func() {
 				Namespace: ORANO2IMSNamespace,
 			},
 			Spec: oranv1alpha1.ORANO2IMSSpec{
-				MetadataServer:          true,
-				DeploymentManagerServer: true,
+				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
 			},
 		}
 
-		actualArgs, err := BuildServerContainerArgs(orano2ims, ORANO2IMSDeploymentManagerServerName)
+		objs := []client.Object{orano2ims}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+
+		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, orano2ims, ORANO2IMSDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
@@ -143,10 +154,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 				Name:      "oran-o2ims-sample-1",
 				Namespace: ORANO2IMSNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{
-				MetadataServer:          true,
-				DeploymentManagerServer: true,
-			},
+			Spec: oranv1alpha1.ORANO2IMSSpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -179,10 +187,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 				Name:      "oran-o2ims-sample-1",
 				Namespace: ORANO2IMSNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{
-				MetadataServer:          true,
-				DeploymentManagerServer: true,
-			},
+			Spec: oranv1alpha1.ORANO2IMSSpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -260,5 +265,201 @@ var _ = Describe("DoesK8SResourceExist", func() {
 		k8sResourceExists, err := DoesK8SResourceExist(context.TODO(), fakeClient, "metadata-server", "oran", obj)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(k8sResourceExists).To(Equal(false))
+	})
+})
+
+var _ = Describe("getACMNamespace", func() {
+
+	It("If multiclusterengine does not exist, return error", func() {
+		objs := []client.Object{}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("multiclusterengine object not found"))
+		Expect(acmNamespace).To(Equal(""))
+	})
+
+	It("If multiclusterengine exists without the expected labels, return error", func() {
+		u := &unstructured.Unstructured{}
+		u.Object = map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name": "multiclusterengine",
+				"labels": map[string]interface{}{
+					"installer.name": "multiclusterhub",
+				},
+			},
+			"spec": map[string]interface{}{
+				"targetNamespace": "multicluster-engine",
+			},
+		}
+
+		u.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "multicluster.openshift.io",
+			Kind:    "MultiClusterEngine",
+			Version: "v1",
+		})
+
+		objs := []client.Object{u}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
+		Expect(acmNamespace).To(Equal(""))
+	})
+
+	It("If multiclusterengine exists with the expected labels, return the ACM namespace", func() {
+		mce := &unstructured.Unstructured{}
+		mce.Object = map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name": "multiclusterengine",
+				"labels": map[string]interface{}{
+					"installer.name":      "multiclusterhub",
+					"installer.namespace": "open-cluster-management",
+				},
+			},
+			"spec": map[string]interface{}{
+				"targetNamespace": "multicluster-engine",
+			},
+		}
+
+		mce.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "multicluster.openshift.io",
+			Kind:    "MultiClusterEngine",
+			Version: "v1",
+		})
+
+		objs := []client.Object{mce}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(acmNamespace).To(Equal("open-cluster-management"))
+	})
+})
+
+var _ = Describe("searchAPI", func() {
+	It("If there is an error in getACMNamespace, that error is returned", func() {
+		mce := &unstructured.Unstructured{}
+		mce.Object = map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name": "multiclusterengine",
+				"labels": map[string]interface{}{
+					"installer.name": "multiclusterhub",
+				},
+			},
+			"spec": map[string]interface{}{
+				"targetNamespace": "multicluster-engine",
+			},
+		}
+
+		mce.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "multicluster.openshift.io",
+			Kind:    "MultiClusterEngine",
+			Version: "v1",
+		})
+
+		orano2ims := &oranv1alpha1.ORANO2IMS{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "oran-o2ims-sample-1",
+				Namespace: ORANO2IMSNamespace,
+			},
+			Spec: oranv1alpha1.ORANO2IMSSpec{
+				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
+				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
+			},
+		}
+
+		objs := []client.Object{mce, orano2ims}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
+		Expect(searchAPI).To(Equal(""))
+	})
+
+	It("If the ingress host does not have the expected format (containing .apps), error is returned", func() {
+		mce := &unstructured.Unstructured{}
+		mce.Object = map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name": "multiclusterengine",
+				"labels": map[string]interface{}{
+					"installer.name":      "multiclusterhub",
+					"installer.namespace": "open-cluster-management",
+				},
+			},
+			"spec": map[string]interface{}{
+				"targetNamespace": "multicluster-engine",
+			},
+		}
+
+		mce.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "multicluster.openshift.io",
+			Kind:    "MultiClusterEngine",
+			Version: "v1",
+		})
+
+		orano2ims := &oranv1alpha1.ORANO2IMS{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "oran-o2ims-sample-1",
+				Namespace: ORANO2IMSNamespace,
+			},
+			Spec: oranv1alpha1.ORANO2IMSSpec{
+				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
+				IngressHost:                   "o2ims.app.lab.karmalabs.corp",
+			},
+		}
+
+		objs := []client.Object{mce, orano2ims}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		Expect(searchAPI).To(BeEmpty())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"the searchAPIBackendURL could not be obtained from the IngressHost. " +
+				"Directly specify the searchAPIBackendURL in the ORANO2IMS CR or update the IngressHost"))
+	})
+
+	It("The ingress host has the expected format (containing .apps) and the searchAPI is returned", func() {
+		mce := &unstructured.Unstructured{}
+		mce.Object = map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name": "multiclusterengine",
+				"labels": map[string]interface{}{
+					"installer.name":      "multiclusterhub",
+					"installer.namespace": "open-cluster-management",
+				},
+			},
+			"spec": map[string]interface{}{
+				"targetNamespace": "multicluster-engine",
+			},
+		}
+
+		mce.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "multicluster.openshift.io",
+			Kind:    "MultiClusterEngine",
+			Version: "v1",
+		})
+
+		orano2ims := &oranv1alpha1.ORANO2IMS{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "oran-o2ims-sample-1",
+				Namespace: ORANO2IMSNamespace,
+			},
+			Spec: oranv1alpha1.ORANO2IMSSpec{
+				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
+				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
+			},
+		}
+
+		objs := []client.Object{mce, orano2ims}
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(searchAPI).To(Equal("https://search-api-open-cluster-management.apps.lab.karmalabs.corp"))
 	})
 })

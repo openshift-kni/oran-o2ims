@@ -34,48 +34,119 @@ spec:
           spec:
             description: ORANO2IMSSpec defines the desired state of ORANO2IMS
             properties:
-              alarmSubscriptionServer:
-                type: boolean
-              backendToken:
-                type: string
-              backendType:
-                default: regular-hub
-                enum:
-                - regular-hub
-                - global-hub
-                type: string
-              backendURL:
-                type: string
+              alarmSubscriptionServerConfig:
+                description: AlarmSubscriptionServerConfig contains the configuration
+                  for the alarm subscription server.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                required:
+                - enabled
+                type: object
               cloudId:
                 type: string
-              deploymentManagerServer:
-                default: false
-                type: boolean
-              extensions:
-                description: This field allows the addition of extra O-Cloud information
-                items:
-                  type: string
-                type: array
+              deploymentManagerServerConfig:
+                description: DeploymentManagerServerConfig contains the configuration
+                  for the deployment manager server.
+                properties:
+                  backendToken:
+                    type: string
+                  backendType:
+                    default: regular-hub
+                    enum:
+                    - regular-hub
+                    - global-hub
+                    type: string
+                  backendURL:
+                    type: string
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                  extensions:
+                    description: This field allows the addition of extra O-Cloud information
+                      for the deployment manager server.
+                    items:
+                      type: string
+                    type: array
+                required:
+                - enabled
+                type: object
+              image:
+                description: Image is the full reference of the container image that
+                  contains the binary. This is optional and the default will be the
+                  value passed to the `--image` command line flag of the controller
+                  manager.
+                type: string
               ingressHost:
                 type: string
-              metadataServer:
-                default: false
-                type: boolean
-              resourceServer:
-                default: false
-                type: boolean
-              searchAPIBackendURL:
-                type: string
+              metadataServerConfig:
+                description: MetdataServerConfig contains the configuration for the
+                  metadata server.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                required:
+                - enabled
+                type: object
+              resourceServerConfig:
+                description: ResourceServerConfig contains the configuration for the
+                  resource server.
+                properties:
+                  backendToken:
+                    type: string
+                  backendURL:
+                    type: string
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                  extensions:
+                    description: This field allows the addition of extra O-Cloud information
+                      for the resource server.
+                    items:
+                      type: string
+                    type: array
+                required:
+                - enabled
+                type: object
             required:
-            - alarmSubscriptionServer
             - cloudId
-            - deploymentManagerServer
-            - metadataServer
-            - resourceServer
             type: object
           status:
             description: ORANO2IMSStatus defines the observed state of ORANO2IMS
             properties:
+              deploymentManagerUsedServerConfig:
+                description: DeploymentManagerServerConfig contains the configuration
+                  for the deployment manager server.
+                properties:
+                  backendToken:
+                    type: string
+                  backendType:
+                    default: regular-hub
+                    enum:
+                    - regular-hub
+                    - global-hub
+                    type: string
+                  backendURL:
+                    type: string
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                  extensions:
+                    description: This field allows the addition of extra O-Cloud information
+                      for the deployment manager server.
+                    items:
+                      type: string
+                    type: array
+                required:
+                - enabled
+                type: object
               deploymentStatus:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
@@ -158,6 +229,27 @@ spec:
                     type: string
                   resourceServerStatus:
                     type: string
+                type: object
+              resourceServerUsedConfig:
+                description: ResourceServerConfig contains the configuration for the
+                  resource server.
+                properties:
+                  backendToken:
+                    type: string
+                  backendURL:
+                    type: string
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                  extensions:
+                    description: This field allows the addition of extra O-Cloud information
+                      for the resource server.
+                    items:
+                      type: string
+                    type: array
+                required:
+                - enabled
                 type: object
             type: object
         type: object

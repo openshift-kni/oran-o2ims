@@ -91,6 +91,20 @@
                         "request": "launch",
                         "mode": "test",
                         "program": "${fileDirname}"
+                },
+                {
+                        "name": "start controller",
+                        "type": "go",
+                        "request": "launch",
+                        "mode": "auto",
+                        "program": "${workspaceFolder}",
+                        "env": {
+                            "KUBECONFIG": "${env:KUBECONFIG}",
+                        },
+                        "args": [
+                                "start",
+                                "controller-manager",
+                        ]
                 }
         ]
 }

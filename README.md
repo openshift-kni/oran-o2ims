@@ -128,7 +128,9 @@ $ ./oran-o2ims start resource-server \
 --backend-token="${BACKEND_TOKEN}"
 ```
 
-Note: see more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
+Notes:
+- `--backend-token-file="${BACKEND_TOKEN_FILE}"` can also be used instead of `--backend-token`.
+- see more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
 
 For more information about other command line flags use the `--help` command:
 
