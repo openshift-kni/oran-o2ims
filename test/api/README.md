@@ -20,7 +20,7 @@ resource-server-646bccdb87-65jwr             1/1     Running   0          12d
 
 ## Preparation
 
-For running correctly the testsuite we need to set TEST_HOST env variable, this variable is the search-api URL that we can get using this command
+For running correctly the testsuite we need to set  **TEST_HOST** env variable, this variable is the apps URL that we can get using this command
 
 ```bash
  oc describe routes -n oran-o2ims | grep Host
