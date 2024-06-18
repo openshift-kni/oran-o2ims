@@ -1,285 +1,100 @@
-# O-RAN O2IMS
+# ORAN API TEST SUITE
+## Introduction
 
-This project is an implementation of the O-RAN O2 IMS API on top of
-OpenShift and ACM.
+This test suite needs of a functional Openshift deployment with ACM and ORAN operator, servers must be started too
 
-Note that at this point this is just experimental and at its very beginnings,
-so don't try to use it for anything close to a production environment.
-
-***Note: this README is only for development purposes.***
-
-## Quick Start
-
-### Build binary
-``` bash
-make binary
+```bash
+oran-o2ims                                         Active   12d
+oran-o2ims-system                                  Active   12d
+rhacm                                              Active   12d
 ```
 
-### Run
+In this case *rhacm* is the ACM namespace, *oran-o2ims-system* is the operator namespace and *oran-o2ims* is where the servers are deployed
 
-#### Metadata server
-
-The metadata server returns information about the supported versions of the
-API. It doesn't require any backend, only the O-Cloud identifier. You can start
-it with a command like this:
-
-```
-$ ./oran-o2ims start metadata-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8000 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123
+```bash
+NAME                                         READY   STATUS    RESTARTS   AGE
+deployment-manager-server-66d5b544f4-94p96   1/1     Running   0          12d
+metadata-server-64b4597c94-9q4sk             1/1     Running   0          12d
+resource-server-646bccdb87-65jwr             1/1     Running   0          12d
 ```
 
-You can send requests with commands like these:
+## Preparation
 
-```
-$ curl -s http://localhost:8000/o2ims-infrastructureInventory/api_versions | jq
+For running correctly the testsuite we need to set TEST_HOST env variable, this variable is the search-api URL that we can get using this command
 
-$ curl -s http://localhost:8000/o2ims-infrastructureInventory/v1 | jq
-```
-
-Inside _VS Code_ use the _Run and Debug_ option with the `start
-metadata-server` [configuration](.vscode/launch.json).
-
-#### Deployment manager server
-
-The deployment manager server needs to connect to the non-kubernetes API of the
-ACM global hub. If you are already connected to an OpenShift cluster that has
-that global hub installed and configured you can obtain the required URL and
-token like this:
-
-```
-$ export BACKEND_URL=$(
-  oc get route -n multicluster-global-hub multicluster-global-hub-manager -o json |
-  jq -r '"https://" + .spec.host'
-)
-$ export BACKEND_TOKEN=$(
-  oc create token -n multicluster-global-hub multicluster-global-hub-manager --duration=24h
-)
+```bash
+ oc describe routes -n oran-o2ims | grep Host
+ Requested Host:         o2ims.apps.ocp-mobius-cluster-assisted-0.qe.lab.redhat.com
 ```
 
-Start the deployment manager server with a command like this:
-
-```
-$ ./oran-o2ims start deployment-manager-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8001 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123 \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}"
+Then we can use this
+```bash
+export TEST_HOST="o2ims.apps.ocp-mobius-cluster-assisted-0.qe.lab.redhat.com"
 ```
 
-Note that by default all the servers listen on `localhost:8000`, so there will
-be conflicts if you try to run multiple servers in the same machine. The
-`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in
-use.
+Or we can launch the test suite without setting with export this way
 
-The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
-
-For more information about other command line flags use the `--help` command:
-
-```
-$ ./oran-o2ims start deployment-manager-server --help
+```bash
+TEST_HOST="o2ims.apps.ocp-mobius-cluster-assisted-0.qe.lab.redhat.com" go run github.com/onsi/ginkgo/v2/ginkgo -v
 ```
 
-You can send requests with commands like this:
+## Execution and results
 
+To run the test we have some ways to do it, for example, if we have used the export command we can run
+
+```bash
+ginkgo -v
 ```
-$ curl -s http://localhost:8001/o2ims-infrastructureInventory/v1/deploymentManagers | jq
-```
+**Note:** probably you get a ginkgo version mismatch, if you want to get rid of the message is better to launch with the repo version like this
 
-Inside _VS Code_ use the _Run and Debug_ option with the `start
-deployment-manager-server` [configuration](.vscode/launch.json).
-
-#### Resource server
-
-The resource server exposes endpoints for retrieving resource types, resource pools
-and resources objects. The server relies on the Search Query API of ACM hub.
-Follow the these [instructions](docs/dev/env_acm.md#search-query-api) to enable
-and configure the search API access.
-
-The required URL and token can be obtained
-as follows:
-
-```
-$ export BACKEND_URL=$(
-  oc get route -n open-cluster-management search-api -o json |
-  jq -r '"https://" + .spec.host'
-)
-$ export BACKEND_TOKEN=$(
-  oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
-)
+```bash
+go run github.com/onsi/ginkgo/v2/ginkgo -v
 ```
 
-Start the resource server with a command like this:
+This gives a result like this
 
-```
-$ ./oran-o2ims start resource-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8002 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123 \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}"
-```
+```bash
+Running Suite: OranO2ims Suite - /home/sdelacru/repos/oran-o2ims
+================================================================
+Random Seed: 1717072815
 
-Notes:
-- `--backend-token-file="${BACKEND_TOKEN_FILE}"` can also be used instead of `--backend-token`.
-- see more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
+Will run 2 of 7 specs
+------------------------------
+Metadata Server API testing When getting infrastructure Inventory API version should return OK in the response and json response should match reference json
+/home/sdelacru/repos/oran-o2ims/oran_o2ims_suite_test.go:18
+  STEP: Executing https petition @ 05/30/24 14:40:17.779
+  STEP: Checking OK status response @ 05/30/24 14:40:18.091
+  STEP: Checking response JSON is equal to expected JSON @ 05/30/24 14:40:18.092
+• [0.313 seconds]
+------------------------------
+Metadata Server API testing When getting infrastructure Inventory description should return OK in the response and json response should match reference json
+/home/sdelacru/repos/oran-o2ims/oran_o2ims_suite_test.go:40
+  STEP: Executing https petition @ 05/30/24 14:40:18.092
+  STEP: Checking OK status response @ 05/30/24 14:40:18.418
+  STEP: Checking response JSON is equal to expected JSON @ 05/30/24 14:40:18.418
+• [0.326 seconds]
+------------------------------
+SSSSS
 
-For more information about other command line flags use the `--help` command:
+Ran 2 of 7 Specs in 0.640 seconds
+SUCCESS! -- 2 Passed | 0 Failed | 0 Pending | 5 Skipped
+PASS
 
-```
-$ ./oran-o2ims start resource-server --help
-```
-
-##### Run and Debug
-
-Inside _VS Code_ use the _Run and Debug_ option with the `start
-resource-server` [configuration](.vscode/launch.json).
-
-##### Requests Examples
-
-###### GET Resource Type List
-
-To get a list of resource types:
-```
-$ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourceTypes | jq
+Ginkgo ran 1 suite in 3.296458911s
+Test Suite Passed
 ```
 
-###### GET Resource Pool List
+## Advanced usage
+We can run selected groups of tests, like this way
 
-To get a list of resource pools:
+```bash
+TEST_HOST="o2ims.apps.ocp-hub-0.qe.lab.redhat.com" go run github.com/onsi/ginkgo/v2/ginkgo --focus=Metadata -v
 ```
-$ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourcePools | jq
-```
+with *focus* parameter we can launch only a group of tests, in this case metadata server only test cases, we can do the same with the other servers, for example *--focus=Resources* will run only resource server tests
 
-###### GET Resource List
 
-To get a list of resources in a resource pool:
-```
-$ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}
-/resources | jq
-```
+## TODO
 
-#### Alarm server
-
-The alarm server exposes endpoints for retrieving alarms (AlarmEventRecord objects).
-The server relies on the Alertmanager API from Observability operator.
-Follow the these [instructions](docs/dev/env_acm.md#observability) to enable
-and configure Observability.
-
-The required URL and token can be obtained
-as follows:
-
-```
-$ export BACKEND_URL=$(
-  oc get route -n open-cluster-management-observability alertmanager -o json |
-  jq -r '"https://" + .spec.host'
-)
-$ export BACKEND_TOKEN=$(
-  oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
-)
-$ export RESOURCE_SERVER_URL=http://localhost:8002/o2ims-infrastructureInventory/v1/
-```
-
-Start the resource server with a command like this:
-
-```
-$ ./oran-o2ims start alarm-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8003 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123 \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}" \
---resource-server-url="${RESOURCE_SERVER_URL}"
-```
-
-Notes: 
-* See more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
-* The alarm server requires the `resource-server-url`, which is needed for fetching information about resources that are associated with retrieved alarms.
-
-For more information about other command line flags use the `--help` command:
-
-```
-$ ./oran-o2ims start alarm-server --help
-```
-
-##### Run and Debug
-
-Inside _VS Code_ use the _Run and Debug_ option with the `start
-alarm-server` [configuration](.vscode/launch.json).
-
-##### Requests Examples
-
-###### GET Alarm List
-
-To get a list of alarms:
-```
-$ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms | jq
-```
-
-###### GET an Alarm
-
-To get a list of resource pools:
-```
-$ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId} | jq
-```
-
-###### GET Alarm Probable Causes
-
-To get a list of alarm probable causes:
-```
-$ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarmProbableCauses | jq
-```
-
-Notes:
-* This API is not defined by O2ims Interface Specification.
-* The server supports the `alarmProbableCauses` endpoint for exposing a custom list of probable causes.
-* The list is available in [data folder](internal/files/alarms/probable_causes.json). Can be customized and maintained as required.
-
-#### Alarm Subscription server
-
-To use the configmap to persist the subscriptions, the namespace "orantest" should be created at hub cluster for now.
-
-Start the alarm subscription server with a command like this:
-
-```
-$./oran-o2ims start alarm-subscription-server \
---log-file="servers.log" \
---log-level="debug" \
---log-field="server=alarm-subscription" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8006" \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id="123" 
-```
-
-Note that by default all the servers listen on `localhost:8000`, so there will
-be conflicts if you try to run multiple servers in the same machine. The
-`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in use.
-
-The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
-
-For more information about other command line flags use the `--help` command:
-
-```
-$ ./oran-o2ims start alarm-subscription-server --help
-```
-
-You can send requests with commands like this:
-
-```
-$ curl -s http://localhost:8001/o2ims-infrastructureMonitoring/v1/alarmSubscriptions | jq
-```
-Above example will get a list of existing alarm subscriptions
-
-Inside _VS Code_ use the _Run and Debug_ option with the `start
-alarm-subscription-server` [configuration](.vscode/launch.json).
+-[ ] Check running servers in BeforeSuite
+-[ ] Add labels to tag the indivual tests so we can run specific tests depending on test phase (integration, development, release...etc)
+-[ ] Add more tests in next iteration
