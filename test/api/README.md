@@ -95,9 +95,9 @@ with *focus* parameter we can launch only a group of tests, in this case metadat
 
 ## TODO
 
--[ ] Check running servers in BeforeSuite
--[ ] Add labels to tag the indivual tests so we can run specific tests depending on test phase (integration, development, release...etc)
--[ ] Add more tests in next iteration
--[x] Use BeforeEach for the HTTP client
--[x] Separate servers testcases in different files
--[ ] Add alarm server testcases
+- [ ] Check running servers in BeforeSuite
+- [ ] Add labels to tag the indivual tests so we can run specific tests depending on test phase (integration, development, release...etc)
+- [ ] Add more tests in next iteration
+- [x] Use BeforeEach for the HTTP client
+- [x] Separate servers testcases in different files
+- [ ] Add alarm server testcases
