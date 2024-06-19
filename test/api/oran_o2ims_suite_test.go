@@ -1,24 +1,27 @@
-package main_test
+package api
 
 import (
 	"bytes"
-	"os"
-	"testing"
 	"crypto/tls"
 	"io"
 	"net/http"
+	"os"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-func TestOranO2ims(t *testing.T) {
+func TestAPI(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "OranO2ims Test Suite")
 }
 
 var _ = BeforeSuite(func() {
 	Expect(os.Getenv("TEST_HOST")).NotTo(BeZero(), "Please make sure TEST_HOST is set correctly.")
+	if os.Getenv("TEST_HOST") == "" {
+		Skip("API tests were skipped because environment variable 'TEST_HOST' isn't set")
+	}
 })
 
 var _ = Describe("Metadata Server API testing", func() {
