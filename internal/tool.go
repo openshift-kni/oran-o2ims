@@ -212,7 +212,7 @@ func (t *Tool) run(cmd *cobra.Command, args []string) error {
 func (t *Tool) createCommand() error {
 	// Create the main command:
 	t.cmd = &cobra.Command{
-		Use:               "o2ims",
+		Use:               "oran-o2ims",
 		Long:              "O2 IMS",
 		PersistentPreRunE: t.run,
 		SilenceErrors:     true,
