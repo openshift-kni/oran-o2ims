@@ -167,6 +167,79 @@ $ curl -s http://localhost:8002/o2ims-infrastructureInventory/v1/resourcePools/{
 /resources | jq
 ```
 
+#### Infrastructure Inventory Subscription Server (Resource Server)
+
+The infrastructure inventory subscription server exposes endpoints for creating, retrieving
+and deleting resource subscriptions.
+
+***Notes:***
+- No URL or token are required
+- A connection to an ACM hub cluster is required
+
+Start the infrastructure inventory subscription server with a command like this:
+
+```
+$ ./oran-o2ims start infrastructure-inventory-subscription-server \
+--log-level=debug \
+--log-file=stdout \
+--log-field="server=resource-subscriptions" \
+--api-listener-address=localhost:8004 \
+--metrics-listener-address=localhost:8008 \
+--cloud-id=123
+```
+
+For more information about other command line flags use the `--help` command:
+
+```
+$ ./oran-o2ims start infrastructure-inventory-subscription-server --help
+```
+
+##### Run and Debug
+
+Inside _VS Code_ use the _Run and Debug_ option with the `start
+infrastructure-inventory-subscription-server` [configuration](.vscode/launch.json).
+
+##### Request Examples
+
+###### GET Infrastructure Inventory Subscription List
+
+To get a list of resource subscriptions:
+```
+$ curl -s http://localhost:8004/o2ims-infrastructureInventory/v1/subscriptions | jq
+```
+
+###### GET Infrastructure Inventory Subscription Information
+
+To get all the information about an existing resource subscription:
+```
+$ curl -s http://localhost:8004/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq
+```
+
+###### POST a new Infrastructure Inventory Subscription Information
+
+To add a new resource subscription:
+```
+$ curl -s -X POST \
+--header "Content-Type: application/json" \
+-d @infra-sub.json http://127.0.0.1:8004/o2ims-infrastructureInventory/v1/subscriptions | jq
+```
+Where the content of `infra-sub.json` is as follows:
+```
+{
+  "consumerSubscriptionId": "69253c4b-8398-4602-855d-783865f5f25c",
+  "filter": "(eq,extensions/country,US);",
+  "callback": "https://128.224.115.15:1081/smo/v1/o2ims_inventory_observer"
+}
+```
+
+###### DELETE an Infrastructure Inventory Subscription
+
+To delete an existing resource subscription:
+```
+$ curl -s -X DELETE \
+http://localhost:8000/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq
+```
+
 #### Alarm server
 
 The alarm server exposes endpoints for retrieving alarms (AlarmEventRecord objects).
