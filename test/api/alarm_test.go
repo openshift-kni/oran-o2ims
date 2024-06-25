@@ -8,7 +8,6 @@ import (
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
 	"io"
 	"net/http"
-	"os"
 	// "github.com/openshift-kni/oran-o2ims/test/api"
 )
 
@@ -21,10 +20,12 @@ var _ = Describe("Alarm Server test API", func() {
 		}
 		client = &http.Client{Transport: tr}
 	})
-	Context("When getting infrastructure Inventory API version", func() {
+	Context("When getting alarm Inventory", func() {
 		It("should return OK in the response and json response should match reference json", func() {
 			requestBody := []byte(``)
-			request, _ := http.NewRequest("GET", "https://"+os.Getenv("TEST_HOST")+"/o2ims-infrastructureInventory/api_versions", bytes.NewBuffer([]byte(requestBody)))
+			request, _ := http.NewRequest("GET",
+        "https://"+ testHost + alarUrl + "alarms",
+        bytes.NewBuffer([]byte(requestBody)))
 			request.Header.Set("Content-Type", "application/json")
 			By("Executing https petition")
 			response, err := client.Do(request)
@@ -33,7 +34,7 @@ var _ = Describe("Alarm Server test API", func() {
 			Expect(response.StatusCode).To(Equal(http.StatusOK))
 			By("Checking response JSON matches condition")
 			responseBody, _ := io.ReadAll(response.Body)
-			Expect(responseBody).To(MatchJQ(`version`, "1.0.0"))
+			Expect(responseBody).To(MatchJQ(`version`, version))
 		})
 	})
 })

@@ -26,7 +26,9 @@ var _ = Describe("Resources Server API testing", func() {
 	Context("When getting Resource Type list", func() {
 		It("should return OK in the response and json response should match condition", func() {
 			requestBody := []byte(``)
-			request, _ := http.NewRequest("GET", "https://"+os.Getenv("TEST_HOST")+"/o2ims-infrastructureInventory/v1/resourceTypes", bytes.NewBuffer([]byte(requestBody)))
+			request, _ := http.NewRequest("GET",
+        "https://" + testHost + resUrl + "resourceTypes",
+        bytes.NewBuffer([]byte(requestBody)))
 			request.Header.Set("Content-Type", "application/json")
 			By("Executing https petition")
 			response, err := client.Do(request)
@@ -41,7 +43,9 @@ var _ = Describe("Resources Server API testing", func() {
 	Context("When getting Resource Pools", func() {
 		It("should return OK in the response and json response should match reference json", func() {
 			requestBody := []byte(``)
-			request, _ := http.NewRequest("GET", "https://"+os.Getenv("TEST_HOST")+"/o2ims-infrastructureInventory/v1/resourcePools", bytes.NewBuffer([]byte(requestBody)))
+			request, _ := http.NewRequest("GET",
+        "https://" + testHost + resUrl + "resourcePools",
+        bytes.NewBuffer([]byte(requestBody)))
 			request.Header.Set("Content-Type", "application/json")
 			By("Executing https petition")
 			response, err := client.Do(request)
@@ -56,7 +60,9 @@ var _ = Describe("Resources Server API testing", func() {
 	Context("When getting Resource List from a defined pool", func() {
 		It("should return OK in the response and json response should match reference json", func() {
 			requestBody := []byte(``)
-			request, _ := http.NewRequest("GET", "https://"+os.Getenv("TEST_HOST")+"/o2ims-infrastructureInventory/v1/resourcePools/local-cluster/resources", bytes.NewBuffer([]byte(requestBody)))
+			request, _ := http.NewRequest("GET",
+        "https://" + testHost + resUrl + "resourcePools/" + resPool + "/resources",
+        bytes.NewBuffer([]byte(requestBody)))
 			request.Header.Set("Content-Type", "application/json")
 			By("Executing https petition")
 			response, err := client.Do(request)
@@ -65,7 +71,7 @@ var _ = Describe("Resources Server API testing", func() {
 			Expect(response.StatusCode).To(Equal(http.StatusOK))
 			By("Checking response JSON matches condition")
 			responseBody, _ := io.ReadAll(response.Body)
-			Expect(responseBody).To(MatchJQ(`.resourcePoolID`, "local-cluster"))
+			Expect(responseBody).To(MatchJQ(`.resourcePoolID`, resPool))
 		})
 	})
 })

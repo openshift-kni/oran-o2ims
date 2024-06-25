@@ -9,7 +9,6 @@ import (
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
 	"io"
 	"net/http"
-	"os"
 	// "github.com/openshift-kni/oran-o2ims/test/api"
 )
 
@@ -25,8 +24,10 @@ var _ = Describe("Deployment Manager Server API testing", func() {
 
 	Context("When getting Deployment managers description", func() {
 		It("should return OK in the response and json response should match json", func() {
-			requestBody := []byte(`{"serviceUri":"","extensions":{},"oCloudId":"123","globalCloudId":"123","name":"OpenShift O-Cloud","description":"OpenShift O-Cloud"}`)
-			request, _ := http.NewRequest("GET", "https://"+os.Getenv("TEST_HOST")+"/o2ims-infrastructureInventory/v1/deploymentManagers", bytes.NewBuffer([]byte(requestBody)))
+			requestBody := []byte(``)
+			request, _ := http.NewRequest("GET",
+        "https://" + testHost + resUrl + "deploymentManagers",
+        bytes.NewBuffer([]byte(requestBody)))
 			request.Header.Set("Content-Type", "application/json")
 			By("Executing http petition")
 			response, err := client.Do(request)
