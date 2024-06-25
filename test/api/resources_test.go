@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"io"
 	"net/http"
-	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -54,7 +53,7 @@ var _ = Describe("Resources Server API testing", func() {
 			Expect(response.StatusCode).To(Equal(http.StatusOK))
 			By("Checking response JSON is equal to expected JSON")
 			responseBody, _ := io.ReadAll(response.Body)
-			Expect(responseBody).To(MatchJQ(`.name`, "local-cluster"))
+			Expect(responseBody).To(MatchJQ(`.name`, resPool))
 		})
 	})
 	Context("When getting Resource List from a defined pool", func() {
