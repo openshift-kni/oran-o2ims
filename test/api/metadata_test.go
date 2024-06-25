@@ -33,7 +33,7 @@ var _ = Describe("Metadata Server API testing", func() {
 			Expect(response.StatusCode).To(Equal(http.StatusOK))
 			By("Checking response JSON matches condition")
 			responseBody, _ := io.ReadAll(response.Body)
-			Expect(responseBody).To(MatchJQ(`version`, "1.0.0"))
+			Expect(responseBody).To(MatchJQ(`version`, version))
 		})
 	})
 	Context("When getting infrastructure Inventory description", func() {
