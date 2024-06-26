@@ -11,7 +11,7 @@ import (
 var ErrNotFound = errors.New("not found")
 
 // interface for persistent storage
-type StorageOperations interface {
+type Storage interface {
 	//notification from db to application about db entry changes
 	//currently assume the notification is granular to indivial entry
 	ReadEntry(ctx context.Context, key string) (value string, err error)
@@ -21,18 +21,18 @@ type StorageOperations interface {
 	ProcessChanges(ctx context.Context, dataMap **map[string]data.Object, lock *sync.Mutex) (err error)
 }
 
-func Add(so StorageOperations, ctx context.Context, key string, value string) (err error) {
+func Add(so Storage, ctx context.Context, key string, value string) (err error) {
 	return so.AddEntry(ctx, key, value)
 }
-func Get(so StorageOperations, ctx context.Context, key string) (value string, err error) {
+func Get(so Storage, ctx context.Context, key string) (value string, err error) {
 	return so.ReadEntry(ctx, key)
 }
-func GetAll(so StorageOperations, ctx context.Context) (result map[string]data.Object, err error) {
+func GetAll(so Storage, ctx context.Context) (result map[string]data.Object, err error) {
 	return so.ReadAllEntries(ctx)
 }
-func Delete(so StorageOperations, ctx context.Context, key string) (err error) {
+func Delete(so Storage, ctx context.Context, key string) (err error) {
 	return so.DeleteEntry(ctx, key)
 }
-func ProcessChanges(so StorageOperations, ctx context.Context, dataMap **map[string]data.Object, lock *sync.Mutex) (err error) {
+func ProcessChanges(so Storage, ctx context.Context, dataMap **map[string]data.Object, lock *sync.Mutex) (err error) {
 	return so.ProcessChanges(ctx, dataMap, lock)
 }

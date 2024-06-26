@@ -16,6 +16,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
@@ -27,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("alarm Subscription handler", func() {
+var _ = Describe("Subscription handler", func() {
 	Describe("Creation", func() {
 		var (
 			ctx        context.Context
@@ -40,10 +41,29 @@ var _ = Describe("alarm Subscription handler", func() {
 			fakeClient = k8s.NewFakeClient()
 		})
 
-		It("Can't be created without a logger", func() {
-			handler, err := NewAlarmSubscriptionHandler().
+		It("Needs a subscription type", func() {
+			handler, err := NewSubscriptionHandler().
+				SetLogger(logger).
 				SetCloudID("123").
 				SetKubeClient(fakeClient).
+				Build(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(handler).To(BeNil())
+			msg := err.Error()
+			Expect(msg).To(
+				ContainSubstring(
+					fmt.Sprintf("subscription type can only be %s or %s",
+						SubscriptionTypeAlarm,
+						SubscriptionTypeInfrastructureInventory),
+				),
+			)
+		})
+
+		It("Can't be created without a logger", func() {
+			handler, err := NewSubscriptionHandler().
+				SetCloudID("123").
+				SetKubeClient(fakeClient).
+				SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
 				Build(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(handler).To(BeNil())
@@ -53,9 +73,10 @@ var _ = Describe("alarm Subscription handler", func() {
 		})
 
 		It("Can't be created without a cloud identifier", func() {
-			handler, err := NewAlarmSubscriptionHandler().
+			handler, err := NewSubscriptionHandler().
 				SetLogger(logger).
 				SetKubeClient(fakeClient).
+				SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
 				Build(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(handler).To(BeNil())
@@ -83,18 +104,32 @@ var _ = Describe("alarm Subscription handler", func() {
 			}
 			err := fakeClient.Create(ctx, namespace, &client.CreateOptions{}, client.FieldOwner(FieldOwner))
 			Expect(err).ToNot(HaveOccurred())
-			configmap := &corev1.ConfigMap{
+			alarmSubConfigMap := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ConfigMap",
 					APIVersion: "v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: TestNamespace,
-					Name:      TestConfigmapName,
+					Name:      AlarmConfigMapName,
 				},
 				Data: nil,
 			}
-			err = fakeClient.Create(ctx, configmap, &client.CreateOptions{}, client.FieldOwner(FieldOwner))
+			err = fakeClient.Create(ctx, alarmSubConfigMap, &client.CreateOptions{}, client.FieldOwner(FieldOwner))
+			Expect(err).ToNot(HaveOccurred())
+
+			resourceSubConfigMap := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: TestNamespace,
+					Name:      InfraInventoryConfigMapName,
+				},
+				Data: nil,
+			}
+			err = fakeClient.Create(ctx, resourceSubConfigMap, &client.CreateOptions{}, client.FieldOwner(FieldOwner))
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -103,10 +138,11 @@ var _ = Describe("alarm Subscription handler", func() {
 			It("Translates empty list of results", func() {
 
 				// Create the handler:
-				handler, err := NewAlarmSubscriptionHandler().
+				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
+					SetSubscriptionType(SubscriptionTypeAlarm).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(handler).ToNot(BeNil())
@@ -122,10 +158,11 @@ var _ = Describe("alarm Subscription handler", func() {
 
 			It("Translates non empty list of results", func() {
 				// Create the handler:
-				handler, err := NewAlarmSubscriptionHandler().
+				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
+					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(handler).ToNot(BeNil())
@@ -135,7 +172,7 @@ var _ = Describe("alarm Subscription handler", func() {
 					"customerId": "test_customer_id_prime",
 				}
 				obj_2 := data.Object{
-					"customerId": "test_custer_id",
+					"customerId": "test_cluster_id",
 					"filter": data.Object{
 						"notificationType": "1",
 						"nsInstanceId":     "test_instance_id",
@@ -151,9 +188,9 @@ var _ = Describe("alarm Subscription handler", func() {
 				subId_2, err := handler.addItem(ctx, req_2)
 				Expect(err).ToNot(HaveOccurred())
 
-				obj_1, err = handler.encodeSubId(ctx, subId_1, obj_1)
+				obj_1, err = handler.encodeSubId(subId_1, obj_1)
 				Expect(err).ToNot(HaveOccurred())
-				obj_2, err = handler.encodeSubId(ctx, subId_2, obj_2)
+				obj_2, err = handler.encodeSubId(subId_2, obj_2)
 				Expect(err).ToNot(HaveOccurred())
 
 				subIdMap := map[string]data.Object{}
@@ -169,10 +206,10 @@ var _ = Describe("alarm Subscription handler", func() {
 				items, err := data.Collect(ctx, response.Items)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(items).To(HaveLen(2))
-				id, err := handler.decodeSubId(ctx, items[0])
+				id, err := handler.decodeSubId(items[0])
 				Expect(err).ToNot(HaveOccurred())
 				Expect(items[0]).To(Equal(subIdMap[id]))
-				id, err = handler.decodeSubId(ctx, items[1])
+				id, err = handler.decodeSubId(items[1])
 				Expect(err).ToNot(HaveOccurred())
 				Expect(items[1]).To(Equal(subIdMap[id]))
 			})
@@ -185,10 +222,11 @@ var _ = Describe("alarm Subscription handler", func() {
 		Describe("Get", func() {
 			It("Test Get functions", func() {
 				// Create the handler:
-				handler, err := NewAlarmSubscriptionHandler().
+				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
+					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -207,10 +245,11 @@ var _ = Describe("alarm Subscription handler", func() {
 
 			It("Uses the right search id ", func() {
 				// Create the handler:
-				handler, err := NewAlarmSubscriptionHandler().
+				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
+					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				obj_1 := data.Object{
@@ -225,7 +264,7 @@ var _ = Describe("alarm Subscription handler", func() {
 
 				subId_1, err := handler.addItem(ctx, req_1)
 				Expect(err).ToNot(HaveOccurred())
-				obj_1, err = handler.encodeSubId(ctx, subId_1, obj_1)
+				obj_1, err = handler.encodeSubId(subId_1, obj_1)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Send the request. Note that we ignore the error here because
@@ -241,12 +280,13 @@ var _ = Describe("alarm Subscription handler", func() {
 		})
 
 		Describe("Add + Delete", func() {
-			It("Create the alart subscription and add a subscription", func() {
+			It("Create the subscription handler and add a subscription", func() {
 				// Create the handler:
-				handler, err := NewAlarmSubscriptionHandler().
+				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
+					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				obj := data.Object{
@@ -264,7 +304,7 @@ var _ = Describe("alarm Subscription handler", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				//decode the subId
-				sub_id, err := handler.decodeSubId(ctx, resp.Object)
+				sub_id, err := handler.decodeSubId(resp.Object)
 				Expect(err).ToNot(HaveOccurred())
 
 				//use Get to verify the addrequest
@@ -273,7 +313,7 @@ var _ = Describe("alarm Subscription handler", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				//extract sub_id and verify
-				sub_id_get, err := handler.decodeSubId(ctx, get_resp.Object)
+				sub_id_get, err := handler.decodeSubId(get_resp.Object)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(sub_id).To(Equal(sub_id_get))
 
@@ -291,7 +331,6 @@ var _ = Describe("alarm Subscription handler", func() {
 				Expect(msg).To(Equal("not found"))
 				Expect(get_resp.Object).To(BeEmpty())
 			})
-
 		})
 	})
 })

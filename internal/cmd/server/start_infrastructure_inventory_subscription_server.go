@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Red Hat Inc.
+Copyright 2024 Red Hat Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
 compliance with the License. You may obtain a copy of the License at
@@ -34,12 +34,13 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
-// Server creates and returns the `start alarm-subscription-server` command.
-func AlarmSubscriptionServer() *cobra.Command {
-	c := NewAlarmSubscriptionServer()
+// InfrastructureInventorySubscriptionServer creates and returns the
+// `start infrastructure-inventory-subscription-server` command.
+func InfrastructureInventorySubscriptionServer() *cobra.Command {
+	c := NewInfrastructureInventorySubscriptionServer()
 	result := &cobra.Command{
-		Use:   "alarm-subscription-server",
-		Short: "Starts the alarm Subscription Server",
+		Use:   "infrastructure-inventory-subscription-server",
+		Short: "Starts the infrastructure inventory subscription server",
 		Args:  cobra.NoArgs,
 		RunE:  c.run,
 	}
@@ -58,24 +59,25 @@ func AlarmSubscriptionServer() *cobra.Command {
 	_ = flags.StringArray(
 		extensionsFlagName,
 		[]string{},
-		"Extension to add to alarm subscriptions.",
+		"Extension to add to infrastructure inventory subscriptions.",
 	)
+
 	return result
 }
 
-// alarmSubscriptionServerCommand contains the data and logic needed to run the `start
-// alarm-subscription-server` command.
-type AlarmSubscriptionServerCommand struct {
+// InfrastructureInventorySubscriptionServerCommand contains the data and logic needed to run the
+// `start infrastructure-inventory-subscription-server` command.
+type InfrastructureInventorySubscriptionServerCommand struct {
 }
 
-// NewAlarmSubscriptionServer creates a new runner that knows how to execute the `start
-// alarm-subscription-server` command.
-func NewAlarmSubscriptionServer() *AlarmSubscriptionServerCommand {
-	return &AlarmSubscriptionServerCommand{}
+// NewInfrastructureInventorySubscriptionServer creates a new runner that knows how to execute the
+// `start infrastructure-inventory-subscription-server` command.
+func NewInfrastructureInventorySubscriptionServer() *InfrastructureInventorySubscriptionServerCommand {
+	return &InfrastructureInventorySubscriptionServerCommand{}
 }
 
-// run executes the `start alarm-subscription-server` command.
-func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) error {
+// run executes the `start infrastructure-inventory-subscription-server` command.
+func (c *InfrastructureInventorySubscriptionServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the context:
 	ctx := cmd.Context()
 
@@ -136,7 +138,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 	logger.InfoContext(
 		ctx,
-		"alarm subscription extensions details",
+		"infrastructure inventory subscription extensions details",
 		slog.Any("extensions", extensions),
 	)
 
@@ -183,7 +185,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Create the metrics wrapper:
 	metricsWrapper, err := metrics.NewHandlerWrapper().
 		AddPaths(
-			"/o2ims-infrastructureMonitoring/-/alarmSubscriptions/-",
+			"/o2ims-infrastructureInventory/-/subscriptions/-",
 		).
 		SetSubsystem("inbound").
 		Build()
@@ -206,10 +208,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	})
 	router.Use(metricsWrapper, authenticationWrapper, authorizationWrapper)
 
-	// create k8s client with kube(from env first)
-	//var config *rest.Config
+	// Get the K8S client (from the environment first):
 	kubeClient, err := k8s.NewClient().SetLogger(logger).SetLoggingWrapper(loggingWrapper).Build()
-
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -226,14 +226,14 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetCloudID(cloudID).
 		SetExtensions(extensions...).
 		SetKubeClient(kubeClient).
-		SetSubscriptionType(service.SubscriptionTypeAlarm).
+		SetSubscriptionType(service.SubscriptionTypeInfrastructureInventory).
 		Build(ctx)
 
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to create handler",
-			"error", err,
+			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
 	}
@@ -241,7 +241,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Create the routes:
 	adapter, err := service.NewAdapter().
 		SetLogger(logger).
-		SetPathVariables("alarmSubscriptionID").
+		SetPathVariables("subscriptionId").
 		SetHandler(handler).
 		Build()
 	if err != nil {
@@ -253,12 +253,11 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/o2ims-infrastructureMonitoring/{version}/alarmSubscriptions",
+		"/o2ims-infrastructureInventory/{version}/subscriptions",
 		adapter,
 	).Methods(http.MethodGet, http.MethodPost)
-
 	router.Handle(
-		"/o2ims-infrastructureMonitoring/{version}/alarmSubscriptions/{alarmSubscriptionID}",
+		"/o2ims-infrastructureInventory/{version}/subscriptions/{subscriptionId}",
 		adapter,
 	).Methods(http.MethodGet, http.MethodDelete)
 
