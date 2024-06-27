@@ -1,0 +1,12 @@
+apiVersion: oran.openshift.io/v1alpha1
+kind: ClusterRequest
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrequest
+    app.kubernetes.io/instance: clusterrequest-sample
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: oran-o2ims
+  name: clusterrequest-sample
+spec:
+  # TODO(user): Add fields here

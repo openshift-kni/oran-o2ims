@@ -162,6 +162,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Start the O2IMS controller.
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
 		Logger: slog.With("controller", "ORAN-O2IMS"),
@@ -171,6 +172,34 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "ORANO2IMS"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the Cluster Template controller.
+	if err = (&controllers.ClusterTemplateReconciler{
+		Client: mgr.GetClient(),
+		Logger: slog.With("controller", "ClusterTemplate"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "ClusterTemplate"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the Cluster Request controller.
+	if err = (&controllers.ClusterRequestReconciler{
+		Client: mgr.GetClient(),
+		Logger: slog.With("controller", "ClusterRequest"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "ClusterRequest"),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)

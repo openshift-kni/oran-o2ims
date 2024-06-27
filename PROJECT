@@ -5,6 +5,7 @@
 domain: openshift.io
 layout:
 - go.kubebuilder.io/v4
+multigroup: true
 projectName: oran-o2ims
 repo: oran-o2ims
 resources:
@@ -16,5 +17,23 @@ resources:
   group: oran
   kind: ORANO2IMS
   path: oran-o2ims/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: oran.openshift.io
+  kind: ClusterTemplate
+  path: oran-o2ims/api/oran.openshift.io/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: oran.openshift.io
+  kind: ClusterRequest
+  path: oran-o2ims/api/oran.openshift.io/v1alpha1
   version: v1alpha1
 version: "3"

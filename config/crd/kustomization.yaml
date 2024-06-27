@@ -10,5 +10,9 @@ resources:
 - bases/hardwaremanagement.oran.openshift.io_nodeallocationrequests.yaml
 - bases/hardwaremanagement.oran.openshift.io_nodereleaserequests.yaml
 
+# Provisioning:
+- bases/oran.openshift.io_clustertemplates.yaml
+- bases/oran.openshift.io_clusterrequests.yaml
+
 configurations:
 - kustomizeconfig.yaml
