@@ -3,3 +3,5 @@
 /oran-o2ims
 /vendor
 /bin/*
+.vscode
+.vim*
