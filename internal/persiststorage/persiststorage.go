@@ -10,6 +10,9 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+// process change function
+type ProcessFunc func(dataMap *map[string]data.Object)
+
 // interface for persistent storage
 type Storage interface {
 	//notification from db to application about db entry changes
@@ -19,6 +22,7 @@ type Storage interface {
 	DeleteEntry(ctx context.Context, key string) (err error)
 	ReadAllEntries(ctx context.Context) (result map[string]data.Object, err error)
 	ProcessChanges(ctx context.Context, dataMap **map[string]data.Object, lock *sync.Mutex) (err error)
+	ProcessChangesWithFunction(ctx context.Context, function ProcessFunc) (err error)
 }
 
 func Add(so Storage, ctx context.Context, key string, value string) (err error) {
@@ -35,4 +39,8 @@ func Delete(so Storage, ctx context.Context, key string) (err error) {
 }
 func ProcessChanges(so Storage, ctx context.Context, dataMap **map[string]data.Object, lock *sync.Mutex) (err error) {
 	return so.ProcessChanges(ctx, dataMap, lock)
+}
+
+func ProcessChangesWithFunction(so Storage, ctx context.Context, function ProcessFunc) (err error) {
+	return so.ProcessChangesWithFunction(ctx, function)
 }

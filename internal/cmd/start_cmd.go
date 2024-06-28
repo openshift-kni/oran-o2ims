@@ -35,5 +35,6 @@ func Start() *cobra.Command {
 	result.AddCommand(server.AlarmSubscriptionServer())
 	result.AddCommand(server.InfrastructureInventorySubscriptionServer())
 	result.AddCommand(operator.ControllerManager())
+	result.AddCommand(server.AlarmNotificationServer())
 	return result
 }

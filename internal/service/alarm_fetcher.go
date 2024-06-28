@@ -23,7 +23,6 @@ import (
 	"net/http"
 	neturl "net/url"
 
-	"github.com/imdario/mergo"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
@@ -225,8 +224,19 @@ func (r *AlarmFetcher) FetchItems(
 		return
 	}
 
+	alarmMapper, err := NewAlarmMapper().
+		SetLogger(r.logger).
+		SetBackendClient(r.backendClient).
+		SetResourceServerURL(r.resourceServerURL).
+		SetResourceServerToken(r.resourceServerToken).
+		SetExtensions(r.extensions...).
+		Build()
+	if err != nil {
+		return
+	}
+
 	// Transform Alerts to Alarms
-	alarms = data.Map(alerts, r.mapAlertItem)
+	alarms = data.Map(alerts, alarmMapper.MapAlertItem)
 
 	return
 }
@@ -267,163 +277,4 @@ func (r *AlarmFetcher) doGet(ctx context.Context, url, token string,
 		return
 	}
 	return
-}
-
-// Map Alert to an O2 Alarm object.
-func (r *AlarmFetcher) mapAlertItem(ctx context.Context,
-	from data.Object) (to data.Object, err error) {
-
-	alertName, err := data.GetString(from, "labels.alertname")
-	if err != nil {
-		return
-	}
-
-	alarmRaisedTime, err := data.GetString(from, "startsAt")
-	if err != nil {
-		return
-	}
-
-	alarmChangedTime, err := data.GetString(from, "updatedAt")
-	if err != nil {
-		return
-	}
-
-	severity, err := data.GetString(from, "labels.severity")
-	if err != nil {
-		return
-	}
-
-	clusterId, err := data.GetString(from, "labels.managed_cluster")
-	if err != nil {
-		return
-	}
-
-	resourcePool, err := r.fetchResourcePool(ctx, clusterId)
-	if err != nil {
-		return
-	}
-	resourcePoolName, err := data.GetString(resourcePool, "name")
-	if err != nil {
-		return
-	}
-
-	var alarmEventRecordId, resourceID, resourceTypeID string
-	alertInstance, err := data.GetString(from, "labels.instance")
-	if err != nil {
-		// Instance is not available for cluster global alerts
-		alarmEventRecordId = fmt.Sprintf("%s_%s", alertName, resourcePoolName)
-		resourceID = resourcePool["resourcePoolID"].(string)
-	} else {
-		alarmEventRecordId = fmt.Sprintf("%s_%s_%s", alertName, resourcePoolName, alertInstance)
-		resource, err := r.fetchResource(ctx, resourcePoolName, alertInstance)
-		if err == nil {
-			resourceID = resource["resourceID"].(string)
-			resourceTypeID = resource["resourceTypeID"].(string)
-		}
-	}
-
-	// Add the extensions:
-	extensionsMap, err := data.GetExtensions(from, r.extensions, r.jqTool)
-	if err != nil {
-		return
-	}
-	if len(extensionsMap) == 0 {
-		// Fallback to all labels and annotations
-		var labels, annotations data.Object
-		labels, err = data.GetObj(from, "labels")
-		if err != nil {
-			return
-		}
-		annotations, err = data.GetObj(from, "annotations")
-		if err != nil {
-			return
-		}
-		err = mergo.Map(&extensionsMap, labels, mergo.WithOverride)
-		if err != nil {
-			return
-		}
-		err = mergo.Map(&extensionsMap, annotations, mergo.WithOverride)
-		if err != nil {
-			return
-		}
-	}
-
-	to = data.Object{
-		"alarmEventRecordId": alarmEventRecordId,
-		"resourceID":         resourceID,
-		"resourceTypeID":     resourceTypeID,
-		"alarmRaisedTime":    alarmRaisedTime,
-		"alarmChangedTime":   alarmChangedTime,
-		"alarmDefinitionID":  alertName,
-		"probableCauseID":    alertName,
-		"perceivedSeverity":  AlarmSeverity(severity).mapProperty(),
-		"extensions":         extensionsMap,
-	}
-
-	return
-}
-
-func (r *AlarmFetcher) fetchResourcePool(ctx context.Context, clusterId string) (resourcePool data.Object, err error) {
-	query := neturl.Values{}
-	query.Add("filter", fmt.Sprintf("(eq,description,%s)", clusterId))
-	url := r.resourceServerURL + "/resourcePools"
-	response, err := r.doGet(ctx, url, r.resourceServerToken, query, nil)
-	if err != nil {
-		return
-	}
-
-	// Create a reader for Resource pools
-	resourcePools, err := k8s.NewStream().
-		SetLogger(r.logger).
-		SetReader(response.Body).
-		Build()
-	if err != nil {
-		return
-	}
-
-	resourcePool, err = resourcePools.Next(ctx)
-
-	return
-}
-
-func (r *AlarmFetcher) fetchResource(ctx context.Context, clusterName, resourceName string) (resource data.Object, err error) {
-	query := neturl.Values{}
-	query.Add("filter", fmt.Sprintf("(eq,description,%s)", resourceName))
-	path := fmt.Sprintf("/resourcePools/%s/resources", clusterName)
-	url := r.resourceServerURL + path
-	response, err := r.doGet(ctx, url, r.resourceServerToken, query, nil)
-	if err != nil {
-		return
-	}
-
-	// Create a reader for Resources
-	resources, err := k8s.NewStream().
-		SetLogger(r.logger).
-		SetReader(response.Body).
-		Build()
-	if err != nil {
-		return
-	}
-
-	resource, err = resources.Next(ctx)
-
-	return
-}
-
-type AlarmSeverity string
-
-func (p AlarmSeverity) mapProperty() string {
-	switch p {
-	case "critical":
-		return "CRITICAL"
-	case "info":
-		return "MINOR"
-	case "warning":
-		return "WARNING"
-	case "none":
-		return "INDETERMINATE"
-	default:
-		// unknown property
-		return "CLEARED"
-	}
 }
