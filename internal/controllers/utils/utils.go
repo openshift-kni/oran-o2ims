@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -34,6 +35,13 @@ func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Objec
 
 	return nil
 }
+
+// ValidateInputDataSchema succeeds if intputDataSchema is in a JSON format.
+func ValidateInputDataSchema(inputDataSchema string) (err error) {
+	var jsonInputDataSchema json.RawMessage
+	return json.Unmarshal([]byte(inputDataSchema), &jsonInputDataSchema)
+}
+
 func CreateK8sCR(ctx context.Context, c client.Client,
 	newObject client.Object, ownerObject client.Object,
 	operation string) (err error) {
