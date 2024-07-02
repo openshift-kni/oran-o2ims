@@ -34,10 +34,15 @@ spec:
           spec:
             description: ClusterRequestSpec defines the desired state of ClusterRequest
             properties:
-              foo:
-                description: Foo is an example field of ClusterRequest. Edit clusterrequest_types.go
-                  to remove/update
+              clusterTemplateInput:
+                description: JSON Schema input used for the clusterTemplateRef.
                 type: string
+              clusterTemplateRef:
+                description: Reference to an existing clusterTemplate CR.
+                type: string
+            required:
+            - clusterTemplateInput
+            - clusterTemplateRef
             type: object
           status:
             description: ClusterRequestStatus defines the observed state of ClusterRequest
