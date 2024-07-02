@@ -39,7 +39,12 @@ func TestControllers(t *testing.T) {
 }
 
 func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
+	return fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objs...).
+		WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).
+		WithStatusSubresource(&oranv1alpha1.ClusterTemplate{}).
+		Build(), nil
 }
 
 // Logger used for tests:
@@ -65,6 +70,8 @@ var _ = BeforeSuite(func() {
 	// Add all the required types to the scheme used by the tests:
 	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMS{})
 	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMSList{})
+	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplate{})
+	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplateList{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.Ingress{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.IngressList{})
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceAccount{})
