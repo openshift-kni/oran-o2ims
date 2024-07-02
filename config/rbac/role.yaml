@@ -107,6 +107,58 @@ rules:
   - patch
   - update
 - apiGroups:
+  - oran.openshift.io
+  resources:
+  - clusterrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clusterrequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clusterrequests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clustertemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clustertemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clustertemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - rbac.authorization.k8s.io
   resources:
   - clusterrolebindings
