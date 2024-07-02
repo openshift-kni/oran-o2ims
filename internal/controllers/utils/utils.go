@@ -15,12 +15,25 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
+func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := c.Status().Update(ctx, object)
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 func CreateK8sCR(ctx context.Context, c client.Client,
 	newObject client.Object, ownerObject client.Object,
 	operation string) (err error) {

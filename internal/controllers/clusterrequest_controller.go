@@ -73,7 +73,7 @@ func (r *ClusterRequestReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-	    Named("orano2ims-cluster-request").
+		Named("orano2ims-cluster-request").
 		For(&oranv1alpha1.ClusterRequest{}).
 		Complete(r)
 }

@@ -83,32 +83,6 @@ rules:
 - apiGroups:
   - oran.openshift.io
   resources:
-  - orano2imses
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - oran.openshift.io
-  resources:
-  - orano2imses/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - oran.openshift.io
-  resources:
-  - orano2imses/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - oran.openshift.io
-  resources:
   - clusterrequests
   verbs:
   - create
@@ -154,6 +128,32 @@ rules:
   - oran.openshift.io
   resources:
   - clustertemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - orano2imses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - orano2imses/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - orano2imses/status
   verbs:
   - get
   - patch

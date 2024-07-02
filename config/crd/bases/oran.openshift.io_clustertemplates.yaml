@@ -34,13 +34,31 @@ spec:
           spec:
             description: ClusterTemplateSpec defines the desired state of ClusterTemplate
             properties:
-              foo:
-                description: Foo is an example field of ClusterTemplate. Edit clustertemplate_types.go
-                  to remove/update
+              inputDataSchema:
+                description: JSON formatted string that includes the schema for the
+                  ClusterTemplate. Required values should be explicitly defined.
                 type: string
+            required:
+            - inputDataSchema
             type: object
           status:
             description: ClusterTemplateStatus defines the observed state of ClusterTemplate
+            properties:
+              clusterTemplateValidation:
+                description: Tells if the schema provided in spec.inputDataSchema
+                  is a valid JSON.
+                properties:
+                  clusterTemplateError:
+                    description: Holds the error in case the ClusterTemplate is invalid.
+                    type: string
+                  clusterTemplateIsValid:
+                    description: Says of the ClusterTemplate is valid or not.
+                    type: boolean
+                required:
+                - clusterTemplateIsValid
+                type: object
+            required:
+            - clusterTemplateValidation
             type: object
         type: object
     served: true

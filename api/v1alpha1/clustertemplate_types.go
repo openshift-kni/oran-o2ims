@@ -28,14 +28,25 @@ type ClusterTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ClusterTemplate. Edit clustertemplate_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// JSON formatted string that includes the schema for the ClusterTemplate.
+	// Required values should be explicitly defined.
+	InputDataSchema string `json:"inputDataSchema"`
+}
+
+type ClusterTemplateValidation struct {
+	// Says of the ClusterTemplate is valid or not.
+	ClusterTemplateIsValid bool `json:"clusterTemplateIsValid"`
+	// Holds the error in case the ClusterTemplate is invalid.
+	ClusterTemplateError string `json:"clusterTemplateError,omitempty"`
 }
 
 // ClusterTemplateStatus defines the observed state of ClusterTemplate
 type ClusterTemplateStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Tells if the schema provided in spec.inputDataSchema is a valid JSON.
+	ClusterTemplateValidation ClusterTemplateValidation `json:"clusterTemplateValidation"`
 }
 
 //+kubebuilder:object:root=true

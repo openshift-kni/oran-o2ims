@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/util/retry"
 	k8sptr "k8s.io/utils/ptr"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
@@ -742,19 +741,6 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 	}
 }
 
-func (t *reconcilerTask) updateORANO2ISMStatus(ctx context.Context) error {
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		err := t.client.Status().Update(ctx, t.object)
-		return err
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
 	ctx context.Context, serverName string, deploymentArgs []string,
 	errorReason utils.ORANO2IMSConditionReason, err error) error {
@@ -793,7 +779,7 @@ func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
 			string(utils.MapErrorDeploymentNameConditionType[serverName]))
 	}
 
-	return t.updateORANO2ISMStatus(ctx)
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
 func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) error {
@@ -811,7 +797,7 @@ func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) er
 		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSResourceServerName)
 	}
 
-	return t.updateORANO2ISMStatus(ctx)
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
 // SetupWithManager sets up the controller with the Manager.

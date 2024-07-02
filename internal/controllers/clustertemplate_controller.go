@@ -18,21 +18,34 @@ package controllers
 
 import (
 	"context"
+
+	"encoding/json"
 	"log/slog"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // ClusterTemplateReconciler reconciles a ClusterTemplate object
 type ClusterTemplateReconciler struct {
 	client.Client
 	Logger *slog.Logger
+}
+
+type clusterTemplateReconcilerTask struct {
+	logger *slog.Logger
+	client client.Client
+	object *oranv1alpha1.ClusterTemplate
 }
 
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
@@ -48,7 +61,9 @@ type ClusterTemplateReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
-func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
+func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
+	result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
 
 	// Fetch the object:
@@ -60,20 +75,82 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		r.Logger.ErrorContext(
 			ctx,
-			"Unable to fetch ORANO2IMS",
+			"Unable to fetch ClusterTemplate",
 			slog.String("error", err.Error()),
 		)
 	}
 
-	r.Logger.InfoContext(ctx, ">>> Reconcile Cluster Template")
+	r.Logger.InfoContext(ctx, "[Reconcile Cluster Template]")
 
-	return ctrl.Result{}, nil
+	// Create and run the task:
+	task := &clusterTemplateReconcilerTask{
+		logger: r.Logger,
+		client: r.Client,
+		object: object,
+	}
+	result, err = task.run(ctx)
+	return
+}
+
+func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
+	// Set the default reconcile time to 5 minutes.
+	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
+
+	// Check if the inputDataSchema is in a JSON format; the schema itself is not of importance.
+	err = t.validateInputDataSchema(ctx)
+
+	// If there is an error, log it and set the reconciliation to 30 seconds.
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"inputDataSchema is not in a JSON format",
+		)
+		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
+	}
+
+	// Update the ClusterTemplate status.
+	err = t.updateClusterTemplateStatus(ctx, err)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update status for ClusterTemplate",
+			slog.String("name", t.object.Name),
+		)
+		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
+	}
+
+	return
+}
+
+// validateInputDataSchema succeeds if intputDataSchema is in a JSON format.
+func (t *clusterTemplateReconcilerTask) validateInputDataSchema(ctx context.Context) (err error) {
+
+	var jsonInputDataSchema json.RawMessage
+	return json.Unmarshal([]byte(t.object.Spec.InputDataSchema), &jsonInputDataSchema)
+}
+
+// updateClusterTemplateStatus update the status of the ClusterTemplate object (CR).
+func (t *clusterTemplateReconcilerTask) updateClusterTemplateStatus(
+	ctx context.Context, inputError error) error {
+
+	t.object.Status.ClusterTemplateValidation.ClusterTemplateIsValid = true
+	t.object.Status.ClusterTemplateValidation.ClusterTemplateError = ""
+
+	if inputError != nil {
+		t.object.Status.ClusterTemplateValidation.ClusterTemplateIsValid = false
+		t.object.Status.ClusterTemplateValidation.ClusterTemplateError = inputError.Error()
+	}
+
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-	    Named("orano2ims-cluster-template").
-		For(&oranv1alpha1.ClusterTemplate{}).
+		Named("orano2ims-cluster-template").
+		For(&oranv1alpha1.ClusterTemplate{},
+			// Watch for create event for ClusterTemplate.
+			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
 }

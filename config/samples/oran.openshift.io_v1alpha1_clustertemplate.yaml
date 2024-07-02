@@ -9,4 +9,30 @@ metadata:
     app.kubernetes.io/created-by: oran-o2ims
   name: clustertemplate-sample
 spec:
-  # TODO(user): Add fields here
+    inputDataSchema: |
+        {
+          "clusterNetwork":
+            {
+              "description": "ClusterNetwork is the list of IP address pools for pods.",
+              "items": {
+                "description": "ClusterNetworkEntry is a single IP address block for pod IP blocks...",
+                 "properties": {
+                  "cidr": {
+                    "description": "CIDR is the IP block address pool.",
+                    "type": "string"
+                   },
+                   "hostPrefix": {
+                     "description": "HostPrefix is the prefix size to allocate to each...",
+                     "format": "int32",
+                     "type": "integer"
+                   }
+                 },
+               "required": [
+                   "cidr"
+                 ],
+               "type": "object"
+               },
+              "type": "array"
+           }
+         }
+
