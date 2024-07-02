@@ -101,9 +101,9 @@ var _ = DescribeTable(
 				Spec: oranv1alpha1.ClusterTemplateSpec{
 					InputDataSchema: fmt.Sprintf(
 						"{\n" +
-						    "\"key1\": \"value1\",\n" +
-						    "\"price\": 2\n" +
-						"}\n"),
+							"\"key1\": \"value1\",\n" +
+							"\"price\": 2\n" +
+							"}\n"),
 				},
 			},
 		},
@@ -174,21 +174,22 @@ var _ = DescribeTable(
 				To(Equal(false))
 			Expect(clusterTemplate.Status.ClusterTemplateValidation.ClusterTemplateError).
 				To(ContainSubstring("invalid character '.' looking for beginning of value"))
-			
+
 			// Update the clusterTemplate inputDataSchema to a valid JSON schema.
 			clusterTemplate.Spec.InputDataSchema = fmt.Sprintf(
 				"{\n" +
 					"\"key1\": \"value1\",\n" +
 					"\"price\": 2\n" +
-				"}\n")
-			reconciler.Client.Update(context.TODO(), clusterTemplate)
-			
+					"}\n")
+			err = reconciler.Client.Update(context.TODO(), clusterTemplate)
+			Expect(err).ToNot(HaveOccurred())
+
 			// Run the reconciliation again.
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-				    Namespace: "cluster-template-1",
-				    Name:      "cluster-template-1",
-			    },
+					Namespace: "cluster-template-1",
+					Name:      "cluster-template-1",
+				},
 			}
 			_, err = reconciler.Reconcile(context.TODO(), req)
 			Expect(err).ToNot(HaveOccurred())

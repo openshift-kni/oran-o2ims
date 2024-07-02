@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 
-	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -97,7 +96,7 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile 
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
 	// Check if the inputDataSchema is in a JSON format; the schema itself is not of importance.
-	err = t.validateInputDataSchema(ctx)
+	err = utils.ValidateInputDataSchema(t.object.Spec.InputDataSchema)
 
 	// If there is an error, log it and set the reconciliation to 30 seconds.
 	if err != nil {
@@ -122,13 +121,6 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile 
 	return
 }
 
-// validateInputDataSchema succeeds if intputDataSchema is in a JSON format.
-func (t *clusterTemplateReconcilerTask) validateInputDataSchema(ctx context.Context) (err error) {
-
-	var jsonInputDataSchema json.RawMessage
-	return json.Unmarshal([]byte(t.object.Spec.InputDataSchema), &jsonInputDataSchema)
-}
-
 // updateClusterTemplateStatus update the status of the ClusterTemplate object (CR).
 func (t *clusterTemplateReconcilerTask) updateClusterTemplateStatus(
 	ctx context.Context, inputError error) error {
@@ -149,7 +141,7 @@ func (r *ClusterTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("orano2ims-cluster-template").
 		For(&oranv1alpha1.ClusterTemplate{},
-			// Watch for create event for ClusterTemplate.
+			// Watch for create and update event for ClusterTemplate.
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)

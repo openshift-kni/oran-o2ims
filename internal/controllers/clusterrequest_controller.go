@@ -23,16 +23,25 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
-// ClusterRequestReconciler reconciles a ClusterRequest object
+// clusterRequestReconciler reconciles a ClusterRequest object
 type ClusterRequestReconciler struct {
 	client.Client
 	Logger *slog.Logger
+}
+
+type clusterRequestReconcilerTask struct {
+	logger *slog.Logger
+	client client.Client
+	object *oranv1alpha1.ClusterRequest
 }
 
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
@@ -48,7 +57,8 @@ type ClusterRequestReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
-func (r *ClusterRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ClusterRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
+	result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
 
 	// Fetch the object:
@@ -60,20 +70,74 @@ func (r *ClusterRequestReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		r.Logger.ErrorContext(
 			ctx,
-			"Unable to fetch ORANO2IMS",
+			"Unable to fetch Cluster Request",
 			slog.String("error", err.Error()),
 		)
 	}
 
-	r.Logger.InfoContext(ctx, ">>> Reconcile Cluster Request")
+	r.Logger.InfoContext(ctx, "[Reconcile Cluster Template]")
 
-	return ctrl.Result{}, nil
+	// Create and run the task:
+	task := &clusterRequestReconcilerTask{
+		logger: r.Logger,
+		client: r.Client,
+		object: object,
+	}
+	result, err = task.run(ctx)
+	return
+}
+
+func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
+	// Set the default reconcile time to 5 minutes.
+	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
+
+	// Check if the clusterTemplateInput is in a JSON format; the schema itself is not of importance.
+	err = utils.ValidateInputDataSchema(t.object.Spec.ClusterTemplateInput)
+
+	// If there is an error, log it and set the reconciliation to 30 seconds.
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"clusterTemplateInput is not in a JSON format",
+		)
+		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
+	}
+
+	// Update the ClusterRequest status.
+	err = t.updateClusterTemplateInputValidationStatus(ctx, err)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update status for ClusterRequest",
+			slog.String("name", t.object.Name),
+		)
+		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
+	}
+
+	return
+}
+
+// updateClusterTemplateInputValidationStatus update the status of the ClusterTemplate object (CR).
+func (t *clusterRequestReconcilerTask) updateClusterTemplateInputValidationStatus(
+	ctx context.Context, inputError error) error {
+
+	t.object.Status.ClusterTemplateInputValidation.ClusterTemplateInputIsValid = true
+	t.object.Status.ClusterTemplateInputValidation.ClusterTemplateInputError = ""
+
+	if inputError != nil {
+		t.object.Status.ClusterTemplateInputValidation.ClusterTemplateInputIsValid = false
+		t.object.Status.ClusterTemplateInputValidation.ClusterTemplateInputError = inputError.Error()
+	}
+
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("orano2ims-cluster-request").
-		For(&oranv1alpha1.ClusterRequest{}).
+		For(&oranv1alpha1.ClusterRequest{},
+			// Watch for create and update event for ClusterRequest.
+			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }
