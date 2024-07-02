@@ -28,8 +28,10 @@ type ClusterRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ClusterRequest. Edit clusterrequest_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Reference to an existing clusterTemplate CR.
+	ClusterTemplateRef string `json:"clusterTemplateRef"`
+	// JSON Schema input used for the clusterTemplateRef.
+	ClusterTemplateInput string `json:"clusterTemplateInput"`
 }
 
 // ClusterRequestStatus defines the observed state of ClusterRequest
