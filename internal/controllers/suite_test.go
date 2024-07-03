@@ -44,6 +44,7 @@ func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
 		WithObjects(objs...).
 		WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).
 		WithStatusSubresource(&oranv1alpha1.ClusterTemplate{}).
+		WithStatusSubresource(&oranv1alpha1.ClusterRequest{}).
 		Build(), nil
 }
 
@@ -72,6 +73,8 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMSList{})
 	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplate{})
 	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplateList{})
+	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterRequest{})
+	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterRequestList{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.Ingress{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.IngressList{})
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceAccount{})

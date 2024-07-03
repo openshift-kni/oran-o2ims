@@ -73,7 +73,7 @@ var _ = DescribeTable(
 		func(result ctrl.Result, reconciler ClusterTemplateReconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 30 * time.Second}))
 
-			// Create the ClusterTemplate and run the reconciliation once.
+			// Get the ClusterTemplate and run the reconciliation once.
 			clusterTemplate := &oranv1alpha1.ClusterTemplate{}
 			err := reconciler.Client.Get(
 				context.TODO(),

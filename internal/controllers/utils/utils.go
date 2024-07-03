@@ -19,6 +19,8 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	gojsonschema "github.com/xeipuuv/gojsonschema"
 )
 
 var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
@@ -42,6 +44,30 @@ func ValidateInputDataSchema(inputDataSchema string) (err error) {
 	return json.Unmarshal([]byte(inputDataSchema), &jsonInputDataSchema)
 }
 
+func ValidateJsonAgainstJsonSchema(schema string, input string) error {
+	schemaLoader := gojsonschema.NewStringLoader(schema)
+	inputLoader := gojsonschema.NewStringLoader(input)
+
+	result, err := gojsonschema.Validate(schemaLoader, inputLoader)
+	if err != nil {
+		oranUtilsLog.Error(err, "Error validating JSON against JSON schema")
+		return err
+	}
+
+	if result.Valid() {
+		return nil
+	} else {
+		errorDescription := ""
+		for _, description := range result.Errors() {
+			errorDescription = errorDescription + " " + description.String()
+		}
+
+		return fmt.Errorf(
+			fmt.Sprintf("The JSON input does not match the JSON schema: %s", errorDescription))
+	}
+}
+
+// CreateK8sCR creates/updates/patches an object.
 func CreateK8sCR(ctx context.Context, c client.Client,
 	newObject client.Object, ownerObject client.Object,
 	operation string) (err error) {
