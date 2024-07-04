@@ -29,7 +29,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/persiststorage"
-	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 // SubscriptionHandlerBuilder contains the data and logic needed to create a new
@@ -54,7 +53,6 @@ type SubscriptionHandler struct {
 	extensions          []string
 	kubeClient          *k8s.Client
 	jsonAPI             jsoniter.API
-	selectorEvaluator   *search.SelectorEvaluator
 	jqTool              *jq.Tool
 	subscriptionMapLock *sync.Mutex
 	subscriptionMap     *map[string]data.Object
@@ -151,21 +149,6 @@ func (b *SubscriptionHandlerBuilder) Build(ctx context.Context) (
 	}
 	jsonAPI := jsonConfig.Froze()
 
-	// Create the filter expression evaluator:
-	pathEvaluator, err := search.NewPathEvaluator().
-		SetLogger(b.logger).
-		Build()
-	if err != nil {
-		return
-	}
-	selectorEvaluator, err := search.NewSelectorEvaluator().
-		SetLogger(b.logger).
-		SetPathEvaluator(pathEvaluator.Evaluate).
-		Build()
-	if err != nil {
-		return
-	}
-
 	// Create the jq tool:
 	jqTool, err := jq.NewTool().
 		SetLogger(b.logger).
@@ -204,7 +187,6 @@ func (b *SubscriptionHandlerBuilder) Build(ctx context.Context) (
 		cloudID:             b.cloudID,
 		kubeClient:          b.kubeClient,
 		extensions:          slices.Clone(b.extensions),
-		selectorEvaluator:   selectorEvaluator,
 		jsonAPI:             jsonAPI,
 		jqTool:              jqTool,
 		subscriptionMapLock: &sync.Mutex{},
@@ -248,17 +230,6 @@ func (h *SubscriptionHandler) List(ctx context.Context,
 
 	// Transform the items into what we need:
 	items = data.Map(items, h.mapItem)
-
-	// Select only the items that satisfy the filter:
-	if request.Selector != nil {
-		items = data.Select(
-			items,
-			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.selectorEvaluator.Evaluate(ctx, request.Selector, item)
-				return
-			},
-		)
-	}
 
 	// Return the result:
 	response = &ListResponse{

@@ -66,6 +66,7 @@ type Adapter struct {
 	excludeFields        []search.Path
 	pathsParser          *search.PathsParser
 	selectorParser       *search.SelectorParser
+	selectorEvaluator    *search.SelectorEvaluator
 	projectorEvaluator   *search.ProjectorEvaluator
 	externalAddress      *neturl.URL
 	nextPageMarkerCipher cipher.AEAD
@@ -207,16 +208,16 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 		return
 	}
 
-	// Create the filter expression parser:
+	// Create the selector parser:
 	selectorParser, err := search.NewSelectorParser().
 		SetLogger(b.logger).
 		Build()
 	if err != nil {
-		err = fmt.Errorf("failed to create filter expression parser: %w", err)
+		err = fmt.Errorf("failed to create selector parser: %w", err)
 		return
 	}
 
-	// Create the projector evaluator:
+	// Create the path evaluator:
 	pathEvaluator, err := search.NewPathEvaluator().
 		SetLogger(b.logger).
 		Build()
@@ -224,6 +225,18 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 		err = fmt.Errorf("failed to create projector path evaluator: %w", err)
 		return
 	}
+
+	// Create the selector evaluator:
+	selectorEvaluator, err := search.NewSelectorEvaluator().
+		SetLogger(b.logger).
+		SetPathEvaluator(pathEvaluator.Evaluate).
+		Build()
+	if err != nil {
+		err = fmt.Errorf("failed to create the selector evaluator: %w", err)
+		return
+	}
+
+	// Create the projector evaluator:
 	projectorEvaluator, err := search.NewProjectorEvaluator().
 		SetLogger(b.logger).
 		SetPathEvaluator(pathEvaluator.Evaluate).
@@ -267,6 +280,7 @@ func (b *AdapterBuilder) Build() (result *Adapter, err error) {
 		includeFields:        includePaths,
 		excludeFields:        excludePaths,
 		selectorParser:       selectorParser,
+		selectorEvaluator:    selectorEvaluator,
 		projectorEvaluator:   projectorEvaluator,
 		externalAddress:      externalAddress,
 		nextPageMarkerCipher: nextPageMarkerCipher,
@@ -478,8 +492,19 @@ func (a *Adapter) serveList(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	// If there is a projector apply it:
+	// If there is a selector apply it:
 	items := response.Items
+	if request.Selector != nil {
+		items = data.Select(
+			items,
+			func(ctx context.Context, item data.Object) (result bool, err error) {
+				result, err = a.selectorEvaluator.Evaluate(ctx, request.Selector, item)
+				return
+			},
+		)
+	}
+
+	// If there is a projector apply it:
 	if request.Projector != nil {
 		items = data.Map(
 			items,

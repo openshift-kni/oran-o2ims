@@ -26,7 +26,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
-	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 const (
@@ -56,17 +55,16 @@ type ResourceTypeHandlerBuilder struct {
 // ResourceTypeHandler knows how to respond to requests to list resource types. Don't create
 // instances of this type directly, use the NewResourceTypeHandler function instead.
 type ResourceTypeHandler struct {
-	logger            *slog.Logger
-	transportWrapper  func(http.RoundTripper) http.RoundTripper
-	cloudID           string
-	backendURL        string
-	backendToken      string
-	backendClient     *http.Client
-	jsonAPI           jsoniter.API
-	selectorEvaluator *search.SelectorEvaluator
-	graphqlQuery      string
-	graphqlVars       *model.SearchInput
-	resourceFetcher   *ResourceFetcher
+	logger           *slog.Logger
+	transportWrapper func(http.RoundTripper) http.RoundTripper
+	cloudID          string
+	backendURL       string
+	backendToken     string
+	backendClient    *http.Client
+	jsonAPI          jsoniter.API
+	graphqlQuery     string
+	graphqlVars      *model.SearchInput
+	resourceFetcher  *ResourceFetcher
 }
 
 // NewResourceTypeHandler creates a builder that can then be used to configure and create a
@@ -167,33 +165,17 @@ func (b *ResourceTypeHandlerBuilder) Build() (
 	}
 	jsonAPI := jsonConfig.Froze()
 
-	// Create the filter expression evaluator:
-	pathEvaluator, err := search.NewPathEvaluator().
-		SetLogger(b.logger).
-		Build()
-	if err != nil {
-		return
-	}
-	selectorEvaluator, err := search.NewSelectorEvaluator().
-		SetLogger(b.logger).
-		SetPathEvaluator(pathEvaluator.Evaluate).
-		Build()
-	if err != nil {
-		return
-	}
-
 	// Create and populate the object:
 	result = &ResourceTypeHandler{
-		logger:            b.logger,
-		transportWrapper:  b.transportWrapper,
-		cloudID:           b.cloudID,
-		backendURL:        b.backendURL,
-		backendToken:      b.backendToken,
-		backendClient:     backendClient,
-		selectorEvaluator: selectorEvaluator,
-		jsonAPI:           jsonAPI,
-		graphqlQuery:      b.graphqlQuery,
-		graphqlVars:       b.graphqlVars,
+		logger:           b.logger,
+		transportWrapper: b.transportWrapper,
+		cloudID:          b.cloudID,
+		backendURL:       b.backendURL,
+		backendToken:     b.backendToken,
+		backendClient:    backendClient,
+		jsonAPI:          jsonAPI,
+		graphqlQuery:     b.graphqlQuery,
+		graphqlVars:      b.graphqlVars,
 	}
 	return
 }
@@ -206,17 +188,6 @@ func (h *ResourceTypeHandler) List(ctx context.Context,
 	resourceTypes, err := h.fetchItems(ctx)
 	if err != nil {
 		return
-	}
-
-	// Select only the items that satisfy the filter:
-	if request.Selector != nil {
-		resourceTypes = data.Select(
-			resourceTypes,
-			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.selectorEvaluator.Evaluate(ctx, request.Selector, item)
-				return
-			},
-		)
 	}
 
 	// Return the result:
