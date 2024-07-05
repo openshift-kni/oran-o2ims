@@ -74,3 +74,11 @@ const (
 	defaultBackendURL       = "https://kubernetes.default.svc"
 	defaultBackendTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token"
 )
+
+// ClusterInstance template constants
+const (
+	ClusterInstanceTemplateName               = "ClusterInstance"
+	ClusterInstanceTemplatePath               = "controllers/clusterinstance-template.yaml"
+	ClusterInstanceTemplateConfigmapName      = "sc-clusterinstance-template"
+	ClusterInstanceTemplateConfigmapNamespace = ORANO2IMSNamespace
+)

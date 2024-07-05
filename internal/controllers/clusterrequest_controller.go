@@ -20,9 +20,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -147,7 +150,129 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 		return ctrl.Result{}, nil
 	}
 
+	// ### CLUSTERINSTANCE GENERATION ###
+	renderedClusterInstance, renderErr := t.renderClusterInstanceTemplate(ctx)
+	if renderErr != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to render the ClusterInstance template for ClusterInstance",
+			slog.String("name", t.object.Name),
+			slog.String("error", renderErr.Error()),
+		)
+		renderErr = fmt.Errorf("failed to render the ClusterInstance template: %s", renderErr.Error())
+	}
+
+	err = t.updateRenderTemplateStatus(ctx, renderErr)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update the RenderTemplate status for ClusterRequest",
+			slog.String("name", t.object.Name),
+		)
+		return
+	}
+	if renderErr != nil {
+		return ctrl.Result{}, nil
+	}
+
+	// Create/Update the ClusterInstance CR
+	createErr := utils.CreateK8sCR(ctx, t.client, renderedClusterInstance, nil, utils.UPDATE)
+	if createErr != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create/update the ClusterInstance",
+			slog.String("name", renderedClusterInstance.GetName()),
+			slog.String("namespace", renderedClusterInstance.GetNamespace()),
+			slog.String("error", createErr.Error()),
+		)
+		createErr = fmt.Errorf("failed to create/update the rendered ClusterInstance: %s", createErr.Error())
+	}
+
+	err = t.updateRenderTemplateAppliedStatus(ctx, createErr)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update the RenderTemplateApplied status for ClusterRequest",
+			slog.String("name", t.object.Name),
+		)
+		return
+	}
+	if createErr != nil {
+		return ctrl.Result{}, nil
+	}
 	return
+}
+
+func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(ctx context.Context) (*unstructured.Unstructured, error) {
+	t.logger.InfoContext(
+		ctx,
+		"Rendering ClusterInstance template",
+	)
+
+	// Unmarshal the clusterTemplateInput JSON string into a map
+	clusterTemplateInputMap := make(map[string]any)
+	err := utils.UnmarshalYAMLOrJSONString(t.object.Spec.ClusterTemplateInput, &clusterTemplateInputMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal clusterTemplateInput: %w", err)
+	}
+
+	ctClusterInstanceDefaultsMap := make(map[string]any)
+	ctClusterInstanceDefaultsCm := &corev1.ConfigMap{}
+	err = t.client.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-clusterinstance-defaults", t.object.Spec.ClusterTemplateRef),
+		Namespace: t.object.Namespace,
+	}, ctClusterInstanceDefaultsCm)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get configmap, err: %w", err)
+		}
+	} else {
+		defaults, exists := ctClusterInstanceDefaultsCm.Data["clusterinstance-defaults"]
+		if !exists {
+			return nil, fmt.Errorf("clusterinstance-defaults does not exist in configmap data")
+		}
+		// Unmarshal the clusterinstance defaults JSON string into a map
+		err := utils.UnmarshalYAMLOrJSONString(defaults, &ctClusterInstanceDefaultsMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal configmap data, err: %w", err)
+		}
+	}
+
+	mergedClusterInstanceData, err := t.buildClusterInstanceData(clusterTemplateInputMap, ctClusterInstanceDefaultsMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ClusterInstance data, err: %w", err)
+	}
+
+	// TODO: validateClusterTemplateInputMatchesClusterTemplate for mergedClusterInstanceMap
+
+	renderedClusterInstance, err := utils.RenderTemplateForK8sCR("ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render the template, err: %w", err)
+	}
+
+	t.logger.InfoContext(
+		ctx,
+		"ClusterInstance template is rendered successfully",
+		slog.String("name", renderedClusterInstance.GetName()),
+		slog.String("namespace", renderedClusterInstance.GetNamespace()),
+	)
+	return renderedClusterInstance, nil
+}
+
+// buildClusterInstanceData returns an object that is consumed for rendering clusterinstance template
+func (t *clusterRequestReconcilerTask) buildClusterInstanceData(
+	clusterTemplateInput, ctClusterInstanceDefaults map[string]any) (map[string]any, error) {
+	// Merging the clusterTemplateInput data with defaults
+	// TODO: create custom function for merging
+	mergedClusterInstanceMap := maps.Clone(ctClusterInstanceDefaults)
+	maps.Copy(mergedClusterInstanceMap, clusterTemplateInput)
+
+	// Wrap the data in a map with key "Cluster"
+	mergedClusterInstanceData := map[string]any{
+		"Cluster": mergedClusterInstanceMap,
+	}
+
+	return mergedClusterInstanceData, nil
 }
 
 // validateClusterTemplateInput validates if the clusterTemplateInput matches the
@@ -227,6 +352,42 @@ func (t *clusterRequestReconcilerTask) updateClusterTemplateMatchStatus(
 	if inputError != nil {
 		t.object.Status.ClusterTemplateInputValidation.InputMatchesTemplate = false
 		t.object.Status.ClusterTemplateInputValidation.InputMatchesTemplateError = inputError.Error()
+	}
+
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+}
+
+// updateRenderTemplateStatus update the status of the ClusterRequest object (CR).
+func (t *clusterRequestReconcilerTask) updateRenderTemplateStatus(
+	ctx context.Context, inputError error) error {
+
+	if t.object.Status.RenderedTemplateStatus == nil {
+		t.object.Status.RenderedTemplateStatus = &oranv1alpha1.RenderedTemplateStatus{}
+	}
+	t.object.Status.RenderedTemplateStatus.RenderedTemplate = true
+	t.object.Status.RenderedTemplateStatus.RenderedTemplateError = ""
+
+	if inputError != nil {
+		t.object.Status.RenderedTemplateStatus.RenderedTemplate = false
+		t.object.Status.RenderedTemplateStatus.RenderedTemplateError = inputError.Error()
+	}
+
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+}
+
+// updateRenderTemplateAppliedStatus update the status of the ClusterRequest object (CR).
+func (t *clusterRequestReconcilerTask) updateRenderTemplateAppliedStatus(
+	ctx context.Context, inputError error) error {
+	if t.object.Status.RenderedTemplateStatus == nil {
+		t.object.Status.RenderedTemplateStatus = &oranv1alpha1.RenderedTemplateStatus{}
+	}
+
+	t.object.Status.RenderedTemplateStatus.RenderedTemplateApplied = true
+	t.object.Status.RenderedTemplateStatus.RenderedTemplateAppliedError = ""
+
+	if inputError != nil {
+		t.object.Status.RenderedTemplateStatus.RenderedTemplateApplied = false
+		t.object.Status.RenderedTemplateStatus.RenderedTemplateAppliedError = inputError.Error()
 	}
 
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
