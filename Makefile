@@ -122,7 +122,7 @@ build: manifests generate fmt vet ## Build manager binary.
 	go build
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
+run: manifests generate fmt vet binary ## Run a controller from your host.
 	./oran-o2ims start controller-manager
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.

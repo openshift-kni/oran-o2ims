@@ -26,7 +26,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -124,12 +123,12 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	// Restrict to the following namespaces - subject to change.
-	namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
-	defaultNamespaces := make(map[string]cache.Config)
+	//namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
+	//defaultNamespaces := make(map[string]cache.Config)
 
-	for _, ns := range namespaces {
-		defaultNamespaces[ns] = cache.Config{}
-	}
+	//for _, ns := range namespaces {
+	//	defaultNamespaces[ns] = cache.Config{}
+	//}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -137,9 +136,9 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		HealthProbeBindAddress: c.probeAddr,
 		LeaderElection:         c.enableLeaderElection,
 		LeaderElectionID:       "a73bc4d2.openshift.io",
-		Cache: cache.Options{
-			DefaultNamespaces: defaultNamespaces,
-		},
+		//Cache: cache.Options{
+		//	DefaultNamespaces: defaultNamespaces,
+		//},
 
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the

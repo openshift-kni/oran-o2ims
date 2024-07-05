@@ -48,21 +48,28 @@ spec:
             description: ClusterRequestStatus defines the observed state of ClusterRequest
             properties:
               clusterTemplateInputValidation:
-                description: Tells if the schema provided in spec.clusterTemplateInput
-                  is a valid JSON.
+                description: Contains JSON schema and cluster template validation
+                  details.
                 properties:
-                  clusterTemplateInputError:
+                  inputError:
                     description: Holds the error in case the ClusterTemplateInput
                       is invalid.
                     type: string
-                  clusterTemplateInputIsValid:
-                    description: Says of the ClusterTemplateInput is valid or not.
+                  inputIsValid:
+                    description: Says if the ClusterTemplateInput is valid or not.
                     type: boolean
+                  inputMatchesTemplate:
+                    description: Says if the provided ClusterTemplateInput matches
+                      the referenced ClusterTemplate.
+                    type: boolean
+                  inputMatchesTemplateError:
+                    description: Holds the error if the provided ClusterTemplateInput
+                      matches the referenced ClusterTemplate.
+                    type: string
                 required:
-                - clusterTemplateInputIsValid
+                - inputIsValid
+                - inputMatchesTemplate
                 type: object
-            required:
-            - clusterTemplateInputValidation
             type: object
         type: object
     served: true

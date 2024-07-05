@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 
 	"log/slog"
 	"time"
@@ -79,7 +80,7 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		)
 	}
 
-	r.Logger.InfoContext(ctx, "[Reconcile Cluster Template]")
+	r.Logger.InfoContext(ctx, "[Reconcile Cluster Template] "+object.Name)
 
 	// Create and run the task:
 	task := &clusterTemplateReconcilerTask{
@@ -96,7 +97,7 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile 
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
 	// Check if the inputDataSchema is in a JSON format; the schema itself is not of importance.
-	err = utils.ValidateInputDataSchema(t.object.Spec.InputDataSchema)
+	err = t.validateInputDataSchema()
 
 	// If there is an error, log it and set the reconciliation to 30 seconds.
 	if err != nil {
@@ -119,6 +120,13 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile 
 	}
 
 	return
+}
+
+// validateInputDataSchema succeeds if intputDataSchema is in a JSON format.
+func (t *clusterTemplateReconcilerTask) validateInputDataSchema() (err error) {
+
+	var jsonInputDataSchema json.RawMessage
+	return json.Unmarshal([]byte(t.object.Spec.InputDataSchema), &jsonInputDataSchema)
 }
 
 // updateClusterTemplateStatus update the status of the ClusterTemplate object (CR).

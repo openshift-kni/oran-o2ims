@@ -237,7 +237,7 @@ Where the content of `infra-sub.json` is as follows:
 To delete an existing resource subscription:
 ```
 $ curl -s -X DELETE \
-http://localhost:8000/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq
+http://localhost:8004/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq
 ```
 
 #### Alarm server

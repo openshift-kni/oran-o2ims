@@ -463,3 +463,190 @@ var _ = Describe("searchAPI", func() {
 		Expect(searchAPI).To(Equal("https://search-api-open-cluster-management.apps.lab.karmalabs.corp"))
 	})
 })
+
+var _ = Describe("ValidateJsonAgainstJsonSchema", func() {
+
+	It("Return error if required field is missing", func() {
+		schema := `
+		{
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"age": {
+					"type": "integer"
+				},
+				"email": {
+					"type": "string",
+					"format": "email"
+				},
+				"address": {
+					"type": "object",
+					"properties": {
+						"street": {
+							"type": "string"
+						},
+						"city": {
+							"type": "string"
+						},
+						"zipcode": {
+							"type": "string"
+						},
+						"capital": {
+							"type": "boolean"
+						}
+					},
+					"required": ["street", "city", "capital"]
+				},
+				"phoneNumbers": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			},
+			"required": ["name", "age"]
+		}
+		`
+		input := `
+		{
+			"name": "Bob",
+			"age": 35,
+			"email": "bob@example.com",
+			"address": {
+				"street": "123 Main St",
+				"city": "Springfield",
+				"zipcode": "12345"
+			},
+			"phoneNumbers": ["123-456-7890", "987-654-3210"]
+		}
+		`
+		err := ValidateJsonAgainstJsonSchema(schema, input)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("The JSON input does not match the JSON schema:  address: capital is required"))
+	})
+
+	It("Return error if field is of different type", func() {
+		schema := `
+		{
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"age": {
+					"type": "integer"
+				},
+				"email": {
+					"type": "string",
+					"format": "email"
+				},
+				"address": {
+					"type": "object",
+					"properties": {
+						"street": {
+							"type": "string"
+						},
+						"city": {
+							"type": "string"
+						},
+						"zipcode": {
+							"type": "string"
+						},
+						"capital": {
+							"type": "boolean"
+						}
+					},
+					"required": ["street", "city"]
+				},
+				"phoneNumbers": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			},
+			"required": ["name", "age"]
+		}
+		`
+		// Age is a string instead of integer.
+		input := `
+		{
+			"name": "Bob",
+			"age": "35",
+			"email": "bob@example.com",
+			"address": {
+				"street": "123 Main St",
+				"city": "Springfield",
+				"zipcode": "12345"
+			},
+			"phoneNumbers": ["123-456-7890", "987-654-3210"]
+		}
+		`
+		err := ValidateJsonAgainstJsonSchema(schema, input)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("The JSON input does not match the JSON schema:  age: Invalid type. Expected: integer, given: string"))
+	})
+
+	It("Returns success if optional field with required fields is missing", func() {
+		schema := `
+		{
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"age": {
+					"type": "integer"
+				},
+				"email": {
+					"type": "string",
+					"format": "email"
+				},
+				"address": {
+					"type": "object",
+					"properties": {
+						"street": {
+							"type": "string"
+						},
+						"city": {
+							"type": "string"
+						},
+						"zipcode": {
+							"type": "string"
+						},
+						"capital": {
+							"type": "boolean"
+						}
+					},
+					"required": ["street", "city"]
+				},
+				"phoneNumbers": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			},
+			"required": ["name", "age"]
+		}
+		`
+		// Address has required fields, but it's missing completely.
+		input := `
+		{
+			"name": "Bob",
+			"age": 35,
+			"email": "bob@example.com",
+			"phoneNumbers": ["123-456-7890", "987-654-3210"]
+		}
+		`
+		err := ValidateJsonAgainstJsonSchema(schema, input)
+		Expect(err).ToNot(HaveOccurred())
+	})
+})

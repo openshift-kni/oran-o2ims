@@ -36,9 +36,13 @@ type ClusterRequestSpec struct {
 
 type ClusterTemplateInputValidation struct {
 	// Says if the ClusterTemplateInput is valid or not.
-	ClusterTemplateInputIsValid bool `json:"clusterTemplateInputIsValid"`
+	InputIsValid bool `json:"inputIsValid"`
 	// Holds the error in case the ClusterTemplateInput is invalid.
-	ClusterTemplateInputError string `json:"clusterTemplateInputError,omitempty"`
+	InputError string `json:"inputError,omitempty"`
+	// Says if the provided ClusterTemplateInput matches the referenced ClusterTemplate.
+	InputMatchesTemplate bool `json:"inputMatchesTemplate"`
+	// Holds the error if the provided ClusterTemplateInput matches the referenced ClusterTemplate.
+	InputMatchesTemplateError string `json:"inputMatchesTemplateError,omitempty"`
 }
 
 // ClusterRequestStatus defines the observed state of ClusterRequest
@@ -46,8 +50,8 @@ type ClusterRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Tells if the schema provided in spec.clusterTemplateInput is a valid JSON.
-	ClusterTemplateInputValidation ClusterTemplateInputValidation `json:"clusterTemplateInputValidation"`
+	// Contains JSON schema and cluster template validation details.
+	ClusterTemplateInputValidation ClusterTemplateInputValidation `json:"clusterTemplateInputValidation,omitempty"`
 }
 
 //+kubebuilder:object:root=true
