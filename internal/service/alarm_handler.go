@@ -23,8 +23,6 @@ import (
 	"net/http"
 	"slices"
 
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -55,7 +53,6 @@ type AlarmHandler struct {
 	backendClient       *http.Client
 	resourceServerURL   string
 	resourceServerToken string
-	jsonAPI             jsoniter.API
 	alarmFetcher        *AlarmFetcher
 }
 
@@ -163,12 +160,6 @@ func (b *AlarmHandlerBuilder) Build() (
 		Transport: backendTransport,
 	}
 
-	// Prepare the JSON iterator API:
-	jsonConfig := jsoniter.Config{
-		IndentionStep: 2,
-	}
-	jsonAPI := jsonConfig.Froze()
-
 	// Create and populate the object:
 	result = &AlarmHandler{
 		logger:              b.logger,
@@ -180,7 +171,6 @@ func (b *AlarmHandlerBuilder) Build() (
 		backendToken:        b.backendToken,
 		resourceServerURL:   b.resourceServerURL,
 		resourceServerToken: b.resourceServerToken,
-		jsonAPI:             jsonAPI,
 	}
 	return
 }

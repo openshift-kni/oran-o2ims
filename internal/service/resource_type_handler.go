@@ -21,8 +21,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
@@ -61,7 +59,6 @@ type ResourceTypeHandler struct {
 	backendURL       string
 	backendToken     string
 	backendClient    *http.Client
-	jsonAPI          jsoniter.API
 	graphqlQuery     string
 	graphqlVars      *model.SearchInput
 	resourceFetcher  *ResourceFetcher
@@ -159,12 +156,6 @@ func (b *ResourceTypeHandlerBuilder) Build() (
 		Transport: backendTransport,
 	}
 
-	// Prepare the JSON iterator API:
-	jsonConfig := jsoniter.Config{
-		IndentionStep: 2,
-	}
-	jsonAPI := jsonConfig.Froze()
-
 	// Create and populate the object:
 	result = &ResourceTypeHandler{
 		logger:           b.logger,
@@ -173,7 +164,6 @@ func (b *ResourceTypeHandlerBuilder) Build() (
 		backendURL:       b.backendURL,
 		backendToken:     b.backendToken,
 		backendClient:    backendClient,
-		jsonAPI:          jsonAPI,
 		graphqlQuery:     b.graphqlQuery,
 		graphqlVars:      b.graphqlVars,
 	}
