@@ -301,7 +301,7 @@ $ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms | jq
 
 ###### GET an Alarm
 
-To get a list of resource pools:
+To get a specific alarm:
 ```
 $ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId} | jq
 ```
