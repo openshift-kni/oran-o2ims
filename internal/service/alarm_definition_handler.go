@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
@@ -43,8 +41,7 @@ type AlarmDefinitionHandlerBuilder struct {
 // AlarmDefinitionHandler knows how to respond to requests to list alarms. Don't create
 // instances of this type directly, use the NewAlarmDefinitionHandler function instead.
 type AlarmDefinitionHandler struct {
-	logger  *slog.Logger
-	jsonAPI jsoniter.API
+	logger *slog.Logger
 }
 
 // NewAlarmDefinitionHandler creates a builder that can then be used to configure and create a
@@ -69,16 +66,9 @@ func (b *AlarmDefinitionHandlerBuilder) Build() (
 		return
 	}
 
-	// Prepare the JSON iterator API:
-	jsonConfig := jsoniter.Config{
-		IndentionStep: 2,
-	}
-	jsonAPI := jsonConfig.Froze()
-
 	// Create and populate the object:
 	result = &AlarmDefinitionHandler{
-		logger:  b.logger,
-		jsonAPI: jsonAPI,
+		logger: b.logger,
 	}
 	return
 }

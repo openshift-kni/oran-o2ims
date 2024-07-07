@@ -23,7 +23,6 @@ import (
 	"slices"
 
 	"github.com/itchyny/gojq"
-	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
@@ -56,7 +55,6 @@ type ResourceHandler struct {
 	backendURL       string
 	backendToken     string
 	backendClient    *http.Client
-	jsonAPI          jsoniter.API
 	graphqlQuery     string
 	graphqlVars      *model.SearchInput
 	resourceFetcher  *ResourceFetcher
@@ -161,12 +159,6 @@ func (b *ResourceHandlerBuilder) Build() (
 		Transport: backendTransport,
 	}
 
-	// Prepare the JSON iterator API:
-	jsonConfig := jsoniter.Config{
-		IndentionStep: 2,
-	}
-	jsonAPI := jsonConfig.Froze()
-
 	// Create a jq compiler function for parsing labels
 	compilerFunc := gojq.WithFunction("parse_labels", 0, 1, func(x any, _ []any) any {
 		if labels, ok := x.(string); ok {
@@ -201,7 +193,6 @@ func (b *ResourceHandlerBuilder) Build() (
 		backendURL:       b.backendURL,
 		backendToken:     b.backendToken,
 		backendClient:    backendClient,
-		jsonAPI:          jsonAPI,
 		graphqlQuery:     b.graphqlQuery,
 		graphqlVars:      b.graphqlVars,
 		jqTool:           jqTool,

@@ -20,8 +20,6 @@ import (
 	"errors"
 	"log/slog"
 
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
@@ -37,8 +35,7 @@ type AlarmProbableCauseHandlerBuilder struct {
 // AlarmProbableCauseHandler knows how to respond to requests to list alarms. Don't create
 // instances of this type directly, use the NewAlarmProbableCauseHandler function instead.
 type AlarmProbableCauseHandler struct {
-	logger  *slog.Logger
-	jsonAPI jsoniter.API
+	logger *slog.Logger
 }
 
 // NewAlarmProbableCauseHandler creates a builder that can then be used to configure and create a
@@ -63,16 +60,9 @@ func (b *AlarmProbableCauseHandlerBuilder) Build() (
 		return
 	}
 
-	// Prepare the JSON iterator API:
-	jsonConfig := jsoniter.Config{
-		IndentionStep: 2,
-	}
-	jsonAPI := jsonConfig.Froze()
-
 	// Create and populate the object:
 	result = &AlarmProbableCauseHandler{
-		logger:  b.logger,
-		jsonAPI: jsonAPI,
+		logger: b.logger,
 	}
 	return
 }
