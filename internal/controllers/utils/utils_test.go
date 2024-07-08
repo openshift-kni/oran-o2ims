@@ -17,10 +17,12 @@ package utils
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -648,5 +650,265 @@ var _ = Describe("ValidateJsonAgainstJsonSchema", func() {
 		`
 		err := ValidateJsonAgainstJsonSchema(schema, input)
 		Expect(err).ToNot(HaveOccurred())
+	})
+})
+
+var _ = Describe("RenderTemplateForK8sCR", func() {
+	var (
+		clusterInstanceObj   map[string]interface{}
+		expectedRenderedYaml string
+	)
+
+	BeforeEach(func() {
+		clusterInstanceObj = map[string]interface{}{
+			"Cluster": map[string]interface{}{
+				"clusterName":            "site-sno-du-1",
+				"baseDomain":             "example.com",
+				"clusterImageSetNameRef": "4.16",
+				"pullSecretRef":          map[string]interface{}{"name": "pullSecretName"},
+				"templateRefs":           []map[string]interface{}{{"name": "aci-cluster-crs-v1", "namespace": "siteconfig-system"}},
+				"additionalNTPSources":   []string{"NTP.server1", "10.16.231.22"},
+				"apiVIPs":                []string{"10.0.0.1", "10.0.0.2"},
+				"caBundleRef":            map[string]interface{}{"name": "my-bundle-ref"},
+				"clusterLabels":          map[string]string{"common": "true", "group-du-sno": "test", "sites": "site-sno-du-1"},
+				"clusterType":            "SNO",
+				"clusterNetwork":         []map[string]interface{}{{"cidr": "10.128.0.0/14", "hostPrefix": 23}},
+				"machineNetwork":         []map[string]interface{}{{"cidr": "10.16.231.0/24"}},
+				"networkType":            "OVNKubernetes",
+				"cpuPartitioningMode":    "AllNodes",
+				"diskEncryption":         map[string]interface{}{"tang": []map[string]interface{}{{"thumbprint": "1234567890", "url": "http://10.0.0.1:7500"}}, "type": "nbde"},
+				"extraManifestsRef":      []map[string]interface{}{{"name": "foobar1"}, {"name": "foobar2"}},
+				"ignitionConfigOverride": "igen",
+				"installConfigOverrides": "{\"capabilities\":{\"baselineCapabilitySet\": \"None\", \"additionalEnabledCapabilities\": [ \"marketplace\", \"NodeTuning\" ] }}",
+				"proxy":                  map[string]interface{}{"noProxy": "foobar"},
+				"serviceNetwork":         []map[string]interface{}{{"cidr": "172.30.0.0/16"}},
+				"sshPublicKey":           "ssh-rsa",
+				"nodes": []map[string]interface{}{
+					{
+						"bmcAddress":             "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
+						"bmcCredentialsName":     map[string]interface{}{"name": "node1-bmc-secret"},
+						"bootMACAddress":         "00:00:00:01:20:30",
+						"bootMode":               "UEFI",
+						"hostName":               "node1.baseDomain.com",
+						"ignitionConfigOverride": "{\"ignition\": {\"version\": \"3.1.0\"}, \"storage\": {\"files\": [{\"path\": \"/etc/containers/registries.conf\", \"overwrite\": true, \"contents\": {\"source\": \"data:text/plain;base64,aGVsbG8gZnJvbSB6dHAgcG9saWN5IGdlbmVyYXRvcg==\"}}]}}",
+						"installerArgs":          "[\"--append-karg\", \"nameserver=8.8.8.8\", \"-n\"]",
+						"ironicInspect":          "",
+						"role":                   "master",
+						"rootDeviceHint":         map[string]interface{}{"hctl": "1:2:0:0"},
+						"automatedCleaningMode":  "disabled",
+						"templateRefs":           []map[string]interface{}{{"name": "aci-node-crs-v1", "namespace": "siteconfig-system"}},
+						"nodeNetwork": map[string]interface{}{
+							"config": map[string]interface{}{
+								"dns-resolver": map[string]interface{}{
+									"config": map[string]interface{}{
+										"server": []string{"10.19.42.41"},
+									},
+								},
+								"interfaces": []map[string]interface{}{
+									{
+										"ipv4": map[string]interface{}{
+											"address": []map[string]interface{}{
+												{"ip": "10.16.231.3", "prefix-length": 24},
+												{"ip": "10.16.231.28", "prefix-length": 24},
+												{"ip": "10.16.231.31", "prefix-length": 24},
+											},
+											"dhcp":    false,
+											"enabled": true,
+										},
+										"ipv6": map[string]interface{}{
+											"address": []map[string]interface{}{
+												{"ip": "2620:52:0:10e7:e42:a1ff:fe8a:601", "prefix-length": 64},
+												{"ip": "2620:52:0:10e7:e42:a1ff:fe8a:602", "prefix-length": 64},
+												{"ip": "2620:52:0:10e7:e42:a1ff:fe8a:603", "prefix-length": 64},
+											},
+											"dhcp":    false,
+											"enabled": true,
+										},
+										"name": "eno1",
+										"type": "ethernet",
+									},
+									{
+										"ipv6": map[string]interface{}{
+											"address": []map[string]interface{}{
+												{"ip": "2620:52:0:1302::100"},
+											},
+											"enabled": true,
+											"link-aggregation": map[string]interface{}{
+												"mode": "balance-rr",
+												"options": map[string]interface{}{
+													"miimon": "140",
+												},
+												"slaves": []string{"eth0", "eth1"},
+											},
+											"prefix-length": 64,
+										},
+										"name":  "bond99",
+										"state": "up",
+										"type":  "bond",
+									},
+								},
+								"routes": map[string]interface{}{
+									"config": []map[string]interface{}{
+										{
+											"destination":        "0.0.0.0/0",
+											"next-hop-address":   "10.16.231.254",
+											"next-hop-interface": "eno1",
+											"table":              "",
+										},
+									},
+								},
+							},
+							"interfaces": []map[string]interface{}{
+								{"macAddress": "00:00:00:01:20:30", "name": "eno1"},
+								{"macAddress": "02:00:00:80:12:14", "name": "eth0"},
+								{"macAddress": "02:00:00:80:12:15", "name": "eth1"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		expectedRenderedYaml = `
+    apiVersion: siteconfig.open-cluster-management.io/v1alpha1
+    kind: SiteConfig
+    metadata:
+      name: site-sno-du-1
+      namespace: site-sno-du-1
+    spec:
+      additionalNTPSources:
+      - NTP.server1
+      - 10.16.231.22
+      apiVIPs:
+      - 10.0.0.1
+      - 10.0.0.2
+      baseDomain: example.com
+      caBundleRef:
+        name: my-bundle-ref
+      clusterImageSetNameRef: "4.16"
+      clusterLabels:
+        common: "true"
+        group-du-sno: test
+        sites: site-sno-du-1
+      clusterName: site-sno-du-1
+      clusterNetwork:
+        - cidr: 10.128.0.0/14
+          hostPrefix: 23
+      clusterType: SNO
+      cpuPartitioningMode: AllNodes
+      diskEncryption:
+        tang:
+        - thumbprint: "1234567890"
+          url: http://10.0.0.1:7500
+        type: nbde
+      extraManifestsRef:
+          - name: foobar1
+          - name: foobar2
+      ignitionConfigOverride: igen
+      installConfigOverrides: '{"capabilities":{"baselineCapabilitySet": "None", "additionalEnabledCapabilities": [ "marketplace", "NodeTuning" ] }}'
+      machineNetwork:
+          - cidr: 10.16.231.0/24
+      networkType: OVNKubernetes
+      nodes:
+        - automatedCleaningMode: disabled
+          bmcAddress: idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1
+          bmcCredentialsName:
+            name: node1-bmc-secret
+          bootMACAddress: "00:00:00:01:20:30"
+          bootMode: UEFI
+          hostName: node1.baseDomain.com
+          ignitionConfigOverride: '{"ignition": {"version": "3.1.0"}, "storage": {"files": [{"path": "/etc/containers/registries.conf", "overwrite": true, "contents": {"source": "data:text/plain;base64,aGVsbG8gZnJvbSB6dHAgcG9saWN5IGdlbmVyYXRvcg=="}}]}}'
+          installerArgs: '["--append-karg", "nameserver=8.8.8.8", "-n"]'
+          nodeNetwork:
+            config:
+              dns-resolver:
+                config:
+                  server:
+                  - 10.19.42.41
+              interfaces:
+              - ipv4:
+                  address:
+                    - ip: 10.16.231.3
+                      prefix-length: 24
+                    - ip: 10.16.231.28
+                      prefix-length: 24
+                    - ip: 10.16.231.31
+                      prefix-length: 24
+                  dhcp: false
+                  enabled: true
+                ipv6:
+                  address:
+                    - ip: 2620:52:0:10e7:e42:a1ff:fe8a:601
+                      prefix-length: 64
+                    - ip: 2620:52:0:10e7:e42:a1ff:fe8a:602
+                      prefix-length: 64
+                    - ip: 2620:52:0:10e7:e42:a1ff:fe8a:603
+                      prefix-length: 64
+                  dhcp: false
+                  enabled: true
+                name: eno1
+                type: ethernet
+              - ipv6:
+                  address:
+                  - ip: 2620:52:0:1302::100
+                  enabled: true
+                  link-aggregation:
+                    mode: balance-rr
+                    options:
+                      miimon: "140"
+                    slaves:
+                    - eth0
+                    - eth1
+                  prefix-length: 64
+                name: bond99
+                state: up
+                type: bond
+              routes:
+                config:
+                - destination: 0.0.0.0/0
+                  next-hop-address: 10.16.231.254
+                  next-hop-interface: eno1
+                  table: ""
+            interfaces:
+            - macAddress: "00:00:00:01:20:30"
+              name: eno1
+            - macAddress: 02:00:00:80:12:14
+              name: eth0
+            - macAddress: 02:00:00:80:12:15
+              name: eth1
+          role: master
+          templateRefs:
+            - name: aci-node-crs-v1
+              namespace: siteconfig-system
+      proxy:
+        noProxy: foobar
+      pullSecretRef:
+        name: pullSecretName
+      serviceNetwork:
+      - cidr: 172.30.0.0/16
+      sshPublicKey: ssh-rsa
+      templateRefs:
+      - name: aci-cluster-crs-v1
+        namespace: siteconfig-system
+    `
+	})
+
+	It("Renders the cluster instance template successfully", func() {
+		expectedRenderedClusterInstance := &unstructured.Unstructured{}
+		err := yaml.Unmarshal([]byte(expectedRenderedYaml), &expectedRenderedClusterInstance.Object)
+		Expect(err).ToNot(HaveOccurred())
+
+		renderedClusterInstance, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).ToNot(HaveOccurred())
+		yamlString, err := yaml.Marshal(renderedClusterInstance)
+		fmt.Println(string(yamlString))
+
+		Expect(err).ToNot(HaveOccurred())
+		if !reflect.DeepEqual(renderedClusterInstance, expectedRenderedClusterInstance) {
+			err = fmt.Errorf("renderedClusterInstance not equal, expected = %v, got = %v",
+				renderedClusterInstance, expectedRenderedClusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+		}
 	})
 })

@@ -9,4 +9,198 @@ metadata:
     app.kubernetes.io/created-by: oran-o2ims
   name: clusterrequest-sample
 spec:
-  # TODO(user): Add fields here
+  clusterTemplateRef: clustertemplate-sample
+  clusterTemplateInput: |
+       {
+            "additionalNTPSources": [
+              "NTP.server1",
+              "10.16.231.22"
+            ],
+            "baseDomain": "example.com",
+            "caBundleRef": {
+              "name": "my-bundle-ref"
+            },
+            "clusterLabels": {
+              "common": "true",
+              "group-du-sno": "test",
+              "sites": "site-sno-du-1"
+            },
+            "clusterName": "site-sno-du-1",
+            "clusterNetwork": [
+              {
+                "cidr": "10.128.0.0/14",
+                "hostPrefix": 23
+              }
+            ],
+            "clusterImageSetNameRef": "4.16",
+            "clusterType": "SNO",
+            "diskEncryption": {
+              "tang": [
+                {
+                  "thumbprint": "1234567890",
+                  "url": "http://10.0.0.1:7500"
+                }
+              ],
+              "type": "nbde"
+            },
+            "extraManifestsRef": [
+              {
+                "name": "foobar1"
+              },
+              {
+                "name": "foobar2"
+              }
+            ],
+            "cpuPartitioningMode": "AllNodes",
+            "ignitionConfigOverride": "igen",
+            "installConfigOverrides": "{\"capabilities\":{\"baselineCapabilitySet\": \"None\", \"additionalEnabledCapabilities\": [ \"marketplace\", \"NodeTuning\" ] }}",
+            "machineNetwork": [
+              {
+                "cidr": "10.16.231.0/24"
+              }
+            ],
+            "networkType": "OVNKubernetes",
+            "nodes": [
+              {
+                "bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
+                "bmcCredentialsName": {
+                  "name": "node1-bmc-secret"
+                },
+                "bootMACAddress": "00:00:00:01:20:30",
+                "bootMode": "UEFI",
+                "hostName": "node1.baseDomain.com",
+                "ignitionConfigOverride": "{\"ignition\": {\"version\": \"3.1.0\"}, \"storage\": {\"files\": [{\"path\": \"/etc/containers/registries.conf\", \"overwrite\": true, \"contents\": {\"source\": \"data:text/plain;base64,aGVsbG8gZnJvbSB6dHAgcG9saWN5IGdlbmVyYXRvcg==\"}}]}}",
+                "installerArgs": "[\"--append-karg\", \"nameserver=8.8.8.8\", \"-n\"]",
+                "ironicInspect": "",
+                "nodeNetwork": {
+                  "config": {
+                    "dns-resolver": {
+                      "config": {
+                        "server": [
+                          "10.19.42.41"
+                        ]
+                      }
+                    },
+                    "interfaces": [
+                      {
+                        "ipv4": {
+                          "address": [
+                            {
+                              "ip": "10.16.231.3",
+                              "prefix-length": 24
+                            },
+                            {
+                              "ip": "10.16.231.28",
+                              "prefix-length": 24
+                            },
+                            {
+                              "ip": "10.16.231.31",
+                              "prefix-length": 24
+                            }
+                          ],
+                          "dhcp": false,
+                          "enabled": true
+                        },
+                        "ipv6": {
+                          "address": [
+                            {
+                              "ip": "2620:52:0:10e7:e42:a1ff:fe8a:601",
+                              "prefix-length": 64
+                            },
+                            {
+                              "ip": "2620:52:0:10e7:e42:a1ff:fe8a:602",
+                              "prefix-length": 64
+                            },
+                            {
+                              "ip": "2620:52:0:10e7:e42:a1ff:fe8a:603",
+                              "prefix-length": 64
+                            }
+                          ],
+                          "dhcp": false,
+                          "enabled": true
+                        },
+                        "name": "eno1",
+                        "type": "ethernet"
+                      },
+                      {
+                        "ipv6": {
+                          "address": [
+                            {
+                              "ip": "2620:52:0:1302::100"
+                            }
+                          ],
+                          "enabled": true,
+                          "link-aggregation": {
+                            "mode": "balance-rr",
+                            "options": {
+                              "miimon": "140"
+                            },
+                            "slaves": [
+                              "eth0",
+                              "eth1"
+                            ]
+                          },
+                          "prefix-length": 64
+                        },
+                        "name": "bond99",
+                        "state": "up",
+                        "type": "bond"
+                      }
+                    ],
+                    "routes": {
+                      "config": [
+                        {
+                          "destination": "0.0.0.0/0",
+                          "next-hop-address": "10.16.231.254",
+                          "next-hop-interface": "eno1",
+                          "table-id": 254
+                        }
+                      ]
+                    }
+                  },
+                  "interfaces": [
+                    {
+                      "macAddress": "00:00:00:01:20:30",
+                      "name": "eno1"
+                    },
+                    {
+                      "macAddress": "02:00:00:80:12:14",
+                      "name": "eth0"
+                    },
+                    {
+                      "macAddress": "02:00:00:80:12:15",
+                      "name": "eth1"
+                    }
+                  ]
+                },
+                "role": "master",
+                "rootDeviceHints": {
+                  "hctl": "1:2:0:0"
+                },
+                "templateRefs": [
+                  {
+                    "name": "aci-node-crs-v1",
+                    "namespace": "siteconfig-system"
+                  }
+                ]
+              }
+            ],
+            "proxy": {
+              "noProxy": "foobar"
+            },
+            "pullSecretRef": {
+              "name": "pullSecretName"
+            },
+            "serviceNetwork": [
+              {
+                "cidr": "172.30.0.0/16"
+              }
+            ],
+            "sshPublicKey": "ssh-rsa",
+            "templateRefs": [
+              {
+                "name": "aci-cluster-crs-v1",
+                "namespace": "siteconfig-system"
+              }
+            ]
+        }
