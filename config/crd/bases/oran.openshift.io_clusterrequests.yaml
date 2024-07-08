@@ -47,6 +47,21 @@ spec:
           status:
             description: ClusterRequestStatus defines the observed state of ClusterRequest
             properties:
+              clusterInstallationResources:
+                description: Contains details about the creation of the resources
+                  needed by the ClusterInstance.
+                properties:
+                  errorCreatingResources:
+                    description: Holds the error if there were issues creating the
+                      resources needed by the ClusterInstance
+                    type: string
+                  resourcesCreatedSuccessfully:
+                    description: Says if all the resources needed by the ClusterInstance
+                      have been successfully created.
+                    type: boolean
+                required:
+                - resourcesCreatedSuccessfully
+                type: object
               clusterTemplateInputValidation:
                 description: Contains JSON schema and cluster template validation
                   details.
@@ -58,19 +73,11 @@ spec:
                   inputIsValid:
                     description: Says if the ClusterTemplateInput is valid or not.
                     type: boolean
-                  inputMatchesTemplate:
-                    description: Says if the provided ClusterTemplateInput matches
-                      the referenced ClusterTemplate.
-                    type: boolean
-                  inputMatchesTemplateError:
-                    description: Holds the error if the provided ClusterTemplateInput
-                      matches the referenced ClusterTemplate.
-                    type: string
                 required:
                 - inputIsValid
-                - inputMatchesTemplate
                 type: object
               renderedTemplateStatus:
+                description: Contains details about Cluster templating.
                 properties:
                   renderedTemplate:
                     description: RenderedTemplate represents whether the ClusterInstance

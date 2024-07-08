@@ -129,7 +129,7 @@ spec:
             "description": "Additional cluster-wide annotations to be applied to the rendered templates",
             "type": "object"
           },
-          "extraManifestsRef": {
+          "extraManifestsRefs": {
             "description": "ExtraManifestsRefs is list of config map references containing additional manifests to be applied to the cluster.",
             "items": {
               "description": "LocalObjectReference contains enough information to let you locate the referenced object inside the same namespace.",
