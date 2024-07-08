@@ -46,6 +46,8 @@ var _ = Describe("Subscription handler", func() {
 				SetLogger(logger).
 				SetCloudID("123").
 				SetKubeClient(fakeClient).
+				SetConfigmapName(DefaultInfraInventoryConfigmapName).
+				SetNamespace(DefaultNamespace).
 				Build(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(handler).To(BeNil())
@@ -53,8 +55,8 @@ var _ = Describe("Subscription handler", func() {
 			Expect(msg).To(
 				ContainSubstring(
 					fmt.Sprintf("subscription type can only be %s or %s",
-						SubscriptionTypeAlarm,
-						SubscriptionTypeInfrastructureInventory),
+						SubscriptionIdAlarm,
+						SubscriptionIdInfrastructureInventory),
 				),
 			)
 		})
@@ -63,7 +65,7 @@ var _ = Describe("Subscription handler", func() {
 			handler, err := NewSubscriptionHandler().
 				SetCloudID("123").
 				SetKubeClient(fakeClient).
-				SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
+				SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
 				Build(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(handler).To(BeNil())
@@ -76,7 +78,9 @@ var _ = Describe("Subscription handler", func() {
 			handler, err := NewSubscriptionHandler().
 				SetLogger(logger).
 				SetKubeClient(fakeClient).
-				SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
+				SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
+				SetConfigmapName(DefaultInfraInventoryConfigmapName).
+				SetNamespace(DefaultNamespace).
 				Build(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(handler).To(BeNil())
@@ -99,7 +103,7 @@ var _ = Describe("Subscription handler", func() {
 			//create fake namespace
 			namespace := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: TestNamespace,
+					Name: DefaultNamespace,
 				},
 			}
 			err := fakeClient.Create(ctx, namespace, &client.CreateOptions{}, client.FieldOwner(FieldOwner))
@@ -110,8 +114,8 @@ var _ = Describe("Subscription handler", func() {
 					APIVersion: "v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: TestNamespace,
-					Name:      AlarmConfigMapName,
+					Namespace: DefaultNamespace,
+					Name:      DefaultAlarmConfigmapName,
 				},
 				Data: nil,
 			}
@@ -124,8 +128,8 @@ var _ = Describe("Subscription handler", func() {
 					APIVersion: "v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: TestNamespace,
-					Name:      InfraInventoryConfigMapName,
+					Namespace: DefaultNamespace,
+					Name:      DefaultInfraInventoryConfigmapName,
 				},
 				Data: nil,
 			}
@@ -142,7 +146,9 @@ var _ = Describe("Subscription handler", func() {
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
-					SetSubscriptionType(SubscriptionTypeAlarm).
+					SetSubscriptionIdString(SubscriptionIdAlarm).
+					SetConfigmapName(DefaultAlarmConfigmapName).
+					SetNamespace(DefaultNamespace).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(handler).ToNot(BeNil())
@@ -162,7 +168,9 @@ var _ = Describe("Subscription handler", func() {
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
-					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
+					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
+					SetConfigmapName(DefaultInfraInventoryConfigmapName).
+					SetNamespace(DefaultNamespace).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(handler).ToNot(BeNil())
@@ -226,7 +234,9 @@ var _ = Describe("Subscription handler", func() {
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
-					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
+					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
+					SetConfigmapName(DefaultInfraInventoryConfigmapName).
+					SetNamespace(DefaultNamespace).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -249,7 +259,9 @@ var _ = Describe("Subscription handler", func() {
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
-					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
+					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
+					SetConfigmapName(DefaultInfraInventoryConfigmapName).
+					SetNamespace(DefaultNamespace).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				obj_1 := data.Object{
@@ -286,7 +298,9 @@ var _ = Describe("Subscription handler", func() {
 					SetLogger(logger).
 					SetCloudID("123").
 					SetKubeClient(fakeClient).
-					SetSubscriptionType(SubscriptionTypeInfrastructureInventory).
+					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
+					SetConfigmapName(DefaultInfraInventoryConfigmapName).
+					SetNamespace(DefaultNamespace).
 					Build(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				obj := data.Object{

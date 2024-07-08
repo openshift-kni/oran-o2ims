@@ -34,12 +34,12 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
-// Server creates and returns the `start alarm-subscription-server` command.
-func AlarmSubscriptionServer() *cobra.Command {
-	c := NewAlarmSubscriptionServer()
+// Server creates and returns the `start alarm-notification-server` command.
+func AlarmNotificationServer() *cobra.Command {
+	c := NewAlarmNotificationServer()
 	result := &cobra.Command{
-		Use:   "alarm-subscription-server",
-		Short: "Starts the alarm Subscription Server",
+		Use:   "alarm-notification-server",
+		Short: "Starts the alarm Notification Server",
 		Args:  cobra.NoArgs,
 		RunE:  c.run,
 	}
@@ -55,11 +55,6 @@ func AlarmSubscriptionServer() *cobra.Command {
 		"",
 		"O-Cloud identifier.",
 	)
-	_ = flags.StringArray(
-		extensionsFlagName,
-		[]string{},
-		"Extension to add to alarm subscriptions.",
-	)
 	_ = flags.String(
 		namespaceFlagName,
 		"",
@@ -70,22 +65,32 @@ func AlarmSubscriptionServer() *cobra.Command {
 		"",
 		"The configmap name used by alarm subscriptions ",
 	)
+	_ = flags.String(
+		resourceServerURLFlagName,
+		"",
+		"The resource server URL used by alarm subscriptions ",
+	)
+	_ = flags.String(
+		resourceServerTokenFlagName,
+		"",
+		"The resource server token used by alarm subscriptions ",
+	)
 	return result
 }
 
-// alarmSubscriptionServerCommand contains the data and logic needed to run the `start
-// alarm-subscription-server` command.
-type AlarmSubscriptionServerCommand struct {
+// alarmNotificationServerCommand contains the data and logic needed to run the `start
+// alarm-notification-server` command.
+type AlarmNotificationServerCommand struct {
 }
 
-// NewAlarmSubscriptionServer creates a new runner that knows how to execute the `start
-// alarm-subscription-server` command.
-func NewAlarmSubscriptionServer() *AlarmSubscriptionServerCommand {
-	return &AlarmSubscriptionServerCommand{}
+// NewAlarmNotificationServer creates a new runner that knows how to execute the `start
+// alarm-notification-server` command.
+func NewAlarmNotificationServer() *AlarmNotificationServerCommand {
+	return &AlarmNotificationServerCommand{}
 }
 
-// run executes the `start alarm-subscription-server` command.
-func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) error {
+// run executes the `start alarm-notification-server` command.
+func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) error {
 	// Get the context:
 	ctx := cmd.Context()
 
@@ -107,12 +112,10 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
-
 	// Get the cloud identifier:
 	cloudID, err := flags.GetString(cloudIDFlagName)
 	if err != nil {
-		logger.ErrorContext(
-			ctx,
+		logger.Error(
 			"Failed to get cloud identifier flag",
 			"flag", cloudIDFlagName,
 			"error", err.Error(),
@@ -120,34 +123,15 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	if cloudID == "" {
-		logger.ErrorContext(
-			ctx,
+		logger.Error(
 			"Cloud identifier is empty",
 			"flag", cloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
-	logger.InfoContext(
-		ctx,
+	logger.Info(
 		"Cloud identifier",
 		"value", cloudID,
-	)
-
-	// Get the extensions details:
-	extensions, err := flags.GetStringArray(extensionsFlagName)
-	if err != nil {
-		logger.ErrorContext(
-			ctx,
-			"Failed to extension flag",
-			"flag", extensionsFlagName,
-			"error", err.Error(),
-		)
-		return exit.Error(1)
-	}
-	logger.InfoContext(
-		ctx,
-		"alarm subscription extensions details",
-		slog.Any("extensions", extensions),
 	)
 
 	// Create the logging wrapper:
@@ -156,8 +140,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.ErrorContext(
-			ctx,
+		logger.Error(
 			"Failed to create transport wrapper",
 			"error", err.Error(),
 		)
@@ -170,8 +153,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.ErrorContext(
-			ctx,
+		logger.Error(
 			"Failed to create authentication wrapper",
 			slog.String("error", err.Error()),
 		)
@@ -182,8 +164,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags).
 		Build()
 	if err != nil {
-		logger.ErrorContext(
-			ctx,
+		logger.Error(
 			"Failed to create authorization wrapper",
 			slog.String("error", err.Error()),
 		)
@@ -193,7 +174,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	// Create the metrics wrapper:
 	metricsWrapper, err := metrics.NewHandlerWrapper().
 		AddPaths(
-			"/o2ims-infrastructureMonitoring/-/alarmSubscriptions/-",
+			"/o2ims-infrastructureMonitoring/-/alarmNotifications/-",
 		).
 		SetSubsystem("inbound").
 		Build()
@@ -229,7 +210,35 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 
-	// Get the namespace:
+	// Get the resource server details:
+	resourceServerURL, err := flags.GetString(resourceServerURLFlagName)
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to get resource server URL flag",
+			"flag", resourceServerURLFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
+	if resourceServerURL == "" {
+		logger.ErrorContext(
+			ctx,
+			"Resource server URL is empty",
+			slog.String("flag", resourceServerURLFlagName),
+		)
+		return exit.Error(1)
+	}
+	resourceServerToken, err := flags.GetString(resourceServerTokenFlagName)
+	if err != nil || resourceServerToken == "" {
+		logger.ErrorContext(
+			ctx,
+			"Resource server URL is empty",
+			slog.String("flag", resourceServerTokenFlagName),
+		)
+		return exit.Error(1)
+	}
+
 	namespace, err := flags.GetString(namespaceFlagName)
 	if err != nil {
 		logger.ErrorContext(
@@ -243,7 +252,6 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	if namespace == "" {
 		namespace = service.DefaultNamespace
 	}
-
 	// Get the configmapName:
 	subscriptionsConfigmapName, err := flags.GetString(subscriptionConfigmapNameFlagName)
 	if err != nil {
@@ -259,49 +267,30 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		subscriptionsConfigmapName = service.DefaultAlarmConfigmapName
 	}
 
-	handler, err := service.NewSubscriptionHandler().
+	//create handler
+	handler, err := service.NewAlarmNotificationHandler().
 		SetLogger(logger).
 		SetLoggingWrapper(loggingWrapper).
 		SetCloudID(cloudID).
-		SetExtensions(extensions...).
 		SetKubeClient(kubeClient).
-		SetSubscriptionIdString(service.SubscriptionIdAlarm).
 		SetNamespace(namespace).
 		SetConfigmapName(subscriptionsConfigmapName).
+		SetResourceServerURL(resourceServerURL).
+		SetResourceServerToken(resourceServerToken).
 		Build(ctx)
 
 	if err != nil {
-		logger.ErrorContext(
-			ctx,
+		logger.Error(
 			"Failed to create handler",
 			"error", err,
 		)
 		return exit.Error(1)
 	}
 
-	// Create the routes:
-	adapter, err := service.NewAdapter().
-		SetLogger(logger).
-		SetPathVariables("alarmSubscriptionID").
-		SetHandler(handler).
-		Build()
-	if err != nil {
-		logger.ErrorContext(
-			ctx,
-			"Failed to create adapter",
-			"error", err,
-		)
-		return exit.Error(1)
-	}
 	router.Handle(
-		"/o2ims-infrastructureMonitoring/{version}/alarmSubscriptions",
-		adapter,
-	).Methods(http.MethodGet, http.MethodPost)
-
-	router.Handle(
-		"/o2ims-infrastructureMonitoring/{version}/alarmSubscriptions/{alarmSubscriptionID}",
-		adapter,
-	).Methods(http.MethodGet, http.MethodDelete)
+		"/",
+		handler,
+	).Methods(http.MethodPost)
 
 	// Start the API server:
 	apiListener, err := network.NewListener().
@@ -309,9 +298,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		SetFlags(flags, network.APIListener).
 		Build()
 	if err != nil {
-		logger.ErrorContext(
-			ctx,
-			"Failed to create API listener",
+		logger.Error(
+			"Failed to to create API listener",
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
@@ -325,6 +313,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		Addr:    apiListener.Addr().String(),
 		Handler: router,
 	}
+
 	exitHandler.AddServer(apiServer)
 	go func() {
 		err = apiServer.Serve(apiListener)
