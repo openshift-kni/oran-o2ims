@@ -1,5 +1,5 @@
 apiVersion: siteconfig.open-cluster-management.io/v1alpha1
-kind: SiteConfig
+kind: ClusterInstance
 metadata:
   name: "{{ .Cluster.clusterName }}"
   namespace: "{{ .Cluster.clusterName }}"
@@ -64,9 +64,9 @@ spec:
   extraAnnotations:
 {{ .Cluster.extraAnnotations | toYaml | indent 4 }}
 {{- end }}
-{{- if .Cluster.extraManifestsRef }}
+{{- if .Cluster.extraManifestsRefs }}
   extraManifestsRef:
-  {{- range .Cluster.extraManifestsRef }}
+  {{- range .Cluster.extraManifestsRefs }}
     - name: "{{ .name }}"
   {{- end }}
 {{- end }}

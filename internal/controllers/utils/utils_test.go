@@ -677,7 +677,7 @@ var _ = Describe("RenderTemplateForK8sCR", func() {
 				"networkType":            "OVNKubernetes",
 				"cpuPartitioningMode":    "AllNodes",
 				"diskEncryption":         map[string]interface{}{"tang": []map[string]interface{}{{"thumbprint": "1234567890", "url": "http://10.0.0.1:7500"}}, "type": "nbde"},
-				"extraManifestsRef":      []map[string]interface{}{{"name": "foobar1"}, {"name": "foobar2"}},
+				"extraManifestsRefs":     []map[string]interface{}{{"name": "foobar1"}, {"name": "foobar2"}},
 				"ignitionConfigOverride": "igen",
 				"installConfigOverrides": "{\"capabilities\":{\"baselineCapabilitySet\": \"None\", \"additionalEnabledCapabilities\": [ \"marketplace\", \"NodeTuning\" ] }}",
 				"proxy":                  map[string]interface{}{"noProxy": "foobar"},
@@ -771,7 +771,7 @@ var _ = Describe("RenderTemplateForK8sCR", func() {
 
 		expectedRenderedYaml = `
     apiVersion: siteconfig.open-cluster-management.io/v1alpha1
-    kind: SiteConfig
+    kind: ClusterInstance
     metadata:
       name: site-sno-du-1
       namespace: site-sno-du-1
@@ -801,7 +801,7 @@ var _ = Describe("RenderTemplateForK8sCR", func() {
         - thumbprint: "1234567890"
           url: http://10.0.0.1:7500
         type: nbde
-      extraManifestsRef:
+      extraManifestsRefs:
           - name: foobar1
           - name: foobar2
       ignitionConfigOverride: igen

@@ -39,10 +39,6 @@ type ClusterTemplateInputValidation struct {
 	InputIsValid bool `json:"inputIsValid"`
 	// Holds the error in case the ClusterTemplateInput is invalid.
 	InputError string `json:"inputError,omitempty"`
-	// Says if the provided ClusterTemplateInput matches the referenced ClusterTemplate.
-	InputMatchesTemplate bool `json:"inputMatchesTemplate"`
-	// Holds the error if the provided ClusterTemplateInput matches the referenced ClusterTemplate.
-	InputMatchesTemplateError string `json:"inputMatchesTemplateError,omitempty"`
 }
 
 type RenderedTemplateStatus struct {
@@ -56,6 +52,15 @@ type RenderedTemplateStatus struct {
 	RenderedTemplateAppliedError string `json:"renderedTemplateAppliedError,omitempty"`
 }
 
+type ClusterInstallationResources struct {
+	// Says if all the resources needed by the ClusterInstance have been
+	// successfully created.
+	ResourcesCreatedSuccessfully bool `json:"resourcesCreatedSuccessfully"`
+	// Holds the error if there were issues creating the resources needed by
+	// the ClusterInstance
+	ErrorCreatingResources string `json:"errorCreatingResources,omitempty"`
+}
+
 // ClusterRequestStatus defines the observed state of ClusterRequest
 type ClusterRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -63,7 +68,12 @@ type ClusterRequestStatus struct {
 
 	// Contains JSON schema and cluster template validation details.
 	ClusterTemplateInputValidation ClusterTemplateInputValidation `json:"clusterTemplateInputValidation,omitempty"`
-	RenderedTemplateStatus         *RenderedTemplateStatus        `json:"renderedTemplateStatus,omitempty"`
+
+	// Contains details about Cluster templating.
+	RenderedTemplateStatus *RenderedTemplateStatus `json:"renderedTemplateStatus,omitempty"`
+
+	// Contains details about the creation of the resources needed by the ClusterInstance.
+	ClusterInstallationResources ClusterInstallationResources `json:"clusterInstallationResources,omitempty"`
 }
 
 //+kubebuilder:object:root=true

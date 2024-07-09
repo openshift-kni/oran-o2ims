@@ -73,6 +73,64 @@ func ValidateJsonAgainstJsonSchema(schema string, input string) error {
 	}
 }
 
+func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest string) (
+	string, string, string, error) {
+	// Get the BMC details.
+	bmcCredentialsDetailsInterface, bmcCredentialsDetailsExist := node["bmcCredentialsDetails"]
+
+	if !bmcCredentialsDetailsExist {
+		return "", "", "", fmt.Errorf(
+			`\"bmcCredentialsDetails\" key expected to exist in ClusterTemplateInput 
+			of ClusterRequest %s, but it's missing`,
+			clusterRequest,
+		)
+	}
+
+	bmcCredentialsDetails := bmcCredentialsDetailsInterface.(map[string]interface{})
+
+	oranUtilsLog.Info(
+		"[getBMCDetailsForClusterInstance]",
+		"bmcCredentialsDetails: "+fmt.Sprintf("%v", bmcCredentialsDetails),
+	)
+
+	// Get the BMC username and password.
+	username, usernameExists := bmcCredentialsDetails["username"].(string)
+	if !usernameExists {
+		return "", "", "", fmt.Errorf(
+			`\"bmcCredentialsDetails.username\" key expected to exist in ClusterTemplateInput 
+			of ClusterRequest %s, but it's missing`,
+			clusterRequest,
+		)
+	}
+
+	password, passwordExists := bmcCredentialsDetails["password"].(string)
+	if !passwordExists {
+		return "", "", "", fmt.Errorf(
+			`\"bmcCredentialsDetails.password\" key expected to exist in ClusterTemplateInput 
+			of ClusterRequest %s, but it's missing`,
+			clusterRequest,
+		)
+	}
+
+	secretName := ""
+	// Get the BMC CredentialsName.
+	bmcCredentialsNameInterface, bmcCredentialsNameExist := node["bmcCredentialsName"]
+	if !bmcCredentialsNameExist {
+		nodeHostnameInterface, nodeHostnameExists := node["hostName"]
+		if !nodeHostnameExists {
+			secretName = clusterRequest
+		} else {
+			secretName =
+				extractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) +
+					"-bmc-secret"
+		}
+	} else {
+		secretName = bmcCredentialsNameInterface.(map[string]interface{})["name"].(string)
+	}
+
+	return username, password, secretName, nil
+}
+
 // CreateK8sCR creates/updates/patches an object.
 func CreateK8sCR(ctx context.Context, c client.Client,
 	newObject client.Object, ownerObject client.Object,
@@ -443,4 +501,13 @@ func toYaml(v interface{}) (string, error) {
 	}
 
 	return strings.TrimRight(string(yamlData), "\n"), nil
+}
+
+// extractBeforeDot returns the strubstring before the first dot.
+func extractBeforeDot(s string) string {
+	dotIndex := strings.Index(s, ".")
+	if dotIndex == -1 {
+		return s
+	}
+	return s[:dotIndex]
 }

@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -25,6 +26,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -55,8 +57,9 @@ type clusterRequestReconcilerTask struct {
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests/finalizers,verbs=update
-
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -104,53 +107,22 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 	// ### JSON VALIDATION ###
 
 	// Check if the clusterTemplateInput is in a JSON format; the schema itself is not of importance.
-	err = utils.ValidateInputDataSchema(t.object.Spec.ClusterTemplateInput)
-
-	// If there is an error, log it and stop the reconciliation.
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"clusterTemplateInput is not in a JSON format",
-		)
-		return ctrl.Result{}, nil
-	}
-
+	validationErr := utils.ValidateInputDataSchema(t.object.Spec.ClusterTemplateInput)
 	// Update the ClusterRequest status.
-	err = t.updateClusterTemplateInputValidationStatus(ctx, err)
+	err = t.updateClusterTemplateInputValidationStatus(ctx, validationErr)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to update the ClusterTemplateInputValidation status for ClusterRequest",
+			"Failed to update the clusterTemplateInputValidation for ClusterRequest",
 			slog.String("name", t.object.Name),
 		)
+		return
+	}
+	if validationErr != nil {
 		return ctrl.Result{}, nil
 	}
 
-	// ### VALIDATION AGAINST CLUSTER TEMPLATE REF ###
-
-	// Check if the clusterTemplateInput matches the inputDataSchema of the ClusterTemplate
-	// specified in spec.clusterTemplateRef.
-	err = t.validateClusterTemplateInputMatchesClusterTemplate(ctx)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			err.Error(),
-		)
-		return ctrl.Result{}, nil
-	}
-
-	// Update the ClusterRequest status.
-	err = t.updateClusterTemplateMatchStatus(ctx, err)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to update the ClusterTemplateValidation status for ClusterRequest",
-			slog.String("name", t.object.Name),
-		)
-		return ctrl.Result{}, nil
-	}
-
-	// ### CLUSTERINSTANCE GENERATION ###
+	// ### CLUSTERINSTANCE TEMPLATE RENDERING ###
 	renderedClusterInstance, renderErr := t.renderClusterInstanceTemplate(ctx)
 	if renderErr != nil {
 		t.logger.ErrorContext(
@@ -175,8 +147,27 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 		return ctrl.Result{}, nil
 	}
 
-	// Create/Update the ClusterInstance CR
-	createErr := utils.CreateK8sCR(ctx, t.client, renderedClusterInstance, nil, utils.UPDATE)
+	// ### CREATION OF RESOURCES NEEDED BY THE CLUSTER INSTANCE ###
+	createErr := t.createClusterInstanceResources(ctx, renderedClusterInstance)
+	// Update the ClusterRequest status.
+	err = t.updateInstallationResourcesStatus(ctx, createErr)
+	if err != nil {
+		errString := fmt.Sprintf(
+			"Failed to update the clusterInstallationResources status for ClusterRequest %s",
+			slog.String("name", t.object.Name),
+		)
+		t.logger.ErrorContext(
+			ctx,
+			errString,
+		)
+		return
+	}
+	if createErr != nil {
+		return ctrl.Result{}, nil
+	}
+
+	// ### Create/Update the ClusterInstance CR
+	createErr = utils.CreateK8sCR(ctx, t.client, renderedClusterInstance, nil, utils.UPDATE)
 	if createErr != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -200,10 +191,12 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 	if createErr != nil {
 		return ctrl.Result{}, nil
 	}
+
 	return
 }
 
-func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(ctx context.Context) (*unstructured.Unstructured, error) {
+func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
+	ctx context.Context) (*unstructured.Unstructured, error) {
 	t.logger.InfoContext(
 		ctx,
 		"Rendering ClusterInstance template",
@@ -238,14 +231,25 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(ctx context
 		}
 	}
 
-	mergedClusterInstanceData, err := t.buildClusterInstanceData(clusterTemplateInputMap, ctClusterInstanceDefaultsMap)
+	mergedClusterInstanceData, err := t.buildClusterInstanceData(
+		clusterTemplateInputMap, ctClusterInstanceDefaultsMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build ClusterInstance data, err: %w", err)
 	}
 
-	// TODO: validateClusterTemplateInputMatchesClusterTemplate for mergedClusterInstanceMap
+	// Validate that the mergedClusterInstanceMap matches the ClusterTemplate referenced
+	// in the ClusterRequest.
+	err = t.validateClusterTemplateInputMatchesClusterTemplate(
+		ctx, mergedClusterInstanceData["Cluster"].(map[string]any))
+	if err != nil {
+		return nil, fmt.Errorf(
+			fmt.Sprintf(
+				"errors matching the merged ClusterInstance data against the referenced "+
+					"ClusterTemplate %s: %s", t.object.Name, err.Error()))
+	}
 
-	renderedClusterInstance, err := utils.RenderTemplateForK8sCR("ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
+	renderedClusterInstance, err := utils.RenderTemplateForK8sCR(
+		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render the template, err: %w", err)
 	}
@@ -275,10 +279,241 @@ func (t *clusterRequestReconcilerTask) buildClusterInstanceData(
 	return mergedClusterInstanceData, nil
 }
 
+// createClusterInstanceResources creates all the resources needed for the
+// ClusterInstance object to perform a successful installation.
+func (t *clusterRequestReconcilerTask) createClusterInstanceResources(
+	ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+
+	// Create the clusterInstance namespace.
+	err := t.createClusterInstanceNamespace(ctx, clusterInstance)
+	if err != nil {
+		return err
+	}
+
+	clusterName := clusterInstance.GetName()
+
+	// Create the BMC secrets.
+	err = t.createClusterInstanceBMCSecrets(ctx, clusterName)
+	if err != nil {
+		return err
+	}
+
+	// If we got to this point, we can assume that all the keys up to the BMC details
+	// exists since ClusterInstance has nodes mandatory.
+	specInterface, specExists := clusterInstance.Object["spec"]
+	if !specExists {
+		return fmt.Errorf(
+			"\"spec\" expected to exist in the rendered ClusterInstance for ClusterRequest %s, but it's missing",
+			t.object.Name,
+		)
+	}
+	spec := specInterface.(map[string]interface{})
+
+	// Copy the pull secret from the cluster template namespace to the
+	// clusterInstance namespace.
+	err = t.createPullSecret(ctx, clusterName, spec)
+	if err != nil {
+		return err
+	}
+
+	// Copy the extra-manifests ConfigMaps from the cluster template namespace
+	// to the clusterInstance namespace.
+	err = t.createExtraManifestsConfigMap(ctx, clusterName, spec)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// createExtraManifestsConfigMap copies the extra-manifests ConfigMaps from the
+// cluster template namespace to the clusterInstance namespace.
+func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
+	ctx context.Context, clusterName string, spec map[string]interface{}) error {
+
+	configMapRefInterface, configMapRefExists := spec["extraManifestsRefs"]
+	// If no extra manifests ConfigMap is referenced, there's nothing to do. Return.
+	if !configMapRefExists {
+		return nil
+	}
+
+	// Make sure the extra-manifests ConfigMap exists in the cluster template
+	// namespace. The name of the extra-manifests ConfigMap is the same as the cluster
+	// template.
+	configMap := &corev1.ConfigMap{}
+	configMapExists, err := utils.DoesK8SResourceExist(
+		ctx, t.client, t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef, configMap)
+	if err != nil {
+		return err
+	}
+	if !configMapExists {
+		return fmt.Errorf(
+			"extra-manifests configmap %s expected to exist in the %s namespace, but it's missing",
+			clusterName, t.object.Spec.ClusterTemplateRef)
+	}
+
+	// Get the name of the extra-manifests ConfigMap for the ClusterInstance namespace.
+	configMapInterfaceArr := configMapRefInterface.([]interface{})
+	configMapNameInterface, configMapNameExists :=
+		configMapInterfaceArr[0].(map[string]interface{})["name"]
+	if !configMapNameExists {
+		return fmt.Errorf(
+			"\"spec.extraManifestsRefs[%d].name\" expected to exist in the rendered of "+
+				"ClusterInstance for ClusterRequest %s, but it's missing",
+			0, t.object.Name,
+		)
+	}
+	newConfigMapName := configMapNameInterface.(string)
+	newExtraManifestsConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      newConfigMapName,
+			Namespace: clusterName,
+		},
+		Data: configMap.Data,
+	}
+	return utils.CreateK8sCR(ctx, t.client, newExtraManifestsConfigMap, t.object, utils.UPDATE)
+}
+
+// createPullSecret copies the pull secret from the cluster template namespace
+// to the clusterInstanceNamespace
+func (t *clusterRequestReconcilerTask) createPullSecret(
+	ctx context.Context, clusterName string, spec map[string]interface{}) error {
+
+	// If we got to this point, we can assume that all the keys exist, including
+	// clusterName
+	pullSecretRefInterface, pullSecretRefExists := spec["pullSecretRef"]
+	if !pullSecretRefExists {
+		return fmt.Errorf(
+			"\"spec.pullSecretRef\" key expected to exist in the rendered ClusterInstance "+
+				"for ClusterRequest %s, but it's missing",
+			t.object.Name,
+		)
+	}
+	pullSecretInterface := pullSecretRefInterface.(map[string]interface{})
+	pullSecretNameInterface, pullSecretNameExists := pullSecretInterface["name"]
+	if !pullSecretNameExists {
+		return fmt.Errorf(
+			"\"spec.pullSecretRef.name\" key expected to exist in the rendered ClusterInstance "+
+				"for ClusterRequest %s, but it's missing",
+			t.object.Name,
+		)
+	}
+	pullSecretName := pullSecretNameInterface.(string)
+	t.logger.InfoContext(
+		ctx,
+		"pullSecretName: "+fmt.Sprintf("%v", pullSecretName),
+	)
+	// Check the pull secret already exists in the clusterTemplate namespace.
+	// We assume the ClusterTemplate name and ClusterTemplate namespace are the same.
+	pullSecret := &corev1.Secret{}
+	pullSecretExistsInTemplateNamespace, err := utils.DoesK8SResourceExist(
+		ctx, t.client, t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef, pullSecret)
+	if err != nil {
+		return err
+	}
+	if !pullSecretExistsInTemplateNamespace {
+		return fmt.Errorf(
+			"pull secret %s expected to exist in the %s namespace, but it's missing",
+			t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef)
+	}
+
+	newClusterInstancePullSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pullSecretName,
+			Namespace: clusterName,
+		},
+		Data: pullSecret.Data,
+		Type: corev1.SecretTypeDockerConfigJson,
+	}
+
+	return utils.CreateK8sCR(ctx, t.client, newClusterInstancePullSecret, nil, utils.UPDATE)
+}
+
+// createClusterInstanceNamespace creates the namespace of the ClusterInstance
+// where all the other resources needed for installation will exist.
+func (t *clusterRequestReconcilerTask) createClusterInstanceNamespace(
+	ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+
+	// If we got to this point, we can assume that all the keys exist, including
+	// clusterName
+	clusterName := clusterInstance.GetName()
+	t.logger.InfoContext(
+		ctx,
+		"nodes: "+fmt.Sprintf("%v", clusterName),
+	)
+
+	// Create the namespace.
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+	}
+	err := utils.CreateK8sCR(ctx, t.client, namespace, nil, utils.UPDATE)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// createClusterInstanceBMCSecrets creates all the BMC secrets needed by the nodes included
+// in the ClusterRequest.
+func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
+	ctx context.Context, clusterName string) error {
+
+	// The BMC credential details are for now obtained from the ClusterRequest.
+	var inputData map[string]interface{}
+	err := json.Unmarshal([]byte(t.object.Spec.ClusterTemplateInput), &inputData)
+	if err != nil {
+		return err
+	}
+
+	// If we got to this point, we can assume that all the keys up to the BMC details
+	// exists since ClusterInstance has nodes mandatory.
+	nodesInterface, nodesExist := inputData["nodes"]
+	if !nodesExist {
+		return fmt.Errorf(
+			"\"spec.nodes\" expected to exist in the rendered ClusterInstance for ClusterRequest %s, but it's missing",
+			t.object.Name,
+		)
+	}
+
+	nodes := nodesInterface.([]interface{})
+	// Go through all the nodes.
+	for _, nodeInterface := range nodes {
+		node := nodeInterface.(map[string]interface{})
+
+		username, password, secretName, err :=
+			utils.GetBMCDetailsForClusterInstance(node, t.object.Name)
+		if err != nil {
+			return err
+		}
+
+		// Create the node's BMC secret.
+		bmcSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: clusterName,
+			},
+			Data: map[string][]byte{
+				"username": []byte(username),
+				"password": []byte(password),
+			},
+		}
+
+		err = utils.CreateK8sCR(ctx, t.client, bmcSecret, nil, utils.UPDATE)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // validateClusterTemplateInput validates if the clusterTemplateInput matches the
 // inputDataSchema of the ClusterTemplate
 func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesClusterTemplate(
-	ctx context.Context) error {
+	ctx context.Context, clusterInstanceData map[string]any) error {
 
 	// Check the clusterTemplateRef references an existing template in the same namespace
 	// as the current clusterRequest.
@@ -309,9 +544,21 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 		return err
 	}
 
+	// Get the input data in string format.
+	jsonString, err := json.Marshal(clusterInstanceData)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			fmt.Sprintf(
+				"Error Marshaling the provided clusterInstance data from "+
+					"ClusterTemplate %s for ClusterRequest %s",
+				t.object.Spec.ClusterTemplateRef, t.object.Name))
+		return err
+	}
+
 	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
 	err = utils.ValidateJsonAgainstJsonSchema(
-		clusterTemplateRef.Spec.InputDataSchema, t.object.Spec.ClusterTemplateInput)
+		clusterTemplateRef.Spec.InputDataSchema, string(jsonString))
 
 	if err != nil {
 		t.logger.ErrorContext(
@@ -342,6 +589,7 @@ func (t *clusterRequestReconcilerTask) updateClusterTemplateInputValidationStatu
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
+/*
 // updateClusterTemplateMatchStatus update the status of the ClusterTemplate object (CR).
 func (t *clusterRequestReconcilerTask) updateClusterTemplateMatchStatus(
 	ctx context.Context, inputError error) error {
@@ -356,6 +604,7 @@ func (t *clusterRequestReconcilerTask) updateClusterTemplateMatchStatus(
 
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
+*/
 
 // updateRenderTemplateStatus update the status of the ClusterRequest object (CR).
 func (t *clusterRequestReconcilerTask) updateRenderTemplateStatus(
@@ -388,6 +637,21 @@ func (t *clusterRequestReconcilerTask) updateRenderTemplateAppliedStatus(
 	if inputError != nil {
 		t.object.Status.RenderedTemplateStatus.RenderedTemplateApplied = false
 		t.object.Status.RenderedTemplateStatus.RenderedTemplateAppliedError = inputError.Error()
+	}
+
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+}
+
+// updateClusterTemplateMatchStatus update the status of the ClusterTemplate object (CR).
+func (t *clusterRequestReconcilerTask) updateInstallationResourcesStatus(
+	ctx context.Context, inputError error) error {
+
+	t.object.Status.ClusterInstallationResources.ResourcesCreatedSuccessfully = true
+	t.object.Status.ClusterInstallationResources.ErrorCreatingResources = ""
+
+	if inputError != nil {
+		t.object.Status.ClusterInstallationResources.ResourcesCreatedSuccessfully = false
+		t.object.Status.ClusterInstallationResources.ErrorCreatingResources = inputError.Error()
 	}
 
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)

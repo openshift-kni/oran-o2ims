@@ -19,6 +19,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - namespaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - get
@@ -174,6 +186,18 @@ rules:
   - rbac.authorization.k8s.io
   resources:
   - clusterroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - siteconfig.open-cluster-management.io
+  resources:
+  - clusterinstances
   verbs:
   - create
   - delete

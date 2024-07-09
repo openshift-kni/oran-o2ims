@@ -43,7 +43,7 @@ spec:
               ],
               "type": "nbde"
             },
-            "extraManifestsRef": [
+            "extraManifestsRefs": [
               {
                 "name": "foobar1"
               },
