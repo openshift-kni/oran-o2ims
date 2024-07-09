@@ -511,3 +511,113 @@ func extractBeforeDot(s string) string {
 	}
 	return s[:dotIndex]
 }
+
+// DeepMergeMaps performs a deep merge of the src map into the dst map.
+// Merge rules:
+//  1. If a key exists in both src and dst maps:
+//     a. If the values are of different types and matched type is required,
+//     it returns an error, otherwise, the src values overrides the dst element.
+//     b. If the values are both maps, recursively merge them.
+//     c. If the values are both slices, deeply merge the slices.
+//     d. For other types, the src value overrides the dst value.
+//  2. If a key exists only in src, add it to dst.
+//  3. If a key exists only in dst, preserve it.
+func DeepMergeMaps[K comparable, V any](dst, src map[K]V, checkType bool) error {
+	for key, srcValue := range src {
+		if dstValue, exists := dst[key]; exists {
+			if reflect.TypeOf(dstValue) != reflect.TypeOf(srcValue) {
+				// If types do not match, return an error if checkType is true
+				if checkType {
+					return fmt.Errorf("type mismatch for key: %v (dst: %T, src: %T)", key, dstValue, srcValue)
+				}
+				// Otherwise, override dst with sr
+				dst[key] = srcValue
+			} else {
+				// Types match, handle according to type
+				switch dstValueTyped := any(dstValue).(type) {
+				case map[K]V:
+					// If both values are maps, recursively merge them
+					srcValueTyped := any(srcValue).(map[K]V)
+					if err := DeepMergeMaps(dstValueTyped, srcValueTyped, checkType); err != nil {
+						return fmt.Errorf("error merging maps for key: %v: %w", key, err)
+					}
+				case []V:
+					// If both values are slices, deeply merge the slices
+					srcValueTyped := any(srcValue).([]V)
+					mergedSlice, err := DeepMergeSlices[K](dstValueTyped, srcValueTyped, checkType)
+					if err != nil {
+						return fmt.Errorf("error merging slices for key: %v: %w", key, err)
+					}
+					// Convert the merged slice back to the generic type V
+					dst[key] = any(mergedSlice).(V)
+				default:
+					// For other types, override dst with src
+					dst[key] = srcValue
+				}
+			}
+		} else {
+			// If the key exists only in src, add it to dst
+			dst[key] = srcValue
+		}
+	}
+	return nil
+}
+
+// DeepMergeSlices performs a deep indexing merge of the src slice into the dst slice.
+// Merge rules:
+//  1. For elements present in both src and dst slices at the same index:
+//     a. If the elements are of different types and matched type is required,
+//     it returns an error, otherwise, the src element overrides the dst element.
+//     b. If the elements are both maps, deeply merge them.
+//     c. For other types, the src element overrides the dst element.
+//  2. If the src slice is longer, append the additional elements from src to dst.
+//  3. If the dst slice is longer, preserve the additional elements from dst.
+func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, error) {
+	maxLen := len(dst)
+	if len(src) > maxLen {
+		maxLen = len(src)
+	}
+
+	result := make([]V, 0, maxLen)
+
+	for i := 0; i < maxLen; i++ {
+		if i < len(dst) && i < len(src) {
+			dstElem := dst[i]
+			srcElem := src[i]
+			if reflect.TypeOf(dstElem) != reflect.TypeOf(srcElem) {
+				// If types do not match, return an error if checkType is true
+				if checkType {
+					return nil, fmt.Errorf("type mismatch at index: %d (dst: %T, src: %T)", i, dstElem, srcElem)
+				}
+				// Otherwise, use the src element
+				result = append(result, srcElem)
+			} else {
+				// Types match, handle according to type
+				switch dstElemTyped := any(dstElem).(type) {
+				case map[K]V:
+					// If both elements are maps, deeply merge them
+					srcElemTyped := any(srcElem).(map[K]V)
+					mergedElem := make(map[K]V)
+					for k, v := range dstElemTyped {
+						mergedElem[k] = v
+					}
+					if err := DeepMergeMaps(mergedElem, srcElemTyped, checkType); err != nil {
+						return nil, fmt.Errorf("error merging maps at slice index: %d: %w", i, err)
+					}
+					result = append(result, any(mergedElem).(V))
+				default:
+					// For other types, use the src element
+					result = append(result, srcElem)
+				}
+			}
+		} else if i < len(dst) {
+			// Only dst has the element
+			result = append(result, dst[i])
+		} else {
+			// Only src has the element
+			result = append(result, src[i])
+		}
+	}
+
+	return result, nil
+}

@@ -108,6 +108,15 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 
 	// Check if the clusterTemplateInput is in a JSON format; the schema itself is not of importance.
 	validationErr := utils.ValidateInputDataSchema(t.object.Spec.ClusterTemplateInput)
+	if validationErr != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to validate the ClusterTemplateInput format",
+			slog.String("name", t.object.Name),
+			slog.String("error", validationErr.Error()),
+		)
+		validationErr = fmt.Errorf("failed to validate the ClusterTemplateInput format: %s", validationErr.Error())
+	}
 	// Update the ClusterRequest status.
 	err = t.updateClusterTemplateInputValidationStatus(ctx, validationErr)
 	if err != nil {
@@ -149,6 +158,15 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 
 	// ### CREATION OF RESOURCES NEEDED BY THE CLUSTER INSTANCE ###
 	createErr := t.createClusterInstanceResources(ctx, renderedClusterInstance)
+	if createErr != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create/update the resources for ClusterInstance",
+			slog.String("name", t.object.Name),
+			slog.String("error", createErr.Error()),
+		)
+		createErr = fmt.Errorf("failed to render the ClusterInstance template: %s", createErr.Error())
+	}
 	// Update the ClusterRequest status.
 	err = t.updateInstallationResourcesStatus(ctx, createErr)
 	if err != nil {
@@ -171,13 +189,23 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 	if createErr != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create/update the ClusterInstance",
-			slog.String("name", renderedClusterInstance.GetName()),
-			slog.String("namespace", renderedClusterInstance.GetNamespace()),
+			fmt.Sprintf(
+				"Failed to create/update the rendered ClusterInstance %s in the namespace %s",
+				renderedClusterInstance.GetName(),
+				renderedClusterInstance.GetNamespace(),
+			),
 			slog.String("error", createErr.Error()),
 		)
 		createErr = fmt.Errorf("failed to create/update the rendered ClusterInstance: %s", createErr.Error())
 	}
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf(
+			"Created/Updated clusterInstance %s in the namespace %s",
+			renderedClusterInstance.GetName(),
+			renderedClusterInstance.GetNamespace(),
+		),
+	)
 
 	err = t.updateRenderTemplateAppliedStatus(ctx, createErr)
 	if err != nil {
@@ -199,38 +227,42 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 	ctx context.Context) (*unstructured.Unstructured, error) {
 	t.logger.InfoContext(
 		ctx,
-		"Rendering ClusterInstance template",
+		"[RenderClusterInstance] Rendering the ClusterInstance template for ClusterRequest",
+		slog.String("name", t.object.Name),
 	)
 
-	// Unmarshal the clusterTemplateInput JSON string into a map
+	// Convert the clusterTemplateInput JSON string into a map
+	t.logger.InfoContext(
+		ctx,
+		"[RenderClusterInstance] Getting the input data(clusterTemplateInput) from ClusterRequest",
+		slog.String("name", t.object.Name),
+	)
 	clusterTemplateInputMap := make(map[string]any)
 	err := utils.UnmarshalYAMLOrJSONString(t.object.Spec.ClusterTemplateInput, &clusterTemplateInputMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal clusterTemplateInput: %w", err)
+		return nil, fmt.Errorf("the clusterTemplateInput is not in a valid JSON format, err: %w", err)
 	}
 
-	ctClusterInstanceDefaultsMap := make(map[string]any)
-	ctClusterInstanceDefaultsCm := &corev1.ConfigMap{}
-	err = t.client.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-clusterinstance-defaults", t.object.Spec.ClusterTemplateRef),
-		Namespace: t.object.Namespace,
-	}, ctClusterInstanceDefaultsCm)
+	ctClusterInstanceDefaultsCmName := fmt.Sprintf(
+		"%s-%s", t.object.Spec.ClusterTemplateRef, utils.ClusterInstanceTemplateDefaultsConfigmapSuffix)
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf(
+			"[RenderClusterInstance] Getting the default data(clusterinstance-defaults) "+
+				" from Configmap %s in the namespace %s",
+			ctClusterInstanceDefaultsCmName,
+			t.object.Namespace,
+		),
+		slog.String("name", t.object.Name),
+	)
+
+	// Retrieve the map that holds the default data for clusterInstance
+	ctClusterInstanceDefaultsMap, err := t.getCtClusterInstanceDefaults(ctx, ctClusterInstanceDefaultsCmName)
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to get configmap, err: %w", err)
-		}
-	} else {
-		defaults, exists := ctClusterInstanceDefaultsCm.Data["clusterinstance-defaults"]
-		if !exists {
-			return nil, fmt.Errorf("clusterinstance-defaults does not exist in configmap data")
-		}
-		// Unmarshal the clusterinstance defaults JSON string into a map
-		err := utils.UnmarshalYAMLOrJSONString(defaults, &ctClusterInstanceDefaultsMap)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal configmap data, err: %w", err)
-		}
+		return nil, fmt.Errorf("failed to get the default data for ClusterInstace: %w ", err)
 	}
 
+	// Create the data object that is consumed by the clusterInstance template
 	mergedClusterInstanceData, err := t.buildClusterInstanceData(
 		clusterTemplateInputMap, ctClusterInstanceDefaultsMap)
 	if err != nil {
@@ -251,25 +283,92 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 	renderedClusterInstance, err := utils.RenderTemplateForK8sCR(
 		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to render the template, err: %w", err)
+		return nil, fmt.Errorf("failed to render the ClusterInstance template, err: %w", err)
 	}
 
 	t.logger.InfoContext(
 		ctx,
-		"ClusterInstance template is rendered successfully",
-		slog.String("name", renderedClusterInstance.GetName()),
-		slog.String("namespace", renderedClusterInstance.GetNamespace()),
+		"[RenderClusterInstance] ClusterInstance template is rendered successfully for ClusterRequest",
+		slog.String("name", t.object.Name),
 	)
 	return renderedClusterInstance, nil
+}
+
+// getCtClusterInstanceDefaults retrieves the dafault data for ClusterInstance for a configmap
+func (t *clusterRequestReconcilerTask) getCtClusterInstanceDefaults(
+	ctx context.Context, configmapName string) (map[string]any, error) {
+
+	ctClusterInstanceDefaultsMap := make(map[string]any)
+	ctClusterInstanceDefaultsCm := &corev1.ConfigMap{}
+
+	cmExists, err := utils.DoesK8SResourceExist(
+		ctx, t.client, configmapName, t.object.Namespace, ctClusterInstanceDefaultsCm)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to get the %s configmap for ClusterInstance defaults, err: %w", configmapName, err)
+	}
+	if !cmExists {
+		t.logger.InfoContext(
+			ctx,
+			"[RenderClusterInstance] The Configmap for ClusterInstance defaults is not found",
+			fmt.Sprintf(
+				"[RenderClusterInstance] The Configmap %s in the namespace %s for "+
+					"ClusterInstance defaults is not found",
+				configmapName,
+				t.object.Namespace,
+			),
+			slog.String("name", t.object.Name),
+		)
+	} else {
+		defaults, exists := ctClusterInstanceDefaultsCm.Data[utils.ClusterInstanceTemplateDefaultsConfigmapSuffix]
+		if !exists {
+			return nil, fmt.Errorf(
+				"%s does not exist in the %s configmap data",
+				utils.ClusterInstanceTemplateDefaultsConfigmapSuffix,
+				configmapName,
+			)
+		}
+
+		// Unmarshal the clusterinstance defaults JSON string into a map
+		err = utils.UnmarshalYAMLOrJSONString(defaults, &ctClusterInstanceDefaultsMap)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"the %s from configmap %s is not in a valid JSON format, err: %w",
+				utils.ClusterInstanceTemplateDefaultsConfigmapSuffix, configmapName, err,
+			)
+		}
+	}
+
+	return ctClusterInstanceDefaultsMap, nil
 }
 
 // buildClusterInstanceData returns an object that is consumed for rendering clusterinstance template
 func (t *clusterRequestReconcilerTask) buildClusterInstanceData(
 	clusterTemplateInput, ctClusterInstanceDefaults map[string]any) (map[string]any, error) {
-	// Merging the clusterTemplateInput data with defaults
-	// TODO: create custom function for merging
-	mergedClusterInstanceMap := maps.Clone(ctClusterInstanceDefaults)
-	maps.Copy(mergedClusterInstanceMap, clusterTemplateInput)
+
+	// Initialize a map to hold the merged data
+	var mergedClusterInstanceMap map[string]any
+
+	switch {
+	case len(ctClusterInstanceDefaults) != 0 && len(clusterTemplateInput) != 0:
+		t.logger.Info(
+			"[RenderClusterInstance] Merging the default data with the clusterTemplateInput data for ClusterInstance",
+			slog.String("name", t.object.Name),
+		)
+		// A shallow copy of src map
+		// Both maps reference to the same underlying data
+		mergedClusterInstanceMap = maps.Clone(ctClusterInstanceDefaults)
+		err := utils.DeepMergeMaps(mergedClusterInstanceMap, clusterTemplateInput, true) // clusterTemplateInput overrides the defaults
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge the clusterTemplateInput(src) with the defaults(dst): %w", err)
+		}
+	case len(ctClusterInstanceDefaults) == 0 && len(clusterTemplateInput) != 0:
+		mergedClusterInstanceMap = maps.Clone(clusterTemplateInput)
+	case len(clusterTemplateInput) == 0 && len(ctClusterInstanceDefaults) != 0:
+		mergedClusterInstanceMap = maps.Clone(ctClusterInstanceDefaults)
+	default:
+		return nil, fmt.Errorf("no ClusterInstance data provided in either ClusterRequest or Configmap")
+	}
 
 	// Wrap the data in a map with key "Cluster"
 	mergedClusterInstanceData := map[string]any{

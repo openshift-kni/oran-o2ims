@@ -65,7 +65,7 @@ spec:
 {{ .Cluster.extraAnnotations | toYaml | indent 4 }}
 {{- end }}
 {{- if .Cluster.extraManifestsRefs }}
-  extraManifestsRef:
+  extraManifestsRefs:
   {{- range .Cluster.extraManifestsRefs }}
     - name: "{{ .name }}"
   {{- end }}
