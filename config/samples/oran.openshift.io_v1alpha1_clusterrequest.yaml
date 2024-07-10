@@ -14,7 +14,7 @@ spec:
        {
             "additionalNTPSources": [
               "NTP.server1",
-              "10.16.231.22"
+              "1.1.1.1"
             ],
             "baseDomain": "example.com",
             "caBundleRef": {
@@ -28,7 +28,7 @@ spec:
             "clusterName": "site-sno-du-1",
             "clusterNetwork": [
               {
-                "cidr": "10.128.0.0/14",
+                "cidr": "203.0.113.0/24",
                 "hostPrefix": 23
               }
             ],
@@ -38,7 +38,7 @@ spec:
               "tang": [
                 {
                   "thumbprint": "1234567890",
-                  "url": "http://10.0.0.1:7500"
+                  "url": "http://198.51.100.11:7500"
                 }
               ],
               "type": "nbde"
@@ -46,9 +46,6 @@ spec:
             "extraManifestsRefs": [
               {
                 "name": "foobar1"
-              },
-              {
-                "name": "foobar2"
               }
             ],
             "cpuPartitioningMode": "AllNodes",
@@ -56,7 +53,7 @@ spec:
             "installConfigOverrides": "{\"capabilities\":{\"baselineCapabilitySet\": \"None\", \"additionalEnabledCapabilities\": [ \"marketplace\", \"NodeTuning\" ] }}",
             "machineNetwork": [
               {
-                "cidr": "10.16.231.0/24"
+                "cidr": "192.0.2.0/24"
               }
             ],
             "networkType": "OVNKubernetes",
@@ -77,7 +74,7 @@ spec:
                     "dns-resolver": {
                       "config": {
                         "server": [
-                          "10.19.42.41"
+                          "192.0.2.22"
                         ]
                       }
                     },
@@ -86,15 +83,15 @@ spec:
                         "ipv4": {
                           "address": [
                             {
-                              "ip": "10.16.231.3",
+                              "ip": "192.0.2.10",
                               "prefix-length": 24
                             },
                             {
-                              "ip": "10.16.231.28",
+                              "ip": "192.0.2.11",
                               "prefix-length": 24
                             },
                             {
-                              "ip": "10.16.231.31",
+                              "ip": "192.0.2.12",
                               "prefix-length": 24
                             }
                           ],
@@ -151,7 +148,7 @@ spec:
                       "config": [
                         {
                           "destination": "0.0.0.0/0",
-                          "next-hop-address": "10.16.231.254",
+                          "next-hop-address": "192.0.2.254",
                           "next-hop-interface": "eno1",
                           "table-id": 254
                         }

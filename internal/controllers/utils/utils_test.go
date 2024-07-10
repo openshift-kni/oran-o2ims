@@ -912,3 +912,304 @@ var _ = Describe("RenderTemplateForK8sCR", func() {
 		}
 	})
 })
+
+var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
+	var (
+		dst map[string]interface{}
+		src map[string]interface{}
+	)
+
+	BeforeEach(func() {
+		dst = make(map[string]interface{})
+		src = make(map[string]interface{})
+	})
+
+	It("should merge non-conflicting keys", func() {
+		dst = map[string]interface{}{
+			"key1": "value1",
+			"key2": "value2",
+		}
+
+		src = map[string]interface{}{
+			"key3": "value3",
+			"key4": "value4",
+		}
+
+		expected := map[string]interface{}{
+			"key1": "value1",
+			"key2": "value2",
+			"key3": "value3",
+			"key4": "value4",
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(expected))
+	})
+
+	It("should override conflicting keys with src values", func() {
+		dst = map[string]interface{}{
+			"key1": "value1",
+			"key2": "value2",
+		}
+
+		src = map[string]interface{}{
+			"key2": "new_value2",
+			"key3": "value3",
+		}
+
+		expected := map[string]interface{}{
+			"key1": "value1",
+			"key2": "new_value2",
+			"key3": "value3",
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(expected))
+	})
+
+	It("should recursively merge nested maps", func() {
+		dst = map[string]interface{}{
+			"key1": map[string]interface{}{
+				"subkey1": "subvalue1",
+				"subkey2": "subvalue2",
+			},
+		}
+
+		src = map[string]interface{}{
+			"key1": map[string]interface{}{
+				"subkey2": "new_subvalue2",
+				"subkey3": "subvalue3",
+			},
+		}
+
+		expected := map[string]interface{}{
+			"key1": map[string]interface{}{
+				"subkey1": "subvalue1",
+				"subkey2": "new_subvalue2",
+				"subkey3": "subvalue3",
+			},
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(expected))
+	})
+
+	It("should deeply merge slices of maps", func() {
+		dst = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+		}
+
+		src = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey2": "new_subvalue2",
+					"subkey3": "subvalue3",
+				},
+			},
+		}
+
+		expected := map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "new_subvalue2",
+					"subkey3": "subvalue3",
+				},
+			},
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(expected))
+	})
+
+	It("should append elements when src slice is longer than dst slice", func() {
+		dst = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+		}
+
+		src = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey2": "new_subvalue2",
+					"subkey3": "subvalue3",
+				},
+			},
+			"key2": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+		}
+
+		expected := map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "new_subvalue2",
+					"subkey3": "subvalue3",
+				},
+			},
+			"key2": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(expected))
+	})
+
+	It("should preserve elements when dst slice is longer than src slice", func() {
+		dst = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+			"key2": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+		}
+
+		src = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey2": "new_subvalue2",
+					"subkey3": "subvalue3",
+				},
+			},
+		}
+
+		expected := map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "new_subvalue2",
+					"subkey3": "subvalue3",
+				},
+			},
+			"key2": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+					"subkey2": "subvalue2",
+				},
+			},
+		}
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(expected))
+	})
+
+	It("should return error on type mismatch when checkType is true", func() {
+		dst = map[string]interface{}{
+			"key1": "value1",
+		}
+
+		src = map[string]interface{}{
+			"key1": 10,
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("type mismatch for key: key1"))
+	})
+
+	It("should return error if type do not match in maps when checkType is true", func() {
+		dst = map[string]interface{}{
+			"key1": map[string]interface{}{
+				"subKey1": "test",
+			},
+		}
+
+		src = map[string]interface{}{
+			"key1": map[string]interface{}{
+				"subKey1": 10,
+			},
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"error merging maps for key: key1: type mismatch for key: subKey1 (dst: string, src: int)"))
+	})
+
+	It("should return error if types do not match in slices and checkType is true", func() {
+		dst = map[string]interface{}{
+			"key1": []interface{}{"value1"},
+		}
+
+		src = map[string]interface{}{
+			"key1": []interface{}{10},
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"error merging slices for key: key1: type mismatch at index: 0 (dst: string, src: int)"))
+	})
+	It("should return error when merging slices for key with mismatched types", func() {
+		dst = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+				},
+			},
+		}
+
+		src = map[string]interface{}{
+			"key1": []interface{}{
+				"string_value",
+			},
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"error merging slices for key: key1: type mismatch at index: 0 (dst: map[string]interface {}, src: string)"))
+	})
+
+	It("should return error when merging maps at index with mismatched types", func() {
+		dst = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": "subvalue1",
+				},
+			},
+		}
+
+		src = map[string]interface{}{
+			"key1": []interface{}{
+				map[string]interface{}{
+					"subkey1": 123, // Type mismatch here
+				},
+			},
+		}
+
+		err := DeepMergeMaps(dst, src, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"error merging maps at slice index: 0: type mismatch for key: subkey1"))
+	})
+})
