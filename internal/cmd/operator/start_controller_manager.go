@@ -72,7 +72,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.image,
 		imageFlagName,
-		"quay.io/openshift-kni/oran-o2ims:latest",
+		"quay.io/openshift-kni/oran-o2ims-operator:latest",
 		"Reference of the container image containing the servers.",
 	)
 	return result
