@@ -26,9 +26,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,6 +43,10 @@ import (
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // clusterRequestReconciler reconciles a ClusterRequest object
@@ -54,11 +61,18 @@ type clusterRequestReconcilerTask struct {
 	object *oranv1alpha1.ClusterRequest
 }
 
+const (
+	clusterRequestFinalizer = "clusterrequest.oran.openshift.io/finalizer"
+	ztpDoneLabel            = "ztp-done"
+)
+
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests/finalizers,verbs=update
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -88,7 +102,18 @@ func (r *ClusterRequestReconciler) Reconcile(
 		)
 	}
 
-	r.Logger.InfoContext(ctx, "[Reconcile Cluster Request] "+object.Name)
+	r.Logger.InfoContext(ctx, "[Reconcile ClusterRequest]",
+		"name", object.Name, "namespace", object.Namespace)
+
+	if res, stop, err := r.handleFinalizer(ctx, object); !res.IsZero() || stop || err != nil {
+		if err != nil {
+			r.Logger.ErrorContext(
+				ctx,
+				"Encountered error while handling the ClusterRequest finalizer",
+				slog.String("err", err.Error()))
+		}
+		return res, err
+	}
 
 	// Create and run the task:
 	task := &clusterRequestReconcilerTask{
@@ -101,9 +126,6 @@ func (r *ClusterRequestReconciler) Reconcile(
 }
 
 func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
-	// Set the default reconcile time to 5 minutes.
-	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
-
 	// ### JSON VALIDATION ###
 
 	// Check if the clusterTemplateInput is in a JSON format; the schema itself is not of importance.
@@ -220,7 +242,18 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 		return ctrl.Result{}, nil
 	}
 
-	return
+	// Update the Status with status from the ClusterInstance object.
+	err = t.updateClusterInstanceStatus(ctx, renderedClusterInstance.GetName(), true)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update the ClusterInstanceStatus status for ClusterRequest",
+			slog.String("name", t.object.Name),
+		)
+		return
+	}
+
+	return ctrl.Result{}, nil
 }
 
 func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
@@ -506,14 +539,14 @@ func (t *clusterRequestReconcilerTask) createPullSecret(
 	// We assume the ClusterTemplate name and ClusterTemplate namespace are the same.
 	pullSecret := &corev1.Secret{}
 	pullSecretExistsInTemplateNamespace, err := utils.DoesK8SResourceExist(
-		ctx, t.client, t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef, pullSecret)
+		ctx, t.client, pullSecretName, t.object.Spec.ClusterTemplateRef, pullSecret)
 	if err != nil {
 		return err
 	}
 	if !pullSecretExistsInTemplateNamespace {
 		return fmt.Errorf(
 			"pull secret %s expected to exist in the %s namespace, but it's missing",
-			t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef)
+			pullSecretName, t.object.Spec.ClusterTemplateRef)
 	}
 
 	newClusterInstancePullSecret := &corev1.Secret{
@@ -651,7 +684,7 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 			fmt.Sprintf(
 				"Error Marshaling the provided clusterInstance data from "+
 					"ClusterTemplate %s for ClusterRequest %s",
-				t.object.Spec.ClusterTemplateRef, t.object.Name))
+				t.object.Spec.ClusterTemplateRef, jsonString))
 		return err
 	}
 
@@ -687,23 +720,6 @@ func (t *clusterRequestReconcilerTask) updateClusterTemplateInputValidationStatu
 
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
-
-/*
-// updateClusterTemplateMatchStatus update the status of the ClusterTemplate object (CR).
-func (t *clusterRequestReconcilerTask) updateClusterTemplateMatchStatus(
-	ctx context.Context, inputError error) error {
-
-	t.object.Status.ClusterTemplateInputValidation.InputMatchesTemplate = true
-	t.object.Status.ClusterTemplateInputValidation.InputMatchesTemplateError = ""
-
-	if inputError != nil {
-		t.object.Status.ClusterTemplateInputValidation.InputMatchesTemplate = false
-		t.object.Status.ClusterTemplateInputValidation.InputMatchesTemplateError = inputError.Error()
-	}
-
-	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
-}
-*/
 
 // updateRenderTemplateStatus update the status of the ClusterRequest object (CR).
 func (t *clusterRequestReconcilerTask) updateRenderTemplateStatus(
@@ -741,9 +757,13 @@ func (t *clusterRequestReconcilerTask) updateRenderTemplateAppliedStatus(
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
-// updateClusterTemplateMatchStatus update the status of the ClusterTemplate object (CR).
+// updateInstallationResourcesStatus update the status of the ClusterTemplate object (CR).
 func (t *clusterRequestReconcilerTask) updateInstallationResourcesStatus(
 	ctx context.Context, inputError error) error {
+
+	if t.object.Status.ClusterInstallationResources == nil {
+		t.object.Status.ClusterInstallationResources = &oranv1alpha1.ClusterInstallationResources{}
+	}
 
 	t.object.Status.ClusterInstallationResources.ResourcesCreatedSuccessfully = true
 	t.object.Status.ClusterInstallationResources.ErrorCreatingResources = ""
@@ -756,26 +776,286 @@ func (t *clusterRequestReconcilerTask) updateInstallationResourcesStatus(
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
+func (r *ClusterRequestReconciler) finalizeClusterRequest(
+	ctx context.Context, clusterRequest *oranv1alpha1.ClusterRequest) error {
+
+	// If the ClusterInstance has been created, delete it. The SiteConfig operator
+	// will also delete the namespace.
+	if clusterRequest.Status.RenderedTemplateStatus != nil {
+		if clusterRequest.Status.RenderedTemplateStatus.RenderedTemplateApplied {
+			clusterInstanceName := clusterRequest.Status.ClusterInstanceStatus.Name
+
+			clusterInstance := &unstructured.Unstructured{}
+			clusterInstance.SetGroupVersionKind(schema.GroupVersionKind{
+				Kind:    "ClusterInstance",
+				Group:   "siteconfig.open-cluster-management.io",
+				Version: "v1alpha1",
+			})
+			clusterInstance.SetName(clusterInstanceName)
+			clusterInstance.SetNamespace(clusterInstanceName)
+
+			exists, err := utils.DoesK8SResourceExist(
+				ctx,
+				r.Client,
+				clusterRequest.Status.ClusterInstanceStatus.Name,
+				clusterRequest.Status.ClusterInstanceStatus.Name,
+				clusterInstance,
+			)
+
+			if err != nil {
+				return err
+			}
+
+			if exists {
+				err := r.Client.Delete(ctx, clusterInstance)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// If the namespace exists, delete it.
+	if clusterRequest.Status.ClusterInstanceStatus != nil {
+		namespace := &corev1.Namespace{}
+		exists, err := utils.DoesK8SResourceExist(
+			ctx,
+			r.Client,
+			clusterRequest.Status.ClusterInstanceStatus.Name,
+			clusterRequest.Status.ClusterInstanceStatus.Name,
+			namespace,
+		)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			return r.Client.Delete(ctx, namespace)
+		}
+	}
+	return nil
+}
+
+func (r *ClusterRequestReconciler) handleFinalizer(
+	ctx context.Context, clusterRequest *oranv1alpha1.ClusterRequest) (ctrl.Result, bool, error) {
+
+	// Check if the ClusterRequest is marked to be deleted, which is
+	// indicated by the deletion timestamp being set.
+	if clusterRequest.DeletionTimestamp.IsZero() {
+		// Check and add finalizer for this CR.
+		if !controllerutil.ContainsFinalizer(clusterRequest, clusterRequestFinalizer) {
+			controllerutil.AddFinalizer(clusterRequest, clusterRequestFinalizer)
+			// Update and requeue since the finalizer has been added.
+			return ctrl.Result{Requeue: true}, true, r.Update(ctx, clusterRequest)
+		}
+		return ctrl.Result{}, false, nil
+	} else if controllerutil.ContainsFinalizer(clusterRequest, clusterRequestFinalizer) {
+		// Run finalization logic for clusterRequestFinalizer. If the finalization logic
+		// fails, don't remove the finalizer so that we can retry during the next reconciliation.
+		if err := r.finalizeClusterRequest(ctx, clusterRequest); err != nil {
+			return ctrl.Result{}, true, err
+		}
+
+		// Remove clusterInstanceFinalizer. Once all finalizers have been
+		// removed, the object will be deleted.
+		r.Logger.Info("Removing ClusterRequest finalizer", "name", clusterRequest.Name)
+		patch := client.MergeFrom(clusterRequest.DeepCopy())
+		if controllerutil.RemoveFinalizer(clusterRequest, clusterRequestFinalizer) {
+			return ctrl.Result{}, true, r.Patch(ctx, clusterRequest, patch)
+		}
+	}
+	return ctrl.Result{}, false, nil
+}
+
+// updateClusterInstanceStatus updates the status for the created ClusterInstance
+func (t *clusterRequestReconcilerTask) updateClusterInstanceStatus(
+	ctx context.Context, clusterInstanceName string,
+	checkClusterInstance bool) error {
+
+	if t.object.Status.ClusterInstanceStatus == nil {
+		t.object.Status.ClusterInstanceStatus = &oranv1alpha1.ClusterInstanceStatus{}
+	}
+
+	t.object.Status.ClusterInstanceStatus.Name = clusterInstanceName
+
+	if !checkClusterInstance {
+		return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+	}
+
+	// Get the generated ClusterInstance and its status.
+	clusterInstance := &siteconfig.ClusterInstance{}
+	err := t.client.Get(
+		ctx,
+		types.NamespacedName{
+			Name:      t.object.Status.ClusterInstanceStatus.Name,
+			Namespace: t.object.Status.ClusterInstanceStatus.Name},
+		clusterInstance)
+	if err != nil {
+		return err
+	}
+
+	// Update the Provisioned condition type with the content of the Provisioned
+	// condition from the ClusterInstance, if it has been added.
+	provisionedCondition := meta.FindStatusCondition(
+		clusterInstance.Status.Conditions, "Provisioned")
+
+	if provisionedCondition != nil {
+		meta.SetStatusCondition(
+			&t.object.Status.ClusterInstanceStatus.Conditions,
+			*provisionedCondition,
+		)
+	} else {
+		meta.SetStatusCondition(
+			&t.object.Status.ClusterInstanceStatus.Conditions,
+			metav1.Condition{
+				Type:    "Provisioned",
+				Status:  "Unknown",
+				Reason:  "ProvisionedStatusMissing",
+				Message: "ClusterInstance is missing its Provisioned type condition",
+			},
+		)
+	}
+
+	err = utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+	if err != nil {
+		return err
+	}
+
+	// Combine the Hive ClusterInstall conditions to determine if the install has
+	// failed. Look at the stopped, completed and failed condition to make a
+	// decision.
+	// For more details: https://github.com/openshift/hive/blob/master/pkg/controller/clusterdeployment/clusterinstalls.go
+	var deploymentCompletedCondition *hivev1.ClusterDeploymentCondition
+	var deploymentFailedCondition *hivev1.ClusterDeploymentCondition
+	var deploymentStoppedCondition *hivev1.ClusterDeploymentCondition
+
+	for _, deploymentCondition := range clusterInstance.Status.DeploymentConditions {
+		switch deploymentCondition.Type {
+		case hivev1.ClusterDeploymentConditionType(hivev1.ClusterInstallCompleted):
+			deploymentCompletedCondition = &deploymentCondition
+		case hivev1.ClusterDeploymentConditionType(hivev1.ClusterInstallFailed):
+			deploymentFailedCondition = &deploymentCondition
+		case hivev1.ClusterDeploymentConditionType(hivev1.ClusterInstallStopped):
+			deploymentStoppedCondition = &deploymentCondition
+		default:
+			continue
+		}
+	}
+
+	if deploymentCompletedCondition != nil &&
+		deploymentFailedCondition != nil &&
+		deploymentStoppedCondition != nil {
+		if
+		// Stopped + Failed = Final failure.
+		deploymentStoppedCondition.Status == corev1.ConditionTrue &&
+			deploymentFailedCondition.Status == corev1.ConditionTrue {
+			t.object.Status.ClusterInstanceStatus.ClusterInstallStatus = utils.ClusterFailed
+		} else if
+		// Stopped + Completed = Success.
+		deploymentStoppedCondition.Status == corev1.ConditionTrue &&
+			deploymentCompletedCondition.Status == corev1.ConditionTrue {
+			t.object.Status.ClusterInstanceStatus.ClusterInstallStatus = utils.ClusterCompleted
+		} else if
+		// Not Stopped + Not Completed + Not Failed = In progress.
+		deploymentStoppedCondition.Status != corev1.ConditionTrue &&
+			deploymentCompletedCondition.Status != corev1.ConditionTrue &&
+			deploymentFailedCondition.Status != corev1.ConditionTrue {
+			t.object.Status.ClusterInstanceStatus.ClusterInstallStatus = utils.ClusterInstalling
+		}
+	}
+
+	err = utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+	if err != nil {
+		return err
+	}
+
+	// Check the managed cluster for updating the ztpDone status.
+	managedCluster := &clusterv1.ManagedCluster{}
+	managedClusterExists, err := utils.DoesK8SResourceExist(
+		ctx, t.client,
+		t.object.Status.ClusterInstanceStatus.Name,
+		t.object.Status.ClusterInstanceStatus.Name,
+		managedCluster,
+	)
+	if err != nil {
+		return err
+	}
+
+	if managedClusterExists {
+		// If the ztp-done label exists, update the status to completed.
+		labels := managedCluster.GetLabels()
+		_, hasZtpDone := labels[ztpDoneLabel]
+		if hasZtpDone {
+			t.object.Status.ClusterInstanceStatus.ZtpStatus = utils.ClusterZtpDone
+		} else {
+			t.object.Status.ClusterInstanceStatus.ZtpStatus = utils.ClusterZtpNotDone
+		}
+	}
+
+	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+}
+
+// findClusterInstanceForClusterRequest maps the ClusterInstance created by a
+// a ClusterRequest to a reconciliation request.
+func (r *ClusterRequestReconciler) findClusterInstanceForClusterRequest(
+	ctx context.Context, event event.UpdateEvent,
+	queue workqueue.RateLimitingInterface) {
+
+	newClusterInstance := event.ObjectNew.(*siteconfig.ClusterInstance)
+
+	// Get all the ClusterRequests.
+	clusterRequests := &oranv1alpha1.ClusterRequestList{}
+	err := r.Client.List(ctx, clusterRequests)
+	if err != nil {
+		r.Logger.Error("Error listing ClusterRequests. ", "Error: ", err)
+	}
+
+	// Create reconciling requests only for the ClusterRequest that has generated
+	// the current ClusterInstance.
+	// ToDo: Filter on future conditions that the ClusterRequest is interested in.
+	for _, clusterRequest := range clusterRequests.Items {
+		if clusterRequest.Status.ClusterInstanceStatus != nil {
+			if clusterRequest.Status.ClusterInstanceStatus.Name == newClusterInstance.Name {
+				r.Logger.Info(
+					"[findClusterInstanceForClusterRequest] Add new reconcile request for ClusterRequest",
+					"name", clusterRequest.Name)
+				queue.Add(
+					reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Namespace: clusterRequest.Namespace,
+							Name:      clusterRequest.Name,
+						},
+					},
+				)
+			}
+		}
+	}
+}
+
 // findClusterRequestsForClusterTemplate maps the ClusterTemplates used by ClusterRequests
 // to reconciling requests for those ClusterRequests.
 func (r *ClusterRequestReconciler) findClusterRequestsForClusterTemplate(
-	ctx context.Context, clusterTemplate client.Object) []reconcile.Request {
+	ctx context.Context, event event.UpdateEvent,
+	queue workqueue.RateLimitingInterface) {
 
-	// Empty array of reconciling requests.
-	reqs := make([]reconcile.Request, 0)
+	// For this case we can use either new or old object.
+	newClusterTemplate := event.ObjectNew.(*oranv1alpha1.ClusterTemplate)
+
 	// Get all the clusterRequests.
 	clusterRequests := &oranv1alpha1.ClusterRequestList{}
-	err := r.Client.List(ctx, clusterRequests, client.InNamespace(clusterTemplate.GetNamespace()))
+	err := r.Client.List(ctx, clusterRequests, client.InNamespace(newClusterTemplate.GetNamespace()))
 	if err != nil {
-		return reqs
+		r.Logger.Error("Error listing ClusterRequests. ", "Error: ", err)
 	}
 
 	// Create reconciling requests only for the clusterRequests that are using the
 	// current clusterTemplate.
 	for _, clusterRequest := range clusterRequests.Items {
-		if clusterRequest.Spec.ClusterTemplateRef == clusterTemplate.GetName() {
-			reqs = append(
-				reqs,
+		if clusterRequest.Spec.ClusterTemplateRef == newClusterTemplate.GetName() {
+			r.Logger.Info(
+				"[findClusterRequestsForClusterTemplate] Add new reconcile request for ClusterRequest",
+				"name", clusterRequest.Name)
+			queue.Add(
 				reconcile.Request{
 					NamespacedName: types.NamespacedName{
 						Namespace: clusterRequest.Namespace,
@@ -785,8 +1065,41 @@ func (r *ClusterRequestReconciler) findClusterRequestsForClusterTemplate(
 			)
 		}
 	}
+}
 
-	return reqs
+// findManagedClusterForClusterRequest maps the ManagedClusters created
+// by ClusterInstances through ClusterRequests.
+func (r *ClusterRequestReconciler) findManagedClusterForClusterRequest(
+	ctx context.Context, event event.UpdateEvent,
+	queue workqueue.RateLimitingInterface) {
+
+	// For this case we can use either new or old object.
+	newManagedCluster := event.ObjectNew.(*clusterv1.ManagedCluster)
+
+	// Get all the clusterRequests.
+	clusterRequests := &oranv1alpha1.ClusterRequestList{}
+	err := r.Client.List(ctx, clusterRequests)
+	if err != nil {
+		r.Logger.Error("Error listing ClusterRequests. ", "Error: ", err)
+	}
+
+	// Create reconciling requests only for the clusterRequests that have
+	// the same name as the ManagedCluster.
+	for _, clusterRequest := range clusterRequests.Items {
+		if clusterRequest.Spec.ClusterTemplateRef == newManagedCluster.GetName() {
+			r.Logger.Info(
+				"[findManagedClusterForClusterRequest] Add new reconcile request for ClusterRequest",
+				"name", clusterRequest.Name)
+			queue.Add(
+				reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Namespace: clusterRequest.Namespace,
+						Name:      clusterRequest.Name,
+					},
+				},
+			)
+		}
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -799,14 +1112,72 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
 			&oranv1alpha1.ClusterTemplate{},
-			handler.EnqueueRequestsFromMapFunc(r.findClusterRequestsForClusterTemplate),
+			handler.Funcs{UpdateFunc: r.findClusterRequestsForClusterTemplate},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Watch on spec changes.
 					return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 				},
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
+		Watches(
+			&siteconfig.ClusterInstance{},
+			handler.Funcs{
+				UpdateFunc: r.findClusterInstanceForClusterRequest,
+			},
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Watch on status changes.
+					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
+				},
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
+		Watches(
+			&clusterv1.ManagedCluster{},
+			handler.Funcs{
+				UpdateFunc: r.findManagedClusterForClusterRequest,
+			},
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Check if the event was adding the label "ztp-done".
+					// Return true for that event only, and false for everything else.
+					_, doneLabelExistsInOld := e.ObjectOld.GetLabels()[ztpDoneLabel]
+					_, doneLabelExistsInNew := e.ObjectNew.GetLabels()[ztpDoneLabel]
+
+					doneLabelAdded := !doneLabelExistsInOld && doneLabelExistsInNew
+
+					var availableInNew, availableInOld bool
+					availableCondition := meta.FindStatusCondition(
+						e.ObjectOld.(*clusterv1.ManagedCluster).Status.Conditions,
+						clusterv1.ManagedClusterConditionAvailable)
+					if availableCondition != nil && availableCondition.Status == metav1.ConditionTrue {
+						availableInOld = true
+					}
+					availableCondition = meta.FindStatusCondition(
+						e.ObjectNew.(*clusterv1.ManagedCluster).Status.Conditions,
+						clusterv1.ManagedClusterConditionAvailable)
+					if availableCondition != nil && availableCondition.Status == metav1.ConditionTrue {
+						availableInNew = true
+					}
+
+					var hubAccepted bool
+					acceptedCondition := meta.FindStatusCondition(
+						e.ObjectNew.(*clusterv1.ManagedCluster).Status.Conditions,
+						clusterv1.ManagedClusterConditionHubAccepted)
+					if acceptedCondition != nil && acceptedCondition.Status == metav1.ConditionTrue {
+						hubAccepted = true
+					}
+
+					return (doneLabelAdded && availableInNew && hubAccepted) ||
+						(!availableInOld && availableInNew && doneLabelExistsInNew && hubAccepted)
+				},
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc:  func(de event.DeleteEvent) bool { return false },
 			})).
 		Complete(r)
 }

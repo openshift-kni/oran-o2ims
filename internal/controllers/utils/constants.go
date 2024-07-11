@@ -83,3 +83,12 @@ const (
 	ClusterInstanceTemplateConfigmapNamespace      = ORANO2IMSNamespace
 	ClusterInstanceTemplateDefaultsConfigmapSuffix = "clusterinstance-defaults"
 )
+
+// ClusterInstance status
+const (
+	ClusterInstalling = "In progress"
+	ClusterCompleted  = "Completed"
+	ClusterFailed     = "Failed"
+	ClusterZtpDone    = "ZTP Done"
+	ClusterZtpNotDone = "ZTP Not Done"
+)

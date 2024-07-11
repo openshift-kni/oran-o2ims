@@ -21,6 +21,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -45,6 +46,7 @@ func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
 		WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).
 		WithStatusSubresource(&oranv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&oranv1alpha1.ClusterRequest{}).
+		WithStatusSubresource(&siteconfig.ClusterInstance{}).
 		Build(), nil
 }
 
@@ -83,4 +85,6 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceList{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.Deployment{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
+	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstance{})
+	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstanceList{})
 })

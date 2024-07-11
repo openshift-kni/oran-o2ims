@@ -97,30 +97,28 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 }
 
 func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
-	// Set the default reconcile time to 5 minutes.
-	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
-
 	// Check if the inputDataSchema is in a JSON format; the schema itself is not of importance.
-	err = t.validateInputDataSchema()
+	validationErr := t.validateInputDataSchema()
 
-	// If there is an error, log it and set the reconciliation to 30 seconds.
-	if err != nil {
+	// If there is an error, log it and return with error.
+	if validationErr != nil {
 		t.logger.ErrorContext(
 			ctx,
 			"inputDataSchema is not in a JSON format",
 		)
-		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
+		validationErr = fmt.Errorf(
+			"failed to validate inputDataSchema: %s", validationErr.Error())
 	}
 
 	// Update the ClusterTemplate status.
-	err = t.updateClusterTemplateStatus(ctx, err)
+	err = t.updateClusterTemplateStatus(ctx, validationErr)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to update status for ClusterTemplate",
 			slog.String("name", t.object.Name),
 		)
-		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
+		return
 	}
 
 	return
