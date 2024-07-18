@@ -35,6 +35,8 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/spf13/cobra"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 // ControllerManager creates and returns the `start controller-manager` command.
@@ -97,6 +99,8 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(oranv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(siteconfig.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.

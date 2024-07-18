@@ -88,11 +88,6 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 
 	bmcCredentialsDetails := bmcCredentialsDetailsInterface.(map[string]interface{})
 
-	oranUtilsLog.Info(
-		"[getBMCDetailsForClusterInstance]",
-		"bmcCredentialsDetails: "+fmt.Sprintf("%v", bmcCredentialsDetails),
-	)
-
 	// Get the BMC username and password.
 	username, usernameExists := bmcCredentialsDetails["username"].(string)
 	if !usernameExists {
@@ -156,7 +151,7 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	objectType := reflect.TypeOf(newObject).Elem()
 	oldObject := reflect.New(objectType).Interface().(client.Object)
 
-	// If the newObject is unstructured, we need to copy the GVK to the oldObject
+	// If the newObject is unstructured, we need to copy the GVK to the oldObject.
 	if unstructuredObj, ok := newObject.(*unstructured.Unstructured); ok {
 		oldUnstructuredObj := oldObject.(*unstructured.Unstructured)
 		oldUnstructuredObj.SetGroupVersionKind(unstructuredObj.GroupVersionKind())
@@ -169,7 +164,10 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	// If the CR already exists, patch it or update it.
 	if err != nil {
 		if errors.IsNotFound(err) {
-			oranUtilsLog.Info("[CreateK8sCR] CR not found, CREATE it")
+			oranUtilsLog.Info(
+				"[CreateK8sCR] CR not found, CREATE it",
+				"name", newObject.GetName(),
+				"namespace", newObject.GetNamespace())
 			err = c.Create(ctx, newObject)
 			if err != nil {
 				return err
@@ -180,10 +178,14 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	} else {
 		newObject.SetResourceVersion(oldObject.GetResourceVersion())
 		if operation == PATCH {
-			oranUtilsLog.Info("[CreateK8sCR] CR already present, PATCH it")
+			oranUtilsLog.Info("[CreateK8sCR] CR already present, PATCH it",
+				"name", newObject.GetName(),
+				"namespace", newObject.GetNamespace())
 			return c.Patch(ctx, oldObject, client.MergeFrom(newObject))
 		} else if operation == UPDATE {
-			oranUtilsLog.Info("[CreateK8sCR] CR already present, UPDATE it")
+			oranUtilsLog.Info("[CreateK8sCR] CR already present, UPDATE it",
+				"name", newObject.GetName(),
+				"namespace", newObject.GetNamespace())
 			return c.Update(ctx, newObject)
 		}
 	}
@@ -197,14 +199,14 @@ func DoesK8SResourceExist(ctx context.Context, c client.Client, Name string, Nam
 	if err != nil {
 		if errors.IsNotFound(err) {
 			oranUtilsLog.Info("[doesK8SResourceExist] Resource not found, create it. ",
-				"Type: ", reflect.TypeOf(obj), "Name: ", Name, "Namespace: ", Namespace)
+				"name", Name, "namespace", Namespace)
 			return false, nil
 		} else {
 			return false, err
 		}
 	} else {
 		oranUtilsLog.Info("[doesK8SResourceExist] Resource already present, return. ",
-			"Type: ", reflect.TypeOf(obj), "Name: ", Name, "Namespace: ", Namespace)
+			"name", Name, "namespace", Namespace)
 		return true, nil
 	}
 }

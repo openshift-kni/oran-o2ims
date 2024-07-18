@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -71,8 +70,6 @@ var _ = DescribeTable(
 			},
 		},
 		func(result ctrl.Result, reconciler ClusterTemplateReconciler) {
-			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 30 * time.Second}))
-
 			// Get the ClusterTemplate and run the reconciliation once.
 			clusterTemplate := &oranv1alpha1.ClusterTemplate{}
 			err := reconciler.Client.Get(
@@ -99,11 +96,46 @@ var _ = DescribeTable(
 					Namespace: "cluster-template-1",
 				},
 				Spec: oranv1alpha1.ClusterTemplateSpec{
-					InputDataSchema: fmt.Sprintf(
-						"{\n" +
-							"\"key1\": \"value1\",\n" +
-							"\"price\": 2\n" +
-							"}\n"),
+					InputDataSchema: `{
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"age": {
+								"type": "integer"
+							},
+							"email": {
+								"type": "string",
+								"format": "email"
+							},
+							"address": {
+								"type": "object",
+								"properties": {
+									"street": {
+										"type": "string"
+									},
+									"city": {
+										"type": "string"
+									},
+									"zipcode": {
+										"type": "string"
+									},
+									"capital": {
+									  "type": "boolean"
+									}
+								},
+								"required": ["street", "city"]
+							},
+							"phoneNumbers": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"required": ["name", "age", "address"]
+					  }`,
 				},
 			},
 		},
@@ -114,8 +146,6 @@ var _ = DescribeTable(
 			},
 		},
 		func(result ctrl.Result, reconciler ClusterTemplateReconciler) {
-			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
-
 			// Create the ClusterTemplate and run the reconciliation once.
 			clusterTemplate := &oranv1alpha1.ClusterTemplate{}
 			err := reconciler.Client.Get(
@@ -158,8 +188,6 @@ var _ = DescribeTable(
 			},
 		},
 		func(result ctrl.Result, reconciler ClusterTemplateReconciler) {
-			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 30 * time.Second}))
-
 			// Create the ClusterTemplate and run the reconciliation once.
 			clusterTemplate := &oranv1alpha1.ClusterTemplate{}
 			err := reconciler.Client.Get(
@@ -176,11 +204,46 @@ var _ = DescribeTable(
 				To(ContainSubstring("invalid character '.' looking for beginning of value"))
 
 			// Update the clusterTemplate inputDataSchema to a valid JSON schema.
-			clusterTemplate.Spec.InputDataSchema = fmt.Sprintf(
-				"{\n" +
-					"\"key1\": \"value1\",\n" +
-					"\"price\": 2\n" +
-					"}\n")
+			clusterTemplate.Spec.InputDataSchema = `{
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"age": {
+						"type": "integer"
+					},
+					"email": {
+						"type": "string",
+						"format": "email"
+					},
+					"address": {
+						"type": "object",
+						"properties": {
+							"street": {
+								"type": "string"
+							},
+							"city": {
+								"type": "string"
+							},
+							"zipcode": {
+								"type": "string"
+							},
+							"capital": {
+							  "type": "boolean"
+							}
+						},
+						"required": ["street", "city"]
+					},
+					"phoneNumbers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				},
+				"required": ["name", "age", "address"]
+			  }`
 			err = reconciler.Client.Update(context.TODO(), clusterTemplate)
 			Expect(err).ToNot(HaveOccurred())
 

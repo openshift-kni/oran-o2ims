@@ -61,6 +61,17 @@ type ClusterInstallationResources struct {
 	ErrorCreatingResources string `json:"errorCreatingResources,omitempty"`
 }
 
+type ClusterInstanceStatus struct {
+	// Contains the name of the created ClusterInstance.
+	Name string `json:"name,omitempty"`
+	// Holds relevant conditions from the ClusterInstance.
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// Holds the status of the cluster deployment.
+	ClusterInstallStatus string `json:"clusterInstallStatus,omitempty"`
+	// Says if ZTP has complete or not.
+	ZtpStatus string `json:"ztpStatus,omitempty"`
+}
+
 // ClusterRequestStatus defines the observed state of ClusterRequest
 type ClusterRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -73,7 +84,10 @@ type ClusterRequestStatus struct {
 	RenderedTemplateStatus *RenderedTemplateStatus `json:"renderedTemplateStatus,omitempty"`
 
 	// Contains details about the creation of the resources needed by the ClusterInstance.
-	ClusterInstallationResources ClusterInstallationResources `json:"clusterInstallationResources,omitempty"`
+	ClusterInstallationResources *ClusterInstallationResources `json:"clusterInstallationResources,omitempty"`
+
+	// ClusterInstanceStatus holds status details about the ClusterInstance.
+	ClusterInstanceStatus *ClusterInstanceStatus `json:"clusterInstanceStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
