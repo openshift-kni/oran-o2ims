@@ -128,7 +128,7 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile 
 func (t *clusterTemplateReconcilerTask) validateInputDataSchema() (err error) {
 
 	var jsonInputDataSchema json.RawMessage
-	return json.Unmarshal([]byte(t.object.Spec.InputDataSchema), &jsonInputDataSchema)
+	return json.Unmarshal([]byte(t.object.Spec.InputDataSchema.ClusterInstanceSchema), &jsonInputDataSchema)
 }
 
 // updateClusterTemplateStatus update the status of the ClusterTemplate object (CR).

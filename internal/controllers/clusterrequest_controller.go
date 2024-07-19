@@ -129,7 +129,7 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 	// ### JSON VALIDATION ###
 
 	// Check if the clusterTemplateInput is in a JSON format; the schema itself is not of importance.
-	validationErr := utils.ValidateInputDataSchema(t.object.Spec.ClusterTemplateInput)
+	validationErr := utils.ValidateInputDataSchema(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput)
 	if validationErr != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -271,13 +271,17 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		slog.String("name", t.object.Name),
 	)
 	clusterTemplateInputMap := make(map[string]any)
-	err := utils.UnmarshalYAMLOrJSONString(t.object.Spec.ClusterTemplateInput, &clusterTemplateInputMap)
+	err := utils.UnmarshalYAMLOrJSONString(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput, &clusterTemplateInputMap)
 	if err != nil {
 		return nil, fmt.Errorf("the clusterTemplateInput is not in a valid JSON format, err: %w", err)
 	}
 
-	ctClusterInstanceDefaultsCmName := fmt.Sprintf(
-		"%s-%s", t.object.Spec.ClusterTemplateRef, utils.ClusterInstanceTemplateDefaultsConfigmapSuffix)
+	clusterTemplate, err := t.getCrClusterTemplateRef(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the ClusterTemplate for ClusterRequest %s: %w ", t.object.Name, err)
+	}
+
+	ctClusterInstanceDefaultsCmName := clusterTemplate.Spec.Templates.ClusterInstanceDefaults
 	t.logger.InfoContext(
 		ctx,
 		fmt.Sprintf(
@@ -305,7 +309,7 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 	// Validate that the mergedClusterInstanceMap matches the ClusterTemplate referenced
 	// in the ClusterRequest.
 	err = t.validateClusterTemplateInputMatchesClusterTemplate(
-		ctx, mergedClusterInstanceData["Cluster"].(map[string]any))
+		ctx, clusterTemplate, mergedClusterInstanceData["Cluster"].(map[string]any))
 	if err != nil {
 		return nil, fmt.Errorf(
 			fmt.Sprintf(
@@ -595,7 +599,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 
 	// The BMC credential details are for now obtained from the ClusterRequest.
 	var inputData map[string]interface{}
-	err := json.Unmarshal([]byte(t.object.Spec.ClusterTemplateInput), &inputData)
+	err := json.Unmarshal([]byte(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput), &inputData)
 	if err != nil {
 		return err
 	}
@@ -642,11 +646,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 	return nil
 }
 
-// validateClusterTemplateInput validates if the clusterTemplateInput matches the
-// inputDataSchema of the ClusterTemplate
-func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesClusterTemplate(
-	ctx context.Context, clusterInstanceData map[string]any) error {
-
+func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Context) (*oranv1alpha1.ClusterTemplate, error) {
 	// Check the clusterTemplateRef references an existing template in the same namespace
 	// as the current clusterRequest.
 	clusterTemplateRef := &oranv1alpha1.ClusterTemplate{}
@@ -660,7 +660,7 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 			"Error obtaining the ClusterTemplate referenced by ClusterTemplateRef",
 			slog.String("clusterTemplateRef", t.object.Spec.ClusterTemplateRef),
 		)
-		return err
+		return nil, err
 	}
 
 	// If the referenced ClusterTemplate does not exist, log and return an appropriate error.
@@ -673,8 +673,15 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 		t.logger.ErrorContext(
 			ctx,
 			err.Error())
-		return err
+		return nil, err
 	}
+	return clusterTemplateRef, nil
+}
+
+// validateClusterTemplateInput validates if the clusterTemplateInput matches the
+// inputDataSchema of the ClusterTemplate
+func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesClusterTemplate(
+	ctx context.Context, clusterTemplateRef *oranv1alpha1.ClusterTemplate, clusterInstanceData map[string]any) error {
 
 	// Get the input data in string format.
 	jsonString, err := json.Marshal(clusterInstanceData)
@@ -690,7 +697,7 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 
 	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
 	err = utils.ValidateJsonAgainstJsonSchema(
-		clusterTemplateRef.Spec.InputDataSchema, string(jsonString))
+		clusterTemplateRef.Spec.InputDataSchema.ClusterInstanceSchema, string(jsonString))
 
 	if err != nil {
 		t.logger.ErrorContext(
