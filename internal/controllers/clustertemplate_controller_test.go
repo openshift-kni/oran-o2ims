@@ -54,12 +54,14 @@ var _ = DescribeTable(
 					Namespace: "cluster-template-1",
 				},
 				Spec: oranv1alpha1.ClusterTemplateSpec{
-					InputDataSchema: fmt.Sprintf(
-						".metadata.labels[\"name\"] as $name |\n" +
-							"{\n" +
-							"  name: $name,\n" +
-							"  alias: $name\n" +
-							"}\n"),
+					InputDataSchema: oranv1alpha1.InputDataSchema{
+						ClusterInstanceSchema: fmt.Sprintf(
+							".metadata.labels[\"name\"] as $name |\n" +
+								"{\n" +
+								"  name: $name,\n" +
+								"  alias: $name\n" +
+								"}\n"),
+					},
 				},
 			},
 		},
@@ -96,7 +98,8 @@ var _ = DescribeTable(
 					Namespace: "cluster-template-1",
 				},
 				Spec: oranv1alpha1.ClusterTemplateSpec{
-					InputDataSchema: `{
+					InputDataSchema: oranv1alpha1.InputDataSchema{
+						ClusterInstanceSchema: `{
 						"type": "object",
 						"properties": {
 							"name": {
@@ -136,6 +139,7 @@ var _ = DescribeTable(
 						},
 						"required": ["name", "age", "address"]
 					  }`,
+					},
 				},
 			},
 		},
@@ -172,12 +176,14 @@ var _ = DescribeTable(
 					Namespace: "cluster-template-1",
 				},
 				Spec: oranv1alpha1.ClusterTemplateSpec{
-					InputDataSchema: fmt.Sprintf(
-						".metadata.labels[\"name\"] as $name |\n" +
-							"{\n" +
-							"  name: $name,\n" +
-							"  alias: $name\n" +
-							"}\n"),
+					InputDataSchema: oranv1alpha1.InputDataSchema{
+						ClusterInstanceSchema: fmt.Sprintf(
+							".metadata.labels[\"name\"] as $name |\n" +
+								"{\n" +
+								"  name: $name,\n" +
+								"  alias: $name\n" +
+								"}\n"),
+					},
 				},
 			},
 		},
@@ -204,7 +210,7 @@ var _ = DescribeTable(
 				To(ContainSubstring("invalid character '.' looking for beginning of value"))
 
 			// Update the clusterTemplate inputDataSchema to a valid JSON schema.
-			clusterTemplate.Spec.InputDataSchema = `{
+			clusterTemplate.Spec.InputDataSchema.ClusterInstanceSchema = `{
 				"type": "object",
 				"properties": {
 					"name": {

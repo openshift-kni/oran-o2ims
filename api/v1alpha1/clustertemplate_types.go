@@ -28,9 +28,24 @@ type ClusterTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// JSON formatted string that includes the schema for the ClusterTemplate.
-	// Required values should be explicitly defined.
-	InputDataSchema string `json:"inputDataSchema"`
+	Templates       Templates       `json:"templates"`
+	InputDataSchema InputDataSchema `json:"inputDataSchema"`
+}
+
+// Templates defines the references to the templates required for ClusterTemplate.
+type Templates struct {
+	// ClusterInstanceDefaults defines a reference to a configmap with default values for ClusterInstance
+	ClusterInstanceDefaults string `json:"clusterInstanceDefaults"`
+}
+
+// InputDataSchema encapsulates all the schemas required for ClusterTemplate.
+type InputDataSchema struct {
+	// ClusterInstanceParams is a JSON-formatted string that defines the parameters required for provisioning.
+	// The parameter definitions should follow the OpenAPI V3 schema and explicitly define required fields.
+	ClusterInstanceSchema string `json:"clusterInstanceSchema"`
+
+	// TODO: Additional parameters can be added here
+	// PolicyTemplateSchema
 }
 
 type ClusterTemplateValidation struct {

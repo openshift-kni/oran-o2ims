@@ -1103,12 +1103,14 @@ var _ = DescribeTable(
 				},
 				Spec: oranv1alpha1.ClusterRequestSpec{
 					ClusterTemplateRef: "cluster-template",
-					ClusterTemplateInput: `
-							"name": "Bob",
-							"age": 35,
-							"email": "bob@example.com",
-							"phoneNumbers": ["123-456-7890", "987-654-3210"]
-						  }`,
+					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+						ClusterInstanceInput: `
+								"name": "Bob",
+								"age": 35,
+								"email": "bob@example.com",
+								"phoneNumbers": ["123-456-7890", "987-654-3210"]
+							}`,
+					},
 				},
 			},
 		},

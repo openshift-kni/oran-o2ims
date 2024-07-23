@@ -30,8 +30,18 @@ type ClusterRequestSpec struct {
 
 	// Reference to an existing clusterTemplate CR.
 	ClusterTemplateRef string `json:"clusterTemplateRef"`
-	// JSON Schema input used for the clusterTemplateRef.
-	ClusterTemplateInput string `json:"clusterTemplateInput"`
+
+	ClusterTemplateInput ClusterTemplateInput `json:"clusterTemplateInput"`
+}
+
+// ClusterTemplateInput provides the input data that follows the schema defined in the referenced ClusterTemplate.
+type ClusterTemplateInput struct {
+	// ClusterInstanceInput is a JSON-formatted string that defines the input values required for provisioning.
+	// The input follows the schema defined in the referenced ClusterTemplate's spec.inputDataSchema.clusterInstanceSchema.
+	ClusterInstanceInput string `json:"clusterInstanceInput"`
+
+	// TODO: Additional parameters will be added here
+	// PolicyTemplateInput
 }
 
 type ClusterTemplateInputValidation struct {

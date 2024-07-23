@@ -35,11 +35,32 @@ spec:
             description: ClusterTemplateSpec defines the desired state of ClusterTemplate
             properties:
               inputDataSchema:
-                description: JSON formatted string that includes the schema for the
-                  ClusterTemplate. Required values should be explicitly defined.
-                type: string
+                description: InputDataSchema encapsulates all the schemas required
+                  for ClusterTemplate.
+                properties:
+                  clusterInstanceSchema:
+                    description: ClusterInstanceParams is a JSON-formatted string
+                      that defines the parameters required for provisioning. The parameter
+                      definitions should follow the OpenAPI V3 schema and explicitly
+                      define required fields.
+                    type: string
+                required:
+                - clusterInstanceSchema
+                type: object
+              templates:
+                description: Templates defines the references to the templates required
+                  for ClusterTemplate.
+                properties:
+                  clusterInstanceDefaults:
+                    description: ClusterInstanceDefaults defines a reference to a
+                      configmap with default values for ClusterInstance
+                    type: string
+                required:
+                - clusterInstanceDefaults
+                type: object
             required:
             - inputDataSchema
+            - templates
             type: object
           status:
             description: ClusterTemplateStatus defines the observed state of ClusterTemplate

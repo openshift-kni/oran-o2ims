@@ -35,8 +35,18 @@ spec:
             description: ClusterRequestSpec defines the desired state of ClusterRequest
             properties:
               clusterTemplateInput:
-                description: JSON Schema input used for the clusterTemplateRef.
-                type: string
+                description: ClusterTemplateInput provides the input data that follows
+                  the schema defined in the referenced ClusterTemplate.
+                properties:
+                  clusterInstanceInput:
+                    description: ClusterInstanceInput is a JSON-formatted string that
+                      defines the input values required for provisioning. The input
+                      follows the schema defined in the referenced ClusterTemplate's
+                      spec.inputDataSchema.clusterInstanceSchema.
+                    type: string
+                required:
+                - clusterInstanceInput
+                type: object
               clusterTemplateRef:
                 description: Reference to an existing clusterTemplate CR.
                 type: string
