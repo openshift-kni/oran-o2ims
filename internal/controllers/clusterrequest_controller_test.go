@@ -894,8 +894,7 @@ var _ = DescribeTable(
 		objs = append(objs, ns, nsSite)
 
 		// Get the fake client.
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
+		fakeClient := getFakeClientFromObjects(objs...)
 
 		// Initialize the O-RAN O2IMS reconciler.
 		r := &ClusterRequestReconciler{
