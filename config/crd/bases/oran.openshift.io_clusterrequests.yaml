@@ -39,11 +39,11 @@ spec:
                   the schema defined in the referenced ClusterTemplate.
                 properties:
                   clusterInstanceInput:
-                    description: ClusterInstanceInput is a JSON-formatted string that
-                      defines the input values required for provisioning. The input
-                      follows the schema defined in the referenced ClusterTemplate's
-                      spec.inputDataSchema.clusterInstanceSchema.
-                    type: string
+                    description: ClusterInstanceInput provides the input values required
+                      for provisioning. The input follows the schema defined in the
+                      referenced ClusterTemplate's spec.inputDataSchema.clusterInstanceSchema.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 required:
                 - clusterInstanceInput
                 type: object
@@ -157,20 +157,6 @@ spec:
                   ztpStatus:
                     description: Says if ZTP has complete or not.
                     type: string
-                type: object
-              clusterTemplateInputValidation:
-                description: Contains JSON schema and cluster template validation
-                  details.
-                properties:
-                  inputError:
-                    description: Holds the error in case the ClusterTemplateInput
-                      is invalid.
-                    type: string
-                  inputIsValid:
-                    description: Says if the ClusterTemplateInput is valid or not.
-                    type: boolean
-                required:
-                - inputIsValid
                 type: object
               renderedTemplateStatus:
                 description: Contains details about Cluster templating.

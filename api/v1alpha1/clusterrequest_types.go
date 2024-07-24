@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -36,9 +37,11 @@ type ClusterRequestSpec struct {
 
 // ClusterTemplateInput provides the input data that follows the schema defined in the referenced ClusterTemplate.
 type ClusterTemplateInput struct {
-	// ClusterInstanceInput is a JSON-formatted string that defines the input values required for provisioning.
+	// ClusterInstanceInput provides the input values required for provisioning.
 	// The input follows the schema defined in the referenced ClusterTemplate's spec.inputDataSchema.clusterInstanceSchema.
-	ClusterInstanceInput string `json:"clusterInstanceInput"`
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ClusterInstanceInput runtime.RawExtension `json:"clusterInstanceInput"`
 
 	// TODO: Additional parameters will be added here
 	// PolicyTemplateInput
@@ -86,9 +89,6 @@ type ClusterInstanceStatus struct {
 type ClusterRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Contains JSON schema and cluster template validation details.
-	ClusterTemplateInputValidation ClusterTemplateInputValidation `json:"clusterTemplateInputValidation,omitempty"`
 
 	// Contains details about Cluster templating.
 	RenderedTemplateStatus *RenderedTemplateStatus `json:"renderedTemplateStatus,omitempty"`

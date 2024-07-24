@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"log/slog"
@@ -72,7 +71,7 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Fetch the object:
 	object := &oranv1alpha1.ClusterTemplate{}
-	if err := r.Client.Get(ctx, req.NamespacedName, object); err != nil {
+	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
 			err = nil
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, err
@@ -82,6 +81,7 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			"Unable to fetch ClusterTemplate",
 			slog.String("error", err.Error()),
 		)
+		return
 	}
 
 	r.Logger.InfoContext(ctx, "[Reconcile Cluster Template] "+object.Name)
@@ -97,21 +97,10 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 }
 
 func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
-	// Check if the inputDataSchema is in a JSON format; the schema itself is not of importance.
-	validationErr := t.validateInputDataSchema()
-
-	// If there is an error, log it and return with error.
-	if validationErr != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"inputDataSchema is not in a JSON format",
-		)
-		validationErr = fmt.Errorf(
-			"failed to validate inputDataSchema: %s", validationErr.Error())
-	}
+	// TODO: check existence of referenced resources and add proper status condition
 
 	// Update the ClusterTemplate status.
-	err = t.updateClusterTemplateStatus(ctx, validationErr)
+	err = t.updateClusterTemplateStatus(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -124,24 +113,12 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (nextReconcile 
 	return
 }
 
-// validateInputDataSchema succeeds if intputDataSchema is in a JSON format.
-func (t *clusterTemplateReconcilerTask) validateInputDataSchema() (err error) {
-
-	var jsonInputDataSchema json.RawMessage
-	return json.Unmarshal([]byte(t.object.Spec.InputDataSchema.ClusterInstanceSchema), &jsonInputDataSchema)
-}
-
 // updateClusterTemplateStatus update the status of the ClusterTemplate object (CR).
 func (t *clusterTemplateReconcilerTask) updateClusterTemplateStatus(
-	ctx context.Context, inputError error) error {
+	ctx context.Context) error {
 
 	t.object.Status.ClusterTemplateValidation.ClusterTemplateIsValid = true
 	t.object.Status.ClusterTemplateValidation.ClusterTemplateError = ""
-
-	if inputError != nil {
-		t.object.Status.ClusterTemplateValidation.ClusterTemplateIsValid = false
-		t.object.Status.ClusterTemplateValidation.ClusterTemplateError = inputError.Error()
-	}
 
 	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
