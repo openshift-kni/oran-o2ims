@@ -1,0 +1,73 @@
+# All the values from this schema are of string type as they will
+# end up as key:value pairs in a ConfigMap.
+description: ACM PolicyGenerator schema
+properties:
+
+  # site specific config
+  site: # this is the name of the ConfigMap holding site specific configuration
+    description: Site specific configuration
+    properties:
+      sriov-network-vlan-1:
+        type: string
+      sriov-network-vlan-2:
+        type: string
+    type: object
+
+  # zoning specific config
+  zone: # this is the name of the ConfigMap holding zoning specific configuration
+    description: Zone specific configuration
+    properties:
+      # event.redhat-cne.org/v1alpha1: HardwareEvent
+      hwevent-logLevel:
+        type: string
+      # logging.openshift.io/v1: ClusterLogForwarder
+      cluster-log-fwd-outputs:
+        type: string
+      cluster-log-fwd-pipelines:
+        type: string
+      # storage.k8s.io/v1 StorageClass
+      storagepvc-storage:
+        type: string
+    type: object
+
+  # hw specific config
+  hw-type: # this is the name of the ConfigMap holding hw specific configuration
+    description: Hardware type specific configuration
+    properties:
+      # sriovfec.intel.com/v2: SriovFecClusterConfig
+      sriov-fec-pfDriver:
+        type: string
+      fec-vfDriver:
+        type: string
+      fec-pciAddress:
+        type: string
+      # sriovnetwork.openshift.io/v1: SriovNetworkNodePolicy
+      sriov-node-policy-pfNames-1:
+        type: string
+      sriov-node-policy-pfNames-2:
+        type: string
+      # performance.openshift.io/v2: PerformanceProfile
+      cpu-isolated:
+        type: string
+      cpu-reserved:
+        type: string
+      hugepages-default: 
+        type: string
+      hugepages-size: 
+        type: string
+      hugepages-count: 
+        type: string
+      # ptp.openshift.io/v1: PtpConfigSlave
+      ptpcfgslave-profile-interface: 
+        type: string
+      # local.storage.openshift.io/v1: LocalVolume (StorageLV)
+      storagelv-devicepaths-1: 
+        type: string
+      storagelv-devicepaths-2: 
+        type: string
+      # machineconfiguration.openshift.io/v1: MachineConfig (MachineConfigGeneric)
+      machine-config-storage-source-1: 
+        type: string
+      machine-config-storage-source-2: 
+        type: string
+    type: object
