@@ -90,7 +90,7 @@ func (r *ClusterRequestReconciler) Reconcile(
 
 	// Fetch the object:
 	object := &oranv1alpha1.ClusterRequest{}
-	if err := r.Client.Get(ctx, req.NamespacedName, object); err != nil {
+	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
 			err = nil
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, err
@@ -100,6 +100,7 @@ func (r *ClusterRequestReconciler) Reconcile(
 			"Unable to fetch Cluster Request",
 			slog.String("error", err.Error()),
 		)
+		return
 	}
 
 	r.Logger.InfoContext(ctx, "[Reconcile ClusterRequest]",
@@ -126,33 +127,6 @@ func (r *ClusterRequestReconciler) Reconcile(
 }
 
 func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
-	// ### JSON VALIDATION ###
-
-	// Check if the clusterTemplateInput is in a JSON format; the schema itself is not of importance.
-	validationErr := utils.ValidateInputDataSchema(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput)
-	if validationErr != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to validate the ClusterTemplateInput format",
-			slog.String("name", t.object.Name),
-			slog.String("error", validationErr.Error()),
-		)
-		validationErr = fmt.Errorf("failed to validate the ClusterTemplateInput format: %s", validationErr.Error())
-	}
-	// Update the ClusterRequest status.
-	err = t.updateClusterTemplateInputValidationStatus(ctx, validationErr)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to update the clusterTemplateInputValidation for ClusterRequest",
-			slog.String("name", t.object.Name),
-		)
-		return
-	}
-	if validationErr != nil {
-		return ctrl.Result{}, nil
-	}
-
 	// ### CLUSTERINSTANCE TEMPLATE RENDERING ###
 	renderedClusterInstance, renderErr := t.renderClusterInstanceTemplate(ctx)
 	if renderErr != nil {
@@ -271,7 +245,7 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		slog.String("name", t.object.Name),
 	)
 	clusterTemplateInputMap := make(map[string]any)
-	err := utils.UnmarshalYAMLOrJSONString(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput, &clusterTemplateInputMap)
+	err := json.Unmarshal(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput.Raw, &clusterTemplateInputMap)
 	if err != nil {
 		return nil, fmt.Errorf("the clusterTemplateInput is not in a valid JSON format, err: %w", err)
 	}
@@ -599,7 +573,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 
 	// The BMC credential details are for now obtained from the ClusterRequest.
 	var inputData map[string]interface{}
-	err := json.Unmarshal([]byte(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput), &inputData)
+	err := json.Unmarshal(t.object.Spec.ClusterTemplateInput.ClusterInstanceInput.Raw, &inputData)
 	if err != nil {
 		return err
 	}
@@ -697,7 +671,7 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 
 	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
 	err = utils.ValidateJsonAgainstJsonSchema(
-		clusterTemplateRef.Spec.InputDataSchema.ClusterInstanceSchema, string(jsonString))
+		string(clusterTemplateRef.Spec.InputDataSchema.ClusterInstanceSchema.Raw), string(jsonString))
 
 	if err != nil {
 		t.logger.ErrorContext(
@@ -711,21 +685,6 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 	}
 
 	return nil
-}
-
-// updateClusterTemplateInputValidationStatus update the status of the ClusterTemplate object (CR).
-func (t *clusterRequestReconcilerTask) updateClusterTemplateInputValidationStatus(
-	ctx context.Context, inputError error) error {
-
-	t.object.Status.ClusterTemplateInputValidation.InputIsValid = true
-	t.object.Status.ClusterTemplateInputValidation.InputError = ""
-
-	if inputError != nil {
-		t.object.Status.ClusterTemplateInputValidation.InputIsValid = false
-		t.object.Status.ClusterTemplateInputValidation.InputError = inputError.Error()
-	}
-
-	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
 }
 
 // updateRenderTemplateStatus update the status of the ClusterRequest object (CR).

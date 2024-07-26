@@ -3,7 +3,6 @@ package utils
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -42,12 +41,6 @@ func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Objec
 	}
 
 	return nil
-}
-
-// ValidateInputDataSchema succeeds if intputDataSchema is in a JSON format.
-func ValidateInputDataSchema(inputDataSchema string) (err error) {
-	var jsonInputDataSchema json.RawMessage
-	return json.Unmarshal([]byte(inputDataSchema), &jsonInputDataSchema)
 }
 
 func ValidateJsonAgainstJsonSchema(schema string, input string) error {
@@ -181,7 +174,7 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 			oranUtilsLog.Info("[CreateK8sCR] CR already present, PATCH it",
 				"name", newObject.GetName(),
 				"namespace", newObject.GetNamespace())
-			return c.Patch(ctx, oldObject, client.MergeFrom(newObject))
+			return c.Patch(ctx, newObject, client.MergeFrom(oldObject))
 		} else if operation == UPDATE {
 			oranUtilsLog.Info("[CreateK8sCR] CR already present, UPDATE it",
 				"name", newObject.GetName(),

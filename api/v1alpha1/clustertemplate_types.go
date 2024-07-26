@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -40,9 +41,11 @@ type Templates struct {
 
 // InputDataSchema encapsulates all the schemas required for ClusterTemplate.
 type InputDataSchema struct {
-	// ClusterInstanceParams is a JSON-formatted string that defines the parameters required for provisioning.
+	// ClusterInstanceSchema defines the parameters required for provisioning.
 	// The parameter definitions should follow the OpenAPI V3 schema and explicitly define required fields.
-	ClusterInstanceSchema string `json:"clusterInstanceSchema"`
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ClusterInstanceSchema runtime.RawExtension `json:"clusterInstanceSchema"`
 
 	// TODO: Additional parameters can be added here
 	// PolicyTemplateSchema

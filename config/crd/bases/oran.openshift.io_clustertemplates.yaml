@@ -39,11 +39,11 @@ spec:
                   for ClusterTemplate.
                 properties:
                   clusterInstanceSchema:
-                    description: ClusterInstanceParams is a JSON-formatted string
-                      that defines the parameters required for provisioning. The parameter
-                      definitions should follow the OpenAPI V3 schema and explicitly
-                      define required fields.
-                    type: string
+                    description: ClusterInstanceSchema defines the parameters required
+                      for provisioning. The parameter definitions should follow the
+                      OpenAPI V3 schema and explicitly define required fields.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 required:
                 - clusterInstanceSchema
                 type: object

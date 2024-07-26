@@ -9,6 +9,7 @@ import (
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1093,7 +1094,7 @@ var _ = DescribeTable(
 		),
 	*/
 	Entry(
-		"ClusterTemplate specified by ClusterTemplateRef is missing and input is invalid",
+		"ClusterTemplate specified by ClusterTemplateRef is missing and input is valid",
 		[]client.Object{
 			&oranv1alpha1.ClusterRequest{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1104,12 +1105,14 @@ var _ = DescribeTable(
 				Spec: oranv1alpha1.ClusterRequestSpec{
 					ClusterTemplateRef: "cluster-template",
 					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
-						ClusterInstanceInput: `
+						ClusterInstanceInput: runtime.RawExtension{
+							Raw: []byte(`{
 								"name": "Bob",
 								"age": 35,
 								"email": "bob@example.com",
 								"phoneNumbers": ["123-456-7890", "987-654-3210"]
-							}`,
+							}`),
+						},
 					},
 				},
 			},
@@ -1131,10 +1134,6 @@ var _ = DescribeTable(
 				},
 				clusterRequest)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputIsValid).
-				To(Equal(false))
-			Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputError).
-				To(ContainSubstring("invalid character ':' after top-level value"))
 		},
 	),
 
