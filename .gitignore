@@ -1,5 +1,4 @@
 *.log
 /__debug*
 /oran-o2ims
-/vendor
 /bin/*

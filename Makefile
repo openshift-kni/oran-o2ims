@@ -289,7 +289,7 @@ catalog-push: ## Push a catalog image.
 ##@ Binary
 .PHONY: binary
 binary:
-	go build
+	go build -mod=vendor
 
 .PHONY: image
 image:
