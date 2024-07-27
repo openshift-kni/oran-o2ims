@@ -2,3 +2,5 @@
 /__debug*
 /oran-o2ims
 /bin/*
+.vscode
+.vim*
