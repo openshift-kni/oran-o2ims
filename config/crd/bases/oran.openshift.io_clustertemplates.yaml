@@ -46,27 +46,43 @@ spec:
                   clusterInstanceSchema:
                     description: |-
                       ClusterInstanceSchema defines the parameters required for provisioning.
-                      The parameter definitions should follow the OpenAPI V3 schema and explicitly define required fields.
+                      The parameter definitions should follow the OpenAPI V3 schema and
+                      explicitly define required fields.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  policyTemplateSchema:
+                    description: |-
+                      PolicyTemplateSchema defines the parameters required for ACM policies.
+                      The parameter definitions should follow the OpenAPI V3 schema and
+                      explicitly define required fields.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                 required:
                 - clusterInstanceSchema
+                - policyTemplateSchema
                 type: object
               templates:
                 description: Templates defines the references to the templates required
                   for ClusterTemplate.
                 properties:
                   clusterInstanceDefaults:
-                    description: ClusterInstanceDefaults defines a reference to a
-                      configmap with default values for ClusterInstance
+                    description: |-
+                      ClusterInstanceDefaults defines a reference to a configmap with
+                      default values for ClusterInstance
                     type: string
                   hwTemplate:
                     description: HwTemplate defines a reference to a hardware template
                       config map
                     type: string
+                  policyTemplateDefaults:
+                    description: |-
+                      PolicyTemplateDefaults defines a reference to a configmap with
+                      default values for ACM policies
+                    type: string
                 required:
                 - clusterInstanceDefaults
                 - hwTemplate
+                - policyTemplateDefaults
                 type: object
             required:
             - inputDataSchema

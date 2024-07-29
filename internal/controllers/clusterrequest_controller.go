@@ -62,6 +62,32 @@ type clusterRequestReconcilerTask struct {
 	object *oranv1alpha1.ClusterRequest
 }
 
+type clusterDetails struct {
+	name          string `default:""`
+	version       string `default:""`
+	policyVersion string `default:""`
+}
+
+func newClusterDetails() *clusterDetails {
+	cd := &clusterDetails{}
+	return cd
+}
+
+func (cd *clusterDetails) setName(name string) *clusterDetails {
+	cd.name = name
+	return cd
+}
+
+func (cd *clusterDetails) setVersion(version string) *clusterDetails {
+	cd.version = version
+	return cd
+}
+
+func (cd *clusterDetails) setPolicyVersion(policyVersion string) *clusterDetails {
+	cd.policyVersion = policyVersion
+	return cd
+}
+
 const (
 	clusterRequestFinalizer = "clusterrequest.oran.openshift.io/finalizer"
 	ztpDoneLabel            = "ztp-done"
@@ -295,13 +321,18 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 	)
 
 	// Retrieve the map that holds the default data for clusterInstance
-	ctClusterInstanceDefaultsMap, err := t.getCtClusterInstanceDefaults(ctx, ctClusterInstanceDefaultsCmName)
+	ctClusterInstanceDefaultsMap, err :=
+		t.getClusterTemplateDefaultsFromConfigMap(
+			ctx,
+			ctClusterInstanceDefaultsCmName,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+		)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get the default data for ClusterInstace: %w ", err)
 	}
 
 	// Create the data object that is consumed by the clusterInstance template
-	mergedClusterInstanceData, err := t.buildClusterInstanceData(
+	mergedClusterInstanceData, err := t.buildClusterData(
 		clusterTemplateInputMap, ctClusterInstanceDefaultsMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build ClusterInstance data, err: %w", err)
@@ -309,8 +340,13 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 
 	// Validate that the mergedClusterInstanceMap matches the ClusterTemplate referenced
 	// in the ClusterRequest.
-	err = t.validateClusterTemplateInputMatchesClusterTemplate(
-		ctx, clusterTemplate, mergedClusterInstanceData["Cluster"].(map[string]any))
+	err = t.validateClusterTemplateInputMatchesSchema(
+		ctx,
+		clusterTemplate,
+		mergedClusterInstanceData["Cluster"].(map[string]any),
+		utils.ClusterInstanceSchema,
+	)
+
 	if err != nil {
 		return nil, fmt.Errorf(
 			fmt.Sprintf(
@@ -438,80 +474,81 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 	return nodePool, nil
 }
 
-// getCtClusterInstanceDefaults retrieves the dafault data for ClusterInstance for a configmap
-func (t *clusterRequestReconcilerTask) getCtClusterInstanceDefaults(
-	ctx context.Context, configmapName string) (map[string]any, error) {
+// getClusterTemplateDefaultsFromConfigMap retrieves the default data for a configmap.
+func (t *clusterRequestReconcilerTask) getClusterTemplateDefaultsFromConfigMap(
+	ctx context.Context, configmapName string, configMapSuffix string) (map[string]any, error) {
 
-	ctClusterInstanceDefaultsMap := make(map[string]any)
-	ctClusterInstanceDefaultsCm := &corev1.ConfigMap{}
+	ctDefaultsMap := make(map[string]any)
+	ctDefaultsCm := &corev1.ConfigMap{}
 
 	cmExists, err := utils.DoesK8SResourceExist(
-		ctx, t.client, configmapName, t.object.Namespace, ctClusterInstanceDefaultsCm)
+		ctx, t.client, configmapName, t.object.Namespace, ctDefaultsCm)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to get the %s configmap for ClusterInstance defaults, err: %w", configmapName, err)
+			"failed to get the %s configmap for ClusterTemplate defaults, err: %w",
+			configmapName, err)
 	}
 	if !cmExists {
 		t.logger.InfoContext(
 			ctx,
-			"[RenderClusterInstance] The Configmap for ClusterInstance defaults is not found",
+			"[getClusterTemplateDefaultsFromConfigMap] The Configmap for ClusterTemplate defaults is not found",
 			fmt.Sprintf(
-				"[RenderClusterInstance] The Configmap %s in the namespace %s for "+
-					"ClusterInstance defaults is not found",
+				"The Configmap %s in the namespace %s for ClusterTemplate defaults is not found",
 				configmapName,
 				t.object.Namespace,
 			),
 			slog.String("name", t.object.Name),
 		)
 	} else {
-		defaults, exists := ctClusterInstanceDefaultsCm.Data[utils.ClusterInstanceTemplateDefaultsConfigmapKey]
+		defaults, exists := ctDefaultsCm.Data[configMapSuffix]
 		if !exists {
 			return nil, fmt.Errorf(
 				"%s does not exist in the %s configmap data",
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+				configMapSuffix,
 				configmapName,
 			)
 		}
 
-		// Unmarshal the clusterinstance defaults JSON string into a map
-		err = utils.UnmarshalYAMLOrJSONString(defaults, &ctClusterInstanceDefaultsMap)
+		// Unmarshal the defaults JSON string into a map.
+		err = utils.UnmarshalYAMLOrJSONString(defaults, &ctDefaultsMap)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"the %s from configmap %s is not in a valid JSON format, err: %w",
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey, configmapName, err,
+				configMapSuffix, configmapName, err,
 			)
 		}
 	}
 
-	return ctClusterInstanceDefaultsMap, nil
+	return ctDefaultsMap, nil
 }
 
-// buildClusterInstanceData returns an object that is consumed for rendering clusterinstance template
-func (t *clusterRequestReconcilerTask) buildClusterInstanceData(
-	clusterTemplateInput, ctClusterInstanceDefaults map[string]any) (map[string]any, error) {
+// buildClusterData returns an object that is consumed for rendering clusterinstance template
+// or templated policies.
+func (t *clusterRequestReconcilerTask) buildClusterData(
+	clusterTemplateInput, ctClusterInputDefaults map[string]any) (map[string]any, error) {
 
 	// Initialize a map to hold the merged data
 	var mergedClusterInstanceMap map[string]any
 
 	switch {
-	case len(ctClusterInstanceDefaults) != 0 && len(clusterTemplateInput) != 0:
+	case len(ctClusterInputDefaults) != 0 && len(clusterTemplateInput) != 0:
 		t.logger.Info(
-			"[RenderClusterInstance] Merging the default data with the clusterTemplateInput data for ClusterInstance",
+			"[buildClusterData] Merging default data with the clusterTemplateInput data for ClusterRequest",
 			slog.String("name", t.object.Name),
 		)
 		// A shallow copy of src map
 		// Both maps reference to the same underlying data
-		mergedClusterInstanceMap = maps.Clone(ctClusterInstanceDefaults)
+		mergedClusterInstanceMap = maps.Clone(ctClusterInputDefaults)
 		err := utils.DeepMergeMaps(mergedClusterInstanceMap, clusterTemplateInput, true) // clusterTemplateInput overrides the defaults
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge the clusterTemplateInput(src) with the defaults(dst): %w", err)
 		}
-	case len(ctClusterInstanceDefaults) == 0 && len(clusterTemplateInput) != 0:
+	case len(ctClusterInputDefaults) == 0 && len(clusterTemplateInput) != 0:
 		mergedClusterInstanceMap = maps.Clone(clusterTemplateInput)
-	case len(clusterTemplateInput) == 0 && len(ctClusterInstanceDefaults) != 0:
-		mergedClusterInstanceMap = maps.Clone(ctClusterInstanceDefaults)
+	case len(clusterTemplateInput) == 0 && len(ctClusterInputDefaults) != 0:
+		mergedClusterInstanceMap = maps.Clone(ctClusterInputDefaults)
 	default:
-		return nil, fmt.Errorf("no ClusterInstance data provided in either ClusterRequest or Configmap")
+		return nil, fmt.Errorf("expected clusterTemplateInput data not provided in either ClusterRequest or Configmap")
 	}
 
 	// Wrap the data in a map with key "Cluster"
@@ -560,6 +597,12 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceResources(
 		return err
 	}
 
+	// Create the cluster ConfigMap which will be used by ACM policies.
+	err = t.createPoliciesConfigMap(ctx, clusterName, spec)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -579,14 +622,14 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 	// template.
 	configMap := &corev1.ConfigMap{}
 	configMapExists, err := utils.DoesK8SResourceExist(
-		ctx, t.client, clusterName, t.object.Spec.ClusterTemplateRef, configMap)
+		ctx, t.client, t.object.Spec.ClusterTemplateRef, t.object.Namespace, configMap)
 	if err != nil {
 		return err
 	}
 	if !configMapExists {
 		return fmt.Errorf(
 			"extra-manifests configmap %s expected to exist in the %s namespace, but it's missing",
-			clusterName, t.object.Spec.ClusterTemplateRef)
+			t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef)
 	}
 
 	// Get the name of the extra-manifests ConfigMap for the ClusterInstance namespace.
@@ -644,7 +687,7 @@ func (t *clusterRequestReconcilerTask) createPullSecret(
 	// We assume the ClusterTemplate name and ClusterTemplate namespace are the same.
 	pullSecret := &corev1.Secret{}
 	pullSecretExistsInTemplateNamespace, err := utils.DoesK8SResourceExist(
-		ctx, t.client, pullSecretName, t.object.Spec.ClusterTemplateRef, pullSecret)
+		ctx, t.client, t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef, pullSecret)
 	if err != nil {
 		return err
 	}
@@ -864,26 +907,34 @@ func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Conte
 	return clusterTemplateRef, nil
 }
 
-// validateClusterTemplateInput validates if the clusterTemplateInput matches the
+// validateClusterTemplateInputMatchesSchema validates if the clusterTemplateInput matches the
 // inputDataSchema of the ClusterTemplate
-func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesClusterTemplate(
-	ctx context.Context, clusterTemplateRef *oranv1alpha1.ClusterTemplate, clusterInstanceData map[string]any) error {
+func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema(
+	ctx context.Context,
+	clusterTemplateRef *oranv1alpha1.ClusterTemplate,
+	clusterData map[string]any,
+	schemaType string) error {
 
 	// Get the input data in string format.
-	jsonString, err := json.Marshal(clusterInstanceData)
+	jsonString, err := json.Marshal(clusterData)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
 			fmt.Sprintf(
-				"Error Marshaling the provided clusterInstance data from "+
+				"Error Marshaling the provided cluster data from "+
 					"ClusterTemplate %s for ClusterRequest %s",
 				t.object.Spec.ClusterTemplateRef, jsonString))
 		return err
 	}
 
 	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
-	err = utils.ValidateJsonAgainstJsonSchema(
-		string(clusterTemplateRef.Spec.InputDataSchema.ClusterInstanceSchema.Raw), string(jsonString))
+	if schemaType == utils.ClusterInstanceSchema {
+		err = utils.ValidateJsonAgainstJsonSchema(
+			string(clusterTemplateRef.Spec.InputDataSchema.ClusterInstanceSchema.Raw), string(jsonString))
+	} else if schemaType == utils.PolicyTemplateSchema {
+		err = utils.ValidateJsonAgainstJsonSchema(
+			string(clusterTemplateRef.Spec.InputDataSchema.PolicyTemplateSchema.Raw), string(jsonString))
+	}
 
 	if err != nil {
 		t.logger.ErrorContext(
@@ -897,6 +948,150 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesCluste
 	}
 
 	return nil
+}
+
+// createPoliciesConfigMap creates the cluster ConfigMap which will be used
+// by the ACM policies.
+func (t *clusterRequestReconcilerTask) createPoliciesConfigMap(
+	ctx context.Context, clusterName string, spec map[string]interface{}) error {
+
+	clusterTemplate, err := t.getCrClusterTemplateRef(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get the ClusterTemplate for ClusterRequest %s: %w ", t.object.Name, err)
+	}
+
+	// Obtain the cluster version for the cluster-version label.
+	clusterVersion, policyVersion, err := utils.GetLabelsForPolicies(
+		t.object, spec, clusterName, clusterTemplate.Namespace)
+	if err != nil {
+		return err
+	}
+	clusterDetails := newClusterDetails()
+	clusterDetails.setName(clusterName).setVersion(clusterVersion).setPolicyVersion(policyVersion)
+
+	// Merge the defaults and the input values for the policies.
+	mergedPolicyTemplateData, err := t.createMergedPolicyTemplateData(ctx, clusterTemplate)
+
+	if err != nil {
+		return nil
+	}
+
+	// Validate that the mergedPolicyTemplateData matches the policyTemplateSchema referenced
+	// in the ClusterRequest.
+	err = t.validateClusterTemplateInputMatchesSchema(
+		ctx,
+		clusterTemplate,
+		mergedPolicyTemplateData["Cluster"].(map[string]any),
+		utils.PolicyTemplateSchema,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			fmt.Sprintf(
+				"errors matching the merged policyTemplate data against the referenced "+
+					"ClusterTemplate %s: %s", t.object.Name, err.Error()))
+	}
+
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf(
+			"the merged policyTemplate data matches the policyTemplateSchema referenced in "+
+				"ClusterTemplate  %s", t.object.Name),
+	)
+
+	return t.createPolicyTemplateConfigMap(
+		ctx, mergedPolicyTemplateData, clusterTemplate, clusterDetails)
+}
+
+// createMergedPolicyTemplateData merges the defaults and the input values for the config policies
+func (t *clusterRequestReconcilerTask) createMergedPolicyTemplateData(
+	ctx context.Context, clusterTemplate *oranv1alpha1.ClusterTemplate) (map[string]any, error) {
+
+	// Convert the policyTemplateInput JSON string into a map.
+	t.logger.InfoContext(
+		ctx,
+		"Getting the input data(policyTemplateInput) from ClusterRequest",
+		slog.String("name", t.object.Name),
+	)
+	clusterTemplateInputMap := make(map[string]any)
+	err := json.Unmarshal(t.object.Spec.ClusterTemplateInput.PolicyTemplateInput.Raw, &clusterTemplateInputMap)
+	if err != nil {
+		return nil, fmt.Errorf("the PolicyTemplateInput is not in a valid JSON format, err: %w", err)
+	}
+
+	ctPolicyTemplateDefaultsCmName := clusterTemplate.Spec.Templates.PolicyTemplateDefaults
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf(
+			"Getting the default data(policytemplate-defaults) "+
+				" from Configmap %s in the namespace %s",
+			ctPolicyTemplateDefaultsCmName,
+			t.object.Namespace,
+		),
+		slog.String("name", t.object.Name),
+	)
+
+	// Retrieve the map that holds the default data for policy templates.
+	ctClusterInstanceDefaultsMap, err :=
+		t.getClusterTemplateDefaultsFromConfigMap(
+			ctx,
+			ctPolicyTemplateDefaultsCmName,
+			utils.PolicyTemplateDefaultsConfigmapKey)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the default data for PolicyTemplates: %w ", err)
+	}
+
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf("policytemplate-defaults: %s", ctClusterInstanceDefaultsMap),
+		slog.String("name", t.object.Name),
+	)
+
+	// Create the data object that is consumed by the templated policies.
+	mergedPolicyTemplateData, err := t.buildClusterData(
+		clusterTemplateInputMap, ctClusterInstanceDefaultsMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ClusterInstance data, err: %w", err)
+	}
+
+	return mergedPolicyTemplateData, nil
+}
+
+// createPolicyTemplateConfigMap updates the keys of the default ConfigMap to match the
+// clusterTemplate and the cluster version and creates/updates the ConfigMap for the
+// required version of the policy template.
+func (t *clusterRequestReconcilerTask) createPolicyTemplateConfigMap(
+	ctx context.Context,
+	mergedPolicyTemplateData map[string]any,
+	clusterTemplate *oranv1alpha1.ClusterTemplate,
+	clusterDetails *clusterDetails) error {
+
+	// Update the keys to match the ClusterTemplate name and the version.
+	finalPolicyTemplateData := make(map[string]string)
+	for key, value := range mergedPolicyTemplateData["Cluster"].(map[string]interface{}) {
+		newKey := fmt.Sprintf(
+			"policy-%s-%s",
+			clusterDetails.policyVersion,
+			key,
+		)
+		finalPolicyTemplateData[newKey] = value.(string)
+	}
+
+	// Put all the data from the mergedPolicyTemplateData in a configMap in the same
+	// namespace as the templated ACM policies.
+	// The namespace is: ztp + <clustertemplate-name> + <cluster-version>
+	policyTemplateConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-pg", clusterDetails.name),
+			Namespace: fmt.Sprintf(
+				"ztp-%s-%s",
+				clusterTemplate.Namespace, clusterDetails.version,
+			),
+		},
+		Data: finalPolicyTemplateData,
+	}
+
+	return utils.CreateK8sCR(ctx, t.client, policyTemplateConfigMap, t.object, utils.UPDATE)
 }
 
 // updateRenderTemplateStatus update the status of the ClusterRequest object (CR).
