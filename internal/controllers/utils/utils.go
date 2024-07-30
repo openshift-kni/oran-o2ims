@@ -10,8 +10,6 @@ import (
 	"strings"
 	"text/template"
 
-	"gopkg.in/yaml.v3"
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	sprig "github.com/go-task/slim-sprig/v3"
@@ -25,6 +23,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/yaml"
 
 	gojsonschema "github.com/xeipuuv/gojsonschema"
 )
@@ -50,7 +49,7 @@ func ValidateJsonAgainstJsonSchema(schema, input string) error {
 
 	result, err := gojsonschema.Validate(schemaLoader, inputLoader)
 	if err != nil {
-		oranUtilsLog.Error(err, "Error validating JSON against JSON schema")
+		oranUtilsLog.Error(err, "Error validating the input against the schema")
 		return err
 	}
 
@@ -63,7 +62,7 @@ func ValidateJsonAgainstJsonSchema(schema, input string) error {
 		}
 
 		return fmt.Errorf(
-			fmt.Sprintf("The JSON input does not match the JSON schema: %s", errorDescription))
+			fmt.Sprintf("The input does not match the schema: %s", errorDescription))
 	}
 }
 
@@ -73,7 +72,7 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 	bmcCredentialsDetailsInterface, bmcCredentialsDetailsExist := node["bmcCredentialsDetails"]
 
 	if !bmcCredentialsDetailsExist {
-		return "", "", "", fmt.Errorf(
+		return "", "", "", NewInputError(
 			`\"bmcCredentialsDetails\" key expected to exist in ClusterTemplateInput 
 			of ClusterRequest %s, but it's missing`,
 			clusterRequest,
@@ -85,7 +84,7 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 	// Get the BMC username and password.
 	username, usernameExists := bmcCredentialsDetails["username"].(string)
 	if !usernameExists {
-		return "", "", "", fmt.Errorf(
+		return "", "", "", NewInputError(
 			`\"bmcCredentialsDetails.username\" key expected to exist in ClusterTemplateInput 
 			of ClusterRequest %s, but it's missing`,
 			clusterRequest,
@@ -94,7 +93,7 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 
 	password, passwordExists := bmcCredentialsDetails["password"].(string)
 	if !passwordExists {
-		return "", "", "", fmt.Errorf(
+		return "", "", "", NewInputError(
 			`\"bmcCredentialsDetails.password\" key expected to exist in ClusterTemplateInput 
 			of ClusterRequest %s, but it's missing`,
 			clusterRequest,
@@ -436,16 +435,6 @@ func GetServerArgs(ctx context.Context, c client.Client,
 	return
 }
 
-// UnmarshalYAMLOrJSONString decodes either YAML or JSON documents
-func UnmarshalYAMLOrJSONString(str string, into any) error {
-	decoder := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(str)), 4096)
-	err := decoder.Decode(into)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // RenderTemplateForK8sCR returns a rendered K8s resource with an given template and object data
 func RenderTemplateForK8sCR(templateName, templatePath string, templateDataObj map[string]any) (*unstructured.Unstructured, error) {
 	renderedTemplate := &unstructured.Unstructured{}
@@ -499,6 +488,45 @@ func extractBeforeDot(s string) string {
 		return s
 	}
 	return s[:dotIndex]
+}
+
+func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) (*corev1.ConfigMap, error) {
+	existingConfigmap := &corev1.ConfigMap{}
+	cmExists, err := DoesK8SResourceExist(
+		ctx, c, name, namespace, existingConfigmap)
+	if err != nil {
+		return nil, err
+	}
+
+	if !cmExists {
+		// Check if the configmap is missing
+		return nil, NewInputError(
+			"the ConfigMap %s is not found in the namespace %s", name, namespace)
+	}
+	return existingConfigmap, nil
+}
+
+// ExtractTemplateDataFromConfigMap extractes the template data associated with the specified key
+// from the provided ConfigMap. The data is expected to be in YAML format.
+func ExtractTemplateDataFromConfigMap[T any](ctx context.Context, c client.Client, cm *corev1.ConfigMap, expectedKey string) (T, error) {
+	var validData T
+
+	// Find the expected key is present in the configmap data
+	defaults, exists := cm.Data[expectedKey]
+	if !exists {
+		return validData, NewInputError(
+			"the expected key %s does not exist in the ConfigMap %s data", expectedKey, cm.GetName())
+	}
+
+	// Parse the YAML data into a map
+	err := yaml.Unmarshal([]byte(defaults), &validData)
+	if err != nil {
+		return validData, NewInputError(
+			"the value of key %s from ConfigMap %s is not in a valid YAML string: %s",
+			expectedKey, cm.GetName(), err.Error(),
+		)
+	}
+	return validData, nil
 }
 
 // DeepMergeMaps performs a deep merge of the src map into the dst map.
@@ -651,12 +679,10 @@ func GetLabelsForPolicies(
 	labelsInterface, labelsExists := spec["clusterLabels"]
 
 	if !labelsExists {
-		return "", "", fmt.Errorf(
-			fmt.Sprintf(
-				"No cluster labels configured by the ClusterInstance %s(%s). "+
-					"Labels %s and %s are needed for cluster configuration",
-				clusterName, clusterName, policyLabelKey, ClusterVersionLabelKey,
-			),
+		return "", "", NewInputError(
+			"No cluster labels configured by the ClusterInstance %s(%s). "+
+				"Labels %s and %s are needed for cluster configuration",
+			clusterName, clusterName, policyLabelKey, ClusterVersionLabelKey,
 		)
 	}
 
@@ -664,12 +690,10 @@ func GetLabelsForPolicies(
 	policyLabelInterface, policyLabelExists :=
 		labelsInterface.(map[string]interface{})[policyLabelKey]
 	if !policyLabelExists {
-		return "", "", fmt.Errorf(
-			fmt.Sprintf(
-				"Managed cluster %s is missing the %s label. This label is needed for correctly "+
-					"generating and populating configuration data",
-				clusterName, policyLabelKey,
-			),
+		return "", "", NewInputError(
+			"Managed cluster %s is missing the %s label. This label is needed for correctly "+
+				"generating and populating configuration data",
+			clusterName, policyLabelKey,
 		)
 	}
 
@@ -686,12 +710,10 @@ func GetLabelsForPolicies(
 	clusterVersionLabelInterface, clusterVersionLabelExists :=
 		labelsInterface.(map[string]interface{})[ClusterVersionLabelKey]
 	if !clusterVersionLabelExists {
-		return "", "", fmt.Errorf(
-			fmt.Sprintf(
-				"Managed cluster %s is missing the %s label. This label is needed for correctly "+
-					"generating and populating configuration data",
-				clusterName, ClusterVersionLabelKey,
-			),
+		return "", "", NewInputError(
+			"Managed cluster %s is missing the %s label. This label is needed for correctly "+
+				"generating and populating configuration data",
+			clusterName, ClusterVersionLabelKey,
 		)
 	}
 

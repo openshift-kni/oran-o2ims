@@ -120,3 +120,8 @@ const (
 	HwTemplatePluginMgr = "hwMgrId"
 	HwTemplateNodePool  = "node-pools-data"
 )
+
+const (
+	ClusterInstanceDataType = "ClusterInstance"
+	PolicyTemplateDataType  = "PolicyTemplate"
+)

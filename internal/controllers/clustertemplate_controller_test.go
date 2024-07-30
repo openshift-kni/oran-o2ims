@@ -26,6 +26,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
+		hwTemplateCm = "hwTemplate-v1"
 	)
 
 	BeforeEach(func() {
@@ -40,6 +41,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
 				},
 				InputDataSchema: oranv1alpha1.InputDataSchema{
 					// APIserver has enforced the validation for this field who holds
@@ -79,6 +81,19 @@ key: value`,
 clustertemplate-a-policy-v1-cpu-isolated: "2-31"
 clustertemplate-a-policy-v1-cpu-reserved: "0-1"
 clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCm,
+					Namespace: utils.ORANO2IMSNamespace,
+				},
+				Data: map[string]string{
+					utils.HwTemplateNodePool: `
+- name: master
+  hwProfile: profile-spr-single-processor-64G
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
 				},
 			},
 		}
@@ -131,9 +146,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"The referenced ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
+			"the ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"The referenced ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
+			"the ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
 	})
 })
 
@@ -242,6 +257,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-ci-defaults"
 		ptDefaultsCm = "policytemplate-ci-defaults"
+		hwTemplateCm = "hwTemplate-v1"
 		t            *clusterTemplateReconcilerTask
 	)
 
@@ -256,6 +272,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
 				},
 			},
 		}
@@ -293,6 +310,19 @@ clustertemplate-a-policy-v1-cpu-reserved: "0-1"
 clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				},
 			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCm,
+					Namespace: utils.ORANO2IMSNamespace,
+				},
+				Data: map[string]string{
+					utils.HwTemplateNodePool: `
+- name: master
+  hwProfile: profile-spr-single-processor-64G
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
+				},
+			},
 		}
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
@@ -324,9 +354,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"The referenced ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
+			"the ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"The referenced ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
+			"the ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
 	})
 })
 
@@ -356,19 +386,19 @@ key: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
-		validationErr, err := validateConfigmapReference(
+		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(validationErr).To(BeEmpty())
 	})
 
 	It("should return validation error message for a missing configmap", func() {
 		// No ConfigMap created
-		validationErr, err := validateConfigmapReference(
+		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(validationErr).To(Equal(fmt.Sprintf(
-			"The referenced ConfigMap %s is not found in the namespace %s", configmapName, namespace)))
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(Equal(fmt.Sprintf(
+			"the ConfigMap %s is not found in the namespace %s", configmapName, namespace)))
 	})
 
 	It("should return validation error message for missing expected key in configmap", func() {
@@ -384,10 +414,11 @@ key: value`,
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		validationErr, err := validateConfigmapReference(
+		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(validationErr).To(Equal(fmt.Sprintf(
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"the expected key %s does not exist in the ConfigMap %s data", utils.ClusterInstanceTemplateDefaultsConfigmapKey, configmapName)))
 	})
 
@@ -404,10 +435,11 @@ key: value`,
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		validationErr, err := validateConfigmapReference(
+		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(validationErr).To(ContainSubstring("the value of key"))
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("the value of key"))
 	})
 
 	It("should return validation error message if configmap is mutable", func() {
@@ -426,10 +458,11 @@ key: value`,
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		validationErr, err := validateConfigmapReference(
+		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(validationErr).To(Equal(fmt.Sprintf(
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"It is not allowed to set Immutable to false in the ConfigMap %s", configmapName)))
 	})
 
@@ -447,10 +480,9 @@ key: value`,
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		validationErr, err := validateConfigmapReference(
+		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(validationErr).To(BeEmpty())
 
 		// Verify that the configmap is patched to be immutable
 		updatedCM := &corev1.ConfigMap{}

@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +31,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/yaml"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 )
@@ -529,7 +529,7 @@ var _ = Describe("ValidateJsonAgainstJsonSchema", func() {
 		err := ValidateJsonAgainstJsonSchema(schema, input)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(
-			ContainSubstring("The JSON input does not match the JSON schema:  address: capital is required"))
+			ContainSubstring("The input does not match the schema:  address: capital is required"))
 	})
 
 	It("Return error if field is of different type", func() {
@@ -593,7 +593,7 @@ var _ = Describe("ValidateJsonAgainstJsonSchema", func() {
 		err := ValidateJsonAgainstJsonSchema(schema, input)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(
-			ContainSubstring("The JSON input does not match the JSON schema:  age: Invalid type. Expected: integer, given: string"))
+			ContainSubstring("The input does not match the schema:  age: Invalid type. Expected: integer, given: string"))
 	})
 
 	It("Returns success if optional field with required fields is missing", func() {

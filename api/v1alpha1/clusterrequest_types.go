@@ -55,49 +55,17 @@ type ClusterTemplateInput struct {
 	PolicyTemplateInput runtime.RawExtension `json:"policyTemplateInput"`
 }
 
-type ClusterTemplateInputValidation struct {
-	// Says if the ClusterTemplateInput is valid or not.
-	InputIsValid bool `json:"inputIsValid"`
-	// Holds the error in case the ClusterTemplateInput is invalid.
-	InputError string `json:"inputError,omitempty"`
-}
-
-type HardwareProvisioningStatus struct {
+type NodePoolRef struct {
 	// Contains the name of the created NodePool.
-	ClusterName string `json:"clusterName,omitempty"`
+	Name string `json:"name,omitempty"`
 	// Contains the namespace of the created NodePool.
 	Namespace string `json:"namespace,omitempty"`
-	// Holds the status of the hardware provisioning
-	HardwareStatus string `json:"hardwareStatus,omitempty"`
 }
 
-type RenderedTemplateStatus struct {
-	// RenderedTemplate represents whether the ClusterInstance template is rendered successfully
-	RenderedTemplate bool `json:"renderedTemplate"`
-	// RenderedTemplateError holds the error if the ClusterInstance template is not rendered
-	RenderedTemplateError string `json:"renderedTemplateError,omitempty"`
-	// RenderedTemplateApplied represents whether the rendered ClusterInstance is applied successfully
-	RenderedTemplateApplied bool `json:"renderedTemplateApplied"`
-	// RenderedTemplateAppliedError holds the error if the rendered ClusterInstance CR is not applied
-	RenderedTemplateAppliedError string `json:"renderedTemplateAppliedError,omitempty"`
-}
-
-type ClusterInstallationResources struct {
-	// Says if all the resources needed by the ClusterInstance have been
-	// successfully created.
-	ResourcesCreatedSuccessfully bool `json:"resourcesCreatedSuccessfully"`
-	// Holds the error if there were issues creating the resources needed by
-	// the ClusterInstance
-	ErrorCreatingResources string `json:"errorCreatingResources,omitempty"`
-}
-
-type ClusterInstanceStatus struct {
+type ClusterInstanceRef struct {
 	// Contains the name of the created ClusterInstance.
 	Name string `json:"name,omitempty"`
-	// Holds relevant conditions from the ClusterInstance.
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	// Holds the status of the cluster deployment.
-	ClusterInstallStatus string `json:"clusterInstallStatus,omitempty"`
+
 	// Says if ZTP has complete or not.
 	ZtpStatus string `json:"ztpStatus,omitempty"`
 }
@@ -107,17 +75,13 @@ type ClusterRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Contains details about Cluster templating.
-	RenderedTemplateStatus *RenderedTemplateStatus `json:"renderedTemplateStatus,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// Contains details about the creation of the resources needed by the ClusterInstance.
-	ClusterInstallationResources *ClusterInstallationResources `json:"clusterInstallationResources,omitempty"`
+	// ClusterInstanceRef references to the ClusterInstance.
+	ClusterInstanceRef *ClusterInstanceRef `json:"clusterInstanceRef,omitempty"`
 
-	// ClusterInstanceStatus holds status details about the ClusterInstance.
-	ClusterInstanceStatus *ClusterInstanceStatus `json:"clusterInstanceStatus,omitempty"`
-
-	// HardwareProvisioningStatus holds status details about the NodePool
-	HardwareProvisioningStatus *HardwareProvisioningStatus `json:"hardwareProvisioningStatus,omitempty"`
+	// NodePoolRef references to the NodePool
+	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
 }
 
 //+kubebuilder:object:root=true
