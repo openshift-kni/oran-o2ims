@@ -39,7 +39,7 @@ func TestControllers(t *testing.T) {
 	RunSpecs(t, "Controllers")
 }
 
-func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
+func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	return fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
@@ -47,7 +47,7 @@ func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
 		WithStatusSubresource(&oranv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&oranv1alpha1.ClusterRequest{}).
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
-		Build(), nil
+		Build()
 }
 
 // Logger used for tests:
