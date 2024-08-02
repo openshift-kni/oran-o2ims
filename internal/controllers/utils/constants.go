@@ -77,11 +77,11 @@ const (
 
 // ClusterInstance template constants
 const (
-	ClusterInstanceTemplateName                    = "ClusterInstance"
-	ClusterInstanceTemplatePath                    = "controllers/clusterinstance-template.yaml"
-	ClusterInstanceTemplateConfigmapName           = "sc-clusterinstance-template"
-	ClusterInstanceTemplateConfigmapNamespace      = ORANO2IMSNamespace
-	ClusterInstanceTemplateDefaultsConfigmapSuffix = "clusterinstance-defaults"
+	ClusterInstanceTemplateName                 = "ClusterInstance"
+	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
+	ClusterInstanceTemplateConfigmapName        = "sc-clusterinstance-template"
+	ClusterInstanceTemplateConfigmapNamespace   = ORANO2IMSNamespace
+	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
 )
 
 // ClusterInstance status

@@ -54,26 +54,19 @@ type InputDataSchema struct {
 	// PolicyTemplateSchema
 }
 
-type ClusterTemplateValidation struct {
-	// Says of the ClusterTemplate is valid or not.
-	ClusterTemplateIsValid bool `json:"clusterTemplateIsValid"`
-	// Holds the error in case the ClusterTemplate is invalid.
-	ClusterTemplateError string `json:"clusterTemplateError,omitempty"`
-}
-
 // ClusterTemplateStatus defines the observed state of ClusterTemplate
 type ClusterTemplateStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Tells if the schema provided in spec.inputDataSchema is a valid JSON.
-	ClusterTemplateValidation ClusterTemplateValidation `json:"clusterTemplateValidation"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
 // ClusterTemplate is the Schema for the clustertemplates API
+// +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a ClusterTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='ClusterTemplateValidated' && c.status=='False') || oldSelf.spec == self.spec"
 type ClusterTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

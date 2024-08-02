@@ -464,11 +464,11 @@ func (t *clusterRequestReconcilerTask) getCtClusterInstanceDefaults(
 			slog.String("name", t.object.Name),
 		)
 	} else {
-		defaults, exists := ctClusterInstanceDefaultsCm.Data[utils.ClusterInstanceTemplateDefaultsConfigmapSuffix]
+		defaults, exists := ctClusterInstanceDefaultsCm.Data[utils.ClusterInstanceTemplateDefaultsConfigmapKey]
 		if !exists {
 			return nil, fmt.Errorf(
 				"%s does not exist in the %s configmap data",
-				utils.ClusterInstanceTemplateDefaultsConfigmapSuffix,
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey,
 				configmapName,
 			)
 		}
@@ -478,7 +478,7 @@ func (t *clusterRequestReconcilerTask) getCtClusterInstanceDefaults(
 		if err != nil {
 			return nil, fmt.Errorf(
 				"the %s from configmap %s is not in a valid JSON format, err: %w",
-				utils.ClusterInstanceTemplateDefaultsConfigmapSuffix, configmapName, err,
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey, configmapName, err,
 			)
 		}
 	}
