@@ -44,8 +44,15 @@ spec:
                       OpenAPI V3 schema and explicitly define required fields.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
+                  policyTemplateSchema:
+                    description: PolicyTemplateSchema defines the parameters required
+                      for ACM policies. The parameter definitions should follow the
+                      OpenAPI V3 schema and explicitly define required fields.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 required:
                 - clusterInstanceSchema
+                - policyTemplateSchema
                 type: object
               templates:
                 description: Templates defines the references to the templates required
@@ -55,8 +62,13 @@ spec:
                     description: ClusterInstanceDefaults defines a reference to a
                       configmap with default values for ClusterInstance
                     type: string
+                  policyTemplateDefaults:
+                    description: PolicyTemplateDefaults defines a reference to a configmap
+                      with default values for ACM policies
+                    type: string
                 required:
                 - clusterInstanceDefaults
+                - policyTemplateDefaults
                 type: object
             required:
             - inputDataSchema
