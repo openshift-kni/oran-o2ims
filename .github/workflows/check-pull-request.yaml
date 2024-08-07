@@ -18,6 +18,7 @@ on:
   pull_request:
     branches:
     - main
+    - CNF-13183-provisioning-poc
 
 jobs:
 
