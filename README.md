@@ -185,8 +185,12 @@ $ ./oran-o2ims start infrastructure-inventory-subscription-server \
 --log-field="server=resource-subscriptions" \
 --api-listener-address=localhost:8004 \
 --metrics-listener-address=localhost:8008 \
+--namespace="test" \
+--configmap-name="testInventorySubscriptionConfigmap" \
 --cloud-id=123
 ```
+
+Note: By default, the namespace of "orantest" and "oran-infra-inventory-sub" are used currently.
 
 For more information about other command line flags use the `--help` command:
 
@@ -301,7 +305,7 @@ $ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms | jq
 
 ###### GET an Alarm
 
-To get a list of resource pools:
+To get a specific alarm:
 ```
 $ curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId} | jq
 ```
@@ -332,6 +336,8 @@ $./oran-o2ims start alarm-subscription-server \
 --log-field="pid=%p" \
 --api-listener-address="127.0.0.1:8006" \
 --metrics-listener-address="127.0.0.1:8008" \
+--namespace="test" \
+--configmap-name="testConfigmap" \
 --cloud-id="123" 
 ```
 
@@ -340,6 +346,8 @@ be conflicts if you try to run multiple servers in the same machine. The
 `--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in use.
 
 The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
+
+By default, the namespace of "orantest" and configmap-name of "oran-o2ims-alarm-subscriptions" are used.
 
 For more information about other command line flags use the `--help` command:
 
@@ -354,5 +362,57 @@ $ curl -s http://localhost:8001/o2ims-infrastructureMonitoring/v1/alarmSubscript
 ```
 Above example will get a list of existing alarm subscriptions
 
+```
+$ curl -s -X POST --header "Content-Type: application/json" -d @subscription.json http://localhost:8000/o2ims-infrastructureMonitoring/v1/alarmSubscriptions
+```
+Above example will post an alarm subscription defined in subscription.json file 
+
 Inside _VS Code_ use the _Run and Debug_ option with the `start
 alarm-subscription-server` [configuration](.vscode/launch.json).
+
+#### Alarm Notification server
+
+The alarm-notification-server should use together with alarm subscription server. The alarm subscription sever accept and manages the alarm subscriptions. The alarm notificaton servers synch the alarm subscriptions via perisist storage. To use the configmap to persist the subscriptions, the namespace "orantest" should be created at hub cluster for now (will use official oranims namespace in future). Alarm subscripton server and corresonding alarm notification server should have same namespace and configmap-name. The alarm notification server accept the alerts, match the subscription filter, build and send out the alarm notification based on url in the subscription.
+
+The required Resource server URL and token can be obtained as follows:
+
+```
+$ export RESOURCE_SERVER_URL=http://localhost:8002/o2ims-infrastructureInventory/v1/
+$ export RESOURCE_SERVER_TOKEN=$(
+  oc whoami --show-token
+)
+```
+
+Start the alarm notification server with a command like this:
+
+```
+$./oran-o2ims start alarm-notification-server \
+--log-file="servers.log" \
+--log-level="debug" \
+--log-field="server=alarm-notification" \
+--log-field="pid=%p" \
+--api-listener-address="127.0.0.1:8010" \
+--metrics-listener-address="127.0.0.1:8011" \
+--cloud-id="123" \
+--namespace="test" \
+--configmap-name="testConfigmap" \
+--resource-server-url="${RESOURCE_SERVER_URL}"
+--resource-server-token="${RESOURCE_SERVER_TOKEN}" \
+```
+
+Note that by default all the servers listen on `localhost:8000`, so there will
+be conflicts if you try to run multiple servers in the same machine. The
+`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in use.
+
+The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
+
+By default, the namespace of "orantest" and configmap-name of "oran-o2ims-alarm-subscriptions" are used.
+
+For more information about other command line flags use the `--help` command:
+
+```
+$ ./oran-o2ims start alarm-notification-server --help
+```
+
+Inside _VS Code_ use the _Run and Debug_ option with the `start
+alarm-notification-server` [configuration](.vscode/launch.json).

@@ -47,11 +47,6 @@ COPY \
   --chown=builder:builder \
   . .
 
-# Download the Go dependencies. We do this in a separate step so that hopefully that large set of
-# dependencies will be in a cached layer, and we will not need to download them for every build.
-RUN \
-  go mod download
-
 # Build the binary:
 RUN \
   make binary

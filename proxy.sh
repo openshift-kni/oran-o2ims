@@ -66,7 +66,23 @@ pids="${pids} $!"
 --log-level="debug" \
 --log-field="server=alarm-subscription" \
 --log-field="pid=%p" \
---api-listener-address="127.0.0.1:8006" \
+--api-listener-address="127.0.0.1:8010" \
+--metrics-listener-address="127.0.0.1:8095" \
+--namespace="orantest" \
+--configmap-name="oran-o2ims-alarm-subscriptions" \
+--cloud-id="123" \
+&
+pids="${pids} $!"
+#### start notificaton server deamon from cmd line
+# Start the alert notification debug server:
+./oran-o2ims start alarm-notification-server \
+--log-level="debug" \
+--log-field="server=alarm-notification" \
+--log-field="pid=%p" \
+--api-listener-address="127.0.0.1:8030" \
+--metrics-listener-address="127.0.0.1:8070" \
+--resource-server-url="${RESOURCE_SERVER_URL}" \
+--resource-server-token="${RESOURCE_SERVER_TOKEN}" \
 --cloud-id="123" \
 &
 pids="${pids} $!"

@@ -62,6 +62,16 @@ func InfrastructureInventorySubscriptionServer() *cobra.Command {
 		"Extension to add to infrastructure inventory subscriptions.",
 	)
 
+	_ = flags.String(
+		namespaceFlagName,
+		"",
+		"The namespace the server is running",
+	)
+	_ = flags.String(
+		subscriptionConfigmapNameFlagName,
+		"",
+		"The configmap name used by infrastructure inventory subscriptions.",
+	)
 	return result
 }
 
@@ -219,6 +229,36 @@ func (c *InfrastructureInventorySubscriptionServerCommand) run(cmd *cobra.Comman
 		return exit.Error(1)
 	}
 
+	// Get the namespace:
+	namespace, err := flags.GetString(namespaceFlagName)
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to get o2ims namespace flag",
+			slog.String("flag", namespaceFlagName),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	if namespace == "" {
+		namespace = service.DefaultNamespace
+	}
+
+	// Get the configmapName:
+	subscriptionsConfigmapName, err := flags.GetString(subscriptionConfigmapNameFlagName)
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to get alarm subscription configmap name flag",
+			slog.String("flag", subscriptionConfigmapNameFlagName),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	if subscriptionsConfigmapName == "" {
+		subscriptionsConfigmapName = service.DefaultAlarmConfigmapName
+	}
+
 	// Create the handler:
 	handler, err := service.NewSubscriptionHandler().
 		SetLogger(logger).
@@ -226,7 +266,9 @@ func (c *InfrastructureInventorySubscriptionServerCommand) run(cmd *cobra.Comman
 		SetCloudID(cloudID).
 		SetExtensions(extensions...).
 		SetKubeClient(kubeClient).
-		SetSubscriptionType(service.SubscriptionTypeInfrastructureInventory).
+		SetSubscriptionIdString(service.SubscriptionIdInfrastructureInventory).
+		SetNamespace(namespace).
+		SetConfigmapName(subscriptionsConfigmapName).
 		Build(ctx)
 
 	if err != nil {
