@@ -50,9 +50,14 @@ spec:
               clusterTemplateRef:
                 description: Reference to an existing clusterTemplate CR.
                 type: string
+              location:
+                type: string
+              site:
+                type: string
             required:
             - clusterTemplateInput
             - clusterTemplateRef
+            - site
             type: object
           status:
             description: ClusterRequestStatus defines the observed state of ClusterRequest
@@ -156,6 +161,20 @@ spec:
                     type: string
                   ztpStatus:
                     description: Says if ZTP has complete or not.
+                    type: string
+                type: object
+              hardwareProvisioningStatus:
+                description: HardwareProvisioningStatus holds status details about
+                  the NodePool
+                properties:
+                  clusterName:
+                    description: Contains the name of the created NodePool.
+                    type: string
+                  hardwareStatus:
+                    description: Holds the status of the hardware provisioning
+                    type: string
+                  namespace:
+                    description: Contains the namespace of the created NodePool.
                     type: string
                 type: object
               renderedTemplateStatus:

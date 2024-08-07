@@ -55,8 +55,13 @@ spec:
                     description: ClusterInstanceDefaults defines a reference to a
                       configmap with default values for ClusterInstance
                     type: string
+                  hwTemplate:
+                    description: HwTemplate defines a reference to a hardware template
+                      config map
+                    type: string
                 required:
                 - clusterInstanceDefaults
+                - hwTemplate
                 type: object
             required:
             - inputDataSchema

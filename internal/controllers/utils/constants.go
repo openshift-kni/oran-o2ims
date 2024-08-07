@@ -92,3 +92,17 @@ const (
 	ClusterZtpDone    = "ZTP Done"
 	ClusterZtpNotDone = "ZTP Not Done"
 )
+
+// Hardware Provisioning status
+const (
+	HardwareProvisioningInProgress = "InProgress"
+	HardwareProvisioningCompleted  = "Completed"
+	HardwareProvisioningFailed     = "Failed"
+	HardwareProvisioningUnknown    = "Unknown"
+)
+
+// Hardeware template constants
+const (
+	HwTemplatePluginMgr = "hwMgrId"
+	HwTemplateNodePool  = "node-pools-data"
+)

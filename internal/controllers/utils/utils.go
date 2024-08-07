@@ -616,3 +616,30 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 
 	return result, nil
 }
+
+func CopyK8sSecret(ctx context.Context, c client.Client, secretName string, sourceNamespace string, targetNamespace string) error {
+	// Get the secret from the source namespace
+	secret := &corev1.Secret{}
+	exists, err := DoesK8SResourceExist(
+		ctx, c, secretName, sourceNamespace, secret)
+
+	// If there was an error in trying to get the secret from the source namespace, return it.
+	if err != nil {
+		return fmt.Errorf("error obtaining the secret %s from namespace: %s: %w", secretName, sourceNamespace, err)
+	}
+
+	if !exists {
+		return fmt.Errorf("secret %s does not exist in namespace: %s", secretName, sourceNamespace)
+	}
+
+	// Modify the secret metadata to set the target namespace and remove resourceVersion
+	secret.ObjectMeta.Namespace = targetNamespace
+	secret.ObjectMeta.ResourceVersion = ""
+
+	// Create the secret in the target namespace
+	err = CreateK8sCR(ctx, c, secret, nil, UPDATE)
+	if err != nil {
+		return fmt.Errorf("failed to create secret %s in namespace %s: %w", secret.GetName(), secret.GetNamespace(), err)
+	}
+	return nil
+}
