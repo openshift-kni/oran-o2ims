@@ -36,9 +36,7 @@ import (
 )
 
 const (
-	alartmanagerApiUrlPrefix    = "alertmanager-open-cluster-management-observability"
-	resourceServerURLFlagName   = "resource-server-url"
-	resourceServerTokenFlagName = "resource-server-token"
+	alertmanagerApiUrlPrefix = "alertmanager-open-cluster-management-observability"
 )
 
 // Server creates and returns the `start alarm-server` command.
@@ -272,8 +270,8 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	})
 	router.Use(metricsWrapper)
 
-	// Generate the search API URL according the backend URL
-	backendURL, err = c.generateAlarmmanagerApiUrl(backendURL)
+	// Generate the Prometheus Alertmanager API URL according to the backend URL
+	backendURL, err = c.generateAlertmanagerApiUrl(backendURL)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
@@ -467,7 +465,7 @@ func (c *AlarmServerCommand) createAlarmProbableCausesHandler(ctx context.Contex
 	return nil
 }
 
-func (c *AlarmServerCommand) generateAlarmmanagerApiUrl(backendURL string) (string, error) {
+func (c *AlarmServerCommand) generateAlertmanagerApiUrl(backendURL string) (string, error) {
 	u, err := url.Parse(backendURL)
 	if err != nil {
 		return "", err
@@ -476,8 +474,8 @@ func (c *AlarmServerCommand) generateAlarmmanagerApiUrl(backendURL string) (stri
 	// Split URL address
 	hostArr := strings.Split(u.Host, ".")
 
-	// Replace with Alarmmanager API prefix
-	hostArr[0] = alartmanagerApiUrlPrefix
+	// Replace with Alertmanager API prefix
+	hostArr[0] = alertmanagerApiUrlPrefix
 
 	// Generate search API URL
 	alertmanagerUri := strings.Join(hostArr, ".")

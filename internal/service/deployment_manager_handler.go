@@ -36,7 +36,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
-	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
 // DeploymentManagerBackendType defines the types of backends supported by the deployment manager: global or regular ACM hub.
@@ -65,21 +64,20 @@ type DeploymentManagerHandlerBuilder struct {
 // Don't create instances of this type directly, use the NewDeploymentManagerHandler function
 // instead.
 type DeploymentManagerHandler struct {
-	logger            *slog.Logger
-	loggingWrapper    func(http.RoundTripper) http.RoundTripper
-	cloudID           string
-	extensions        []string
-	backendType       DeploymentManagerBackendType
-	backendURL        string
-	backendToken      string
-	backendClient     *http.Client
-	jsonAPI           jsoniter.API
-	selectorEvaluator *search.SelectorEvaluator
-	jqTool            *jq.Tool
-	hubClient         *k8s.Client
-	enableHack        bool
-	profileCacheLock  *sync.Mutex
-	profileCache      map[string]data.Object
+	logger           *slog.Logger
+	loggingWrapper   func(http.RoundTripper) http.RoundTripper
+	cloudID          string
+	extensions       []string
+	backendType      DeploymentManagerBackendType
+	backendURL       string
+	backendToken     string
+	backendClient    *http.Client
+	jsonAPI          jsoniter.API
+	jqTool           *jq.Tool
+	hubClient        *k8s.Client
+	enableHack       bool
+	profileCacheLock *sync.Mutex
+	profileCache     map[string]data.Object
 }
 
 // NewDeploymentManagerHandler creates a builder that can then be used to configure and create a
@@ -195,21 +193,6 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 	}
 	jsonAPI := jsonConfig.Froze()
 
-	// Create the filter expression evaluator:
-	pathEvaluator, err := search.NewPathEvaluator().
-		SetLogger(b.logger).
-		Build()
-	if err != nil {
-		return
-	}
-	selectorEvaluator, err := search.NewSelectorEvaluator().
-		SetLogger(b.logger).
-		SetPathEvaluator(pathEvaluator.Evaluate).
-		Build()
-	if err != nil {
-		return
-	}
-
 	// Create the jq tool:
 	jqTool, err := jq.NewTool().
 		SetLogger(b.logger).
@@ -240,21 +223,20 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 
 	// Create and populate the object:
 	result = &DeploymentManagerHandler{
-		logger:            b.logger,
-		loggingWrapper:    b.loggingWrapper,
-		cloudID:           b.cloudID,
-		extensions:        slices.Clone(b.extensions),
-		backendType:       b.backendType,
-		backendURL:        b.backendURL,
-		backendToken:      b.backendToken,
-		backendClient:     backendClient,
-		selectorEvaluator: selectorEvaluator,
-		jsonAPI:           jsonAPI,
-		jqTool:            jqTool,
-		hubClient:         hubClient,
-		enableHack:        b.enableHack,
-		profileCacheLock:  &sync.Mutex{},
-		profileCache:      map[string]data.Object{},
+		logger:           b.logger,
+		loggingWrapper:   b.loggingWrapper,
+		cloudID:          b.cloudID,
+		extensions:       slices.Clone(b.extensions),
+		backendType:      b.backendType,
+		backendURL:       b.backendURL,
+		backendToken:     b.backendToken,
+		backendClient:    backendClient,
+		jsonAPI:          jsonAPI,
+		jqTool:           jqTool,
+		hubClient:        hubClient,
+		enableHack:       b.enableHack,
+		profileCacheLock: &sync.Mutex{},
+		profileCache:     map[string]data.Object{},
 	}
 	return
 }
@@ -278,17 +260,6 @@ func (h *DeploymentManagerHandler) List(ctx context.Context,
 
 	// Transform the items into what we need:
 	items = data.Map(items, h.mapItem)
-
-	// Select only the items that satisfy the filter:
-	if request.Selector != nil {
-		items = data.Select(
-			items,
-			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.selectorEvaluator.Evaluate(ctx, request.Selector, item)
-				return
-			},
-		)
-	}
 
 	// Return the result:
 	response = &ListResponse{

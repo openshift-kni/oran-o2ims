@@ -22,8 +22,6 @@ import (
 	"net/http"
 	"slices"
 
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
@@ -54,8 +52,6 @@ type ResourcePoolHandler struct {
 	backendURL          string
 	backendToken        string
 	backendClient       *http.Client
-	jsonAPI             jsoniter.API
-	selectorEvaluator   *search.SelectorEvaluator
 	graphqlQuery        string
 	graphqlVars         *model.SearchInput
 	resourcePoolFetcher *ResourcePoolFetcher
@@ -159,40 +155,17 @@ func (b *ResourcePoolHandlerBuilder) Build() (
 		Transport: backendTransport,
 	}
 
-	// Prepare the JSON iterator API:
-	jsonConfig := jsoniter.Config{
-		IndentionStep: 2,
-	}
-	jsonAPI := jsonConfig.Froze()
-
-	// Create the filter expression evaluator:
-	pathEvaluator, err := search.NewPathEvaluator().
-		SetLogger(b.logger).
-		Build()
-	if err != nil {
-		return
-	}
-	selectorEvaluator, err := search.NewSelectorEvaluator().
-		SetLogger(b.logger).
-		SetPathEvaluator(pathEvaluator.Evaluate).
-		Build()
-	if err != nil {
-		return
-	}
-
 	// Create and populate the object:
 	result = &ResourcePoolHandler{
-		logger:            b.logger,
-		transportWrapper:  b.transportWrapper,
-		cloudID:           b.cloudID,
-		extensions:        slices.Clone(b.extensions),
-		backendURL:        b.backendURL,
-		backendToken:      b.backendToken,
-		backendClient:     backendClient,
-		selectorEvaluator: selectorEvaluator,
-		jsonAPI:           jsonAPI,
-		graphqlQuery:      b.graphqlQuery,
-		graphqlVars:       b.graphqlVars,
+		logger:           b.logger,
+		transportWrapper: b.transportWrapper,
+		cloudID:          b.cloudID,
+		extensions:       slices.Clone(b.extensions),
+		backendURL:       b.backendURL,
+		backendToken:     b.backendToken,
+		backendClient:    backendClient,
+		graphqlQuery:     b.graphqlQuery,
+		graphqlVars:      b.graphqlVars,
 	}
 	return
 }
@@ -205,17 +178,6 @@ func (h *ResourcePoolHandler) List(ctx context.Context,
 	resourcePools, err := h.fetchItems(ctx, request.Selector)
 	if err != nil {
 		return
-	}
-
-	// Select only the items that satisfy the filter:
-	if request.Selector != nil {
-		resourcePools = data.Select(
-			resourcePools,
-			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.selectorEvaluator.Evaluate(ctx, request.Selector, item)
-				return
-			},
-		)
 	}
 
 	// Return the result:

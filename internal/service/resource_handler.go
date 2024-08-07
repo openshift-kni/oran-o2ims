@@ -23,7 +23,6 @@ import (
 	"slices"
 
 	"github.com/itchyny/gojq"
-	jsoniter "github.com/json-iterator/go"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
@@ -49,19 +48,17 @@ type ResourceHandlerBuilder struct {
 // ResourceHandler knows how to respond to requests to list resources. Don't create
 // instances of this type directly, use the NewResourceHandler function instead.
 type ResourceHandler struct {
-	logger            *slog.Logger
-	transportWrapper  func(http.RoundTripper) http.RoundTripper
-	cloudID           string
-	extensions        []string
-	backendURL        string
-	backendToken      string
-	backendClient     *http.Client
-	jsonAPI           jsoniter.API
-	selectorEvaluator *search.SelectorEvaluator
-	graphqlQuery      string
-	graphqlVars       *model.SearchInput
-	resourceFetcher   *ResourceFetcher
-	jqTool            *jq.Tool
+	logger           *slog.Logger
+	transportWrapper func(http.RoundTripper) http.RoundTripper
+	cloudID          string
+	extensions       []string
+	backendURL       string
+	backendToken     string
+	backendClient    *http.Client
+	graphqlQuery     string
+	graphqlVars      *model.SearchInput
+	resourceFetcher  *ResourceFetcher
+	jqTool           *jq.Tool
 }
 
 // NewResourceHandler creates a builder that can then be used to configure and create a
@@ -162,27 +159,6 @@ func (b *ResourceHandlerBuilder) Build() (
 		Transport: backendTransport,
 	}
 
-	// Prepare the JSON iterator API:
-	jsonConfig := jsoniter.Config{
-		IndentionStep: 2,
-	}
-	jsonAPI := jsonConfig.Froze()
-
-	// Create the filter expression evaluator:
-	pathEvaluator, err := search.NewPathEvaluator().
-		SetLogger(b.logger).
-		Build()
-	if err != nil {
-		return
-	}
-	selectorEvaluator, err := search.NewSelectorEvaluator().
-		SetLogger(b.logger).
-		SetPathEvaluator(pathEvaluator.Evaluate).
-		Build()
-	if err != nil {
-		return
-	}
-
 	// Create a jq compiler function for parsing labels
 	compilerFunc := gojq.WithFunction("parse_labels", 0, 1, func(x any, _ []any) any {
 		if labels, ok := x.(string); ok {
@@ -210,18 +186,16 @@ func (b *ResourceHandlerBuilder) Build() (
 
 	// Create and populate the object:
 	result = &ResourceHandler{
-		logger:            b.logger,
-		transportWrapper:  b.transportWrapper,
-		cloudID:           b.cloudID,
-		extensions:        slices.Clone(b.extensions),
-		backendURL:        b.backendURL,
-		backendToken:      b.backendToken,
-		backendClient:     backendClient,
-		selectorEvaluator: selectorEvaluator,
-		jsonAPI:           jsonAPI,
-		graphqlQuery:      b.graphqlQuery,
-		graphqlVars:       b.graphqlVars,
-		jqTool:            jqTool,
+		logger:           b.logger,
+		transportWrapper: b.transportWrapper,
+		cloudID:          b.cloudID,
+		extensions:       slices.Clone(b.extensions),
+		backendURL:       b.backendURL,
+		backendToken:     b.backendToken,
+		backendClient:    backendClient,
+		graphqlQuery:     b.graphqlQuery,
+		graphqlVars:      b.graphqlVars,
+		jqTool:           jqTool,
 	}
 	return
 }
@@ -233,17 +207,6 @@ func (h *ResourceHandler) List(ctx context.Context,
 	resources, err := h.fetchItems(ctx, request.Variables[0], request.Selector)
 	if err != nil {
 		return
-	}
-
-	// Select only the items that satisfy the filter:
-	if request.Selector != nil {
-		resources = data.Select(
-			resources,
-			func(ctx context.Context, item data.Object) (result bool, err error) {
-				result, err = h.selectorEvaluator.Evaluate(ctx, request.Selector, item)
-				return
-			},
-		)
 	}
 
 	// Return the result:

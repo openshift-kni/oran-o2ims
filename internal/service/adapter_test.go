@@ -228,7 +228,7 @@ var _ = Describe("Adapter", func() {
 			router.ServeHTTP(recorder, request)
 		})
 
-		It("Accepts multiple filters", func() {
+		It("Accepts multiple selectors", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *ListRequest) (response *ListResponse, err error) {
@@ -282,7 +282,7 @@ var _ = Describe("Adapter", func() {
 			router.ServeHTTP(recorder, request)
 		})
 
-		It("Accepts no filter", func() {
+		It("Accepts zero selectors", func() {
 			// Prepare the handler:
 			body := func(ctx context.Context,
 				request *ListRequest) (response *ListResponse, err error) {
@@ -311,7 +311,7 @@ var _ = Describe("Adapter", func() {
 			router.ServeHTTP(recorder, request)
 		})
 
-		It("Rejects incorrect filter", func() {
+		It("Rejects incorrect selector", func() {
 			// Prepare the handler, but don't expect any call as the filter error will
 			// be detected before calling the handler.
 			handler := NewMockHandler(ctrl)
@@ -331,6 +331,53 @@ var _ = Describe("Adapter", func() {
 			// Run the adapter:
 			adapter.ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		It("Applies selector", func() {
+			// Prepare the handler:
+			body := func(ctx context.Context,
+				request *ListRequest) (response *ListResponse, err error) {
+				response = &ListResponse{
+					Items: data.Pour(
+						data.Object{
+							"name": "a",
+						},
+						data.Object{
+							"name": "b",
+						},
+					),
+				}
+				return
+			}
+			handler := NewMockHandler(ctrl)
+			handler.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(body)
+
+			// Create the adapter:
+			adapter, err := NewAdapter().
+				SetLogger(logger).
+				SetPathVariables("id").
+				SetHandler(handler).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			router := mux.NewRouter()
+			router.Handle("/mycollection", adapter)
+
+			// Send the request:
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/mycollection?filter=(eq,name,b)",
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+
+			// Check that we received only the expected results that match
+			// the selector.
+			Expect(recorder.Body).To(MatchJSON(`[
+				{
+					"name": "b"
+				}
+			]`))
 		})
 	})
 
