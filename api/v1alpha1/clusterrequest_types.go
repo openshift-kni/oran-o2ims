@@ -29,6 +29,9 @@ type ClusterRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// LocationSpec is the geographical location of the requested node.
+	LocationSpec `json:",inline"`
+
 	// Reference to an existing clusterTemplate CR.
 	ClusterTemplateRef string `json:"clusterTemplateRef"`
 
@@ -52,6 +55,15 @@ type ClusterTemplateInputValidation struct {
 	InputIsValid bool `json:"inputIsValid"`
 	// Holds the error in case the ClusterTemplateInput is invalid.
 	InputError string `json:"inputError,omitempty"`
+}
+
+type HardwareProvisioningStatus struct {
+	// Contains the name of the created NodePool.
+	ClusterName string `json:"clusterName,omitempty"`
+	// Contains the namespace of the created NodePool.
+	Namespace string `json:"namespace,omitempty"`
+	// Holds the status of the hardware provisioning
+	HardwareStatus string `json:"hardwareStatus,omitempty"`
 }
 
 type RenderedTemplateStatus struct {
@@ -98,6 +110,9 @@ type ClusterRequestStatus struct {
 
 	// ClusterInstanceStatus holds status details about the ClusterInstance.
 	ClusterInstanceStatus *ClusterInstanceStatus `json:"clusterInstanceStatus,omitempty"`
+
+	// HardwareProvisioningStatus holds status details about the NodePool
+	HardwareProvisioningStatus *HardwareProvisioningStatus `json:"hardwareProvisioningStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true

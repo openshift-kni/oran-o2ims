@@ -4,20 +4,19 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.13.0
-  name: clustertemplates.oran.openshift.io
+  name: nodes.oran.openshift.io
 spec:
   group: oran.openshift.io
   names:
-    kind: ClusterTemplate
-    listKind: ClusterTemplateList
-    plural: clustertemplates
-    singular: clustertemplate
+    kind: Node
+    listKind: NodeList
+    plural: nodes
+    singular: node
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterTemplate is the Schema for the clustertemplates API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -32,45 +31,40 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClusterTemplateSpec defines the desired state of ClusterTemplate
+            description: NodeSpec describes a node presents a hardware server
             properties:
-              inputDataSchema:
-                description: InputDataSchema encapsulates all the schemas required
-                  for ClusterTemplate.
-                properties:
-                  clusterInstanceSchema:
-                    description: ClusterInstanceSchema defines the parameters required
-                      for provisioning. The parameter definitions should follow the
-                      OpenAPI V3 schema and explicitly define required fields.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                required:
-                - clusterInstanceSchema
-                type: object
-              templates:
-                description: Templates defines the references to the templates required
-                  for ClusterTemplate.
-                properties:
-                  clusterInstanceDefaults:
-                    description: ClusterInstanceDefaults defines a reference to a
-                      configmap with default values for ClusterInstance
-                    type: string
-                  hwTemplate:
-                    description: HwTemplate defines a reference to a hardware template
-                      config map
-                    type: string
-                required:
-                - clusterInstanceDefaults
-                - hwTemplate
-                type: object
+              groupName:
+                type: string
+              hwProfile:
+                type: string
+              nodePool:
+                type: string
             required:
-            - inputDataSchema
-            - templates
+            - groupName
+            - hwProfile
+            - nodePool
             type: object
           status:
-            description: ClusterTemplateStatus defines the observed state of ClusterTemplate
+            description: NodePoolStatus describes the observed state of a request
+              to allocate and prepare a node that will eventually be part of a deployment
+              manager.
             properties:
+              bmc:
+                properties:
+                  address:
+                    description: Address contains the URL for accessing the BMC over
+                      the network.
+                    type: string
+                  credentialsName:
+                    description: CredentialsName is a reference to a secret containing
+                      the credentials. That secret should contain the keys `username`
+                      and `password`.
+                    type: string
+                type: object
               conditions:
+                description: Conditions represent the observations of the current
+                  state of the NodePool. Possible values of the condition type are
+                  `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct
@@ -140,11 +134,6 @@ spec:
                 type: array
             type: object
         type: object
-        x-kubernetes-validations:
-        - message: Spec changes are not allowed for a ClusterTemplate that has passed
-            the validation
-          rule: '!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type==''ClusterTemplateValidated''
-            && c.status==''False'') || oldSelf.spec == self.spec'
     served: true
     storage: true
     subresources:

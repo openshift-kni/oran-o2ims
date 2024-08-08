@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -152,8 +153,34 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 		return ctrl.Result{}, nil
 	}
 
+	// ### HARDWARE TEMPLATE RENDERING ###
+	renderedNodePool, renderErr := t.renderHardwareTemplate(ctx, renderedClusterInstance)
+	if renderErr != nil {
+		return ctrl.Result{}, nil
+	}
+
+	// ### CREATE/UPDATE NODE POOL CR ###
+	createErr := t.createNodePoolResources(ctx, renderedNodePool)
+	if createErr != nil {
+		return ctrl.Result{}, nil
+	}
+
+	// wait for the NodePool to be provisioned and update BMC details in ClusterInstance
+	if !t.waitForHardwareData(ctx, renderedClusterInstance, renderedNodePool) {
+		t.logger.InfoContext(
+			ctx,
+			fmt.Sprintf(
+				"Waiting for NodePool %s in the namespace %s to be provisioned",
+				renderedNodePool.GetName(),
+				renderedNodePool.GetNamespace(),
+			),
+		)
+		//TODO: enable Requeue after the hardware plugin is ready
+		//return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+	}
+
 	// ### CREATION OF RESOURCES NEEDED BY THE CLUSTER INSTANCE ###
-	createErr := t.createClusterInstanceResources(ctx, renderedClusterInstance)
+	createErr = t.createClusterInstanceResources(ctx, renderedClusterInstance)
 	if createErr != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -305,6 +332,112 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 	return renderedClusterInstance, nil
 }
 
+func (t *clusterRequestReconcilerTask) renderHardwareTemplate(ctx context.Context,
+	clusterInstance *unstructured.Unstructured) (*oranv1alpha1.NodePool, error) {
+	renderedNodePool, renderErr := t.handleRenderHardwareTemplate(ctx, clusterInstance)
+	if renderErr != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to render the Hardware template for NodePool",
+			slog.String("name", t.object.Name),
+			slog.String("error", renderErr.Error()),
+		)
+		renderErr = fmt.Errorf("failed to render the Hardware template: %s", renderErr.Error())
+		err := t.updateRenderTemplateStatus(ctx, renderErr)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to update the RenderTemplate status for ClusterRequest",
+				slog.String("name", t.object.Name),
+			)
+		}
+		return &oranv1alpha1.NodePool{}, renderErr
+	}
+	return renderedNodePool, nil
+}
+
+func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
+	clusterInstance *unstructured.Unstructured) (*oranv1alpha1.NodePool, error) {
+
+	nodePool := &oranv1alpha1.NodePool{}
+	hwTemplateCm := &corev1.ConfigMap{}
+
+	clusterTemplate, err := t.getCrClusterTemplateRef(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the ClusterTemplate for ClusterRequest %s: %w ", t.object.Name, err)
+
+	}
+	hwTemplateCmName := clusterTemplate.Spec.Templates.HwTemplate
+	cmExists, err := utils.DoesK8SResourceExist(
+		ctx, t.client, hwTemplateCmName, utils.ORANO2IMSNamespace, hwTemplateCm)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to get the %s configmap for Hardware Template, err: %w", hwTemplateCmName, err)
+	}
+	if !cmExists {
+		t.logger.InfoContext(
+			ctx,
+			"[renderHardwareTemplate] The Configmap for Hardware Template is not found",
+			fmt.Sprintf("[renderHardwareTemplate] The Configmap %s in the namespace %s for "+
+				"Hardware Template is not found",
+				hwTemplateCmName,
+				utils.ORANO2IMSNamespace,
+			),
+			slog.String("name", t.object.Name),
+		)
+		return nil, fmt.Errorf("configmap for Hardware Template is not found %s: %w ", hwTemplateCmName, err)
+	}
+
+	nodeGroup := []oranv1alpha1.NodeGroup{}
+	poolData, exists := hwTemplateCm.Data[utils.HwTemplateNodePool]
+	if !exists {
+		return nil, fmt.Errorf(
+			"%s does not exist in the %s configmap data",
+			utils.HwTemplateNodePool,
+			hwTemplateCmName,
+		)
+	}
+	if err := k8syaml.Unmarshal([]byte(poolData), &nodeGroup); err != nil {
+		return nil, fmt.Errorf(
+			"error unmarshaling JSON data from configmap %s for Hardware Template, err: %w", hwTemplateCmName, err)
+	}
+
+	// count the nodes  per group
+	roleCounts := make(map[string]int)
+	specInterface, specExists := clusterInstance.Object["spec"].(map[string]any)
+	if !specExists {
+		return nil, fmt.Errorf(
+			"\"spec\" expected to exist in the rendered ClusterInstance for ClusterRequest %s, but it's missing",
+			t.object.Name,
+		)
+	}
+	if nodes, ok := specInterface["nodes"].([]interface{}); ok {
+		for _, node := range nodes {
+			if nodeMap, ok := node.(map[string]interface{}); ok {
+				if role, ok := nodeMap["role"].(string); ok {
+					roleCounts[role]++
+				}
+			}
+		}
+	} else {
+		return nil, fmt.Errorf("nodes field is not a list")
+	}
+
+	for i, group := range nodeGroup {
+		if count, ok := roleCounts[group.Name]; ok {
+			nodeGroup[i].Size = count
+		}
+	}
+	nodePool.Spec.CloudID = clusterInstance.GetName()
+	nodePool.Spec.LocationSpec = t.object.Spec.LocationSpec
+	nodePool.Spec.Site = t.object.Spec.Site
+	nodePool.Spec.NodeGroup = nodeGroup
+	nodePool.ObjectMeta.Name = clusterInstance.GetName()
+	nodePool.ObjectMeta.Namespace = hwTemplateCm.Data[utils.HwTemplatePluginMgr]
+
+	return nodePool, nil
+}
+
 // getCtClusterInstanceDefaults retrieves the dafault data for ClusterInstance for a configmap
 func (t *clusterRequestReconcilerTask) getCtClusterInstanceDefaults(
 	ctx context.Context, configmapName string) (map[string]any, error) {
@@ -394,16 +527,10 @@ func (t *clusterRequestReconcilerTask) buildClusterInstanceData(
 func (t *clusterRequestReconcilerTask) createClusterInstanceResources(
 	ctx context.Context, clusterInstance *unstructured.Unstructured) error {
 
-	// Create the clusterInstance namespace.
-	err := t.createClusterInstanceNamespace(ctx, clusterInstance)
-	if err != nil {
-		return err
-	}
-
 	clusterName := clusterInstance.GetName()
 
 	// Create the BMC secrets.
-	err = t.createClusterInstanceBMCSecrets(ctx, clusterName)
+	err := t.createClusterInstanceBMCSecrets(ctx, clusterName)
 	if err != nil {
 		return err
 	}
@@ -452,7 +579,7 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 	// template.
 	configMap := &corev1.ConfigMap{}
 	configMapExists, err := utils.DoesK8SResourceExist(
-		ctx, t.client, t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef, configMap)
+		ctx, t.client, clusterName, t.object.Spec.ClusterTemplateRef, configMap)
 	if err != nil {
 		return err
 	}
@@ -542,15 +669,7 @@ func (t *clusterRequestReconcilerTask) createPullSecret(
 // createClusterInstanceNamespace creates the namespace of the ClusterInstance
 // where all the other resources needed for installation will exist.
 func (t *clusterRequestReconcilerTask) createClusterInstanceNamespace(
-	ctx context.Context, clusterInstance *unstructured.Unstructured) error {
-
-	// If we got to this point, we can assume that all the keys exist, including
-	// clusterName
-	clusterName := clusterInstance.GetName()
-	t.logger.InfoContext(
-		ctx,
-		"nodes: "+fmt.Sprintf("%v", clusterName),
-	)
+	ctx context.Context, clusterName string) error {
 
 	// Create the namespace.
 	namespace := &corev1.Namespace{
@@ -618,6 +737,99 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 	}
 
 	return nil
+}
+
+// copyHwMgrPluginBMCSecret copies the BMC secret from the plugin namespace to the cluster namespace
+func (t *clusterRequestReconcilerTask) copyHwMgrPluginBMCSecret(ctx context.Context, name string, sourceNamespace string, targetNamespace string) error {
+
+	// if the secret already exists in the target namespace, do nothing
+	secret := &corev1.Secret{}
+	exists, err := utils.DoesK8SResourceExist(
+		ctx, t.client, name, targetNamespace, secret)
+	if err != nil {
+		return err
+	}
+	if exists {
+		t.logger.Info(
+			"BMC secret already exists in the cluster namespace",
+			slog.String("name", name),
+			slog.String("name", targetNamespace),
+		)
+		return nil
+	}
+	return utils.CopyK8sSecret(ctx, t.client, name, sourceNamespace, targetNamespace)
+}
+
+// createHwMgrPluginNamespace creates the namespace of the hardware manager plugin
+// where the node pools resource resides
+func (t *clusterRequestReconcilerTask) createHwMgrPluginNamespace(
+	ctx context.Context, name string) error {
+
+	t.logger.InfoContext(
+		ctx,
+		"Plugin: "+fmt.Sprintf("%v", name),
+	)
+
+	// Create the namespace.
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	err := utils.CreateK8sCR(ctx, t.client, namespace, nil, utils.UPDATE)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *oranv1alpha1.NodePool) error {
+
+	// Create the hardware plugin namespace.
+	pluginNameSpace := nodePool.ObjectMeta.Namespace
+	createErr := t.createHwMgrPluginNamespace(ctx, pluginNameSpace)
+	if createErr != nil {
+		return fmt.Errorf(
+			"failed to create hardware manager plugin namespace %s, err: %w", pluginNameSpace, createErr)
+	}
+	// Create the clusterInstance namespace.
+	err := t.createClusterInstanceNamespace(ctx, nodePool.GetName())
+	if err != nil {
+		return err
+	}
+
+	// Create/update the node pool resource
+	createErr = utils.CreateK8sCR(ctx, t.client, nodePool, t.object, utils.UPDATE)
+	if createErr != nil {
+		t.logger.ErrorContext(
+			ctx,
+			fmt.Sprintf(
+				"Failed to create/update the NodePool %s in the namespace %s",
+				nodePool.GetName(),
+				nodePool.GetNamespace(),
+			),
+			slog.String("error", createErr.Error()),
+		)
+		createErr = fmt.Errorf("failed to create/update the NodePool: %s", createErr.Error())
+	}
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf(
+			"Created/Updated NodePool %s in the namespace %s",
+			nodePool.GetName(),
+			nodePool.GetNamespace(),
+		),
+	)
+	err = t.updateRenderTemplateAppliedStatus(ctx, createErr)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update the RenderTemplateApplied status for ClusterRequest",
+			slog.String("name", t.object.Name),
+		)
+	}
+	return createErr
 }
 
 func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Context) (*oranv1alpha1.ClusterTemplate, error) {
@@ -749,33 +961,58 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 	// will also delete the namespace.
 	if clusterRequest.Status.RenderedTemplateStatus != nil {
 		if clusterRequest.Status.RenderedTemplateStatus.RenderedTemplateApplied {
-			clusterInstanceName := clusterRequest.Status.ClusterInstanceStatus.Name
+			if clusterRequest.Status.ClusterInstanceStatus != nil {
+				clusterInstanceName := clusterRequest.Status.ClusterInstanceStatus.Name
 
-			clusterInstance := &unstructured.Unstructured{}
-			clusterInstance.SetGroupVersionKind(schema.GroupVersionKind{
-				Kind:    "ClusterInstance",
-				Group:   "siteconfig.open-cluster-management.io",
-				Version: "v1alpha1",
-			})
-			clusterInstance.SetName(clusterInstanceName)
-			clusterInstance.SetNamespace(clusterInstanceName)
+				clusterInstance := &unstructured.Unstructured{}
+				clusterInstance.SetGroupVersionKind(schema.GroupVersionKind{
+					Kind:    "ClusterInstance",
+					Group:   "siteconfig.open-cluster-management.io",
+					Version: "v1alpha1",
+				})
+				clusterInstance.SetName(clusterInstanceName)
+				clusterInstance.SetNamespace(clusterInstanceName)
 
-			exists, err := utils.DoesK8SResourceExist(
-				ctx,
-				r.Client,
-				clusterRequest.Status.ClusterInstanceStatus.Name,
-				clusterRequest.Status.ClusterInstanceStatus.Name,
-				clusterInstance,
-			)
+				exists, err := utils.DoesK8SResourceExist(
+					ctx,
+					r.Client,
+					clusterRequest.Status.ClusterInstanceStatus.Name,
+					clusterRequest.Status.ClusterInstanceStatus.Name,
+					clusterInstance,
+				)
 
-			if err != nil {
-				return err
-			}
-
-			if exists {
-				err := r.Client.Delete(ctx, clusterInstance)
 				if err != nil {
 					return err
+				}
+
+				if exists {
+					err := r.Client.Delete(ctx, clusterInstance)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			if clusterRequest.Status.HardwareProvisioningStatus != nil {
+				// delete the node pool created by this request if it exists
+				nodePool := &oranv1alpha1.NodePool{}
+				exists, err := utils.DoesK8SResourceExist(
+					ctx,
+					r.Client,
+					clusterRequest.Status.HardwareProvisioningStatus.ClusterName,
+					clusterRequest.Status.HardwareProvisioningStatus.Namespace,
+					nodePool,
+				)
+
+				if err != nil {
+					return err
+				}
+
+				if exists {
+					err := r.Client.Delete(ctx, nodePool)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -831,6 +1068,226 @@ func (r *ClusterRequestReconciler) handleFinalizer(
 		}
 	}
 	return ctrl.Result{}, false, nil
+}
+
+// waitForNodePoolProvision waits for the NodePool status to be in the provisioned state.
+func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Context,
+	nodePool *oranv1alpha1.NodePool) bool {
+
+	// Get the generated NodePool and its status.
+	exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodePool.GetName(),
+		nodePool.GetNamespace(), nodePool)
+
+	if err != nil || !exists {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to get the NodePools",
+			slog.String("name", nodePool.GetName()),
+			slog.String("namespace", nodePool.GetNamespace()),
+		)
+		return false
+	}
+
+	//Update the Cluster Request Status with status from the NodePool object.
+	err = t.updateHardwareProvisioningStatus(ctx, nodePool)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update the NodePool status for ClusterRequest",
+			slog.String("name", t.object.Name),
+		)
+	}
+	// Check if provisioning is completed
+	provisionedCondition := meta.FindStatusCondition(nodePool.Status.Conditions, "Provisioned")
+	if provisionedCondition != nil && provisionedCondition.Status == metav1.ConditionTrue {
+		t.logger.InfoContext(
+			ctx,
+			fmt.Sprintf(
+				"NodePool %s in the namespace %s is provisioned",
+				nodePool.GetName(),
+				nodePool.GetNamespace(),
+			),
+		)
+		return true
+	}
+	return false
+}
+
+// updateClusterInstance updates the given clusterinstance object based on the provisioned nodePool.
+func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context,
+	clusterInstance *unstructured.Unstructured, nodePool *oranv1alpha1.NodePool) bool {
+
+	hwNodes := make(map[string][]oranv1alpha1.BMC)
+	for _, nodeName := range nodePool.Status.Properties.NodeNames {
+		node := &oranv1alpha1.Node{}
+		exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodeName, nodePool.Namespace, node)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to get the Node object",
+				slog.String("name", nodeName),
+				slog.String("namespace", nodePool.Namespace),
+				slog.String("error", err.Error()),
+				slog.Bool("exists", exists),
+			)
+			return false
+		}
+		if !exists {
+			t.logger.ErrorContext(
+				ctx,
+				"Node object does not exist",
+				slog.String("name", nodeName),
+				slog.String("namespace", nodePool.Namespace),
+				slog.Bool("exists", exists),
+			)
+			return false
+		}
+		// Verify the node object is generated from the expected pool
+		if node.Spec.NodePool != nodePool.GetName() {
+			t.logger.ErrorContext(
+				ctx,
+				"Node object is not from the expected NodePool",
+				slog.String("name", node.GetName()),
+				slog.String("pool", nodePool.GetName()),
+			)
+			return false
+		}
+		if node.Status.BMC == nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Node status does not have BMC details",
+				slog.String("name", node.GetName()),
+				slog.String("pool", nodePool.GetName()),
+			)
+			return false
+
+		}
+		// Store the BMC details per group
+		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], oranv1alpha1.BMC{
+			Address:         node.Status.BMC.Address,
+			CredentialsName: node.Status.BMC.CredentialsName,
+		})
+	}
+	// Copy the BMC secret from the plugin namespace to the cluster namespace
+	for _, bmcs := range hwNodes {
+		for _, bmc := range bmcs {
+			// nodePool namespace is the plugin namespace, and nodePool name is the cluster name
+			err := t.copyHwMgrPluginBMCSecret(ctx, bmc.CredentialsName, nodePool.GetNamespace(), nodePool.GetName())
+			if err != nil {
+				t.logger.ErrorContext(
+					ctx,
+					"Failed to copy BMC secret from the plugin namespace to the cluster namespaceNode",
+					slog.String("name", bmc.CredentialsName),
+					slog.String("plugin", nodePool.GetNamespace()),
+					slog.String("cluster", nodePool.GetName()),
+				)
+				return false
+			}
+		}
+	}
+	// Populate the BMC endpoint and credential in the cluster instance
+	specInterface, specExists := clusterInstance.Object["spec"].(map[string]any)
+	if !specExists {
+		return false
+	}
+	if nodes, ok := specInterface["nodes"].([]interface{}); ok {
+		for _, node := range nodes {
+			if nodeMap, ok := node.(map[string]interface{}); ok {
+				if role, ok := nodeMap["role"].(string); ok {
+					// Check if the node's role matches any key in hwNodes
+					if bmcs, exists := hwNodes[role]; exists && len(bmcs) > 0 {
+						// Assign the first BMC item to the node
+						nodeMap["bmcAddress"] = bmcs[0].Address
+						nodeMap["bmcCredentialsName"] = map[string]interface{}{"name": bmcs[0].CredentialsName}
+						// Remove the first BMC item from the list
+						hwNodes[role] = bmcs[1:]
+					}
+				}
+			}
+		}
+	}
+	return true
+}
+
+// waitForHardwareData waits for the NodePool to be provisioned and update BMC details in ClusterInstance.
+func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
+	clusterInstance *unstructured.Unstructured, nodePool *oranv1alpha1.NodePool) bool {
+
+	provisioned := t.waitForNodePoolProvision(ctx, nodePool)
+	if provisioned {
+		t.logger.InfoContext(
+			ctx,
+			fmt.Sprintf(
+				"NodePool %s in the namespace %s is provisioned",
+				nodePool.GetName(),
+				nodePool.GetNamespace(),
+			),
+		)
+		return t.updateClusterInstance(ctx, clusterInstance, nodePool)
+	}
+	return false
+}
+
+// updateHardwareProvisioningStatus updates the status for the created ClusterInstance
+func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
+	ctx context.Context, nodePool *oranv1alpha1.NodePool) error {
+
+	var err error
+	if t.object.Status.HardwareProvisioningStatus == nil {
+		t.object.Status.HardwareProvisioningStatus = &oranv1alpha1.HardwareProvisioningStatus{}
+	}
+
+	t.object.Status.HardwareProvisioningStatus.ClusterName = nodePool.GetName()
+	t.object.Status.HardwareProvisioningStatus.Namespace = nodePool.GetNamespace()
+
+	if len(nodePool.Status.Conditions) > 0 {
+		provisionedCondition := meta.FindStatusCondition(
+			nodePool.Status.Conditions, "Provisioned")
+		if provisionedCondition != nil && provisionedCondition.Status == metav1.ConditionTrue {
+			t.object.Status.HardwareProvisioningStatus.HardwareStatus = utils.HardwareProvisioningCompleted
+		} else {
+			provisioningCondition := meta.FindStatusCondition(
+				nodePool.Status.Conditions, "Provisioning")
+			if provisioningCondition != nil && provisioningCondition.Status == metav1.ConditionTrue {
+				t.object.Status.HardwareProvisioningStatus.HardwareStatus = utils.HardwareProvisioningInProgress
+			} else {
+				failedCondition := meta.FindStatusCondition(
+					nodePool.Status.Conditions, "Failed")
+				if failedCondition != nil && failedCondition.Status == metav1.ConditionTrue {
+					t.object.Status.HardwareProvisioningStatus.HardwareStatus = utils.HardwareProvisioningFailed
+				} else {
+					t.object.Status.HardwareProvisioningStatus.HardwareStatus = utils.HardwareProvisioningUnknown
+				}
+			}
+		}
+
+		err = utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to update the HardwareProvisioning status for ClusterRequest",
+				slog.String("name", t.object.Name),
+			)
+		}
+	} else {
+		meta.SetStatusCondition(
+			&nodePool.Status.Conditions,
+			metav1.Condition{
+				Type:   "Unknown",
+				Status: metav1.ConditionUnknown,
+				Reason: "NotInitialized",
+			},
+		)
+		err = utils.UpdateK8sCRStatus(ctx, t.client, nodePool)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to update the NodePool status",
+				slog.String("name", nodePool.Name),
+			)
+		}
+	}
+	return err
 }
 
 // updateClusterInstanceStatus updates the status for the created ClusterInstance
@@ -998,6 +1455,43 @@ func (r *ClusterRequestReconciler) findClusterInstanceForClusterRequest(
 	}
 }
 
+// findNodePoolForClusterRequest maps the NodePool created by a
+// a ClusterRequest to a reconciliation request.
+func (r *ClusterRequestReconciler) findNodePoolForClusterRequest(
+	ctx context.Context, event event.UpdateEvent,
+	queue workqueue.RateLimitingInterface) {
+
+	newNodePool := event.ObjectNew.(*oranv1alpha1.NodePool)
+
+	// Get all the ClusterRequests.
+	clusterRequests := &oranv1alpha1.ClusterRequestList{}
+	err := r.Client.List(ctx, clusterRequests)
+	if err != nil {
+		r.Logger.Error("Error listing ClusterRequests. ", "Error: ", err)
+	}
+
+	// Create reconciling requests only for the ClusterRequest that has generated
+	// the current NodePool.
+	// TODO: Filter on future conditions that the ClusterRequest is interested in.
+	for _, clusterRequest := range clusterRequests.Items {
+		if clusterRequest.Status.HardwareProvisioningStatus != nil {
+			if clusterRequest.Status.HardwareProvisioningStatus.ClusterName == newNodePool.Name {
+				r.Logger.Info(
+					"[findNodePoolForClusterRequest] Add new reconcile request for ClusterRequest",
+					"name", clusterRequest.Name)
+				queue.Add(
+					reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Namespace: clusterRequest.Namespace,
+							Name:      clusterRequest.Name,
+						},
+					},
+				)
+			}
+		}
+	}
+}
+
 // findClusterRequestsForClusterTemplate maps the ClusterTemplates used by ClusterRequests
 // to reconciling requests for those ClusterRequests.
 func (r *ClusterRequestReconciler) findClusterRequestsForClusterTemplate(
@@ -1092,6 +1586,20 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&siteconfig.ClusterInstance{},
 			handler.Funcs{
 				UpdateFunc: r.findClusterInstanceForClusterRequest,
+			},
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Watch on status changes.
+					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
+				},
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
+		Watches(
+			&oranv1alpha1.NodePool{},
+			handler.Funcs{
+				UpdateFunc: r.findNodePoolForClusterRequest,
 			},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
