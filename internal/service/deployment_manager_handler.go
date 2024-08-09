@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/net"
 	"log/slog"
 	"net/http"
 	neturl "net/url"
@@ -174,12 +175,11 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper
-	backendTransport = &http.Transport{
+	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-	}
+	})
 	if b.loggingWrapper != nil {
 		backendTransport = b.loggingWrapper(backendTransport)
 	}
