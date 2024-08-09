@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"k8s.io/apimachinery/pkg/util/net"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -343,12 +344,12 @@ func (b *HandlerWrapperBuilder) Build() (result func(http.Handler) http.Handler,
 
 	// Create the HTTP client that will be used to load the keys:
 	keysClient := &http.Client{
-		Transport: &http.Transport{
+		Transport: net.SetTransportDefaults(&http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:            keysCA,
 				InsecureSkipVerify: b.keysInsecure,
 			},
-		},
+		}),
 	}
 
 	// Try to compile the regular expressions that define the parts of the URL space that are

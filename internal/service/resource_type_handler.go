@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"k8s.io/apimachinery/pkg/util/net"
 	"log/slog"
 	"net/http"
 
@@ -143,12 +144,11 @@ func (b *ResourceTypeHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper
-	backendTransport = &http.Transport{
+	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-	}
+	})
 	if b.transportWrapper != nil {
 		backendTransport = b.transportWrapper(backendTransport)
 	}
