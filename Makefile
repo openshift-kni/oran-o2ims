@@ -86,6 +86,10 @@ CONTAINER_TOOL ?= docker
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+
+# Source directories
+SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
+
 .PHONY: all
 all: build
 
@@ -311,7 +315,7 @@ test tests:
 .PHONY: fmt
 fmt:
 	@echo "Run fmt"
-	gofmt -s -l -w .
+	gofmt -s -l -w main.go $(SOURCE_DIRS)
 
 .PHONY: vet
 vet: ## Run go vet against code.
