@@ -18,72 +18,55 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type LocationSpec struct {
-	Location string `json:"location,omitempty"`
-	Site     string `json:"site"`
-}
-
-// NodePoolSpec describes a pool of nodes to allocate
-type NodePoolSpec struct {
-	// CloudID is the identifier of the O-Cloud that generated this request. The hardware
-	// manager may want to use this to tag the nodes in its database, and to generate
-	// statistics.
-	//
-	// +kubebuilder:validation:Required
-	CloudID string `json:"cloudID"`
-
-	// LocationSpec is the geographical location of the requested node.
-	LocationSpec `json:",inline"`
-
-	NodeGroup []NodeGroup `json:"nodeGroup"`
-}
-
-type NodeGroup struct {
-	Name      string `json:"name" yaml:"name"`
+// NodeSpec describes a node presents a hardware server
+type NodeSpec struct {
+	NodePool  string `json:"nodePool"`
+	GroupName string `json:"groupName"`
 	HwProfile string `json:"hwProfile"`
-	Size      int    `json:"size" yaml:"size"`
 }
 
-type Properties struct {
-	NodeNames []string `json:"nodeNames,omitempty"`
+type BMC struct {
+	// Address contains the URL for accessing the BMC over the network.
+	Address string `json:"address,omitempty"`
+
+	// CredentialsName is a reference to a secret containing the credentials. That secret
+	// should contain the keys `username` and `password`.
+	CredentialsName string `json:"credentialsName,omitempty"`
 }
 
 // NodePoolStatus describes the observed state of a request to allocate and prepare
 // a node that will eventually be part of a deployment manager.
-type NodePoolStatus struct {
-	// Properties represents the node properties in the pool
-	Properties Properties `json:"properties,omitempty"`
-
+type NodeStatus struct {
+	BMC *BMC `json:"bmc,omitempty"`
 	// Conditions represent the observations of the current state of the NodePool. Possible
 	// values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// NodePool is the schema for an allocation request of nodes
-//
-// +kubebuilder:resource:shortName=np
+// Node is the schema for an allocated node
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-type NodePool struct {
+type Node struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   NodePoolSpec   `json:"spec,omitempty"`
-	Status NodePoolStatus `json:"status,omitempty"`
+	Spec   NodeSpec   `json:"spec,omitempty"`
+	Status NodeStatus `json:"status,omitempty"`
 }
 
-// NodePoolList contains a list of node allocation requests.
+// NodeList contains a list of provisioned node.
 //
 // +kubebuilder:object:root=true
-type NodePoolList struct {
+type NodeList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []NodePool `json:"items"`
+	Items           []Node `json:"items"`
 }
 
 func init() {
 	SchemeBuilder.Register(
-		&NodePool{},
-		&NodePoolList{},
+		&Node{},
+		&NodeList{},
 	)
 }
