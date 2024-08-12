@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: nodepools.oran.openshift.io
+  name: nodepools.hardwaremanagement.oran.openshift.io
 spec:
-  group: oran.openshift.io
+  group: hardwaremanagement.oran.openshift.io
   names:
     kind: NodePool
     listKind: NodePoolList
