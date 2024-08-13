@@ -330,7 +330,7 @@ func (h *SubscriptionHandler) Delete(ctx context.Context,
 
 	return
 }
-func (h *SubscriptionHandler) fetchItem(ctx context.Context,
+func (h *SubscriptionHandler) fetchItem(ctx context.Context, // nolint: unparam
 	id string) (result data.Object, err error) {
 	h.subscriptionMapLock.Lock()
 	defer h.subscriptionMapLock.Unlock()

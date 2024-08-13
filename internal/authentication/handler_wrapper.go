@@ -577,6 +577,7 @@ func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 				slog.String("file", keysFile),
 				slog.String("error", err.Error()),
 			)
+			return fmt.Errorf("unable to load keys from file: %w", err)
 		}
 	}
 
@@ -595,6 +596,7 @@ func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 				slog.String("url", keysURL),
 				slog.String("error", err.Error()),
 			)
+			return fmt.Errorf("unable to load keys from URL: %w", err)
 		}
 	}
 
@@ -907,7 +909,7 @@ func (h *handlerWrapper) checkStringClaim(ctx context.Context, claims jwt.MapCla
 // checkTimeClaim checks that the given claim exists and that the value is a time. If it exists it
 // returns the value.
 func (h *handlerWrapper) checkTimeClaim(ctx context.Context, claims jwt.MapClaims,
-	name string) (result time.Time, err error) {
+	name string) (result time.Time, err error) { // nolint: unparam
 	value, err := h.checkClaim(ctx, claims, name)
 	if err != nil {
 		return
@@ -925,7 +927,7 @@ func (h *handlerWrapper) checkTimeClaim(ctx context.Context, claims jwt.MapClaim
 }
 
 // checkClaim checks that the given claim exists. If it exists it returns the value.
-func (h *handlerWrapper) checkClaim(ctx context.Context, claims jwt.MapClaims,
+func (h *handlerWrapper) checkClaim(ctx context.Context, claims jwt.MapClaims, // nolint: unparam
 	name string) (result any, err error) {
 	value, ok := claims[name]
 	if !ok {

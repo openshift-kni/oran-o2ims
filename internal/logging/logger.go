@@ -298,7 +298,7 @@ func (b *LoggerBuilder) customFields() (result []any, err error) {
 	return
 }
 
-func (b *LoggerBuilder) customField(name string, value any) (result any, err error) {
+func (b *LoggerBuilder) customField(name string, value any) (result any, err error) { // nolint: unparam
 	switch value {
 	case pidLogFieldValue:
 		result = os.Getpid()

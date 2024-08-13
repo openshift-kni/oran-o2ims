@@ -377,7 +377,7 @@ func (h *DeploymentManagerHandler) fetchItemFromRegularHub(ctx context.Context,
 	return
 }
 
-func (h *DeploymentManagerHandler) doGet(ctx context.Context, path string,
+func (h *DeploymentManagerHandler) doGet(ctx context.Context, path string, // nolint: unparam
 	query neturl.Values) (response *http.Response, err error) {
 	url := h.backendURL + path
 	request, err := http.NewRequest(http.MethodGet, url, nil)

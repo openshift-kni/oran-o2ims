@@ -239,7 +239,7 @@ func (h *ResourcePoolHandler) fetchItems(
 }
 
 func (h *ResourcePoolHandler) fetchItem(ctx context.Context,
-	id string) (resourcePool data.Object, err error) {
+	id string) (resourcePool data.Object, err error) { // nolint: unparam
 	// Fetch resource pools
 	resourcePools, err := h.resourcePoolFetcher.FetchItems(ctx)
 	if err != nil {
@@ -286,7 +286,7 @@ func (h *ResourcePoolHandler) getCollectionGraphqlVars(ctx context.Context, sele
 	return
 }
 
-func (h *ResourcePoolHandler) getObjectGraphqlVars(ctx context.Context, id string) (graphqlVars *model.SearchInput) {
+func (h *ResourcePoolHandler) getObjectGraphqlVars(ctx context.Context, id string) (graphqlVars *model.SearchInput) { // nolint: unparam
 	graphqlVars = &model.SearchInput{}
 	graphqlVars.Keywords = h.graphqlVars.Keywords
 	graphqlVars.Filters = h.graphqlVars.Filters

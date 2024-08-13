@@ -369,7 +369,7 @@ func (a *Adapter) serveGetMethod(ctx context.Context, w http.ResponseWriter, r *
 	}
 }
 
-func (a *Adapter) servePostMethod(ctx context.Context, w http.ResponseWriter, r *http.Request,
+func (a *Adapter) servePostMethod(ctx context.Context, w http.ResponseWriter, r *http.Request, // nolint: unparam
 	pathVariables []string) {
 	// Check that we have a compatible handler:
 	if a.addHandler == nil {
@@ -606,7 +606,7 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 	a.sendObject(ctx, w, response.Object)
 }
 
-func (a *Adapter) serveDelete(ctx context.Context, w http.ResponseWriter, r *http.Request,
+func (a *Adapter) serveDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, // nolint: unparam
 	pathVariables []string) {
 	// Create the request:
 	request := &DeleteRequest{
