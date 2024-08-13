@@ -22,6 +22,24 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
 
+const (
+	OpEq  = "="
+	OpNeq = "!="
+	OpGt  = ">"
+	OpGte = ">="
+	OpLt  = "<"
+	OpLte = "<="
+
+	pCluster        = "cluster"
+	pDescription    = "description"
+	pGlobalAssetID  = "globalAssetID"
+	pName           = "name"
+	pResourceID     = "resourceID"
+	pResourcePoolID = "resourcePoolID"
+	pSystemUUID     = "_systemUUID"
+	pUid            = "_uid"
+)
+
 type FilterOperator search.Operator
 
 // String generates a GraphQL string representation of the operator. It panics if used on an unknown
@@ -29,17 +47,17 @@ type FilterOperator search.Operator
 func (o FilterOperator) String() (result string, err error) {
 	switch search.Operator(o) {
 	case search.Eq:
-		result = "="
+		result = OpEq
 	case search.Neq:
-		result = "!="
+		result = OpNeq
 	case search.Gt:
-		result = ">"
+		result = OpGt
 	case search.Gte:
-		result = ">="
+		result = OpGte
 	case search.Lt:
-		result = "<"
+		result = OpLt
 	case search.Lte:
-		result = "<="
+		result = OpLte
 	default:
 		err = fmt.Errorf("unknown operator %d", o)
 	}
@@ -51,10 +69,10 @@ type PropertyCluster string
 // MapProperty maps a specified O2 property name to the search API property name
 func (p PropertyCluster) MapProperty() string {
 	switch p {
-	case "name":
-		return "name"
-	case "resourcePoolID":
-		return "cluster"
+	case pName:
+		return pName
+	case pResourcePoolID:
+		return pCluster
 	default:
 		// unknown property
 		return ""
@@ -66,14 +84,14 @@ type PropertyNode string
 // MapProperty maps a specified O2 property name to the search API property name
 func (p PropertyNode) MapProperty() string {
 	switch p {
-	case "description":
-		return "name"
-	case "resourcePoolID":
-		return "cluster"
-	case "globalAssetID":
-		return "_uid"
-	case "resourceID":
-		return "_systemUUID"
+	case pDescription:
+		return pName
+	case pResourcePoolID:
+		return pCluster
+	case pGlobalAssetID:
+		return pUid
+	case pResourceID:
+		return pSystemUUID
 	default:
 		// unknown property
 		return ""
