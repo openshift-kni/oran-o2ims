@@ -21,7 +21,7 @@ linters:
     - typecheck
     - unconvert
     - unparam
-    #- gocyclo
+    - gocyclo
     - unused
     - errorlint
     - loggercheck
