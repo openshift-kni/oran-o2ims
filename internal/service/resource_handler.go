@@ -18,10 +18,11 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"k8s.io/apimachinery/pkg/util/net"
 	"log/slog"
 	"net/http"
 	"slices"
+
+	"k8s.io/apimachinery/pkg/util/net"
 
 	"github.com/itchyny/gojq"
 

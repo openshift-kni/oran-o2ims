@@ -20,12 +20,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/net"
 	"log/slog"
 	"net/http"
 	neturl "net/url"
 	"slices"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/util/net"
 
 	"github.com/imdario/mergo"
 	jsoniter "github.com/json-iterator/go"

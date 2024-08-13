@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"k8s.io/apimachinery/pkg/util/net"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -36,6 +35,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"k8s.io/apimachinery/pkg/util/net"
 
 	"github.com/golang-jwt/jwt/v4"
 	jsoniter "github.com/json-iterator/go"
