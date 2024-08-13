@@ -74,7 +74,7 @@ type Adapter struct {
 	jsonAPI              jsoniter.API
 }
 
-// NewAdapter creates a builder that can be used to configure and create an adatper.
+// NewAdapter creates a builder that can be used to configure and create an adapter.
 func NewAdapter() *AdapterBuilder {
 	return &AdapterBuilder{
 		nextPageMarkerKey: slices.Clone(defaultAdapdterNextPageMarkerKey[:]),
