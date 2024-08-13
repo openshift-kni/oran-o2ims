@@ -273,7 +273,7 @@ func (h *ResourceHandler) fetchItems(
 }
 
 func (h *ResourceHandler) fetchItem(ctx context.Context,
-	id, parentID string) (resource data.Object, err error) {
+	id, parentID string) (resource data.Object, err error) { // nolint: unparam
 	// Fetch items
 	items, err := h.resourceFetcher.FetchItems(ctx)
 	if err != nil {
@@ -365,7 +365,7 @@ func (r *ResourceHandler) mapItem(ctx context.Context,
 }
 
 // Map a Node to an O2 Resource object.
-func (r *ResourceHandler) mapNodeItem(ctx context.Context,
+func (r *ResourceHandler) mapNodeItem(ctx context.Context, // nolint: unparam
 	from data.Object) (to data.Object, err error) {
 	description, err := data.GetString(from,
 		graphql.PropertyNode("description").MapProperty())

@@ -256,7 +256,7 @@ func (h *handlerWrapper) checkACL(claims map[string]any) bool {
 }
 
 // sendError sends an error response to the client with the message of the given error.
-func (h *handlerWrapper) sendError(w http.ResponseWriter, r *http.Request) {
+func (h *handlerWrapper) sendError(w http.ResponseWriter, r *http.Request) { // nolint: unparam
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(http.StatusForbidden)
 	writer := jsoniter.NewStream(h.jsonAPI, w, 512)

@@ -188,7 +188,7 @@ func (h *AlarmNotificationHandler) getSubscriptionIdsFromAlarm(ctx context.Conte
 	return
 }
 
-func (h *AlarmNotificationHandler) getSubscriptionInfo(ctx context.Context, subId string) (result subscriptionInfo, ok bool) {
+func (h *AlarmNotificationHandler) getSubscriptionInfo(ctx context.Context, subId string) (result subscriptionInfo, ok bool) { // nolint: unparam
 	h.subscriptionMapMemoryLock.RLock()
 	defer h.subscriptionMapMemoryLock.RUnlock()
 	result, ok = h.subscriptionSearcher.subscriptionInfoMap[subId]

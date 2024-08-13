@@ -153,7 +153,7 @@ func (r *ClusterRequestReconciler) Reconcile(
 	return
 }
 
-func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
+func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) { // nolint: unparam
 	// ### CLUSTERINSTANCE TEMPLATE RENDERING ###
 	renderedClusterInstance, renderErr := t.renderClusterInstanceTemplate(ctx)
 	if renderErr != nil {

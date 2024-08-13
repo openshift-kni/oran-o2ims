@@ -20,7 +20,7 @@ linters:
     - staticcheck
     - typecheck
     - unconvert
-    #- unparam
+    - unparam
     #- gocyclo
     - unused
     #- errorlint
