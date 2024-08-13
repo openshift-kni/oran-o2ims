@@ -23,7 +23,7 @@ linters:
     #- unparam
     #- gocyclo
     - unused
-    #- errorlint
+    - errorlint
     - loggercheck
     #- gosec
     #- wrapcheck
