@@ -168,7 +168,7 @@ func (q *Query) convert(input any, output any) error {
 				q.logger.Warn(
 					"Conversion from float to 64 bits integer loses precision",
 					slog.Float64("input", input),
-					slog.Int64("output", int64(*output)),
+					slog.Int64("output", *output),
 				)
 			}
 		case *float64:
