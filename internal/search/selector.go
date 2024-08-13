@@ -93,7 +93,7 @@ func (t *Term) String() string {
 	return buffer.String()
 }
 
-// Operator represents a comparision operator.
+// Operator represents a comparison operator.
 type Operator int
 
 const (

@@ -16,7 +16,7 @@ linters:
     #- goimports
     - govet
     - ineffassign
-    #- misspell
+    - misspell
     - staticcheck
     - typecheck
     #- unconvert
