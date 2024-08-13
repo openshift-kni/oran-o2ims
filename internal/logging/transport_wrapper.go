@@ -186,7 +186,7 @@ func (b *TransportWrapperBuilder) createExcludeFunc() (result func(*http.Request
 			excludeRE, err = regexp.Compile(typed)
 			if err != nil {
 				err = fmt.Errorf(
-					"failed to compile exclude regular expression '%s': %v",
+					"failed to compile exclude regular expression '%s': %w",
 					typed, err,
 				)
 				return
