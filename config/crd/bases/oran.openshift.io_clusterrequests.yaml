@@ -49,8 +49,16 @@ spec:
                       The input follows the schema defined in the referenced ClusterTemplate's spec.inputDataSchema.clusterInstanceSchema.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
+                  policyTemplateInput:
+                    description: |-
+                      PolicyTemplateInput provides input values for ACM configuration policies.
+                      The input follows the schema defined in the referenced ClusterTemplate's
+                      spec.inputDataSchema.policyTemplateSchema.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 required:
                 - clusterInstanceInput
+                - policyTemplateInput
                 type: object
               clusterTemplateRef:
                 description: Reference to an existing clusterTemplate CR.

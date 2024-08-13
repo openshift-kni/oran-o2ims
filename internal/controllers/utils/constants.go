@@ -84,6 +84,15 @@ const (
 	ClusterInstanceTemplateConfigmapName        = "sc-clusterinstance-template"
 	ClusterInstanceTemplateConfigmapNamespace   = ORANO2IMSNamespace
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
+	ClusterInstanceSchema                       = "clusterInstanceSchema"
+)
+
+// PolicyTemplate constants
+const (
+	PolicyTemplateDefaultsConfigmapKey = "policytemplate-defaults"
+	PolicyTemplateSchema               = "policyTemplateSchema"
+	PolicyTemplateConfigMapNs          = "ztp-install"
+	ClusterVersionLabelKey             = "cluster-version"
 )
 
 // ClusterInstance status

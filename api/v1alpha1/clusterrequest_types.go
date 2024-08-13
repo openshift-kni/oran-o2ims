@@ -46,8 +46,12 @@ type ClusterTemplateInput struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	ClusterInstanceInput runtime.RawExtension `json:"clusterInstanceInput"`
 
-	// TODO: Additional parameters will be added here
-	// PolicyTemplateInput
+	// PolicyTemplateInput provides input values for ACM configuration policies.
+	// The input follows the schema defined in the referenced ClusterTemplate's
+	// spec.inputDataSchema.policyTemplateSchema.
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	PolicyTemplateInput runtime.RawExtension `json:"policyTemplateInput"`
 }
 
 type ClusterTemplateInputValidation struct {

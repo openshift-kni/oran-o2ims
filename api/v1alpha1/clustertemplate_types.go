@@ -38,20 +38,29 @@ type Templates struct {
 	// HwTemplate defines a reference to a hardware template config map
 	HwTemplate string `json:"hwTemplate"`
 
-	// ClusterInstanceDefaults defines a reference to a configmap with default values for ClusterInstance
+	// ClusterInstanceDefaults defines a reference to a configmap with
+	// default values for ClusterInstance
 	ClusterInstanceDefaults string `json:"clusterInstanceDefaults"`
+	// PolicyTemplateDefaults defines a reference to a configmap with
+	// default values for ACM policies
+	PolicyTemplateDefaults string `json:"policyTemplateDefaults"`
 }
 
 // InputDataSchema encapsulates all the schemas required for ClusterTemplate.
 type InputDataSchema struct {
 	// ClusterInstanceSchema defines the parameters required for provisioning.
-	// The parameter definitions should follow the OpenAPI V3 schema and explicitly define required fields.
+	// The parameter definitions should follow the OpenAPI V3 schema and
+	// explicitly define required fields.
 	// +kubebuilder:validation:Type=object
 	// +kubebuilder:pruning:PreserveUnknownFields
 	ClusterInstanceSchema runtime.RawExtension `json:"clusterInstanceSchema"`
 
-	// TODO: Additional parameters can be added here
-	// PolicyTemplateSchema
+	// PolicyTemplateSchema defines the parameters required for ACM policies.
+	// The parameter definitions should follow the OpenAPI V3 schema and
+	// explicitly define required fields.
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	PolicyTemplateSchema runtime.RawExtension `json:"policyTemplateSchema"`
 }
 
 // ClusterTemplateStatus defines the observed state of ClusterTemplate

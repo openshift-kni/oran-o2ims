@@ -147,10 +147,23 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	var validationErrs []string
 
 	// TODO: validition for hw template configmap
-	// TODO: validition for policy template configmap
 
-	// Validate the ClusterInstance defaults configmap
+	// Validition for the policy template defaults configmap.
 	validationErr, err := validateConfigmapReference(
+		ctx, t.client,
+		t.object.Spec.Templates.PolicyTemplateDefaults,
+		t.object.Namespace,
+		utils.PolicyTemplateDefaultsConfigmapKey)
+	if err != nil {
+		return false, fmt.Errorf("failed to validate the ConfigMap %s for policy template defaults: %w",
+			t.object.Spec.Templates.PolicyTemplateDefaults, err)
+	}
+	if validationErr != "" {
+		validationErrs = append(validationErrs, validationErr)
+	}
+
+	// Validate the ClusterInstance defaults configmap.
+	validationErr, err = validateConfigmapReference(
 		ctx, t.client,
 		t.object.Spec.Templates.ClusterInstanceDefaults,
 		t.object.Namespace,
@@ -199,7 +212,7 @@ func validateConfigmapReference(
 		return validationErr, nil
 	} else {
 		// Check if the expected key is present in the configmap data
-		defaults, exists := existingConfigmap.Data[utils.ClusterInstanceTemplateDefaultsConfigmapKey]
+		defaults, exists := existingConfigmap.Data[expectedKey]
 		if !exists {
 			validationErr = fmt.Sprintf(
 				"the expected key %s does not exist in the ConfigMap %s data", expectedKey, name)
