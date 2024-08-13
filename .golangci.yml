@@ -19,7 +19,7 @@ linters:
     - misspell
     - staticcheck
     - typecheck
-    #- unconvert
+    - unconvert
     #- unparam
     #- gocyclo
     - unused
