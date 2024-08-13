@@ -110,6 +110,214 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 	return
 }
 
+// setupResourceServerConfig creates the resources necessary to start the Resource Server.
+func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createServiceAccount(ctx, utils.ORANO2IMSResourceServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ServiceAccount for the Resource server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the Resource server.
+	err = t.createService(ctx, utils.ORANO2IMSResourceServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for Resource server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the resource-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSResourceServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the Resource server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return nextReconcile, err
+}
+
+// setupMetadataServerConfig creates the resource necessary to start the Metadata Server.
+func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createServiceAccount(ctx, utils.ORANO2IMSMetadataServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ServiceAccount for Metadata server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the Metadata server.
+	err = t.createService(ctx, utils.ORANO2IMSMetadataServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for Metadata server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the metadata-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSMetadataServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the Metadata server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return
+}
+
+// setupDeploymentManagerServerConfig creates the resources necessary to start the Deployment Manager Server.
+func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createServiceAccount(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create deployment manager service account",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+	err = t.createDeploymentManagerClusterRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create deployment manager cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+	err = t.createDeploymentManagerClusterRoleBinding(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create deployment manager cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create authz ConfigMap.
+	err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ConfigMap for Deployment Manager server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the Deployment Manager server.
+	err = t.createService(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for Deployment Manager server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the deployment-manager-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the Deployment Manager server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return
+}
+
+// setupAlarmSubscriptionServerConfig creates the resources necessary to start the Alarm Subscription Server.
+func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ConfigMap for alarm subscription server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the needed ServiceAccount.
+	err = t.createServiceAccount(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ServiceAccount for Alarm Subscription server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the alarm subscription server.
+	err = t.createService(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for Alarm Subscription server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the alarm subscription-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the alarm subscription server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return
+}
+
 func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
@@ -143,195 +351,36 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	if t.object.Spec.ResourceServerConfig.Enabled {
 		// The ResourceServer requires the searchAPIBackendURL. Check it has been defined.
 		// Create the needed ServiceAccount.
-		err = t.createServiceAccount(ctx, utils.ORANO2IMSResourceServerName)
+		nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
 		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy ServiceAccount for the Resource server.",
-				slog.String("error", err.Error()),
-			)
 			return
-		}
-
-		// Create the Service needed for the Resource server.
-		err = t.createService(ctx, utils.ORANO2IMSResourceServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy Service for Resource server.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the resource-server deployment.
-		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSResourceServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy the Resource server.",
-				slog.String("error", err.Error()),
-			)
-			if errorReason == "" {
-				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
-				return nextReconcile, err
-			}
 		}
 	}
 
 	// Start the metadata server if required by the Spec.
 	if t.object.Spec.MetadataServerConfig.Enabled {
 		// Create the needed ServiceAccount.
-		err = t.createServiceAccount(ctx, utils.ORANO2IMSMetadataServerName)
+		nextReconcile, err = t.setupMetadataServerConfig(ctx, nextReconcile)
 		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy ServiceAccount for Metadata server.",
-				slog.String("error", err.Error()),
-			)
 			return
-		}
-
-		// Create the Service needed for the Metadata server.
-		err = t.createService(ctx, utils.ORANO2IMSMetadataServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy Service for Metadata server.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the metadata-server deployment.
-		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSMetadataServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy the Metadata server.",
-				slog.String("error", err.Error()),
-			)
-			if errorReason == "" {
-				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
-				return nextReconcile, err
-			}
 		}
 	}
 
 	// Start the deployment server if required by the Spec.
 	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
 		// Create the service account, role and binding:
-		err = t.createServiceAccount(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+		nextReconcile, err = t.setupDeploymentManagerServerConfig(ctx, nextReconcile)
 		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to create deployment manager service account",
-				slog.String("error", err.Error()),
-			)
 			return
-		}
-		err = t.createDeploymentManagerClusterRole(ctx)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to create deployment manager cluster role",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-		err = t.createDeploymentManagerClusterRoleBinding(ctx)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to create deployment manager cluster role binding",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create authz ConfigMap.
-		err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy ConfigMap for Deployment Manager server.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the Service needed for the Deployment Manager server.
-		err = t.createService(ctx, utils.ORANO2IMSDeploymentManagerServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy Service for Deployment Manager server.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the deployment-manager-server deployment.
-		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSDeploymentManagerServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy the Deployment Manager server.",
-				slog.String("error", err.Error()),
-			)
-			if errorReason == "" {
-				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
-				return nextReconcile, err
-			}
 		}
 	}
+
 	// Start the alarm subscription server if required by the Spec.
 	if t.object.Spec.AlarmSubscriptionServerConfig.Enabled {
 		// Create authz ConfigMap.
-		err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
+		nextReconcile, err = t.setupAlarmSubscriptionServerConfig(ctx, nextReconcile)
 		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy ConfigMap for alarm subscription server.",
-				slog.String("error", err.Error()),
-			)
 			return
-		}
-
-		// Create the needed ServiceAccount.
-		err = t.createServiceAccount(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy ServiceAccount for Alarm Subscription server.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the Service needed for the alarm subscription server.
-		err = t.createService(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy Service for Alarm Subscription server.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the alarm subscription-server deployment.
-		errorReason, err := t.deployServer(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy the alarm subscription server.",
-				slog.String("error", err.Error()),
-			)
-			if errorReason == "" {
-				nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
-				return nextReconcile, err
-			}
 		}
 	}
 
