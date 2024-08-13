@@ -25,6 +25,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 		ctName       = "cluster-template-a-v1"
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
+		ptDefaultsCm = "policytemplate-defaults-v1"
 	)
 
 	BeforeEach(func() {
@@ -38,6 +39,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 			Spec: oranv1alpha1.ClusterTemplateSpec{
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
 				InputDataSchema: oranv1alpha1.InputDataSchema{
 					// APIserver has enforced the validation for this field who holds
@@ -55,18 +57,34 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 	})
 
 	It("should not requeue a valid ClusterTemplate", func() {
-		// Create a valid ConfigMap and ClusterTemplate
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ciDefaultsCm,
-				Namespace: ctNamespace,
-			},
-			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+		// Create valid ConfigMaps and ClusterTemplate
+		cms := []*corev1.ConfigMap{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ciDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ptDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.PolicyTemplateDefaultsConfigmapKey: `
+clustertemplate-a-policy-v1-cpu-isolated: "2-31"
+clustertemplate-a-policy-v1-cpu-reserved: "0-1"
+clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
+				},
 			},
 		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
+		for _, cm := range cms {
+			Expect(c.Create(ctx, cm)).To(Succeed())
+		}
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
@@ -112,8 +130,10 @@ key: value`,
 		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
-		Expect(conditions[0].Message).To(Equal(fmt.Sprintf(
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"The referenced ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"The referenced ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
 	})
 })
 
@@ -221,6 +241,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ctName       = "cluster-template-a-v1"
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-ci-defaults"
+		ptDefaultsCm = "policytemplate-ci-defaults"
 		t            *clusterTemplateReconcilerTask
 	)
 
@@ -234,6 +255,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 			Spec: oranv1alpha1.ClusterTemplateSpec{
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
 			},
 		}
@@ -247,18 +269,34 @@ var _ = Describe("validateClusterTemplateCR", func() {
 	})
 
 	It("should validate a valid ClusterTemplate and set status condition to true", func() {
-		// Create a valid ConfigMap
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ciDefaultsCm,
-				Namespace: ctNamespace,
-			},
-			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+		// Create valid ConfigMaps
+		cms := []*corev1.ConfigMap{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ciDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ptDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.PolicyTemplateDefaultsConfigmapKey: `
+clustertemplate-a-policy-v1-cpu-isolated: "2-31"
+clustertemplate-a-policy-v1-cpu-reserved: "0-1"
+clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
+				},
 			},
 		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
+		for _, cm := range cms {
+			Expect(c.Create(ctx, cm)).To(Succeed())
+		}
 
 		valid, err := t.validateClusterTemplateCR(ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -285,8 +323,10 @@ key: value`,
 		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
-		Expect(conditions[0].Message).To(Equal(fmt.Sprintf(
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"The referenced ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"The referenced ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
 	})
 })
 
