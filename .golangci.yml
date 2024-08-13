@@ -9,7 +9,7 @@ linters:
   disable-all: true
   enable:
     - depguard
-    #- goconst
+    - goconst
     #- gocritic
     - revive
     - gofmt
