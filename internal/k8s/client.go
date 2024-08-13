@@ -206,7 +206,7 @@ func (b *ClientBuilder) loadConfig() (result *rest.Config, err error) {
 
 // loadDefaultConfig loads the configuration from the typical default locations, the `KUBECONFIG`
 // environment variable and the ~/.kube/config` file.
-func (b *ClientBuilder) loadDefaultConfig() (result clientcmd.ClientConfig, err error) {
+func (b *ClientBuilder) loadDefaultConfig() (result clientcmd.ClientConfig, err error) { // nolint: unparam
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	overrides := &clientcmd.ConfigOverrides{}
 	result = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
