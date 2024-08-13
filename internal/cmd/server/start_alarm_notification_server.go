@@ -198,7 +198,6 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 	router.Use(metricsWrapper, authenticationWrapper, authorizationWrapper)
 
 	// create k8s client with kube(from env first)
-	//var config *rest.Config
 	kubeClient, err := k8s.NewClient().SetLogger(logger).SetLoggingWrapper(loggingWrapper).Build()
 
 	if err != nil {
@@ -267,7 +266,7 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 		subscriptionsConfigmapName = service.DefaultAlarmConfigmapName
 	}
 
-	//create handler
+	// create handler
 	handler, err := service.NewAlarmNotificationHandler().
 		SetLogger(logger).
 		SetLoggingWrapper(loggingWrapper).

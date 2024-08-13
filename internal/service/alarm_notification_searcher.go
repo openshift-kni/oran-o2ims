@@ -55,10 +55,10 @@ func (b *alarmSubscriptionSearcherBuilder) SetJqTool(
 type alarmSubscriptionSearcher struct {
 	logger *slog.Logger
 	jqTool *jq.Tool
-	//map with prebuilt selector
+	// map with prebuilt selector
 	subscriptionInfoMap map[string]subscriptionInfo
 
-	//Parser used for the subscription filters
+	// Parser used for the subscription filters
 	selectorParser *search.SelectorParser
 }
 
@@ -87,7 +87,7 @@ func (b *alarmSubscriptionSearcherBuilder) build() (result *alarmSubscriptionSea
 }
 
 // NOTE the function should be called by a function that is holding the semophone
-func (b *alarmSubscriptionSearcher) getSubFilters(filterStr string, subId string) (err error) {
+func (b *alarmSubscriptionSearcher) getSubFilters(filterStr, subId string) (err error) {
 
 	result, err := b.selectorParser.Parse(filterStr)
 
@@ -107,7 +107,7 @@ func (b *alarmSubscriptionSearcher) getSubFilters(filterStr string, subId string
 }
 
 // NOTE the function should be called by a function that is holding the semophone
-func (b *alarmSubscriptionSearcher) pocessSubscriptionMapForSearcher(subscriptionMap *map[string]data.Object,
+func (b *alarmSubscriptionSearcher) pocessSubscriptionMapForSearcher(subscriptionMap *map[string]data.Object, // nolint: gocritic
 	jqTool *jq.Tool) (err error) {
 
 	for key, value := range *subscriptionMap {
@@ -115,7 +115,7 @@ func (b *alarmSubscriptionSearcher) pocessSubscriptionMapForSearcher(subscriptio
 		b.subscriptionInfoMap[key] = subscriptionInfo{}
 
 		subInfo := b.subscriptionInfoMap[key]
-		//get uris
+		// get uris
 		var uris string
 		err = jqTool.Evaluate(`.callback`, value, &uris)
 		if err != nil {
@@ -135,7 +135,7 @@ func (b *alarmSubscriptionSearcher) pocessSubscriptionMapForSearcher(subscriptio
 
 		b.subscriptionInfoMap[key] = subInfo
 
-		//get filter from data object
+		// get filter from data object
 		var filter string
 		err = jqTool.Evaluate(`.filter`, value, &filter)
 		if err != nil {

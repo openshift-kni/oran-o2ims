@@ -15,8 +15,8 @@ type ProcessFunc func(dataMap *map[string]data.Object)
 
 // interface for persistent storage
 type Storage interface {
-	//notification from db to application about db entry changes
-	//currently assume the notification is granular to indivial entry
+	// notification from db to application about db entry changes
+	// currently assume the notification is granular to indivial entry
 	ReadEntry(ctx context.Context, key string) (value string, err error)
 	AddEntry(ctx context.Context, key string, value string) (err error)
 	DeleteEntry(ctx context.Context, key string) (err error)
@@ -25,7 +25,7 @@ type Storage interface {
 	ProcessChangesWithFunction(ctx context.Context, function ProcessFunc) (err error)
 }
 
-func Add(so Storage, ctx context.Context, key string, value string) (err error) {
+func Add(so Storage, ctx context.Context, key, value string) (err error) {
 	return so.AddEntry(ctx, key, value)
 }
 func Get(so Storage, ctx context.Context, key string) (value string, err error) {

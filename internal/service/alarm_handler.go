@@ -316,7 +316,7 @@ func (h *AlarmHandler) getAlertFilter(ctx context.Context, term *search.Term) (f
 
 	// Map filter property for Alertmanager
 	var property string
-	if len(term.Path) == 1 {
+	if len(term.Path) == 1 { // nolint: gocritic
 		property = AlertFilterProperty(term.Path[0]).MapProperty()
 		if property == "" {
 			h.logFallbackError(

@@ -168,7 +168,7 @@ func (h *ResourceFetcher) GetResourceTypeID(from data.Object) (resourceTypeID st
 		return
 	}
 
-	switch kind {
+	switch kind { // nolint: gocritic
 	case KindNode:
 		var architecture, cpu string
 		cpu, err = data.GetString(from, "cpu")

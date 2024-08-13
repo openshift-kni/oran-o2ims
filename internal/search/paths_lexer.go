@@ -108,7 +108,7 @@ func (b *pathsLexerBuilder) Build() (result *pathsLexer, err error) {
 		err = errors.New("logger is mandatory")
 		return
 	}
-	if len(b.source) == 0 {
+	if b.source == "" {
 		err = errors.New("source is mandatory")
 		return
 	}

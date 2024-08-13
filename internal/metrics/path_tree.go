@@ -56,7 +56,7 @@ type pathTree map[string]pathTree
 // add adds the given branch to this tree.
 func (t pathTree) add(path string) {
 	path = t.clean(path)
-	if len(path) == 0 {
+	if path == "" {
 		return
 	}
 	segments := strings.Split(path, "/")
@@ -80,10 +80,10 @@ func (t pathTree) addSegments(segments []string) {
 }
 
 func (t pathTree) clean(path string) string {
-	for len(path) > 0 && strings.HasPrefix(path, "/") {
+	for path != "" && strings.HasPrefix(path, "/") {
 		path = path[1:]
 	}
-	for len(path) > 0 && strings.HasSuffix(path, "/") {
+	for path != "" && strings.HasSuffix(path, "/") {
 		path = path[0 : len(path)-1]
 	}
 	return path

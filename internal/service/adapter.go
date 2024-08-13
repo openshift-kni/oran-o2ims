@@ -110,7 +110,7 @@ func (b *AdapterBuilder) SetPathVariables(values ...string) *AdapterBuilder {
 // SetIncludeFields set thes collection of fields that will be included by default from the
 // response. Each field is specified using the same syntax accepted by paths parsers.
 func (b *AdapterBuilder) SetIncludeFields(values ...string) *AdapterBuilder {
-	b.includeFields = append(b.excludeFields, values...)
+	b.includeFields = append(b.includeFields, values...)
 	return b
 }
 

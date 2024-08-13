@@ -39,7 +39,7 @@ type Query struct {
 
 // Evaluate evaluates the query with on the given input. The output should be a pointer to a
 // variable where the result will be stored. Optional named variables can be passed.
-func (q *Query) Evaluate(input any, output any, variables ...Variable) error {
+func (q *Query) Evaluate(input, output any, variables ...Variable) error {
 	slices.SortFunc(variables, func(a, b Variable) int {
 		return strings.Compare(a.name, b.name)
 	})
@@ -58,7 +58,7 @@ func (q *Query) Evaluate(input any, output any, variables ...Variable) error {
 	return q.evaluate(input, output, values)
 }
 
-func (q *Query) evaluate(input any, output any, variables []any) error {
+func (q *Query) evaluate(input, output any, variables []any) error {
 	// Check that the output is a pointer:
 	outputType := reflect.TypeOf(output)
 	if outputType.Kind() != reflect.Pointer {
@@ -115,7 +115,7 @@ func (q *Query) evaluate(input any, output any, variables []any) error {
 	return q.convert(result, output)
 }
 
-func (q *Query) convert(input any, output any) error {
+func (q *Query) convert(input, output any) error {
 	switch input := input.(type) {
 	case bool:
 		switch output := output.(type) {
@@ -211,7 +211,7 @@ func (q *Query) convert(input any, output any) error {
 	return nil
 }
 
-func (q *Query) clone(input any, output any) error {
+func (q *Query) clone(input, output any) error {
 	data, err := jsoniter.Marshal(input)
 	if err != nil {
 		return err
