@@ -17,6 +17,7 @@ License.
 package metrics
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -159,9 +160,10 @@ func (b *TransportWrapperBuilder) Build() (result func(http.RoundTripper) http.R
 	)
 	err = b.registerer.Register(requestCount)
 	if err != nil {
-		registered, ok := err.(prometheus.AlreadyRegisteredError)
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		ok := errors.As(err, &alreadyRegisteredError)
 		if ok {
-			requestCount = registered.ExistingCollector.(*prometheus.CounterVec)
+			requestCount = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
 			err = nil // nolint
 		} else {
 			return
@@ -191,9 +193,10 @@ func (b *TransportWrapperBuilder) Build() (result func(http.RoundTripper) http.R
 	)
 	err = b.registerer.Register(requestDuration)
 	if err != nil {
-		registered, ok := err.(prometheus.AlreadyRegisteredError)
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		ok := errors.As(err, &alreadyRegisteredError)
 		if ok {
-			requestDuration = registered.ExistingCollector.(*prometheus.HistogramVec)
+			requestDuration = alreadyRegisteredError.ExistingCollector.(*prometheus.HistogramVec)
 			err = nil
 		} else {
 			return

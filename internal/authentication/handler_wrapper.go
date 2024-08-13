@@ -803,16 +803,17 @@ func (h *handlerWrapper) checkToken(ctx context.Context, bearer string) (token *
 			slog.String("!token", bearer),
 			slog.String("error", err.Error()),
 		)
-		switch typed := err.(type) {
-		case *jwt.ValidationError:
+		var validationError *jwt.ValidationError
+		switch {
+		case errors.As(err, &validationError):
 			switch {
-			case typed.Errors&jwt.ValidationErrorMalformed != 0:
+			case validationError.Errors&jwt.ValidationErrorMalformed != 0:
 				err = errors.New("bearer token is malformed")
-			case typed.Errors&jwt.ValidationErrorUnverifiable != 0:
+			case validationError.Errors&jwt.ValidationErrorUnverifiable != 0:
 				err = errors.New("bearer token can't be verified")
-			case typed.Errors&jwt.ValidationErrorSignatureInvalid != 0:
+			case validationError.Errors&jwt.ValidationErrorSignatureInvalid != 0:
 				err = errors.New("signature of bearer token isn't valid")
-			case typed.Errors&jwt.ValidationErrorExpired != 0:
+			case validationError.Errors&jwt.ValidationErrorExpired != 0:
 				// When the token is expired according to the JWT library we may
 				// still want to accept it if we have a configured tolerance:
 				if h.tolerance > 0 {
@@ -832,9 +833,9 @@ func (h *handlerWrapper) checkToken(ctx context.Context, bearer string) (token *
 				} else {
 					err = errors.New("bearer token is expired")
 				}
-			case typed.Errors&jwt.ValidationErrorIssuedAt != 0:
+			case validationError.Errors&jwt.ValidationErrorIssuedAt != 0:
 				err = errors.New("bearer token was issued in the future")
-			case typed.Errors&jwt.ValidationErrorNotValidYet != 0:
+			case validationError.Errors&jwt.ValidationErrorNotValidYet != 0:
 				err = errors.New("bearer token isn't valid yet")
 			default:
 				err = errors.New("bearer token isn't valid")
