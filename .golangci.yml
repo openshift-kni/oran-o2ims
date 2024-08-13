@@ -13,7 +13,7 @@ linters:
     #- gocritic
     - revive
     - gofmt
-    #- goimports
+    - goimports
     - govet
     - ineffassign
     - misspell
