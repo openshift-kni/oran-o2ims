@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -30,7 +31,7 @@ type ClusterRequestSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// LocationSpec is the geographical location of the requested node.
-	LocationSpec `json:",inline"`
+	hwv1alpha1.LocationSpec `json:",inline"`
 
 	// Reference to an existing clusterTemplate CR.
 	ClusterTemplateRef string `json:"clusterTemplateRef"`

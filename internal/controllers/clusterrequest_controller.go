@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -369,7 +370,7 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 }
 
 func (t *clusterRequestReconcilerTask) renderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*oranv1alpha1.NodePool, error) {
+	clusterInstance *unstructured.Unstructured) (*hwv1alpha1.NodePool, error) {
 	renderedNodePool, renderErr := t.handleRenderHardwareTemplate(ctx, clusterInstance)
 	if renderErr != nil {
 		t.logger.ErrorContext(
@@ -387,15 +388,15 @@ func (t *clusterRequestReconcilerTask) renderHardwareTemplate(ctx context.Contex
 				slog.String("name", t.object.Name),
 			)
 		}
-		return &oranv1alpha1.NodePool{}, renderErr
+		return &hwv1alpha1.NodePool{}, renderErr
 	}
 	return renderedNodePool, nil
 }
 
 func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*oranv1alpha1.NodePool, error) {
+	clusterInstance *unstructured.Unstructured) (*hwv1alpha1.NodePool, error) {
 
-	nodePool := &oranv1alpha1.NodePool{}
+	nodePool := &hwv1alpha1.NodePool{}
 	hwTemplateCm := &corev1.ConfigMap{}
 
 	clusterTemplate, err := t.getCrClusterTemplateRef(ctx)
@@ -424,7 +425,7 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 		return nil, fmt.Errorf("configmap for Hardware Template is not found %s: %w ", hwTemplateCmName, err)
 	}
 
-	nodeGroup := []oranv1alpha1.NodeGroup{}
+	nodeGroup := []hwv1alpha1.NodeGroup{}
 	poolData, exists := hwTemplateCm.Data[utils.HwTemplateNodePool]
 	if !exists {
 		return nil, fmt.Errorf(
@@ -827,7 +828,7 @@ func (t *clusterRequestReconcilerTask) createHwMgrPluginNamespace(
 	return nil
 }
 
-func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *oranv1alpha1.NodePool) error {
+func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
 
 	// Create the hardware plugin namespace.
 	pluginNameSpace := nodePool.ObjectMeta.Namespace
@@ -1190,7 +1191,7 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 
 			if clusterRequest.Status.HardwareProvisioningStatus != nil {
 				// delete the node pool created by this request if it exists
-				nodePool := &oranv1alpha1.NodePool{}
+				nodePool := &hwv1alpha1.NodePool{}
 				exists, err := utils.DoesK8SResourceExist(
 					ctx,
 					r.Client,
@@ -1267,7 +1268,7 @@ func (r *ClusterRequestReconciler) handleFinalizer(
 
 // waitForNodePoolProvision waits for the NodePool status to be in the provisioned state.
 func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Context,
-	nodePool *oranv1alpha1.NodePool) bool {
+	nodePool *hwv1alpha1.NodePool) bool {
 
 	// Get the generated NodePool and its status.
 	exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodePool.GetName(),
@@ -1310,11 +1311,11 @@ func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Cont
 
 // updateClusterInstance updates the given clusterinstance object based on the provisioned nodePool.
 func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodePool *oranv1alpha1.NodePool) bool {
+	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) bool {
 
-	hwNodes := make(map[string][]oranv1alpha1.BMC)
+	hwNodes := make(map[string][]hwv1alpha1.BMC)
 	for _, nodeName := range nodePool.Status.Properties.NodeNames {
-		node := &oranv1alpha1.Node{}
+		node := &hwv1alpha1.Node{}
 		exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodeName, nodePool.Namespace, node)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -1358,7 +1359,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context
 
 		}
 		// Store the BMC details per group
-		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], oranv1alpha1.BMC{
+		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], hwv1alpha1.BMC{
 			Address:         node.Status.BMC.Address,
 			CredentialsName: node.Status.BMC.CredentialsName,
 		})
@@ -1406,7 +1407,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context
 
 // waitForHardwareData waits for the NodePool to be provisioned and update BMC details in ClusterInstance.
 func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodePool *oranv1alpha1.NodePool) bool {
+	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) bool {
 
 	provisioned := t.waitForNodePoolProvision(ctx, nodePool)
 	if provisioned {
@@ -1425,7 +1426,7 @@ func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
 
 // updateHardwareProvisioningStatus updates the status for the created ClusterInstance
 func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
-	ctx context.Context, nodePool *oranv1alpha1.NodePool) error {
+	ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
 
 	var err error
 	if t.object.Status.HardwareProvisioningStatus == nil {
@@ -1656,7 +1657,7 @@ func (r *ClusterRequestReconciler) findNodePoolForClusterRequest(
 	ctx context.Context, event event.UpdateEvent,
 	queue workqueue.RateLimitingInterface) {
 
-	newNodePool := event.ObjectNew.(*oranv1alpha1.NodePool)
+	newNodePool := event.ObjectNew.(*hwv1alpha1.NodePool)
 
 	// Get all the ClusterRequests.
 	clusterRequests := &oranv1alpha1.ClusterRequestList{}
@@ -1792,7 +1793,7 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
 		Watches(
-			&oranv1alpha1.NodePool{},
+			&hwv1alpha1.NodePool{},
 			handler.Funcs{
 				UpdateFunc: r.findNodePoolForClusterRequest,
 			},
