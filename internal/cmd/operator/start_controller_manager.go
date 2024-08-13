@@ -127,9 +127,11 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	// Restrict to the following namespaces - subject to change.
+	// nolint: gocritic
 	//namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
 	//defaultNamespaces := make(map[string]cache.Config)
 
+	// nolint: gocritic
 	//for _, ns := range namespaces {
 	//	defaultNamespaces[ns] = cache.Config{}
 	//}
@@ -140,6 +142,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		HealthProbeBindAddress: c.probeAddr,
 		LeaderElection:         c.enableLeaderElection,
 		LeaderElectionID:       "a73bc4d2.openshift.io",
+
+		// nolint: gocritic
 		//Cache: cache.Options{
 		//	DefaultNamespaces: defaultNamespaces,
 		//},

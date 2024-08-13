@@ -98,8 +98,8 @@ func (s *KubeConfigMapStore) GetName() (name string) {
 }
 
 // k8s configmap methods
-func (s *KubeConfigMapStore) AddEntry(ctx context.Context, entryKey string, value string) (err error) {
-	//test to read the configmap
+func (s *KubeConfigMapStore) AddEntry(ctx context.Context, entryKey, value string) (err error) {
+	// test to read the configmap
 	configmap := &corev1.ConfigMap{}
 
 	key := clnt.ObjectKey{
@@ -114,7 +114,7 @@ func (s *KubeConfigMapStore) AddEntry(ctx context.Context, entryKey string, valu
 
 	savedData := configmap.Data
 
-	//configmap does not exist
+	// configmap does not exist
 	if savedData == nil {
 		savedData = map[string]string{}
 	}
@@ -138,7 +138,7 @@ func (s *KubeConfigMapStore) AddEntry(ctx context.Context, entryKey string, valu
 }
 
 func (s *KubeConfigMapStore) DeleteEntry(ctx context.Context, entryKey string) (err error) {
-	//test to read the configmap
+	// test to read the configmap
 	configmap := &corev1.ConfigMap{}
 
 	key := clnt.ObjectKey{
@@ -148,8 +148,8 @@ func (s *KubeConfigMapStore) DeleteEntry(ctx context.Context, entryKey string) (
 	err = (*s.client).Get(ctx, key, configmap)
 
 	if err != nil && !apierrors.IsNotFound(err) {
-		//there is error and err is not notfound error
-		//panic("unexpected error")
+		// there is error and err is not notfound error
+		// panic("unexpected error")
 		return
 	}
 
@@ -159,7 +159,7 @@ func (s *KubeConfigMapStore) DeleteEntry(ctx context.Context, entryKey string) (
 
 	_, ok := configmap.Data[entryKey]
 
-	//entry not found
+	// entry not found
 	if !ok {
 		return
 	}
@@ -183,7 +183,7 @@ func (s *KubeConfigMapStore) DeleteEntry(ctx context.Context, entryKey string) (
 
 func (s *KubeConfigMapStore) ReadEntry(ctx context.Context, entryKey string) (value string, err error) {
 
-	//test to read the configmap
+	// test to read the configmap
 	configmap := &corev1.ConfigMap{}
 
 	key := clnt.ObjectKey{
@@ -193,8 +193,8 @@ func (s *KubeConfigMapStore) ReadEntry(ctx context.Context, entryKey string) (va
 	err = (*s.client).Get(ctx, key, configmap)
 
 	if err != nil && !apierrors.IsNotFound(err) {
-		//there is error and err is not notfound error
-		//panic("unexpected error")
+		// there is error and err is not notfound error
+		// panic("unexpected error")
 		return
 	}
 
@@ -214,7 +214,7 @@ func (s *KubeConfigMapStore) ReadEntry(ctx context.Context, entryKey string) (va
 func (s *KubeConfigMapStore) ReadAllEntries(ctx context.Context) (result map[string]data.Object, err error) {
 	result = map[string]data.Object{}
 
-	//test to read the configmap
+	// test to read the configmap
 	configmap := &corev1.ConfigMap{}
 
 	key := clnt.ObjectKey{
@@ -224,8 +224,8 @@ func (s *KubeConfigMapStore) ReadAllEntries(ctx context.Context) (result map[str
 	err = (*s.client).Get(ctx, key, configmap)
 
 	if err != nil && !apierrors.IsNotFound(err) {
-		//there is error and err is not notfound error
-		//panic("unexpected error")
+		// there is error and err is not notfound error
+		// panic("unexpected error")
 		return
 	}
 

@@ -201,8 +201,8 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (nextReconcile c
 				renderedNodePool.GetNamespace(),
 			),
 		)
-		//TODO: enable Requeue after the hardware plugin is ready
-		//return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		// TODO: enable Requeue after the hardware plugin is ready
+		// return ctrl.Result{RequeueAfter: time.Second * 30}, nil
 	}
 
 	// ### CREATION OF RESOURCES NEEDED BY THE CLUSTER INSTANCE ###
@@ -783,7 +783,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 }
 
 // copyHwMgrPluginBMCSecret copies the BMC secret from the plugin namespace to the cluster namespace
-func (t *clusterRequestReconcilerTask) copyHwMgrPluginBMCSecret(ctx context.Context, name string, sourceNamespace string, targetNamespace string) error {
+func (t *clusterRequestReconcilerTask) copyHwMgrPluginBMCSecret(ctx context.Context, name, sourceNamespace, targetNamespace string) error {
 
 	// if the secret already exists in the target namespace, do nothing
 	secret := &corev1.Secret{}
@@ -1283,7 +1283,7 @@ func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Cont
 		return false
 	}
 
-	//Update the Cluster Request Status with status from the NodePool object.
+	// Update the Cluster Request Status with status from the NodePool object.
 	err = t.updateHardwareProvisioningStatus(ctx, nodePool)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -1563,7 +1563,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstanceStatus(
 	if deploymentCompletedCondition != nil &&
 		deploymentFailedCondition != nil &&
 		deploymentStoppedCondition != nil {
-		if
+		if // nolint: gocritic
 		// Stopped + Failed = Final failure.
 		deploymentStoppedCondition.Status == corev1.ConditionTrue &&
 			deploymentFailedCondition.Status == corev1.ConditionTrue {

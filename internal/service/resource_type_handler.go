@@ -365,7 +365,7 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 	}
 
 	var resourceClass, resourceKind, resourceTypeID string
-	switch kind {
+	switch kind { // nolint: gocritic
 	case KindNode:
 		resourceClass = ResourceClassCompute
 		resourceKind = ResourceKindPhysical

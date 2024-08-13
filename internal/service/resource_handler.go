@@ -356,7 +356,7 @@ func (r *ResourceHandler) mapItem(ctx context.Context,
 		return
 	}
 
-	switch kind {
+	switch kind { // nolint: gocritic
 	case KindNode:
 		return r.mapNodeItem(ctx, from)
 	}

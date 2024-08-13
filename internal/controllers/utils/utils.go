@@ -44,7 +44,7 @@ func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Objec
 	return nil
 }
 
-func ValidateJsonAgainstJsonSchema(schema string, input string) error {
+func ValidateJsonAgainstJsonSchema(schema, input string) error {
 	schemaLoader := gojsonschema.NewStringLoader(schema)
 	inputLoader := gojsonschema.NewStringLoader(input)
 
@@ -187,20 +187,20 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	return nil
 }
 
-func DoesK8SResourceExist(ctx context.Context, c client.Client, Name string, Namespace string, obj client.Object) (resourceExists bool, err error) {
-	err = c.Get(ctx, types.NamespacedName{Name: Name, Namespace: Namespace}, obj)
+func DoesK8SResourceExist(ctx context.Context, c client.Client, name, namespace string, obj client.Object) (resourceExists bool, err error) {
+	err = c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, obj)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
 			oranUtilsLog.Info("[doesK8SResourceExist] Resource not found, create it. ",
-				"name", Name, "namespace", Namespace)
+				"name", name, "namespace", namespace)
 			return false, nil
 		} else {
 			return false, err
 		}
 	} else {
 		oranUtilsLog.Info("[doesK8SResourceExist] Resource already present, return. ",
-			"name", Name, "namespace", Namespace)
+			"name", name, "namespace", namespace)
 		return true, nil
 	}
 }
@@ -362,7 +362,7 @@ func getSearchAPI(ctx context.Context, c client.Client, orano2ims *oranv1alpha1.
 func GetServerArgs(ctx context.Context, c client.Client,
 	orano2ims *oranv1alpha1.ORANO2IMS,
 	serverName string) (result []string, err error) {
-	// MetadataServer:
+	// MetadataServer
 	if serverName == ORANO2IMSMetadataServerName {
 		result = slices.Clone(MetadataServerArgs)
 		result = append(
@@ -373,7 +373,7 @@ func GetServerArgs(ctx context.Context, c client.Client,
 		return
 	}
 
-	// ResourceServer:
+	// ResourceServer
 	if serverName == ORANO2IMSResourceServerName {
 		searchAPI := orano2ims.Spec.ResourceServerConfig.BackendURL
 		if searchAPI == "" {
@@ -385,21 +385,17 @@ func GetServerArgs(ctx context.Context, c client.Client,
 
 		result = slices.Clone(ResourceServerArgs)
 
-		// Add the cloud-id and backend-url args:
+		// Add the cloud-id, backend-url, and token args:
 		result = append(
 			result,
 			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-			fmt.Sprintf("--backend-url=%s", searchAPI))
-
-		// Add the token arg:
-		result = append(
-			result,
+			fmt.Sprintf("--backend-url=%s", searchAPI),
 			GetBackendTokenArg(orano2ims.Spec.ResourceServerConfig.BackendToken))
 
 		return result, nil
 	}
 
-	// DeploymentManagerServer:
+	// DeploymentManagerServer
 	if serverName == ORANO2IMSDeploymentManagerServerName {
 		result = slices.Clone(DeploymentManagerServerArgs)
 
@@ -423,14 +419,11 @@ func GetServerArgs(ctx context.Context, c client.Client,
 		if backendURL == "" {
 			backendURL = defaultBackendURL
 		}
+
+		// Add the backend and token args:
 		result = append(
 			result,
 			fmt.Sprintf("--backend-url=%s", backendURL),
-		)
-
-		// Add the token argument:
-		result = append(
-			result,
 			GetBackendTokenArg(orano2ims.Spec.DeploymentManagerServerConfig.BackendToken))
 
 		// Add the extensions:
@@ -577,7 +570,7 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	result := make([]V, 0, maxLen)
 
 	for i := 0; i < maxLen; i++ {
-		if i < len(dst) && i < len(src) {
+		if i < len(dst) && i < len(src) { // nolint: gocritic
 			dstElem := dst[i]
 			srcElem := src[i]
 			if reflect.TypeOf(dstElem) != reflect.TypeOf(srcElem) {
@@ -618,7 +611,7 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	return result, nil
 }
 
-func CopyK8sSecret(ctx context.Context, c client.Client, secretName string, sourceNamespace string, targetNamespace string) error {
+func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNamespace, targetNamespace string) error {
 	// Get the secret from the source namespace
 	secret := &corev1.Secret{}
 	exists, err := DoesK8SResourceExist(

@@ -273,7 +273,7 @@ func (b *LoggerBuilder) openWriter() (result io.Writer, err error) {
 }
 
 func (b *LoggerBuilder) openFile(file string) (result io.Writer, err error) {
-	result, err = os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0660)
+	result, err = os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o660)
 	return
 }
 

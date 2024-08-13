@@ -240,7 +240,7 @@ func validateConfigmapReference(
 		newConfigmap := existingConfigmap.DeepCopy()
 		newConfigmap.Immutable = &immutable
 
-		if err = utils.CreateK8sCR(ctx, c, newConfigmap, nil, utils.PATCH); err != nil {
+		if err := utils.CreateK8sCR(ctx, c, newConfigmap, nil, utils.PATCH); err != nil {
 			return validationErr, err
 		}
 	}

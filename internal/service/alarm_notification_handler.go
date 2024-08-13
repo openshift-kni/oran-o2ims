@@ -60,7 +60,7 @@ type AlarmNotificationHandler struct {
 	jqTool            *jq.Tool
 	alarmMapper       *AlarmMapper
 
-	//structures for notification
+	// structures for notification
 	subscriptionMapMemoryLock *sync.RWMutex
 	subscriptionMap           *map[string]data.Object
 	persistStore              *persiststorage.KubeConfigMapStore
@@ -304,12 +304,12 @@ func (h *AlarmNotificationHandler) watchPersistStore(ctx context.Context) (err e
 
 // Following function is called during daemon start to update alarm subscription as well as
 // alarm subscription got updated. The write lock is need to update subscription kept in memory
-func (h *AlarmNotificationHandler) assignSubscriptionMap(newMap *map[string]data.Object) (err error) {
+func (h *AlarmNotificationHandler) assignSubscriptionMap(newMap *map[string]data.Object) (err error) { // nolint: gocritic
 	h.subscriptionMapMemoryLock.Lock()
 	defer h.subscriptionMapMemoryLock.Unlock()
 	h.subscriptionMap = newMap
 
-	//clear existing search index and build new one for now
+	// clear existing search index and build new one for now
 	h.subscriptionSearcher.subscriptionInfoMap = map[string]subscriptionInfo{}
 
 	err = h.subscriptionSearcher.pocessSubscriptionMapForSearcher(h.subscriptionMap, h.jqTool)
@@ -323,7 +323,7 @@ func (h *AlarmNotificationHandler) assignSubscriptionMap(newMap *map[string]data
 	return
 }
 
-func (h *AlarmNotificationHandler) processStorageChanges(newMap *map[string]data.Object) {
+func (h *AlarmNotificationHandler) processStorageChanges(newMap *map[string]data.Object) { // nolint: gocritic
 
 	err := h.assignSubscriptionMap(newMap)
 
