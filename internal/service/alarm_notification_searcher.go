@@ -173,7 +173,7 @@ func (h *AlarmNotificationHandler) getSubscriptionIdsFromAlarm(ctx context.Conte
 			h.logger.Debug(
 				"pocessSubscriptionMapForSearcher ",
 				"subscription: ", subId,
-				slog.String("error", err.Error()),
+				" error", err.Error(),
 			)
 			continue
 		}
