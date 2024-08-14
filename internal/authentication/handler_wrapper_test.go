@@ -31,6 +31,8 @@ import (
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
 )
 
+const bearerPrefix = "Bearer "
+
 var _ = Describe("Handler wapper", func() {
 	It("Can't be built without a logger", func() {
 		_, err := NewHandlerWrapper().
@@ -192,7 +194,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the expired token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -225,7 +227,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -255,7 +257,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -287,7 +289,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -319,7 +321,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -355,7 +357,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -391,7 +393,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -431,7 +433,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -472,7 +474,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with a bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -503,7 +505,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -533,7 +535,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -563,7 +565,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -643,7 +645,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/public", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 	})
@@ -702,7 +704,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/public", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -743,7 +745,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -784,7 +786,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -816,7 +818,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send a request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -900,7 +902,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -928,7 +930,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -993,7 +995,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1032,7 +1034,7 @@ var _ = Describe("Handler wapper", func() {
 		}()
 		err = fd.Close()
 		Expect(err).ToNot(HaveOccurred())
-		err = os.WriteFile(file, []byte("mykeystoken"), 0600)
+		err = os.WriteFile(file, []byte("mykeystoken"), 0o600)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Prepare the handler:
@@ -1047,7 +1049,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1098,7 +1100,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1137,7 +1139,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1190,7 +1192,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 

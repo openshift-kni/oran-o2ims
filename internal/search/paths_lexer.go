@@ -46,6 +46,8 @@ const (
 	pathsSymbolIdentifier
 	pathsSymbolComma
 	pathsSymbolSlash
+
+	identifierToken = "identifier"
 )
 
 // String generates a string representation of the terminal symbol.
@@ -162,8 +164,7 @@ func (l *pathsLexer) FetchToken() (token *pathsToken, err error) {
 				return
 			default:
 				err = fmt.Errorf(
-					"unexpected character '%c' while expecting start of "+
-						"identifier",
+					"unexpected character '%c' while expecting start of "+identifierToken,
 					r,
 				)
 				return
