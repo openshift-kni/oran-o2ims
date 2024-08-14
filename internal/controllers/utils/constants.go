@@ -14,13 +14,16 @@ const (
 	ORANO2IMSAlarmNotification = "alarm-notification"
 )
 
+// Suffix for server names
+const serverSuffix = "-server"
+
 // Deployment names
 const (
-	ORANO2IMSMetadataServerName          = ORANO2IMSMetadata + "-server"
-	ORANO2IMSDeploymentManagerServerName = ORANO2IMSDeploymentManager + "-server"
-	ORANO2IMSResourceServerName          = ORANO2IMSResource + "-server"
-	ORANO2IMSAlarmSubscriptionServerName = ORANO2IMSAlarmSubscription + "-server"
-	ORANO2IMSAlarmNotificationServerName = ORANO2IMSAlarmNotification + "-server"
+	ORANO2IMSMetadataServerName          = ORANO2IMSMetadata + serverSuffix
+	ORANO2IMSDeploymentManagerServerName = ORANO2IMSDeploymentManager + serverSuffix
+	ORANO2IMSResourceServerName          = ORANO2IMSResource + serverSuffix
+	ORANO2IMSAlarmSubscriptionServerName = ORANO2IMSAlarmSubscription + serverSuffix
+	ORANO2IMSAlarmNotificationServerName = ORANO2IMSAlarmNotification + serverSuffix
 )
 
 // CR default names

@@ -44,6 +44,7 @@ func TestORANO2IMSControllerUtils(t *testing.T) {
 	RunSpecs(t, "Controller Utils Suite")
 }
 
+//nolint:unparam
 func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
 	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
 }
