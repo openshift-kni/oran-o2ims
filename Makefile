@@ -324,8 +324,7 @@ vet: ## Run go vet against code.
 .PHONY: lint
 lint:
 	@echo "Run lint"
-	golangci-lint --version
-	golangci-lint run --verbose --print-resources-usage --timeout=5m0s
+	hack/golangci-lint.sh
 
 .PHONY: deps-update
 deps-update:
