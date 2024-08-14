@@ -15,8 +15,6 @@ resources:
 # Provisioning:
 - bases/oran.openshift.io_clustertemplates.yaml
 - bases/oran.openshift.io_clusterrequests.yaml
-- bases/oran.openshift.io_nodepools.yaml
-- bases/oran.openshift.io_nodes.yaml
 
 configurations:
 - kustomizeconfig.yaml
