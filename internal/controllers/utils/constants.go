@@ -77,7 +77,7 @@ var (
 // Default values for backend URL and token:
 const (
 	defaultBackendURL       = "https://kubernetes.default.svc"
-	defaultBackendTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultBackendTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token" // nolint: gosec // hardcoded path only
 )
 
 // ClusterInstance template constants
@@ -123,4 +123,10 @@ const (
 const (
 	ClusterInstanceDataType = "ClusterInstance"
 	PolicyTemplateDataType  = "PolicyTemplate"
+)
+
+// Environment variable names
+const (
+	TLSSkipVerifyEnvName      = "INSECURE_SKIP_VERIFY"
+	TLSSkipVerifyDefaultValue = true // TODO(alegacy): need to set to false for production
 )

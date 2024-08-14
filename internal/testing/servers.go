@@ -75,7 +75,7 @@ func MakeTCPTLSServer() (server *ghttp.Server, ca string) {
 func fetchCACertificate(network, address string) string {
 	// Connect to the server and do the TLS handshake to obtain the certificate chain:
 	conn, err := tls.Dial(network, address, &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, // nolint: gosec  // test only
 	})
 	Expect(err).ToNot(HaveOccurred())
 	defer func() {

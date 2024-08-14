@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -312,8 +313,12 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		slog.String("address", apiListener.Addr().String()),
 	)
 	apiServer := &http.Server{
-		Addr:    apiListener.Addr().String(),
-		Handler: router,
+		Addr:              apiListener.Addr().String(),
+		Handler:           router,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(apiServer)
 	go func() {
@@ -347,8 +352,12 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	)
 	metricsHandler := promhttp.Handler()
 	metricsServer := &http.Server{
-		Addr:    metricsListener.Addr().String(),
-		Handler: metricsHandler,
+		Addr:              metricsListener.Addr().String(),
+		Handler:           metricsHandler,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(metricsServer)
 	go func() {
