@@ -107,7 +107,7 @@ var _ = Describe("Subscription handler", func() {
 			// Create a context:
 			ctx = context.TODO()
 			fakeClient = k8s.NewFakeClient()
-			//create fake namespace
+			// create fake namespace
 			namespace := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: DefaultNamespace,
@@ -215,7 +215,7 @@ var _ = Describe("Subscription handler", func() {
 				subIdMap[subId_2] = obj_2
 				subIdMap[subId_1] = obj_1
 
-				//subIdArray := maps.Keys(subIdMap)
+				// subIdArray := maps.Keys(subIdMap)
 
 				// Send the request and verify the result:
 				response, err := handler.List(ctx, &ListRequest{})
@@ -325,7 +325,7 @@ var _ = Describe("Subscription handler", func() {
 					},
 				}
 
-				//add the request
+				// add the request
 				add_req := AddRequest{nil, obj}
 				resp, err := handler.Add(ctx, &add_req)
 				if checkFakeClientServerSideApplyError(err) {
@@ -333,26 +333,26 @@ var _ = Describe("Subscription handler", func() {
 				}
 				Expect(err).ToNot(HaveOccurred())
 
-				//decode the subId
+				// decode the subId
 				sub_id, err := handler.decodeSubId(resp.Object)
 				Expect(err).ToNot(HaveOccurred())
 
-				//use Get to verify the addrequest
+				// use Get to verify the addrequest
 				get_resp, err := handler.Get(ctx, &GetRequest{
 					Variables: []string{sub_id},
 				})
 				Expect(err).ToNot(HaveOccurred())
-				//extract sub_id and verify
+				// extract sub_id and verify
 				sub_id_get, err := handler.decodeSubId(get_resp.Object)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(sub_id).To(Equal(sub_id_get))
 
-				//use Delete
+				// use Delete
 				_, err = handler.Delete(ctx, &DeleteRequest{
 					Variables: []string{sub_id}})
 				Expect(err).ToNot(HaveOccurred())
 
-				//use Get to verify the entry was deleted
+				// use Get to verify the entry was deleted
 				get_resp, err = handler.Get(ctx, &GetRequest{
 					Variables: []string{sub_id},
 				})
