@@ -25,7 +25,7 @@ import (
 var _ = Describe("Selector evaluator", func() {
 	// nop is a simple path evaluator that always return nil.
 	var nop = func(context.Context, Path, any) (any, error) {
-		return nil, nil
+		return nil, nil // nolint: nilnil
 	}
 
 	Describe("Creation", func() {
