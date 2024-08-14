@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1314,3 +1316,178 @@ var _ = DescribeTable(
 		),
 	*/
 )
+
+var _ = Describe("getCrClusterTemplateRef", func() {
+	var (
+		ctx          context.Context
+		c            client.Client
+		reconciler   *ClusterRequestReconciler
+		task         *clusterRequestReconcilerTask
+		ctName       = "clustertemplate-a-v1"
+		ctNamespace  = "clustertemplate-a-v4-16"
+		ciDefaultsCm = "clusterinstance-defaults-v1"
+		ptDefaultsCm = "policytemplate-defaults-v1"
+		crName       = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Define the cluster request.
+		cr := &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterRequestSpec{
+				ClusterTemplateRef: ctName,
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &clusterRequestReconcilerTask{
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
+		}
+	})
+
+	It("returns error if the referred ClusterTemplate is missing", func() {
+		// Define the cluster template.
+		ct := &oranv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "other-cluster-template-name",
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterTemplateSpec{
+				Templates: oranv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+				},
+				InputDataSchema: oranv1alpha1.InputDataSchema{
+					ClusterInstanceSchema: runtime.RawExtension{},
+				},
+			},
+		}
+
+		Expect(c.Create(ctx, ct)).To(Succeed())
+
+		retCt, err := task.getCrClusterTemplateRef(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			fmt.Sprintf("the referenced ClusterTemplate (%s) does not exist in the %s namespace",
+				ctName, ctNamespace)))
+		Expect(retCt).To(Equal((*oranv1alpha1.ClusterTemplate)(nil)))
+	})
+
+	It("returns the referred ClusterTemplate if it exists", func() {
+		// Define the cluster template.
+		ct := &oranv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ctName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterTemplateSpec{
+				Templates: oranv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+				},
+				InputDataSchema: oranv1alpha1.InputDataSchema{
+					ClusterInstanceSchema: runtime.RawExtension{},
+				},
+			},
+		}
+
+		Expect(c.Create(ctx, ct)).To(Succeed())
+
+		retCt, err := task.getCrClusterTemplateRef(context.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(retCt.Name).To(Equal(ctName))
+		Expect(retCt.Namespace).To(Equal(ctNamespace))
+		Expect(retCt.Spec.Templates.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
+		Expect(retCt.Spec.Templates.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
+	})
+})
+
+var _ = Describe("createPolicyTemplateConfigMap", func() {
+	var (
+		ctx         context.Context
+		c           client.Client
+		reconciler  *ClusterRequestReconciler
+		task        *clusterRequestReconcilerTask
+		ctName      = "clustertemplate-a-v1"
+		ctNamespace = "clustertemplate-a-v4-16"
+		crName      = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx := context.Background()
+		// Define the cluster request.
+		cr := &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterRequestSpec{
+				ClusterTemplateRef: ctName,
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &clusterRequestReconcilerTask{
+			logger:       reconciler.Logger,
+			client:       reconciler.Client,
+			object:       cr,
+			clusterInput: &clusterInput{},
+		}
+
+		// Define the cluster template.
+		ztpNs := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "ztp-" + ctNamespace,
+			},
+		}
+
+		Expect(c.Create(ctx, ztpNs)).To(Succeed())
+	})
+
+	It("it returns no error if there is no template data", func() {
+		err := task.createPolicyTemplateConfigMap(ctx, crName)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("it creates the policy template configmap with the correct content", func() {
+		// Declare the merged policy template data.
+		task.clusterInput.policyTemplateData = map[string]any{
+			"cpu-isolated":    "0-1,64-65",
+			"hugepages-count": "32",
+		}
+
+		// Create the configMap.
+		err := task.createPolicyTemplateConfigMap(ctx, crName)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check that the configMap exists in the expected namespace.
+		configMapName := crName + "-pg"
+		configMapNs := "ztp-" + ctNamespace
+		configMap := &corev1.ConfigMap{}
+		configMapExists, err := utils.DoesK8SResourceExist(
+			ctx, c, configMapName, configMapNs, configMap)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configMapExists).To(BeTrue())
+		Expect(configMap.Data).To(Equal(
+			map[string]string{
+				"cpu-isolated":    "0-1,64-65",
+				"hugepages-count": "32",
+			},
+		))
+	})
+})

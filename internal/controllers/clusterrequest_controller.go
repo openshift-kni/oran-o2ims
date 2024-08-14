@@ -69,32 +69,6 @@ type clusterInput struct {
 	policyTemplateData  map[string]any
 }
 
-type clusterDetails struct {
-	name          string `default:""`
-	version       string `default:""`
-	policyVersion string `default:""`
-}
-
-func newClusterDetails() *clusterDetails {
-	cd := &clusterDetails{}
-	return cd
-}
-
-func (cd *clusterDetails) setName(name string) *clusterDetails {
-	cd.name = name
-	return cd
-}
-
-func (cd *clusterDetails) setVersion(version string) *clusterDetails {
-	cd.version = version
-	return cd
-}
-
-func (cd *clusterDetails) setPolicyVersion(policyVersion string) *clusterDetails {
-	cd.policyVersion = policyVersion
-	return cd
-}
-
 const (
 	clusterRequestFinalizer      = "clusterrequest.oran.openshift.io/finalizer"
 	clusterRequestNameLabel      = "clusterrequest.oran.openshift.io/name"
@@ -880,7 +854,7 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 		}
 
 		// Make sure the extra-manifests ConfigMap exists in the clusterTemplate namespace.
-		// The clusterRequest namespace is same as the clusterTemplate namespace.
+		// The clusterRequest namespace is the same as the clusterTemplate namespace.
 		configMap := &corev1.ConfigMap{}
 		extraManifestCmName := configMapNameInterface.(string)
 		configMapExists, err := utils.DoesK8SResourceExist(
@@ -1180,54 +1154,40 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema
 func (t *clusterRequestReconcilerTask) createPoliciesConfigMap(
 	ctx context.Context, clusterName string, spec map[string]interface{}) error {
 
-	clusterTemplate, err := t.getCrClusterTemplateRef(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get the ClusterTemplate for ClusterRequest %s: %w ", t.object.Name, err)
-	}
-
-	// Obtain the cluster version for the cluster-version label.
-	clusterVersion, policyVersion, err := utils.GetLabelsForPolicies(
-		t.object, spec, clusterName, clusterTemplate.Namespace)
+	// Check the cluster version for the cluster-version label.
+	err := utils.CheckClusterLabelsForPolicies(spec, clusterName)
 	if err != nil {
 		return err
 	}
-	clusterDetails := newClusterDetails()
-	clusterDetails.setName(clusterName).setVersion(clusterVersion).setPolicyVersion(policyVersion)
 
-	return t.createPolicyTemplateConfigMap(
-		ctx, t.clusterInput.policyTemplateData, clusterTemplate, clusterDetails)
+	return t.createPolicyTemplateConfigMap(ctx, clusterName)
 }
 
 // createPolicyTemplateConfigMap updates the keys of the default ConfigMap to match the
 // clusterTemplate and the cluster version and creates/updates the ConfigMap for the
 // required version of the policy template.
 func (t *clusterRequestReconcilerTask) createPolicyTemplateConfigMap(
-	ctx context.Context,
-	mergedPolicyTemplateData map[string]any,
-	clusterTemplate *oranv1alpha1.ClusterTemplate,
-	clusterDetails *clusterDetails) error {
+	ctx context.Context, clusterName string) error {
+
+	// If there is no policy configuration data, log a message and return without error.
+	if len(t.clusterInput.policyTemplateData) == 0 {
+		t.logger.InfoContext(ctx, "Policy template data is empty")
+		return nil
+	}
 
 	// Update the keys to match the ClusterTemplate name and the version.
 	finalPolicyTemplateData := make(map[string]string)
-	for key, value := range mergedPolicyTemplateData {
-		newKey := fmt.Sprintf(
-			"policy-%s-%s",
-			clusterDetails.policyVersion,
-			key,
-		)
-		finalPolicyTemplateData[newKey] = value.(string)
+	for key, value := range t.clusterInput.policyTemplateData {
+		finalPolicyTemplateData[key] = value.(string)
 	}
 
 	// Put all the data from the mergedPolicyTemplateData in a configMap in the same
 	// namespace as the templated ACM policies.
-	// The namespace is: ztp + <clustertemplate-name> + <cluster-version>
+	// The namespace is: ztp + <clustertemplate-namespace>
 	policyTemplateConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-pg", clusterDetails.name),
-			Namespace: fmt.Sprintf(
-				"ztp-%s-%s",
-				clusterTemplate.Namespace, clusterDetails.version,
-			),
+			Name:      fmt.Sprintf("%s-pg", clusterName),
+			Namespace: fmt.Sprintf("ztp-%s", t.object.Namespace),
 		},
 		Data: finalPolicyTemplateData,
 	}

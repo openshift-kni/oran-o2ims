@@ -94,7 +94,6 @@ const (
 const (
 	PolicyTemplateDefaultsConfigmapKey = "policytemplate-defaults"
 	PolicyTemplateSchema               = "policyTemplateSchema"
-	PolicyTemplateConfigMapNs          = "ztp-install"
 	ClusterVersionLabelKey             = "cluster-version"
 )
 
