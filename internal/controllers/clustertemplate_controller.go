@@ -29,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/yaml"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -41,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
@@ -69,6 +69,10 @@ func requeueWithError(err error) (ctrl.Result, error) {
 
 func requeueWithLongInterval() ctrl.Result {
 	return requeueWithCustomInterval(5 * time.Minute)
+}
+
+func requeueWithMediumInterval() ctrl.Result {
+	return requeueWithCustomInterval(1 * time.Minute)
 }
 
 func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
@@ -146,34 +150,46 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (ctrl.Result, e
 func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Context) (bool, error) {
 	var validationErrs []string
 
-	// TODO: validition for hw template configmap
-
-	// Validition for the policy template defaults configmap.
-	validationErr, err := validateConfigmapReference(
+	// Validate the HW template configmap
+	err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
 		ctx, t.client,
-		t.object.Spec.Templates.PolicyTemplateDefaults,
-		t.object.Namespace,
-		utils.PolicyTemplateDefaultsConfigmapKey)
+		t.object.Spec.Templates.HwTemplate,
+		utils.ORANO2IMSNamespace,
+		utils.HwTemplateNodePool)
 	if err != nil {
-		return false, fmt.Errorf("failed to validate the ConfigMap %s for policy template defaults: %w",
-			t.object.Spec.Templates.PolicyTemplateDefaults, err)
-	}
-	if validationErr != "" {
-		validationErrs = append(validationErrs, validationErr)
+		if !utils.IsInputError(err) {
+			return false, fmt.Errorf("failed to validate the ConfigMap %s for hw template: %w",
+				t.object.Spec.Templates.HwTemplate, err)
+		}
+		validationErrs = append(validationErrs, err.Error())
 	}
 
-	// Validate the ClusterInstance defaults configmap.
-	validationErr, err = validateConfigmapReference(
+	// Validate the ClusterInstance defaults configmap
+	err = validateConfigmapReference[map[string]any](
 		ctx, t.client,
 		t.object.Spec.Templates.ClusterInstanceDefaults,
 		t.object.Namespace,
 		utils.ClusterInstanceTemplateDefaultsConfigmapKey)
 	if err != nil {
-		return false, fmt.Errorf("failed to validate the ConfigMap %s for ClusterInstance defaults: %w",
-			t.object.Spec.Templates.ClusterInstanceDefaults, err)
+		if !utils.IsInputError(err) {
+			return false, fmt.Errorf("failed to validate the ConfigMap %s for ClusterInstance defaults: %w",
+				t.object.Spec.Templates.ClusterInstanceDefaults, err)
+		}
+		validationErrs = append(validationErrs, err.Error())
 	}
-	if validationErr != "" {
-		validationErrs = append(validationErrs, validationErr)
+
+	// Validation for the policy template defaults configmap.
+	err = validateConfigmapReference[map[string]any](
+		ctx, t.client,
+		t.object.Spec.Templates.PolicyTemplateDefaults,
+		t.object.Namespace,
+		utils.PolicyTemplateDefaultsConfigmapKey)
+	if err != nil {
+		if !utils.IsInputError(err) {
+			return false, fmt.Errorf("failed to validate the ConfigMap %s for policy template defaults: %w",
+				t.object.Spec.Templates.PolicyTemplateDefaults, err)
+		}
+		validationErrs = append(validationErrs, err.Error())
 	}
 
 	validationErrsMsg := strings.Join(validationErrs, ";")
@@ -193,47 +209,23 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 }
 
 // validateConfigmapReference validates a given configmap reference within the ClusterTemplate
-func validateConfigmapReference(
-	ctx context.Context, c client.Client, name, namespace, expectedKey string) (string, error) {
+func validateConfigmapReference[T any](
+	ctx context.Context, c client.Client, name, namespace, expectedKey string) error {
 
-	var validationErr string
-
-	existingConfigmap := &corev1.ConfigMap{}
-	cmExists, err := utils.DoesK8SResourceExist(
-		ctx, c, name, namespace, existingConfigmap)
+	existingConfigmap, err := utils.GetConfigmap(ctx, c, name, namespace)
 	if err != nil {
-		return validationErr, err
+		return err
 	}
 
-	if !cmExists {
-		// Check if the configmap is missing
-		validationErr = fmt.Sprintf(
-			"The referenced ConfigMap %s is not found in the namespace %s", name, namespace)
-		return validationErr, nil
-	} else {
-		// Check if the expected key is present in the configmap data
-		defaults, exists := existingConfigmap.Data[expectedKey]
-		if !exists {
-			validationErr = fmt.Sprintf(
-				"the expected key %s does not exist in the ConfigMap %s data", expectedKey, name)
-			return validationErr, nil
-		}
-
-		// Check if the data value is valid YAML
-		var validData map[string]interface{}
-		err = yaml.Unmarshal([]byte(defaults), &validData)
-		if err != nil {
-			validationErr = fmt.Sprintf(
-				"the value of key %s from ConfigMap %s is not in a valid YAML string: %s", expectedKey, name, err.Error())
-			return validationErr, nil
-		}
+	// Extract and validate the template from the configmap
+	_, err = utils.ExtractTemplateDataFromConfigMap[T](ctx, c, existingConfigmap, expectedKey)
+	if err != nil {
+		return err
 	}
 
 	// Check if the configmap is set to mutable
 	if existingConfigmap.Immutable != nil && !*existingConfigmap.Immutable {
-		validationErr = fmt.Sprintf(
-			"It is not allowed to set Immutable to false in the ConfigMap %s", name)
-		return validationErr, nil
+		return utils.NewInputError("It is not allowed to set Immutable to false in the ConfigMap %s", name)
 	} else if existingConfigmap.Immutable == nil {
 		// Patch the validated ConfigMap to make it immutable if not already set
 		immutable := true
@@ -241,11 +233,11 @@ func validateConfigmapReference(
 		newConfigmap.Immutable = &immutable
 
 		if err := utils.CreateK8sCR(ctx, c, newConfigmap, nil, utils.PATCH); err != nil {
-			return validationErr, err
+			return err
 		}
 	}
 
-	return validationErr, nil
+	return nil
 }
 
 // setStatusConditionValidated updates the Validated status condition of the ClusterTemplate object
@@ -383,8 +375,9 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 
 	for _, clusterTemplate := range clusterTemplates.Items {
 		if clusterTemplate.Namespace == obj.GetNamespace() {
-			// TODO: add check for policy template configmap
-			if clusterTemplate.Spec.Templates.ClusterInstanceDefaults == obj.GetName() {
+			if clusterTemplate.Spec.Templates.ClusterInstanceDefaults == obj.GetName() ||
+				clusterTemplate.Spec.Templates.PolicyTemplateDefaults == obj.GetName() ||
+				clusterTemplate.Spec.Templates.HwTemplate == obj.GetName() {
 				// The configmap is referenced in this cluster template , enqueue it
 				requests = append(requests, reconcile.Request{
 					NamespacedName: types.NamespacedName{
@@ -393,8 +386,16 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 					},
 				})
 			}
+		} else if obj.GetNamespace() == utils.ORANO2IMSNamespace {
+			if clusterTemplate.Spec.Templates.HwTemplate == obj.GetName() {
+				requests = append(requests, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Namespace: clusterTemplate.Namespace,
+						Name:      clusterTemplate.Name,
+					},
+				})
+			}
 		}
-		// TODO: add check for hw template
 	}
 	return requests
 }

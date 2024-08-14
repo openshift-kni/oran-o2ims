@@ -15,6 +15,26 @@ var CTconditionTypes = struct {
 	Validated: "ClusterTemplateValidated",
 }
 
+// The following constants define the different types of conditions that will be set for ClusterRequest
+var CRconditionTypes = struct {
+	Validated                ConditionType
+	HardwareTemplateRendered ConditionType
+	HardwareProvisioned      ConditionType
+	ClusterInstanceRendered  ConditionType
+	ClusterResourcesCreated  ConditionType
+	ClusterInstanceProcessed ConditionType
+	ClusterProvisioned       ConditionType
+	// TODO: add condition for configuration apply
+}{
+	Validated:                "ClusterRequestValidated",
+	HardwareTemplateRendered: "HardwareTemplateRendered",
+	HardwareProvisioned:      "HardwareProvisioned",
+	ClusterInstanceRendered:  "ClusterInstanceRendered",
+	ClusterResourcesCreated:  "ClusterResourcesCreated",
+	ClusterInstanceProcessed: "ClusterInstanceProcessed",
+	ClusterProvisioned:       "ClusterProvisioned",
+}
+
 // ConditionReason is a string representing the condition's reason
 type ConditionReason string
 
@@ -25,6 +45,21 @@ var CTconditionReasons = struct {
 }{
 	Completed: "Completed",
 	Failed:    "Failed",
+}
+
+// The following constants define the different reasons that conditions will be set for ClusterRequest
+var CRconditionReasons = struct {
+	NotApplied ConditionReason
+	Completed  ConditionReason
+	Failed     ConditionReason
+	InProgress ConditionReason
+	Unknown    ConditionReason
+}{
+	NotApplied: "NotApplied",
+	Completed:  "Completed",
+	Failed:     "Failed",
+	InProgress: "InProgress",
+	Unknown:    "Unknown",
 }
 
 // SetStatusCondition is a convenience wrapper for meta.SetStatusCondition that takes in the types defined here and converts them to strings
