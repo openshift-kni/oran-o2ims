@@ -1501,7 +1501,7 @@ func (t *clusterRequestReconcilerTask) updateNodeStatusWithHostname(ctx context.
 		return false
 	}
 
-	node.Status.HostName = hostname
+	node.Status.Hostname = hostname
 	err = t.client.Status().Update(ctx, node)
 	if err != nil {
 		t.logger.ErrorContext(

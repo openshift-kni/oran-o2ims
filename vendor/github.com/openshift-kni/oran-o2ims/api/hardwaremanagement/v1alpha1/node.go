@@ -41,7 +41,7 @@ type NodeStatus struct {
 
 	BootMACAddress string `json:"bootMACAddress,omitempty"`
 
-	HostName string `json:"hostName,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
 
 	// Conditions represent the observations of the current state of the NodePool. Possible
 	// values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.

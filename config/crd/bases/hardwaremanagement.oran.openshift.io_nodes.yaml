@@ -140,7 +140,7 @@ spec:
                   - type
                   type: object
                 type: array
-              hostName:
+              hostname:
                 type: string
             type: object
         type: object
