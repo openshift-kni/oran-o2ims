@@ -81,6 +81,7 @@ const (
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests/finalizers,verbs=update
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
