@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 	"text/template"
@@ -666,66 +665,31 @@ func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNames
 	return nil
 }
 
-// GetLabelsForPolicyTemplate checks if the <clustertemplate>-policy and the cluster_version
-// labels exist for a certain ClusterInstance and returns them.
-func GetLabelsForPolicies(
-	clusterRequest *oranv1alpha1.ClusterRequest, spec map[string]interface{},
-	clusterName string, clusterTemplateNs string) (
-	string, string, error) {
+// CheckClusterLabelsForPolicies checks if the cluster_version
+// label exist for a certain ClusterInstance and returns it.
+func CheckClusterLabelsForPolicies(
+	spec map[string]interface{}, clusterName string) error {
 
-	// If the cluster labels contain the <clusterTemplateRef>-policy label,
-	// then it means configuration through ACM policies will be applied.
-	policyLabelKey := clusterTemplateNs + "-policy"
 	labelsInterface, labelsExists := spec["clusterLabels"]
 
 	if !labelsExists {
-		return "", "", NewInputError(
+		return NewInputError(
 			"No cluster labels configured by the ClusterInstance %s(%s). "+
-				"Labels %s and %s are needed for cluster configuration",
-			clusterName, clusterName, policyLabelKey, ClusterVersionLabelKey,
+				"Labels are needed for cluster configuration",
+			clusterName, clusterName,
 		)
 	}
-
-	policyLabelExists := false
-	policyLabelInterface, policyLabelExists :=
-		labelsInterface.(map[string]interface{})[policyLabelKey]
-	if !policyLabelExists {
-		return "", "", NewInputError(
-			"Managed cluster %s is missing the %s label. This label is needed for correctly "+
-				"generating and populating configuration data",
-			clusterName, policyLabelKey,
-		)
-	}
-
-	policyKeyVersion := policyLabelInterface.(string)
-	oranUtilsLog.Info(
-		fmt.Sprintf(
-			"Managed cluster %s will have ACM configuration policies since the %s label is present. "+
-				"The version of the policy configuration is %s",
-			clusterName, policyLabelKey, policyKeyVersion,
-		),
-	)
 
 	// Make sure the cluster-version label exists.
-	clusterVersionLabelInterface, clusterVersionLabelExists :=
+	_, clusterVersionLabelExists :=
 		labelsInterface.(map[string]interface{})[ClusterVersionLabelKey]
 	if !clusterVersionLabelExists {
-		return "", "", NewInputError(
+		return NewInputError(
 			"Managed cluster %s is missing the %s label. This label is needed for correctly "+
 				"generating and populating configuration data",
 			clusterName, ClusterVersionLabelKey,
 		)
 	}
 
-	clusterVersion := clusterVersionLabelInterface.(string)
-	oranUtilsLog.Info(
-		fmt.Sprintf(
-			"Managed cluster %s will be applied the configuration "+
-				" corresponding to its %s: %s."+
-				clusterName, ClusterVersionLabelKey, clusterVersion,
-		),
-	)
-	clusterVersion = regexp.MustCompile(`\.`).ReplaceAllString(clusterVersion, "-")
-
-	return clusterVersion, policyKeyVersion, nil
+	return nil
 }

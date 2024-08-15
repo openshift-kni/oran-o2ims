@@ -1214,3 +1214,46 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 			"error merging maps at slice index: 0: type mismatch for key: subkey1"))
 	})
 })
+
+var _ = Describe("GetLabelsForPolicies", func() {
+	var (
+		spec        = make(map[string]interface{})
+		clusterName = "cluster-1"
+	)
+
+	It("returns error if the clusterInstance does not have any labels", func() {
+
+		err := CheckClusterLabelsForPolicies(spec, clusterName)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			fmt.Sprintf("No cluster labels configured by the ClusterInstance %s(%s)",
+				clusterName, clusterName)))
+	})
+
+	It("returns error if the clusterInstance does not have the cluster-version label", func() {
+
+		spec = map[string]interface{}{
+			"clusterLabels": map[string]interface{}{
+				"clustertemplate-a-policy": "v1",
+			},
+		}
+		err := CheckClusterLabelsForPolicies(spec, clusterName)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			fmt.Sprintf("Managed cluster %s is missing the cluster-version label.",
+				clusterName)))
+	})
+
+	It("returns no error if the cluster-version label exists", func() {
+
+		spec = map[string]interface{}{
+			"clusterLabels": map[string]interface{}{
+				"clustertemplate-a-policy": "v1",
+				"cluster-version":          "v4.16",
+			},
+		}
+		err := CheckClusterLabelsForPolicies(spec, clusterName)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+})
