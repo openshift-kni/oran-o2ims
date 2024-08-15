@@ -66,6 +66,8 @@ spec:
                       should contain the keys `username` and `password`.
                     type: string
                 type: object
+              bootMACAddress:
+                type: string
               conditions:
                 description: |-
                   Conditions represent the observations of the current state of the NodePool. Possible
@@ -138,6 +140,8 @@ spec:
                   - type
                   type: object
                 type: array
+              hostName:
+                type: string
             type: object
         type: object
     served: true

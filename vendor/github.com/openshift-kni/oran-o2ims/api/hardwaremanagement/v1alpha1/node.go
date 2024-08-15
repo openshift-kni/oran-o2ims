@@ -38,6 +38,11 @@ type BMC struct {
 // a node that will eventually be part of a deployment manager.
 type NodeStatus struct {
 	BMC *BMC `json:"bmc,omitempty"`
+
+	BootMACAddress string `json:"bootMACAddress,omitempty"`
+
+	HostName string `json:"hostName,omitempty"`
+
 	// Conditions represent the observations of the current state of the NodePool. Possible
 	// values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
