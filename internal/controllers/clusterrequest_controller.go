@@ -69,6 +69,12 @@ type clusterInput struct {
 	policyTemplateData  map[string]any
 }
 
+type nodeInfo struct {
+	bmcAddress     string
+	bmcCredentials string
+	nodeName       string
+}
+
 const (
 	clusterRequestFinalizer      = "clusterrequest.oran.openshift.io/finalizer"
 	clusterRequestNameLabel      = "clusterrequest.oran.openshift.io/name"
@@ -1348,99 +1354,24 @@ func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Cont
 func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context,
 	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) bool {
 
-	hwNodes := make(map[string][]hwv1alpha1.BMC)
-	for _, nodeName := range nodePool.Status.Properties.NodeNames {
-		node := &hwv1alpha1.Node{}
-		exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodeName, nodePool.Namespace, node)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to get the Node object",
-				slog.String("name", nodeName),
-				slog.String("namespace", nodePool.Namespace),
-				slog.String("error", err.Error()),
-				slog.Bool("exists", exists),
-			)
-			return false
-		}
-		if !exists {
-			t.logger.ErrorContext(
-				ctx,
-				"Node object does not exist",
-				slog.String("name", nodeName),
-				slog.String("namespace", nodePool.Namespace),
-				slog.Bool("exists", exists),
-			)
-			return false
-		}
-		// Verify the node object is generated from the expected pool
-		if node.Spec.NodePool != nodePool.GetName() {
-			t.logger.ErrorContext(
-				ctx,
-				"Node object is not from the expected NodePool",
-				slog.String("name", node.GetName()),
-				slog.String("pool", nodePool.GetName()),
-			)
-			return false
-		}
-		if node.Status.BMC == nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Node status does not have BMC details",
-				slog.String("name", node.GetName()),
-				slog.String("pool", nodePool.GetName()),
-			)
-			return false
-
-		}
-		// Store the BMC details per group
-		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], hwv1alpha1.BMC{
-			Address:         node.Status.BMC.Address,
-			CredentialsName: node.Status.BMC.CredentialsName,
-		})
-	}
-	// Copy the BMC secret from the plugin namespace to the cluster namespace
-	for _, bmcs := range hwNodes {
-		for _, bmc := range bmcs {
-			// nodePool namespace is the plugin namespace, and nodePool name is the cluster name
-			err := t.copyHwMgrPluginBMCSecret(ctx, bmc.CredentialsName, nodePool.GetNamespace(), nodePool.GetName())
-			if err != nil {
-				t.logger.ErrorContext(
-					ctx,
-					"Failed to copy BMC secret from the plugin namespace to the cluster namespaceNode",
-					slog.String("name", bmc.CredentialsName),
-					slog.String("plugin", nodePool.GetNamespace()),
-					slog.String("cluster", nodePool.GetName()),
-				)
-				return false
-			}
-		}
-	}
-	// Populate the BMC endpoint and credential in the cluster instance
-	specInterface, specExists := clusterInstance.Object["spec"].(map[string]any)
-	if !specExists {
+	hwNodes, macAddresses := t.collectNodeDetails(ctx, nodePool)
+	if hwNodes == nil {
 		return false
 	}
-	if nodes, ok := specInterface["nodes"].([]interface{}); ok {
-		for _, node := range nodes {
-			if nodeMap, ok := node.(map[string]interface{}); ok {
-				if role, ok := nodeMap["role"].(string); ok {
-					// Check if the node's role matches any key in hwNodes
-					if bmcs, exists := hwNodes[role]; exists && len(bmcs) > 0 {
-						// Assign the first BMC item to the node
-						nodeMap["bmcAddress"] = bmcs[0].Address
-						nodeMap["bmcCredentialsName"] = map[string]interface{}{"name": bmcs[0].CredentialsName}
-						// Remove the first BMC item from the list
-						hwNodes[role] = bmcs[1:]
-					}
-				}
-			}
-		}
+
+	if !t.copyBMCSecrets(ctx, hwNodes, nodePool) {
+		return false
 	}
+
+	if !t.applyNodeConfiguration(ctx, hwNodes, macAddresses, nodePool, clusterInstance) {
+		return false
+	}
+
 	return true
 }
 
-// waitForHardwareData waits for the NodePool to be provisioned and update BMC details in ClusterInstance.
+// waitForHardwareData waits for the NodePool to be provisioned and update BMC details
+// and bootMacAddress in ClusterInstance.
 func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
 	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) bool {
 
@@ -1457,6 +1388,156 @@ func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
 		return t.updateClusterInstance(ctx, clusterInstance, nodePool)
 	}
 	return false
+}
+
+// collectNodeDetails collects BMC details and boot MAC addresses.
+func (t *clusterRequestReconcilerTask) collectNodeDetails(ctx context.Context,
+	nodePool *hwv1alpha1.NodePool) (map[string][]nodeInfo, map[string]string) {
+
+	// hwNodes maps a group name to a slice of NodeInfo
+	hwNodes := make(map[string][]nodeInfo)
+	macAddresses := make(map[string]string)
+
+	for _, nodeName := range nodePool.Status.Properties.NodeNames {
+		node := &hwv1alpha1.Node{}
+		exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodeName, nodePool.Namespace, node)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to get the Node object",
+				slog.String("name", nodeName),
+				slog.String("namespace", nodePool.Namespace),
+				slog.String("error", err.Error()),
+				slog.Bool("exists", exists),
+			)
+			return nil, nil
+		}
+		if !exists {
+			t.logger.ErrorContext(
+				ctx,
+				"Node object does not exist",
+				slog.String("name", nodeName),
+				slog.String("namespace", nodePool.Namespace),
+				slog.Bool("exists", exists),
+			)
+			return nil, nil
+		}
+		// Verify the node object is generated from the expected pool
+		if node.Spec.NodePool != nodePool.GetName() {
+			t.logger.ErrorContext(
+				ctx,
+				"Node object is not from the expected NodePool",
+				slog.String("name", node.GetName()),
+				slog.String("pool", nodePool.GetName()),
+			)
+			return nil, nil
+		}
+
+		if node.Status.BMC == nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Node status does not have BMC details",
+				slog.String("name", node.GetName()),
+				slog.String("pool", nodePool.GetName()),
+			)
+			return nil, nil
+		}
+		// Store the nodeInfo per group
+		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], nodeInfo{
+			bmcAddress:     node.Status.BMC.Address,
+			bmcCredentials: node.Status.BMC.CredentialsName,
+			nodeName:       node.Name,
+		})
+
+		if node.Status.BootMACAddress != "" {
+			macAddresses[node.Status.BMC.Address] = node.Status.BootMACAddress
+		}
+	}
+
+	return hwNodes, macAddresses
+}
+
+// copyBMCSecrets copies BMC secrets from the plugin namespace to the cluster namespace.
+func (t *clusterRequestReconcilerTask) copyBMCSecrets(ctx context.Context, hwNodes map[string][]nodeInfo,
+	nodePool *hwv1alpha1.NodePool) bool {
+
+	for _, nodeInfos := range hwNodes {
+		for _, node := range nodeInfos {
+			err := t.copyHwMgrPluginBMCSecret(ctx, node.bmcCredentials, nodePool.GetNamespace(), nodePool.GetName())
+			if err != nil {
+				t.logger.ErrorContext(
+					ctx,
+					"Failed to copy BMC secret from the plugin namespace to the cluster namespace",
+					slog.String("name", node.bmcCredentials),
+					slog.String("plugin", nodePool.GetNamespace()),
+					slog.String("cluster", nodePool.GetName()),
+				)
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// applyNodeConfiguration updates the clusterInstance with BMC details and bootMacAddress.
+func (t *clusterRequestReconcilerTask) applyNodeConfiguration(ctx context.Context, hwNodes map[string][]nodeInfo,
+	macAddresses map[string]string, nodePool *hwv1alpha1.NodePool, clusterInstance *unstructured.Unstructured) bool {
+
+	if nodes, ok := clusterInstance.Object["spec"].(map[string]any)["nodes"].([]interface{}); ok {
+		for _, node := range nodes {
+			if nodeMap, ok := node.(map[string]interface{}); ok {
+				if role, ok := nodeMap["role"].(string); ok {
+					// Check if the node's role matches any key in hwNodes
+					if nodeInfos, exists := hwNodes[role]; exists && len(nodeInfos) > 0 {
+						nodeMap["bmcAddress"] = nodeInfos[0].bmcAddress
+						nodeMap["bmcCredentialsName"] = map[string]interface{}{"name": nodeInfos[0].bmcCredentials}
+						if mac, macExists := macAddresses[nodeInfos[0].bmcAddress]; macExists {
+							nodeMap["bootMACAddress"] = mac
+						}
+						// indicates which host has been assigned to the node
+						if !t.updateNodeStatusWithHostname(ctx, nodeInfos[0].nodeName, nodeMap["hostName"].(string),
+							nodePool.Namespace) {
+							return false
+						}
+						hwNodes[role] = nodeInfos[1:]
+					}
+				}
+			}
+		}
+	}
+	return true
+}
+
+// Updates the Node status with the hostname after BMC information has been assigned.
+func (t *clusterRequestReconcilerTask) updateNodeStatusWithHostname(ctx context.Context, nodeName, hostname, namespace string) bool {
+	node := &hwv1alpha1.Node{}
+	exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodeName, namespace, node)
+	if err != nil || !exists {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to get the Node object for updating hostname",
+			slog.String("name", nodeName),
+			slog.String("namespace", namespace),
+			slog.String("error", err.Error()),
+			slog.Bool("exists", exists),
+		)
+		return false
+	}
+
+	node.Status.Hostname = hostname
+	err = t.client.Status().Update(ctx, node)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update Node status with hostname",
+			slog.String("name", node.GetName()),
+			slog.String("hostname", hostname),
+			slog.String("namespace", namespace),
+			slog.String("error", err.Error()),
+		)
+		return false
+	}
+	return true
 }
 
 // updateHardwareProvisioningStatus updates the status for the created ClusterInstance
