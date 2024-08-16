@@ -69,3 +69,7 @@ func ProcessChangesWithFunction(so Storage, ctx context.Context, function Proces
 	}
 	return nil
 }
+
+func ProcessChangesWithFunction(so Storage, ctx context.Context, function ProcessFunc) (err error) {
+	return so.ProcessChangesWithFunction(ctx, function)
+}
