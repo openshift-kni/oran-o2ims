@@ -50,7 +50,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-// clusterRequestReconciler reconciles a ClusterRequest object
+// ClusterRequestReconciler reconciles a ClusterRequest object
 type ClusterRequestReconciler struct {
 	client.Client
 	Logger *slog.Logger
@@ -359,13 +359,13 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		slog.String("name", t.object.Name),
 	)
 
-	// Wrap the merged clusterinstance data in a map with key "Cluster"
+	// Wrap the merged ClusterInstance data in a map with key "Cluster"
 	// This data object will be consumed by the clusterInstance template
 	mergedClusterInstanceData := map[string]any{
 		"Cluster": t.clusterInput.clusterInstanceData,
 	}
 
-	// TODO: Consider unsharmalling into siteconfig.ClusterInstance type
+	// TODO: Consider unmarshalling into siteconfig.ClusterInstance type
 	// to catch any type issue in advance
 	renderedClusterInstance, err := utils.RenderTemplateForK8sCR(
 		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
@@ -410,7 +410,10 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		return nil, fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
 	}
 
-	return renderedClusterInstance, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to render ClusterInstanceTemplate: %w", err)
+	}
+	return renderedClusterInstance, nil
 }
 
 func (t *clusterRequestReconcilerTask) handleClusterResources(ctx context.Context, clusterInstance *unstructured.Unstructured) error {
@@ -513,7 +516,7 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 			"failed to get the Hardware template from ConfigMap %s, err: %w", hwTemplateCmName, err)
 	}
 
-	// count the nodes  per group
+	// count the nodes per group
 	roleCounts := make(map[string]int)
 	specInterface, specExists := clusterInstance.Object["spec"].(map[string]any)
 	if !specExists {
@@ -603,14 +606,14 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		existingClusterInstance)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return err
+			return fmt.Errorf("failed to get ClusterInstance: %w", err)
 		}
 
 		// Create the ClusterInstance
 		err = t.client.Create(ctx, clusterInstance)
 		if err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return err
+				return fmt.Errorf("failed to create ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
 			err = utils.NewInputError(err.Error())
@@ -640,7 +643,7 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		patch := client.MergeFrom(existingClusterInstance.DeepCopy())
 		if err := t.client.Patch(ctx, clusterInstance, patch); err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return err
+				return fmt.Errorf("failed to patch ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
 			err = utils.NewInputError(err.Error())
@@ -674,11 +677,11 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 			managedCluster,
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to check if managed cluster exists: %w", err)
 		}
 
 		if managedClusterExists {
-			// If the ztp-done label exists, update the status to completed.
+			// If the ztp-done label exists, update the status to complete.
 			labels := managedCluster.GetLabels()
 			_, hasZtpDone := labels[ztpDoneLabel]
 			if hasZtpDone {
@@ -861,7 +864,7 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 		configMapExists, err := utils.DoesK8SResourceExist(
 			ctx, t.client, extraManifestCmName, t.object.Namespace, configMap)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to check if ConfigMap exists: %w", err)
 		}
 		if !configMapExists {
 			return utils.NewInputError(
@@ -878,7 +881,7 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 			Data: configMap.Data,
 		}
 		if err := utils.CreateK8sCR(ctx, t.client, newExtraManifestsConfigMap, t.object, utils.UPDATE); err != nil {
-			return err
+			return fmt.Errorf("failed to create extra-manifests ConfigMap: %w", err)
 		}
 	}
 
@@ -911,13 +914,16 @@ func (t *clusterRequestReconcilerTask) createPullSecret(
 	}
 
 	// Check the pull secret already exists in the clusterTemplate namespace.
-	// The clusterRequest namespace is same as the clusterTemplate namespace.
+	// The clusterRequest namespace is the same as the clusterTemplate namespace.
 	pullSecret := &corev1.Secret{}
 	pullSecretName := pullSecretNameInterface.(string)
 	pullSecretExistsInTemplateNamespace, err := utils.DoesK8SResourceExist(
 		ctx, t.client, pullSecretName, t.object.Namespace, pullSecret)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"failed to check if pull secret %s exists in namespace %s: %w",
+			t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef, err,
+		)
 	}
 	if !pullSecretExistsInTemplateNamespace {
 		return utils.NewInputError(
@@ -934,7 +940,11 @@ func (t *clusterRequestReconcilerTask) createPullSecret(
 		Type: corev1.SecretTypeDockerConfigJson,
 	}
 
-	return utils.CreateK8sCR(ctx, t.client, newClusterInstancePullSecret, nil, utils.UPDATE)
+	if err := utils.CreateK8sCR(ctx, t.client, newClusterInstancePullSecret, nil, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Kubernetes CR for ClusterInstancePullSecret: %w", err)
+	}
+
+	return nil
 }
 
 // createClusterInstanceNamespace creates the namespace of the ClusterInstance
@@ -957,7 +967,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceNamespace(
 
 	err := utils.CreateK8sCR(ctx, t.client, namespace, nil, utils.UPDATE)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create or update namespace %s: %w", clusterName, err)
 	}
 
 	if namespace.Status.Phase == corev1.NamespaceTerminating {
@@ -975,7 +985,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 	// The BMC credential details are for now obtained from the ClusterRequest.
 	inputData, err := t.getClusterTemplateInputFromClusterRequest(&t.object.Spec.ClusterTemplateInput.ClusterInstanceInput)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal ClusterInstanceInput raw data: %w", err)
 	}
 
 	// If we got to this point, we can assume that all the keys up to the BMC details
@@ -997,7 +1007,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 		username, password, secretName, err :=
 			utils.GetBMCDetailsForClusterInstance(node, t.object.Name)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get BMC details for cluster instance %s: %w", t.object.Name, err)
 		}
 
 		// Create the node's BMC secret.
@@ -1012,9 +1022,8 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 			},
 		}
 
-		err = utils.CreateK8sCR(ctx, t.client, bmcSecret, nil, utils.UPDATE)
-		if err != nil {
-			return err
+		if err = utils.CreateK8sCR(ctx, t.client, bmcSecret, nil, utils.UPDATE); err != nil {
+			return fmt.Errorf("failed to create Kubernetes CR: %w", err)
 		}
 	}
 
@@ -1029,7 +1038,7 @@ func (t *clusterRequestReconcilerTask) copyHwMgrPluginBMCSecret(ctx context.Cont
 	exists, err := utils.DoesK8SResourceExist(
 		ctx, t.client, name, targetNamespace, secret)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to check if secret exists in namespace %s: %w", targetNamespace, err)
 	}
 	if exists {
 		t.logger.Info(
@@ -1039,7 +1048,12 @@ func (t *clusterRequestReconcilerTask) copyHwMgrPluginBMCSecret(ctx context.Cont
 		)
 		return nil
 	}
-	return utils.CopyK8sSecret(ctx, t.client, name, sourceNamespace, targetNamespace)
+
+	if err := utils.CopyK8sSecret(ctx, t.client, name, sourceNamespace, targetNamespace); err != nil {
+		return fmt.Errorf("failed to copy Kubernetes secret: %w", err)
+	}
+
+	return nil
 }
 
 // createHwMgrPluginNamespace creates the namespace of the hardware manager plugin
@@ -1058,9 +1072,8 @@ func (t *clusterRequestReconcilerTask) createHwMgrPluginNamespace(
 			Name: name,
 		},
 	}
-	err := utils.CreateK8sCR(ctx, t.client, namespace, nil, utils.UPDATE)
-	if err != nil {
-		return err
+	if err := utils.CreateK8sCR(ctx, t.client, namespace, nil, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Kubernetes CR for namespace %s: %w", namespace, err)
 	}
 
 	return nil
@@ -1115,7 +1128,7 @@ func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Conte
 
 	// If there was an error in trying to get the ClusterTemplate, return it.
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
 
 	// If the referenced ClusterTemplate does not exist, log and return an appropriate error.
@@ -1156,9 +1169,8 @@ func (t *clusterRequestReconcilerTask) createPoliciesConfigMap(
 	ctx context.Context, clusterName string, spec map[string]interface{}) error {
 
 	// Check the cluster version for the cluster-version label.
-	err := utils.CheckClusterLabelsForPolicies(spec, clusterName)
-	if err != nil {
-		return err
+	if err := utils.CheckClusterLabelsForPolicies(spec, clusterName); err != nil {
+		return fmt.Errorf("failed to check cluster labels: %w", err)
 	}
 
 	return t.createPolicyTemplateConfigMap(ctx, clusterName)
@@ -1170,7 +1182,7 @@ func (t *clusterRequestReconcilerTask) createPoliciesConfigMap(
 func (t *clusterRequestReconcilerTask) createPolicyTemplateConfigMap(
 	ctx context.Context, clusterName string) error {
 
-	// If there is no policy configuration data, log a message and return without error.
+	// If there is no policy configuration data, log a message and return without an error.
 	if len(t.clusterInput.policyTemplateData) == 0 {
 		t.logger.InfoContext(ctx, "Policy template data is empty")
 		return nil
@@ -1193,7 +1205,11 @@ func (t *clusterRequestReconcilerTask) createPolicyTemplateConfigMap(
 		Data: finalPolicyTemplateData,
 	}
 
-	return utils.CreateK8sCR(ctx, t.client, policyTemplateConfigMap, t.object, utils.UPDATE)
+	if err := utils.CreateK8sCR(ctx, t.client, policyTemplateConfigMap, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Kubernetes CR: %w", err)
+	}
+
+	return nil
 }
 
 func (r *ClusterRequestReconciler) finalizeClusterRequest(
@@ -1210,12 +1226,12 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 	// Query the NodePool created by this ClusterRequest. Delete it if exists.
 	nodePoolList := &hwv1alpha1.NodePoolList{}
 	if err := r.Client.List(ctx, nodePoolList, listOpts...); err != nil {
-		return err
+		return fmt.Errorf("failed to list node pools: %w", err)
 	}
 	for _, nodePool := range nodePoolList.Items {
 		copiedNodePool := nodePool
 		if err := r.Client.Delete(ctx, &copiedNodePool); client.IgnoreNotFound(err) != nil {
-			return err
+			return fmt.Errorf("failed to delete node pool: %w", err)
 		}
 	}
 
@@ -1223,12 +1239,12 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 	// The SiteConfig operator will also delete the namespace.
 	clusterInstanceList := &siteconfig.ClusterInstanceList{}
 	if err := r.Client.List(ctx, clusterInstanceList, listOpts...); err != nil {
-		return err
+		return fmt.Errorf("failed to list cluster instances: %w", err)
 	}
 	for _, clusterInstance := range clusterInstanceList.Items {
 		copiedClusterInstance := clusterInstance
 		if err := r.Client.Delete(ctx, &copiedClusterInstance); client.IgnoreNotFound(err) != nil {
-			return err
+			return fmt.Errorf("failed to delete cluster instance: %w", err)
 		}
 	}
 
@@ -1237,12 +1253,12 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 		// this ClusterRequest. Delete it if exists.
 		namespaceList := &corev1.NamespaceList{}
 		if err := r.Client.List(ctx, namespaceList, listOpts...); err != nil {
-			return err
+			return fmt.Errorf("failed to list namespaces: %w", err)
 		}
 		for _, ns := range namespaceList.Items {
 			copiedNamespace := ns
 			if err := r.Client.Delete(ctx, &copiedNamespace); client.IgnoreNotFound(err) != nil {
-				return err
+				return fmt.Errorf("failed to delete namespace: %w", err)
 			}
 		}
 	}
@@ -1260,7 +1276,10 @@ func (r *ClusterRequestReconciler) handleFinalizer(
 		if !controllerutil.ContainsFinalizer(clusterRequest, clusterRequestFinalizer) {
 			controllerutil.AddFinalizer(clusterRequest, clusterRequestFinalizer)
 			// Update and requeue since the finalizer has been added.
-			return ctrl.Result{Requeue: true}, true, r.Update(ctx, clusterRequest)
+			if err := r.Update(ctx, clusterRequest); err != nil {
+				return ctrl.Result{}, true, fmt.Errorf("failed to update ClusterRequest with finalizer: %w", err)
+			}
+			return ctrl.Result{Requeue: true}, true, nil
 		}
 		return ctrl.Result{}, false, nil
 	} else if controllerutil.ContainsFinalizer(clusterRequest, clusterRequestFinalizer) {
@@ -1275,7 +1294,8 @@ func (r *ClusterRequestReconciler) handleFinalizer(
 		r.Logger.Info("Removing ClusterRequest finalizer", "name", clusterRequest.Name)
 		patch := client.MergeFrom(clusterRequest.DeepCopy())
 		if controllerutil.RemoveFinalizer(clusterRequest, clusterRequestFinalizer) {
-			return ctrl.Result{}, true, r.Patch(ctx, clusterRequest, patch)
+			err := r.Patch(ctx, clusterRequest, patch)
+			return ctrl.Result{}, true, fmt.Errorf("failed to patch ClusterRequest: %w", err)
 		}
 	}
 	return ctrl.Result{}, false, nil
@@ -1324,7 +1344,7 @@ func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Cont
 	return false
 }
 
-// updateClusterInstance updates the given clusterinstance object based on the provisioned nodePool.
+// updateClusterInstance updates the given ClusterInstance object based on the provisioned nodePool.
 func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context,
 	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) bool {
 
@@ -1443,7 +1463,6 @@ func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
 func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 	ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
 
-	var err error
 	if t.object.Status.NodePoolRef == nil {
 		t.object.Status.NodePoolRef = &oranv1alpha1.NodePoolRef{}
 	}
@@ -1492,13 +1511,14 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 			}
 		}
 
-		err = utils.UpdateK8sCRStatus(ctx, t.client, t.object)
-		if err != nil {
+		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 			t.logger.ErrorContext(
 				ctx,
 				"Failed to update the HardwareProvisioning status for ClusterRequest",
 				slog.String("name", t.object.Name),
+				slog.Any("specificError", err),
 			)
+			return fmt.Errorf("failed to update HardwareProvisioning status: %w", err)
 		}
 	} else {
 		meta.SetStatusCondition(
@@ -1509,20 +1529,21 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 				Reason: "NotInitialized",
 			},
 		)
-		err = utils.UpdateK8sCRStatus(ctx, t.client, nodePool)
-		if err != nil {
+		if err := utils.UpdateK8sCRStatus(ctx, t.client, nodePool); err != nil {
 			t.logger.ErrorContext(
 				ctx,
 				"Failed to update the NodePool status",
 				slog.String("name", nodePool.Name),
+				slog.Any("specificError", err),
 			)
+			return fmt.Errorf("failed to update NodePool status: %w", err)
 		}
 	}
-	return err
+	return nil
 }
 
 // findClusterInstanceForClusterRequest maps the ClusterInstance created by a
-// a ClusterRequest to a reconciliation request.
+// ClusterRequest to a reconciliation request.
 func (r *ClusterRequestReconciler) findClusterInstanceForClusterRequest(
 	ctx context.Context, event event.UpdateEvent,
 	queue workqueue.RateLimitingInterface) {
@@ -1548,7 +1569,7 @@ func (r *ClusterRequestReconciler) findClusterInstanceForClusterRequest(
 }
 
 // findNodePoolForClusterRequest maps the NodePool created by a
-// a ClusterRequest to a reconciliation request.
+// ClusterRequest to a reconciliation request.
 func (r *ClusterRequestReconciler) findNodePoolForClusterRequest(
 	ctx context.Context, event event.UpdateEvent,
 	queue workqueue.RateLimitingInterface) {
@@ -1580,7 +1601,7 @@ func (r *ClusterRequestReconciler) findClusterTemplateForClusterRequest(
 	ctx context.Context, event event.UpdateEvent,
 	queue workqueue.RateLimitingInterface) {
 
-	// For this case we can use either new or old object.
+	// For this case, we can use either new or old object.
 	newClusterTemplate := event.ObjectNew.(*oranv1alpha1.ClusterTemplate)
 
 	// Get all the clusterRequests.
@@ -1616,7 +1637,7 @@ func (r *ClusterRequestReconciler) findManagedClusterForClusterRequest(
 	ctx context.Context, event event.UpdateEvent,
 	queue workqueue.RateLimitingInterface) {
 
-	// For this case we can use either new or old object.
+	// For this case, we can use either new or old object.
 	newManagedCluster := event.ObjectNew.(*clusterv1.ManagedCluster)
 
 	// Get the ClusterInstance
@@ -1627,7 +1648,7 @@ func (r *ClusterRequestReconciler) findManagedClusterForClusterRequest(
 	}, clusterInstance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Return as this managedcluster is not deployed/managed by ClusterInstance
+			// Return as this ManagedCluster is not deployed/managed by ClusterInstance
 			return
 		}
 		r.Logger.Error("[findManagedClusterForClusterRequest] Error getting ClusterInstance. ", "Error: ", err)
@@ -1653,6 +1674,7 @@ func (r *ClusterRequestReconciler) findManagedClusterForClusterRequest(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("orano2ims-cluster-request").
 		For(

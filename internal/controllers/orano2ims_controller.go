@@ -420,7 +420,7 @@ func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context)
 				},
 			},
 
-			// We also need to read the secrets containing the admin kubeconfigs of the
+			// We also need to read the secrets containing the admin kubeConfigs of the
 			// clusters.
 			{
 				APIGroups: []string{
@@ -437,7 +437,12 @@ func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context)
 			},
 		},
 	}
-	return utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE)
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create DeploymentManagerCluster role: %w", err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.Context) error {
@@ -464,7 +469,12 @@ func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.C
 			},
 		},
 	}
-	return utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE)
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create DeploymentManagerCluster role binding: %w", err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (utils.ORANO2IMSConditionReason, error) {
@@ -490,13 +500,13 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 			ctx, serverName, deploymentContainerArgs,
 			utils.ORANO2IMSConditionReasons.ServerArgumentsError, err)
 		if err2 != nil {
-			return "", err2
+			return "", fmt.Errorf("failed to update ORANO2ISMUsedConfigStatus: %w", err2)
 		}
-		return utils.ORANO2IMSConditionReasons.ServerArgumentsError, err
+		return utils.ORANO2IMSConditionReasons.ServerArgumentsError, fmt.Errorf("failed to get server arguments: %w", err)
 	}
 	err = t.updateORANO2ISMUsedConfigStatus(ctx, serverName, deploymentContainerArgs, "", nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to update ORANO2ISMUsedConfigStatus: %w", err)
 	}
 
 	// Select the container image to use:
@@ -550,7 +560,11 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	t.logger.InfoContext(ctx, "[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
-	return "", utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE)
+	if err := utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE); err != nil {
+		return "", fmt.Errorf("failed to deploy ManagerServer: %w", err)
+	}
+
+	return "", nil
 }
 
 func (t *reconcilerTask) createConfigMap(ctx context.Context, resourceName string) error {
@@ -568,7 +582,11 @@ func (t *reconcilerTask) createConfigMap(ctx context.Context, resourceName strin
 	}
 
 	t.logger.InfoContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, t.client, configMap, t.object, utils.UPDATE)
+	if err := utils.CreateK8sCR(ctx, t.client, configMap, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create ConfigMap for deployment: %w", err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName string) error {
@@ -590,7 +608,11 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 	}
 
 	t.logger.InfoContext(ctx, "[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, t.client, newServiceAccount, t.object, utils.UPDATE)
+	if err := utils.CreateK8sCR(ctx, t.client, newServiceAccount, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create ServiceAccount for deployment: %w", err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) createService(ctx context.Context, resourceName string) error {
@@ -626,7 +648,11 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string)
 	}
 
 	t.logger.InfoContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
-	return utils.CreateK8sCR(ctx, t.client, newService, t.object, utils.PATCH)
+	if err := utils.CreateK8sCR(ctx, t.client, newService, t.object, utils.PATCH); err != nil {
+		return fmt.Errorf("failed to create Service for deployment: %w", err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) createIngress(ctx context.Context) error {
@@ -735,7 +761,11 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	}
 
 	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.ORANO2IMSIngressName)
-	return utils.CreateK8sCR(ctx, t.client, newIngress, t.object, utils.UPDATE)
+	if err := utils.CreateK8sCR(ctx, t.client, newIngress, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, deploymentName string) {
@@ -828,7 +858,11 @@ func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
 			string(utils.MapErrorDeploymentNameConditionType[serverName]))
 	}
 
-	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update ORANO2ISMUsedConfig CR status: %w", err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) error {
@@ -846,12 +880,17 @@ func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) er
 		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSResourceServerName)
 	}
 
-	return utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update ORANO2ISMDeployment CR status: %w", err)
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
+	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("orano2ims").
 		For(&oranv1alpha1.ORANO2IMS{},

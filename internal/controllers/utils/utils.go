@@ -11,34 +11,36 @@ import (
 	"strings"
 	"text/template"
 
-	ctrl "sigs.k8s.io/controller-runtime"
-
 	sprig "github.com/go-task/slim-sprig/v3"
+	"github.com/xeipuuv/gojsonschema"
+
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
-
-	gojsonschema "github.com/xeipuuv/gojsonschema"
 )
 
 var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		err := c.Status().Update(ctx, object)
-		return err
+		if err := c.Status().Update(ctx, object); err != nil {
+			return fmt.Errorf("failed to update status: %w", err)
+		}
+		return nil
 	})
 
 	if err != nil {
-		return err
+		return fmt.Errorf("status update failed after retries: %w", err)
 	}
 
 	return nil
@@ -51,7 +53,7 @@ func ValidateJsonAgainstJsonSchema(schema, input string) error {
 	result, err := gojsonschema.Validate(schemaLoader, inputLoader)
 	if err != nil {
 		oranUtilsLog.Error(err, "Error validating the input against the schema")
-		return err
+		return fmt.Errorf("failed when validating the input against the schema: %w", err)
 	}
 
 	if result.Valid() {
@@ -131,12 +133,12 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 
 	// We can set the owner reference only for objects that live in the same namespace, as cross
 	// namespace owners are forbidden. This also applies to non-namespaced objects like cluster
-	// roles or cluster role bindings; those have empty namespaces so the equals comparison
+	// roles or cluster role bindings; those have empty namespaces, so the equals comparison
 	// should also work.
 	if ownerObject != nil && ownerObject.GetNamespace() == key.Namespace {
 		err = controllerutil.SetControllerReference(ownerObject, newObject, c.Scheme())
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to set controller reference: %w", err)
 		}
 	}
 
@@ -154,7 +156,7 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	err = c.Get(ctx, key, oldObject)
 
 	// If there was an error obtaining the CR and the error was "Not found", create the object.
-	// If any other other occurred, return the error.
+	// If any other occurred, return the error.
 	// If the CR already exists, patch it or update it.
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -164,10 +166,10 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 				"namespace", newObject.GetNamespace())
 			err = c.Create(ctx, newObject)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create CR %s/%s: %w", newObject.GetNamespace(), newObject.GetName(), err)
 			}
 		} else {
-			return err
+			return fmt.Errorf("failed to get CR %s/%s: %w", newObject.GetNamespace(), newObject.GetName(), err)
 		}
 	} else {
 		newObject.SetResourceVersion(oldObject.GetResourceVersion())
@@ -175,12 +177,18 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 			oranUtilsLog.Info("[CreateK8sCR] CR already present, PATCH it",
 				"name", newObject.GetName(),
 				"namespace", newObject.GetNamespace())
-			return c.Patch(ctx, newObject, client.MergeFrom(oldObject))
+			if err := c.Patch(ctx, newObject, client.MergeFrom(oldObject)); err != nil {
+				return fmt.Errorf("failed to patch object %s/%s: %w", newObject.GetNamespace(), newObject.GetName(), err)
+			}
+			return nil
 		} else if operation == UPDATE {
 			oranUtilsLog.Info("[CreateK8sCR] CR already present, UPDATE it",
 				"name", newObject.GetName(),
 				"namespace", newObject.GetNamespace())
-			return c.Update(ctx, newObject)
+			if err := c.Update(ctx, newObject); err != nil {
+				return fmt.Errorf("failed to update object %s/%s: %w", newObject.GetNamespace(), newObject.GetName(), err)
+			}
+			return nil
 		}
 	}
 
@@ -196,7 +204,7 @@ func DoesK8SResourceExist(ctx context.Context, c client.Client, name, namespace 
 				"name", name, "namespace", namespace)
 			return false, nil
 		} else {
-			return false, err
+			return false, fmt.Errorf("failed to check existence of resource '%s' in namespace '%s': %w", name, namespace, err)
 		}
 	} else {
 		oranUtilsLog.Info("[doesK8SResourceExist] Resource already present, return. ",
@@ -473,10 +481,10 @@ func RenderTemplateForK8sCR(templateName, templatePath string, templateDataObj m
 
 // toYaml converts an interface to a YAML string and trims the trailing newline
 func toYaml(v interface{}) (string, error) {
-	// yaml.Marshal adds a trailling newline to its output
+	// yaml.Marshal adds a trailing newline to its output
 	yamlData, err := yaml.Marshal(v)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal interface to YAML: %w", err)
 	}
 
 	return strings.TrimRight(string(yamlData), "\n"), nil

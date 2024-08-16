@@ -167,9 +167,8 @@ func (t *Tool) Evaluate(source string, input, output any, variables ...Variable)
 // a JSON document.
 func (t *Tool) EvaluateString(source, input string, output any, variables ...Variable) error {
 	var tmp any
-	err := jsoniter.Unmarshal([]byte(input), &tmp)
-	if err != nil {
-		return err
+	if err := jsoniter.Unmarshal([]byte(input), &tmp); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON input: %w", err)
 	}
 	return t.Evaluate(source, tmp, output, variables...)
 }
@@ -178,9 +177,8 @@ func (t *Tool) EvaluateString(source, input string, output any, variables ...Var
 // containing a JSON document.
 func (t *Tool) EvaluateBytes(source string, input []byte, output any, variables ...Variable) error {
 	var tmp any
-	err := jsoniter.Unmarshal(input, &tmp)
-	if err != nil {
-		return err
+	if err := jsoniter.Unmarshal(input, &tmp); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON input: %w", err)
 	}
 	return t.Evaluate(source, tmp, output, variables...)
 }

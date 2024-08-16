@@ -310,7 +310,10 @@ func (r *requestReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *requestReader) Close() error {
-	return r.reader.Close()
+	if err := r.reader.Close(); err != nil {
+		return fmt.Errorf("failed to close reader: %w", err)
+	}
+	return nil
 }
 
 func (r *responseReader) Read(p []byte) (n int, err error) {
@@ -328,5 +331,8 @@ func (r *responseReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *responseReader) Close() error {
-	return r.reader.Close()
+	if err := r.reader.Close(); err != nil {
+		return fmt.Errorf("failed to close reader: %w", err)
+	}
+	return nil
 }

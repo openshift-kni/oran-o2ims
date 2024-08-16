@@ -16,6 +16,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -320,6 +321,9 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		}
 	}()
 
-	// Wait for exit signals:
-	return exitHandler.Wait(ctx)
+	// Wait for exit signals
+	if err := exitHandler.Wait(ctx); err != nil {
+		return fmt.Errorf("failed to wait for exit signals: %w", err)
+	}
+	return nil
 }

@@ -398,7 +398,7 @@ key: value`,
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
-			"the ConfigMap %s is not found in the namespace %s", configmapName, namespace)))
+			"failed to get ConfigmapReference: the ConfigMap %s is not found in the namespace %s", configmapName, namespace)))
 	})
 
 	It("should return validation error message for missing expected key in configmap", func() {

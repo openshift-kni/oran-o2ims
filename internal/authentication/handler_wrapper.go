@@ -599,7 +599,7 @@ func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 func (h *handlerWrapper) loadKeysFile(ctx context.Context, file string) error {
 	reader, err := os.Open(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open file %s: %w", file, err)
 	}
 	return h.readKeys(ctx, reader)
 }
@@ -608,7 +608,7 @@ func (h *handlerWrapper) loadKeysFile(ctx context.Context, file string) error {
 func (h *handlerWrapper) loadKeysURL(ctx context.Context, addr string) error {
 	request, err := http.NewRequest(http.MethodGet, addr, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create new HTTP request: %w", err)
 	}
 	token := h.selectKeysToken(ctx)
 	if token != "" {
@@ -617,7 +617,7 @@ func (h *handlerWrapper) loadKeysURL(ctx context.Context, addr string) error {
 	request = request.WithContext(ctx)
 	response, err := h.keysClient.Do(request)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
 	defer func() {
 		err := response.Body.Close()
@@ -668,14 +668,13 @@ func (h *handlerWrapper) readKeys(ctx context.Context, reader io.Reader) error {
 	// Read the JSON data:
 	jsonData, err := io.ReadAll(reader)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read JSON data: %w", err)
 	}
 
 	// Parse the JSON data:
 	var setData setData
-	err = json.Unmarshal(jsonData, &setData)
-	if err != nil {
-		return err
+	if err = json.Unmarshal(jsonData, &setData); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON data: %w", err)
 	}
 
 	// Convert the key data to actual keys that can be used to verify the signatures of the
