@@ -36,6 +36,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/util/net"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -60,7 +61,6 @@ type HandlerWrapperBuilder struct {
 	keysURLs      []string
 	keysCA        *x509.CertPool
 	keysCAFile    string
-	keysInsecure  bool
 	keysToken     string
 	keysTokenFile string
 	realm         string
@@ -161,14 +161,6 @@ func (b *HandlerWrapperBuilder) SetKeysCA(value *x509.CertPool) *HandlerWrapperB
 // from.
 func (b *HandlerWrapperBuilder) SetKeysCAFile(value string) *HandlerWrapperBuilder {
 	b.keysCAFile = value
-	return b
-}
-
-// SetKeysInsecure sets the flag that indicates that the certificate of the web server where the
-// keys are loaded from should not be checked. The default is false and changing it to true makes
-// the token verification insecure, so refrain from doing that in security sensitive environments.
-func (b *HandlerWrapperBuilder) SetKeysInsecure(value bool) *HandlerWrapperBuilder {
-	b.keysInsecure = value
 	return b
 }
 
@@ -348,7 +340,7 @@ func (b *HandlerWrapperBuilder) Build() (result func(http.Handler) http.Handler,
 		Transport: net.SetTransportDefaults(&http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:            keysCA,
-				InsecureSkipVerify: b.keysInsecure,
+				InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaults to false; logged if disabled
 			},
 		}),
 	}

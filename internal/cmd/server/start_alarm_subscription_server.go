@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -35,7 +36,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
-// Server creates and returns the `start alarm-subscription-server` command.
+// AlarmSubscriptionServer Server creates and returns the `start alarm-subscription-server` command.
 func AlarmSubscriptionServer() *cobra.Command {
 	c := NewAlarmSubscriptionServer()
 	result := &cobra.Command{
@@ -74,7 +75,7 @@ func AlarmSubscriptionServer() *cobra.Command {
 	return result
 }
 
-// alarmSubscriptionServerCommand contains the data and logic needed to run the `start
+// AlarmSubscriptionServerCommand contains the data and logic needed to run the `start
 // alarm-subscription-server` command.
 type AlarmSubscriptionServerCommand struct {
 }
@@ -322,8 +323,12 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		slog.String("address", apiListener.Addr().String()),
 	)
 	apiServer := &http.Server{
-		Addr:    apiListener.Addr().String(),
-		Handler: router,
+		Addr:              apiListener.Addr().String(),
+		Handler:           router,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(apiServer)
 	go func() {
@@ -357,8 +362,12 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	)
 	metricsHandler := promhttp.Handler()
 	metricsServer := &http.Server{
-		Addr:    metricsListener.Addr().String(),
-		Handler: metricsHandler,
+		Addr:              metricsListener.Addr().String(),
+		Handler:           metricsHandler,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(metricsServer)
 	go func() {

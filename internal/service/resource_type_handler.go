@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/util/net"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
@@ -147,7 +148,7 @@ func (b *ResourceTypeHandlerBuilder) Build() (
 	// Create the HTTP client that we will use to connect to the backend:
 	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
 		},
 	})
 	if b.transportWrapper != nil {

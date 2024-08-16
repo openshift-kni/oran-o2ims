@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/ghttp"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
 )
@@ -715,6 +716,10 @@ var _ = Describe("Handler wapper", func() {
 	It("Doesn't load insecure keys by default", func() {
 		var err error
 
+		// TODO(alegacy): Remove this override once it is fixed for production
+		err = os.Setenv(utils.TLSSkipVerifyEnvName, "false")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -756,6 +761,10 @@ var _ = Describe("Handler wapper", func() {
 	It("Loads insecure keys in insecure mode", func() {
 		var err error
 
+		// Override the TLS Skip Verify variable
+		err = os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -779,7 +788,6 @@ var _ = Describe("Handler wapper", func() {
 		wrapper, err := NewHandlerWrapper().
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
@@ -963,6 +971,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Uses token to load keys", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -988,7 +1000,6 @@ var _ = Describe("Handler wapper", func() {
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
 			SetKeysToken("mykeystoken").
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
@@ -1004,6 +1015,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Uses token file to load keys", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1042,7 +1057,6 @@ var _ = Describe("Handler wapper", func() {
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
 			SetKeysTokenFile(file).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
@@ -1058,6 +1072,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Uses token to load keys if token file doesn't exist", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1093,7 +1111,6 @@ var _ = Describe("Handler wapper", func() {
 			AddKeysURL(server.URL()).
 			SetKeysToken("mykeystoken").
 			SetKeysTokenFile(file).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
@@ -1109,6 +1126,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Rejects if token is required for loading keys and none has been configured", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1132,7 +1153,6 @@ var _ = Describe("Handler wapper", func() {
 		wrapper, err := NewHandlerWrapper().
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
@@ -1152,6 +1172,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Rejects if token is required for loading keys token file doesn't exist", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1184,7 +1208,6 @@ var _ = Describe("Handler wapper", func() {
 		wrapper, err := NewHandlerWrapper().
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
-			SetKeysInsecure(true).
 			SetKeysTokenFile(file).
 			Build()
 		Expect(err).ToNot(HaveOccurred())

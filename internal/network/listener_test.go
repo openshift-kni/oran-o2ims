@@ -190,7 +190,8 @@ var _ = Describe("Listener", func() {
 			Expect(ok).To(BeTrue())
 			dialer := tls.Dialer{
 				Config: &tls.Config{
-					RootCAs: cas,
+					RootCAs:    cas,
+					MinVersion: tls.VersionTLS12,
 				},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -365,7 +366,11 @@ var _ = Describe("Listener", func() {
 				w.WriteHeader(http.StatusOK)
 			})
 			server := http.Server{
-				Handler: handler,
+				Handler:           handler,
+				ReadHeaderTimeout: 15 * time.Second,
+				ReadTimeout:       15 * time.Second,
+				WriteTimeout:      15 * time.Second,
+				IdleTimeout:       60 * time.Second,
 			}
 			go func() {
 				defer GinkgoRecover()
@@ -382,7 +387,8 @@ var _ = Describe("Listener", func() {
 			client := http.Client{
 				Transport: &http.Transport{
 					TLSClientConfig: &tls.Config{
-						RootCAs: cas,
+						RootCAs:    cas,
+						MinVersion: tls.VersionTLS12,
 					},
 				},
 			}
@@ -408,7 +414,11 @@ var _ = Describe("Listener", func() {
 				w.WriteHeader(http.StatusOK)
 			})
 			server := http.Server{
-				Handler: handler,
+				Handler:           handler,
+				ReadHeaderTimeout: 15 * time.Second,
+				ReadTimeout:       15 * time.Second,
+				WriteTimeout:      15 * time.Second,
+				IdleTimeout:       60 * time.Second,
 			}
 			go func() {
 				defer GinkgoRecover()
@@ -425,7 +435,8 @@ var _ = Describe("Listener", func() {
 			client := http.Client{
 				Transport: &http2.Transport{
 					TLSClientConfig: &tls.Config{
-						RootCAs: cas,
+						RootCAs:    cas,
+						MinVersion: tls.VersionTLS12,
 					},
 				},
 			}

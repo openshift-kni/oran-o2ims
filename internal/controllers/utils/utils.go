@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -700,4 +702,21 @@ func CheckClusterLabelsForPolicies(
 	}
 
 	return nil
+}
+
+// GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting
+func GetTLSSkipVerify() bool {
+	value, ok := os.LookupEnv(TLSSkipVerifyEnvName)
+	if !ok {
+		return TLSSkipVerifyDefaultValue
+	}
+
+	result, err := strconv.ParseBool(value)
+	if err != nil {
+		oranUtilsLog.Error(err, fmt.Sprintf("Error parsing '%s' variable value '%s'",
+			TLSSkipVerifyEnvName, value))
+		return TLSSkipVerifyDefaultValue
+	}
+
+	return result
 }

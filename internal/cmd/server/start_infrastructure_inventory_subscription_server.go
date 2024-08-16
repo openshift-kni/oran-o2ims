@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -323,8 +324,12 @@ func (c *InfrastructureInventorySubscriptionServerCommand) run(cmd *cobra.Comman
 		slog.String("address", apiListener.Addr().String()),
 	)
 	apiServer := &http.Server{
-		Addr:    apiListener.Addr().String(),
-		Handler: router,
+		Addr:              apiListener.Addr().String(),
+		Handler:           router,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(apiServer)
 	go func() {
@@ -358,8 +363,12 @@ func (c *InfrastructureInventorySubscriptionServerCommand) run(cmd *cobra.Comman
 	)
 	metricsHandler := promhttp.Handler()
 	metricsServer := &http.Server{
-		Addr:    metricsListener.Addr().String(),
-		Handler: metricsHandler,
+		Addr:              metricsListener.Addr().String(),
+		Handler:           metricsHandler,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(metricsServer)
 	go func() {
