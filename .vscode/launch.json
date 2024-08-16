@@ -1,7 +1,6 @@
 {
         "version": "0.2.0",
         "configurations": [
-
                 {
                         "name": "version",
                         "type": "go",
@@ -32,6 +31,9 @@
                         "request": "launch",
                         "mode": "auto",
                         "program": "${workspaceFolder}",
+                        "env": {
+                                "INSECURE_SKIP_VERIFY": "true"
+                        },
                         "args": [
                                 "start",
                                 "deployment-manager-server",
@@ -47,6 +49,9 @@
                         "request": "launch",
                         "mode": "auto",
                         "program": "${workspaceFolder}",
+                        "env": {
+                                "INSECURE_SKIP_VERIFY": "true"
+                        },
                         "args": [
                                 "start",
                                 "resource-server",
@@ -70,7 +75,7 @@
                                 "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
                                 "--api-listener-address=127.0.0.1:8010",
                                 "--metrics-listener-address=127.0.0.1:8095",
-                                "--configmap-name=oran-o2ims-alarm-subscriptions",
+                                "--configmap-name=oran-o2ims-alarm-subscriptions"
                         ]
                 },
                 {
@@ -79,8 +84,9 @@
                         "request": "launch",
                         "mode": "auto",
                         "env": {
-                            "KUBECONFIG": "/home/username/.kube/kubeconfig",
-                        }
+                                "INSECURE_SKIP_VERIFY": "true",
+                                "KUBECONFIG": "/home/username/.kube/kubeconfig"
+                        },
                         "program": "${workspaceFolder}",
                         "args": [
                                 "start",
@@ -92,8 +98,7 @@
                                 "--api-listener-address=127.0.0.1:8035",
                                 "--metrics-listener-address=127.0.0.1:8075",
                                 "--resource-server-url=${env:RESOURCE_SERVER_URL}",
-                                "--resource-server-token=${env:RESOURCE_SERVER_TOKEN}",
-}"
+                                "--resource-server-token=${env:RESOURCE_SERVER_TOKEN}"
                         ]
                 },
                 {
@@ -102,6 +107,9 @@
                         "request": "launch",
                         "mode": "auto",
                         "program": "${workspaceFolder}",
+                        "env": {
+                                "INSECURE_SKIP_VERIFY": "true"
+                        },
                         "args": [
                                 "start",
                                 "alarm-server",
@@ -109,21 +117,21 @@
                                 "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
                                 "--backend-url=${env:BACKEND_URL}",
                                 "--backend-token=${env:BACKEND_TOKEN}",
-                                "--resource-server-url=${env:RESOURCE_SERVER_URL}",
+                                "--resource-server-url=${env:RESOURCE_SERVER_URL}"
                         ]
                 },
                 {
-                    "name": "start infrastructure-inventory-subscription-server",
-                    "type": "go",
-                    "request": "launch",
-                    "mode": "auto",
-                    "program": "${workspaceFolder}",
-                    "args": [
-                            "start",
-                            "infrastructure-inventory-subscription-server",
-                            "--log-level=debug",
-                            "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb"
-                    ]
+                        "name": "start infrastructure-inventory-subscription-server",
+                        "type": "go",
+                        "request": "launch",
+                        "mode": "auto",
+                        "program": "${workspaceFolder}",
+                        "args": [
+                                "start",
+                                "infrastructure-inventory-subscription-server",
+                                "--log-level=debug",
+                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb"
+                        ]
                 },
                 {
                         "name": "test",
@@ -139,11 +147,11 @@
                         "mode": "auto",
                         "program": "${workspaceFolder}",
                         "env": {
-                            "KUBECONFIG": "${env:KUBECONFIG}",
+                                "KUBECONFIG": "${env:KUBECONFIG}"
                         },
                         "args": [
                                 "start",
-                                "controller-manager",
+                                "controller-manager"
                         ]
                 }
         ]

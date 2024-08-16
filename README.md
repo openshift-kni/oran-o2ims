@@ -58,6 +58,7 @@ $ export BACKEND_URL=$(
 $ export BACKEND_TOKEN=$(
   oc create token -n multicluster-global-hub multicluster-global-hub-manager --duration=24h
 )
+$ export INSECURE_SKIP_VERIFY=true
 ```
 
 Start the deployment manager server with a command like this:
@@ -113,6 +114,7 @@ $ export BACKEND_URL=$(
 $ export BACKEND_TOKEN=$(
   oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
 )
+$ export INSECURE_SKIP_VERIFY=true
 ```
 
 Start the resource server with a command like this:
@@ -263,6 +265,7 @@ $ export BACKEND_TOKEN=$(
   oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
 )
 $ export RESOURCE_SERVER_URL=http://localhost:8002/o2ims-infrastructureInventory/v1/
+$ export INSECURE_SKIP_VERIFY=true
 ```
 
 Start the resource server with a command like this:
@@ -381,6 +384,7 @@ $ export RESOURCE_SERVER_URL=http://localhost:8002/o2ims-infrastructureInventory
 $ export RESOURCE_SERVER_TOKEN=$(
   oc whoami --show-token
 )
+$ export INSECURE_SKIP_VERIFY=true
 ```
 
 Start the alarm notification server with a command like this:

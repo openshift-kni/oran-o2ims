@@ -17,12 +17,14 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"runtime"
 	"runtime/debug"
 	"slices"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 
 	"github.com/spf13/cobra"
@@ -206,6 +208,9 @@ func (t *Tool) run(cmd *cobra.Command, args []string) error {
 	// Write build information:
 	t.writeBuildInfo(ctx)
 
+	// Security validation checks
+	t.validateSecurityParameters(ctx)
+
 	return nil
 }
 
@@ -273,6 +278,15 @@ func (t *Tool) writeBuildInfo(ctx context.Context) {
 
 	// Write the information:
 	t.logger.InfoContext(ctx, "Build", logFields...)
+}
+
+// validateSecurityParameters validates
+func (t *Tool) validateSecurityParameters(ctx context.Context) {
+	value := utils.GetTLSSkipVerify()
+	if value {
+		t.logger.WarnContext(ctx, fmt.Sprintf("TLS certificate verification skipped by environment variable '%s'; this configuration is not recommended for production systems",
+			utils.TLSSkipVerifyEnvName))
+	}
 }
 
 // In returns the input stream of the tool.

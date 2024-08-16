@@ -1213,7 +1213,8 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 		return err
 	}
 	for _, nodePool := range nodePoolList.Items {
-		if err := r.Client.Delete(ctx, &nodePool); client.IgnoreNotFound(err) != nil {
+		copiedNodePool := nodePool
+		if err := r.Client.Delete(ctx, &copiedNodePool); client.IgnoreNotFound(err) != nil {
 			return err
 		}
 	}
@@ -1225,7 +1226,8 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 		return err
 	}
 	for _, clusterInstance := range clusterInstanceList.Items {
-		if err := r.Client.Delete(ctx, &clusterInstance); client.IgnoreNotFound(err) != nil {
+		copiedClusterInstance := clusterInstance
+		if err := r.Client.Delete(ctx, &copiedClusterInstance); client.IgnoreNotFound(err) != nil {
 			return err
 		}
 	}
@@ -1238,7 +1240,8 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 			return err
 		}
 		for _, ns := range namespaceList.Items {
-			if err := r.Client.Delete(ctx, &ns); client.IgnoreNotFound(err) != nil {
+			copiedNamespace := ns
+			if err := r.Client.Delete(ctx, &copiedNamespace); client.IgnoreNotFound(err) != nil {
 				return err
 			}
 		}

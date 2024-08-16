@@ -168,7 +168,8 @@ func (h *AlarmNotificationHandler) getSubscriptionIdsFromAlarm(ctx context.Conte
 
 	for subId, subInfo := range h.subscriptionSearcher.subscriptionInfoMap {
 
-		match, err := h.selectorEvaluator.Evaluate(ctx, &subInfo.filters, alarm)
+		filters := subInfo.filters
+		match, err := h.selectorEvaluator.Evaluate(ctx, &filters, alarm)
 		if err != nil {
 			h.logger.Debug(
 				"pocessSubscriptionMapForSearcher ",
