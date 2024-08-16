@@ -38,6 +38,7 @@ import (
 	"github.com/spf13/cobra"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 )
 
 // ControllerManager creates and returns the `start controller-manager` command.
@@ -103,6 +104,7 @@ func init() {
 	utilruntime.Must(siteconfig.AddToScheme(scheme))
 	utilruntime.Must(hwv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(policiesv1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.

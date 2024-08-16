@@ -70,6 +70,19 @@ type ClusterInstanceRef struct {
 	ZtpStatus string `json:"ztpStatus,omitempty"`
 }
 
+// PolicyDetails holds information about an ACM policy.
+type PolicyDetails struct {
+	// The compliance of the managedcluster created through a clusterRequest with the current
+	// policy.
+	Compliant string `json:"compliant,omitempty"`
+	// The policy's name.
+	PolicyName string `json:"policyName,omitempty"`
+	// The policy's namespace.
+	PolicyNamespace string `json:"policyNamespace,omitempty"`
+	// The policy's remediation action.
+	RemediationAction string `json:"remediationAction,omitempty"`
+}
+
 // ClusterRequestStatus defines the observed state of ClusterRequest
 type ClusterRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -82,6 +95,9 @@ type ClusterRequestStatus struct {
 
 	// NodePoolRef references to the NodePool
 	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
+
+	// Holds policies that are matched with the managed cluster created by the clusterRequest.
+	Policies []PolicyDetails `json:"policies,omitempty"`
 }
 
 //+kubebuilder:object:root=true

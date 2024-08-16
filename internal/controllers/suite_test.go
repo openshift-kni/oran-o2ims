@@ -27,6 +27,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -50,6 +51,7 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
 		WithStatusSubresource(&hwv1alpha1.NodePool{}).
 		WithStatusSubresource(&hwv1alpha1.Node{}).
+		WithStatusSubresource(&policiesv1.Policy{}).
 		Build()
 }
 
@@ -92,4 +94,6 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstanceList{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.NodePool{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.Node{})
+	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
+	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 })

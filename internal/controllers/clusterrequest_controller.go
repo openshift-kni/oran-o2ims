@@ -47,6 +47,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -214,6 +215,15 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 
 	// Handle the cluster install with ClusterInstance
 	err = t.handleClusterInstallation(ctx, renderedClusterInstance)
+	if err != nil {
+		if utils.IsInputError(err) {
+			return doNotRequeue(), nil
+		}
+		return requeueWithError(err)
+	}
+
+	// Handle configuration through policies.
+	err = t.handleClusterPolicyConfiguration(ctx)
 	if err != nil {
 		if utils.IsInputError(err) {
 			return doNotRequeue(), nil
@@ -698,6 +708,80 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		}
 	}
 
+	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
+	}
+
+	return nil
+}
+
+func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx context.Context) error {
+	// Get all the policies.
+	policies := &policiesv1.PolicyList{}
+
+	err := t.client.List(ctx, policies)
+	if err != nil {
+		return fmt.Errorf("failed to list Policies: %w", err)
+	}
+
+	allPoliciesCompliant := true
+	nonCompliantPolicyInEnforce := false
+	var targetPolicies []oranv1alpha1.PolicyDetails
+	// Go through all the policies and get those that are matched with the managed cluster created
+	// by the current cluster request.
+	for _, policy := range policies.Items {
+		if _, ok := policy.GetLabels()[utils.ChildPolicyLabel]; ok {
+			continue
+		}
+		for _, status := range policy.Status.Status {
+			if status.ClusterName == t.object.Name {
+				if status.ComplianceState == policiesv1.NonCompliant {
+					allPoliciesCompliant = false
+					if policy.Spec.RemediationAction == policiesv1.Enforce || policy.Spec.RemediationAction == "enforce" {
+						nonCompliantPolicyInEnforce = true
+					}
+				}
+				targetPolicy := &oranv1alpha1.PolicyDetails{
+					Compliant:         string(status.ComplianceState),
+					PolicyName:        policy.Name,
+					PolicyNamespace:   policy.Namespace,
+					RemediationAction: string(policy.Spec.RemediationAction),
+				}
+				targetPolicies = append(targetPolicies, *targetPolicy)
+				// If we already found the cluster in this policy, move to the next policy.
+				break
+			}
+		}
+	}
+
+	// Update the ConfigurationApplied condition.
+	if allPoliciesCompliant {
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.CRconditionTypes.ConfigurationApplied,
+			utils.CRconditionReasons.Completed,
+			metav1.ConditionTrue,
+			"The configuration is up to date",
+		)
+	} else {
+		if nonCompliantPolicyInEnforce {
+			utils.SetStatusCondition(&t.object.Status.Conditions,
+				utils.CRconditionTypes.ConfigurationApplied,
+				utils.CRconditionReasons.InProgress,
+				metav1.ConditionFalse,
+				"The configuration is still being applied",
+			)
+		} else {
+			utils.SetStatusCondition(&t.object.Status.Conditions,
+				utils.CRconditionTypes.ConfigurationApplied,
+				utils.CRconditionReasons.OutOfDate,
+				metav1.ConditionFalse,
+				"The configuration is out of date",
+			)
+		}
+	}
+
+	t.object.Status.Policies = targetPolicies
+	// Update the current policy status
 	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
 	}
@@ -1730,6 +1814,138 @@ func (r *ClusterRequestReconciler) findManagedClusterForClusterRequest(
 	}
 }
 
+func (r *ClusterRequestReconciler) findPoliciesForClusterRequestsForDelete(
+	ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+
+	policy := e.Object.(*policiesv1.Policy)
+
+	// Get all the clusterRequests.
+	clusterRequests := &oranv1alpha1.ClusterRequestList{}
+	err := r.Client.List(ctx, clusterRequests)
+	if err != nil {
+		r.Logger.Error("[findPolicyForManagedClustersOfClusterRequests] Error listing ClusterRequests. ", "Error: ", err)
+		return
+	}
+
+	for _, clusterStatus := range policy.Status.Status {
+		for _, clusterRequest := range clusterRequests.Items {
+			if clusterStatus.ClusterName == clusterRequest.Name {
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      clusterRequest.Name,
+					Namespace: clusterRequest.Namespace,
+				}})
+			}
+		}
+	}
+}
+
+// Add the cluster to targetClusters if its compliant status has changed or it has been removed.
+// If we assume there are 2 clusters in the current policy.
+//
+// If the policy has just been created the policy status transition may be as follows:
+// status:                                            status:
+//
+//	                                                   compliant: NonCompliant
+//	placement:                                         placement:
+//	- placement: placement-v1-new-policy               - placement: placement-v1-new-policy
+//	  placementBinding: binding-v1-new-policy            placementBinding: binding-v1-new-policy
+//	status:                                            status:
+//	  - clustername: cluster-1                   ->    - clustername: cluster-1
+//	    clusternamespace: cluster-1                      clusternamespace: cluster-1
+//	                                                     compliant: NonCompliant
+//	  - clustername: cluster-2                         - clustername: cluster-2
+//	    clusternamespace: cluster-2                      clusternamespace: cluster-2
+//	                                                     compliant: NonCompliant
+//
+// If the policy already existed but it switches its compliance:
+// status:                                            status:
+//
+//	compliant: Compliant                               compliant: NonCompliant
+//	placement:                                         placement:
+//	- placement: placement-v1-new-policy               - placement: placement-v1-new-policy
+//	  placementBinding: binding-v1-new-policy            placementBinding: binding-v1-new-policy
+//	status:                                            status:
+//	  - clustername: cluster-1                   ->    - clustername: cluster-1
+//	    clusternamespace: cluster-1                      clusternamespace: cluster-1
+//	    compliant: Compliant                             compliant: NonCompliant
+//	  - clustername: cluster-2                         - clustername: cluster-2
+//	    clusternamespace: cluster-2                      clusternamespace: cluster-2
+//	    compliant: Compliant                             compliant: NonCompliant
+func (r *ClusterRequestReconciler) findPoliciesForClusterRequestsForUpdate(
+	ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+
+	oldPolicy := e.ObjectOld.(*policiesv1.Policy)
+	newPolicy := e.ObjectNew.(*policiesv1.Policy)
+
+	oldClusterStatusMap := make(map[string]string)
+	for _, clusterStatus := range oldPolicy.Status.Status {
+		oldClusterStatusMap[clusterStatus.ClusterName] = string(clusterStatus.ComplianceState)
+	}
+
+	newClusterStatusMap := make(map[string]string)
+	for _, clusterStatus := range newPolicy.Status.Status {
+		newClusterStatusMap[clusterStatus.ClusterName] = string(clusterStatus.ComplianceState)
+	}
+
+	var targetClusters []string // clusters with status updated that require reconciliation
+
+	// If the remediation action has changed, add all the new clusters to the target clusters.
+	if oldPolicy.Spec.RemediationAction != newPolicy.Spec.RemediationAction {
+		for cluster := range newClusterStatusMap {
+			targetClusters = append(targetClusters, cluster)
+		}
+	} else {
+		// If the remediation action has not changed, add all the clusters that have been newly added.
+		for cluster := range newClusterStatusMap {
+			if _, ok := oldClusterStatusMap[cluster]; !ok {
+				targetClusters = append(targetClusters, cluster)
+			}
+		}
+	}
+
+	// Add the cluster to targetClusters if its compliant status has changed or it has been deleted.
+	for cluster, oldStatus := range oldClusterStatusMap {
+		// If the cluster exists in both old and new status.
+		if newStatus, ok := newClusterStatusMap[cluster]; ok {
+			// If the status is identical, do not add the cluster.
+			if newStatus == oldStatus {
+				continue
+			}
+
+			// If the status is different and the remediation action is the same, it means the cluster
+			// has not yet been added.
+			if oldPolicy.Spec.RemediationAction == newPolicy.Spec.RemediationAction {
+				targetClusters = append(targetClusters, cluster)
+				continue
+			} else {
+				continue
+			}
+		}
+
+		// If the cluster exists just in the old policy status, add it to the target clusters.
+		targetClusters = append(targetClusters, cluster)
+	}
+
+	// Get all the clusterRequests.
+	clusterRequests := &oranv1alpha1.ClusterRequestList{}
+	err := r.Client.List(ctx, clusterRequests)
+	if err != nil {
+		r.Logger.Error("[findPolicyForManagedClustersOfClusterRequests] Error listing ClusterRequests. ", "Error: ", err)
+		return
+	}
+
+	for _, cluster := range targetClusters {
+		for _, clusterRequest := range clusterRequests.Items {
+			if cluster == clusterRequest.Name {
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      clusterRequest.Name,
+					Namespace: clusterRequest.Namespace,
+				}})
+			}
+		}
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	//nolint:wrapcheck
@@ -1744,10 +1960,10 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.Funcs{UpdateFunc: r.findClusterTemplateForClusterRequest},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Watch on status changes only
+					// Watch on status changes only.
 					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
 				},
-				CreateFunc:  func(ce event.CreateEvent) bool { return true },
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
@@ -1787,6 +2003,36 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
+		Watches(
+			&policiesv1.Policy{},
+			handler.Funcs{
+				UpdateFunc: r.findPoliciesForClusterRequestsForUpdate,
+				DeleteFunc: r.findPoliciesForClusterRequestsForDelete,
+			},
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Filter out updates to child policies.
+					if _, ok := e.ObjectNew.GetLabels()[utils.ChildPolicyLabel]; ok {
+						return false
+					}
+
+					policyNew := e.ObjectNew.(*policiesv1.Policy)
+					policyOld := e.ObjectOld.(*policiesv1.Policy)
+
+					// Process status.status and remediation action changes.
+					return !equality.Semantic.DeepEqual(policyOld.Status.Status, policyNew.Status.Status) ||
+						(policyOld.Spec.RemediationAction != policyNew.Spec.RemediationAction)
+				},
+				CreateFunc:  func(e event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc: func(de event.DeleteEvent) bool {
+					// Filter out updates to child policies
+					if _, ok := de.Object.GetLabels()[utils.ChildPolicyLabel]; ok {
+						return false
+					}
+					return true
+				},
 			})).
 		Watches(
 			&clusterv1.ManagedCluster{},

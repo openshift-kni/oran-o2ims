@@ -24,6 +24,7 @@ var CRconditionTypes = struct {
 	ClusterResourcesCreated  ConditionType
 	ClusterInstanceProcessed ConditionType
 	ClusterProvisioned       ConditionType
+	ConfigurationApplied     ConditionType
 	// TODO: add condition for configuration apply
 }{
 	Validated:                "ClusterRequestValidated",
@@ -33,6 +34,7 @@ var CRconditionTypes = struct {
 	ClusterResourcesCreated:  "ClusterResourcesCreated",
 	ClusterInstanceProcessed: "ClusterInstanceProcessed",
 	ClusterProvisioned:       "ClusterProvisioned",
+	ConfigurationApplied:     "ConfigurationApplied",
 }
 
 // ConditionReason is a string representing the condition's reason
@@ -53,12 +55,14 @@ var CRconditionReasons = struct {
 	Completed  ConditionReason
 	Failed     ConditionReason
 	InProgress ConditionReason
+	OutOfDate  ConditionReason
 	Unknown    ConditionReason
 }{
 	NotApplied: "NotApplied",
 	Completed:  "Completed",
 	Failed:     "Failed",
 	InProgress: "InProgress",
+	OutOfDate:  "OutOfDate",
 	Unknown:    "Unknown",
 }
 

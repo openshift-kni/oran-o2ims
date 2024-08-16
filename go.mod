@@ -17,7 +17,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.5.0
 	github.com/gorilla/mux v1.8.1
-	github.com/imdario/mergo v0.3.12
+	github.com/imdario/mergo v0.3.15
 	github.com/itchyny/gojq v0.12.14
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.14.0
@@ -39,6 +39,7 @@ require (
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	open-cluster-management.io/api v0.14.0
+	open-cluster-management.io/governance-policy-propagator v0.12.0
 	sigs.k8s.io/controller-runtime v0.17.2
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -69,7 +70,7 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
+	github.com/google/pprof v0.0.0-20230502171905-255e3b9b56de // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/itchyny/timefmt-go v0.1.5 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
@@ -93,7 +94,7 @@ require (
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
-	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	go.mongodb.org/mongo-driver v1.10.0 // indirect
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1 // indirect
@@ -112,6 +113,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.29.0 // indirect
 	k8s.io/component-base v0.29.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
+	open-cluster-management.io/multicloud-operators-subscription v0.11.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
