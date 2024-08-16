@@ -32,7 +32,7 @@ linters:
     - unparam
     - unused
     - usestdlibvars
-    #- wrapcheck
+    - wrapcheck
 linters-settings:
   revive:
     rules:

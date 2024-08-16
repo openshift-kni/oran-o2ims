@@ -214,7 +214,7 @@ func validateConfigmapReference[T any](
 
 	existingConfigmap, err := utils.GetConfigmap(ctx, c, name, namespace)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get ConfigmapReference: %w", err)
 	}
 
 	// Extract and validate the template from the configmap
@@ -233,7 +233,7 @@ func validateConfigmapReference[T any](
 		newConfigmap.Immutable = &immutable
 
 		if err := utils.CreateK8sCR(ctx, c, newConfigmap, nil, utils.PATCH); err != nil {
-			return err
+			return fmt.Errorf("failed to patch ConfigMap as immutable: %w", err)
 		}
 	}
 
@@ -327,10 +327,11 @@ func (r *ClusterTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("orano2ims-cluster-template").
 		For(&oranv1alpha1.ClusterTemplate{},
-			// Watch for create and update event for ClusterTemplate.
+			// Watch for create and update events for ClusterTemplate.
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					oldGeneration := e.ObjectOld.GetGeneration()

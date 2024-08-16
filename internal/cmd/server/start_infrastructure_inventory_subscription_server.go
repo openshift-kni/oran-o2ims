@@ -16,6 +16,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -372,6 +373,9 @@ func (c *InfrastructureInventorySubscriptionServerCommand) run(cmd *cobra.Comman
 		}
 	}()
 
-	// Wait for exit signals:
-	return exitHandler.Wait(ctx)
+	// Wait for exit signals
+	if err := exitHandler.Wait(ctx); err != nil {
+		return fmt.Errorf("failed to wait for exit signals: %w", err)
+	}
+	return nil
 }

@@ -17,6 +17,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"runtime"
@@ -149,12 +150,12 @@ func (b *ToolBuilder) Build() (result *Tool, err error) {
 	return
 }
 
-// Run rus the tool.
+// Run runs the tool.
 func (t *Tool) Run(ctx context.Context) error {
 	// Create the main command:
 	err := t.createCommand()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create default logger: %w", err)
 	}
 
 	// Create a default logger that we can use while we haven't yet parsed the command line
@@ -183,7 +184,7 @@ func (t *Tool) Run(ctx context.Context) error {
 			"error", err,
 		)
 	}
-	return err
+	return fmt.Errorf("failed to run command: %w", err)
 }
 
 func (t *Tool) run(cmd *cobra.Command, args []string) error {
@@ -225,7 +226,11 @@ func (t *Tool) createCommand() error {
 
 	// Add sub-commands:
 	for _, sub := range t.sub {
-		t.cmd.AddCommand(sub())
+		cmd := sub()
+		if cmd == nil {
+			return fmt.Errorf("failed to create sub-command")
+		}
+		t.cmd.AddCommand(cmd)
 	}
 
 	return nil

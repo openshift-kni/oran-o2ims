@@ -214,7 +214,12 @@ func (q *Query) convert(input, output any) error {
 func (q *Query) clone(input, output any) error {
 	data, err := jsoniter.Marshal(input)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal JSON input: %w", err)
 	}
-	return jsoniter.Unmarshal(data, output)
+
+	if err = jsoniter.Unmarshal(data, output); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON data into output: %w", err)
+	}
+
+	return nil
 }

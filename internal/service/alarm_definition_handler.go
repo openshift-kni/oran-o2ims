@@ -111,7 +111,7 @@ func (h *AlarmDefinitionHandler) Get(ctx context.Context,
 func (h *AlarmDefinitionHandler) fetchItems() (result data.Stream, err error) {
 	jsonFile, err := files.Alarms.ReadFile(alarmsDefinitionsPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read JSON file at path %s: %w", alarmsDefinitionsPath, err)
 	}
 	reader := bytes.NewReader(jsonFile)
 
@@ -119,6 +119,9 @@ func (h *AlarmDefinitionHandler) fetchItems() (result data.Stream, err error) {
 		SetLogger(h.logger).
 		SetReader(reader).
 		Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build stream from reader: %w", err)
+	}
 
 	// Transform to AlarmDefinitions objects
 	result = data.Map(definitions, h.mapItem)
