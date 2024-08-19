@@ -16,15 +16,13 @@ package service
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/util/net"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
@@ -145,11 +143,11 @@ func (b *ResourcePoolHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
-		},
-	})
+	backendTransport, err := utils.GetDefaultBackendTransport()
+	if err != nil {
+		err = fmt.Errorf("failed to create default HTTP backend transport: %w", err)
+		return
+	}
 	if b.transportWrapper != nil {
 		backendTransport = b.transportWrapper(backendTransport)
 	}

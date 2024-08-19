@@ -3,13 +3,19 @@ package utils
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 	"text/template"
+
+	"k8s.io/apimachinery/pkg/util/net"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	sprig "github.com/go-task/slim-sprig/v3"
 	"github.com/xeipuuv/gojsonschema"
@@ -23,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
@@ -719,4 +724,61 @@ func GetTLSSkipVerify() bool {
 	}
 
 	return result
+}
+
+// loadDefaultCABundles loads the default service account and ingress CA bundles.  This should only be invoked if TLS
+// verification has not been disabled since the expectation is that it will only need to be disabled when testing as a
+// standalone binary in which case the paths to the bundles won't be present.  Otherwise, we always expect the bundles
+// to be present when running in-cluster.
+func loadDefaultCABundles(config *tls.Config) error {
+	config.RootCAs = x509.NewCertPool()
+	if data, err := os.ReadFile(defaultBackendCABundle); err != nil {
+		// This should not happen unless the binary is being tested in standalone mode in which case the developer
+		// should have disabled the TLS verification which would prevent this function from being invoked.
+		return fmt.Errorf("failed to read CA bundle '%s': %w", defaultBackendCABundle, err)
+		// This should not happen, but if it does continue anyway
+	} else {
+		// This will enable accessing public facing API endpoints signed by the default ingress controller certificate
+		config.RootCAs.AppendCertsFromPEM(data)
+	}
+
+	if data, err := os.ReadFile(defaultServiceCAFile); err != nil {
+		return fmt.Errorf("failed to read service CA file '%s': %w", defaultServiceCAFile, err)
+	} else {
+		// This will enable accessing internal services signed by the service account signer.
+		config.RootCAs.AppendCertsFromPEM(data)
+	}
+
+	return nil
+}
+
+// GetDefaultTLSConfig sets the TLS configuration attributes appropriately to enable communication between internal
+// services and accessing the public facing API endpoints.
+func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
+	if config == nil {
+		config = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+
+	// Allow developers to override the TLS verification
+	config.InsecureSkipVerify = GetTLSSkipVerify()
+	if !config.InsecureSkipVerify {
+		// TLS verification is enabled therefore we need to load the CA bundles that are injected into our filesystem
+		// automatically; which happens since we are defined as using a service-account
+		err := loadDefaultCABundles(config)
+		if err != nil {
+			return nil, fmt.Errorf("error loading default CABundles: %w", err)
+		}
+	}
+
+	return config, nil
+}
+
+// GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
+func GetDefaultBackendTransport() (http.RoundTripper, error) {
+	tlsConfig, err := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
+	if err != nil {
+		return nil, err
+	}
+
+	return net.SetTransportDefaults(&http.Transport{TLSClientConfig: tlsConfig}), nil
 }
