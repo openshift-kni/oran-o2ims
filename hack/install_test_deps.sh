@@ -5,12 +5,17 @@ set -e
 go install github.com/onsi/ginkgo/v2/ginkgo@$(go list -f '{{.Version}}' -m github.com/onsi/ginkgo/v2)
 go install go.uber.org/mock/mockgen@v0.3.0
 
+if ! [ -x "$(command -v diff)" ]; then
+    # Workaround for CI build env
+    dnf install -y diffutils
+fi
+
 if ! [ -x "$(command -v golangci-lint)" ]; then
     echo "Downloading golangci-lint"
 
-    curl -Lo tarball https://github.com/golangci/golangci-lint/releases/download/v1.55.2/golangci-lint-1.55.2-linux-amd64.tar.gz
-    echo ca21c961a33be3bc15e4292dc40c98c8dcc5463a7b6768a3afc123761630c09c tarball | sha256sum -c
-    tar -C $(go env GOPATH)/bin --strip-components=1 -xf tarball golangci-lint-1.55.2-linux-amd64/golangci-lint
+    curl -Lo tarball https://github.com/golangci/golangci-lint/releases/download/v1.59.1/golangci-lint-1.59.1-linux-amd64.tar.gz
+    echo c30696f1292cff8778a495400745f0f9c0406a3f38d8bb12cef48d599f6c7791 tarball | sha256sum -c
+    tar -C $(go env GOPATH)/bin --strip-components=1 -xf tarball golangci-lint-1.59.1-linux-amd64/golangci-lint
     rm tarball
 fi
 
