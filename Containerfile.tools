@@ -30,7 +30,9 @@ RUN \
   rm tarball
 
 # Install git - required by the ci-operator.
-RUN dnf install git -y
+RUN dnf install -y \
+    git \
+    diffutils
 
 # Update GOPATH, GOCACHE, GOLANGCI_LINT_CACHE, PATH.
 ENV \
