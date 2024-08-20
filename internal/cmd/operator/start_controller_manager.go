@@ -26,16 +26,18 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/go-logr/logr"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/spf13/cobra"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 // ControllerManager creates and returns the `start controller-manager` command.
@@ -98,6 +100,9 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(oranv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(siteconfig.AddToScheme(scheme))
+	utilruntime.Must(hwv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.
@@ -124,12 +129,14 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	// Restrict to the following namespaces - subject to change.
-	namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
-	defaultNamespaces := make(map[string]cache.Config)
+	// nolint: gocritic
+	//namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
+	//defaultNamespaces := make(map[string]cache.Config)
 
-	for _, ns := range namespaces {
-		defaultNamespaces[ns] = cache.Config{}
-	}
+	// nolint: gocritic
+	//for _, ns := range namespaces {
+	//	defaultNamespaces[ns] = cache.Config{}
+	//}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -137,9 +144,11 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		HealthProbeBindAddress: c.probeAddr,
 		LeaderElection:         c.enableLeaderElection,
 		LeaderElectionID:       "a73bc4d2.openshift.io",
-		Cache: cache.Options{
-			DefaultNamespaces: defaultNamespaces,
-		},
+
+		// nolint: gocritic
+		//Cache: cache.Options{
+		//	DefaultNamespaces: defaultNamespaces,
+		//},
 
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
@@ -162,6 +171,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Start the O2IMS controller.
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
 		Logger: slog.With("controller", "ORAN-O2IMS"),
@@ -171,6 +181,34 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "ORANO2IMS"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the Cluster Template controller.
+	if err = (&controllers.ClusterTemplateReconciler{
+		Client: mgr.GetClient(),
+		Logger: slog.With("controller", "ClusterTemplate"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "ClusterTemplate"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the Cluster Request controller.
+	if err = (&controllers.ClusterRequestReconciler{
+		Client: mgr.GetClient(),
+		Logger: slog.With("controller", "ClusterRequest"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "ClusterRequest"),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)

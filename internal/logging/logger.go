@@ -273,7 +273,7 @@ func (b *LoggerBuilder) openWriter() (result io.Writer, err error) {
 }
 
 func (b *LoggerBuilder) openFile(file string) (result io.Writer, err error) {
-	result, err = os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0660)
+	result, err = os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o660)
 	return
 }
 
@@ -298,7 +298,7 @@ func (b *LoggerBuilder) customFields() (result []any, err error) {
 	return
 }
 
-func (b *LoggerBuilder) customField(name string, value any) (result any, err error) {
+func (b *LoggerBuilder) customField(name string, value any) (result any, err error) { // nolint: unparam
 	switch value {
 	case pidLogFieldValue:
 		result = os.Getpid()

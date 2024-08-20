@@ -23,7 +23,7 @@ import (
 // Dedent removes from the given string all the whitespace that is common to all the lines.
 func Dedent(s string) string {
 	// Handle the special case of the empty string:
-	if len(s) == 0 {
+	if s == "" {
 		return s
 	}
 
@@ -77,7 +77,7 @@ func Dedent(s string) string {
 	for _, prefix := range list {
 		i := 0
 		for _, line := range lines {
-			if len(line) > 0 && !strings.HasPrefix(line, prefix) {
+			if line != "" && !strings.HasPrefix(line, prefix) {
 				break
 			}
 			i++
@@ -90,7 +90,7 @@ func Dedent(s string) string {
 
 	// Remove the longest prefix from all the non empty lines:
 	for i, line := range lines {
-		if len(line) > 0 {
+		if line != "" {
 			lines[i] = line[length:]
 		}
 	}

@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -265,8 +266,12 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		slog.String("address", apiListener.Addr().String()),
 	)
 	apiServer := &http.Server{
-		Addr:    apiListener.Addr().String(),
-		Handler: router,
+		Addr:              apiListener.Addr().String(),
+		Handler:           router,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(apiServer)
 	go func() {
@@ -300,8 +305,12 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	)
 	metricsHandler := promhttp.Handler()
 	metricsServer := &http.Server{
-		Addr:    metricsListener.Addr().String(),
-		Handler: metricsHandler,
+		Addr:              metricsListener.Addr().String(),
+		Handler:           metricsHandler,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	exitHandler.AddServer(metricsServer)
 	go func() {
@@ -315,8 +324,11 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		}
 	}()
 
-	// Wait for exit signals:
-	return exitHandler.Wait(ctx)
+	// Wait for exit signals
+	if err := exitHandler.Wait(ctx); err != nil {
+		return fmt.Errorf("failed to wait for exit signals: %w", err)
+	}
+	return nil
 }
 
 func (c *ResourceServerCommand) createResourcePoolHandler(
@@ -477,7 +489,7 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 func (c *ResourceServerCommand) generateSearchApiUrl(backendURL string) (string, error) {
 	u, err := url.Parse(backendURL)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse backend URL %s: %w", backendURL, err)
 	}
 
 	// Split URL address

@@ -19,10 +19,25 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - secrets
+  - namespaces
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - ""
@@ -69,6 +84,18 @@ rules:
   - list
   - watch
 - apiGroups:
+  - hardwaremanagement.oran.openshift.io
+  resources:
+  - nodepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - networking.k8s.io
   resources:
   - ingresses
@@ -80,6 +107,58 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clusterrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clusterrequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clusterrequests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clustertemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clustertemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - oran.openshift.io
+  resources:
+  - clustertemplates/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - oran.openshift.io
   resources:
@@ -122,6 +201,18 @@ rules:
   - rbac.authorization.k8s.io
   resources:
   - clusterroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - siteconfig.open-cluster-management.io
+  resources:
+  - clusterinstances
   verbs:
   - create
   - delete

@@ -50,7 +50,7 @@ func AddFlags(set *pflag.FlagSet) {
 const (
 	jwksFileFlagName      = "authn-jwks-file"
 	jwksURLFlagName       = "authn-jwks-url"
-	jwksTokenFlagName     = "authn-jwks-token"
-	jwksTokenFileFlagName = "authn-jwks-token-file"
+	jwksTokenFlagName     = "authn-jwks-token"      // nolint: gosec  // attribute names only
+	jwksTokenFileFlagName = "authn-jwks-token-file" // nolint: gosec  // attribute names only
 	jwksCAFileFlagName    = "authn-jwks-ca-file"
 )

@@ -108,7 +108,7 @@ var _ = Describe("alarm Notification handler", func() {
 					"subId-2": obj2,
 				}
 
-				//validate the prebuild indexes go through
+				// validate the prebuild indexes go through
 				Expect(handler.assignSubscriptionMap(&newMap)).ToNot(HaveOccurred())
 
 				requestObj := data.Object{
@@ -124,16 +124,16 @@ var _ = Describe("alarm Notification handler", func() {
 					},
 				}
 
-				//validate the subId set size(expected filter matched number correct)
+				// validate the subId set size(expected filter matched number correct)
 				subIdSet := handler.getSubscriptionIdsFromAlarm(ctx, requestObj)
 				Expect(len(subIdSet) == 2)
 
-				//validate add/post request go through
+				// validate add/post request go through
 				add_req := AddRequest{nil, requestObj}
 				_, err = handler.add(ctx, &add_req)
 				Expect(err).To(HaveOccurred())
 
-				//packet does not match any subscription filters
+				// packet does not match any subscription filters
 				requestObj2 := data.Object{
 					"alarmRaisedTime":   "2024-06-11T11:08:56.160Z",
 					"alarmChangedTime":  "2024-06-11T11:13:26.937Z",
@@ -162,11 +162,11 @@ var _ = Describe("alarm Notification handler", func() {
 					"probableCauseID":    "NodeClockNotSynchronising",
 				}
 
-				//validate the subId set size(expected filter matched number correct)
+				// validate the subId set size(expected filter matched number correct)
 				subIdSet2 := handler.getSubscriptionIdsFromAlarm(ctx, requestObj)
 				Expect(len(subIdSet2) == 0)
 
-				//validate add/post request go through
+				// validate add/post request go through
 				add_req = AddRequest{nil, requestObj2}
 				_, err = handler.add(ctx, &add_req)
 				Expect(err).To(HaveOccurred())

@@ -74,7 +74,7 @@ type Adapter struct {
 	jsonAPI              jsoniter.API
 }
 
-// NewAdapter creates a builder that can be used to configure and create an adatper.
+// NewAdapter creates a builder that can be used to configure and create an adapter.
 func NewAdapter() *AdapterBuilder {
 	return &AdapterBuilder{
 		nextPageMarkerKey: slices.Clone(defaultAdapdterNextPageMarkerKey[:]),
@@ -110,7 +110,7 @@ func (b *AdapterBuilder) SetPathVariables(values ...string) *AdapterBuilder {
 // SetIncludeFields set thes collection of fields that will be included by default from the
 // response. Each field is specified using the same syntax accepted by paths parsers.
 func (b *AdapterBuilder) SetIncludeFields(values ...string) *AdapterBuilder {
-	b.includeFields = append(b.excludeFields, values...)
+	b.includeFields = append(b.includeFields, values...)
 	return b
 }
 
@@ -369,7 +369,7 @@ func (a *Adapter) serveGetMethod(ctx context.Context, w http.ResponseWriter, r *
 	}
 }
 
-func (a *Adapter) servePostMethod(ctx context.Context, w http.ResponseWriter, r *http.Request,
+func (a *Adapter) servePostMethod(ctx context.Context, w http.ResponseWriter, r *http.Request, // nolint: unparam
 	pathVariables []string) {
 	// Check that we have a compatible handler:
 	if a.addHandler == nil {
@@ -606,7 +606,7 @@ func (a *Adapter) serveAdd(w http.ResponseWriter, r *http.Request, pathVariables
 	a.sendObject(ctx, w, response.Object)
 }
 
-func (a *Adapter) serveDelete(ctx context.Context, w http.ResponseWriter, r *http.Request,
+func (a *Adapter) serveDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, // nolint: unparam
 	pathVariables []string) {
 	// Create the request:
 	request := &DeleteRequest{

@@ -14,13 +14,16 @@ const (
 	ORANO2IMSAlarmNotification = "alarm-notification"
 )
 
+// Suffix for server names
+const serverSuffix = "-server"
+
 // Deployment names
 const (
-	ORANO2IMSMetadataServerName          = ORANO2IMSMetadata + "-server"
-	ORANO2IMSDeploymentManagerServerName = ORANO2IMSDeploymentManager + "-server"
-	ORANO2IMSResourceServerName          = ORANO2IMSResource + "-server"
-	ORANO2IMSAlarmSubscriptionServerName = ORANO2IMSAlarmSubscription + "-server"
-	ORANO2IMSAlarmNotificationServerName = ORANO2IMSAlarmNotification + "-server"
+	ORANO2IMSMetadataServerName          = ORANO2IMSMetadata + serverSuffix
+	ORANO2IMSDeploymentManagerServerName = ORANO2IMSDeploymentManager + serverSuffix
+	ORANO2IMSResourceServerName          = ORANO2IMSResource + serverSuffix
+	ORANO2IMSAlarmSubscriptionServerName = ORANO2IMSAlarmSubscription + serverSuffix
+	ORANO2IMSAlarmNotificationServerName = ORANO2IMSAlarmNotification + serverSuffix
 )
 
 // CR default names
@@ -74,5 +77,56 @@ var (
 // Default values for backend URL and token:
 const (
 	defaultBackendURL       = "https://kubernetes.default.svc"
-	defaultBackendTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultBackendTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token" // nolint: gosec // hardcoded path only
+)
+
+// ClusterInstance template constants
+const (
+	ClusterInstanceTemplateName                 = "ClusterInstance"
+	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
+	ClusterInstanceTemplateConfigmapName        = "sc-clusterinstance-template"
+	ClusterInstanceTemplateConfigmapNamespace   = ORANO2IMSNamespace
+	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
+	ClusterInstanceSchema                       = "clusterInstanceSchema"
+)
+
+// PolicyTemplate constants
+const (
+	PolicyTemplateDefaultsConfigmapKey = "policytemplate-defaults"
+	PolicyTemplateSchema               = "policyTemplateSchema"
+	ClusterVersionLabelKey             = "cluster-version"
+)
+
+// ClusterInstance status
+const (
+	ClusterInstalling = "In progress"
+	ClusterCompleted  = "Completed"
+	ClusterFailed     = "Failed"
+	ClusterZtpDone    = "ZTP Done"
+	ClusterZtpNotDone = "ZTP Not Done"
+)
+
+// Hardware Provisioning status
+const (
+	HardwareProvisioningInProgress = "InProgress"
+	HardwareProvisioningCompleted  = "Completed"
+	HardwareProvisioningFailed     = "Failed"
+	HardwareProvisioningUnknown    = "Unknown"
+)
+
+// Hardeware template constants
+const (
+	HwTemplatePluginMgr = "hwMgrId"
+	HwTemplateNodePool  = "node-pools-data"
+)
+
+const (
+	ClusterInstanceDataType = "ClusterInstance"
+	PolicyTemplateDataType  = "PolicyTemplate"
+)
+
+// Environment variable names
+const (
+	TLSSkipVerifyEnvName      = "INSECURE_SKIP_VERIFY"
+	TLSSkipVerifyDefaultValue = true // TODO(alegacy): need to set to false for production
 )

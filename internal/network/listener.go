@@ -181,6 +181,7 @@ func (b *ListenerBuilder) Build() (result net.Listener, err error) {
 			Certificates: []tls.Certificate{
 				tlsCrt,
 			},
+			MinVersion: tls.VersionTLS12,
 			NextProtos: slices.Clone(b.tlsProtocols),
 		})
 	}

@@ -200,7 +200,7 @@ func (e *ProjectorEvaluator) setPath(path Path, object map[string]any, value any
 	}
 }
 
-func (e *ProjectorEvaluator) excludePath(ctx context.Context, path Path, object any, result map[string]any) error {
+func (e *ProjectorEvaluator) excludePath(ctx context.Context, path Path, object any, result map[string]any) error { // nolint: unparam
 	return e.clearPath(path, result)
 }
 

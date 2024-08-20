@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
@@ -105,7 +106,7 @@ func (h *AlarmProbableCauseHandler) Get(ctx context.Context,
 func (h *AlarmProbableCauseHandler) fetchItems() (result data.Stream, err error) {
 	jsonFile, err := files.Alarms.ReadFile(alarmsProbableCausesPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read file at path %s: %w", alarmsProbableCausesPath, err)
 	}
 	reader := bytes.NewReader(jsonFile)
 
@@ -113,6 +114,9 @@ func (h *AlarmProbableCauseHandler) fetchItems() (result data.Stream, err error)
 		SetLogger(h.logger).
 		SetReader(reader).
 		Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build stream from reader: %w", err)
+	}
 
 	// Transform AlarmProbableCauses
 	result = data.Map(definitions, h.mapItem)

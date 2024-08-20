@@ -4,11 +4,18 @@ ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /workspace
-# Copy the Go Modules manifests
-COPY go.mod go.sum ./
 
-# Copy the go source
-COPY . .
+# Bring in the go dependencies before anything else so we can take
+# advantage of caching these layers in future builds.
+COPY vendor/ vendor/
+
+# Copy the go modules manifests
+COPY go.* .
+
+# Copy the required source directories
+COPY main.go .
+COPY api api
+COPY internal internal
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
