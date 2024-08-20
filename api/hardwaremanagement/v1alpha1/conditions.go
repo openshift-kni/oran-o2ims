@@ -23,3 +23,22 @@ const (
 	// fulfilled.
 	FailedCondition = "Failed"
 )
+
+type ConditionType string
+
+// The following constants define the different types of conditions that will be set
+const (
+	Provisioned ConditionType = "Provisioned"
+	Unknown     ConditionType = "Unknown" // indicates the condition has not been evaluated
+)
+
+type ConditionReason string
+
+// The following constants define the different reasons that conditions will be set for
+const (
+	InProgress     ConditionReason = "InProgress"
+	Completed      ConditionReason = "Completed"
+	Unprovisioned  ConditionReason = "Unprovisioned"
+	Failed         ConditionReason = "Failed"
+	NotInitialized ConditionReason = "NotInitialized"
+)

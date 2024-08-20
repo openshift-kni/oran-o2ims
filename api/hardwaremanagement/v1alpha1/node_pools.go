@@ -55,8 +55,8 @@ type NodePoolStatus struct {
 	Properties Properties `json:"properties,omitempty"`
 
 	// Conditions represent the observations of the current state of the NodePool. Possible
-	// values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// values of the condition type are `Provisioned` and `Unknown`.
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 // NodePool is the schema for an allocation request of nodes
