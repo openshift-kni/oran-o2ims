@@ -86,6 +86,10 @@ CONTAINER_TOOL ?= docker
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+
+# Source directories
+SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
+
 .PHONY: all
 all: build
 
@@ -122,8 +126,8 @@ build: manifests generate fmt vet ## Build manager binary.
 	go build
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go -- start controller-manager
+run: manifests generate fmt vet binary ## Run a controller from your host.
+	./oran-o2ims start controller-manager
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -311,7 +315,7 @@ test tests:
 .PHONY: fmt
 fmt:
 	@echo "Run fmt"
-	gofmt -s -l -w .
+	gofmt -s -l -w main.go $(SOURCE_DIRS)
 
 .PHONY: vet
 vet: ## Run go vet against code.
@@ -320,8 +324,7 @@ vet: ## Run go vet against code.
 .PHONY: lint
 lint:
 	@echo "Run lint"
-	golangci-lint --version
-	golangci-lint run --verbose --print-resources-usage --timeout=5m0s
+	hack/golangci-lint.sh
 
 .PHONY: deps-update
 deps-update:

@@ -176,7 +176,7 @@ var _ = Describe("Handler wapper", func() {
 					- claim: sub
 					  pattern: ^mysubject$
 				`)),
-				0600,
+				0o600,
 			)
 			Expect(err).ToNot(HaveOccurred())
 			file2 := filepath.Join(dir, "acl2.yaml")
@@ -186,7 +186,7 @@ var _ = Describe("Handler wapper", func() {
 					- claim: sub
 					  pattern: ^yoursubject$
 				`)),
-				0600,
+				0o600,
 			)
 			Expect(err).ToNot(HaveOccurred())
 

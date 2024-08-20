@@ -27,9 +27,12 @@ import (
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/ghttp"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	. "github.com/openshift-kni/oran-o2ims/internal/testing"
 )
+
+const bearerPrefix = "Bearer "
 
 var _ = Describe("Handler wapper", func() {
 	It("Can't be built without a logger", func() {
@@ -192,7 +195,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the expired token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -225,7 +228,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -255,7 +258,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -287,7 +290,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -319,7 +322,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -355,7 +358,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -391,7 +394,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -431,7 +434,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with the bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -472,7 +475,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request with a bad token:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -503,7 +506,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -533,7 +536,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -563,7 +566,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -643,7 +646,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/public", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 	})
@@ -702,7 +705,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/public", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -712,6 +715,10 @@ var _ = Describe("Handler wapper", func() {
 
 	It("Doesn't load insecure keys by default", func() {
 		var err error
+
+		// TODO(alegacy): Remove this override once it is fixed for production
+		err = os.Setenv(utils.TLSSkipVerifyEnvName, "false")
+		Expect(err).ToNot(HaveOccurred())
 
 		// Prepare the server:
 		server, ca := MakeTCPTLSServer()
@@ -743,7 +750,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -753,6 +760,10 @@ var _ = Describe("Handler wapper", func() {
 
 	It("Loads insecure keys in insecure mode", func() {
 		var err error
+
+		// Override the TLS Skip Verify variable
+		err = os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
 
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
@@ -777,14 +788,13 @@ var _ = Describe("Handler wapper", func() {
 		wrapper, err := NewHandlerWrapper().
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -816,7 +826,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send a request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -900,7 +910,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -928,7 +938,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -961,6 +971,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Uses token to load keys", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -986,14 +1000,13 @@ var _ = Describe("Handler wapper", func() {
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
 			SetKeysToken("mykeystoken").
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1002,6 +1015,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Uses token file to load keys", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1032,7 +1049,7 @@ var _ = Describe("Handler wapper", func() {
 		}()
 		err = fd.Close()
 		Expect(err).ToNot(HaveOccurred())
-		err = os.WriteFile(file, []byte("mykeystoken"), 0600)
+		err = os.WriteFile(file, []byte("mykeystoken"), 0o600)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Prepare the handler:
@@ -1040,14 +1057,13 @@ var _ = Describe("Handler wapper", func() {
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
 			SetKeysTokenFile(file).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1056,6 +1072,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Uses token to load keys if token file doesn't exist", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1091,14 +1111,13 @@ var _ = Describe("Handler wapper", func() {
 			AddKeysURL(server.URL()).
 			SetKeysToken("mykeystoken").
 			SetKeysTokenFile(file).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1107,6 +1126,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Rejects if token is required for loading keys and none has been configured", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1130,14 +1153,13 @@ var _ = Describe("Handler wapper", func() {
 		wrapper, err := NewHandlerWrapper().
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
-			SetKeysInsecure(true).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
 		handler = wrapper(handler)
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 
@@ -1150,6 +1172,10 @@ var _ = Describe("Handler wapper", func() {
 	})
 
 	It("Rejects if token is required for loading keys token file doesn't exist", func() {
+		// Override the TLS Skip Verify variable
+		err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+		Expect(err).ToNot(HaveOccurred())
+
 		// Prepare the server that will return the keys:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
@@ -1182,7 +1208,6 @@ var _ = Describe("Handler wapper", func() {
 		wrapper, err := NewHandlerWrapper().
 			SetLogger(logger).
 			AddKeysURL(server.URL()).
-			SetKeysInsecure(true).
 			SetKeysTokenFile(file).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
@@ -1190,7 +1215,7 @@ var _ = Describe("Handler wapper", func() {
 
 		// Send the request:
 		request := httptest.NewRequest(http.MethodGet, "/private", nil)
-		request.Header.Set("Authorization", "Bearer "+bearer)
+		request.Header.Set("Authorization", bearerPrefix+bearer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 

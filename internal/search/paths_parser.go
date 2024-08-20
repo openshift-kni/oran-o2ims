@@ -181,7 +181,7 @@ func (t *pathsParserTask) consumeToken(symbol pathsSymbol) {
 		case pathsSymbolEnd:
 			expected = "end of input"
 		case pathsSymbolIdentifier:
-			expected = "identifier"
+			expected = identifierToken
 		case pathsSymbolComma:
 			expected = "comma"
 		case pathsSymbolSlash:

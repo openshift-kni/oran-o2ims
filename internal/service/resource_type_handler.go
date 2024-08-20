@@ -21,6 +21,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"k8s.io/apimachinery/pkg/util/net"
+
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
@@ -143,12 +146,11 @@ func (b *ResourceTypeHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper
-	backendTransport = &http.Transport{
+	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
 		},
-	}
+	})
 	if b.transportWrapper != nil {
 		backendTransport = b.transportWrapper(backendTransport)
 	}
@@ -364,7 +366,7 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 	}
 
 	var resourceClass, resourceKind, resourceTypeID string
-	switch kind {
+	switch kind { // nolint: gocritic
 	case KindNode:
 		resourceClass = ResourceClassCompute
 		resourceKind = ResourceKindPhysical

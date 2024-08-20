@@ -146,7 +146,7 @@ func (t *Tool) compile(source string, variables []string) (query *Query, err err
 
 // Evaluate compiles the query and then evaluates it. The input can be any kind of object that can
 // be serialized to JSON.
-func (t *Tool) Evaluate(source string, input any, output any, variables ...Variable) error {
+func (t *Tool) Evaluate(source string, input, output any, variables ...Variable) error {
 	slices.SortFunc(variables, func(a, b Variable) int {
 		return strings.Compare(a.name, b.name)
 	})
@@ -165,11 +165,10 @@ func (t *Tool) Evaluate(source string, input any, output any, variables ...Varia
 
 // EvaluateString compiles the query and then evaluates it. The input should be a string containing
 // a JSON document.
-func (t *Tool) EvaluateString(source string, input string, output any, variables ...Variable) error {
+func (t *Tool) EvaluateString(source, input string, output any, variables ...Variable) error {
 	var tmp any
-	err := jsoniter.Unmarshal([]byte(input), &tmp)
-	if err != nil {
-		return err
+	if err := jsoniter.Unmarshal([]byte(input), &tmp); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON input: %w", err)
 	}
 	return t.Evaluate(source, tmp, output, variables...)
 }
@@ -178,9 +177,8 @@ func (t *Tool) EvaluateString(source string, input string, output any, variables
 // containing a JSON document.
 func (t *Tool) EvaluateBytes(source string, input []byte, output any, variables ...Variable) error {
 	var tmp any
-	err := jsoniter.Unmarshal(input, &tmp)
-	if err != nil {
-		return err
+	if err := jsoniter.Unmarshal(input, &tmp); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON input: %w", err)
 	}
 	return t.Evaluate(source, tmp, output, variables...)
 }
