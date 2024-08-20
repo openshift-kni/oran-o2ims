@@ -21,7 +21,6 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
-	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -39,15 +38,8 @@ func TestControllers(t *testing.T) {
 	RunSpecs(t, "Controllers")
 }
 
-func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	return fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(objs...).
-		WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).
-		WithStatusSubresource(&oranv1alpha1.ClusterTemplate{}).
-		WithStatusSubresource(&oranv1alpha1.ClusterRequest{}).
-		WithStatusSubresource(&siteconfig.ClusterInstance{}).
-		Build()
+func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
 }
 
 // Logger used for tests:
@@ -73,10 +65,6 @@ var _ = BeforeSuite(func() {
 	// Add all the required types to the scheme used by the tests:
 	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMS{})
 	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMSList{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplate{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplateList{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterRequest{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterRequestList{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.Ingress{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.IngressList{})
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceAccount{})
@@ -85,6 +73,4 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceList{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.Deployment{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
-	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstance{})
-	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstanceList{})
 })

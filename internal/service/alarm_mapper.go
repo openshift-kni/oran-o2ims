@@ -43,7 +43,7 @@ type AlarmMapper struct {
 type AlarmMapperBuilder struct {
 	logger        *slog.Logger
 	backendClient *http.Client
-	// transportWrapper    func(http.RoundTripper) http.RoundTripper
+	//transportWrapper    func(http.RoundTripper) http.RoundTripper
 	resourceServerURL   string
 	resourceServerToken string
 	extensions          []string

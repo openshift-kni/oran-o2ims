@@ -47,7 +47,7 @@ func (h *AlarmNotificationHandler) add(ctx context.Context,
 
 	subIdSet := h.getSubscriptionIdsFromAlarm(ctx, alarmEventRecord)
 
-	// now look up subscriptions id_set matched and send http packets to URIs
+	//now look up subscriptions id_set matched and send http packets to URIs
 	for key := range subIdSet {
 		subInfo, ok := h.getSubscriptionInfo(ctx, key)
 
@@ -62,7 +62,7 @@ func (h *AlarmNotificationHandler) add(ctx context.Context,
 
 		var obj data.Object
 		// TODO:
-		// determine if alarmNotificationType needs to be added
+		// determin if alarmNotificationType needs to be added
 
 		err = h.jqTool.Evaluate(
 			`{
@@ -78,8 +78,8 @@ func (h *AlarmNotificationHandler) add(ctx context.Context,
 			jq.Any("$alarmEvent", alarmEventRecord),
 		)
 
-		// following function will send out the notification packet based on subscription
-		// and alert received in a go route thread that will not hold the AddRequest ctx.
+		//following function will send out the notification packet based on subscription
+		//and alert received in a go route thread that will not hold the AddRequest ctx.
 		go func(pkt data.Object) {
 			content, err := h.jsonAPI.MarshalIndent(&pkt, "", " ")
 			if err != nil {
@@ -89,7 +89,7 @@ func (h *AlarmNotificationHandler) add(ctx context.Context,
 				)
 			}
 
-			// following new buffer usage may need optimization
+			//following new buffer usage may need optimization
 			resp, err := h.httpClient.Post(subInfo.uris, "application/json", bytes.NewBuffer(content))
 			if err != nil {
 				h.logger.Debug("AlarmNotificationHandler failed to post packet",
@@ -180,7 +180,7 @@ func (h *AlarmNotificationHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// send response back
+	//send response back
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	writer := jsoniter.NewStream(h.jsonAPI, w, 0)

@@ -298,7 +298,7 @@ func (h *SubscriptionHandler) Add(ctx context.Context,
 		return
 	}
 
-	// add subscription Id in the response
+	//add subscription Id in the response
 	obj := request.Object
 
 	obj, err = h.encodeSubId(id, obj)
@@ -330,7 +330,7 @@ func (h *SubscriptionHandler) Delete(ctx context.Context,
 
 	return
 }
-func (h *SubscriptionHandler) fetchItem(ctx context.Context, // nolint: unparam
+func (h *SubscriptionHandler) fetchItem(ctx context.Context,
 	id string) (result data.Object, err error) {
 	h.subscriptionMapLock.Lock()
 	defer h.subscriptionMapLock.Unlock()
@@ -367,7 +367,7 @@ func (h *SubscriptionHandler) addItem(
 
 	subId = h.getSubcriptionId()
 
-	// save the subscription in configuration map
+	//save the subscription in configuration map
 	value, err := h.jsonAPI.MarshalIndent(&input_data.Object, "", " ")
 	if err != nil {
 		return
@@ -402,7 +402,7 @@ func (h *SubscriptionHandler) deleteItem(
 func (h *SubscriptionHandler) mapItem(ctx context.Context,
 	input data.Object) (output data.Object, err error) {
 
-	// TBD only save related attributes in the future
+	//TBD only save related attributes in the future
 	return input, nil
 }
 func (h *SubscriptionHandler) addToSubscriptionMap(key string, value data.Object) {
@@ -413,7 +413,7 @@ func (h *SubscriptionHandler) addToSubscriptionMap(key string, value data.Object
 func (h *SubscriptionHandler) deleteToSubscriptionMap(key string) {
 	h.subscriptionMapLock.Lock()
 	defer h.subscriptionMapLock.Unlock()
-	// test if the key in the map
+	//test if the key in the map
 	_, ok := (*h.subscriptionMap)[key]
 
 	if !ok {

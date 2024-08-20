@@ -206,7 +206,7 @@ func (b *ClientBuilder) loadConfig() (result *rest.Config, err error) {
 
 // loadDefaultConfig loads the configuration from the typical default locations, the `KUBECONFIG`
 // environment variable and the ~/.kube/config` file.
-func (b *ClientBuilder) loadDefaultConfig() (result clientcmd.ClientConfig, err error) { // nolint: unparam
+func (b *ClientBuilder) loadDefaultConfig() (result clientcmd.ClientConfig, err error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	overrides := &clientcmd.ConfigOverrides{}
 	result = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
@@ -240,55 +240,34 @@ var _ clnt.Client = (*Client)(nil)
 
 func (c *Client) Get(ctx context.Context, key types.NamespacedName, obj clnt.Object,
 	opts ...clnt.GetOption) error {
-	if err := c.delegate.Get(ctx, key, obj, opts...); err != nil {
-		return fmt.Errorf("failed Get operation: %w", err)
-	}
-	return nil
+	return c.delegate.Get(ctx, key, obj, opts...)
 }
 
 func (c *Client) List(ctx context.Context, list clnt.ObjectList,
 	opts ...clnt.ListOption) error {
-	if err := c.delegate.List(ctx, list, opts...); err != nil {
-		return fmt.Errorf("failed List operation: %w", err)
-	}
-	return nil
+	return c.delegate.List(ctx, list, opts...)
 }
 
 func (c *Client) Create(ctx context.Context, obj clnt.Object, opts ...clnt.CreateOption) error {
-	if err := c.delegate.Create(ctx, obj, opts...); err != nil {
-		return fmt.Errorf("failed Create operation: %w", err)
-	}
-	return nil
+	return c.delegate.Create(ctx, obj, opts...)
 }
 
 func (c *Client) Delete(ctx context.Context, obj clnt.Object, opts ...clnt.DeleteOption) error {
-	if err := c.delegate.Delete(ctx, obj, opts...); err != nil {
-		return fmt.Errorf("failed Delete operation: %w", err)
-	}
-	return nil
+	return c.delegate.Delete(ctx, obj, opts...)
 }
 
 func (c *Client) DeleteAllOf(ctx context.Context, obj clnt.Object,
 	opts ...clnt.DeleteAllOfOption) error {
-	if err := c.delegate.DeleteAllOf(ctx, obj, opts...); err != nil {
-		return fmt.Errorf("failed DeleteAllOf operation: %w", err)
-	}
-	return nil
+	return c.delegate.DeleteAllOf(ctx, obj, opts...)
 }
 
 func (c *Client) Patch(ctx context.Context, obj clnt.Object, patch clnt.Patch,
 	opts ...clnt.PatchOption) error {
-	if err := c.delegate.Patch(ctx, obj, patch, opts...); err != nil {
-		return fmt.Errorf("failed Patch operation: %w", err)
-	}
-	return nil
+	return c.delegate.Patch(ctx, obj, patch, opts...)
 }
 
 func (c *Client) Update(ctx context.Context, obj clnt.Object, opts ...clnt.UpdateOption) error {
-	if err := c.delegate.Update(ctx, obj, opts...); err != nil {
-		return fmt.Errorf("failed Update operation: %w", err)
-	}
-	return nil
+	return c.delegate.Update(ctx, obj, opts...)
 }
 
 func (c *Client) Status() clnt.SubResourceWriter {
@@ -308,31 +287,20 @@ func (c *Client) Scheme() *runtime.Scheme {
 }
 
 func (c *Client) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
-	gvk, err := c.delegate.GroupVersionKindFor(obj)
-	if err != nil {
-		return schema.GroupVersionKind{}, fmt.Errorf("failed to get GroupVersionKind for object: %w", err)
-	}
-	return gvk, nil
+	return c.delegate.GroupVersionKindFor(obj)
 }
 
 func (c *Client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	isNamespaced, err := c.delegate.IsObjectNamespaced(obj)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if object is namespaced: %w", err)
-	}
-	return isNamespaced, nil
+	return c.delegate.IsObjectNamespaced(obj)
 }
 
+// watch
 func (c *Client) Watch(ctx context.Context, obj clnt.ObjectList, opts ...clnt.ListOption) (watch.Interface, error) {
-	watcher, err := c.delegate.Watch(ctx, obj, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to watch object list: %w", err)
-	}
-	return watcher, nil
+	return c.delegate.Watch(ctx, obj, opts...)
 }
 
 // Close closes the client and releases all the resources it is using. It is specially important to
-// call this method when the client is using an SSH tunnel, as otherwise the tunnel will remain
+// call this method when the client is using as SSH tunnel, as otherwise the tunnel will remain
 // open.
 func (c *Client) Close() error {
 	return nil

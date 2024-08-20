@@ -55,7 +55,8 @@ var _ = DescribeTable(
 		objs = append(objs, ns)
 
 		// Get the fake client.
-		fakeClient := getFakeClientFromObjects(objs...)
+		fakeClient, err := getFakeClientFromObjects(objs...)
+		Expect(err).ToNot(HaveOccurred())
 
 		// Initialize the O-RAN O2IMS reconciler.
 		r := &Reconciler{

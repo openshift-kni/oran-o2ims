@@ -186,7 +186,7 @@ func (b *TransportWrapperBuilder) createExcludeFunc() (result func(*http.Request
 			excludeRE, err = regexp.Compile(typed)
 			if err != nil {
 				err = fmt.Errorf(
-					"failed to compile exclude regular expression '%s': %w",
+					"failed to compile exclude regular expression '%s': %v",
 					typed, err,
 				)
 				return
@@ -310,10 +310,7 @@ func (r *requestReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *requestReader) Close() error {
-	if err := r.reader.Close(); err != nil {
-		return fmt.Errorf("failed to close reader: %w", err)
-	}
-	return nil
+	return r.reader.Close()
 }
 
 func (r *responseReader) Read(p []byte) (n int, err error) {
@@ -331,8 +328,5 @@ func (r *responseReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *responseReader) Close() error {
-	if err := r.reader.Close(); err != nil {
-		return fmt.Errorf("failed to close reader: %w", err)
-	}
-	return nil
+	return r.reader.Close()
 }

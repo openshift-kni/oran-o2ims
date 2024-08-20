@@ -46,8 +46,6 @@ const (
 	pathsSymbolIdentifier
 	pathsSymbolComma
 	pathsSymbolSlash
-
-	identifierToken = "identifier"
 )
 
 // String generates a string representation of the terminal symbol.
@@ -110,7 +108,7 @@ func (b *pathsLexerBuilder) Build() (result *pathsLexer, err error) {
 		err = errors.New("logger is mandatory")
 		return
 	}
-	if b.source == "" {
+	if len(b.source) == 0 {
 		err = errors.New("source is mandatory")
 		return
 	}
@@ -164,7 +162,8 @@ func (l *pathsLexer) FetchToken() (token *pathsToken, err error) {
 				return
 			default:
 				err = fmt.Errorf(
-					"unexpected character '%c' while expecting start of "+identifierToken,
+					"unexpected character '%c' while expecting start of "+
+						"identifier",
 					r,
 				)
 				return

@@ -36,9 +36,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/util/net"
-
 	"github.com/golang-jwt/jwt/v4"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/pflag"
@@ -61,6 +58,7 @@ type HandlerWrapperBuilder struct {
 	keysURLs      []string
 	keysCA        *x509.CertPool
 	keysCAFile    string
+	keysInsecure  bool
 	keysToken     string
 	keysTokenFile string
 	realm         string
@@ -161,6 +159,14 @@ func (b *HandlerWrapperBuilder) SetKeysCA(value *x509.CertPool) *HandlerWrapperB
 // from.
 func (b *HandlerWrapperBuilder) SetKeysCAFile(value string) *HandlerWrapperBuilder {
 	b.keysCAFile = value
+	return b
+}
+
+// SetKeysInsecure sets the flag that indicates that the certificate of the web server where the
+// keys are loaded from should not be checked. The default is false and changing it to true makes
+// the token verification insecure, so refrain from doing that in security sensitive environments.
+func (b *HandlerWrapperBuilder) SetKeysInsecure(value bool) *HandlerWrapperBuilder {
+	b.keysInsecure = value
 	return b
 }
 
@@ -337,12 +343,12 @@ func (b *HandlerWrapperBuilder) Build() (result func(http.Handler) http.Handler,
 
 	// Create the HTTP client that will be used to load the keys:
 	keysClient := &http.Client{
-		Transport: net.SetTransportDefaults(&http.Transport{
+		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:            keysCA,
-				InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaults to false; logged if disabled
+				InsecureSkipVerify: b.keysInsecure,
 			},
-		}),
+		},
 	}
 
 	// Try to compile the regular expressions that define the parts of the URL space that are
@@ -569,7 +575,6 @@ func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 				slog.String("file", keysFile),
 				slog.String("error", err.Error()),
 			)
-			return fmt.Errorf("unable to load keys from file: %w", err)
 		}
 	}
 
@@ -588,7 +593,6 @@ func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 				slog.String("url", keysURL),
 				slog.String("error", err.Error()),
 			)
-			return fmt.Errorf("unable to load keys from URL: %w", err)
 		}
 	}
 
@@ -599,7 +603,7 @@ func (h *handlerWrapper) loadKeys(ctx context.Context) error {
 func (h *handlerWrapper) loadKeysFile(ctx context.Context, file string) error {
 	reader, err := os.Open(file)
 	if err != nil {
-		return fmt.Errorf("failed to open file %s: %w", file, err)
+		return err
 	}
 	return h.readKeys(ctx, reader)
 }
@@ -608,7 +612,7 @@ func (h *handlerWrapper) loadKeysFile(ctx context.Context, file string) error {
 func (h *handlerWrapper) loadKeysURL(ctx context.Context, addr string) error {
 	request, err := http.NewRequest(http.MethodGet, addr, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create new HTTP request: %w", err)
+		return err
 	}
 	token := h.selectKeysToken(ctx)
 	if token != "" {
@@ -617,7 +621,7 @@ func (h *handlerWrapper) loadKeysURL(ctx context.Context, addr string) error {
 	request = request.WithContext(ctx)
 	response, err := h.keysClient.Do(request)
 	if err != nil {
-		return fmt.Errorf("failed to execute HTTP request: %w", err)
+		return err
 	}
 	defer func() {
 		err := response.Body.Close()
@@ -668,13 +672,14 @@ func (h *handlerWrapper) readKeys(ctx context.Context, reader io.Reader) error {
 	// Read the JSON data:
 	jsonData, err := io.ReadAll(reader)
 	if err != nil {
-		return fmt.Errorf("failed to read JSON data: %w", err)
+		return err
 	}
 
 	// Parse the JSON data:
 	var setData setData
-	if err = json.Unmarshal(jsonData, &setData); err != nil {
-		return fmt.Errorf("failed to unmarshal JSON data: %w", err)
+	err = json.Unmarshal(jsonData, &setData)
+	if err != nil {
+		return err
 	}
 
 	// Convert the key data to actual keys that can be used to verify the signatures of the
@@ -794,17 +799,16 @@ func (h *handlerWrapper) checkToken(ctx context.Context, bearer string) (token *
 			slog.String("!token", bearer),
 			slog.String("error", err.Error()),
 		)
-		var validationError *jwt.ValidationError
-		switch {
-		case errors.As(err, &validationError):
+		switch typed := err.(type) {
+		case *jwt.ValidationError:
 			switch {
-			case validationError.Errors&jwt.ValidationErrorMalformed != 0:
+			case typed.Errors&jwt.ValidationErrorMalformed != 0:
 				err = errors.New("bearer token is malformed")
-			case validationError.Errors&jwt.ValidationErrorUnverifiable != 0:
+			case typed.Errors&jwt.ValidationErrorUnverifiable != 0:
 				err = errors.New("bearer token can't be verified")
-			case validationError.Errors&jwt.ValidationErrorSignatureInvalid != 0:
+			case typed.Errors&jwt.ValidationErrorSignatureInvalid != 0:
 				err = errors.New("signature of bearer token isn't valid")
-			case validationError.Errors&jwt.ValidationErrorExpired != 0:
+			case typed.Errors&jwt.ValidationErrorExpired != 0:
 				// When the token is expired according to the JWT library we may
 				// still want to accept it if we have a configured tolerance:
 				if h.tolerance > 0 {
@@ -824,9 +828,9 @@ func (h *handlerWrapper) checkToken(ctx context.Context, bearer string) (token *
 				} else {
 					err = errors.New("bearer token is expired")
 				}
-			case validationError.Errors&jwt.ValidationErrorIssuedAt != 0:
+			case typed.Errors&jwt.ValidationErrorIssuedAt != 0:
 				err = errors.New("bearer token was issued in the future")
-			case validationError.Errors&jwt.ValidationErrorNotValidYet != 0:
+			case typed.Errors&jwt.ValidationErrorNotValidYet != 0:
 				err = errors.New("bearer token isn't valid yet")
 			default:
 				err = errors.New("bearer token isn't valid")
@@ -901,7 +905,7 @@ func (h *handlerWrapper) checkStringClaim(ctx context.Context, claims jwt.MapCla
 // checkTimeClaim checks that the given claim exists and that the value is a time. If it exists it
 // returns the value.
 func (h *handlerWrapper) checkTimeClaim(ctx context.Context, claims jwt.MapClaims,
-	name string) (result time.Time, err error) { // nolint: unparam
+	name string) (result time.Time, err error) {
 	value, err := h.checkClaim(ctx, claims, name)
 	if err != nil {
 		return
@@ -919,7 +923,7 @@ func (h *handlerWrapper) checkTimeClaim(ctx context.Context, claims jwt.MapClaim
 }
 
 // checkClaim checks that the given claim exists. If it exists it returns the value.
-func (h *handlerWrapper) checkClaim(ctx context.Context, claims jwt.MapClaims, // nolint: unparam
+func (h *handlerWrapper) checkClaim(ctx context.Context, claims jwt.MapClaims,
 	name string) (result any, err error) {
 	value, ok := claims[name]
 	if !ok {

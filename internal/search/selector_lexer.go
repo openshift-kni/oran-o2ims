@@ -147,7 +147,7 @@ func (b *selectorLexerBuilder) Build() (result *selectorLexer, err error) {
 		err = errors.New("logger is mandatory")
 		return
 	}
-	if b.source == "" {
+	if len(b.source) == 0 {
 		err = errors.New("source is mandatory")
 		return
 	}

@@ -25,9 +25,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/util/net"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
@@ -137,11 +134,12 @@ func (b *ResourceFetcherBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
+	var backendTransport http.RoundTripper
+	backendTransport = &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
+			InsecureSkipVerify: true,
 		},
-	})
+	}
 	if b.transportWrapper != nil {
 		backendTransport = b.transportWrapper(backendTransport)
 	}
@@ -169,7 +167,7 @@ func (h *ResourceFetcher) GetResourceTypeID(from data.Object) (resourceTypeID st
 		return
 	}
 
-	switch kind { // nolint: gocritic
+	switch kind {
 	case KindNode:
 		var architecture, cpu string
 		cpu, err = data.GetString(from, "cpu")

@@ -18,7 +18,6 @@ on:
   pull_request:
     branches:
     - main
-    - CNF-13183-provisioning-poc
 
 jobs:
 
@@ -27,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout the source
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Build image
       run: make image
@@ -37,10 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout the source
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Install Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v4
       with:
         go-version: '1.21'
 
@@ -64,10 +63,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout the source
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Install Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v4
       with:
         go-version: '1.21'
 
@@ -86,15 +85,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout the source
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Install Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v4
       with:
         go-version: '1.21'
 
     - name: Run the linter
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v3
       with:
-        version: v1.59.1
+        version: v1.54.2
         args: --timeout=5m
