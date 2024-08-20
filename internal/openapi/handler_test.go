@@ -91,7 +91,7 @@ var _ = Describe("Handler", func() {
 			file := filepath.Join(tmp, "spec.yaml")
 			data, err := json.Marshal(spec)
 			Expect(err).ToNot(HaveOccurred())
-			err = os.WriteFile(file, data, 0o600)
+			err = os.WriteFile(file, data, 0600)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check that the spectral command is available:

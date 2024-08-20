@@ -156,7 +156,7 @@ var _ = Describe("Listener", func() {
 				Bytes: crtRaw,
 			})
 			crtFile = filepath.Join(tmp, "tls.crt")
-			err := os.WriteFile(crtFile, crtPEM, 0o600)
+			err := os.WriteFile(crtFile, crtPEM, 0600)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Write the key bytes:
@@ -167,7 +167,7 @@ var _ = Describe("Listener", func() {
 				Bytes: keyRaw,
 			})
 			keyFile = filepath.Join(tmp, "tls.key")
-			err = os.WriteFile(keyFile, keyPEM, 0o600)
+			err = os.WriteFile(keyFile, keyPEM, 0600)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -184,14 +184,13 @@ var _ = Describe("Listener", func() {
 
 		// check opens a connection to the given listener and verifies that it uses the
 		// given certificate.
-		check := func(listener net.Listener, crtRaw []byte) {
+		check := func(listener net.Listener, crt []byte) {
 			cas := x509.NewCertPool()
 			ok := cas.AppendCertsFromPEM(crtPEM)
 			Expect(ok).To(BeTrue())
 			dialer := tls.Dialer{
 				Config: &tls.Config{
-					RootCAs:    cas,
-					MinVersion: tls.VersionTLS12,
+					RootCAs: cas,
 				},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -320,7 +319,7 @@ var _ = Describe("Listener", func() {
 
 		It("Can't be created if TLS certificate file contains junk", func() {
 			junkFile := filepath.Join(tmp, "junk.pem")
-			err := os.WriteFile(junkFile, []byte("junk\n"), 0o600)
+			err := os.WriteFile(junkFile, []byte("junk\n"), 0600)
 			Expect(err).ToNot(HaveOccurred())
 			listener, err := NewListener().
 				SetLogger(logger).
@@ -336,7 +335,7 @@ var _ = Describe("Listener", func() {
 
 		It("Can't be created if TLS key file contains junk", func() {
 			junkFile := filepath.Join(tmp, "junk.pem")
-			err := os.WriteFile(junkFile, []byte("junk\n"), 0o600)
+			err := os.WriteFile(junkFile, []byte("junk\n"), 0600)
 			Expect(err).ToNot(HaveOccurred())
 			listener, err := NewListener().
 				SetLogger(logger).
@@ -366,11 +365,7 @@ var _ = Describe("Listener", func() {
 				w.WriteHeader(http.StatusOK)
 			})
 			server := http.Server{
-				Handler:           handler,
-				ReadHeaderTimeout: 15 * time.Second,
-				ReadTimeout:       15 * time.Second,
-				WriteTimeout:      15 * time.Second,
-				IdleTimeout:       60 * time.Second,
+				Handler: handler,
 			}
 			go func() {
 				defer GinkgoRecover()
@@ -387,8 +382,7 @@ var _ = Describe("Listener", func() {
 			client := http.Client{
 				Transport: &http.Transport{
 					TLSClientConfig: &tls.Config{
-						RootCAs:    cas,
-						MinVersion: tls.VersionTLS12,
+						RootCAs: cas,
 					},
 				},
 			}
@@ -414,11 +408,7 @@ var _ = Describe("Listener", func() {
 				w.WriteHeader(http.StatusOK)
 			})
 			server := http.Server{
-				Handler:           handler,
-				ReadHeaderTimeout: 15 * time.Second,
-				ReadTimeout:       15 * time.Second,
-				WriteTimeout:      15 * time.Second,
-				IdleTimeout:       60 * time.Second,
+				Handler: handler,
 			}
 			go func() {
 				defer GinkgoRecover()
@@ -435,8 +425,7 @@ var _ = Describe("Listener", func() {
 			client := http.Client{
 				Transport: &http2.Transport{
 					TLSClientConfig: &tls.Config{
-						RootCAs:    cas,
-						MinVersion: tls.VersionTLS12,
+						RootCAs: cas,
 					},
 				},
 			}

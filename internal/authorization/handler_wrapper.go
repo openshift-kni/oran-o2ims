@@ -169,20 +169,21 @@ func (b *HandlerWrapperBuilder) loadACLFile(file string, items map[string]*regex
 	// Load the YAML data:
 	yamlData, err := os.ReadFile(file)
 	if err != nil {
-		return fmt.Errorf("failed to read ACL file %s: %w", file, err)
+		return err
 	}
 
 	// Parse the YAML data:
 	var listData []aclItem
-	if err = yaml.Unmarshal(yamlData, &listData); err != nil {
-		return fmt.Errorf("failed to unmarshal YAML data from file %s: %w", file, err)
+	err = yaml.Unmarshal(yamlData, &listData)
+	if err != nil {
+		return err
 	}
 
 	// Process the items:
 	for _, itemData := range listData {
 		items[itemData.Claim], err = regexp.Compile(itemData.Pattern)
 		if err != nil {
-			return fmt.Errorf("failed to compile regex pattern %s for claim %s: %w", itemData.Pattern, itemData.Claim, err)
+			return err
 		}
 	}
 
@@ -255,7 +256,7 @@ func (h *handlerWrapper) checkACL(claims map[string]any) bool {
 }
 
 // sendError sends an error response to the client with the message of the given error.
-func (h *handlerWrapper) sendError(w http.ResponseWriter, r *http.Request) { // nolint: unparam
+func (h *handlerWrapper) sendError(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(http.StatusForbidden)
 	writer := jsoniter.NewStream(h.jsonAPI, w, 512)

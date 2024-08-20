@@ -223,11 +223,11 @@ var _ = Describe("Logger", func() {
 		Expect(info.Size()).To(BeNumerically(">=", 0))
 
 		// Check that the file has read and write permissions for the owner:
-		Expect(info.Mode() & 0o400).ToNot(BeZero())
-		Expect(info.Mode() & 0o200).ToNot(BeZero())
+		Expect(info.Mode() & 0400).ToNot(BeZero())
+		Expect(info.Mode() & 0200).ToNot(BeZero())
 
 		// Check that the file doesn't have execution permissions:
-		Expect(info.Mode() & 0o111).To(BeZero())
+		Expect(info.Mode() & 0111).To(BeZero())
 	})
 
 	It("Adds custom field", func() {

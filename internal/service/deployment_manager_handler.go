@@ -26,9 +26,6 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/util/net"
-
 	"github.com/imdario/mergo"
 	jsoniter "github.com/json-iterator/go"
 	"gopkg.in/yaml.v3"
@@ -177,11 +174,12 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
+	var backendTransport http.RoundTripper
+	backendTransport = &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
+			InsecureSkipVerify: true,
 		},
-	})
+	}
 	if b.loggingWrapper != nil {
 		backendTransport = b.loggingWrapper(backendTransport)
 	}
@@ -378,7 +376,7 @@ func (h *DeploymentManagerHandler) fetchItemFromRegularHub(ctx context.Context,
 	return
 }
 
-func (h *DeploymentManagerHandler) doGet(ctx context.Context, path string, // nolint: unparam
+func (h *DeploymentManagerHandler) doGet(ctx context.Context, path string,
 	query neturl.Values) (response *http.Response, err error) {
 	url := h.backendURL + path
 	request, err := http.NewRequest(http.MethodGet, url, nil)

@@ -22,9 +22,6 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/util/net"
-
 	"github.com/itchyny/gojq"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
@@ -149,11 +146,12 @@ func (b *ResourceHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
+	var backendTransport http.RoundTripper
+	backendTransport = &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
+			InsecureSkipVerify: true,
 		},
-	})
+	}
 	if b.transportWrapper != nil {
 		backendTransport = b.transportWrapper(backendTransport)
 	}
@@ -274,7 +272,7 @@ func (h *ResourceHandler) fetchItems(
 }
 
 func (h *ResourceHandler) fetchItem(ctx context.Context,
-	id, parentID string) (resource data.Object, err error) { // nolint: unparam
+	id, parentID string) (resource data.Object, err error) {
 	// Fetch items
 	items, err := h.resourceFetcher.FetchItems(ctx)
 	if err != nil {
@@ -357,7 +355,7 @@ func (r *ResourceHandler) mapItem(ctx context.Context,
 		return
 	}
 
-	switch kind { // nolint: gocritic
+	switch kind {
 	case KindNode:
 		return r.mapNodeItem(ctx, from)
 	}
@@ -366,7 +364,7 @@ func (r *ResourceHandler) mapItem(ctx context.Context,
 }
 
 // Map a Node to an O2 Resource object.
-func (r *ResourceHandler) mapNodeItem(ctx context.Context, // nolint: unparam
+func (r *ResourceHandler) mapNodeItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
 	description, err := data.GetString(from,
 		graphql.PropertyNode("description").MapProperty())

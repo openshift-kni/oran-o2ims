@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -46,10 +45,9 @@ func main() {
 	// Run the tool:
 	err = tool.Run(ctx)
 	if err != nil {
-		var exitError exit.Error
-		ok := errors.As(err, &exitError)
+		exitErr, ok := err.(exit.Error)
 		if ok {
-			os.Exit(exitError.Code())
+			os.Exit(exitErr.Code())
 		} else {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(1)

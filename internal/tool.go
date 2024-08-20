@@ -17,14 +17,12 @@ package internal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"runtime"
 	"runtime/debug"
 	"slices"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 
 	"github.com/spf13/cobra"
@@ -151,12 +149,12 @@ func (b *ToolBuilder) Build() (result *Tool, err error) {
 	return
 }
 
-// Run runs the tool.
+// Run rus the tool.
 func (t *Tool) Run(ctx context.Context) error {
 	// Create the main command:
 	err := t.createCommand()
 	if err != nil {
-		return fmt.Errorf("failed to create default logger: %w", err)
+		return err
 	}
 
 	// Create a default logger that we can use while we haven't yet parsed the command line
@@ -185,7 +183,7 @@ func (t *Tool) Run(ctx context.Context) error {
 			"error", err,
 		)
 	}
-	return fmt.Errorf("failed to run command: %w", err)
+	return err
 }
 
 func (t *Tool) run(cmd *cobra.Command, args []string) error {
@@ -208,9 +206,6 @@ func (t *Tool) run(cmd *cobra.Command, args []string) error {
 	// Write build information:
 	t.writeBuildInfo(ctx)
 
-	// Security validation checks
-	t.validateSecurityParameters(ctx)
-
 	return nil
 }
 
@@ -230,11 +225,7 @@ func (t *Tool) createCommand() error {
 
 	// Add sub-commands:
 	for _, sub := range t.sub {
-		cmd := sub()
-		if cmd == nil {
-			return fmt.Errorf("failed to create sub-command")
-		}
-		t.cmd.AddCommand(cmd)
+		t.cmd.AddCommand(sub())
 	}
 
 	return nil
@@ -282,15 +273,6 @@ func (t *Tool) writeBuildInfo(ctx context.Context) {
 
 	// Write the information:
 	t.logger.InfoContext(ctx, "Build", logFields...)
-}
-
-// validateSecurityParameters validates
-func (t *Tool) validateSecurityParameters(ctx context.Context) {
-	value := utils.GetTLSSkipVerify()
-	if value {
-		t.logger.WarnContext(ctx, fmt.Sprintf("TLS certificate verification skipped by environment variable '%s'; this configuration is not recommended for production systems",
-			utils.TLSSkipVerifyEnvName))
-	}
 }
 
 // In returns the input stream of the tool.

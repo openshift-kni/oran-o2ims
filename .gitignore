@@ -1,8 +1,4 @@
-# Files
 *.log
 /__debug*
 /oran-o2ims
 /bin/*
-
-# Folders
-.idea/

@@ -81,10 +81,13 @@ spec:
         #
         # Please keep the `exec` before the command, it removes the shell from the picture once
         # the controller manager starts.
-          - /usr/bin/oran-o2ims
-          -  start
-          -  controller-manager
-          -  --leader-elect
+        - /usr/bin/bash
+        - -c
+        - |
+          exec \
+          /usr/bin/oran-o2ims start controller-manager \
+          --leader-elect \
+          --image="${IMAGE}"
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

@@ -78,7 +78,7 @@ func (c *VersionCommand) run(cmd *cobra.Command, argv []string) error {
 	return nil
 }
 
-// getSetting returns the value of the build setting with the given key. Returns an empty string
+// getSetting returns the value of the build setting witht he given key. Returns an empty string
 // if no such setting exists.
 func (c *VersionCommand) getSetting(info *debug.BuildInfo, key string) string {
 	for _, s := range info.Settings {

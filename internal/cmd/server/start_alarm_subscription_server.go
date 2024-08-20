@@ -16,10 +16,8 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,7 +34,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 )
 
-// AlarmSubscriptionServer Server creates and returns the `start alarm-subscription-server` command.
+// Server creates and returns the `start alarm-subscription-server` command.
 func AlarmSubscriptionServer() *cobra.Command {
 	c := NewAlarmSubscriptionServer()
 	result := &cobra.Command{
@@ -75,7 +73,7 @@ func AlarmSubscriptionServer() *cobra.Command {
 	return result
 }
 
-// AlarmSubscriptionServerCommand contains the data and logic needed to run the `start
+// alarmSubscriptionServerCommand contains the data and logic needed to run the `start
 // alarm-subscription-server` command.
 type AlarmSubscriptionServerCommand struct {
 }
@@ -219,6 +217,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	router.Use(metricsWrapper, authenticationWrapper, authorizationWrapper)
 
 	// create k8s client with kube(from env first)
+	//var config *rest.Config
 	kubeClient, err := k8s.NewClient().SetLogger(logger).SetLoggingWrapper(loggingWrapper).Build()
 
 	if err != nil {
@@ -323,12 +322,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		slog.String("address", apiListener.Addr().String()),
 	)
 	apiServer := &http.Server{
-		Addr:              apiListener.Addr().String(),
-		Handler:           router,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		Addr:    apiListener.Addr().String(),
+		Handler: router,
 	}
 	exitHandler.AddServer(apiServer)
 	go func() {
@@ -362,12 +357,8 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	)
 	metricsHandler := promhttp.Handler()
 	metricsServer := &http.Server{
-		Addr:              metricsListener.Addr().String(),
-		Handler:           metricsHandler,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		Addr:    metricsListener.Addr().String(),
+		Handler: metricsHandler,
 	}
 	exitHandler.AddServer(metricsServer)
 	go func() {
@@ -381,9 +372,6 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		}
 	}()
 
-	// Wait for exit signals
-	if err := exitHandler.Wait(ctx); err != nil {
-		return fmt.Errorf("failed to wait for exit signals: %w", err)
-	}
-	return nil
+	// Wait for exit signals:
+	return exitHandler.Wait(ctx)
 }

@@ -23,9 +23,6 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/util/net"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -150,11 +147,12 @@ func (b *AlarmHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
+	var backendTransport http.RoundTripper
+	backendTransport = &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
+			InsecureSkipVerify: true,
 		},
-	})
+	}
 	if b.transportWrapper != nil {
 		backendTransport = b.transportWrapper(backendTransport)
 	}
@@ -317,7 +315,7 @@ func (h *AlarmHandler) getAlertFilter(ctx context.Context, term *search.Term) (f
 
 	// Map filter property for Alertmanager
 	var property string
-	if len(term.Path) == 1 { // nolint: gocritic
+	if len(term.Path) == 1 {
 		property = AlertFilterProperty(term.Path[0]).MapProperty()
 		if property == "" {
 			h.logFallbackError(

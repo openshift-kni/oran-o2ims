@@ -16,10 +16,8 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -80,7 +78,7 @@ func AlarmNotificationServer() *cobra.Command {
 	return result
 }
 
-// AlarmNotificationServerCommand contains the data and logic needed to run the `start
+// alarmNotificationServerCommand contains the data and logic needed to run the `start
 // alarm-notification-server` command.
 type AlarmNotificationServerCommand struct {
 }
@@ -200,6 +198,7 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 	router.Use(metricsWrapper, authenticationWrapper, authorizationWrapper)
 
 	// create k8s client with kube(from env first)
+	//var config *rest.Config
 	kubeClient, err := k8s.NewClient().SetLogger(logger).SetLoggingWrapper(loggingWrapper).Build()
 
 	if err != nil {
@@ -268,7 +267,7 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 		subscriptionsConfigmapName = service.DefaultAlarmConfigmapName
 	}
 
-	// create handler
+	//create handler
 	handler, err := service.NewAlarmNotificationHandler().
 		SetLogger(logger).
 		SetLoggingWrapper(loggingWrapper).
@@ -311,12 +310,8 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 		slog.String("address", apiListener.Addr().String()),
 	)
 	apiServer := &http.Server{
-		Addr:              apiListener.Addr().String(),
-		Handler:           router,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		Addr:    apiListener.Addr().String(),
+		Handler: router,
 	}
 
 	exitHandler.AddServer(apiServer)
@@ -351,12 +346,8 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 	)
 	metricsHandler := promhttp.Handler()
 	metricsServer := &http.Server{
-		Addr:              metricsListener.Addr().String(),
-		Handler:           metricsHandler,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		Addr:    metricsListener.Addr().String(),
+		Handler: metricsHandler,
 	}
 	exitHandler.AddServer(metricsServer)
 	go func() {
@@ -370,9 +361,6 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 		}
 	}()
 
-	// Wait for exit signals
-	if err := exitHandler.Wait(ctx); err != nil {
-		return fmt.Errorf("failed to wait for exit signals: %w", err)
-	}
-	return nil
+	// Wait for exit signals:
+	return exitHandler.Wait(ctx)
 }
