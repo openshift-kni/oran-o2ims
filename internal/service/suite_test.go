@@ -16,10 +16,12 @@ package service
 
 import (
 	"log/slog"
+	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 func TestService(t *testing.T) {
@@ -37,4 +39,9 @@ var _ = BeforeSuite(func() {
 	}
 	handler := slog.NewJSONHandler(GinkgoWriter, options)
 	logger = slog.New(handler)
+
+	// Disable TLS verification, none of these tests use a TLS server anyway so there is no point in running (and
+	// failing) the code that attempts to setup the TLS client.
+	err := os.Setenv(utils.TLSSkipVerifyEnvName, "true")
+	Expect(err).NotTo(HaveOccurred())
 })

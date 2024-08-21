@@ -16,7 +16,6 @@ package service
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,11 +25,9 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/util/net"
-
 	"github.com/imdario/mergo"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -177,11 +174,11 @@ func (b *DeploymentManagerHandlerBuilder) Build() (
 	}
 
 	// Create the HTTP client that we will use to connect to the backend:
-	var backendTransport http.RoundTripper = net.SetTransportDefaults(&http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: utils.GetTLSSkipVerify(), // nolint: gosec  // defaulted to false; logged if disabled
-		},
-	})
+	backendTransport, err := utils.GetDefaultBackendTransport()
+	if err != nil {
+		err = fmt.Errorf("failed to create default HTTP backend transport: %w", err)
+		return
+	}
 	if b.loggingWrapper != nil {
 		backendTransport = b.loggingWrapper(backendTransport)
 	}

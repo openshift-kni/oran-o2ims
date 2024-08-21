@@ -716,10 +716,6 @@ var _ = Describe("Handler wapper", func() {
 	It("Doesn't load insecure keys by default", func() {
 		var err error
 
-		// TODO(alegacy): Remove this override once it is fixed for production
-		err = os.Setenv(utils.TLSSkipVerifyEnvName, "false")
-		Expect(err).ToNot(HaveOccurred())
-
 		// Prepare the server:
 		server, ca := MakeTCPTLSServer()
 		defer func() {
