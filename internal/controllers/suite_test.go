@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 )
 
@@ -47,6 +48,8 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&oranv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&oranv1alpha1.ClusterRequest{}).
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
+		WithStatusSubresource(&hwv1alpha1.NodePool{}).
+		WithStatusSubresource(&hwv1alpha1.Node{}).
 		Build()
 }
 
@@ -87,4 +90,6 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstanceList{})
+	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.NodePool{})
+	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.Node{})
 })
