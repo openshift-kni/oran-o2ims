@@ -764,7 +764,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstanceProcessedStatus(ci *
 func (t *clusterRequestReconcilerTask) updateClusterProvisionStatus(ci *siteconfig.ClusterInstance) {
 	// Search for ClusterInstance Provisioned condition
 	ciProvisionedCondition := meta.FindStatusCondition(
-		ci.Status.Conditions, "Provisioned")
+		ci.Status.Conditions, string(hwv1alpha1.Provisioned))
 
 	if ciProvisionedCondition == nil {
 		crClusterInstanceProcessedCond := meta.FindStatusCondition(
@@ -1335,7 +1335,7 @@ func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Cont
 		)
 	}
 	// Check if provisioning is completed
-	provisionedCondition := meta.FindStatusCondition(nodePool.Status.Conditions, "Provisioned")
+	provisionedCondition := meta.FindStatusCondition(nodePool.Status.Conditions, string(hwv1alpha1.Provisioned))
 	if provisionedCondition != nil && provisionedCondition.Status == metav1.ConditionTrue {
 		t.logger.InfoContext(
 			ctx,
@@ -1553,43 +1553,20 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 
 	if len(nodePool.Status.Conditions) > 0 {
 		provisionedCondition := meta.FindStatusCondition(
-			nodePool.Status.Conditions, "Provisioned")
-		if provisionedCondition != nil && provisionedCondition.Status == metav1.ConditionTrue {
+			nodePool.Status.Conditions, string(hwv1alpha1.Provisioned))
+		if provisionedCondition != nil {
 			utils.SetStatusCondition(&t.object.Status.Conditions,
 				utils.CRconditionTypes.HardwareProvisioned,
-				utils.CRconditionReasons.Completed,
-				metav1.ConditionTrue,
-				"Hareware provisioning completed",
-			)
+				utils.ConditionReason(provisionedCondition.Reason),
+				provisionedCondition.Status,
+				provisionedCondition.Message)
 		} else {
-			provisioningCondition := meta.FindStatusCondition(
-				nodePool.Status.Conditions, "Provisioning")
-			if provisioningCondition != nil && provisioningCondition.Status == metav1.ConditionTrue {
-				utils.SetStatusCondition(&t.object.Status.Conditions,
-					utils.CRconditionTypes.HardwareProvisioned,
-					utils.CRconditionReasons.InProgress,
-					metav1.ConditionFalse,
-					"Hareware provisioning is in progress",
-				)
-			} else {
-				failedCondition := meta.FindStatusCondition(
-					nodePool.Status.Conditions, "Failed")
-				if failedCondition != nil && failedCondition.Status == metav1.ConditionTrue {
-					utils.SetStatusCondition(&t.object.Status.Conditions,
-						utils.CRconditionTypes.HardwareProvisioned,
-						utils.CRconditionReasons.Failed,
-						metav1.ConditionFalse,
-						"Hareware provisioning failed",
-					)
-				} else {
-					utils.SetStatusCondition(&t.object.Status.Conditions,
-						utils.CRconditionTypes.HardwareProvisioned,
-						utils.CRconditionReasons.Unknown,
-						metav1.ConditionUnknown,
-						"Unknown state of hardware provisioning",
-					)
-				}
-			}
+			utils.SetStatusCondition(&t.object.Status.Conditions,
+				utils.CRconditionTypes.HardwareProvisioned,
+				utils.CRconditionReasons.Unknown,
+				metav1.ConditionUnknown,
+				"Unknown state of hardware provisioning",
+			)
 		}
 
 		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
@@ -1605,9 +1582,9 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 		meta.SetStatusCondition(
 			&nodePool.Status.Conditions,
 			metav1.Condition{
-				Type:   "Unknown",
+				Type:   string(hwv1alpha1.Unknown),
 				Status: metav1.ConditionUnknown,
-				Reason: "NotInitialized",
+				Reason: string(hwv1alpha1.NotInitialized),
 			},
 		)
 		if err := utils.UpdateK8sCRStatus(ctx, t.client, nodePool); err != nil {
