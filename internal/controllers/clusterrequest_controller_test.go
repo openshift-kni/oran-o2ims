@@ -7,16 +7,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+type expectedNodeDetails struct {
+	BMCAddress         string
+	BMCCredentialsName string
+	BootMACAddress     string
+}
 
 // The ClusterTemplate and ClusterRequests are still under development, so all the tests
 // will need to be rewritten.
@@ -1491,3 +1500,401 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 		))
 	})
 })
+
+var _ = Describe("renderHardwareTemplate", func() {
+	var (
+		ctx             context.Context
+		c               client.Client
+		reconciler      *ClusterRequestReconciler
+		task            *clusterRequestReconcilerTask
+		clusterInstance *unstructured.Unstructured
+		ct              *oranv1alpha1.ClusterTemplate
+		ctName          = "clustertemplate-a-v1"
+		ctNamespace     = "clustertemplate-a-v4-16"
+		hwTemplateCm    = "hwTemplate-v1"
+		crName          = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Define the cluster instance.
+		clusterInstance = &unstructured.Unstructured{}
+		clusterInstance.SetName(crName)
+		clusterInstance.SetNamespace(ctNamespace)
+		clusterInstance.Object = map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{"role": "master"},
+					map[string]interface{}{"role": "master"},
+					map[string]interface{}{"role": "worker"},
+				},
+			},
+		}
+
+		// Define the cluster request.
+		cr := &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterRequestSpec{
+				ClusterTemplateRef: ctName,
+			},
+		}
+
+		// Define the cluster template.
+		ct = &oranv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ctName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterTemplateSpec{
+				Templates: oranv1alpha1.Templates{
+					HwTemplate: hwTemplateCm,
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &clusterRequestReconcilerTask{
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
+		}
+	})
+
+	It("returns no error when renderHardwareTemplate succeeds", func() {
+		// Ensure the ClusterTemplate is created
+		Expect(c.Create(ctx, ct)).To(Succeed())
+
+		// Define the hardware template config map
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwTemplateCm,
+				Namespace: utils.ORANO2IMSNamespace,
+			},
+			Data: map[string]string{
+				"hwMgrId": "hwmgr",
+				utils.HwTemplateNodePool: `
+- name: master
+  hwProfile: profile-spr-single-processor-64G
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nodePool).ToNot(BeNil())
+		Expect(nodePool.ObjectMeta.Name).To(Equal(clusterInstance.GetName()))
+		Expect(nodePool.ObjectMeta.Namespace).To(Equal(cm.Data[utils.HwTemplatePluginMgr]))
+
+		Expect(nodePool.Spec.CloudID).To(Equal(clusterInstance.GetName()))
+		Expect(nodePool.Labels[clusterRequestNameLabel]).To(Equal(task.object.Name))
+		Expect(nodePool.Labels[clusterRequestNamespaceLabel]).To(Equal(task.object.Namespace))
+
+		Expect(nodePool.Spec.NodeGroup).To(HaveLen(2))
+		for _, group := range nodePool.Spec.NodeGroup {
+			switch group.Name {
+			case "master":
+				Expect(group.Size).To(Equal(2)) // 2 master
+			case "worker":
+				Expect(group.Size).To(Equal(1)) // 1 worker
+			default:
+				Fail(fmt.Sprintf("Unexpected Group Name: %s", group.Name))
+			}
+		}
+	})
+
+	It("returns an error when the HwTemplate is not found", func() {
+		// Ensure the ClusterTemplate is created
+		Expect(c.Create(ctx, ct)).To(Succeed())
+		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(nodePool).To(BeNil())
+		Expect(err.Error()).To(ContainSubstring("failed to get the %s configmap for Hardware Template", hwTemplateCm))
+	})
+
+	It("returns an error when the ClusterTemplate is not found", func() {
+		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(nodePool).To(BeNil())
+		Expect(err.Error()).To(ContainSubstring("failed to get the ClusterTemplate"))
+	})
+})
+
+var _ = Describe("waitForNodePoolProvision", func() {
+	var (
+		ctx         context.Context
+		c           client.Client
+		reconciler  *ClusterRequestReconciler
+		task        *clusterRequestReconcilerTask
+		cr          *oranv1alpha1.ClusterRequest
+		ci          *unstructured.Unstructured
+		np          *hwv1alpha1.NodePool
+		crName      = "cluster-1"
+		ctNamespace = "clustertemplate-a-v4-16"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		// Define the cluster instance.
+		ci = &unstructured.Unstructured{}
+		ci.SetName(crName)
+		ci.SetNamespace(ctNamespace)
+		ci.Object = map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{"role": "master"},
+					map[string]interface{}{"role": "master"},
+					map[string]interface{}{"role": "worker"},
+				},
+			},
+		}
+
+		// Define the cluster request.
+		cr = &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crName,
+			},
+		}
+
+		// Define the node pool.
+		np = &hwv1alpha1.NodePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crName,
+			},
+			// Set up your NodePool object as needed
+			Status: hwv1alpha1.NodePoolStatus{
+				Conditions: []metav1.Condition{},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &clusterRequestReconcilerTask{
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
+		}
+	})
+
+	It("returns false when error fetching NodePool", func() {
+		rt := task.waitForNodePoolProvision(ctx, np)
+		Expect(rt).To(Equal(false))
+	})
+
+	It("returns false when NodePool is not provisioned", func() {
+		provisionedCondition := metav1.Condition{
+			Type:   "Provisioned",
+			Status: metav1.ConditionFalse,
+		}
+		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, np)).To(Succeed())
+
+		rt := task.waitForNodePoolProvision(ctx, np)
+		Expect(rt).To(Equal(false))
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+	})
+
+	It("returns true when NodePool is provisioned", func() {
+		provisionedCondition := metav1.Condition{
+			Type:   "Provisioned",
+			Status: metav1.ConditionTrue,
+		}
+		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, np)).To(Succeed())
+		rt := task.waitForNodePoolProvision(ctx, np)
+		Expect(rt).To(Equal(true))
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+	})
+})
+
+var _ = Describe("updateClusterInstance", func() {
+	var (
+		ctx         context.Context
+		c           client.Client
+		reconciler  *ClusterRequestReconciler
+		task        *clusterRequestReconcilerTask
+		cr          *oranv1alpha1.ClusterRequest
+		ci          *unstructured.Unstructured
+		np          *hwv1alpha1.NodePool
+		crName      = "cluster-1"
+		crNamespace = "clustertemplate-a-v4-16"
+		mn          = "master-node"
+		wn          = "worker-node"
+		mhost       = "node1.test.com"
+		whost       = "node2.test.com"
+		pns         = "hwmgr"
+		masterNode  = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "site-1-master-bmc-secret", "00:00:00:01:20:30", "master", pns, crName)
+		workerNode  = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1", "site-1-worker-bmc-secret", "00:00:00:01:30:10", "worker", pns, crName)
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Define the cluster instance.
+		ci = &unstructured.Unstructured{}
+		ci.SetName(crName)
+		ci.SetNamespace(crNamespace)
+		ci.Object = map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{"role": "master", "hostName": mhost},
+					map[string]interface{}{"role": "worker", "hostName": whost},
+				},
+			},
+		}
+
+		// Define the cluster request.
+		cr = &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crName,
+			},
+		}
+
+		// Define the node pool.
+		np = &hwv1alpha1.NodePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: pns,
+			},
+			Status: hwv1alpha1.NodePoolStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   "Provisioned",
+						Status: "True",
+					},
+				},
+				Properties: hwv1alpha1.Properties{
+					NodeNames: []string{mn, wn},
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &clusterRequestReconcilerTask{
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
+		}
+	})
+
+	It("returns false when failing to get the Node object", func() {
+		rt := task.updateClusterInstance(ctx, ci, np)
+		Expect(rt).To(Equal(false))
+	})
+
+	It("returns true when updateClusterInstance succeeds", func() {
+		nodes := []*hwv1alpha1.Node{masterNode, workerNode}
+		secrets := createSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, pns)
+
+		createResources(c, ctx, nodes, secrets)
+
+		rt := task.updateClusterInstance(ctx, ci, np)
+		Expect(rt).To(Equal(true))
+
+		// Define expected details
+		expectedDetails := []expectedNodeDetails{
+			{
+				BMCAddress:         masterNode.Status.BMC.Address,
+				BMCCredentialsName: masterNode.Status.BMC.CredentialsName,
+				BootMACAddress:     masterNode.Status.BootMACAddress,
+			},
+			{
+				BMCAddress:         workerNode.Status.BMC.Address,
+				BMCCredentialsName: workerNode.Status.BMC.CredentialsName,
+				BootMACAddress:     workerNode.Status.BootMACAddress,
+			},
+		}
+
+		// verify the bmc address, secret and boot mac address are set correctly in the cluster instance
+		verifyClusterInstance(ci, expectedDetails)
+
+		// verify the host name is set in the node status
+		verifyNodeStatus(c, ctx, nodes, mhost, whost)
+	})
+})
+
+func createNode(name, bmcAddress, bmcSecret, mac, groupName, namespace, npName string) *hwv1alpha1.Node {
+	return &hwv1alpha1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: hwv1alpha1.NodeSpec{
+			NodePool:  npName,
+			GroupName: groupName,
+		},
+		Status: hwv1alpha1.NodeStatus{
+			BMC: &hwv1alpha1.BMC{
+				Address:         bmcAddress,
+				CredentialsName: bmcSecret,
+			},
+			BootMACAddress: mac,
+		},
+	}
+}
+
+func createSecrets(names []string, namespace string) []*corev1.Secret {
+	var secrets []*corev1.Secret
+	for _, name := range names {
+		secrets = append(secrets, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+		})
+	}
+	return secrets
+}
+
+func createResources(c client.Client, ctx context.Context, nodes []*hwv1alpha1.Node, secrets []*corev1.Secret) {
+	for _, node := range nodes {
+		Expect(c.Create(ctx, node)).To(Succeed())
+	}
+	for _, secret := range secrets {
+		Expect(c.Create(ctx, secret)).To(Succeed())
+	}
+}
+
+func verifyClusterInstance(ci *unstructured.Unstructured, expectedDetails []expectedNodeDetails) {
+	for i, expected := range expectedDetails {
+		node := ci.Object["spec"].(map[string]interface{})["nodes"].([]interface{})[i].(map[string]interface{})
+		Expect(node["bmcAddress"]).To(Equal(expected.BMCAddress))
+		Expect(node["bmcCredentialsName"].(map[string]interface{})["name"]).To(Equal(expected.BMCCredentialsName))
+		Expect(node["bootMACAddress"]).To(Equal(expected.BootMACAddress))
+	}
+}
+
+func verifyNodeStatus(c client.Client, ctx context.Context, nodes []*hwv1alpha1.Node, mhost, whost string) {
+	for _, node := range nodes {
+		updatedNode := &hwv1alpha1.Node{}
+		Expect(c.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: node.Namespace}, updatedNode)).To(Succeed())
+		switch updatedNode.Spec.GroupName {
+		case "master":
+			Expect(updatedNode.Status.Hostname).To(Equal(mhost))
+		case "worker":
+			Expect(updatedNode.Status.Hostname).To(Equal(whost))
+		default:
+			Fail(fmt.Sprintf("Unexpected GroupName: %s", updatedNode.Spec.GroupName))
+		}
+	}
+}
