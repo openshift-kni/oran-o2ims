@@ -17,6 +17,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
+        description: Node is the schema for an allocated node
         properties:
           apiVersion:
             description: |-
@@ -51,14 +52,14 @@ spec:
             type: object
           status:
             description: |-
-              NodePoolStatus describes the observed state of a request to allocate and prepare
+              NodeStatus describes the observed state of a request to allocate and prepare
               a node that will eventually be part of a deployment manager.
             properties:
               bmc:
                 properties:
                   address:
-                    description: Address contains the URL for accessing the BMC over
-                      the network.
+                    description: The Address contains the URL for accessing the BMC
+                      over the network.
                     type: string
                   credentialsName:
                     description: |-
@@ -70,8 +71,8 @@ spec:
                 type: string
               conditions:
                 description: |-
-                  Conditions represent the observations of the current state of the NodePool. Possible
-                  values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+                  Conditions represent the observations of the NodeStatus's current state.
+                  Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for

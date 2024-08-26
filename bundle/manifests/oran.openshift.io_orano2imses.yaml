@@ -94,7 +94,7 @@ spec:
               metadataServerConfig:
                 default:
                   enabled: true
-                description: MetdataServerConfig contains the configuration for the
+                description: MetadataServerConfig contains the configuration for the
                   metadata server.
                 properties:
                   enabled:

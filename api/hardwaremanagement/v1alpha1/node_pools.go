@@ -51,11 +51,11 @@ type Properties struct {
 // NodePoolStatus describes the observed state of a request to allocate and prepare
 // a node that will eventually be part of a deployment manager.
 type NodePoolStatus struct {
-	// Properties represents the node properties in the pool
+	// Properties represent the node properties in the pool
 	Properties Properties `json:"properties,omitempty"`
 
-	// Conditions represent the observations of the current state of the NodePool. Possible
-	// values of the condition type are `Provisioned` and `Unknown`.
+	// Conditions represent the observations of the NodePool's current state.
+	// Possible values of the condition type are `Provisioned` and `Unknown`.
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 

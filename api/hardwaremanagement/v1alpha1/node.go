@@ -26,7 +26,7 @@ type NodeSpec struct {
 }
 
 type BMC struct {
-	// Address contains the URL for accessing the BMC over the network.
+	// The Address contains the URL for accessing the BMC over the network.
 	Address string `json:"address,omitempty"`
 
 	// CredentialsName is a reference to a secret containing the credentials. That secret
@@ -34,7 +34,7 @@ type BMC struct {
 	CredentialsName string `json:"credentialsName,omitempty"`
 }
 
-// NodePoolStatus describes the observed state of a request to allocate and prepare
+// NodeStatus describes the observed state of a request to allocate and prepare
 // a node that will eventually be part of a deployment manager.
 type NodeStatus struct {
 	BMC *BMC `json:"bmc,omitempty"`
@@ -43,13 +43,13 @@ type NodeStatus struct {
 
 	Hostname string `json:"hostname,omitempty"`
 
-	// Conditions represent the observations of the current state of the NodePool. Possible
-	// values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+	// Conditions represent the observations of the NodeStatus's current state.
+	// Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // Node is the schema for an allocated node
-
+//
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 type Node struct {
