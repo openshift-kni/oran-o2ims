@@ -12,19 +12,18 @@
 # the License.
 #
 
-# Details of the image:
-image_repo:=quay.io/openshift-kni/oran-o2ims
-image_tag:=4.16.0
-
-# Additional flags to pass to the `ginkgo` command.
-ginkgo_flags:=
-
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 4.16.0
+
+# CONTAINER_TOOL defines the container tool to be used for building images.
+# Be aware that the target commands are only tested with Docker which is
+# scaffolded by default. However, you might want to replace it to use other
+# tools. (i.e. podman)
+CONTAINER_TOOL ?= docker
 
 # DEFAULT_CHANNEL defines the default channel used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g DEFAULT_CHANNEL = "stable")
@@ -41,7 +40,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # openshift.io/oran-o2ims-bundle:$VERSION and openshift.io/oran-o2ims-catalog:$VERSION.
-IMAGE_TAG_BASE ?= quay.io/openshift-kni/oran-o2ims-operator
+IMAGE_TAG_BASE ?= quay.io/openshift-kni/oran-o2ims
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -75,11 +74,8 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-# CONTAINER_TOOL defines the container tool to be used for building images.
-# Be aware that the target commands are only tested with Docker which is
-# scaffolded by default. However, you might want to replace it to use other
-# tools. (i.e. podman)
-CONTAINER_TOOL ?= docker
+# Additional flags to pass to the `ginkgo` command.
+ginkgo_flags:=
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -297,11 +293,11 @@ binary:
 
 .PHONY: image
 image:
-	podman build -t "$(image_repo):$(image_tag)" -f Containerfile .
+	podman build -t "$(IMAGE_TAG_BASE):$(VERSION)" -f Containerfile .
 
 .PHONY: push
 push: image
-	podman push "$(image_repo):$(image_tag)"
+	podman push "$(IMAGE_TAG_BASE):$(VERSION)"
 
 .PHONY: generate
 go-generate:
