@@ -4,23 +4,22 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
   creationTimestamp: null
-  name: deploymentmanagerorders.oran.openshift.io
+  name: nodepools.hardwaremanagement.oran.openshift.io
 spec:
-  group: oran.openshift.io
+  group: hardwaremanagement.oran.openshift.io
   names:
-    kind: DeploymentManagerOrder
-    listKind: DeploymentManagerOrderList
-    plural: deploymentmanagerorders
+    kind: NodePool
+    listKind: NodePoolList
+    plural: nodepools
     shortNames:
-    - dmorder
-    singular: deploymentmanagerorder
+    - np
+    singular: nodepool
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: DeploymentManagerOrder is the schema for an order to create one
-          or more deployment managers.
+        description: NodePool is the schema for an allocation request of nodes
         properties:
           apiVersion:
             description: |-
@@ -40,41 +39,47 @@ spec:
           metadata:
             type: object
           spec:
-            description: DeploymentManagerOrderSpec defines the desired state of deployment
-              manager template.
+            description: NodePoolSpec describes a pool of nodes to allocate
             properties:
-              extensions:
-                additionalProperties:
-                  type: string
-                description: Extensions contains additional information that is associated
-                  to the order.
-                type: object
-              id:
-                description: ID is the identifier that will be assigned to the deployment
-                  manager.
+              cloudID:
+                description: |-
+                  CloudID is the identifier of the O-Cloud that generated this request. The hardware
+                  manager may want to use this to tag the nodes in its database, and to generate
+                  statistics.
                 type: string
               location:
-                description: Location is the geographical location of the requested
-                  deployment manager.
                 type: string
-              template:
-                description: |-
-                  Template is the name of the deployment manager template that will be used to create the
-                  deployment manager.
+              nodeGroup:
+                items:
+                  properties:
+                    hwProfile:
+                      type: string
+                    name:
+                      type: string
+                    size:
+                      type: integer
+                  required:
+                  - hwProfile
+                  - name
+                  - size
+                  type: object
+                type: array
+              site:
                 type: string
             required:
-            - id
-            - location
-            - template
+            - cloudID
+            - nodeGroup
+            - site
             type: object
           status:
-            description: DeploymentManagerOrderStatus describes the observed state
-              of a deployment manager order.
+            description: |-
+              NodePoolStatus describes the observed state of a request to allocate and prepare
+              a node that will eventually be part of a deployment manager.
             properties:
               conditions:
                 description: |-
-                  Conditions represents the observations of the current state of the template. Possible
-                  values of the condition type are `Fulfilled` and `Failed`.
+                  Conditions represent the observations of the current state of the NodePool. Possible
+                  values of the condition type are `Provisioned` and `Unknown`.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -143,6 +148,14 @@ spec:
                   - type
                   type: object
                 type: array
+              properties:
+                description: Properties represents the node properties in the pool
+                properties:
+                  nodeNames:
+                    items:
+                      type: string
+                    type: array
+                type: object
             type: object
         type: object
     served: true

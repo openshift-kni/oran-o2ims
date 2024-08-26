@@ -4,23 +4,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
   creationTimestamp: null
-  name: deploymentmanagerorders.oran.openshift.io
+  name: clustertemplates.oran.openshift.io
 spec:
   group: oran.openshift.io
   names:
-    kind: DeploymentManagerOrder
-    listKind: DeploymentManagerOrderList
-    plural: deploymentmanagerorders
-    shortNames:
-    - dmorder
-    singular: deploymentmanagerorder
+    kind: ClusterTemplate
+    listKind: ClusterTemplateList
+    plural: clustertemplates
+    singular: clustertemplate
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: DeploymentManagerOrder is the schema for an order to create one
-          or more deployment managers.
+        description: ClusterTemplate is the Schema for the clustertemplates API
         properties:
           apiVersion:
             description: |-
@@ -40,41 +37,61 @@ spec:
           metadata:
             type: object
           spec:
-            description: DeploymentManagerOrderSpec defines the desired state of deployment
-              manager template.
+            description: ClusterTemplateSpec defines the desired state of ClusterTemplate
             properties:
-              extensions:
-                additionalProperties:
-                  type: string
-                description: Extensions contains additional information that is associated
-                  to the order.
+              inputDataSchema:
+                description: InputDataSchema encapsulates all the schemas required
+                  for ClusterTemplate.
+                properties:
+                  clusterInstanceSchema:
+                    description: |-
+                      ClusterInstanceSchema defines the parameters required for provisioning.
+                      The parameter definitions should follow the OpenAPI V3 schema and
+                      explicitly define required fields.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  policyTemplateSchema:
+                    description: |-
+                      PolicyTemplateSchema defines the parameters required for ACM policies.
+                      The parameter definitions should follow the OpenAPI V3 schema and
+                      explicitly define required fields.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                required:
+                - clusterInstanceSchema
+                - policyTemplateSchema
                 type: object
-              id:
-                description: ID is the identifier that will be assigned to the deployment
-                  manager.
-                type: string
-              location:
-                description: Location is the geographical location of the requested
-                  deployment manager.
-                type: string
-              template:
-                description: |-
-                  Template is the name of the deployment manager template that will be used to create the
-                  deployment manager.
-                type: string
+              templates:
+                description: Templates defines the references to the templates required
+                  for ClusterTemplate.
+                properties:
+                  clusterInstanceDefaults:
+                    description: |-
+                      ClusterInstanceDefaults defines a reference to a configmap with
+                      default values for ClusterInstance
+                    type: string
+                  hwTemplate:
+                    description: HwTemplate defines a reference to a hardware template
+                      config map
+                    type: string
+                  policyTemplateDefaults:
+                    description: |-
+                      PolicyTemplateDefaults defines a reference to a configmap with
+                      default values for ACM policies
+                    type: string
+                required:
+                - clusterInstanceDefaults
+                - hwTemplate
+                - policyTemplateDefaults
+                type: object
             required:
-            - id
-            - location
-            - template
+            - inputDataSchema
+            - templates
             type: object
           status:
-            description: DeploymentManagerOrderStatus describes the observed state
-              of a deployment manager order.
+            description: ClusterTemplateStatus defines the observed state of ClusterTemplate
             properties:
               conditions:
-                description: |-
-                  Conditions represents the observations of the current state of the template. Possible
-                  values of the condition type are `Fulfilled` and `Failed`.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -145,6 +162,11 @@ spec:
                 type: array
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: Spec changes are not allowed for a ClusterTemplate that has passed
+            the validation
+          rule: '!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type==''ClusterTemplateValidated''
+            && c.status==''False'') || oldSelf.spec == self.spec'
     served: true
     storage: true
     subresources:

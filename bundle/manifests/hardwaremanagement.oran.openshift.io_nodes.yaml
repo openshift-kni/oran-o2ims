@@ -4,23 +4,19 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
   creationTimestamp: null
-  name: deploymentmanagerorders.oran.openshift.io
+  name: nodes.hardwaremanagement.oran.openshift.io
 spec:
-  group: oran.openshift.io
+  group: hardwaremanagement.oran.openshift.io
   names:
-    kind: DeploymentManagerOrder
-    listKind: DeploymentManagerOrderList
-    plural: deploymentmanagerorders
-    shortNames:
-    - dmorder
-    singular: deploymentmanagerorder
+    kind: Node
+    listKind: NodeList
+    plural: nodes
+    singular: node
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: DeploymentManagerOrder is the schema for an order to create one
-          or more deployment managers.
         properties:
           apiVersion:
             description: |-
@@ -40,41 +36,42 @@ spec:
           metadata:
             type: object
           spec:
-            description: DeploymentManagerOrderSpec defines the desired state of deployment
-              manager template.
+            description: NodeSpec describes a node presents a hardware server
             properties:
-              extensions:
-                additionalProperties:
-                  type: string
-                description: Extensions contains additional information that is associated
-                  to the order.
-                type: object
-              id:
-                description: ID is the identifier that will be assigned to the deployment
-                  manager.
+              groupName:
                 type: string
-              location:
-                description: Location is the geographical location of the requested
-                  deployment manager.
+              hwProfile:
                 type: string
-              template:
-                description: |-
-                  Template is the name of the deployment manager template that will be used to create the
-                  deployment manager.
+              nodePool:
                 type: string
             required:
-            - id
-            - location
-            - template
+            - groupName
+            - hwProfile
+            - nodePool
             type: object
           status:
-            description: DeploymentManagerOrderStatus describes the observed state
-              of a deployment manager order.
+            description: |-
+              NodePoolStatus describes the observed state of a request to allocate and prepare
+              a node that will eventually be part of a deployment manager.
             properties:
+              bmc:
+                properties:
+                  address:
+                    description: Address contains the URL for accessing the BMC over
+                      the network.
+                    type: string
+                  credentialsName:
+                    description: |-
+                      CredentialsName is a reference to a secret containing the credentials. That secret
+                      should contain the keys `username` and `password`.
+                    type: string
+                type: object
+              bootMACAddress:
+                type: string
               conditions:
                 description: |-
-                  Conditions represents the observations of the current state of the template. Possible
-                  values of the condition type are `Fulfilled` and `Failed`.
+                  Conditions represent the observations of the current state of the NodePool. Possible
+                  values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -143,6 +140,8 @@ spec:
                   - type
                   type: object
                 type: array
+              hostname:
+                type: string
             type: object
         type: object
     served: true
