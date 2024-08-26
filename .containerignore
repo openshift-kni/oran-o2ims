@@ -10,3 +10,4 @@
 !/api
 !/bundle
 !/vendor
+!/index_build_tmp*
