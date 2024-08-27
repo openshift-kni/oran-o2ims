@@ -164,6 +164,28 @@ spec:
                     description: Contains the namespace of the created NodePool.
                     type: string
                 type: object
+              policies:
+                description: Holds policies that are matched with the managed cluster
+                  created by the clusterRequest.
+                items:
+                  description: PolicyDetails holds information about an ACM policy.
+                  properties:
+                    compliant:
+                      description: |-
+                        The compliance of the managedcluster created through a clusterRequest with the current
+                        policy.
+                      type: string
+                    policyName:
+                      description: The policy's name.
+                      type: string
+                    policyNamespace:
+                      description: The policy's namespace.
+                      type: string
+                    remediationAction:
+                      description: The policy's remediation action.
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true

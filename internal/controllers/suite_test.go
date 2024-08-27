@@ -52,6 +52,15 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&hwv1alpha1.NodePool{}).
 		WithStatusSubresource(&hwv1alpha1.Node{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
+		WithIndex(
+			&oranv1alpha1.ClusterRequest{}, "status.clusterInstanceRef.name",
+			func(rawObj client.Object) []string {
+				resource := rawObj.(*oranv1alpha1.ClusterRequest)
+				if resource.Status.ClusterInstanceRef != nil {
+					return []string{resource.Status.ClusterInstanceRef.Name}
+				}
+				return nil
+			}).
 		Build()
 }
 

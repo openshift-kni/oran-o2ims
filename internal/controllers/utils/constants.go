@@ -135,5 +135,7 @@ const (
 
 // Label specific to ACM child policies.
 const (
-	ChildPolicyLabel = "policy.open-cluster-management.io/root-policy"
+	ChildPolicyRootPolicyLabel       = "policy.open-cluster-management.io/root-policy"
+	ChildPolicyClusterNameLabel      = "policy.open-cluster-management.io/cluster-name"
+	ChildPolicyClusterNamespaceLabel = "policy.open-cluster-management.io/cluster-namespace"
 )
