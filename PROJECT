@@ -4,7 +4,7 @@
 # More info: https://book.kubebuilder.io/reference/project-config.html
 domain: openshift.io
 layout:
-- go.kubebuilder.io/v4
+- go.kubebuilder.io/v3
 multigroup: true
 projectName: oran-o2ims
 repo: oran-o2ims

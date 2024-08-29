@@ -242,7 +242,7 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 		$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build
-bundle-build: ## Build the bundle image.
+bundle-build: bundle ## Build the bundle image.
 		$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
@@ -254,13 +254,13 @@ OPM = ./bin/opm
 opm: ## Download opm locally if necessary.
 ifeq (,$(wildcard $(OPM)))
 ifeq (,$(shell which opm 2>/dev/null))
-		@{ \
-		set -e ;\
-		mkdir -p $(dir $(OPM)) ;\
-		OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
-		curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.23.0/$${OS}-$${ARCH}-opm ;\
-		chmod +x $(OPM) ;\
-		}
+	@{ \
+	set -e ;\
+	mkdir -p $(dir $(OPM)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.28.0/$${OS}-$${ARCH}-opm ;\
+	chmod +x $(OPM) ;\
+	}
 else
 OPM = $(shell which opm)
 endif
@@ -283,7 +283,7 @@ endif
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
 .PHONY: catalog-build
 catalog-build: opm ## Build a catalog image.
-		$(OPM) index add --container-tool docker --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
+		$(OPM) index add --container-tool $(CONTAINER_TOOL) --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
 
 # Push the catalog image.
 .PHONY: catalog-push

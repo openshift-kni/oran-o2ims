@@ -30,7 +30,7 @@ type ServerConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
-// MetdataServerConfig contains the configuration for the metadata server.
+// MetadataServerConfig contains the configuration for the metadata server.
 type MetadataServerConfig struct {
 	//+kubebuilder:default:={enabled:true}
 	ServerConfig `json:",inline"`
