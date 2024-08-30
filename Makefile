@@ -12,10 +12,6 @@
 # the License.
 #
 
-# Details of the image:
-image_repo:=quay.io/openshift-kni/oran-o2ims
-image_tag:=4.16.0
-
 # Additional flags to pass to the `ginkgo` command.
 ginkgo_flags:=
 
@@ -294,14 +290,6 @@ catalog-push: ## Push a catalog image.
 .PHONY: binary
 binary:
 	go build -mod=vendor
-
-.PHONY: image
-image:
-	podman build -t "$(image_repo):$(image_tag)" -f Containerfile .
-
-.PHONY: push
-push: image
-	podman push "$(image_repo):$(image_tag)"
 
 .PHONY: generate
 go-generate:
