@@ -42,7 +42,8 @@ type ClusterRequestSpec struct {
 // ClusterTemplateInput provides the input data that follows the schema defined in the referenced ClusterTemplate.
 type ClusterTemplateInput struct {
 	// ClusterInstanceInput provides the input values required for provisioning.
-	// The input follows the schema defined in the referenced ClusterTemplate's spec.inputDataSchema.clusterInstanceSchema.
+	// The input must adhere to the schema defined in the referenced ClusterTemplate's
+	// spec.inputDataSchema.clusterInstanceSchema.
 	// +kubebuilder:validation:Type=object
 	// +kubebuilder:pruning:PreserveUnknownFields
 	ClusterInstanceInput runtime.RawExtension `json:"clusterInstanceInput"`

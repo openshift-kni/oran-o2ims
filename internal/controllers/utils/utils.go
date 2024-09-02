@@ -51,9 +51,40 @@ func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Objec
 	return nil
 }
 
-func ValidateJsonAgainstJsonSchema(schema, input string) error {
-	schemaLoader := gojsonschema.NewStringLoader(schema)
-	inputLoader := gojsonschema.NewStringLoader(input)
+// DisallowUnknownFieldsInSchema updates a schema by adding "additionalProperties": false
+// to all objects/arrays that define "properties". This ensures that any unknown fields
+// not defined in the schema will be disallowed during validation.
+func DisallowUnknownFieldsInSchema(schema map[string]any) {
+	// Check if the current schema level has "properties" defined
+	if properties, hasProperties := schema["properties"]; hasProperties {
+		// If "additionalProperties" is not already set, add it with the value false
+		if _, exists := schema["additionalProperties"]; !exists {
+			schema["additionalProperties"] = false
+		}
+
+		// Recurse into each property defined under "properties"
+		if propsMap, ok := properties.(map[string]any); ok {
+			for _, propValue := range propsMap {
+				if propSchema, ok := propValue.(map[string]any); ok {
+					DisallowUnknownFieldsInSchema(propSchema)
+				}
+			}
+		}
+	}
+
+	// Recurse into each property defined under "items"
+	if items, hasItems := schema["items"]; hasItems {
+		if itemSchema, ok := items.(map[string]any); ok {
+			DisallowUnknownFieldsInSchema(itemSchema)
+		}
+	}
+
+	// Ignore other keywords that could have "properties"
+}
+
+func ValidateJsonAgainstJsonSchema(schema, input map[string]any) error {
+	schemaLoader := gojsonschema.NewGoLoader(schema)
+	inputLoader := gojsonschema.NewGoLoader(input)
 
 	result, err := gojsonschema.Validate(schemaLoader, inputLoader)
 	if err != nil {
@@ -64,13 +95,12 @@ func ValidateJsonAgainstJsonSchema(schema, input string) error {
 	if result.Valid() {
 		return nil
 	} else {
-		errorDescription := ""
+		var errs []string
 		for _, description := range result.Errors() {
-			errorDescription = errorDescription + " " + description.String()
+			errs = append(errs, description.String())
 		}
 
-		return fmt.Errorf(
-			fmt.Sprintf("The input does not match the schema: %s", errorDescription))
+		return fmt.Errorf("invalid input: %s", strings.Join(errs, "; "))
 	}
 }
 
@@ -462,6 +492,9 @@ func RenderTemplateForK8sCR(templateName, templatePath string, templateDataObj m
 	// Create a FuncMap with template functions
 	funcMap := sprig.TxtFuncMap()
 	funcMap["toYaml"] = toYaml
+	funcMap["validateNonEmpty"] = validateNonEmpty
+	funcMap["validateArrayType"] = validateArrayType
+	funcMap["validateMapType"] = validateMapType
 
 	// Parse the template
 	tmpl, err := template.New(templateName).Funcs(funcMap).Parse(string(tmplContent))
@@ -485,7 +518,7 @@ func RenderTemplateForK8sCR(templateName, templatePath string, templateDataObj m
 }
 
 // toYaml converts an interface to a YAML string and trims the trailing newline
-func toYaml(v interface{}) (string, error) {
+func toYaml(v any) (string, error) {
 	// yaml.Marshal adds a trailing newline to its output
 	yamlData, err := yaml.Marshal(v)
 	if err != nil {
@@ -493,6 +526,39 @@ func toYaml(v interface{}) (string, error) {
 	}
 
 	return strings.TrimRight(string(yamlData), "\n"), nil
+}
+
+// validateNonEmpty validates the input and fails if it is not provided or empty
+func validateNonEmpty(fieldName string, input any) (any, error) {
+	// Check if the input is empty (you can adjust this condition as per your validation logic)
+	if input == nil {
+		return nil, fmt.Errorf("%s must be provided", fieldName)
+	}
+
+	v := reflect.ValueOf(input)
+	if v.Kind() == reflect.String || v.Kind() == reflect.Slice || v.Kind() == reflect.Map {
+		if v.Len() == 0 {
+			return nil, fmt.Errorf("%s cannot be empty", fieldName)
+		}
+	}
+
+	return input, nil
+}
+
+// validateMapType checks if the input is of type map and raises an error if not.
+func validateMapType(fieldName string, input any) (any, error) {
+	if reflect.TypeOf(input).Kind() != reflect.Map {
+		return nil, fmt.Errorf("%s must be of type map", fieldName)
+	}
+	return input, nil
+}
+
+// validateArrayType checks if the input is of type slice (array) and raises an error if not.
+func validateArrayType(fieldName string, input any) (any, error) {
+	if reflect.TypeOf(input).Kind() != reflect.Slice {
+		return nil, fmt.Errorf("%s must be of type array", fieldName)
+	}
+	return input, nil
 }
 
 // extractBeforeDot returns the strubstring before the first dot.

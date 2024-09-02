@@ -30,3 +30,18 @@ func (node *NodeSpec) ExtraAnnotationSearch(kind string, cluster *ClusterInstanc
 	}
 	return cluster.ExtraAnnotationSearch(kind)
 }
+
+// ExtraLabelSearch Looks up a specific manifest label for this cluster
+func (c *ClusterInstanceSpec) ExtraLabelSearch(kind string) (map[string]string, bool) {
+	labels, ok := c.ExtraLabels[kind]
+	return labels, ok
+}
+
+// ExtraLabelSearch Looks up a specific manifest label for this node, with fallback to cluster
+func (node *NodeSpec) ExtraLabelSearch(kind string, cluster *ClusterInstanceSpec) (map[string]string, bool) {
+	labels, ok := node.ExtraLabels[kind]
+	if ok {
+		return labels, ok
+	}
+	return cluster.ExtraLabelSearch(kind)
+}

@@ -169,8 +169,8 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 		return requeueWithError(err)
 	}
 
-	// Render the ClusterInstance template
-	renderedClusterInstance, err := t.renderClusterInstanceTemplate(ctx)
+	// Render and validate ClusterInstance
+	renderedClusterInstance, err := t.handleRenderClusterInstance(ctx)
 	if err != nil {
 		if utils.IsInputError(err) {
 			return doNotRequeue(), nil
@@ -288,16 +288,23 @@ func (t *clusterRequestReconcilerTask) validateClusterRequestCR(ctx context.Cont
 		return utils.NewInputError("the clustertemplate validation has failed")
 	}
 
-	// Validate the merged clusterinstance input data matches the schema
-	mergedClusterInstanceData, err := t.getMergedClusterInputData(ctx, clusterTemplate, utils.ClusterInstanceDataType)
+	// Validate the clusterinstance input from ClusterRequest against the schema
+	clusterTemplateInputMap, err := t.getClusterTemplateInputFromClusterRequest(
+		&t.object.Spec.ClusterTemplateInput.ClusterInstanceInput)
 	if err != nil {
-		return fmt.Errorf("failed to get merged cluster input data: %w", err)
+		return utils.NewInputError("failed to get the ClusterTemplate input for ClusterInstance: %s", err.Error())
 	}
 	err = t.validateClusterTemplateInputMatchesSchema(
 		&clusterTemplate.Spec.InputDataSchema.ClusterInstanceSchema,
-		mergedClusterInstanceData)
+		clusterTemplateInputMap,
+		utils.ClusterInstanceDataType)
 	if err != nil {
 		return utils.NewInputError("failed to validate ClusterTemplate input matches schema: %s", err.Error())
+	}
+	// Get the merged clusterinstance input data
+	mergedClusterInstanceData, err := t.getMergedClusterInputData(ctx, clusterTemplate, utils.ClusterInstanceDataType)
+	if err != nil {
+		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
 
 	// Validate the merged policytemplate input data matches the schema
@@ -307,7 +314,8 @@ func (t *clusterRequestReconcilerTask) validateClusterRequestCR(ctx context.Cont
 	}
 	err = t.validateClusterTemplateInputMatchesSchema(
 		&clusterTemplate.Spec.InputDataSchema.PolicyTemplateSchema,
-		mergedPolicyTemplateData)
+		mergedPolicyTemplateData,
+		utils.PolicyTemplateDataType)
 	if err != nil {
 		return utils.NewInputError("failed to validate ClusterTemplate input matches schema: %s", err.Error())
 	}
@@ -372,6 +380,47 @@ func (t *clusterRequestReconcilerTask) getMergedClusterInputData(
 	return mergedClusterDataMap, nil
 }
 
+// handleRenderClusterInstance handles the ClusterInstance rendering and validation.
+func (t *clusterRequestReconcilerTask) handleRenderClusterInstance(ctx context.Context) (*unstructured.Unstructured, error) {
+	renderedClusterInstance, err := t.renderClusterInstanceTemplate(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to render and validate the ClusterInstance for ClusterRequest",
+			slog.String("name", t.object.Name),
+			slog.String("error", err.Error()),
+		)
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.CRconditionTypes.ClusterInstanceRendered,
+			utils.CRconditionReasons.Failed,
+			metav1.ConditionFalse,
+			"Failed to render and validate ClusterInstance: "+err.Error(),
+		)
+	} else {
+		t.logger.InfoContext(
+			ctx,
+			"Successfully rendered the ClusterInstance and validated it with dry-run",
+			slog.String("name", t.object.Name),
+		)
+
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.CRconditionTypes.ClusterInstanceRendered,
+			utils.CRconditionReasons.Completed,
+			metav1.ConditionTrue,
+			"ClusterInstance rendered and passed dry-run validation",
+		)
+	}
+
+	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+		return nil, fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to handle ClusterInstance rendering and validation: %w", err)
+	}
+	return renderedClusterInstance, err
+}
+
 func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 	ctx context.Context) (*unstructured.Unstructured, error) {
 	t.logger.InfoContext(
@@ -386,26 +435,10 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		"Cluster": t.clusterInput.clusterInstanceData,
 	}
 
-	// TODO: Consider unmarshalling into siteconfig.ClusterInstance type
-	// to catch any type issue in advance
 	renderedClusterInstance, err := utils.RenderTemplateForK8sCR(
 		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to render the ClusterInstance template for ClusterRequest",
-			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
-		)
-
-		// Something went wrong with rendering, and it's unlikely to be recoverable
-		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.CRconditionTypes.ClusterInstanceRendered,
-			utils.CRconditionReasons.Failed,
-			metav1.ConditionFalse,
-			"Failed to render the ClusterInstance template: "+err.Error(),
-		)
-		err = utils.NewInputError(err.Error())
+		return nil, utils.NewInputError("failed to render the ClusterInstance template for ClusterRequest: %w", err)
 	} else {
 		// Add ClusterRequest labels to the generated ClusterInstance
 		labels := make(map[string]string)
@@ -413,27 +446,20 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		labels[clusterRequestNamespaceLabel] = t.object.Namespace
 		renderedClusterInstance.SetLabels(labels)
 
-		t.logger.InfoContext(
-			ctx,
-			"Successfully rendered ClusterInstance template for ClusterRequest",
-			slog.String("name", t.object.Name),
-		)
+		// Create the ClusterInstance namespace.
+		err = t.createClusterInstanceNamespace(ctx, renderedClusterInstance.GetName())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cluster namespace %s: %w", renderedClusterInstance.GetName(), err)
+		}
 
-		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.CRconditionTypes.ClusterInstanceRendered,
-			utils.CRconditionReasons.Completed,
-			metav1.ConditionTrue,
-			"Rendered ClusterInstance template successfully",
-		)
+		// Validate the rendered ClusterInstance with dry-run
+		isDryRun := true
+		_, err = t.applyClusterInstance(ctx, renderedClusterInstance, isDryRun)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
+		}
 	}
 
-	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-		return nil, fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to render ClusterInstanceTemplate: %w", err)
-	}
 	return renderedClusterInstance, nil
 }
 
@@ -600,7 +626,9 @@ func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplate
 		// A shallow copy of src map
 		// Both maps reference to the same underlying data
 		mergedClusterData = maps.Clone(clusterTemplateInputDefaults)
-		err := utils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, true) // clusterTemplateInput overrides the defaults
+
+		checkType := false
+		err := utils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, checkType) // clusterTemplateInput overrides the defaults
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge the clusterTemplateInput(src) with the defaults(dst): %w", err)
 		}
@@ -615,8 +643,9 @@ func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplate
 	return mergedClusterData, nil
 }
 
-// handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
-func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance *unstructured.Unstructured, isDryRun bool) (*siteconfig.ClusterInstance, error) {
+	var operationType string
+
 	// Query the ClusterInstance and its status.
 	existingClusterInstance := &siteconfig.ClusterInstance{}
 	err := t.client.Get(
@@ -627,33 +656,28 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		existingClusterInstance)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to get ClusterInstance: %w", err)
+			return nil, fmt.Errorf("failed to get ClusterInstance: %w", err)
+		}
+
+		operationType = utils.OperationTypeCreated
+		opts := []client.CreateOption{}
+		if isDryRun {
+			opts = append(opts, client.DryRunAll)
+			operationType = utils.OperationTypeDryRun
 		}
 
 		// Create the ClusterInstance
-		err = t.client.Create(ctx, clusterInstance)
+		err = t.client.Create(ctx, clusterInstance, opts...)
 		if err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return fmt.Errorf("failed to create ClusterInstance: %w", err)
+				return nil, fmt.Errorf("failed to create ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
-			err = utils.NewInputError(err.Error())
-			t.updateClusterInstanceProcessedStatus(nil, err)
-		} else {
-			t.logger.InfoContext(
-				ctx,
-				fmt.Sprintf(
-					"Created ClusterInstance %s in the namespace %s",
-					clusterInstance.GetName(),
-					clusterInstance.GetNamespace(),
-				),
-			)
+			return nil, utils.NewInputError(err.Error())
 		}
 	} else {
 		// TODO: only update the existing clusterInstance when a list of allowed fields are changed
 		// TODO: What about if the ClusterInstance is not generated by a ClusterRequest?
-		t.updateClusterInstanceProcessedStatus(existingClusterInstance, nil)
-		t.updateClusterProvisionStatus(existingClusterInstance)
 
 		// Make sure these fields from existing object are copied
 		clusterInstance.SetResourceVersion(existingClusterInstance.GetResourceVersion())
@@ -661,25 +685,40 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		clusterInstance.SetLabels(existingClusterInstance.GetLabels())
 		clusterInstance.SetAnnotations(existingClusterInstance.GetAnnotations())
 
+		operationType = utils.OperationTypeUpdated
+		opts := []client.PatchOption{}
+		if isDryRun {
+			opts = append(opts, client.DryRunAll)
+			operationType = utils.OperationTypeDryRun
+		}
 		patch := client.MergeFrom(existingClusterInstance.DeepCopy())
-		if err := t.client.Patch(ctx, clusterInstance, patch); err != nil {
+		if err := t.client.Patch(ctx, clusterInstance, patch, opts...); err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return fmt.Errorf("failed to patch ClusterInstance: %w", err)
+				return nil, fmt.Errorf("failed to patch ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
-			err = utils.NewInputError(err.Error())
-			t.updateClusterInstanceProcessedStatus(nil, err)
-		} else {
-			t.logger.InfoContext(
-				ctx,
-				fmt.Sprintf(
-					"Updated ClusterInstance %s in the namespace %s",
-					clusterInstance.GetName(),
-					clusterInstance.GetNamespace(),
-				),
-			)
+			return nil, utils.NewInputError(err.Error())
 		}
 	}
+
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf(
+			"Rendered ClusterInstance %s in the namespace %s %s",
+			clusterInstance.GetName(),
+			clusterInstance.GetNamespace(),
+			operationType,
+		),
+	)
+	return existingClusterInstance, nil
+}
+
+// handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
+func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+	isDryRun := false
+	existingClusterInstance, err := t.applyClusterInstance(ctx, clusterInstance, isDryRun)
+	t.updateClusterInstanceProcessedStatus(existingClusterInstance, err)
+	t.updateClusterProvisionStatus(existingClusterInstance)
 
 	if t.object.Status.ClusterInstanceRef == nil {
 		t.object.Status.ClusterInstanceRef = &oranv1alpha1.ClusterInstanceRef{}
@@ -717,6 +756,9 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
 	}
 
+	if err != nil {
+		return fmt.Errorf("failed to handle ClusterInstallation: %w", err)
+	}
 	return nil
 }
 
@@ -854,6 +896,10 @@ func (t *clusterRequestReconcilerTask) updateClusterInstanceProcessedStatus(ci *
 }
 
 func (t *clusterRequestReconcilerTask) updateClusterProvisionStatus(ci *siteconfig.ClusterInstance) {
+	if ci == nil {
+		return
+	}
+
 	// Search for ClusterInstance Provisioned condition
 	ciProvisionedCondition := meta.FindStatusCondition(
 		ci.Status.Conditions, string(hwv1alpha1.Provisioned))
@@ -885,14 +931,8 @@ func (t *clusterRequestReconcilerTask) createOrUpdateClusterResources(
 
 	clusterName := clusterInstance.GetName()
 
-	// Create the clusterInstance namespace.
-	err := t.createClusterInstanceNamespace(ctx, clusterName)
-	if err != nil {
-		return fmt.Errorf("failed to create cluster namespace %s: %w", clusterName, err)
-	}
-
 	// TODO: remove the BMC secrets creation when hw plugin is ready
-	err = t.createClusterInstanceBMCSecrets(ctx, clusterName)
+	err := t.createClusterInstanceBMCSecrets(ctx, clusterName)
 	if err != nil {
 		return err
 	}
@@ -1242,20 +1282,23 @@ func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Conte
 // validateClusterTemplateInputMatchesSchema validates if the given clusterTemplateInput matches the
 // provided inputDataSchema of the ClusterTemplate
 func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema(
-	clusterTemplateInputSchema *runtime.RawExtension, clusterTemplateInput map[string]any) error {
-
-	// Get the input data in string format.
-	jsonString, err := json.Marshal(clusterTemplateInput)
+	clusterTemplateInputSchema *runtime.RawExtension, clusterTemplateInput map[string]any, dataType string) error {
+	// Get the schema
+	schemaMap := make(map[string]any)
+	err := json.Unmarshal(clusterTemplateInputSchema.Raw, &schemaMap)
 	if err != nil {
-		return fmt.Errorf("error marshaling the ClusterTemplate input data: %w", err)
+		return fmt.Errorf("error marshaling the ClusterTemplate schema data: %w", err)
+	}
+	if dataType == utils.ClusterInstanceDataType {
+		utils.DisallowUnknownFieldsInSchema(schemaMap)
 	}
 
 	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
 	err = utils.ValidateJsonAgainstJsonSchema(
-		string(clusterTemplateInputSchema.Raw), string(jsonString))
+		schemaMap, clusterTemplateInput)
 	if err != nil {
-		return fmt.Errorf("the provided clusterTemplateInput does not "+
-			"match the schema from the ClusterTemplate (%s): %w", t.object.Spec.ClusterTemplateRef, err)
+		return fmt.Errorf("the provided clusterTemplateInput for %s does not "+
+			"match the schema from the ClusterTemplate (%s): %w", dataType, t.object.Spec.ClusterTemplateRef, err)
 	}
 
 	return nil
@@ -1392,8 +1435,10 @@ func (r *ClusterRequestReconciler) handleFinalizer(
 		r.Logger.Info("Removing ClusterRequest finalizer", "name", clusterRequest.Name)
 		patch := client.MergeFrom(clusterRequest.DeepCopy())
 		if controllerutil.RemoveFinalizer(clusterRequest, clusterRequestFinalizer) {
-			err := r.Patch(ctx, clusterRequest, patch)
-			return ctrl.Result{}, true, fmt.Errorf("failed to patch ClusterRequest: %w", err)
+			if err := r.Patch(ctx, clusterRequest, patch); err != nil {
+				return ctrl.Result{}, true, fmt.Errorf("failed to patch ClusterRequest: %w", err)
+			}
+			return ctrl.Result{}, true, nil
 		}
 	}
 	return ctrl.Result{}, false, nil
