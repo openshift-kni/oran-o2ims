@@ -148,6 +148,7 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
+    olm.skipRange: '>=4.16.0 <4.16.999'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
     operators.operatorframework.io/builder: operator-sdk-v1.23.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -585,4 +586,5 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat
+  replaces: oran-o2ims.v0.0.0
   version: 4.16.0
