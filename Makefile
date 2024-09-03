@@ -56,7 +56,7 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.33.0
+OPERATOR_SDK_VERSION ?= v1.36.1
 
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
@@ -215,35 +215,39 @@ $(ENVTEST): $(LOCALBIN)
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
+OPERATOR_SDK_VERSION_INSTALLED = $(shell $(OPERATOR_SDK) version 2>/dev/null | sed 's/^operator-sdk version: "\([^"]*\).*/\1/')
 operator-sdk: ## Download operator-sdk locally if necessary.
-ifeq (,$(wildcard $(OPERATOR_SDK)))
-ifeq (, $(shell which operator-sdk 2>/dev/null))
-		@{ \
+ifneq ($(OPERATOR_SDK_VERSION),$(OPERATOR_SDK_VERSION_INSTALLED))
+	@echo "Previously installed operator-sdk: $(OPERATOR_SDK_VERSION_INSTALLED)"
+	@echo "Downloading operator-sdk $(OPERATOR_SDK_VERSION)"
+	@{ \
 		set -e ;\
 		mkdir -p $(dir $(OPERATOR_SDK)) ;\
 		OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
 		curl -sSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH} ;\
 		chmod +x $(OPERATOR_SDK) ;\
-		}
-else
-OPERATOR_SDK = $(shell which operator-sdk)
-endif
+	}
 endif
 
 .PHONY: bundle
-bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
-		$(OPERATOR_SDK) generate kustomize manifests --apis-dir api/ -q
-		cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-		$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
-		$(OPERATOR_SDK) bundle validate ./bundle
+bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+	$(OPERATOR_SDK) generate kustomize manifests --apis-dir api/ -q
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(OPERATOR_SDK) bundle validate ./bundle
+	sed -i '/^[[:space:]]*createdAt:/d' bundle/manifests/oran-o2ims.clusterserviceversion.yaml
 
 .PHONY: bundle-build
 bundle-build: bundle ## Build the bundle image.
-		$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-		$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+
+.PHONY: bundle-check
+bundle-check: bundle
+	hack/check-git-tree.sh
 
 .PHONY: opm
 OPM = ./bin/opm
@@ -321,7 +325,7 @@ deps-update:
 	hack/install_test_deps.sh
 
 .PHONY: ci-job
-ci-job: deps-update lint fmt test
+ci-job: deps-update generate fmt vet lint fmt test bundle-check
 
 .PHONY: clean
 clean:
