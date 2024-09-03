@@ -17,13 +17,14 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
+    olm.skipRange: '>=4.16.0 <4.16.999'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
     provider: Red Hat
     repository: https://github.com/openshift-kni/oran-o2ims
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v0.0.0
+  name: oran-o2ims.v4.16.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -82,4 +83,5 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat
+  replaces: oran-o2ims.v0.0.0
   version: 0.0.1
