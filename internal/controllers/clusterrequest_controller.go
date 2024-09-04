@@ -77,6 +77,10 @@ type nodeInfo struct {
 	nodeName       string
 }
 
+type deleteOrUpdateEvent interface {
+	event.UpdateEvent | event.DeleteEvent
+}
+
 const (
 	clusterRequestFinalizer      = "clusterrequest.oran.openshift.io/finalizer"
 	clusterRequestNameLabel      = "clusterrequest.oran.openshift.io/name"
@@ -727,12 +731,7 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 	policies := &policiesv1.PolicyList{}
 	listOpts := []client.ListOption{
 		client.HasLabels{utils.ChildPolicyRootPolicyLabel},
-		client.MatchingLabels(
-			map[string]string{
-				utils.ChildPolicyClusterNameLabel:      t.object.Status.ClusterInstanceRef.Name,
-				utils.ChildPolicyClusterNamespaceLabel: t.object.Status.ClusterInstanceRef.Name,
-			},
-		),
+		client.InNamespace(t.object.Status.ClusterInstanceRef.Name),
 	}
 
 	err := t.client.List(ctx, policies, listOpts...)
@@ -748,7 +747,7 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 	for _, policy := range policies.Items {
 		if policy.Status.ComplianceState == policiesv1.NonCompliant {
 			allPoliciesCompliant = false
-			if policy.Spec.RemediationAction == policiesv1.Enforce || policy.Spec.RemediationAction == "enforce" {
+			if strings.EqualFold(string(policy.Spec.RemediationAction), string(policiesv1.Enforce)) {
 				nonCompliantPolicyInEnforce = true
 			}
 		}
@@ -1823,80 +1822,64 @@ func (r *ClusterRequestReconciler) findManagedClusterForClusterRequest(
 	}
 }
 
-// findPoliciesForClusterRequestsForDelete: Finds if the deleted child policy matches managed clusters
-// created through ClusterRequests.
-func (r *ClusterRequestReconciler) findPoliciesForClusterRequestsForDelete(
-	ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+// findPoliciesForClusterRequests creates reconciliation requests for the ClusterRequests
+// whose associated ManagedClusters have matched policies Updated or Deleted.
+func findPoliciesForClusterRequests[T deleteOrUpdateEvent](
+	ctx context.Context, c client.Client, e T, q workqueue.RateLimitingInterface) {
 
-	policy := e.Object.(*policiesv1.Policy)
-	listOpts := []client.ListOption{
-		client.MatchingFields{
-			"status.clusterInstanceRef.name": policy.Namespace,
-		},
-	}
-
-	clusterRequests := &oranv1alpha1.ClusterRequestList{}
-	err := r.Client.List(ctx, clusterRequests, listOpts...)
-	if err != nil {
-		r.Logger.Error("[findPolicyForManagedClustersOfClusterRequests] Error listing ClusterRequests. ", "Error: ", err)
+	policy := &policiesv1.Policy{}
+	switch evt := any(e).(type) {
+	case event.UpdateEvent:
+		policy = evt.ObjectOld.(*policiesv1.Policy)
+	case event.DeleteEvent:
+		policy = evt.Object.(*policiesv1.Policy)
+	default:
+		// Only Update and Delete events are supported
 		return
 	}
 
-	for _, clusterRequest := range clusterRequests.Items {
+	// Get the ClusterInstance.
+	clusterInstance := &siteconfig.ClusterInstance{}
+	err := c.Get(ctx, types.NamespacedName{
+		Namespace: policy.Namespace,
+		Name:      policy.Namespace,
+	}, clusterInstance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Return as the ManagedCluster for this Namespace is not deployed/managed by ClusterInstance.
+			return
+		}
+		return
+	}
+
+	clusterRequest, okCR := clusterInstance.GetLabels()[clusterRequestNameLabel]
+	clusterRequestNs, okCRNs := clusterInstance.GetLabels()[clusterRequestNamespaceLabel]
+	if okCR && okCRNs {
 		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      clusterRequest.Name,
-			Namespace: clusterRequest.Namespace,
+			Name:      clusterRequest,
+			Namespace: clusterRequestNs,
 		}})
 	}
 }
 
-// findPoliciesForClusterRequestsForUpdate: Finds if the child policy matches managed clusters
-// created through ClusterRequests.
-func (r *ClusterRequestReconciler) findPoliciesForClusterRequestsForUpdate(
+// handlePolicyEvent handled Updates and Deleted events.
+func (r *ClusterRequestReconciler) handlePolicyEventDelete(
+	ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+
+	// Call the generic function for determining the corresponding ClusterRequest.
+	findPoliciesForClusterRequests(ctx, r.Client, e, q)
+}
+
+// handlePolicyEvent handled Updates and Deleted events.
+func (r *ClusterRequestReconciler) handlePolicyEventUpdate(
 	ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 
-	oldPolicy := e.ObjectOld.(*policiesv1.Policy)
-
-	// Get the clusterRequests that created a managed cluster with the same name
-	// as the policy namespace.
-	listOpts := []client.ListOption{
-		client.MatchingFields{
-			"status.clusterInstanceRef.name": oldPolicy.Namespace,
-		},
-	}
-
-	clusterRequests := &oranv1alpha1.ClusterRequestList{}
-	err := r.Client.List(ctx, clusterRequests, listOpts...)
-	if err != nil {
-		r.Logger.Error("[findPolicyForManagedClustersOfClusterRequests] Error listing ClusterRequests. ", "Error: ", err)
-		return
-	}
-
-	for _, clusterRequest := range clusterRequests.Items {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      clusterRequest.Name,
-			Namespace: clusterRequest.Namespace,
-		}})
-	}
+	// Call the generic function.
+	findPoliciesForClusterRequests(ctx, r.Client, e, q)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Add index for the status.clusterInstanceRef.name field.
-	if err := mgr.GetFieldIndexer().IndexField(
-		context.TODO(),
-		&oranv1alpha1.ClusterRequest{},
-		"status.clusterInstanceRef.name",
-		func(rawObj client.Object) []string {
-			// Extract the field value and return it as a string slice.
-			resource := rawObj.(*oranv1alpha1.ClusterRequest)
-			if resource.Status.ClusterInstanceRef != nil {
-				return []string{resource.Status.ClusterInstanceRef.Name}
-			}
-			return nil
-		}); err != nil {
-		return fmt.Errorf("error adding status.clusterInstanceRef.name index field: %w", err)
-	}
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("orano2ims-cluster-request").
@@ -1956,8 +1939,8 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&policiesv1.Policy{},
 			handler.Funcs{
-				UpdateFunc: r.findPoliciesForClusterRequestsForUpdate,
-				DeleteFunc: r.findPoliciesForClusterRequestsForDelete,
+				UpdateFunc: r.handlePolicyEventUpdate,
+				DeleteFunc: r.handlePolicyEventDelete,
 			},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {

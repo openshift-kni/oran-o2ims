@@ -72,7 +72,7 @@ type ClusterInstanceRef struct {
 
 // PolicyDetails holds information about an ACM policy.
 type PolicyDetails struct {
-	// The compliance of the managedcluster created through a clusterRequest with the current
+	// The compliance of the ManagedCluster created through a ClusterRequest with the current
 	// policy.
 	Compliant string `json:"compliant,omitempty"`
 	// The policy's name.
@@ -93,10 +93,10 @@ type ClusterRequestStatus struct {
 	// ClusterInstanceRef references to the ClusterInstance.
 	ClusterInstanceRef *ClusterInstanceRef `json:"clusterInstanceRef,omitempty"`
 
-	// NodePoolRef references to the NodePool
+	// NodePoolRef references to the NodePool.
 	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
 
-	// Holds policies that are matched with the managed cluster created by the clusterRequest.
+	// Holds policies that are matched with the ManagedCluster created by the ClusterRequest.
 	Policies []PolicyDetails `json:"policies,omitempty"`
 }
 

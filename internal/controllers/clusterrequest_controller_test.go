@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
@@ -1538,6 +1539,23 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
+		// Expect the ClusterInstance and its namespace to have been created.
+		clusterInstanceNs := &corev1.Namespace{}
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			client.ObjectKey{Name: "cluster-1"},
+			clusterInstanceNs,
+		)
+		Expect(err).ToNot(HaveOccurred())
+		clusterInstance := &siteconfig.ClusterInstance{}
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: "cluster-1",
+			},
+			clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
 
 		// Check updated policies for matched clusters result in reconciliation request.
 		updateEvent = &event.UpdateEvent{
@@ -1571,7 +1589,7 @@ defaultHugepagesSize: "1G"`,
 			workqueue.RateLimitingQueueConfig{
 				Name: "ClusterRequestsQueue",
 			})
-		CRReconciler.findPoliciesForClusterRequestsForUpdate(ctx, *updateEvent, queue)
+		CRReconciler.handlePolicyEventUpdate(ctx, *updateEvent, queue)
 		Expect(queue.Len()).To(Equal(1))
 
 		// Get the first request from the queue.
@@ -1605,7 +1623,7 @@ defaultHugepagesSize: "1G"`,
 			workqueue.RateLimitingQueueConfig{
 				Name: "ClusterRequestsQueue",
 			})
-		CRReconciler.findPoliciesForClusterRequestsForDelete(ctx, *deleteEvent, queue)
+		CRReconciler.handlePolicyEventDelete(ctx, *deleteEvent, queue)
 		Expect(queue.Len()).To(Equal(1))
 
 		// Get the first request from the queue.

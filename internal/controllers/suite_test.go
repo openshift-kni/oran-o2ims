@@ -52,15 +52,6 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&hwv1alpha1.NodePool{}).
 		WithStatusSubresource(&hwv1alpha1.Node{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
-		WithIndex(
-			&oranv1alpha1.ClusterRequest{}, "status.clusterInstanceRef.name",
-			func(rawObj client.Object) []string {
-				resource := rawObj.(*oranv1alpha1.ClusterRequest)
-				if resource.Status.ClusterInstanceRef != nil {
-					return []string{resource.Status.ClusterInstanceRef.Name}
-				}
-				return nil
-			}).
 		Build()
 }
 
@@ -99,8 +90,8 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceList{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.Deployment{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
-	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstance{})
-	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &siteconfig.ClusterInstanceList{})
+	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
+	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.NodePool{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.Node{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})

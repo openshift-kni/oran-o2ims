@@ -155,7 +155,7 @@ spec:
                   type: object
                 type: array
               nodePoolRef:
-                description: NodePoolRef references to the NodePool
+                description: NodePoolRef references to the NodePool.
                 properties:
                   name:
                     description: Contains the name of the created NodePool.
@@ -165,14 +165,14 @@ spec:
                     type: string
                 type: object
               policies:
-                description: Holds policies that are matched with the managed cluster
-                  created by the clusterRequest.
+                description: Holds policies that are matched with the ManagedCluster
+                  created by the ClusterRequest.
                 items:
                   description: PolicyDetails holds information about an ACM policy.
                   properties:
                     compliant:
                       description: |-
-                        The compliance of the managedcluster created through a clusterRequest with the current
+                        The compliance of the ManagedCluster created through a ClusterRequest with the current
                         policy.
                       type: string
                     policyName:

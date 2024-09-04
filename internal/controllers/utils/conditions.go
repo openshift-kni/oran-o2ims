@@ -25,7 +25,6 @@ var CRconditionTypes = struct {
 	ClusterInstanceProcessed ConditionType
 	ClusterProvisioned       ConditionType
 	ConfigurationApplied     ConditionType
-	// TODO: add condition for configuration apply
 }{
 	Validated:                "ClusterRequestValidated",
 	HardwareTemplateRendered: "HardwareTemplateRendered",
