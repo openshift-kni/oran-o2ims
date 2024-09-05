@@ -155,7 +155,7 @@ spec:
                   type: object
                 type: array
               nodePoolRef:
-                description: NodePoolRef references to the NodePool
+                description: NodePoolRef references to the NodePool.
                 properties:
                   name:
                     description: Contains the name of the created NodePool.
@@ -164,6 +164,28 @@ spec:
                     description: Contains the namespace of the created NodePool.
                     type: string
                 type: object
+              policies:
+                description: Holds policies that are matched with the ManagedCluster
+                  created by the ClusterRequest.
+                items:
+                  description: PolicyDetails holds information about an ACM policy.
+                  properties:
+                    compliant:
+                      description: |-
+                        The compliance of the ManagedCluster created through a ClusterRequest with the current
+                        policy.
+                      type: string
+                    policyName:
+                      description: The policy's name.
+                      type: string
+                    policyNamespace:
+                      description: The policy's namespace.
+                      type: string
+                    remediationAction:
+                      description: The policy's remediation action.
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true

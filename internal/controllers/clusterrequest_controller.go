@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -47,6 +48,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -73,6 +75,10 @@ type nodeInfo struct {
 	bmcAddress     string
 	bmcCredentials string
 	nodeName       string
+}
+
+type deleteOrUpdateEvent interface {
+	event.UpdateEvent | event.DeleteEvent
 }
 
 const (
@@ -214,6 +220,15 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 
 	// Handle the cluster install with ClusterInstance
 	err = t.handleClusterInstallation(ctx, renderedClusterInstance)
+	if err != nil {
+		if utils.IsInputError(err) {
+			return doNotRequeue(), nil
+		}
+		return requeueWithError(err)
+	}
+
+	// Handle configuration through policies.
+	err = t.handleClusterPolicyConfiguration(ctx)
 	if err != nil {
 		if utils.IsInputError(err) {
 			return doNotRequeue(), nil
@@ -698,6 +713,83 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		}
 	}
 
+	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
+	}
+
+	return nil
+}
+
+// handleClusterPolicyConfiguration updates the ClusterRequest status to reflect the status
+// of the policies that match the managed cluster created through the ClusterRequest.
+func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx context.Context) error {
+	if t.object.Status.ClusterInstanceRef == nil {
+		return fmt.Errorf("status.clusterInstanceRef is empty")
+	}
+	// Get all the child policies in the namespace of the managed cluster created through
+	// the ClusterRequest.
+	policies := &policiesv1.PolicyList{}
+	listOpts := []client.ListOption{
+		client.HasLabels{utils.ChildPolicyRootPolicyLabel},
+		client.InNamespace(t.object.Status.ClusterInstanceRef.Name),
+	}
+
+	err := t.client.List(ctx, policies, listOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to list Policies: %w", err)
+	}
+
+	allPoliciesCompliant := true
+	nonCompliantPolicyInEnforce := false
+	var targetPolicies []oranv1alpha1.PolicyDetails
+	// Go through all the policies and get those that are matched with the managed cluster created
+	// by the current cluster request.
+	for _, policy := range policies.Items {
+		if policy.Status.ComplianceState == policiesv1.NonCompliant {
+			allPoliciesCompliant = false
+			if strings.EqualFold(string(policy.Spec.RemediationAction), string(policiesv1.Enforce)) {
+				nonCompliantPolicyInEnforce = true
+			}
+		}
+		// Child policy name = parent_policy_namespace.parent_policy_name
+		policyNameArr := strings.Split(policy.Name, ".")
+		targetPolicy := &oranv1alpha1.PolicyDetails{
+			Compliant:         string(policy.Status.ComplianceState),
+			PolicyName:        policyNameArr[1],
+			PolicyNamespace:   policyNameArr[0],
+			RemediationAction: string(policy.Spec.RemediationAction),
+		}
+		targetPolicies = append(targetPolicies, *targetPolicy)
+	}
+
+	// Update the ConfigurationApplied condition.
+	if allPoliciesCompliant {
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.CRconditionTypes.ConfigurationApplied,
+			utils.CRconditionReasons.Completed,
+			metav1.ConditionTrue,
+			"The configuration is up to date",
+		)
+	} else {
+		if nonCompliantPolicyInEnforce {
+			utils.SetStatusCondition(&t.object.Status.Conditions,
+				utils.CRconditionTypes.ConfigurationApplied,
+				utils.CRconditionReasons.InProgress,
+				metav1.ConditionFalse,
+				"The configuration is still being applied",
+			)
+		} else {
+			utils.SetStatusCondition(&t.object.Status.Conditions,
+				utils.CRconditionTypes.ConfigurationApplied,
+				utils.CRconditionReasons.OutOfDate,
+				metav1.ConditionFalse,
+				"The configuration is out of date",
+			)
+		}
+	}
+
+	t.object.Status.Policies = targetPolicies
+	// Update the current policy status
 	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
 	}
@@ -1730,6 +1822,62 @@ func (r *ClusterRequestReconciler) findManagedClusterForClusterRequest(
 	}
 }
 
+// findPoliciesForClusterRequests creates reconciliation requests for the ClusterRequests
+// whose associated ManagedClusters have matched policies Updated or Deleted.
+func findPoliciesForClusterRequests[T deleteOrUpdateEvent](
+	ctx context.Context, c client.Client, e T, q workqueue.RateLimitingInterface) {
+
+	policy := &policiesv1.Policy{}
+	switch evt := any(e).(type) {
+	case event.UpdateEvent:
+		policy = evt.ObjectOld.(*policiesv1.Policy)
+	case event.DeleteEvent:
+		policy = evt.Object.(*policiesv1.Policy)
+	default:
+		// Only Update and Delete events are supported
+		return
+	}
+
+	// Get the ClusterInstance.
+	clusterInstance := &siteconfig.ClusterInstance{}
+	err := c.Get(ctx, types.NamespacedName{
+		Namespace: policy.Namespace,
+		Name:      policy.Namespace,
+	}, clusterInstance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Return as the ManagedCluster for this Namespace is not deployed/managed by ClusterInstance.
+			return
+		}
+		return
+	}
+
+	clusterRequest, okCR := clusterInstance.GetLabels()[clusterRequestNameLabel]
+	clusterRequestNs, okCRNs := clusterInstance.GetLabels()[clusterRequestNamespaceLabel]
+	if okCR && okCRNs {
+		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+			Name:      clusterRequest,
+			Namespace: clusterRequestNs,
+		}})
+	}
+}
+
+// handlePolicyEvent handled Updates and Deleted events.
+func (r *ClusterRequestReconciler) handlePolicyEventDelete(
+	ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+
+	// Call the generic function for determining the corresponding ClusterRequest.
+	findPoliciesForClusterRequests(ctx, r.Client, e, q)
+}
+
+// handlePolicyEvent handled Updates and Deleted events.
+func (r *ClusterRequestReconciler) handlePolicyEventUpdate(
+	ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+
+	// Call the generic function.
+	findPoliciesForClusterRequests(ctx, r.Client, e, q)
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	//nolint:wrapcheck
@@ -1744,10 +1892,10 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.Funcs{UpdateFunc: r.findClusterTemplateForClusterRequest},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Watch on status changes only
+					// Watch on status changes only.
 					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
 				},
-				CreateFunc:  func(ce event.CreateEvent) bool { return true },
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
@@ -1787,6 +1935,36 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
+		Watches(
+			&policiesv1.Policy{},
+			handler.Funcs{
+				UpdateFunc: r.handlePolicyEventUpdate,
+				DeleteFunc: r.handlePolicyEventDelete,
+			},
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Filter out updates to parent policies.
+					if _, ok := e.ObjectNew.GetLabels()[utils.ChildPolicyRootPolicyLabel]; !ok {
+						return false
+					}
+
+					policyNew := e.ObjectNew.(*policiesv1.Policy)
+					policyOld := e.ObjectOld.(*policiesv1.Policy)
+
+					// Process status.status and remediation action changes.
+					return policyOld.Status.ComplianceState != policyNew.Status.ComplianceState ||
+						(policyOld.Spec.RemediationAction != policyNew.Spec.RemediationAction)
+				},
+				CreateFunc:  func(e event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc: func(de event.DeleteEvent) bool {
+					// Filter out updates to parent policies.
+					if _, ok := de.Object.GetLabels()[utils.ChildPolicyRootPolicyLabel]; !ok {
+						return false
+					}
+					return true
+				},
 			})).
 		Watches(
 			&clusterv1.ManagedCluster{},

@@ -132,3 +132,10 @@ const (
 	TLSSkipVerifyEnvName      = "INSECURE_SKIP_VERIFY"
 	TLSSkipVerifyDefaultValue = false
 )
+
+// Label specific to ACM child policies.
+const (
+	ChildPolicyRootPolicyLabel       = "policy.open-cluster-management.io/root-policy"
+	ChildPolicyClusterNameLabel      = "policy.open-cluster-management.io/cluster-name"
+	ChildPolicyClusterNamespaceLabel = "policy.open-cluster-management.io/cluster-namespace"
+)

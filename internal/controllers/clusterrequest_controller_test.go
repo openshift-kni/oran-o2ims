@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
@@ -16,8 +17,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/client-go/util/workqueue"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -27,390 +30,8 @@ type expectedNodeDetails struct {
 	BootMACAddress     string
 }
 
-// The ClusterTemplate and ClusterRequests are still under development, so all the tests
-// will need to be rewritten.
-
-/*
 const (
-
-	clusterTemplateInputOk = `{
-		"additionalNTPSources": [
-		  "NTP.server1"
-		],
-		"baseDomain": "example.com",
-		"clusterImageSetNameRef": "openshift-v4.15",
-		"caBundleRef": {
-		  "name": "my-bundle-ref"
-		},
-		"clusterLabels": {
-		  "common": "true",
-		  "group-du-sno": "test",
-		  "sites": "site-sno-du-1"
-		},
-		"clusterName": "site-sno-du-1",
-		"clusterNetwork": [
-		  {
-			"cidr": "10.128.0.0/14"
-		  }
-		],
-		"clusterType": "SNO",
-		"diskEncryption": {
-		  "tang": [
-			{
-			  "thumbprint": "1234567890",
-			  "url": "http://10.0.0.1:7500"
-			}
-		  ],
-		  "type": "nbde"
-		},
-		"extraManifestsRefs": [
-		  {
-			"name": "foobar1"
-		  }
-		],
-		"machineNetwork": [
-		  {
-			"cidr": "10.16.231.0/24"
-		  }
-		],
-		"networkType": "OVNKubernetes",
-		"nodes": [
-		  {
-			"bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
-			"bmcCredentialsName": {
-			  "name": "site-sno-du-1-bmc-secret"
-			},
-			"bmcCredentialsDetails": {
-			  "username": "YWFh",
-			  "password": "YmJi"
-			},
-			"bootMACAddress": "00:00:00:01:20:30",
-			"bootMode": "UEFI",
-			"cpuset": "2-19,22-39",
-			"hostName": "node1",
-			"installerArgs": "[\"--append-karg\", \"nameserver=8.8.8.8\", \"-n\"]",
-			"ironicInspect": "",
-			"templateRefs": [
-			  {
-				"name": "ai-cluster-templates-v1",
-				"namespace": "siteconfig-operator"
-			  }
-			],
-			"nodeNetwork": {
-			  "config": {
-				"dns-resolver": {
-				  "config": {
-					"server": [
-					  "10.19.42.41"
-					]
-				  }
-				},
-				"interfaces": [
-				  {
-					"ipv4": {
-					  "address": [
-						{
-						  "ip": "10.16.231.3",
-						  "prefix-length": 24
-						},
-						{
-						  "ip": "10.16.231.28",
-						  "prefix-length": 24
-						},
-						{
-						  "ip": "10.16.231.31",
-						  "prefix-length": 24
-						}
-					  ],
-					  "dhcp": false,
-					  "enabled": true
-					},
-					"ipv6": {
-					  "address": [
-						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:601",
-						  "prefix-length": 64
-						},
-						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:602",
-						  "prefix-length": 64
-						},
-						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:603",
-						  "prefix-length": 64
-						}
-					  ],
-					  "dhcp": false,
-					  "enabled": true
-					},
-					"name": "eno1",
-					"type": "ethernet"
-				  },
-				  {
-					"ipv6": {
-					  "address": [
-						{
-						  "ip": "2620:52:0:1302::100"
-						}
-					  ],
-					  "enabled": true,
-					  "link-aggregation": {
-						"mode": "balance-rr",
-						"options": {
-						  "miimon": "140"
-						},
-						"slaves": [
-						  "eth0",
-						  "eth1"
-						]
-					  },
-					  "prefix-length": 64
-					},
-					"name": "bond99",
-					"state": "up",
-					"type": "bond"
-				  }
-				],
-				"routes": {
-				  "config": [
-					{
-					  "destination": "0.0.0.0/0",
-					  "next-hop-address": "10.16.231.254",
-					  "next-hop-interface": "eno1",
-					  "table-id": 254
-					}
-				  ]
-				}
-			  },
-			  "interfaces": [
-				{
-				  "macAddress": "00:00:00:01:20:30",
-				  "name": "eno1"
-				},
-				{
-				  "macAddress": "02:00:00:80:12:14",
-				  "name": "eth0"
-				},
-				{
-				  "macAddress": "02:00:00:80:12:15",
-				  "name": "eth1"
-				}
-			  ]
-			},
-			"role": "master",
-			"rootDeviceHints": {
-			  "hctl": "1:2:0:0"
-			}
-		  }
-		],
-		"proxy": {
-		  "noProxy": "foobar"
-		},
-		"pullSecretRef": {
-		  "name": "site-sno-du-1-pull-secret"
-		},
-		"serviceNetwork": [
-		  {
-			"cidr": "172.30.0.0/16"
-		  }
-		],
-		"sshPublicKey": "ssh-rsa ",
-		"templateRefs": [
-		  {
-			"name": "ai-cluster-templates-v1",
-			"namespace": "siteconfig-operator"
-		  }
-		]
-	 }`
-	// NTP servers should be a list, but it's a string and baseDomain is required, but missing.
-	clusterTemplateInputMismatch = `{
-		"additionalNTPSources":   "NTP.server1",
-		"clusterImageSetNameRef": "openshift-v4.15",
-		"caBundleRef": {
-		  "name": "my-bundle-ref"
-		},
-		"clusterLabels": {
-		  "common": "true",
-		  "group-du-sno": "test",
-		  "sites": "site-sno-du-1"
-		},
-		"clusterName": "site-sno-du-1",
-		"clusterNetwork": [
-		  {
-			"cidr": "10.128.0.0/14"
-		  }
-		],
-		"clusterType": "SNO",
-		"diskEncryption": {
-		  "tang": [
-			{
-			  "thumbprint": "1234567890",
-			  "url": "http://10.0.0.1:7500"
-			}
-		  ],
-		  "type": "nbde"
-		},
-		"extraManifestsRefs": [
-		  {
-			"name": "foobar1"
-		  }
-		],
-		"machineNetwork": [
-		  {
-			"cidr": "10.16.231.0/24"
-		  }
-		],
-		"networkType": "OVNKubernetes",
-		"nodes": [
-		  {
-			"bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
-			"bmcCredentialsName": {
-			  "name": "site-sno-du-1-bmc-secret"
-			},
-			"bmcCredentialsDetails": {
-			  "username": "YWFh",
-			  "password": "YmJi"
-			},
-			"bootMACAddress": "00:00:00:01:20:30",
-			"bootMode": "UEFI",
-			"cpuset": "2-19,22-39",
-			"hostName": "node1",
-			"installerArgs": "[\"--append-karg\", \"nameserver=8.8.8.8\", \"-n\"]",
-			"ironicInspect": "",
-			"templateRefs": [
-			  {
-				"name": "ai-cluster-templates-v1",
-				"namespace": "siteconfig-operator"
-			  }
-			],
-			"nodeNetwork": {
-			  "config": {
-				"dns-resolver": {
-				  "config": {
-					"server": [
-					  "10.19.42.41"
-					]
-				  }
-				},
-				"interfaces": [
-				  {
-					"ipv4": {
-					  "address": [
-						{
-						  "ip": "10.16.231.3",
-						  "prefix-length": 24
-						},
-						{
-						  "ip": "10.16.231.28",
-						  "prefix-length": 24
-						},
-						{
-						  "ip": "10.16.231.31",
-						  "prefix-length": 24
-						}
-					  ],
-					  "dhcp": false,
-					  "enabled": true
-					},
-					"ipv6": {
-					  "address": [
-						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:601",
-						  "prefix-length": 64
-						},
-						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:602",
-						  "prefix-length": 64
-						},
-						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:603",
-						  "prefix-length": 64
-						}
-					  ],
-					  "dhcp": false,
-					  "enabled": true
-					},
-					"name": "eno1",
-					"type": "ethernet"
-				  },
-				  {
-					"ipv6": {
-					  "address": [
-						{
-						  "ip": "2620:52:0:1302::100"
-						}
-					  ],
-					  "enabled": true,
-					  "link-aggregation": {
-						"mode": "balance-rr",
-						"options": {
-						  "miimon": "140"
-						},
-						"slaves": [
-						  "eth0",
-						  "eth1"
-						]
-					  },
-					  "prefix-length": 64
-					},
-					"name": "bond99",
-					"state": "up",
-					"type": "bond"
-				  }
-				],
-				"routes": {
-				  "config": [
-					{
-					  "destination": "0.0.0.0/0",
-					  "next-hop-address": "10.16.231.254",
-					  "next-hop-interface": "eno1",
-					  "table-id": 254
-					}
-				  ]
-				}
-			  },
-			  "interfaces": [
-				{
-				  "macAddress": "00:00:00:01:20:30",
-				  "name": "eno1"
-				},
-				{
-				  "macAddress": "02:00:00:80:12:14",
-				  "name": "eth0"
-				},
-				{
-				  "macAddress": "02:00:00:80:12:15",
-				  "name": "eth1"
-				}
-			  ]
-			},
-			"role": "master",
-			"rootDeviceHints": {
-			  "hctl": "1:2:0:0"
-			}
-		  }
-		],
-		"proxy": {
-		  "noProxy": "foobar"
-		},
-		"pullSecretRef": {
-		  "name": "site-sno-du-1-pull-secret"
-		},
-		"serviceNetwork": [
-		  {
-			"cidr": "172.30.0.0/16"
-		  }
-		],
-		"sshPublicKey": "ssh-rsa ",
-		"templateRefs": [
-		  {
-			"name": "ai-cluster-templates-v1",
-			"namespace": "siteconfig-operator"
-		  }
-		]
-	}`
-	ClusterTemplateInputDataSchema = `
-	{
+	testClusterTemplateSchema = `{
 		"description": "SiteConfigSpec defines the desired state of SiteConfig.",
 		"properties": {
 		  "additionalNTPSources": {
@@ -880,9 +501,208 @@ const (
 		"type": "object"
 	  }
 	`
+	testClusterTemplateInput = `{
+		"additionalNTPSources": [
+		  "NTP.server1"
+		],
+		"baseDomain": "example.com",
+		"clusterImageSetNameRef": "openshift-v4.15",
+		"caBundleRef": {
+		  "name": "my-bundle-ref"
+		},
+		"clusterLabels": {
+		  "cluster-version": "v4.16"
+		},
+		"clusterName": "cluster-1",
+		"clusterNetwork": [
+		  {
+			"cidr": "10.128.0.0/14"
+		  }
+		],
+		"clusterType": "SNO",
+		"diskEncryption": {
+		  "tang": [
+			{
+			  "thumbprint": "1234567890",
+			  "url": "http://10.0.0.1:7500"
+			}
+		  ],
+		  "type": "nbde"
+		},
+		"extraManifestsRefs": [
+		  {
+			"name": "foobar1"
+		  }
+		],
+		"machineNetwork": [
+		  {
+			"cidr": "10.16.231.0/24"
+		  }
+		],
+		"networkType": "OVNKubernetes",
+		"nodes": [
+		  {
+			"bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
+			"bmcCredentialsName": {
+			  "name": "site-sno-du-1-bmc-secret"
+			},
+			"bmcCredentialsDetails": {
+			  "username": "aaaa",
+			  "password": "aaaa"
+			},
+			"bootMACAddress": "00:00:00:01:20:30",
+			"bootMode": "UEFI",
+			"cpuset": "2-19,22-39",
+			"hostName": "node1",
+			"installerArgs": "[\"--append-karg\", \"nameserver=8.8.8.8\", \"-n\"]",
+			"ironicInspect": "",
+			"templateRefs": [
+			  {
+				"name": "ai-cluster-templates-v1",
+				"namespace": "siteconfig-operator"
+			  }
+			],
+			"nodeNetwork": {
+			  "config": {
+				"dns-resolver": {
+				  "config": {
+					"server": [
+					  "10.19.42.41"
+					]
+				  }
+				},
+				"interfaces": [
+				  {
+					"ipv4": {
+					  "address": [
+						{
+						  "ip": "10.16.231.3",
+						  "prefix-length": 24
+						},
+						{
+						  "ip": "10.16.231.28",
+						  "prefix-length": 24
+						},
+						{
+						  "ip": "10.16.231.31",
+						  "prefix-length": 24
+						}
+					  ],
+					  "dhcp": false,
+					  "enabled": true
+					},
+					"ipv6": {
+					  "address": [
+						{
+						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:601",
+						  "prefix-length": 64
+						},
+						{
+						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:602",
+						  "prefix-length": 64
+						},
+						{
+						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:603",
+						  "prefix-length": 64
+						}
+					  ],
+					  "dhcp": false,
+					  "enabled": true
+					},
+					"name": "eno1",
+					"type": "ethernet"
+				  },
+				  {
+					"ipv6": {
+					  "address": [
+						{
+						  "ip": "2620:52:0:1302::100"
+						}
+					  ],
+					  "enabled": true,
+					  "link-aggregation": {
+						"mode": "balance-rr",
+						"options": {
+						  "miimon": "140"
+						},
+						"slaves": [
+						  "eth0",
+						  "eth1"
+						]
+					  },
+					  "prefix-length": 64
+					},
+					"name": "bond99",
+					"state": "up",
+					"type": "bond"
+				  }
+				],
+				"routes": {
+				  "config": [
+					{
+					  "destination": "0.0.0.0/0",
+					  "next-hop-address": "10.16.231.254",
+					  "next-hop-interface": "eno1",
+					  "table-id": 254
+					}
+				  ]
+				}
+			  },
+			  "interfaces": [
+				{
+				  "macAddress": "00:00:00:01:20:30",
+				  "name": "eno1"
+				},
+				{
+				  "macAddress": "02:00:00:80:12:14",
+				  "name": "eth0"
+				},
+				{
+				  "macAddress": "02:00:00:80:12:15",
+				  "name": "eth1"
+				}
+			  ]
+			},
+			"role": "master",
+			"rootDeviceHints": {
+			  "hctl": "1:2:0:0"
+			}
+		  }
+		],
+		"proxy": {
+		  "noProxy": "foobar"
+		},
+		"pullSecretRef": {
+		  "name": "site-sno-du-1-pull-secret"
+		},
+		"serviceNetwork": [
+		  {
+			"cidr": "172.30.0.0/16"
+		  }
+		],
+		"sshPublicKey": "ssh-rsa ",
+		"templateRefs": [
+		  {
+			"name": "ai-cluster-templates-v1",
+			"namespace": "siteconfig-operator"
+		  }
+		]
+	 }`
 
+	testPolicyTemplateSchema = `{
+	"type": "object",
+	"properties": {
+	  "cpu-isolated": {
+		"type": "string"
+	  }
+	}
+}`
+	testPolicyTemplateInput = `{
+	"cpu-isolated": "1-2"
+}`
 )
-*/
+
+/*
 var _ = DescribeTable(
 	"Reconciler",
 	func(objs []client.Object, request reconcile.Request,
@@ -920,189 +740,6 @@ var _ = DescribeTable(
 		validate(result, *r)
 	},
 
-	/*
-		Entry(
-			"ClusterRequest matches ClusterTemplate and the ClusterInstance is created",
-			[]client.Object{
-				// Cluster Template
-				&oranv1alpha1.ClusterTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-template",
-						Namespace: "cluster-template",
-					},
-					Spec: oranv1alpha1.ClusterTemplateSpec{
-						InputDataSchema: ClusterTemplateInputDataSchema,
-					},
-				},
-				// Cluster Request
-				&oranv1alpha1.ClusterRequest{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-request",
-						Namespace: "cluster-template",
-						Finalizers: []string{clusterRequestFinalizer},
-					},
-					Spec: oranv1alpha1.ClusterRequestSpec{
-						ClusterTemplateRef: "cluster-template",
-						ClusterTemplateInput: clusterTemplateInputOk,
-					},
-				},
-				// Pull secret
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "site-sno-du-1-pull-secret",
-						Namespace: "cluster-template",
-					},
-					Data: map[string][]byte{".dockerconfigjson:": []byte("value1")},
-					Type: corev1.SecretTypeDockerConfigJson,
-				},
-				// BMC secret
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "site-sno-du-1-bmc-secret",
-						Namespace: "site-sno-du-1",
-					},
-					Data: map[string][]byte{
-						"username": []byte("username"),
-						"password": []byte("password"),
-					},
-				},
-				// Extra-manifests ConfigMap
-				&corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-template",
-						Namespace: "cluster-template",
-					},
-					Data: map[string]string{"key1": "value1"},
-				},
-			},
-			reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      "cluster-request",
-					Namespace: "cluster-template",
-				},
-			},
-			func(result ctrl.Result, reconciler ClusterRequestReconciler) {
-				// Get the ClusterRequest and check that everything is valid.
-				clusterRequest := &oranv1alpha1.ClusterRequest{}
-				err := reconciler.Client.Get(
-					context.TODO(),
-					types.NamespacedName{
-						Name:      "cluster-request",
-						Namespace: "cluster-template",
-					},
-					clusterRequest)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputIsValid).
-					To(Equal(true))
-
-				// Get the ClusterInstance and check that everything is valid.
-				clusterInstance := &siteconfig.ClusterInstance{}
-				err = reconciler.Client.Get(
-					context.TODO(),
-					types.NamespacedName{
-						Name:      "site-sno-du-1",
-						Namespace: "site-sno-du-1",
-					},
-					clusterInstance)
-					Expect(err).ToNot(HaveOccurred())
-			},
-		),
-
-		Entry(
-			"ClusterRequest input does not match ClusterTemplate",
-			[]client.Object{
-				&oranv1alpha1.ClusterTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-template",
-						Namespace: "cluster-template",
-					},
-					Spec: oranv1alpha1.ClusterTemplateSpec{
-						InputDataSchema: `{
-										"type": "object",
-										"properties": {
-											"name": {
-												"type": "string"
-											},
-											"age": {
-												"type": "integer"
-											},
-											"email": {
-												"type": "string",
-												"format": "email"
-											},
-											"address": {
-												"type": "object",
-												"properties": {
-													"street": {
-														"type": "string"
-													},
-													"city": {
-														"type": "string"
-													},
-													"zipcode": {
-														"type": "string"
-													},
-													"capital": {
-													  "type": "boolean"
-													}
-												},
-												"required": ["street", "city"]
-											},
-											"phoneNumbers": {
-												"type": "array",
-												"items": {
-													"type": "string"
-												}
-											}
-										},
-										"required": ["name", "age", "address"]
-									  }`,
-					},
-				},
-				&oranv1alpha1.ClusterRequest{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-request",
-						Namespace: "cluster-template",
-					},
-					Spec: oranv1alpha1.ClusterRequestSpec{
-						ClusterTemplateRef: "cluster-template",
-						ClusterTemplateInput: `{
-									"name": "Bob",
-									"age": 35,
-									"email": "bob@example.com",
-									"phoneNumbers": ["123-456-7890", "987-654-3210"]
-								  }`,
-					},
-				},
-			},
-			reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      "cluster-request",
-					Namespace: "cluster-template",
-				},
-			},
-			func(result ctrl.Result, reconciler ClusterRequestReconciler) {
-				Expect(result).To(Equal(ctrl.Result{}))
-
-				// Get the ClusterRequest and check that everything is valid.
-				clusterRequest := &oranv1alpha1.ClusterRequest{}
-				err := reconciler.Client.Get(
-					context.TODO(),
-					types.NamespacedName{
-						Name:      "cluster-request",
-						Namespace: "cluster-template",
-					},
-					clusterRequest)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputIsValid).
-					To(Equal(true))
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputMatchesTemplate).
-					To(Equal(false))
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputMatchesTemplateError).
-					To(ContainSubstring("The JSON input does not match the JSON schema:  (root): address is required"))
-			},
-		),
-	*/
 	Entry(
 		"ClusterTemplate specified by ClusterTemplateRef is missing and input is valid",
 		[]client.Object{
@@ -1146,185 +783,8 @@ var _ = DescribeTable(
 			Expect(err).ToNot(HaveOccurred())
 		},
 	),
-
-	/*
-		Entry(
-			"ClusterTemplate change triggers automatic reconciliation",
-			[]client.Object{
-				&oranv1alpha1.ClusterTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-template",
-						Namespace: "cluster-template",
-					},
-					Spec: oranv1alpha1.ClusterTemplateSpec{
-						InputDataSchema: `{
-								"type": "object",
-								"properties": {
-									"name": {
-										"type": "string"
-									},
-									"age": {
-										"type": "integer"
-									},
-									"email": {
-										"type": "string",
-										"format": "email"
-									},
-									"address": {
-										"type": "object",
-										"properties": {
-											"street": {
-												"type": "string"
-											},
-											"city": {
-												"type": "string"
-											},
-											"zipcode": {
-												"type": "string"
-											},
-											"capital": {
-											  "type": "boolean"
-											}
-										},
-										"required": ["street", "city"]
-									},
-									"phoneNumbers": {
-										"type": "array",
-										"items": {
-											"type": "string"
-										}
-									}
-								},
-								"required": ["name", "age"]
-							  }`,
-					},
-				},
-				&oranv1alpha1.ClusterRequest{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-request",
-						Namespace: "cluster-template",
-					},
-					Spec: oranv1alpha1.ClusterRequestSpec{
-						ClusterTemplateRef: "cluster-template",
-						ClusterTemplateInput: `{
-							"name": "Bob",
-							"age": 35,
-							"email": "bob@example.com",
-							"phoneNumbers": ["123-456-7890", "987-654-3210"]
-						  }`,
-					},
-				},
-			},
-			reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      "cluster-request",
-					Namespace: "cluster-template",
-				},
-			},
-			func(result ctrl.Result, reconciler ClusterRequestReconciler) {
-				// Get the ClusterRequest and check that everything is valid.
-				clusterRequest := &oranv1alpha1.ClusterRequest{}
-				err := reconciler.Client.Get(
-					context.TODO(),
-					types.NamespacedName{
-						Name:      "cluster-request",
-						Namespace: "cluster-template",
-					},
-					clusterRequest)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputIsValid).
-					To(Equal(true))
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputMatchesTemplate).
-					To(Equal(true))
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputMatchesTemplateError).
-					To(Equal(""))
-
-				// Update the ClusterTemplate to have the address required.
-				// Get the ClusterRequest again.
-				clusterTemplate := &oranv1alpha1.ClusterTemplate{}
-				err = reconciler.Client.Get(
-					context.TODO(),
-					types.NamespacedName{
-						Name:      "cluster-template",
-						Namespace: "cluster-template",
-					},
-					clusterTemplate)
-				Expect(err).ToNot(HaveOccurred())
-
-				clusterTemplate.Spec.InputDataSchema =
-					`{
-					"type": "object",
-					"properties": {
-						"name": {
-							"type": "string"
-						},
-						"age": {
-							"type": "integer"
-						},
-						"email": {
-							"type": "string",
-							"format": "email"
-						},
-						"address": {
-							"type": "object",
-							"properties": {
-								"street": {
-									"type": "string"
-								},
-								"city": {
-									"type": "string"
-								},
-								"zipcode": {
-									"type": "string"
-								},
-								"capital": {
-								  "type": "boolean"
-								}
-							},
-							"required": ["street", "city"]
-						},
-						"phoneNumbers": {
-							"type": "array",
-							"items": {
-								"type": "string"
-							}
-						}
-					},
-					"required": ["name", "age", "address"]
-				}`
-
-				err = reconciler.Client.Update(context.TODO(), clusterTemplate)
-				Expect(err).ToNot(HaveOccurred())
-
-				// The reconciliation doesn't run automatically here, but we can obtain it
-				// from the findClusterRequestsForClusterTemplate function and run it.
-				req := reconciler.findClusterRequestsForClusterTemplate(context.TODO(), clusterTemplate)
-				Expect(req).To(HaveLen(1))
-				_, err = reconciler.Reconcile(context.TODO(), req[0])
-				Expect(err).ToNot(HaveOccurred())
-
-				// Get the ClusterRequest again.
-				err = reconciler.Client.Get(
-					context.TODO(),
-					types.NamespacedName{
-						Name:      "cluster-request",
-						Namespace: "cluster-template",
-					},
-					clusterRequest)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Expect for the ClusterRequest to not match the ClusterTemplate and to
-				// report that the required field is missing.
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputIsValid).
-					To(Equal(true))
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputMatchesTemplate).
-					To(Equal(false))
-				Expect(clusterRequest.Status.ClusterTemplateInputValidation.InputMatchesTemplateError).
-					To(ContainSubstring("The JSON input does not match the JSON schema:  (root): address is required"))
-			},
-		),
-	*/
 )
+*/
 
 var _ = Describe("getCrClusterTemplateRef", func() {
 	var (
@@ -1898,3 +1358,583 @@ func verifyNodeStatus(c client.Client, ctx context.Context, nodes []*hwv1alpha1.
 		}
 	}
 }
+
+var _ = Describe("policyManagement", func() {
+	var (
+		ctx          context.Context
+		c            client.Client
+		CRReconciler *ClusterRequestReconciler
+		CRTask       *clusterRequestReconcilerTask
+		CTReconciler *ClusterTemplateReconciler
+		ctName       = "clustertemplate-a-v1"
+		ctNamespace  = "clustertemplate-a-v4-16"
+		ciDefaultsCm = "clusterinstance-defaults-v1"
+		ptDefaultsCm = "policytemplate-defaults-v1"
+		hwTemplateCm = "hwTemplate-v1"
+		updateEvent  *event.UpdateEvent
+	)
+
+	BeforeEach(func() {
+		// Define the needed resources.
+		crs := []client.Object{
+			// Cluster Template Namespace.
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: ctNamespace,
+				},
+			},
+			// Cluster Template.
+			&oranv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ctName,
+					Namespace: ctNamespace,
+				},
+				Spec: oranv1alpha1.ClusterTemplateSpec{
+					Templates: oranv1alpha1.Templates{
+						ClusterInstanceDefaults: ciDefaultsCm,
+						PolicyTemplateDefaults:  ptDefaultsCm,
+						HwTemplate:              hwTemplateCm,
+					},
+					InputDataSchema: oranv1alpha1.InputDataSchema{
+						// APIserver has enforced the validation for this field who holds
+						// the arbirary JSON data
+						ClusterInstanceSchema: runtime.RawExtension{
+							Raw: []byte(testClusterTemplateSchema),
+						},
+						PolicyTemplateSchema: runtime.RawExtension{
+							Raw: []byte(testPolicyTemplateSchema),
+						},
+					},
+				},
+			},
+			// ConfigMaps.
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ciDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `key: value`,
+				},
+			},
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foobar1",
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{},
+			},
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ptDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.PolicyTemplateDefaultsConfigmapKey: `
+cpu-isolated: "2-31"
+cpu-reserved: "0-1"
+defaultHugepagesSize: "1G"`,
+				},
+			},
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCm,
+					Namespace: utils.ORANO2IMSNamespace,
+				},
+				Data: map[string]string{
+					"hwMgrId": "hwmgr",
+					utils.HwTemplateNodePool: `
+- name: master
+  hwProfile: profile-spr-single-processor-64G
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
+				},
+			},
+			// Pull secret.
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "site-sno-du-1-pull-secret",
+					Namespace: ctNamespace,
+				},
+			},
+			// Cluster Requests.
+			&oranv1alpha1.ClusterRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "cluster-1",
+					Namespace:  ctNamespace,
+					Finalizers: []string{clusterRequestFinalizer},
+				},
+				Spec: oranv1alpha1.ClusterRequestSpec{
+					ClusterTemplateRef: ctName,
+					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+						ClusterInstanceInput: runtime.RawExtension{
+							Raw: []byte(testClusterTemplateInput),
+						},
+						PolicyTemplateInput: runtime.RawExtension{
+							Raw: []byte(testPolicyTemplateInput),
+						},
+					},
+				},
+			},
+			&oranv1alpha1.ClusterRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "cluster-2",
+					Namespace:  ctNamespace,
+					Finalizers: []string{clusterRequestFinalizer},
+				},
+				Spec: oranv1alpha1.ClusterRequestSpec{
+					ClusterTemplateRef: ctName,
+					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+						ClusterInstanceInput: runtime.RawExtension{
+							Raw: []byte(testClusterTemplateInput),
+						},
+					},
+				},
+			},
+			&oranv1alpha1.ClusterRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "cluster-3",
+					Namespace:  ctNamespace,
+					Finalizers: []string{clusterRequestFinalizer},
+				},
+				Spec: oranv1alpha1.ClusterRequestSpec{
+					ClusterTemplateRef: ctName,
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects(crs...)
+		// Reconcile the ClusterTemplate.
+		CTReconciler = &ClusterTemplateReconciler{
+			Client: c,
+			Logger: logger,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      ctName,
+				Namespace: ctNamespace,
+			},
+		}
+
+		_, err := CTReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+
+		CRReconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+	})
+
+	It("It handles updated/deleted policies for matched clusters", func() {
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: ctNamespace,
+			},
+		}
+
+		result, err := CRReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		// Expect to not requeue on valid cluster request.
+		Expect(result.Requeue).To(BeFalse())
+		// Expect the ClusterInstance and its namespace to have been created.
+		clusterInstanceNs := &corev1.Namespace{}
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			client.ObjectKey{Name: "cluster-1"},
+			clusterInstanceNs,
+		)
+		Expect(err).ToNot(HaveOccurred())
+		clusterInstance := &siteconfig.ClusterInstance{}
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: "cluster-1",
+			},
+			clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check updated policies for matched clusters result in reconciliation request.
+		updateEvent = &event.UpdateEvent{
+			ObjectOld: &policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.policy",
+					Namespace: "cluster-1",
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+			ObjectNew: &policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.policy",
+					Namespace: "cluster-1",
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+		}
+		queue := workqueue.NewRateLimitingQueueWithConfig(
+			workqueue.DefaultControllerRateLimiter(),
+			workqueue.RateLimitingQueueConfig{
+				Name: "ClusterRequestsQueue",
+			})
+		CRReconciler.handlePolicyEventUpdate(ctx, *updateEvent, queue)
+		Expect(queue.Len()).To(Equal(1))
+
+		// Get the first request from the queue.
+		item, shutdown := queue.Get()
+		Expect(shutdown).To(BeFalse())
+
+		Expect(item).To(Equal(
+			reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: ctNamespace,
+			}},
+		))
+
+		// Check that deleted policies for matched clusters result in reconciliation requests.
+		deleteEvent := &event.DeleteEvent{
+			Object: &policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.policy",
+					Namespace: "cluster-1",
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+		}
+		queue = workqueue.NewRateLimitingQueueWithConfig(
+			workqueue.DefaultControllerRateLimiter(),
+			workqueue.RateLimitingQueueConfig{
+				Name: "ClusterRequestsQueue",
+			})
+		CRReconciler.handlePolicyEventDelete(ctx, *deleteEvent, queue)
+		Expect(queue.Len()).To(Equal(1))
+
+		// Get the first request from the queue.
+		item, shutdown = queue.Get()
+		Expect(shutdown).To(BeFalse())
+
+		Expect(item).To(Equal(
+			reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: ctNamespace,
+			}},
+		))
+	})
+
+	It("Updates ClusterRequest ConfigurationApplied condition to OutOfDate when the cluster is "+
+		"NonCompliant with at least one matched policies and the policy is not in enforce", func() {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: ctNamespace,
+			},
+		}
+
+		result, err := CRReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		// Expect to not requeue on valid cluster request.
+		Expect(result.Requeue).To(BeFalse())
+
+		newPolicies := []client.Object{
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "NonCompliant",
+				},
+			},
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+		}
+		// Create all the ACM policies.
+		for _, newPolicy := range newPolicies {
+			Expect(c.Create(ctx, newPolicy)).To(Succeed())
+		}
+		clusterRequest := &oranv1alpha1.ClusterRequest{}
+
+		// Create the ClusterRequest reconciliation task.
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: "clustertemplate-a-v4-16",
+			},
+			clusterRequest)
+		Expect(err).ToNot(HaveOccurred())
+
+		CRTask = &clusterRequestReconcilerTask{
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: clusterRequest, // cluster-1 request
+		}
+
+		// Call the handleClusterPolicyConfiguration function.
+		err = CRTask.handleClusterPolicyConfiguration(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+			[]oranv1alpha1.PolicyDetails{
+				{
+					Compliant:         "Compliant",
+					PolicyName:        "v1-sriov-configuration-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "enforce",
+				},
+				{
+					Compliant:         "NonCompliant",
+					PolicyName:        "v1-subscriptions-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "inform",
+				},
+			},
+		))
+
+		// Check the status conditions.
+		conditions := CRTask.object.Status.Conditions
+		Expect(conditions[4].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(conditions[4].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[4].Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
+		Expect(conditions[4].Message).To(Equal("The configuration is out of date"))
+	})
+
+	It("Updates ClusterRequest ConfigurationApplied condition to Completed when the cluster is "+
+		"Compliant with all the matched policies", func() {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: ctNamespace,
+			},
+		}
+
+		result, err := CRReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		// Expect to not requeue on valid cluster request.
+		Expect(result.Requeue).To(BeFalse())
+
+		newPolicies := []client.Object{
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+		}
+		// Create all the ACM policies.
+		for _, newPolicy := range newPolicies {
+			Expect(c.Create(ctx, newPolicy)).To(Succeed())
+		}
+		clusterRequest := &oranv1alpha1.ClusterRequest{}
+
+		// Create the ClusterRequest reconciliation task.
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: "clustertemplate-a-v4-16",
+			},
+			clusterRequest)
+		Expect(err).ToNot(HaveOccurred())
+
+		CRTask = &clusterRequestReconcilerTask{
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: clusterRequest, // cluster-1 request
+		}
+
+		// Call the handleClusterPolicyConfiguration function.
+		err = CRTask.handleClusterPolicyConfiguration(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+			[]oranv1alpha1.PolicyDetails{
+				{
+					Compliant:         "Compliant",
+					PolicyName:        "v1-sriov-configuration-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "enforce",
+				},
+				{
+					Compliant:         "Compliant",
+					PolicyName:        "v1-subscriptions-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "inform",
+				},
+			},
+		))
+
+		// Check the status conditions.
+		conditions := CRTask.object.Status.Conditions
+		Expect(conditions[4].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(conditions[4].Status).To(Equal(metav1.ConditionTrue))
+		Expect(conditions[4].Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
+		Expect(conditions[4].Message).To(Equal("The configuration is up to date"))
+	})
+
+	It("Updates ClusterRequest ConfigurationApplied condition to InProgress when the cluster is "+
+		"NonCompliant with at least one enforce policy", func() {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: ctNamespace,
+			},
+		}
+
+		result, err := CRReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		// Expect to not requeue on valid cluster request.
+		Expect(result.Requeue).To(BeFalse())
+
+		newPolicies := []client.Object{
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "NonCompliant",
+				},
+			},
+		}
+		// Create all the ACM policies.
+		for _, newPolicy := range newPolicies {
+			Expect(c.Create(ctx, newPolicy)).To(Succeed())
+		}
+		clusterRequest := &oranv1alpha1.ClusterRequest{}
+
+		// Create the ClusterRequest reconciliation task.
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: "clustertemplate-a-v4-16",
+			},
+			clusterRequest)
+		Expect(err).ToNot(HaveOccurred())
+
+		CRTask = &clusterRequestReconcilerTask{
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: clusterRequest, // cluster-1 request
+		}
+
+		// Call the handleClusterPolicyConfiguration function.
+		err = CRTask.handleClusterPolicyConfiguration(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+			[]oranv1alpha1.PolicyDetails{
+				{
+					Compliant:         "NonCompliant",
+					PolicyName:        "v1-sriov-configuration-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "enforce",
+				},
+				{
+					Compliant:         "Compliant",
+					PolicyName:        "v1-subscriptions-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "inform",
+				},
+			},
+		))
+
+		// Check the status conditions.
+		conditions := CRTask.object.Status.Conditions
+		Expect(conditions[4].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(conditions[4].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[4].Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(conditions[4].Message).To(Equal("The configuration is still being applied"))
+	})
+})
