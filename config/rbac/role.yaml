@@ -34,6 +34,7 @@ rules:
   - secrets
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
@@ -185,6 +186,12 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - policy.open-cluster-management.io
+  resources:
+  - policies
+  verbs:
+  - list
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
