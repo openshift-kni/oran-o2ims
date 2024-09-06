@@ -67,10 +67,29 @@ spec:
                 type: string
               site:
                 type: string
+              timeout:
+                properties:
+                  clusterProvisioning:
+                    default: 90
+                    description: ClusterProvisioning defines the timeout for the initial
+                      cluster installation in minutes.
+                    type: integer
+                  configuration:
+                    default: 30
+                    description: Configuration defines the timeout for ACM policy
+                      configuration.
+                    type: integer
+                  hardwareProvisioning:
+                    default: 90
+                    description: HardwareProvisioning defines the timeout for the
+                      hardware provisioning in minutes.
+                    type: integer
+                type: object
             required:
             - clusterTemplateInput
             - clusterTemplateRef
             - site
+            - timeout
             type: object
           status:
             description: ClusterRequestStatus defines the observed state of ClusterRequest
