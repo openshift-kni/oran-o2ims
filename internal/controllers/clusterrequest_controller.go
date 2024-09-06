@@ -788,7 +788,7 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 	// Go through all the policies and get those that are matched with the managed cluster created
 	// by the current cluster request.
 	for _, policy := range policies.Items {
-		if policy.Status.ComplianceState == policiesv1.NonCompliant {
+		if policy.Status.ComplianceState != policiesv1.Compliant {
 			allPoliciesCompliant = false
 			if strings.EqualFold(string(policy.Spec.RemediationAction), string(policiesv1.Enforce)) {
 				nonCompliantPolicyInEnforce = true

@@ -1663,4 +1663,104 @@ defaultHugepagesSize: "1G"`,
 		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 		Expect(conditions[5].Message).To(Equal("The configuration is still being applied"))
 	})
+
+	It("Updates ClusterRequest ConfigurationApplied condition to InProgress when the cluster is "+
+		"Pending with at least one enforce policy", func() {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: ctNamespace,
+			},
+		}
+
+		result, err := CRReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		// Expect to not requeue on valid cluster request.
+		Expect(result.Requeue).To(BeFalse())
+
+		newPolicies := []client.Object{
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Pending",
+				},
+			},
+		}
+		// Create all the ACM policies.
+		for _, newPolicy := range newPolicies {
+			Expect(c.Create(ctx, newPolicy)).To(Succeed())
+		}
+		clusterRequest := &oranv1alpha1.ClusterRequest{}
+
+		// Create the ClusterRequest reconciliation task.
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name:      "cluster-1",
+				Namespace: "clustertemplate-a-v4-16",
+			},
+			clusterRequest)
+		Expect(err).ToNot(HaveOccurred())
+
+		CRTask = &clusterRequestReconcilerTask{
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: clusterRequest, // cluster-1 request
+		}
+
+		// Call the handleClusterPolicyConfiguration function.
+		err = CRTask.handleClusterPolicyConfiguration(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+			[]oranv1alpha1.PolicyDetails{
+				{
+					Compliant:         "Pending",
+					PolicyName:        "v1-sriov-configuration-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "enforce",
+				},
+				{
+					Compliant:         "Compliant",
+					PolicyName:        "v1-subscriptions-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "inform",
+				},
+			},
+		))
+
+		// Check the status conditions.
+		conditions := CRTask.object.Status.Conditions
+		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(conditions[5].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(conditions[5].Message).To(Equal("The configuration is still being applied"))
+	})
 })
