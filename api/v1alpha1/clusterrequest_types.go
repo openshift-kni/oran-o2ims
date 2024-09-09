@@ -37,6 +37,8 @@ type ClusterRequestSpec struct {
 	ClusterTemplateRef string `json:"clusterTemplateRef"`
 
 	ClusterTemplateInput ClusterTemplateInput `json:"clusterTemplateInput"`
+
+	Timeout Timeout `json:"timeout"`
 }
 
 // ClusterTemplateInput provides the input data that follows the schema defined in the referenced ClusterTemplate.
@@ -68,6 +70,18 @@ type ClusterInstanceRef struct {
 
 	// Says if ZTP has complete or not.
 	ZtpStatus string `json:"ztpStatus,omitempty"`
+}
+
+type Timeout struct {
+	// ClusterProvisioning defines the timeout for the initial cluster installation in minutes.
+	//+kubebuilder:default=90
+	ClusterProvisioning int `json:"clusterProvisioning,omitempty"`
+	// HardwareProvisioning defines the timeout for the hardware provisioning in minutes.
+	//+kubebuilder:default=90
+	HardwareProvisioning int `json:"hardwareProvisioning,omitempty"`
+	// Configuration defines the timeout for ACM policy configuration.
+	//+kubebuilder:default=30
+	Configuration int `json:"configuration,omitempty"`
 }
 
 // PolicyDetails holds information about an ACM policy.
