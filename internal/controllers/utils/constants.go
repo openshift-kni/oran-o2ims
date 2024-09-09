@@ -127,6 +127,12 @@ const (
 	PolicyTemplateDataType  = "PolicyTemplate"
 )
 
+const (
+	OperationTypeCreated = "created"
+	OperationTypeUpdated = "updated"
+	OperationTypeDryRun  = "validated with dry-run"
+)
+
 // Environment variable names
 const (
 	TLSSkipVerifyEnvName      = "INSECURE_SKIP_VERIFY"

@@ -467,190 +467,402 @@ var _ = Describe("searchAPI", func() {
 	})
 })
 
+var testSchema = `
+properties:
+  additionalNTPSources:
+    items:
+      type: string
+    type: array
+  apiVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  baseDomain:
+    type: string
+  clusterLabels:
+    additionalProperties:
+      type: string
+    type: object
+  clusterName:
+    description: ClusterName is the name of the cluster.
+    type: string
+  extraAnnotations:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
+  ingressVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  machineNetwork:
+    description: MachineNetwork is the list of IP address pools for machines.
+    items:
+      description: MachineNetworkEntry is a single IP address block for
+        node IP blocks.
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  nodes:
+    items:
+      description: NodeSpec
+      properties:
+        extraAnnotations:
+          additionalProperties:
+            additionalProperties:
+              type: string
+            type: object
+          description: Additional node-level annotations to be applied
+            to the rendered templates
+          type: object
+        hostName:
+          description: Hostname is the desired hostname for the host
+          type: string
+        nodeLabels:
+          additionalProperties:
+            type: string
+          type: object
+        nodeNetwork:
+          properties:
+            config:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            interfaces:
+              items:
+                properties:
+                  macAddress:
+                    type: string
+                  name:
+                    type: string
+                required:
+                - macAddress
+                type: object
+              minItems: 1
+              type: array
+          type: object
+      required:
+      - hostName
+      type: object
+    type: array
+  serviceNetwork:
+    items:
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  sshPublicKey:
+    type: string
+required:
+- clusterName
+- nodes
+type: object
+`
+
+var _ = Describe("DisallowUnknownFieldsInSchema", func() {
+	var schemaMap map[string]any
+
+	BeforeEach(func() {
+		err := yaml.Unmarshal([]byte(testSchema), &schemaMap)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should add 'additionalProperties': false to all objects with 'properties'", func() {
+		var expected = `
+additionalProperties: false
+properties:
+  additionalNTPSources:
+    items:
+      type: string
+    type: array
+  apiVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  baseDomain:
+    type: string
+  clusterLabels:
+    additionalProperties:
+      type: string
+    type: object
+  clusterName:
+    description: ClusterName is the name of the cluster.
+    type: string
+  extraAnnotations:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
+  ingressVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  machineNetwork:
+    description: MachineNetwork is the list of IP address pools for machines.
+    items:
+      description: MachineNetworkEntry is a single IP address block for
+        node IP blocks.
+      additionalProperties: false
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  nodes:
+    items:
+      description: NodeSpec
+      additionalProperties: false
+      properties:
+        extraAnnotations:
+          additionalProperties:
+            additionalProperties:
+              type: string
+            type: object
+          description: Additional node-level annotations to be applied
+            to the rendered templates
+          type: object
+        hostName:
+          description: Hostname is the desired hostname for the host
+          type: string
+        nodeLabels:
+          additionalProperties:
+            type: string
+          type: object
+        nodeNetwork:
+          additionalProperties: false
+          properties:
+            config:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            interfaces:
+              items:
+                additionalProperties: false
+                properties:
+                  macAddress:
+                    type: string
+                  name:
+                    type: string
+                required:
+                - macAddress
+                type: object
+              minItems: 1
+              type: array
+          type: object
+      required:
+      - hostName
+      type: object
+    type: array
+  serviceNetwork:
+    items:
+      additionalProperties: false
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  sshPublicKey:
+    type: string
+required:
+- clusterName
+- nodes
+type: object
+`
+		// Call the function
+		DisallowUnknownFieldsInSchema(schemaMap)
+
+		var expectedSchema map[string]any
+		err := yaml.Unmarshal([]byte(expected), &expectedSchema)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(schemaMap).To(Equal(expectedSchema))
+	})
+})
+
 var _ = Describe("ValidateJsonAgainstJsonSchema", func() {
 
+	var schemaMap map[string]any
+
+	BeforeEach(func() {
+		err := yaml.Unmarshal([]byte(testSchema), &schemaMap)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
 	It("Return error if required field is missing", func() {
-		schema := `
-		{
-			"$schema": "http://json-schema.org/draft-07/schema#",
-			"type": "object",
-			"properties": {
-				"name": {
-					"type": "string"
-				},
-				"age": {
-					"type": "integer"
-				},
-				"email": {
-					"type": "string",
-					"format": "email"
-				},
-				"address": {
-					"type": "object",
-					"properties": {
-						"street": {
-							"type": "string"
-						},
-						"city": {
-							"type": "string"
-						},
-						"zipcode": {
-							"type": "string"
-						},
-						"capital": {
-							"type": "boolean"
-						}
-					},
-					"required": ["street", "city", "capital"]
-				},
-				"phoneNumbers": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				}
-			},
-			"required": ["name", "age"]
-		}
-		`
+		// The required field nodes[0].hostName is missing.
 		input := `
-		{
-			"name": "Bob",
-			"age": 35,
-			"email": "bob@example.com",
-			"address": {
-				"street": "123 Main St",
-				"city": "Springfield",
-				"zipcode": "12345"
-			},
-			"phoneNumbers": ["123-456-7890", "987-654-3210"]
-		}
-		`
-		err := ValidateJsonAgainstJsonSchema(schema, input)
+clusterName: sno1
+machineNetwork:
+  - cidr: 192.0.2.0/24
+serviceNetwork:
+  - cidr: 172.30.0.0/16
+nodes:
+  - nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJsonAgainstJsonSchema(schemaMap, inputMap)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(
-			ContainSubstring("The input does not match the schema:  address: capital is required"))
+			ContainSubstring("invalid input: nodes.0: hostName is required"))
 	})
 
 	It("Return error if field is of different type", func() {
-		schema := `
-		{
-			"$schema": "http://json-schema.org/draft-07/schema#",
-			"type": "object",
-			"properties": {
-				"name": {
-					"type": "string"
-				},
-				"age": {
-					"type": "integer"
-				},
-				"email": {
-					"type": "string",
-					"format": "email"
-				},
-				"address": {
-					"type": "object",
-					"properties": {
-						"street": {
-							"type": "string"
-						},
-						"city": {
-							"type": "string"
-						},
-						"zipcode": {
-							"type": "string"
-						},
-						"capital": {
-							"type": "boolean"
-						}
-					},
-					"required": ["street", "city"]
-				},
-				"phoneNumbers": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				}
-			},
-			"required": ["name", "age"]
-		}
-		`
-		// Age is a string instead of integer.
+		// clusterLabels is a map instead of list.
 		input := `
-		{
-			"name": "Bob",
-			"age": "35",
-			"email": "bob@example.com",
-			"address": {
-				"street": "123 Main St",
-				"city": "Springfield",
-				"zipcode": "12345"
-			},
-			"phoneNumbers": ["123-456-7890", "987-654-3210"]
-		}
-		`
-		err := ValidateJsonAgainstJsonSchema(schema, input)
+clusterName: sno1
+machineNetwork:
+  - cidr: 192.0.2.0/24
+serviceNetwork:
+  - cidr: 172.30.0.0/16
+clusterLabels:
+- label1
+- label2
+nodes:
+  - hostName: sno1.example.com
+    nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJsonAgainstJsonSchema(schemaMap, inputMap)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(
-			ContainSubstring("The input does not match the schema:  age: Invalid type. Expected: integer, given: string"))
+			ContainSubstring("invalid input: clusterLabels: Invalid type. Expected: object, given: array"))
 	})
 
 	It("Returns success if optional field with required fields is missing", func() {
-		schema := `
-		{
-			"$schema": "http://json-schema.org/draft-07/schema#",
-			"type": "object",
-			"properties": {
-				"name": {
-					"type": "string"
-				},
-				"age": {
-					"type": "integer"
-				},
-				"email": {
-					"type": "string",
-					"format": "email"
-				},
-				"address": {
-					"type": "object",
-					"properties": {
-						"street": {
-							"type": "string"
-						},
-						"city": {
-							"type": "string"
-						},
-						"zipcode": {
-							"type": "string"
-						},
-						"capital": {
-							"type": "boolean"
-						}
-					},
-					"required": ["street", "city"]
-				},
-				"phoneNumbers": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				}
-			},
-			"required": ["name", "age"]
-		}
-		`
-		// Address has required fields, but it's missing completely.
+		// The optional field serviceNetwork has required field - cidr, but it's missing completely.
 		input := `
-		{
-			"name": "Bob",
-			"age": 35,
-			"email": "bob@example.com",
-			"phoneNumbers": ["123-456-7890", "987-654-3210"]
-		}
-		`
-		err := ValidateJsonAgainstJsonSchema(schema, input)
+clusterName: sno1
+machineNetwork:
+  - cidr: 192.0.2.0/24
+nodes:
+  - hostName: sno1.example.com
+    nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
 		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJsonAgainstJsonSchema(schemaMap, inputMap)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("Return error if unknown field is provided", func() {
+		// clusterType is not in the schema
+		input := `
+clusterType: SNO
+clusterName: sno1
+nodes:
+  - hostName: sno1.example.com
+    nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+
+		schemaMap["additionalProperties"] = false
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJsonAgainstJsonSchema(schemaMap, inputMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("Additional property clusterType is not allowed"))
 	})
 })
 
@@ -771,126 +983,131 @@ var _ = Describe("RenderTemplateForK8sCR", func() {
 		}
 
 		expectedRenderedYaml = `
-    apiVersion: siteconfig.open-cluster-management.io/v1alpha1
-    kind: ClusterInstance
-    metadata:
-      name: site-sno-du-1
-      namespace: site-sno-du-1
-    spec:
-      additionalNTPSources:
-      - NTP.server1
-      - 10.16.231.22
-      apiVIPs:
-      - 10.0.0.1
-      - 10.0.0.2
-      baseDomain: example.com
-      caBundleRef:
-        name: my-bundle-ref
-      clusterImageSetNameRef: "4.16"
-      clusterLabels:
-        common: "true"
-        group-du-sno: test
-        sites: site-sno-du-1
-      clusterName: site-sno-du-1
-      clusterNetwork:
-        - cidr: 10.128.0.0/14
-          hostPrefix: 23
-      clusterType: SNO
-      cpuPartitioningMode: AllNodes
-      diskEncryption:
-        tang:
-        - thumbprint: "1234567890"
-          url: http://10.0.0.1:7500
-        type: nbde
-      extraManifestsRefs:
-          - name: foobar1
-          - name: foobar2
-      ignitionConfigOverride: igen
-      installConfigOverrides: '{"capabilities":{"baselineCapabilitySet": "None", "additionalEnabledCapabilities": [ "marketplace", "NodeTuning" ] }}'
-      machineNetwork:
-          - cidr: 10.16.231.0/24
-      networkType: OVNKubernetes
-      nodes:
-        - automatedCleaningMode: disabled
-          bmcAddress: idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1
-          bmcCredentialsName:
-            name: node1-bmc-secret
-          bootMACAddress: "00:00:00:01:20:30"
-          bootMode: UEFI
-          hostName: node1.baseDomain.com
-          ignitionConfigOverride: '{"ignition": {"version": "3.1.0"}, "storage": {"files": [{"path": "/etc/containers/registries.conf", "overwrite": true, "contents": {"source": "data:text/plain;base64,aGVsbG8gZnJvbSB6dHAgcG9saWN5IGdlbmVyYXRvcg=="}}]}}'
-          installerArgs: '["--append-karg", "nameserver=8.8.8.8", "-n"]'
-          nodeNetwork:
-            config:
-              dns-resolver:
-                config:
-                  server:
-                  - 10.19.42.41
-              interfaces:
-              - ipv4:
-                  address:
-                    - ip: 10.16.231.3
-                      prefix-length: 24
-                    - ip: 10.16.231.28
-                      prefix-length: 24
-                    - ip: 10.16.231.31
-                      prefix-length: 24
-                  dhcp: false
-                  enabled: true
-                ipv6:
-                  address:
-                    - ip: 2620:52:0:10e7:e42:a1ff:fe8a:601
-                      prefix-length: 64
-                    - ip: 2620:52:0:10e7:e42:a1ff:fe8a:602
-                      prefix-length: 64
-                    - ip: 2620:52:0:10e7:e42:a1ff:fe8a:603
-                      prefix-length: 64
-                  dhcp: false
-                  enabled: true
-                name: eno1
-                type: ethernet
-              - ipv6:
-                  address:
-                  - ip: 2620:52:0:1302::100
-                  enabled: true
-                  link-aggregation:
-                    mode: balance-rr
-                    options:
-                      miimon: "140"
-                    slaves:
-                    - eth0
-                    - eth1
-                  prefix-length: 64
-                name: bond99
-                state: up
-                type: bond
-              routes:
-                config:
-                - destination: 0.0.0.0/0
-                  next-hop-address: 10.16.231.254
-                  next-hop-interface: eno1
-                  table: ""
-            interfaces:
-            - macAddress: "00:00:00:01:20:30"
-              name: eno1
-            - macAddress: 02:00:00:80:12:14
-              name: eth0
-            - macAddress: 02:00:00:80:12:15
-              name: eth1
-          role: master
-          templateRefs:
-            - name: aci-node-crs-v1
-              namespace: siteconfig-system
-      proxy:
-        noProxy: foobar
-      pullSecretRef:
-        name: pullSecretName
-      serviceNetwork:
-      - cidr: 172.30.0.0/16
-      sshPublicKey: ssh-rsa
-      templateRefs:
-      - name: aci-cluster-crs-v1
-        namespace: siteconfig-system
+apiVersion: siteconfig.open-cluster-management.io/v1alpha1
+kind: ClusterInstance
+metadata:
+  name: site-sno-du-1
+  namespace: site-sno-du-1
+spec:
+  additionalNTPSources:
+  - NTP.server1
+  - 10.16.231.22
+  apiVIPs:
+  - 10.0.0.1
+  - 10.0.0.2
+  baseDomain: example.com
+  caBundleRef:
+    name: my-bundle-ref
+  clusterImageSetNameRef: "4.16"
+  clusterLabels:
+    common: "true"
+    group-du-sno: test
+    sites: site-sno-du-1
+  clusterName: site-sno-du-1
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  clusterType: SNO
+  cpuPartitioningMode: AllNodes
+  diskEncryption:
+    tang:
+    - thumbprint: "1234567890"
+      url: http://10.0.0.1:7500
+    type: nbde
+  extraManifestsRefs:
+  - name: foobar1
+  - name: foobar2
+  holdInstallation: false
+  ignitionConfigOverride: igen
+  installConfigOverrides: '{"capabilities":{"baselineCapabilitySet": "None", "additionalEnabledCapabilities":
+    [ "marketplace", "NodeTuning" ] }}'
+  machineNetwork:
+  - cidr: 10.16.231.0/24
+  networkType: OVNKubernetes
+  nodes:
+  - automatedCleaningMode: disabled
+    bmcAddress: idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1
+    bmcCredentialsName:
+      name: node1-bmc-secret
+    bootMACAddress: "00:00:00:01:20:30"
+    bootMode: UEFI
+    hostName: node1.baseDomain.com
+    ignitionConfigOverride: '{"ignition": {"version": "3.1.0"}, "storage": {"files":
+      [{"path": "/etc/containers/registries.conf", "overwrite": true, "contents":
+      {"source": "data:text/plain;base64,aGVsbG8gZnJvbSB6dHAgcG9saWN5IGdlbmVyYXRvcg=="}}]}}'
+    installerArgs: '["--append-karg", "nameserver=8.8.8.8", "-n"]'
+    ironicInspect: ""
+    nodeNetwork:
+      config:
+        dns-resolver:
+          config:
+            server:
+            - 10.19.42.41
+        interfaces:
+        - ipv4:
+            address:
+            - ip: 10.16.231.3
+              prefix-length: 24
+            - ip: 10.16.231.28
+              prefix-length: 24
+            - ip: 10.16.231.31
+              prefix-length: 24
+            dhcp: false
+            enabled: true
+          ipv6:
+            address:
+            - ip: 2620:52:0:10e7:e42:a1ff:fe8a:601
+              prefix-length: 64
+            - ip: 2620:52:0:10e7:e42:a1ff:fe8a:602
+              prefix-length: 64
+            - ip: 2620:52:0:10e7:e42:a1ff:fe8a:603
+              prefix-length: 64
+            dhcp: false
+            enabled: true
+          name: eno1
+          type: ethernet
+        - ipv6:
+            address:
+            - ip: 2620:52:0:1302::100
+            enabled: true
+            link-aggregation:
+              mode: balance-rr
+              options:
+                miimon: "140"
+              slaves:
+              - eth0
+              - eth1
+            prefix-length: 64
+          name: bond99
+          state: up
+          type: bond
+        routes:
+          config:
+          - destination: 0.0.0.0/0
+            next-hop-address: 10.16.231.254
+            next-hop-interface: eno1
+            table: ""
+      interfaces:
+      - macAddress: 00:00:00:01:20:30
+        name: eno1
+      - macAddress: 02:00:00:80:12:14
+        name: eth0
+      - macAddress: 02:00:00:80:12:15
+        name: eth1
+    role: master
+    templateRefs:
+    - name: aci-node-crs-v1
+      namespace: siteconfig-system
+  proxy:
+    noProxy: foobar
+  pullSecretRef:
+    name: pullSecretName
+  serviceNetwork:
+  - cidr: 172.30.0.0/16
+  sshPublicKey: ssh-rsa
+  templateRefs:
+  - name: aci-cluster-crs-v1
+    namespace: siteconfig-system
     `
 	})
 
@@ -902,15 +1119,84 @@ var _ = Describe("RenderTemplateForK8sCR", func() {
 		renderedClusterInstance, err := RenderTemplateForK8sCR(
 			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
 		Expect(err).ToNot(HaveOccurred())
+
 		yamlString, err := yaml.Marshal(renderedClusterInstance)
+		Expect(err).ToNot(HaveOccurred())
 		fmt.Println(string(yamlString))
 
-		Expect(err).ToNot(HaveOccurred())
 		if !reflect.DeepEqual(renderedClusterInstance, expectedRenderedClusterInstance) {
 			err = fmt.Errorf("renderedClusterInstance not equal, expected = %v, got = %v",
 				renderedClusterInstance, expectedRenderedClusterInstance)
 			Expect(err).ToNot(HaveOccurred())
 		}
+	})
+
+	It("Return error if a required string field is empty", func() {
+		// Update the required field baseDomain to empty string
+		clusterInstanceObj["Cluster"].(map[string]any)["baseDomain"] = ""
+		_, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.baseDomain cannot be empty"))
+		fmt.Println("Error", err.Error())
+	})
+
+	It("Return error if a required array field is empty", func() {
+		// Update the required field templateRefs to empty slice
+		clusterInstanceObj["Cluster"].(map[string]any)["templateRefs"] = []string{}
+		_, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.templateRefs cannot be empty"))
+		fmt.Println("Error", err.Error())
+	})
+
+	It("Return error if a required map field is empty", func() {
+		// Update the required field pullSecretRef to empty map
+		clusterInstanceObj["Cluster"].(map[string]any)["pullSecretRef"] = map[string]any{}
+		_, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.pullSecretRef cannot be empty"))
+		fmt.Println("Error", err.Error())
+	})
+
+	It("Return error if a required field is not provided", func() {
+		// Remove the required field hostName
+		node1 := clusterInstanceObj["Cluster"].(map[string]any)["nodes"].([]map[string]any)[0]
+		delete(node1, "hostName")
+
+		_, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.nodes[0].hostName must be provided"))
+		fmt.Println("Error", err.Error())
+	})
+
+	It("Return error if expected array field is not an array", func() {
+		// Change the nodes.nodeNetwork.interfaces to a map
+		node1 := clusterInstanceObj["Cluster"].(map[string]any)["nodes"].([]map[string]any)[0]
+		delete(node1["nodeNetwork"].(map[string]any), "interfaces")
+		node1["nodeNetwork"].(map[string]any)["interfaces"] = map[string]any{"macAddress": "00:00:00:01:20:30", "name": "eno1"}
+
+		_, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.nodes[0].nodeNetwork.interfaces must be of type array"))
+		fmt.Println("Error", err.Error())
+	})
+
+	It("Return error if expected map field is not a map", func() {
+		// Change the nodes.nodeNetwork to string
+		node1 := clusterInstanceObj["Cluster"].(map[string]any)["nodes"].([]map[string]any)[0]
+		delete(node1, "nodeNetwork")
+		node1["nodeNetwork"] = "string"
+
+		_, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.nodes[0].nodeNetwork must be of type map"))
+		fmt.Println("Error", err.Error())
 	})
 })
 
@@ -1123,7 +1409,7 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 		Expect(dst).To(Equal(expected))
 	})
 
-	It("should return error on type mismatch when checkType is true", func() {
+	It("should return error on type mismatch when checkType is true, and no error when false", func() {
 		dst = map[string]interface{}{
 			"key1": "value1",
 		}
@@ -1135,9 +1421,13 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 		err := DeepMergeMaps(dst, src, true)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("type mismatch for key: key1"))
+
+		err = DeepMergeMaps(dst, src, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(src))
 	})
 
-	It("should return error if type do not match in maps when checkType is true", func() {
+	It("should return error if type do not match in maps when checkType is true, and no error when false", func() {
 		dst = map[string]interface{}{
 			"key1": map[string]interface{}{
 				"subKey1": "test",
@@ -1154,9 +1444,13 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"error merging maps for key: key1: type mismatch for key: subKey1 (dst: string, src: int)"))
+
+		err = DeepMergeMaps(dst, src, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(src))
 	})
 
-	It("should return error if types do not match in slices and checkType is true", func() {
+	It("should return error if types do not match in slices and checkType is true, and no error when false", func() {
 		dst = map[string]interface{}{
 			"key1": []interface{}{"value1"},
 		}
@@ -1169,8 +1463,12 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"error merging slices for key: key1: type mismatch at index: 0 (dst: string, src: int)"))
+
+		err = DeepMergeMaps(dst, src, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(src))
 	})
-	It("should return error when merging slices for key with mismatched types", func() {
+	It("should return error when merging slices for key with mismatched types, and no error when false", func() {
 		dst = map[string]interface{}{
 			"key1": []interface{}{
 				map[string]interface{}{
@@ -1189,9 +1487,13 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"error merging slices for key: key1: type mismatch at index: 0 (dst: map[string]interface {}, src: string)"))
+
+		err = DeepMergeMaps(dst, src, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(src))
 	})
 
-	It("should return error when merging maps at index with mismatched types", func() {
+	It("should return error when merging maps at index with mismatched types, and no error when false", func() {
 		dst = map[string]interface{}{
 			"key1": []interface{}{
 				map[string]interface{}{
@@ -1212,6 +1514,10 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"error merging maps at slice index: 0: type mismatch for key: subkey1"))
+
+		err = DeepMergeMaps(dst, src, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dst).To(Equal(src))
 	})
 })
 

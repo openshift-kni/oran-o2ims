@@ -1,19 +1,23 @@
 apiVersion: siteconfig.open-cluster-management.io/v1alpha1
 kind: ClusterInstance
 metadata:
-  name: "{{ .Cluster.clusterName }}"
-  namespace: "{{ .Cluster.clusterName }}"
+  name: "{{ .Cluster.clusterName | validateNonEmpty "spec.clusterName" }}"
+  namespace: "{{ .Cluster.clusterName | validateNonEmpty "spec.clusterName" }}"
 spec:
   # Mandatory fields at cluster-level
-  baseDomain: "{{ .Cluster.baseDomain }}"
-  clusterImageSetNameRef: "{{ .Cluster.clusterImageSetNameRef }}"
-  clusterName: "{{ .Cluster.clusterName }}"
+  baseDomain: "{{ .Cluster.baseDomain | validateNonEmpty "spec.baseDomain" }}"
+  clusterImageSetNameRef: "{{ .Cluster.clusterImageSetNameRef | validateNonEmpty "spec.clusterImageSetNameRef" }}"
+  clusterName: "{{ .Cluster.clusterName | validateNonEmpty "spec.clusterName" }}"
   pullSecretRef:
-    name: "{{ .Cluster.pullSecretRef.name }}"
+  {{- $ref := .Cluster.pullSecretRef | validateNonEmpty "spec.pullSecretRef" | validateMapType "spec.pullSecretRef" }}
+    name: "{{ $ref.name | validateNonEmpty "spec.pullSecretRef.name" }}"
   templateRefs:
-  {{- range .Cluster.templateRefs }}
-    - name: "{{ .name }}"
-      namespace: "{{ .namespace }}"
+  {{- $t_path := "spec.templateRefs" }}
+  {{- $_ := .Cluster.templateRefs | validateNonEmpty $t_path }}
+  {{- $_ := .Cluster.templateRefs | validateArrayType $t_path }}
+  {{- range $t_index, $t_ref := .Cluster.templateRefs }}
+    - name: "{{ $t_ref.name | validateNonEmpty (printf "%s[%d].name" $t_path $t_index) }}"
+      namespace: "{{ $t_ref.namespace | validateNonEmpty (printf "%s[%d].namespace" $t_path $t_index) }}"
   {{- end }}
   # Optional fields at cluster-level
 {{- if .Cluster.additionalNTPSources }}
@@ -24,9 +28,10 @@ spec:
   apiVIPs:
 {{ .Cluster.apiVIPs | toYaml | indent 4 }}
 {{- end }}
-{{- if .Cluster.caBundleRef.name }}
+{{- if .Cluster.caBundleRef }}
   caBundleRef:
-    name: "{{ .Cluster.caBundleRef.name }}"
+  {{- $ref := .Cluster.caBundleRef | validateMapType "spec.caBundleRef" }}
+    name: "{{ $ref.name | validateNonEmpty "spec.caBundleRef.name" }}"
 {{- end }}
 {{- if .Cluster.clusterLabels }}
   clusterLabels:
@@ -37,8 +42,8 @@ spec:
 {{- end }}
 {{- if .Cluster.clusterNetwork }}
   clusterNetwork:
-  {{- range .Cluster.clusterNetwork }}
-    - cidr: "{{ .cidr }}"
+  {{- range $index, $ref := .Cluster.clusterNetwork | validateArrayType "spec.clusterNetwork" }}
+    - cidr: "{{ $ref.cidr | validateNonEmpty (printf "spec.clusterNetwork[%d].cidr" $index) }}"
       {{- if .hostPrefix }}
       hostPrefix: {{ .hostPrefix }}
       {{- end }}
@@ -46,16 +51,12 @@ spec:
 {{- end }}
 {{- if .Cluster.machineNetwork }}
   machineNetwork:
-  {{- range .Cluster.machineNetwork }}
-    - cidr: "{{ .cidr }}"
+  {{- range $index, $ref := .Cluster.machineNetwork | validateArrayType "spec.machineNetwork" }}
+    - cidr: "{{ $ref.cidr | validateNonEmpty (printf "spec.machineNetwork[%d].cidr" $index) }}"
   {{- end }}
 {{- end }}
-{{- if .Cluster.networkType }}
-  networkType: "{{ .Cluster.networkType }}"
-{{- end }}
-{{- if .Cluster.cpuPartitioningMode }}
-  cpuPartitioningMode: "{{ .Cluster.cpuPartitioningMode }}"
-{{- end }}
+  networkType: "{{ default "OVNKubernetes" .Cluster.networkType }}"
+  cpuPartitioningMode: "{{ default "None" .Cluster.cpuPartitioningMode }}"
 {{- if .Cluster.diskEncryption }}
   diskEncryption:
 {{ .Cluster.diskEncryption | toYaml | indent 4 }}
@@ -64,15 +65,17 @@ spec:
   extraAnnotations:
 {{ .Cluster.extraAnnotations | toYaml | indent 4 }}
 {{- end }}
+{{- if .Cluster.extraLabels }}
+  extraLabels:
+{{ .Cluster.extraLabels | toYaml | indent 4 }}
+{{- end }}
 {{- if .Cluster.extraManifestsRefs }}
   extraManifestsRefs:
-  {{- range .Cluster.extraManifestsRefs }}
-    - name: "{{ .name }}"
+  {{- range $index, $ref := .Cluster.extraManifestsRefs | validateArrayType "spec.extraManifestsRefs" }}
+    - name: "{{ $ref.name | validateNonEmpty (printf "spec.extraManifestsRefs[%d].name" $index) }}"
   {{- end }}
 {{- end }}
-{{- if .Cluster.holdInstallation }}
-  holdInstallation: {{ .Cluster.holdInstallation }}
-{{- end }}
+  holdInstallation: {{ default false .Cluster.holdInstallation }}
 {{- if .Cluster.ignitionConfigOverride }}
   ignitionConfigOverride: {{ .Cluster.ignitionConfigOverride | quote }}
 {{- end }}
@@ -87,10 +90,14 @@ spec:
   proxy:
 {{ .Cluster.proxy | toYaml | indent 4 }}
 {{- end }}
+{{- if .Cluster.pruneManifests }}
+  pruneManifests:
+{{ .Cluster.pruneManifests | toYaml | indent 4 }}
+{{- end }}
 {{- if .Cluster.serviceNetwork }}
   serviceNetwork:
-  {{- range .Cluster.serviceNetwork }}
-    - cidr: "{{ .cidr }}"
+  {{- range $index, $ref := .Cluster.serviceNetwork | validateArrayType "spec.serviceNetwork" }}
+    - cidr: "{{ $ref.cidr | validateNonEmpty (printf "spec.serviceNetwork[%d].cidr" $index) }}"
   {{- end }}
 {{- end }}
 {{- if .Cluster.sshPublicKey }}
@@ -101,9 +108,12 @@ spec:
 {{ .Cluster.suppressedManifests | toYaml | indent 4 }}
 {{- end }}
   nodes:
-  {{- range .Cluster.nodes }}
+  {{- $_ := .Cluster.nodes | validateNonEmpty "spec.nodes" }}
+  {{- $_ := .Cluster.nodes | validateArrayType "spec.nodes"}}
+  {{- range $n_index, $n_ref := .Cluster.nodes }}
     # Mandatory fields at node-level
-    {{- $nodeName := splitList "." .hostName | first }}
+    {{- $hostName := .hostName | validateNonEmpty (printf "spec.nodes[%d].hostName" $n_index) }}
+    {{- $nodeName := splitList "." $hostName | first }}
     {{- $bmcCredname := printf "%s-bmc-secret" $nodeName | quote }}
     {{- if .bmcCredentialsName.name }}
       {{- $bmcCredname = .bmcCredentialsName.name | quote }}
@@ -112,20 +122,25 @@ spec:
       bmcCredentialsName:
         name: {{ $bmcCredname }}
       bootMACAddress: "{{ .bootMACAddress }}"
-      bootMode: "{{ .bootMode }}"
-      hostName: "{{ .hostName }}"
+      bootMode: "{{ default "UEFI" .bootMode }}"
+      hostName: "{{ .hostName | validateNonEmpty (printf "spec.nodes[%d].hostName" $n_index) }}"
       templateRefs:
-      {{- range .templateRefs }}
-        - name: "{{ .name }}"
-          namespace: "{{ .namespace }}"
+      {{- $t_path := printf "spec.nodes[%d].templateRefs" $n_index }}
+      {{- $_ := .templateRefs | validateNonEmpty $t_path }}
+      {{- $_ := .templateRefs | validateArrayType $t_path }}
+      {{- range $t_index, $t_ref := .templateRefs }}
+        - name: "{{ $t_ref.name | validateNonEmpty (printf "%s[%d].name" $t_path $t_index) }}"
+          namespace: "{{ $t_ref.namespace | validateNonEmpty (printf "%s[%d].namespace" $t_path $t_index) }}"
       {{- end }}
       # Optional fields at node-level
-      {{- if .automatedCleaningMode }}
-      automatedCleaningMode: "{{ .automatedCleaningMode }}"
-      {{- end }}
+      automatedCleaningMode: "{{ default "disabled" .automatedCleaningMode }}"
       {{- if .extraAnnotations }}
       extraAnnotations:
 {{ .extraAnnotations | toYaml | indent 8 }}
+      {{- end }}
+      {{- if .Cluster.extraLabels }}
+      extraLabels:
+{{ .Cluster.extraLabels | toYaml | indent 8 }}
       {{- end }}
       {{- if .ignitionConfigOverride }}
       ignitionConfigOverride: {{ .ignitionConfigOverride | quote }}
@@ -133,29 +148,35 @@ spec:
       {{- if .installerArgs }}
       installerArgs: {{ .installerArgs | quote }}
       {{- end }}
-      {{- if .ironicInspect }}
-      ironicInspect: "{{ .ironicInspect }}"
-      {{- end }}
+      ironicInspect: "{{ default "" .ironicInspect }}"
       {{- if .nodeLabels }}
       nodeLabels:
 {{ .nodeLabels | toYaml | indent 8 }}
       {{- end }}
       {{- if .nodeNetwork }}
       nodeNetwork:
+        {{- $_ := .nodeNetwork | validateMapType (printf "spec.nodes[%d].nodeNetwork" $n_index) }}
+        {{- if .nodeNetwork.config }}
         config:
 {{ .nodeNetwork.config | toYaml | indent 10 }}
+        {{- end }}
         interfaces:
-        {{- range .nodeNetwork.interfaces }}
-          - macAddress: "{{ .macAddress }}"
-            name: "{{ .name }}"
+        {{- $i_path := printf "spec.nodes[%d].nodeNetwork.interfaces" $n_index }}
+        {{- $_ := .nodeNetwork.interfaces | validateNonEmpty $i_path }}
+        {{- $_ := .nodeNetwork.interfaces | validateArrayType $i_path }}
+        {{- range $i_index, $i_ref := .nodeNetwork.interfaces }}
+          - macAddress: "{{ $i_ref.macAddress | validateNonEmpty (printf "%s[%d].macAddress" $i_path $i_index) }}"
+            name: "{{ $i_ref.name | validateNonEmpty (printf "%s[%d].name" $i_path $i_index) }}"
         {{- end }}
       {{- end }}
-      {{- if .role }}
-      role: "{{ .role }}"
-      {{- end }}
+      role: "{{ default "master" .role }}"
       {{- if .rootDeviceHints }}
       rootDeviceHints:
 {{ .rootDeviceHints | toYaml | indent 8 }}
+      {{- end }}
+      {{- if .Cluster.pruneManifests }}
+      pruneManifests:
+{{ .Cluster.pruneManifests | toYaml | indent 8 }}
       {{- end }}
       {{- if .suppressedManifests }}
       suppressedManifests:

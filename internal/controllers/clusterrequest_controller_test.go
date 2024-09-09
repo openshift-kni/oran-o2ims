@@ -32,7 +32,7 @@ type expectedNodeDetails struct {
 
 const (
 	testClusterTemplateSchema = `{
-		"description": "SiteConfigSpec defines the desired state of SiteConfig.",
+		"description": "ClusterInstanceSpec defines the params that are allowed in the ClusterRequest spec.clusterInstanceInput",
 		"properties": {
 		  "additionalNTPSources": {
 			"description": "AdditionalNTPSources is a list of NTP sources (hostname or IP) to be added to all cluster hosts. They are added to any NTP sources that were configured through other means.",
@@ -53,21 +53,6 @@ const (
 			"description": "BaseDomain is the base domain to use for the deployed cluster.",
 			"type": "string"
 		  },
-		  "caBundleRef": {
-			"description": "CABundle is a reference to a config map containing the new bundle of trusted certificates for the host. The tls-ca-bundle.pem entry in the config map will be written to /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-			"properties": {
-			  "name": {
-				"description": "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?",
-				"type": "string"
-			  }
-			},
-			"type": "object",
-			"x-kubernetes-map-type": "atomic"
-		  },
-		  "clusterImageSetNameRef": {
-			"description": "ClusterImageSetNameRef is the name of the ClusterImageSet resource indicating which OpenShift version to deploy.",
-			"type": "string"
-		  },
 		  "clusterLabels": {
 			"additionalProperties": {
 			  "type": "string"
@@ -79,64 +64,6 @@ const (
 			"description": "ClusterName is the name of the cluster.",
 			"type": "string"
 		  },
-		  "clusterNetwork": {
-			"description": "ClusterNetwork is the list of IP address pools for pods.",
-			"items": {
-			  "description": "ClusterNetworkEntry is a single IP address block for pod IP blocks. IP blocks are allocated with size 2^HostSubnetLength.",
-			  "properties": {
-				"cidr": {
-				  "description": "CIDR is the IP block address pool.",
-				  "type": "string"
-				}
-			  },
-			  "required": [
-				"cidr"
-			  ],
-			  "type": "object"
-			},
-			"type": "array"
-		  },
-		  "clusterType": {
-			"description": "ClusterType is a string representing the cluster type",
-			"enum": [
-			  "SNO",
-			  "HighlyAvailable"
-			],
-			"type": "string"
-		  },
-		  "cpuPartitioningMode": {
-			"default": "None",
-			"description": "CPUPartitioning determines if a cluster should be setup for CPU workload partitioning at install time. When this field is set the cluster will be flagged for CPU Partitioning allowing users to segregate workloads to specific CPU Sets. This does not make any decisions on workloads it only configures the nodes to allow CPU Partitioning. The \"AllNodes\" value will setup all nodes for CPU Partitioning, the default is \"None\".",
-			"enum": [
-			  "None",
-			  "AllNodes"
-			],
-			"type": "string"
-		  },
-		  "diskEncryption": {
-			"description": "DiskEncryption is the configuration to enable/disable disk encryption for cluster nodes.",
-			"properties": {
-			  "tang": {
-				"items": {
-				  "properties": {
-					"thumbprint": {
-					  "type": "string"
-					},
-					"url": {
-					  "type": "string"
-					}
-				  },
-				  "type": "object"
-				},
-				"type": "array"
-			  },
-			  "type": {
-				"default": "none",
-				"type": "string"
-			  }
-			},
-			"type": "object"
-		  },
 		  "extraAnnotations": {
 			"additionalProperties": {
 			  "additionalProperties": {
@@ -147,29 +74,15 @@ const (
 			"description": "Additional cluster-wide annotations to be applied to the rendered templates",
 			"type": "object"
 		  },
-		  "extraManifestsRef": {
-			"description": "ExtraManifestsRefs is list of config map references containing additional manifests to be applied to the cluster.",
-			"items": {
-			  "description": "LocalObjectReference contains enough information to let you locate the referenced object inside the same namespace.",
-			  "properties": {
-				"name": {
-				  "description": "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?",
-				  "type": "string"
-				}
+		  "extraLabels": {
+			"additionalProperties": {
+			  "additionalProperties": {
+				"type": "string"
 			  },
-			  "type": "object",
-			  "x-kubernetes-map-type": "atomic"
+			  "type": "object"
 			},
-			"type": "array"
-		  },
-		  "holdInstallation": {
-			"default": false,
-			"description": "HoldInstallation will prevent installation from happening when true. Inspection and validation will proceed as usual, but once the RequirementsMet condition is true, installation will not begin until this field is set to false.",
-			"type": "boolean"
-		  },
-		  "ignitionConfigOverride": {
-			"description": "Json formatted string containing the user overrides for the initial ignition config",
-			"type": "string"
+			"description": "Additional cluster-wide labels to be applied to the rendered templates",
+			"type": "object"
 		  },
 		  "ingressVIPs": {
 			"description": "IngressVIPs are the virtual IPs used for cluster ingress traffic. Enter one IP address for single-stack clusters, or up to two for dual-stack clusters (at most one IP address per IP stack used). The order of stacks should be the same as order of subnets in Cluster Networks, Service Networks, and Machine Networks.",
@@ -178,10 +91,6 @@ const (
 			},
 			"maxItems": 2,
 			"type": "array"
-		  },
-		  "installConfigOverrides": {
-			"description": "InstallConfigOverrides is a Json formatted string that provides a generic way of passing install-config parameters.",
-			"type": "string"
 		  },
 		  "machineNetwork": {
 			"description": "MachineNetwork is the list of IP address pools for machines.",
@@ -200,43 +109,28 @@ const (
 			},
 			"type": "array"
 		  },
-		  "networkType": {
-			"default": "OVNKubernetes",
-			"description": "NetworkType is the Container Network Interface (CNI) plug-in to install The default value is OpenShiftSDN for IPv4, and OVNKubernetes for IPv6 or SNO",
-			"enum": [
-			  "OpenShiftSDN",
-			  "OVNKubernetes"
-			],
-			"type": "string"
-		  },
 		  "nodes": {
 			"items": {
 			  "description": "NodeSpec",
 			  "properties": {
-				"automatedCleaningMode": {
-				  "default": "disabled",
-				  "description": "When set to disabled, automated cleaning will be avoided during provisioning and deprovisioning. Set the value to metadata to enable the removal of the disk’s partitioning table only, without fully wiping the disk. The default value is disabled.",
-				  "enum": [
-					"metadata",
-					"disabled"
-				  ],
-				  "type": "string"
-				},
 				"bmcAddress": {
-				  "description": "BmcAddress holds the URL for accessing the controller on the network.",
+				  "description": "(workaround)BmcAddress holds the URL for accessing the controller on the network.",
 				  "type": "string"
 				},
 				"bmcCredentialsName": {
-				  "description": "BmcCredentialsName is the name of the secret containing the BMC credentials (requires keys \"username\" and \"password\").",
+				  "description": "(workaround)BmcCredentialsName is the name of the secret containing the BMC credentials (requires keys \"username\" and \"password\").",
 				  "properties": {
 					"name": {
 					  "type": "string"
 					}
 				  },
+				  "required": [
+					"name"
+				  ],
 				  "type": "object"
 				},
 				"bmcCredentialsDetails": {
-				  "description": "BmcCredentialsName requires keys \"username\" and \"password\".",
+				  "description": "A workaround to provide bmc creds through ClusterRequest",
 				  "properties": {
 					"username": {
 					  "type": "string"
@@ -244,22 +138,11 @@ const (
 					"password": {
 					  "type": "string"
 					}
-				  },
-				  "type": "object"
+				  }
 				},
 				"bootMACAddress": {
-				  "description": "Which MAC address will PXE boot? This is optional for some types, but required for libvirt VMs driven by vbmc.",
+				  "description": "(workaround)Which MAC address will PXE boot? This is optional for some types, but required for libvirt VMs driven by vbmc.",
 				  "pattern": "[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}",
-				  "type": "string"
-				},
-				"bootMode": {
-				  "default": "UEFI",
-				  "description": "Provide guidance about how to choose the device for the image being provisioned.",
-				  "enum": [
-					"UEFI",
-					"UEFISecureBoot",
-					"legacy"
-				  ],
 				  "type": "string"
 				},
 				"extraAnnotations": {
@@ -272,21 +155,18 @@ const (
 				  "description": "Additional node-level annotations to be applied to the rendered templates",
 				  "type": "object"
 				},
+				"extraLabels": {
+				  "additionalProperties": {
+					"additionalProperties": {
+					  "type": "string"
+					},
+					"type": "object"
+				  },
+				  "description": "Additional node-level labels to be applied to the rendered templates",
+				  "type": "object"
+				},
 				"hostName": {
 				  "description": "Hostname is the desired hostname for the host",
-				  "type": "string"
-				},
-				"ignitionConfigOverride": {
-				  "description": "Json formatted string containing the user overrides for the host's ignition config IgnitionConfigOverride enables the assignment of partitions for persistent storage. Adjust disk ID and size to the specific hardware.",
-				  "type": "string"
-				},
-				"installerArgs": {
-				  "description": "Json formatted string containing the user overrides for the host's coreos installer args",
-				  "type": "string"
-				},
-				"ironicInspect": {
-				  "default": "",
-				  "description": "IronicInspect is used to specify if automatic introspection carried out during registration of BMH is enabled or disabled",
 				  "type": "string"
 				},
 				"nodeLabels": {
@@ -319,8 +199,7 @@ const (
 						  }
 						},
 						"required": [
-						  "macAddress",
-						  "name"
+						  "macAddress"
 						],
 						"type": "object"
 					  },
@@ -329,120 +208,14 @@ const (
 					}
 				  },
 				  "type": "object"
-				},
-				"role": {
-				  "default": "master",
-				  "enum": [
-					"master",
-					"worker"
-				  ],
-				  "type": "string"
-				},
-				"rootDeviceHints": {
-				  "description": "RootDeviceHints specifies the device for deployment. Identifiers that are stable across reboots are recommended, for example, wwn: <disk_wwn> or deviceName: /dev/disk/by-path/<device_path>",
-				  "properties": {
-					"deviceName": {
-					  "description": "A Linux device name like \"/dev/vda\", or a by-path link to it like \"/dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0\". The hint must match the actual value exactly.",
-					  "type": "string"
-					},
-					"hctl": {
-					  "description": "A SCSI bus address like 0:0:0:0. The hint must match the actual value exactly.",
-					  "type": "string"
-					},
-					"model": {
-					  "description": "A vendor-specific device identifier. The hint can be a substring of the actual value.",
-					  "type": "string"
-					},
-					"rotational": {
-					  "description": "True if the device should use spinning media, false otherwise.",
-					  "type": "boolean"
-					},
-					"serialNumber": {
-					  "description": "Device serial number. The hint must match the actual value exactly.",
-					  "type": "string"
-					},
-					"vendor": {
-					  "description": "The name of the vendor or manufacturer of the device. The hint can be a substring of the actual value.",
-					  "type": "string"
-					},
-					"wwn": {
-					  "description": "Unique storage identifier. The hint must match the actual value exactly.",
-					  "type": "string"
-					},
-					"wwnVendorExtension": {
-					  "description": "Unique vendor storage identifier. The hint must match the actual value exactly.",
-					  "type": "string"
-					},
-					"wwnWithExtension": {
-					  "description": "Unique storage identifier with the vendor extension appended. The hint must match the actual value exactly.",
-					  "type": "string"
-					}
-				  },
-				  "type": "object"
-				},
-				"suppressedManifests": {
-				  "description": "SuppressedManifests is a list of node-level manifest names to be excluded from the template rendering process",
-				  "items": {
-					"type": "string"
-				  },
-				  "type": "array"
-				},
-				"templateRefs": {
-				  "description": "TemplateRefs is a list of references to node-level templates. A node-level template consists of a ConfigMap in which the keys of the data field represent the kind of the installation manifest(s). Node-level templates are instantiated once for each node in the SiteConfig CR.",
-				  "items": {
-					"description": "TemplateRef is used to specify the installation CR templates",
-					"properties": {
-					  "name": {
-						"type": "string"
-					  },
-					  "namespace": {
-						"type": "string"
-					  }
-					},
-					"type": "object"
-				  },
-				  "type": "array"
 				}
 			  },
 			  "required": [
-				"bmcAddress",
-				"bmcCredentialsName",
-				"bmcCredentialsDetails",
-				"bootMACAddress",
 				"hostName"
 			  ],
 			  "type": "object"
 			},
 			"type": "array"
-		  },
-		  "proxy": {
-			"description": "Proxy defines the proxy settings used for the install config",
-			"properties": {
-			  "httpProxy": {
-				"description": "HTTPProxy is the URL of the proxy for HTTP requests.",
-				"type": "string"
-			  },
-			  "httpsProxy": {
-				"description": "HTTPSProxy is the URL of the proxy for HTTPS requests.",
-				"type": "string"
-			  },
-			  "noProxy": {
-				"description": "NoProxy is a comma-separated list of domains and CIDRs for which the proxy should not be used.",
-				"type": "string"
-			  }
-			},
-			"type": "object"
-		  },
-		  "pullSecretRef": {
-			"description": "PullSecretRef is the reference to the secret to use when pulling images.",
-			"properties": {
-			  "name": {
-				"description": "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?",
-				"type": "string"
-			  }
-			},
-			"type": "object",
-			"x-kubernetes-map-type": "atomic"
 		  },
 		  "serviceNetwork": {
 			"description": "ServiceNetwork is the list of IP address pools for services.",
@@ -464,82 +237,45 @@ const (
 		  "sshPublicKey": {
 			"description": "SSHPublicKey is the public Secure Shell (SSH) key to provide access to instances. This key will be added to the host to allow ssh access",
 			"type": "string"
-		  },
-		  "suppressedManifests": {
-			"description": "SuppressedManifests is a list of manifest names to be excluded from the template rendering process",
-			"items": {
-			  "type": "string"
-			},
-			"type": "array"
-		  },
-		  "templateRefs": {
-			"description": "TemplateRefs is a list of references to cluster-level templates. A cluster-level template consists of a ConfigMap in which the keys of the data field represent the kind of the installation manifest(s). Cluster-level templates are instantiated once per cluster (SiteConfig CR).",
-			"items": {
-			  "description": "TemplateRef is used to specify the installation CR templates",
-			  "properties": {
-				"name": {
-				  "type": "string"
-				},
-				"namespace": {
-				  "type": "string"
-				}
-			  },
-			  "type": "object"
-			},
-			"type": "array"
 		  }
 		},
 		"required": [
-		  "baseDomain",
-		  "clusterImageSetNameRef",
 		  "clusterName",
-		  "clusterType",
-		  "nodes",
-		  "pullSecretRef",
-		  "templateRefs"
+		  "nodes"
 		],
 		"type": "object"
-	  }
-	`
+	  }`
+
 	testClusterTemplateInput = `{
 		"additionalNTPSources": [
 		  "NTP.server1"
 		],
+		"apiVIPs": [
+		  "10.16.231.1"
+		],
 		"baseDomain": "example.com",
-		"clusterImageSetNameRef": "openshift-v4.15",
-		"caBundleRef": {
-		  "name": "my-bundle-ref"
-		},
 		"clusterLabels": {
 		  "cluster-version": "v4.16"
 		},
 		"clusterName": "cluster-1",
-		"clusterNetwork": [
-		  {
-			"cidr": "10.128.0.0/14"
-		  }
-		],
-		"clusterType": "SNO",
-		"diskEncryption": {
-		  "tang": [
-			{
-			  "thumbprint": "1234567890",
-			  "url": "http://10.0.0.1:7500"
-			}
-		  ],
-		  "type": "nbde"
-		},
-		"extraManifestsRefs": [
-		  {
-			"name": "foobar1"
-		  }
-		],
 		"machineNetwork": [
 		  {
 			"cidr": "10.16.231.0/24"
 		  }
 		],
-		"networkType": "OVNKubernetes",
+		"extraAnnotations": {
+          "AgentClusterInstall": {
+		    "extra-annotation-key": "extra-annotation-value"
+		  }
+		},
+		"extraLabels": {
+          "AgentClusterInstall": {
+		    "extra-label-key": "extra-label-value"
+		  }
+		},
+		"ingressVIPs": [
+		  "10.16.231.2"
+		],
 		"nodes": [
 		  {
 			"bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
@@ -551,17 +287,11 @@ const (
 			  "password": "aaaa"
 			},
 			"bootMACAddress": "00:00:00:01:20:30",
-			"bootMode": "UEFI",
-			"cpuset": "2-19,22-39",
 			"hostName": "node1",
-			"installerArgs": "[\"--append-karg\", \"nameserver=8.8.8.8\", \"-n\"]",
-			"ironicInspect": "",
-			"templateRefs": [
-			  {
-				"name": "ai-cluster-templates-v1",
-				"namespace": "siteconfig-operator"
-			  }
-			],
+			"nodeLabels": {
+			  "node-role.kubernetes.io/infra": "",
+			  "node-role.kubernetes.io/master": ""
+			},
 			"nodeNetwork": {
 			  "config": {
 				"dns-resolver": {
@@ -662,31 +392,15 @@ const (
 				  "name": "eth1"
 				}
 			  ]
-			},
-			"role": "master",
-			"rootDeviceHints": {
-			  "hctl": "1:2:0:0"
 			}
 		  }
 		],
-		"proxy": {
-		  "noProxy": "foobar"
-		},
-		"pullSecretRef": {
-		  "name": "site-sno-du-1-pull-secret"
-		},
 		"serviceNetwork": [
 		  {
 			"cidr": "172.30.0.0/16"
 		  }
 		],
-		"sshPublicKey": "ssh-rsa ",
-		"templateRefs": [
-		  {
-			"name": "ai-cluster-templates-v1",
-			"namespace": "siteconfig-operator"
-		  }
-		]
+		"sshPublicKey": "ssh-rsa "
 	 }`
 
 	testPolicyTemplateSchema = `{
@@ -1414,7 +1128,19 @@ var _ = Describe("policyManagement", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `key: value`,
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.15"
+pullSecretRef:
+  name: "pull-secret"
+templateRefs:
+- name: "ai-cluster-templates-v1"
+  namespace: "siteconfig-operator"
+nodes:
+- hostname: "node1"
+  templateRefs:
+  - name: "ai-node-templates-v1"
+    namespace: "siteconfig-operator"
+`,
 				},
 			},
 			&corev1.ConfigMap{
@@ -1453,7 +1179,7 @@ defaultHugepagesSize: "1G"`,
 			// Pull secret.
 			&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "site-sno-du-1-pull-secret",
+					Name:      "pull-secret",
 					Namespace: ctNamespace,
 				},
 			},
@@ -1732,10 +1458,10 @@ defaultHugepagesSize: "1G"`,
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
-		Expect(conditions[4].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(conditions[4].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[4].Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
-		Expect(conditions[4].Message).To(Equal("The configuration is out of date"))
+		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(conditions[5].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
+		Expect(conditions[5].Message).To(Equal("The configuration is out of date"))
 	})
 
 	It("Updates ClusterRequest ConfigurationApplied condition to Completed when the cluster is "+
@@ -1832,10 +1558,10 @@ defaultHugepagesSize: "1G"`,
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
-		Expect(conditions[4].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(conditions[4].Status).To(Equal(metav1.ConditionTrue))
-		Expect(conditions[4].Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
-		Expect(conditions[4].Message).To(Equal("The configuration is up to date"))
+		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(conditions[5].Status).To(Equal(metav1.ConditionTrue))
+		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
+		Expect(conditions[5].Message).To(Equal("The configuration is up to date"))
 	})
 
 	It("Updates ClusterRequest ConfigurationApplied condition to InProgress when the cluster is "+
@@ -1932,9 +1658,9 @@ defaultHugepagesSize: "1G"`,
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
-		Expect(conditions[4].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(conditions[4].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[4].Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
-		Expect(conditions[4].Message).To(Equal("The configuration is still being applied"))
+		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(conditions[5].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(conditions[5].Message).To(Equal("The configuration is still being applied"))
 	})
 })

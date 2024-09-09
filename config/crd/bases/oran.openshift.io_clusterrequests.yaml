@@ -46,7 +46,8 @@ spec:
                   clusterInstanceInput:
                     description: |-
                       ClusterInstanceInput provides the input values required for provisioning.
-                      The input follows the schema defined in the referenced ClusterTemplate's spec.inputDataSchema.clusterInstanceSchema.
+                      The input must adhere to the schema defined in the referenced ClusterTemplate's
+                      spec.inputDataSchema.clusterInstanceSchema.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   policyTemplateInput:

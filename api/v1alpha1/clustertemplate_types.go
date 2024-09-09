@@ -48,9 +48,11 @@ type Templates struct {
 
 // InputDataSchema encapsulates all the schemas required for ClusterTemplate.
 type InputDataSchema struct {
-	// ClusterInstanceSchema defines the parameters required for provisioning.
-	// The parameter definitions should follow the OpenAPI V3 schema and
-	// explicitly define required fields.
+	// ClusterInstanceSchema defines the subschema of ClusterInstance parameters that
+	// are allowed in the ClusterRequest's spec.clusterTemplateInput.clusterInstanceInput.
+	// The parameter definitions should follow the OpenAPI V3 schema and explicitly define
+	// the parameter type and required fields. This schema will be used to validate the
+	// ClusterInstanceInput provided in a ClusterRequest.
 	// +kubebuilder:validation:Type=object
 	// +kubebuilder:pruning:PreserveUnknownFields
 	ClusterInstanceSchema runtime.RawExtension `json:"clusterInstanceSchema"`

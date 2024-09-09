@@ -12,45 +12,43 @@ spec:
   clusterTemplateRef: clustertemplate-sample
   clusterTemplateInput:
     clusterInstanceInput:
+      apiVIPs:
+        - 192.0.2.2
       additionalNTPSources:
         - NTP.server1
         - 1.1.1.1
       baseDomain: example.com
-      caBundleRef:
-        name: my-bundle-ref
       clusterLabels:
         common: "true"
         group-du-sno: test
         sites: site-sno-du-1
       clusterName: site-sno-du-1
-      clusterNetwork:
-        - cidr: 203.0.113.0/24
-          hostPrefix: 23
-      clusterImageSetNameRef: "4.16"
-      clusterType: SNO
-      diskEncryption:
-        tang:
-          - thumbprint: "1234567890"
-            url: http://198.51.100.11:7500
-        type: nbde
-      extraManifestsRefs:
-        - name: foobar1
-      cpuPartitioningMode: AllNodes
-      ignitionConfigOverride: igen
-      installConfigOverrides: '{"capabilities":{"baselineCapabilitySet": "None", "additionalEnabledCapabilities": [ "marketplace", "NodeTuning" ] }}'
+      extraAnnotations:
+        AgentClusterInstall:
+          extra-annotation-key: extra-annotation-value
+      extraLabels:
+        AgentClusterInstall:
+          extra-label-key: extra-label-value
+      ingressVIPs:
+        - 192.0.2.3
       machineNetwork:
         - cidr: 192.0.2.0/24
-      networkType: OVNKubernetes
       nodes:
         - bmcAddress: idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1
           bmcCredentialsName:
             name: node1-bmc-secret
           bootMACAddress: 00:00:00:01:20:30
           bootMode: UEFI
+          extraAnnotations:
+            BareMetalHost:
+              extra-annotation-key: extra-annotation-value
+          extraLabels:
+            BareMetalHost:
+              extra-label-key: extra-label-value
           hostName: node1.baseDomain.com
-          ignitionConfigOverride: '{"ignition": {"version": "3.1.0"}, "storage": {"files": [{"path": "/etc/containers/registries.conf", "overwrite": true, "contents": {"source": "data:text/plain;base64,aGVsbG8gZnJvbSB6dHAgcG9saWN5IGdlbmVyYXRvcg=="}}]}}'
-          installerArgs: '["--append-karg", "nameserver=8.8.8.8", "-n"]'
-          ironicInspect: ""
+          nodeLabels:
+            node-role.kubernetes.io/infra: ""
+            node-role.kubernetes.io/master: ""
           nodeNetwork:
             config:
               dns-resolver:
@@ -108,19 +106,6 @@ spec:
                 name: eth0
               - macAddress: 02:00:00:80:12:15
                 name: eth1
-          role: master
-          rootDeviceHints:
-            hctl: 1:2:0:0
-          templateRefs:
-            - name: aci-node-crs-v1
-              namespace: siteconfig-system
-      proxy:
-        noProxy: foobar
-      pullSecretRef:
-        name: pullSecretName
       serviceNetwork:
         - cidr: 172.30.0.0/16
       sshPublicKey: ssh-rsa
-      templateRefs:
-        - name: aci-cluster-crs-v1
-          namespace: siteconfig-system
