@@ -54,6 +54,7 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&hwv1alpha1.NodePool{}).
 		WithStatusSubresource(&hwv1alpha1.Node{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
+		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		Build()
 }
 
@@ -99,4 +100,5 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
+	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedClusterList{})
 })

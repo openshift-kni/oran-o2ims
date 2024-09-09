@@ -54,14 +54,18 @@ var CRconditionReasons = struct {
 	Completed  ConditionReason
 	Failed     ConditionReason
 	InProgress ConditionReason
+	Missing    ConditionReason
 	OutOfDate  ConditionReason
+	TimedOut   ConditionReason
 	Unknown    ConditionReason
 }{
 	NotApplied: "NotApplied",
 	Completed:  "Completed",
 	Failed:     "Failed",
 	InProgress: "InProgress",
+	Missing:    "Missing",
 	OutOfDate:  "OutOfDate",
+	TimedOut:   "TimedOut",
 	Unknown:    "Unknown",
 }
 

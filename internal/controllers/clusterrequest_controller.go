@@ -247,9 +247,12 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 		string(utils.CRconditionTypes.ClusterProvisioned))
 	if crProvisionedCond != nil {
 		// Handle configuration through policies.
-		err = t.handleClusterPolicyConfiguration(ctx)
+		requeue, err := t.handleClusterPolicyConfiguration(ctx)
 		if err != nil {
 			return requeueWithError(err)
+		}
+		if requeue {
+			return requeueWithMediumInterval(), nil
 		}
 	}
 
@@ -852,10 +855,32 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 
 // handleClusterPolicyConfiguration updates the ClusterRequest status to reflect the status
 // of the policies that match the managed cluster created through the ClusterRequest.
-func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx context.Context) error {
+func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx context.Context) (
+	requeue bool, err error) {
 	if t.object.Status.ClusterInstanceRef == nil {
-		return fmt.Errorf("status.clusterInstanceRef is empty")
+		return false, fmt.Errorf("status.clusterInstanceRef is empty")
 	}
+
+	clusterIsReadyForPolicyConfig, err := utils.ClusterIsReadyForPolicyConfig(
+		ctx, t.client, t.object.Status.ClusterInstanceRef.Name,
+	)
+	if err != nil {
+		return false, fmt.Errorf(
+			"error determining if the cluster is ready for policy configuration: %w", err)
+	}
+
+	if !clusterIsReadyForPolicyConfig {
+		t.logger.InfoContext(
+			ctx,
+			fmt.Sprintf(
+				"Cluster %s (%s) is not ready for policy configuration",
+				t.object.Status.ClusterInstanceRef.Name,
+				t.object.Status.ClusterInstanceRef.Name,
+			),
+		)
+		return false, nil
+	}
+
 	// Get all the child policies in the namespace of the managed cluster created through
 	// the ClusterRequest.
 	policies := &policiesv1.PolicyList{}
@@ -864,9 +889,9 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 		client.InNamespace(t.object.Status.ClusterInstanceRef.Name),
 	}
 
-	err := t.client.List(ctx, policies, listOpts...)
+	err = t.client.List(ctx, policies, listOpts...)
 	if err != nil {
-		return fmt.Errorf("failed to list Policies: %w", err)
+		return false, fmt.Errorf("failed to list Policies: %w", err)
 	}
 
 	allPoliciesCompliant := true
@@ -891,35 +916,115 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 		}
 		targetPolicies = append(targetPolicies, *targetPolicy)
 	}
+	err = t.updateConfigurationAppliedStatus(
+		ctx, targetPolicies, allPoliciesCompliant, nonCompliantPolicyInEnforce)
+	if err != nil {
+		return false, err
+	}
 
-	// Update the ConfigurationApplied condition.
-	if allPoliciesCompliant {
+	// If there are policies that are not Compliant, we need to requeue and see if they
+	// time out or complete.
+	return nonCompliantPolicyInEnforce, nil
+}
+
+// hasPolicyConfigurationTimedOut determines if the policy configuration for the
+// ClusterRequest has timed out.
+func (t *clusterRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx context.Context) bool {
+	policyTimedOut := false
+	// Get the ConfigurationApplied condition.
+	configurationAppliedCondition := meta.FindStatusCondition(
+		t.object.Status.Conditions,
+		string(utils.CRconditionTypes.ConfigurationApplied))
+
+	// If the condition does not exist, set the non compliant timestamp since we
+	// get here just for policies that have a status different from Compliant.
+	if configurationAppliedCondition == nil {
+		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+		return policyTimedOut
+	}
+
+	// If the current status of the Condition is false.
+	if configurationAppliedCondition.Status == metav1.ConditionFalse {
+		switch configurationAppliedCondition.Reason {
+		case string(utils.CRconditionReasons.InProgress):
+			// Check if the configuration application has timed out.
+			if time.Since(t.object.Status.ClusterInstanceRef.NonCompliantAt.Time) > time.Duration(t.object.Spec.Timeout.Configuration)*time.Minute {
+				policyTimedOut = true
+			}
+		case string(utils.CRconditionReasons.TimedOut):
+			policyTimedOut = true
+		case string(utils.CRconditionReasons.Missing):
+			t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+		case string(utils.CRconditionReasons.OutOfDate):
+			t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+		default:
+			t.logger.InfoContext(ctx,
+				fmt.Sprintf("Unexpected Reason for condition type %s",
+					utils.CRconditionTypes.ConfigurationApplied,
+				),
+			)
+		}
+	} else if configurationAppliedCondition.Reason == string(utils.CRconditionReasons.Completed) {
+		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+	}
+
+	return policyTimedOut
+}
+
+// updateConfigurationAppliedStatus updates the ClusterRequest ConfigurationApplied condition
+// based on the state of the policies matched with the managed cluster.
+func (t *clusterRequestReconcilerTask) updateConfigurationAppliedStatus(
+	ctx context.Context, targetPolicies []oranv1alpha1.PolicyDetails, allPoliciesCompliant bool,
+	nonCompliantPolicyInEnforce bool) error {
+	if len(targetPolicies) == 0 {
+		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Completed,
-			metav1.ConditionTrue,
-			"The configuration is up to date",
+			utils.CRconditionReasons.Missing,
+			metav1.ConditionFalse,
+			"No configuration present",
 		)
 	} else {
-		if nonCompliantPolicyInEnforce {
+		// Update the ConfigurationApplied condition.
+		if allPoliciesCompliant {
+			t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Time{}
 			utils.SetStatusCondition(&t.object.Status.Conditions,
 				utils.CRconditionTypes.ConfigurationApplied,
-				utils.CRconditionReasons.InProgress,
-				metav1.ConditionFalse,
-				"The configuration is still being applied",
+				utils.CRconditionReasons.Completed,
+				metav1.ConditionTrue,
+				"The configuration is up to date",
 			)
 		} else {
-			utils.SetStatusCondition(&t.object.Status.Conditions,
-				utils.CRconditionTypes.ConfigurationApplied,
-				utils.CRconditionReasons.OutOfDate,
-				metav1.ConditionFalse,
-				"The configuration is out of date",
-			)
+			if nonCompliantPolicyInEnforce {
+				policyTimedOut := t.hasPolicyConfigurationTimedOut(ctx)
+
+				message := "The configuration is still being applied"
+				reason := utils.CRconditionReasons.InProgress
+				if policyTimedOut {
+					message += ", but it timed out"
+					reason = utils.CRconditionReasons.TimedOut
+				}
+				utils.SetStatusCondition(&t.object.Status.Conditions,
+					utils.CRconditionTypes.ConfigurationApplied,
+					reason,
+					metav1.ConditionFalse,
+					message,
+				)
+			} else {
+				// No timeout is reported if all policies are in inform, just out of date.
+				t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Time{}
+				utils.SetStatusCondition(&t.object.Status.Conditions,
+					utils.CRconditionTypes.ConfigurationApplied,
+					utils.CRconditionReasons.OutOfDate,
+					metav1.ConditionFalse,
+					"The configuration is out of date",
+				)
+			}
 		}
 	}
 
 	t.object.Status.Policies = targetPolicies
-	// Update the current policy status
+	// Update the current policy status.
 	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
 	}

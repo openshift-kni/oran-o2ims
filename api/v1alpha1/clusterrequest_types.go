@@ -74,6 +74,9 @@ type ClusterInstanceRef struct {
 
 	// Says if ZTP has complete or not.
 	ZtpStatus string `json:"ztpStatus,omitempty"`
+
+	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
+	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
 }
 
 // Timeout contains timeout values for hardware provisioning, cluster provisioning and

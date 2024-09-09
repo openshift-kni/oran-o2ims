@@ -24,9 +24,12 @@ import (
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -847,6 +850,7 @@ func GetDefaultBackendTransport() (http.RoundTripper, error) {
 	return net.SetTransportDefaults(&http.Transport{TLSClientConfig: tlsConfig}), nil
 }
 
+<<<<<<< HEAD
 // Helper function to find the matching NodeGroup by role
 func FindNodeGroupByRole(role string, nodeGroups []hwv1alpha1.NodeGroup) (*hwv1alpha1.NodeGroup, error) {
 	for i, group := range nodeGroups {
@@ -912,4 +916,47 @@ func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, nodePool *hwv1alpha1.
 		}
 	}
 	return "", fmt.Errorf("no boot interface found")
+}
+
+// ClusterIsReadyForPolicyConfig checks if a cluster is ready for policy configuration
+// by looking at its availability, joined status and hub acceptance.
+func ClusterIsReadyForPolicyConfig(
+	ctx context.Context, c client.Client, clusterInstanceName string) (bool, error) {
+	// Check if the managed cluster is available. If not, return.
+	managedCluster := &clusterv1.ManagedCluster{}
+	managedClusterExists, err := DoesK8SResourceExist(
+		ctx, c, clusterInstanceName, "", managedCluster)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if managed cluster exists: %w", err)
+	}
+	if !managedClusterExists {
+		return false, nil
+	}
+
+	available := false
+	hubAccepted := false
+	joined := false
+
+	availableCondition := meta.FindStatusCondition(
+		managedCluster.Status.Conditions,
+		clusterv1.ManagedClusterConditionAvailable)
+	if availableCondition != nil && availableCondition.Status == metav1.ConditionTrue {
+		available = true
+	}
+
+	acceptedCondition := meta.FindStatusCondition(
+		managedCluster.Status.Conditions,
+		clusterv1.ManagedClusterConditionHubAccepted)
+	if acceptedCondition != nil && acceptedCondition.Status == metav1.ConditionTrue {
+		hubAccepted = true
+	}
+
+	joinedCondition := meta.FindStatusCondition(
+		managedCluster.Status.Conditions,
+		clusterv1.ManagedClusterConditionJoined)
+	if joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue {
+		joined = true
+	}
+
+	return available && hubAccepted && joined, nil
 }

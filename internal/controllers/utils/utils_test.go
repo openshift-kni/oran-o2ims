@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
@@ -45,8 +46,8 @@ func TestInventoryControllerUtils(t *testing.T) {
 }
 
 //nolint:unparam
-func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
-	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.Inventory{}).Build(), nil
+func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
+	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build()
 }
 
 var _ = Describe("ExtensionUtils", func() {
@@ -81,9 +82,8 @@ var _ = Describe("ExtensionUtils", func() {
 				},
 			},
 		}
-		objs := []client.Object{Inventory}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
+		objs := []client.Object{orano2ims}
+		fakeClient := getFakeClientFromObjects(objs...)
 
 		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
@@ -110,9 +110,8 @@ var _ = Describe("ExtensionUtils", func() {
 			},
 		}
 
-		objs := []client.Object{Inventory}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
+		objs := []client.Object{orano2ims}
+		fakeClient := getFakeClientFromObjects(objs...)
 
 		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
@@ -148,8 +147,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	}
 
 	// Get a fake client.
-	fakeClient, err := getFakeClientFromObjects(objs...)
-	Expect(err).ToNot(HaveOccurred())
+	fakeClient := getFakeClientFromObjects(objs...)
 
 	It("If deployment does not exist, it will be created", func() {
 		Inventory := &oranv1alpha1.Inventory{
@@ -275,8 +273,7 @@ var _ = Describe("getACMNamespace", func() {
 
 	It("If multiclusterengine does not exist, return error", func() {
 		objs := []client.Object{}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
+		fakeClient := getFakeClientFromObjects(objs...)
 		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("multiclusterengine object not found"))
@@ -304,8 +301,7 @@ var _ = Describe("getACMNamespace", func() {
 		})
 
 		objs := []client.Object{u}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
+		fakeClient := getFakeClientFromObjects(objs...)
 		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
@@ -334,8 +330,7 @@ var _ = Describe("getACMNamespace", func() {
 		})
 
 		objs := []client.Object{mce}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
+		fakeClient := getFakeClientFromObjects(objs...)
 		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(acmNamespace).To(Equal("open-cluster-management"))
@@ -374,10 +369,9 @@ var _ = Describe("searchAPI", func() {
 			},
 		}
 
-		objs := []client.Object{mce, Inventory}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
+		objs := []client.Object{mce, orano2ims}
+		fakeClient := getFakeClientFromObjects(objs...)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
 		Expect(searchAPI).To(Equal(""))
@@ -415,10 +409,9 @@ var _ = Describe("searchAPI", func() {
 			},
 		}
 
-		objs := []client.Object{mce, Inventory}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
+		objs := []client.Object{mce, orano2ims}
+		fakeClient := getFakeClientFromObjects(objs...)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
 		Expect(searchAPI).To(BeEmpty())
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
@@ -458,10 +451,9 @@ var _ = Describe("searchAPI", func() {
 			},
 		}
 
-		objs := []client.Object{mce, Inventory}
-		fakeClient, err := getFakeClientFromObjects(objs...)
-		Expect(err).ToNot(HaveOccurred())
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
+		objs := []client.Object{mce, orano2ims}
+		fakeClient := getFakeClientFromObjects(objs...)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(searchAPI).To(Equal("https://search-api-open-cluster-management.apps.lab.karmalabs.corp"))
 	})
@@ -1552,5 +1544,105 @@ var _ = Describe("GetLabelsForPolicies", func() {
 		err := CheckClusterLabelsForPolicies(clusterName, clusterLabels)
 		Expect(err).ToNot(HaveOccurred())
 	})
+})
 
+var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
+	var (
+		ctx         context.Context
+		fakeClient  client.Client
+		clusterName = "cluster-1"
+	)
+
+	suitescheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
+	suitescheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedClusterList{})
+
+	BeforeEach(func() {
+		// Define the needed resources.
+		crs := []client.Object{
+			// Managed clusters
+			&clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+				Spec: clusterv1.ManagedClusterSpec{
+					HubAcceptsClient: true,
+				},
+				Status: clusterv1.ManagedClusterStatus{},
+			},
+		}
+
+		fakeClient = getFakeClientFromObjects(crs...)
+	})
+
+	It("returns false and no error if the cluster doesn't exist", func() {
+		isReadyForConfig, err := ClusterIsReadyForPolicyConfig(ctx, fakeClient, "randomName")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(isReadyForConfig).To(BeFalse())
+	})
+
+	It("returns false if cluster is either not available, hubAccepted or has not joined", func() {
+		// Update the managedCluster cluster-1 to be available, joined and accepted.
+		managedCluster1 := &clusterv1.ManagedCluster{}
+		managedClusterExists, err := DoesK8SResourceExist(
+			ctx, fakeClient, clusterName, "", managedCluster1)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(managedClusterExists).To(BeTrue())
+		SetStatusCondition(&managedCluster1.Status.Conditions,
+			ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			"ManagedClusterAvailable",
+			metav1.ConditionFalse,
+			"Managed cluster is available",
+		)
+		SetStatusCondition(&managedCluster1.Status.Conditions,
+			ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
+			"HubClusterAdminAccepted",
+			metav1.ConditionTrue,
+			"Accepted by hub cluster admin",
+		)
+		SetStatusCondition(&managedCluster1.Status.Conditions,
+			ConditionType(clusterv1.ManagedClusterConditionJoined),
+			"ManagedClusterJoined",
+			metav1.ConditionTrue,
+			"Managed cluster joined",
+		)
+		err = CreateK8sCR(context.TODO(), fakeClient, managedCluster1, nil, UPDATE)
+		Expect(err).ToNot(HaveOccurred())
+
+		isReadyForConfig, err := ClusterIsReadyForPolicyConfig(ctx, fakeClient, clusterName)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(isReadyForConfig).To(BeFalse())
+	})
+
+	It("returns true if cluster is available, hubAccepted and has joined", func() {
+		// Update the managedCluster cluster-1 to be available, joined and accepted.
+		managedCluster1 := &clusterv1.ManagedCluster{}
+		managedClusterExists, err := DoesK8SResourceExist(
+			ctx, fakeClient, clusterName, "", managedCluster1)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(managedClusterExists).To(BeTrue())
+		SetStatusCondition(&managedCluster1.Status.Conditions,
+			ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			"ManagedClusterAvailable",
+			metav1.ConditionTrue,
+			"Managed cluster is available",
+		)
+		SetStatusCondition(&managedCluster1.Status.Conditions,
+			ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
+			"HubClusterAdminAccepted",
+			metav1.ConditionTrue,
+			"Accepted by hub cluster admin",
+		)
+		SetStatusCondition(&managedCluster1.Status.Conditions,
+			ConditionType(clusterv1.ManagedClusterConditionJoined),
+			"ManagedClusterJoined",
+			metav1.ConditionTrue,
+			"Managed cluster joined",
+		)
+		err = CreateK8sCR(context.TODO(), fakeClient, managedCluster1, nil, UPDATE)
+		Expect(err).ToNot(HaveOccurred())
+
+		isReadyForConfig, err := ClusterIsReadyForPolicyConfig(ctx, fakeClient, clusterName)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(isReadyForConfig).To(BeTrue())
+	})
 })
