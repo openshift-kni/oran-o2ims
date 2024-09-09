@@ -1113,7 +1113,7 @@ spec:
 
 	It("Renders the cluster instance template successfully", func() {
 		expectedRenderedClusterInstance := &unstructured.Unstructured{}
-		err := yaml.Unmarshal([]byte(expectedRenderedYaml), &expectedRenderedClusterInstance.Object)
+		err := yaml.Unmarshal([]byte(expectedRenderedYaml), expectedRenderedClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 
 		renderedClusterInstance, err := RenderTemplateForK8sCR(
@@ -1523,13 +1523,13 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 
 var _ = Describe("GetLabelsForPolicies", func() {
 	var (
-		spec        = make(map[string]interface{})
-		clusterName = "cluster-1"
+		clusterLabels = map[string]string{}
+		clusterName   = "cluster-1"
 	)
 
 	It("returns error if the clusterInstance does not have any labels", func() {
 
-		err := CheckClusterLabelsForPolicies(spec, clusterName)
+		err := CheckClusterLabelsForPolicies(clusterName, clusterLabels)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			fmt.Sprintf("No cluster labels configured by the ClusterInstance %s(%s)",
@@ -1538,12 +1538,8 @@ var _ = Describe("GetLabelsForPolicies", func() {
 
 	It("returns error if the clusterInstance does not have the cluster-version label", func() {
 
-		spec = map[string]interface{}{
-			"clusterLabels": map[string]interface{}{
-				"clustertemplate-a-policy": "v1",
-			},
-		}
-		err := CheckClusterLabelsForPolicies(spec, clusterName)
+		clusterLabels["clustertemplate-a-policy"] = "v1"
+		err := CheckClusterLabelsForPolicies(clusterName, clusterLabels)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			fmt.Sprintf("Managed cluster %s is missing the cluster-version label.",
@@ -1552,13 +1548,8 @@ var _ = Describe("GetLabelsForPolicies", func() {
 
 	It("returns no error if the cluster-version label exists", func() {
 
-		spec = map[string]interface{}{
-			"clusterLabels": map[string]interface{}{
-				"clustertemplate-a-policy": "v1",
-				"cluster-version":          "v4.16",
-			},
-		}
-		err := CheckClusterLabelsForPolicies(spec, clusterName)
+		clusterLabels["cluster-version"] = "v4.16"
+		err := CheckClusterLabelsForPolicies(clusterName, clusterLabels)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
