@@ -9,6 +9,10 @@ metadata:
     app.kubernetes.io/created-by: oran-o2ims
   name: clusterrequest-sample
 spec:
+  timeout:
+    clusterProvisioning: 80
+    configuration: 40
+    hardwareProvisioning: 60
   clusterTemplateRef: clustertemplate-sample
   clusterTemplateInput:
     clusterInstanceInput:

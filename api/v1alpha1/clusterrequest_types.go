@@ -38,7 +38,7 @@ type ClusterRequestSpec struct {
 
 	ClusterTemplateInput ClusterTemplateInput `json:"clusterTemplateInput"`
 
-	Timeout Timeout `json:"timeout"`
+	Timeout Timeout `json:"timeout,omitempty"`
 }
 
 // ClusterTemplateInput provides the input data that follows the schema defined in the referenced ClusterTemplate.
