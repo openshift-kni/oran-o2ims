@@ -509,7 +509,7 @@ func RenderTemplateForK8sCR(templateName, templatePath string, templateDataObj m
 		return nil, fmt.Errorf("failed to execute template %s with data, err: %w", templateName, err)
 	}
 
-	err = yaml.Unmarshal(output.Bytes(), &renderedTemplate.Object)
+	err = yaml.Unmarshal(output.Bytes(), renderedTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal, err: %w", err)
 	}
@@ -749,11 +749,9 @@ func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNames
 // CheckClusterLabelsForPolicies checks if the cluster_version
 // label exist for a certain ClusterInstance and returns it.
 func CheckClusterLabelsForPolicies(
-	spec map[string]interface{}, clusterName string) error {
+	clusterName string, clusterLabels map[string]string) error {
 
-	labelsInterface, labelsExists := spec["clusterLabels"]
-
-	if !labelsExists {
+	if len(clusterLabels) == 0 {
 		return NewInputError(
 			"No cluster labels configured by the ClusterInstance %s(%s). "+
 				"Labels are needed for cluster configuration",
@@ -762,8 +760,7 @@ func CheckClusterLabelsForPolicies(
 	}
 
 	// Make sure the cluster-version label exists.
-	_, clusterVersionLabelExists :=
-		labelsInterface.(map[string]interface{})[ClusterVersionLabelKey]
+	_, clusterVersionLabelExists := clusterLabels[ClusterVersionLabelKey]
 	if !clusterVersionLabelExists {
 		return NewInputError(
 			"Managed cluster %s is missing the %s label. This label is needed for correctly "+
@@ -771,7 +768,6 @@ func CheckClusterLabelsForPolicies(
 			clusterName, ClusterVersionLabelKey,
 		)
 	}
-
 	return nil
 }
 

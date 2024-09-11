@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
@@ -393,7 +392,7 @@ func (t *clusterRequestReconcilerTask) getMergedClusterInputData(
 }
 
 // handleRenderClusterInstance handles the ClusterInstance rendering and validation.
-func (t *clusterRequestReconcilerTask) handleRenderClusterInstance(ctx context.Context) (*unstructured.Unstructured, error) {
+func (t *clusterRequestReconcilerTask) handleRenderClusterInstance(ctx context.Context) (*siteconfig.ClusterInstance, error) {
 	renderedClusterInstance, err := t.renderClusterInstanceTemplate(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -434,7 +433,7 @@ func (t *clusterRequestReconcilerTask) handleRenderClusterInstance(ctx context.C
 }
 
 func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
-	ctx context.Context) (*unstructured.Unstructured, error) {
+	ctx context.Context) (*siteconfig.ClusterInstance, error) {
 	t.logger.InfoContext(
 		ctx,
 		"Rendering the ClusterInstance template for ClusterRequest",
@@ -447,7 +446,8 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		"Cluster": t.clusterInput.clusterInstanceData,
 	}
 
-	renderedClusterInstance, err := utils.RenderTemplateForK8sCR(
+	renderedClusterInstance := &siteconfig.ClusterInstance{}
+	renderedClusterInstanceUnstructure, err := utils.RenderTemplateForK8sCR(
 		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
 	if err != nil {
 		return nil, utils.NewInputError("failed to render the ClusterInstance template for ClusterRequest: %w", err)
@@ -456,26 +456,33 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		labels := make(map[string]string)
 		labels[clusterRequestNameLabel] = t.object.Name
 		labels[clusterRequestNamespaceLabel] = t.object.Namespace
-		renderedClusterInstance.SetLabels(labels)
+		renderedClusterInstanceUnstructure.SetLabels(labels)
 
 		// Create the ClusterInstance namespace.
-		err = t.createClusterInstanceNamespace(ctx, renderedClusterInstance.GetName())
+		err = t.createClusterInstanceNamespace(ctx, renderedClusterInstanceUnstructure.GetName())
 		if err != nil {
-			return nil, fmt.Errorf("failed to create cluster namespace %s: %w", renderedClusterInstance.GetName(), err)
+			return nil, fmt.Errorf("failed to create cluster namespace %s: %w", renderedClusterInstanceUnstructure.GetName(), err)
 		}
 
 		// Validate the rendered ClusterInstance with dry-run
 		isDryRun := true
-		_, err = t.applyClusterInstance(ctx, renderedClusterInstance, isDryRun)
+		_, err = t.applyClusterInstance(ctx, renderedClusterInstanceUnstructure, isDryRun)
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
+		}
+
+		// Convert unstructured to siteconfig.ClusterInstance type
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(
+			renderedClusterInstanceUnstructure.Object, renderedClusterInstance); err != nil {
+			// Unlikely to happen since dry-run validation has passed
+			return nil, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
 		}
 	}
 
 	return renderedClusterInstance, nil
 }
 
-func (t *clusterRequestReconcilerTask) handleClusterResources(ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+func (t *clusterRequestReconcilerTask) handleClusterResources(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 	err := t.createOrUpdateClusterResources(ctx, clusterInstance)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -513,7 +520,7 @@ func (t *clusterRequestReconcilerTask) handleClusterResources(ctx context.Contex
 }
 
 func (t *clusterRequestReconcilerTask) renderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwv1alpha1.NodePool, error) {
+	clusterInstance *siteconfig.ClusterInstance) (*hwv1alpha1.NodePool, error) {
 	renderedNodePool, err := t.handleRenderHardwareTemplate(ctx, clusterInstance)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -552,7 +559,7 @@ func (t *clusterRequestReconcilerTask) renderHardwareTemplate(ctx context.Contex
 }
 
 func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwv1alpha1.NodePool, error) {
+	clusterInstance *siteconfig.ClusterInstance) (*hwv1alpha1.NodePool, error) {
 
 	nodePool := &hwv1alpha1.NodePool{}
 
@@ -577,25 +584,8 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 
 	// count the nodes per group
 	roleCounts := make(map[string]int)
-	specInterface, specExists := clusterInstance.Object["spec"].(map[string]any)
-	if !specExists {
-		// Unlikely to happen
-		return nil, utils.NewInputError(
-			"\"spec\" expected to exist in the rendered ClusterInstance for ClusterRequest %s, but it is missing",
-			t.object.Name,
-		)
-	}
-	if nodes, ok := specInterface["nodes"].([]interface{}); ok {
-		for _, node := range nodes {
-			if nodeMap, ok := node.(map[string]interface{}); ok {
-				if role, ok := nodeMap["role"].(string); ok {
-					roleCounts[role]++
-				}
-			}
-		}
-	} else {
-		// Unlikely to happen
-		return nil, utils.NewInputError("nodes field is not a list")
+	for _, node := range clusterInstance.Spec.Nodes {
+		roleCounts[node.Role]++
 	}
 
 	for i, group := range nodeGroup {
@@ -655,7 +645,7 @@ func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplate
 	return mergedClusterData, nil
 }
 
-func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance *unstructured.Unstructured, isDryRun bool) (*siteconfig.ClusterInstance, error) {
+func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance client.Object, isDryRun bool) (*siteconfig.ClusterInstance, error) {
 	var operationType string
 
 	// Query the ClusterInstance and its status.
@@ -726,7 +716,7 @@ func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context,
 }
 
 // handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
-func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 	isDryRun := false
 	existingClusterInstance, err := t.applyClusterInstance(ctx, clusterInstance, isDryRun)
 	t.updateClusterInstanceProcessedStatus(existingClusterInstance, err)
@@ -939,7 +929,7 @@ func (t *clusterRequestReconcilerTask) updateClusterProvisionStatus(ci *siteconf
 
 // createOrUpdateClusterResources creates/updates all the resources needed for cluster deployment
 func (t *clusterRequestReconcilerTask) createOrUpdateClusterResources(
-	ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 
 	clusterName := clusterInstance.GetName()
 
@@ -949,34 +939,22 @@ func (t *clusterRequestReconcilerTask) createOrUpdateClusterResources(
 		return err
 	}
 
-	// If we got to this point, we can assume that all the keys up to the BMC details
-	// exists since ClusterInstance has nodes mandatory.
-	specInterface, specExists := clusterInstance.Object["spec"]
-	if !specExists {
-		// Unlikely to happen
-		return utils.NewInputError(
-			"\"spec\" expected to exist in the rendered ClusterInstance for ClusterRequest %s, but it is missing",
-			t.object.Name,
-		)
-	}
-	spec := specInterface.(map[string]interface{})
-
 	// Copy the pull secret from the cluster template namespace to the
 	// clusterInstance namespace.
-	err = t.createPullSecret(ctx, clusterName, spec)
+	err = t.createPullSecret(ctx, clusterInstance)
 	if err != nil {
 		return fmt.Errorf("failed to create pull Secret for cluster %s: %w", clusterName, err)
 	}
 
 	// Copy the extra-manifests ConfigMaps from the cluster template namespace
 	// to the clusterInstance namespace.
-	err = t.createExtraManifestsConfigMap(ctx, clusterName, spec)
+	err = t.createExtraManifestsConfigMap(ctx, clusterInstance)
 	if err != nil {
 		return fmt.Errorf("failed to create extraManifests ConfigMap for cluster %s: %w", clusterName, err)
 	}
 
 	// Create the cluster ConfigMap which will be used by ACM policies.
-	err = t.createPoliciesConfigMap(ctx, clusterName, spec)
+	err = t.createPoliciesConfigMap(ctx, clusterInstance)
 	if err != nil {
 		return fmt.Errorf("failed to create policy template ConfigMap for cluster %s: %w", clusterName, err)
 	}
@@ -987,30 +965,12 @@ func (t *clusterRequestReconcilerTask) createOrUpdateClusterResources(
 // createExtraManifestsConfigMap copies the extra-manifests ConfigMaps from the
 // cluster template namespace to the clusterInstance namespace.
 func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
-	ctx context.Context, clusterName string, spec map[string]interface{}) error {
-
-	configMapRefInterface, configMapRefExists := spec["extraManifestsRefs"]
-	// If no extra manifests ConfigMap is referenced, there's nothing to do. Return.
-	if !configMapRefExists {
-		return nil
-	}
-
-	configMapInterfaceArr := configMapRefInterface.([]interface{})
-	for index, configMap := range configMapInterfaceArr {
-
-		configMapNameInterface, configMapNameExists := configMap.(map[string]interface{})["name"]
-		if !configMapNameExists {
-			return utils.NewInputError(
-				"\"spec.extraManifestsRefs[%d].name\" expected to exist in the rendered of "+
-					"ClusterInstance for ClusterRequest %s, but it is missing",
-				index, t.object.Name,
-			)
-		}
-
+	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
+	for _, extraManifestsRef := range clusterInstance.Spec.ExtraManifestsRefs {
 		// Make sure the extra-manifests ConfigMap exists in the clusterTemplate namespace.
 		// The clusterRequest namespace is the same as the clusterTemplate namespace.
 		configMap := &corev1.ConfigMap{}
-		extraManifestCmName := configMapNameInterface.(string)
+		extraManifestCmName := extraManifestsRef.Name
 		configMapExists, err := utils.DoesK8SResourceExist(
 			ctx, t.client, extraManifestCmName, t.object.Namespace, configMap)
 		if err != nil {
@@ -1026,7 +986,7 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 		newExtraManifestsConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      extraManifestCmName,
-				Namespace: clusterName,
+				Namespace: clusterInstance.Name,
 			},
 			Data: configMap.Data,
 		}
@@ -1041,32 +1001,15 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 // createPullSecret copies the pull secret from the cluster template namespace
 // to the clusterInstance namespace
 func (t *clusterRequestReconcilerTask) createPullSecret(
-	ctx context.Context, clusterName string, spec map[string]interface{}) error {
+	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 
 	// If we got to this point, we can assume that all the keys exist, including
 	// clusterName
-	pullSecretRefInterface, pullSecretRefExists := spec["pullSecretRef"]
-	if !pullSecretRefExists {
-		return utils.NewInputError(
-			"\"spec.pullSecretRef\" key expected to exist in the rendered ClusterInstance "+
-				"for ClusterRequest %s, but it is missing",
-			t.object.Name,
-		)
-	}
-	pullSecretInterface := pullSecretRefInterface.(map[string]interface{})
-	pullSecretNameInterface, pullSecretNameExists := pullSecretInterface["name"]
-	if !pullSecretNameExists {
-		return utils.NewInputError(
-			"\"spec.pullSecretRef.name\" key expected to exist in the rendered ClusterInstance "+
-				"for ClusterRequest %s, but it is missing",
-			t.object.Name,
-		)
-	}
 
 	// Check the pull secret already exists in the clusterTemplate namespace.
 	// The clusterRequest namespace is the same as the clusterTemplate namespace.
 	pullSecret := &corev1.Secret{}
-	pullSecretName := pullSecretNameInterface.(string)
+	pullSecretName := clusterInstance.Spec.PullSecretRef.Name
 	pullSecretExistsInTemplateNamespace, err := utils.DoesK8SResourceExist(
 		ctx, t.client, pullSecretName, t.object.Namespace, pullSecret)
 	if err != nil {
@@ -1084,7 +1027,7 @@ func (t *clusterRequestReconcilerTask) createPullSecret(
 	newClusterInstancePullSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pullSecretName,
-			Namespace: clusterName,
+			Namespace: clusterInstance.Name,
 		},
 		Data: pullSecret.Data,
 		Type: corev1.SecretTypeDockerConfigJson,
@@ -1319,14 +1262,15 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema
 // createPoliciesConfigMap creates the cluster ConfigMap which will be used
 // by the ACM policies.
 func (t *clusterRequestReconcilerTask) createPoliciesConfigMap(
-	ctx context.Context, clusterName string, spec map[string]interface{}) error {
+	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 
 	// Check the cluster version for the cluster-version label.
-	if err := utils.CheckClusterLabelsForPolicies(spec, clusterName); err != nil {
+	clusterLabels := clusterInstance.Spec.ClusterLabels
+	if err := utils.CheckClusterLabelsForPolicies(clusterInstance.Name, clusterLabels); err != nil {
 		return fmt.Errorf("failed to check cluster labels: %w", err)
 	}
 
-	return t.createPolicyTemplateConfigMap(ctx, clusterName)
+	return t.createPolicyTemplateConfigMap(ctx, clusterInstance.Name)
 }
 
 // createPolicyTemplateConfigMap updates the keys of the default ConfigMap to match the
@@ -1501,7 +1445,7 @@ func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Cont
 
 // updateClusterInstance updates the given ClusterInstance object based on the provisioned nodePool.
 func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) bool {
+	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) bool {
 
 	hwNodes, macAddresses := t.collectNodeDetails(ctx, nodePool)
 	if hwNodes == nil {
@@ -1522,7 +1466,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context
 // waitForHardwareData waits for the NodePool to be provisioned and update BMC details
 // and bootMacAddress in ClusterInstance.
 func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) bool {
+	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) bool {
 
 	provisioned := t.waitForNodePoolProvision(ctx, nodePool)
 	if provisioned {
@@ -1630,29 +1574,26 @@ func (t *clusterRequestReconcilerTask) copyBMCSecrets(ctx context.Context, hwNod
 
 // applyNodeConfiguration updates the clusterInstance with BMC details and bootMacAddress.
 func (t *clusterRequestReconcilerTask) applyNodeConfiguration(ctx context.Context, hwNodes map[string][]nodeInfo,
-	macAddresses map[string]string, nodePool *hwv1alpha1.NodePool, clusterInstance *unstructured.Unstructured) bool {
+	macAddresses map[string]string, nodePool *hwv1alpha1.NodePool, clusterInstance *siteconfig.ClusterInstance) bool {
 
-	if nodes, ok := clusterInstance.Object["spec"].(map[string]any)["nodes"].([]interface{}); ok {
-		for _, node := range nodes {
-			if nodeMap, ok := node.(map[string]interface{}); ok {
-				if role, ok := nodeMap["role"].(string); ok {
-					// Check if the node's role matches any key in hwNodes
-					if nodeInfos, exists := hwNodes[role]; exists && len(nodeInfos) > 0 {
-						nodeMap["bmcAddress"] = nodeInfos[0].bmcAddress
-						nodeMap["bmcCredentialsName"] = map[string]interface{}{"name": nodeInfos[0].bmcCredentials}
-						if mac, macExists := macAddresses[nodeInfos[0].bmcAddress]; macExists {
-							nodeMap["bootMACAddress"] = mac
-						}
-						// indicates which host has been assigned to the node
-						if !t.updateNodeStatusWithHostname(ctx, nodeInfos[0].nodeName, nodeMap["hostName"].(string),
-							nodePool.Namespace) {
-							return false
-						}
-						hwNodes[role] = nodeInfos[1:]
-					}
-				}
-			}
+	for i, node := range clusterInstance.Spec.Nodes {
+		// Check if the node's role matches any key in hwNodes
+		nodeInfos, exists := hwNodes[node.Role]
+		if !exists || len(nodeInfos) == 0 {
+			continue
 		}
+
+		clusterInstance.Spec.Nodes[i].BmcAddress = nodeInfos[0].bmcAddress
+		clusterInstance.Spec.Nodes[i].BmcCredentialsName = siteconfig.BmcCredentialsName{Name: nodeInfos[0].bmcCredentials}
+		if mac, macExists := macAddresses[nodeInfos[0].bmcAddress]; macExists {
+			clusterInstance.Spec.Nodes[i].BootMACAddress = mac
+		}
+		// indicates which host has been assigned to the node
+		if !t.updateNodeStatusWithHostname(ctx, nodeInfos[0].nodeName, node.HostName,
+			nodePool.Namespace) {
+			return false
+		}
+		hwNodes[node.Role] = nodeInfos[1:]
 	}
 	return true
 }

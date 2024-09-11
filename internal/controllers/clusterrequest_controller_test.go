@@ -681,7 +681,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		c               client.Client
 		reconciler      *ClusterRequestReconciler
 		task            *clusterRequestReconcilerTask
-		clusterInstance *unstructured.Unstructured
+		clusterInstance *siteconfig.ClusterInstance
 		ct              *oranv1alpha1.ClusterTemplate
 		ctName          = "clustertemplate-a-v1"
 		ctNamespace     = "clustertemplate-a-v4-16"
@@ -693,15 +693,16 @@ var _ = Describe("renderHardwareTemplate", func() {
 		ctx = context.Background()
 
 		// Define the cluster instance.
-		clusterInstance = &unstructured.Unstructured{}
-		clusterInstance.SetName(crName)
-		clusterInstance.SetNamespace(ctNamespace)
-		clusterInstance.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nodes": []interface{}{
-					map[string]interface{}{"role": "master"},
-					map[string]interface{}{"role": "master"},
-					map[string]interface{}{"role": "worker"},
+		clusterInstance = &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				Nodes: []siteconfig.NodeSpec{
+					{Role: "master"},
+					{Role: "master"},
+					{Role: "worker"},
 				},
 			},
 		}
@@ -904,7 +905,7 @@ var _ = Describe("updateClusterInstance", func() {
 		reconciler  *ClusterRequestReconciler
 		task        *clusterRequestReconcilerTask
 		cr          *oranv1alpha1.ClusterRequest
-		ci          *unstructured.Unstructured
+		ci          *siteconfig.ClusterInstance
 		np          *hwv1alpha1.NodePool
 		crName      = "cluster-1"
 		crNamespace = "clustertemplate-a-v4-16"
@@ -921,14 +922,15 @@ var _ = Describe("updateClusterInstance", func() {
 		ctx = context.Background()
 
 		// Define the cluster instance.
-		ci = &unstructured.Unstructured{}
-		ci.SetName(crName)
-		ci.SetNamespace(crNamespace)
-		ci.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nodes": []interface{}{
-					map[string]interface{}{"role": "master", "hostName": mhost},
-					map[string]interface{}{"role": "worker", "hostName": whost},
+		ci = &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: crNamespace,
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				Nodes: []siteconfig.NodeSpec{
+					{Role: "master", HostName: mhost},
+					{Role: "worker", HostName: whost},
 				},
 			},
 		}
@@ -1049,12 +1051,11 @@ func createResources(c client.Client, ctx context.Context, nodes []*hwv1alpha1.N
 	}
 }
 
-func verifyClusterInstance(ci *unstructured.Unstructured, expectedDetails []expectedNodeDetails) {
+func verifyClusterInstance(ci *siteconfig.ClusterInstance, expectedDetails []expectedNodeDetails) {
 	for i, expected := range expectedDetails {
-		node := ci.Object["spec"].(map[string]interface{})["nodes"].([]interface{})[i].(map[string]interface{})
-		Expect(node["bmcAddress"]).To(Equal(expected.BMCAddress))
-		Expect(node["bmcCredentialsName"].(map[string]interface{})["name"]).To(Equal(expected.BMCCredentialsName))
-		Expect(node["bootMACAddress"]).To(Equal(expected.BootMACAddress))
+		Expect(ci.Spec.Nodes[i].BmcAddress).To(Equal(expected.BMCAddress))
+		Expect(ci.Spec.Nodes[i].BmcCredentialsName.Name).To(Equal(expected.BMCCredentialsName))
+		Expect(ci.Spec.Nodes[i].BootMACAddress).To(Equal(expected.BootMACAddress))
 	}
 }
 
