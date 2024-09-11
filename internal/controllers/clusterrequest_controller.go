@@ -219,22 +219,33 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 		// return ctrl.Result{RequeueAfter: time.Second * 30}, nil
 	}
 
-	// Handle the cluster install with ClusterInstance
-	err = t.handleClusterInstallation(ctx, renderedClusterInstance)
-	if err != nil {
-		if utils.IsInputError(err) {
-			return doNotRequeue(), nil
+	hwProvisionedCond := meta.FindStatusCondition(
+		t.object.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
+	if hwProvisionedCond != nil {
+		// TODO: check hwProvisionedCond.Status == metav1.ConditionTrue
+		// after hw plugin is ready
+
+		// Handle the cluster install with ClusterInstance
+		err = t.handleClusterInstallation(ctx, renderedClusterInstance)
+		if err != nil {
+			if utils.IsInputError(err) {
+				return doNotRequeue(), nil
+			}
+			return requeueWithError(err)
 		}
-		return requeueWithError(err)
 	}
 
-	// Handle configuration through policies.
-	err = t.handleClusterPolicyConfiguration(ctx)
-	if err != nil {
-		if utils.IsInputError(err) {
-			return doNotRequeue(), nil
+	crProvisionedCond := meta.FindStatusCondition(
+		t.object.Status.Conditions, string(utils.CRconditionTypes.ClusterProvisioned))
+	if crProvisionedCond != nil {
+		// Handle configuration through policies.
+		err = t.handleClusterPolicyConfiguration(ctx)
+		if err != nil {
+			if utils.IsInputError(err) {
+				return doNotRequeue(), nil
+			}
+			return requeueWithError(err)
 		}
-		return requeueWithError(err)
 	}
 
 	return doNotRequeue(), nil
@@ -892,7 +903,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstanceProcessedStatus(ci *
 		utils.CRconditionTypes.ClusterInstanceProcessed,
 		utils.CRconditionReasons.Completed,
 		metav1.ConditionTrue,
-		fmt.Sprintf("Processed ClusterInstance (%s) successfully", ci.Name),
+		fmt.Sprintf("Applied and processed ClusterInstance (%s) successfully", ci.Name),
 	)
 }
 

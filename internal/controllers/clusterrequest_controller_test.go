@@ -1201,6 +1201,15 @@ defaultHugepagesSize: "1G"`,
 						},
 					},
 				},
+				Status: oranv1alpha1.ClusterRequestStatus{
+					// Fake the hw provision status
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(utils.CRconditionTypes.HardwareProvisioned),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
 			},
 			&oranv1alpha1.ClusterRequest{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1458,10 +1467,13 @@ defaultHugepagesSize: "1G"`,
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
-		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(conditions[5].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
-		Expect(conditions[5].Message).To(Equal("The configuration is out of date"))
+		configAppliedCond := meta.FindStatusCondition(
+			conditions, string(utils.CRconditionTypes.ConfigurationApplied))
+		Expect(configAppliedCond).ToNot(BeNil())
+		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
+		Expect(configAppliedCond.Message).To(Equal("The configuration is out of date"))
 	})
 
 	It("Updates ClusterRequest ConfigurationApplied condition to Completed when the cluster is "+
@@ -1558,10 +1570,13 @@ defaultHugepagesSize: "1G"`,
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
-		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(conditions[5].Status).To(Equal(metav1.ConditionTrue))
-		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
-		Expect(conditions[5].Message).To(Equal("The configuration is up to date"))
+		configAppliedCond := meta.FindStatusCondition(
+			conditions, string(utils.CRconditionTypes.ConfigurationApplied))
+		Expect(configAppliedCond).ToNot(BeNil())
+		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
+		Expect(configAppliedCond.Message).To(Equal("The configuration is up to date"))
 	})
 
 	It("Updates ClusterRequest ConfigurationApplied condition to InProgress when the cluster is "+
@@ -1658,10 +1673,13 @@ defaultHugepagesSize: "1G"`,
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
-		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(conditions[5].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
-		Expect(conditions[5].Message).To(Equal("The configuration is still being applied"))
+		configAppliedCond := meta.FindStatusCondition(
+			conditions, string(utils.CRconditionTypes.ConfigurationApplied))
+		Expect(configAppliedCond).ToNot(BeNil())
+		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 
 	It("Updates ClusterRequest ConfigurationApplied condition to InProgress when the cluster is "+
@@ -1758,9 +1776,12 @@ defaultHugepagesSize: "1G"`,
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
-		Expect(conditions[5].Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(conditions[5].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[5].Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
-		Expect(conditions[5].Message).To(Equal("The configuration is still being applied"))
+		configAppliedCond := meta.FindStatusCondition(
+			conditions, string(utils.CRconditionTypes.ConfigurationApplied))
+		Expect(configAppliedCond).ToNot(BeNil())
+		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 })
