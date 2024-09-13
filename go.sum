@@ -338,8 +338,8 @@ github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An
 github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace h1:9PNP1jnUjRhfmGMlkXHjYPishpcw4jpSt/V/xYY3FMA=
 github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/stoewer/go-strcase v1.2.0/go.mod h1:IBiWB2sKIp3wVVQ3Y035++gc+knqhUQag1KpM8ahLw8=
-github.com/stolostron/siteconfig v0.0.0-20240829200117-2bbb072ca7bf h1:YGcTFhrRp1ozKua9SibeWQoK74pzak8VxBdah5viwxs=
-github.com/stolostron/siteconfig v0.0.0-20240829200117-2bbb072ca7bf/go.mod h1:9Pts6mE/54rIWZ9LIa37qO++V3dV3+H61toWYC6kdWM=
+github.com/stolostron/siteconfig v0.0.0-20240911204707-0bba68d7dcc0 h1:vUAPqSJN6Y8RQ3p+t+Dxq7zjC7Hiy8dzsZv4NUNCaN0=
+github.com/stolostron/siteconfig v0.0.0-20240911204707-0bba68d7dcc0/go.mod h1:9Pts6mE/54rIWZ9LIa37qO++V3dV3+H61toWYC6kdWM=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=

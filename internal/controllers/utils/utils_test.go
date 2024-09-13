@@ -480,13 +480,15 @@ properties:
     type: array
   baseDomain:
     type: string
-  clusterLabels:
-    additionalProperties:
-      type: string
-    type: object
   clusterName:
     description: ClusterName is the name of the cluster.
     type: string
+  extraLabels:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
   extraAnnotations:
     additionalProperties:
       additionalProperties:
@@ -591,13 +593,15 @@ properties:
     type: array
   baseDomain:
     type: string
-  clusterLabels:
-    additionalProperties:
-      type: string
-    type: object
   clusterName:
     description: ClusterName is the name of the cluster.
     type: string
+  extraLabels:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
   extraAnnotations:
     additionalProperties:
       additionalProperties:
@@ -743,16 +747,17 @@ nodes:
 	})
 
 	It("Return error if field is of different type", func() {
-		// clusterLabels is a map instead of list.
+		// ExtraLabels - ManagedCluster is a map instead of list.
 		input := `
 clusterName: sno1
 machineNetwork:
   - cidr: 192.0.2.0/24
 serviceNetwork:
   - cidr: 172.30.0.0/16
-clusterLabels:
-- label1
-- label2
+extraLabels:
+  ManagedCluster:
+    - label1
+    - label2
 nodes:
   - hostName: sno1.example.com
     nodeNetwork:
@@ -784,7 +789,7 @@ nodes:
 		err = ValidateJsonAgainstJsonSchema(schemaMap, inputMap)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(
-			ContainSubstring("invalid input: clusterLabels: Invalid type. Expected: object, given: array"))
+			ContainSubstring("invalid input: extraLabels.ManagedCluster: Invalid type. Expected: object, given: array"))
 	})
 
 	It("Returns success if optional field with required fields is missing", func() {
@@ -883,7 +888,7 @@ var _ = Describe("RenderTemplateForK8sCR", func() {
 				"additionalNTPSources":   []string{"NTP.server1", "10.16.231.22"},
 				"apiVIPs":                []string{"10.0.0.1", "10.0.0.2"},
 				"caBundleRef":            map[string]interface{}{"name": "my-bundle-ref"},
-				"clusterLabels":          map[string]string{"common": "true", "group-du-sno": "test", "sites": "site-sno-du-1"},
+				"extraLabels":            map[string]map[string]string{"ManagedCluster": {"common": "true", "group-du-sno": "test", "sites": "site-sno-du-1"}},
 				"clusterType":            "SNO",
 				"clusterNetwork":         []map[string]interface{}{{"cidr": "10.128.0.0/14", "hostPrefix": 23}},
 				"machineNetwork":         []map[string]interface{}{{"cidr": "10.16.231.0/24"}},
@@ -999,10 +1004,11 @@ spec:
   caBundleRef:
     name: my-bundle-ref
   clusterImageSetNameRef: "4.16"
-  clusterLabels:
-    common: "true"
-    group-du-sno: test
-    sites: site-sno-du-1
+  extraLabels:
+    ManagedCluster:
+      common: "true"
+      group-du-sno: test
+      sites: site-sno-du-1
   clusterName: site-sno-du-1
   clusterNetwork:
   - cidr: 10.128.0.0/14

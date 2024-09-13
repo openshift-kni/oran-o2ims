@@ -173,13 +173,6 @@ func (in *ClusterInstanceSpec) DeepCopyInto(out *ClusterInstanceSpec) {
 			(*out)[key] = outVal
 		}
 	}
-	if in.ClusterLabels != nil {
-		in, out := &in.ClusterLabels, &out.ClusterLabels
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
 	if in.DiskEncryption != nil {
 		in, out := &in.DiskEncryption, &out.DiskEncryption
 		*out = new(DiskEncryption)

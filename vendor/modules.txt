@@ -274,7 +274,7 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stolostron/siteconfig v0.0.0-20240829200117-2bbb072ca7bf
+# github.com/stolostron/siteconfig v0.0.0-20240911204707-0bba68d7dcc0
 ## explicit; go 1.21
 github.com/stolostron/siteconfig/api/v1alpha1
 # github.com/thoas/go-funk v0.9.3

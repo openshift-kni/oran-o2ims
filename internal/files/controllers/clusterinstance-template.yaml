@@ -33,10 +33,6 @@ spec:
   {{- $ref := .Cluster.caBundleRef | validateMapType "spec.caBundleRef" }}
     name: "{{ $ref.name | validateNonEmpty "spec.caBundleRef.name" }}"
 {{- end }}
-{{- if .Cluster.clusterLabels }}
-  clusterLabels:
-{{ .Cluster.clusterLabels | toYaml | indent 4 }}
-{{- end }}
 {{- if .Cluster.clusterType }}
   clusterType: "{{ .Cluster.clusterType }}"
 {{- end }}

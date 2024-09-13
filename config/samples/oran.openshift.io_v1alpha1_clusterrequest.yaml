@@ -22,10 +22,6 @@ spec:
         - NTP.server1
         - 1.1.1.1
       baseDomain: example.com
-      clusterLabels:
-        common: "true"
-        group-du-sno: test
-        sites: site-sno-du-1
       clusterName: site-sno-du-1
       extraAnnotations:
         AgentClusterInstall:
@@ -33,6 +29,10 @@ spec:
       extraLabels:
         AgentClusterInstall:
           extra-label-key: extra-label-value
+        ManagedCluster:
+          common: "true"
+          group-du-sno: test
+          sites: site-sno-du-1
       ingressVIPs:
         - 192.0.2.3
       machineNetwork:
