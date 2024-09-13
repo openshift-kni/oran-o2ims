@@ -50,23 +50,25 @@ var CTconditionReasons = struct {
 
 // The following constants define the different reasons that conditions will be set for ClusterRequest
 var CRconditionReasons = struct {
-	NotApplied ConditionReason
-	Completed  ConditionReason
-	Failed     ConditionReason
-	InProgress ConditionReason
-	Missing    ConditionReason
-	OutOfDate  ConditionReason
-	TimedOut   ConditionReason
-	Unknown    ConditionReason
+	NotApplied      ConditionReason
+	ClusterNotReady ConditionReason
+	Completed       ConditionReason
+	Failed          ConditionReason
+	InProgress      ConditionReason
+	Missing         ConditionReason
+	OutOfDate       ConditionReason
+	TimedOut        ConditionReason
+	Unknown         ConditionReason
 }{
-	NotApplied: "NotApplied",
-	Completed:  "Completed",
-	Failed:     "Failed",
-	InProgress: "InProgress",
-	Missing:    "Missing",
-	OutOfDate:  "OutOfDate",
-	TimedOut:   "TimedOut",
-	Unknown:    "Unknown",
+	NotApplied:      "NotApplied",
+	ClusterNotReady: "ClusterNotReady",
+	Completed:       "Completed",
+	Failed:          "Failed",
+	InProgress:      "InProgress",
+	Missing:         "Missing",
+	OutOfDate:       "OutOfDate",
+	TimedOut:        "TimedOut",
+	Unknown:         "Unknown",
 }
 
 // SetStatusCondition is a convenience wrapper for meta.SetStatusCondition that takes in the types defined here and converts them to strings

@@ -47,7 +47,7 @@ func TestInventoryControllerUtils(t *testing.T) {
 
 //nolint:unparam
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build()
+	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.Inventory{}).Build()
 }
 
 var _ = Describe("ExtensionUtils", func() {
@@ -82,7 +82,7 @@ var _ = Describe("ExtensionUtils", func() {
 				},
 			},
 		}
-		objs := []client.Object{orano2ims}
+		objs := []client.Object{Inventory}
 		fakeClient := getFakeClientFromObjects(objs...)
 
 		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
@@ -110,7 +110,7 @@ var _ = Describe("ExtensionUtils", func() {
 			},
 		}
 
-		objs := []client.Object{orano2ims}
+		objs := []client.Object{Inventory}
 		fakeClient := getFakeClientFromObjects(objs...)
 
 		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
@@ -369,9 +369,9 @@ var _ = Describe("searchAPI", func() {
 			},
 		}
 
-		objs := []client.Object{mce, orano2ims}
+		objs := []client.Object{mce, Inventory}
 		fakeClient := getFakeClientFromObjects(objs...)
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
 		Expect(searchAPI).To(Equal(""))
@@ -409,9 +409,9 @@ var _ = Describe("searchAPI", func() {
 			},
 		}
 
-		objs := []client.Object{mce, orano2ims}
+		objs := []client.Object{mce, Inventory}
 		fakeClient := getFakeClientFromObjects(objs...)
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
 		Expect(searchAPI).To(BeEmpty())
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
@@ -451,9 +451,9 @@ var _ = Describe("searchAPI", func() {
 			},
 		}
 
-		objs := []client.Object{mce, orano2ims}
+		objs := []client.Object{mce, Inventory}
 		fakeClient := getFakeClientFromObjects(objs...)
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(searchAPI).To(Equal("https://search-api-open-cluster-management.apps.lab.karmalabs.corp"))
 	})

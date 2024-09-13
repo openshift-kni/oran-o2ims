@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/net"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -850,7 +851,6 @@ func GetDefaultBackendTransport() (http.RoundTripper, error) {
 	return net.SetTransportDefaults(&http.Transport{TLSClientConfig: tlsConfig}), nil
 }
 
-<<<<<<< HEAD
 // Helper function to find the matching NodeGroup by role
 func FindNodeGroupByRole(role string, nodeGroups []hwv1alpha1.NodeGroup) (*hwv1alpha1.NodeGroup, error) {
 	for i, group := range nodeGroups {
@@ -959,4 +959,11 @@ func ClusterIsReadyForPolicyConfig(
 	}
 
 	return available && hubAccepted && joined, nil
+}
+
+// TimeoutExceeded returns true if it's been more time than the timeout configuration.
+func TimeoutExceeded(clusterRequest *oranv1alpha1.ClusterRequest) bool {
+	timeSince := time.Since(clusterRequest.Status.ClusterInstanceRef.NonCompliantAt.Time)
+	timeout := time.Duration(clusterRequest.Spec.Timeout.Configuration) * time.Minute
+	return timeSince > timeout
 }
