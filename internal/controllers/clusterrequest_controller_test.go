@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 )
 
 type expectedNodeDetails struct {
@@ -1255,6 +1256,167 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		Expect(retCt.Namespace).To(Equal(ctNamespace))
 		Expect(retCt.Spec.Templates.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
 		Expect(retCt.Spec.Templates.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
+	})
+})
+
+var _ = Describe("handleRenderClusterInstance", func() {
+	var (
+		ctx          context.Context
+		c            client.Client
+		reconciler   *ClusterRequestReconciler
+		task         *clusterRequestReconcilerTask
+		cr           *oranv1alpha1.ClusterRequest
+		ciDefaultsCm = "clusterinstance-defaults-v1"
+		ctName       = "clustertemplate-a-v1"
+		ctNamespace  = "clustertemplate-a-v4-16"
+		crName       = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		// Define the cluster request.
+		cr = &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterRequestSpec{
+				ClusterTemplateRef: ctName,
+				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+					ClusterInstanceInput: runtime.RawExtension{Raw: []byte(testClusterTemplateInput)},
+				},
+			},
+		}
+
+		// Define the cluster template.
+		ct := &oranv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ctName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterTemplateSpec{
+				Templates: oranv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+				},
+			},
+		}
+		// Configmap for ClusterInstance defaults
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ciDefaultsCm,
+				Namespace: ctNamespace,
+			},
+			Data: map[string]string{
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.15"
+pullSecretRef:
+  name: "pull-secret"
+templateRefs:
+  - name: "ai-cluster-templates-v1"
+    namespace: "siteconfig-operator"
+nodes:
+- hostname: "node1"
+  templateRefs:
+    - name: "ai-node-templates-v1"
+      namespace: "siteconfig-operator"`,
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr, ct, cm}...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &clusterRequestReconcilerTask{
+			logger:       reconciler.Logger,
+			client:       reconciler.Client,
+			object:       cr,
+			clusterInput: &clusterInput{},
+		}
+
+		mergedClusterInstanceData, err := task.getMergedClusterInputData(ctx, ct, utils.ClusterInstanceDataType)
+		Expect(err).ToNot(HaveOccurred())
+		task.clusterInput.clusterInstanceData = mergedClusterInstanceData
+	})
+
+	It("should successfully render and validate ClusterInstance with dry-run", func() {
+		renderedClusterInstance, err := task.handleRenderClusterInstance(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(renderedClusterInstance).ToNot(BeNil())
+
+		// Check if status condition was updated correctly
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(utils.CRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(utils.CRconditionReasons.Completed),
+			Message: "ClusterInstance rendered and passed dry-run validation",
+		})
+	})
+
+	It("should fail to render ClusterInstance due to invalid input", func() {
+		// Modify input data to be invalid
+		task.clusterInput.clusterInstanceData["clusterName"] = ""
+		_, err := task.handleRenderClusterInstance(ctx)
+		Expect(err).To(HaveOccurred())
+
+		// Check if status condition was updated correctly
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(utils.CRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(utils.CRconditionReasons.Failed),
+			Message: "spec.clusterName cannot be empty",
+		})
+	})
+
+	It("should detect updates to immutable fields and fail rendering", func() {
+		// Simulate that the ClusterInstance has been provisioned
+		task.object.Status.Conditions = []metav1.Condition{
+			{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			},
+		}
+
+		oldSpec := make(map[string]any)
+		newSpec := make(map[string]any)
+		data, err := yaml.Marshal(task.clusterInput.clusterInstanceData)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(yaml.Unmarshal(data, &oldSpec)).To(Succeed())
+		Expect(yaml.Unmarshal(data, &newSpec)).To(Succeed())
+
+		clusterInstanceObj := map[string]any{
+			"Cluster": task.clusterInput.clusterInstanceData,
+		}
+		oldClusterInstance, err := utils.RenderTemplateForK8sCR(
+			utils.ClusterInstanceTemplateName, utils.ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(c.Create(ctx, oldClusterInstance)).To(Succeed())
+
+		// Update the cluster data with modified field
+		// Change an immutable field at the cluster-level
+		newSpec["baseDomain"] = "newdomain.example.com"
+		task.clusterInput.clusterInstanceData = newSpec
+
+		_, err = task.handleRenderClusterInstance(ctx)
+		Expect(err).To(HaveOccurred())
+
+		// Check if status condition was updated correctly
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(utils.CRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(utils.CRconditionReasons.Failed),
+			Message: "Failed to render and validate ClusterInstance: detected changes in immutable fields",
+		})
 	})
 })
 

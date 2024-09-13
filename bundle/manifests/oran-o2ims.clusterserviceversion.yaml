@@ -39,9 +39,8 @@ metadata:
                     "extra-label-key": "extra-label-value"
                   },
                   "ManagedCluster": {
-                    "common": "true",
-                    "group-du-sno": "test",
-                    "sites": "site-sno-du-1"
+                    "cluster-version": "v4.16",
+                    "clustertemplate-a-policy": "v1"
                   }
                 },
                 "ingressVIPs": [
