@@ -93,6 +93,7 @@ const (
 //+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodepools/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
@@ -1265,7 +1266,7 @@ func (t *clusterRequestReconcilerTask) createPoliciesConfigMap(
 	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 
 	// Check the cluster version for the cluster-version label.
-	clusterLabels := clusterInstance.Spec.ClusterLabels
+	clusterLabels := clusterInstance.Spec.ExtraLabels["ManagedCluster"]
 	if err := utils.CheckClusterLabelsForPolicies(clusterInstance.Name, clusterLabels); err != nil {
 		return fmt.Errorf("failed to check cluster labels: %w", err)
 	}

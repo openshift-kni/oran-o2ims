@@ -291,10 +291,6 @@ type ClusterInstanceSpec struct {
 	// +optional
 	ExtraLabels map[string]map[string]string `json:"extraLabels,omitempty"`
 
-	// ClusterLabels is used to assign labels to the cluster to assist with policy binding.
-	// +optional
-	ClusterLabels map[string]string `json:"clusterLabels,omitempty"`
-
 	// InstallConfigOverrides is a Json formatted string that provides a generic way of passing
 	// install-config parameters.
 	// +optional

@@ -300,6 +300,14 @@ spec:
           - update
           - watch
         - apiGroups:
+          - hardwaremanagement.oran.openshift.io
+          resources:
+          - nodepools/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
           - networking.k8s.io
           resources:
           - ingresses
