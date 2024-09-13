@@ -20,8 +20,10 @@ import (
 	sprig "github.com/go-task/slim-sprig/v3"
 	"github.com/xeipuuv/gojsonschema"
 
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -843,4 +845,71 @@ func GetDefaultBackendTransport() (http.RoundTripper, error) {
 	}
 
 	return net.SetTransportDefaults(&http.Transport{TLSClientConfig: tlsConfig}), nil
+}
+
+// Helper function to find the matching NodeGroup by role
+func FindNodeGroupByRole(role string, nodeGroups []hwv1alpha1.NodeGroup) (*hwv1alpha1.NodeGroup, error) {
+	for i, group := range nodeGroups {
+		if group.Name == role {
+			return &nodeGroups[i], nil
+		}
+	}
+	return nil, fmt.Errorf("node group with role %s not found", role)
+}
+
+// Help function to extract the node interfaces per role and count the nodes per group
+func ProcessClusterNodeGroups(clusterInstance *siteconfig.ClusterInstance, nodeGroups []hwv1alpha1.NodeGroup, roleCounts map[string]int) error {
+	// Map to keep track of processed roles and the corresponding interfaces
+	processedRoles := make(map[string][]string)
+
+	for _, node := range clusterInstance.Spec.Nodes {
+		// Count the nodes per group
+		roleCounts[node.Role]++
+
+		// Find the node group corresponding to this role
+		nodeGroup, err := FindNodeGroupByRole(node.Role, nodeGroups)
+		if err != nil {
+			return fmt.Errorf("could not find node group for role %s: %w", node.Role, err)
+		}
+
+		// Get the interface names for the current node
+		var currentInterfaces []string
+		for _, iface := range node.NodeNetwork.Interfaces {
+			currentInterfaces = append(currentInterfaces, iface.Name)
+		}
+
+		// If the role has not been processed yet, add the interfaces
+		// else check if the interfaces are the same as the first node with this role
+		if _, ok := processedRoles[node.Role]; !ok {
+			nodeGroup.Interfaces = currentInterfaces
+			processedRoles[node.Role] = currentInterfaces
+		} else if !slices.Equal(processedRoles[node.Role], currentInterfaces) {
+			// Nodes with the same role and hardware profile should have identical interfaces
+			return fmt.Errorf("%s has inconsistent interfaces for role %s", node.HostName, node.Role)
+		}
+	}
+
+	return nil
+}
+
+// Helper function to select the boot interface based on label and return the interface MAC address
+func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, nodePool *hwv1alpha1.NodePool) (string, error) {
+	// Get the boot interface label from annotation
+	annotation := nodePool.GetAnnotations()
+	if annotation == nil {
+		return "", fmt.Errorf("annotations are missing from nodePool %s in namespace %s", nodePool.Name, nodePool.Namespace)
+	}
+	// Ensure the boot interface label annotation exists and is not empty
+	bootIfaceLabel, exists := annotation[HwTemplateBootIfaceLabel]
+	if !exists || bootIfaceLabel == "" {
+		return "", fmt.Errorf("%s annotation is missing or empty from nodePool %s in namespace %s",
+			HwTemplateBootIfaceLabel, nodePool.Name, nodePool.Namespace)
+	}
+
+	for _, iface := range interfaces {
+		if iface.Label == bootIfaceLabel {
+			return iface.MACAddress, nil
+		}
+	}
+	return "", fmt.Errorf("no boot interface found")
 }

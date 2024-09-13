@@ -12,6 +12,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift/assisted-service/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +31,7 @@ type expectedNodeDetails struct {
 	BMCAddress         string
 	BMCCredentialsName string
 	BootMACAddress     string
+	Interfaces         []map[string]interface{}
 }
 
 const (
@@ -1362,9 +1364,32 @@ var _ = Describe("renderHardwareTemplate", func() {
 			},
 			Spec: siteconfig.ClusterInstanceSpec{
 				Nodes: []siteconfig.NodeSpec{
-					{Role: "master"},
-					{Role: "master"},
-					{Role: "worker"},
+					{
+						Role: "master",
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno12399"},
+								{Name: "eno1"},
+							},
+						},
+					},
+					{
+						Role: "master",
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno12399"},
+								{Name: "eno1"},
+							},
+						},
+					},
+					{
+						Role: "worker",
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno1"},
+							},
+						},
+					},
 				},
 			},
 		}
@@ -1416,7 +1441,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: utils.InventoryNamespace,
 			},
 			Data: map[string]string{
-				"hwMgrId": utils.UnitTestHwmgrID,
+				"hwMgrId":                      utils.UnitTestHwmgrID,
+				utils.HwTemplateBootIfaceLabel: "bootable-interface",
 				utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
@@ -1431,21 +1457,34 @@ var _ = Describe("renderHardwareTemplate", func() {
 		Expect(nodePool).ToNot(BeNil())
 		Expect(nodePool.ObjectMeta.Name).To(Equal(clusterInstance.GetName()))
 		Expect(nodePool.ObjectMeta.Namespace).To(Equal(cm.Data[utils.HwTemplatePluginMgr]))
+		Expect(nodePool.Annotations[utils.HwTemplateBootIfaceLabel]).To(Equal(cm.Data[utils.HwTemplateBootIfaceLabel]))
 
 		Expect(nodePool.Spec.CloudID).To(Equal(clusterInstance.GetName()))
 		Expect(nodePool.Labels[clusterRequestNameLabel]).To(Equal(task.object.Name))
 		Expect(nodePool.Labels[clusterRequestNamespaceLabel]).To(Equal(task.object.Namespace))
 
+		roleCounts := make(map[string]int)
+		err = utils.ProcessClusterNodeGroups(clusterInstance, nodePool.Spec.NodeGroup, roleCounts)
+		Expect(err).ToNot(HaveOccurred())
+		masterNodeGroup, err := utils.FindNodeGroupByRole("master", nodePool.Spec.NodeGroup)
+		Expect(err).ToNot(HaveOccurred())
+		workerNodeGroup, err := utils.FindNodeGroupByRole("worker", nodePool.Spec.NodeGroup)
+		Expect(err).ToNot(HaveOccurred())
+
 		Expect(nodePool.Spec.NodeGroup).To(HaveLen(2))
+		expectedNodeGroups := map[string]struct {
+			size       int
+			interfaces []string
+		}{
+			"master": {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
+			"worker": {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
+		}
+
 		for _, group := range nodePool.Spec.NodeGroup {
-			switch group.Name {
-			case "master":
-				Expect(group.Size).To(Equal(2)) // 2 master
-			case "worker":
-				Expect(group.Size).To(Equal(1)) // 1 worker
-			default:
-				Fail(fmt.Sprintf("Unexpected Group Name: %s", group.Name))
-			}
+			expected, found := expectedNodeGroups[group.Name]
+			Expect(found).To(BeTrue())
+			Expect(group.Size).To(Equal(expected.size))
+			Expect(group.Interfaces).To(ConsistOf(expected.interfaces))
 		}
 	})
 
@@ -1576,8 +1615,34 @@ var _ = Describe("updateClusterInstance", func() {
 		mhost       = "node1.test.com"
 		whost       = "node2.test.com"
 		poolns      = utils.UnitTestHwmgrNamespace
-		masterNode  = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "site-1-master-bmc-secret", "00:00:00:01:20:30", "master", poolns, crName)
-		workerNode  = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1", "site-1-worker-bmc-secret", "00:00:00:01:30:10", "worker", poolns, crName)
+		mIfaces     = []*hwv1alpha1.Interface{
+			{
+				Name:       "eth0",
+				Label:      "test",
+				MACAddress: "00:00:00:01:20:30",
+			},
+			{
+				Name:       "eth1",
+				Label:      "",
+				MACAddress: "66:77:88:99:CC:BB",
+			},
+		}
+		wIfaces = []*hwv1alpha1.Interface{
+			{
+				Name:       "eno1",
+				Label:      "test",
+				MACAddress: "00:00:00:01:30:10",
+			},
+			{
+				Name:       "eno2",
+				Label:      "",
+				MACAddress: "66:77:88:99:AA:BB",
+			},
+		}
+		masterNode = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
+			"site-1-master-bmc-secret", "master", poolns, crName, mIfaces)
+		workerNode = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1",
+			"site-1-worker-bmc-secret", "worker", poolns, crName, wIfaces)
 	)
 
 	BeforeEach(func() {
@@ -1591,8 +1656,22 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 			Spec: siteconfig.ClusterInstanceSpec{
 				Nodes: []siteconfig.NodeSpec{
-					{Role: "master", HostName: mhost},
-					{Role: "worker", HostName: whost},
+					{
+						Role: "master", HostName: mhost,
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eth0"}, {Name: "eth1"},
+							},
+						},
+					},
+					{
+						Role: "worker", HostName: whost,
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno1"}, {Name: "eno2"},
+							},
+						},
+					},
 				},
 			},
 		}
@@ -1609,6 +1688,9 @@ var _ = Describe("updateClusterInstance", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
 				Namespace: poolns,
+				Annotations: map[string]string{
+					utils.HwTemplateBootIfaceLabel: "test",
+				},
 			},
 			Status: hwv1alpha1.NodePoolStatus{
 				Conditions: []metav1.Condition{
@@ -1649,29 +1731,48 @@ var _ = Describe("updateClusterInstance", func() {
 		rt := task.updateClusterInstance(ctx, ci, np)
 		Expect(rt).To(Equal(true))
 
+		masterBootMAC, err := utils.GetBootMacAddress(masterNode.Status.Interfaces, np)
+		Expect(err).ToNot(HaveOccurred())
+		workerBootMAC, err := utils.GetBootMacAddress(workerNode.Status.Interfaces, np)
+		Expect(err).ToNot(HaveOccurred())
+
 		// Define expected details
 		expectedDetails := []expectedNodeDetails{
 			{
 				BMCAddress:         masterNode.Status.BMC.Address,
 				BMCCredentialsName: masterNode.Status.BMC.CredentialsName,
-				BootMACAddress:     masterNode.Status.BootMACAddress,
+				BootMACAddress:     masterBootMAC,
+				Interfaces:         getInterfaceMap(masterNode.Status.Interfaces),
 			},
 			{
 				BMCAddress:         workerNode.Status.BMC.Address,
 				BMCCredentialsName: workerNode.Status.BMC.CredentialsName,
-				BootMACAddress:     workerNode.Status.BootMACAddress,
+				BootMACAddress:     workerBootMAC,
+				Interfaces:         getInterfaceMap(workerNode.Status.Interfaces),
 			},
 		}
 
-		// verify the bmc address, secret and boot mac address are set correctly in the cluster instance
+		// Verify the bmc address, secret, boot mac address and interface mac addresses are set correctly in the cluster instance
 		verifyClusterInstance(ci, expectedDetails)
 
-		// verify the host name is set in the node status
+		// Verify the host name is set in the node status
 		verifyNodeStatus(c, ctx, nodes, mhost, whost)
 	})
 })
 
-func createNode(name, bmcAddress, bmcSecret, mac, groupName, namespace, npName string) *hwv1alpha1.Node {
+// Helper function to transform interfaces into the required map[string]interface{} format
+func getInterfaceMap(interfaces []*hwv1alpha1.Interface) []map[string]interface{} {
+	var ifaceList []map[string]interface{}
+	for _, iface := range interfaces {
+		ifaceList = append(ifaceList, map[string]interface{}{
+			"Name":       iface.Name,
+			"MACAddress": iface.MACAddress,
+		})
+	}
+	return ifaceList
+}
+
+func createNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
 	return &hwv1alpha1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -1686,7 +1787,7 @@ func createNode(name, bmcAddress, bmcSecret, mac, groupName, namespace, npName s
 				Address:         bmcAddress,
 				CredentialsName: bmcSecret,
 			},
-			BootMACAddress: mac,
+			Interfaces: interfaces,
 		},
 	}
 }
@@ -1718,6 +1819,15 @@ func verifyClusterInstance(ci *siteconfig.ClusterInstance, expectedDetails []exp
 		Expect(ci.Spec.Nodes[i].BmcAddress).To(Equal(expected.BMCAddress))
 		Expect(ci.Spec.Nodes[i].BmcCredentialsName.Name).To(Equal(expected.BMCCredentialsName))
 		Expect(ci.Spec.Nodes[i].BootMACAddress).To(Equal(expected.BootMACAddress))
+		// Verify Interface MAC Address
+		for _, iface := range ci.Spec.Nodes[i].NodeNetwork.Interfaces {
+			for _, expectedIface := range expected.Interfaces {
+				// Compare the interface name and MAC address
+				if iface.Name == expectedIface["Name"] {
+					Expect(iface.MacAddress).To(Equal(expectedIface["MACAddress"]), "MAC Address mismatch for interface")
+				}
+			}
+		}
 	}
 }
 
@@ -1831,7 +1941,8 @@ defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
-					"hwMgrId": utils.UnitTestHwmgrID,
+					"hwMgrId":                      utils.UnitTestHwmgrID,
+					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G

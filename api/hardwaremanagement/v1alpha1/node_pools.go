@@ -49,6 +49,8 @@ type NodeGroup struct {
 	Name      string `json:"name" yaml:"name"`
 	HwProfile string `json:"hwProfile"`
 	Size      int    `json:"size" yaml:"size"`
+	// +kubebuilder:validation:MinItems=1
+	Interfaces []string `json:"interfaces,omitempty"`
 }
 
 type Properties struct {

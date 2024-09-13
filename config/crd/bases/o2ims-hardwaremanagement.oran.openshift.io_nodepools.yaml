@@ -55,6 +55,11 @@ spec:
                   properties:
                     hwProfile:
                       type: string
+                    interfaces:
+                      items:
+                        type: string
+                      minItems: 1
+                      type: array
                     name:
                       type: string
                     size:

@@ -74,6 +74,7 @@ type nodeInfo struct {
 	bmcAddress     string
 	bmcCredentials string
 	nodeName       string
+	interfaces     []*hwv1alpha1.Interface
 }
 
 type deleteOrUpdateEvent interface {
@@ -629,10 +630,11 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 			"failed to get the Hardware template from ConfigMap %s, err: %w", hwTemplateCmName, err)
 	}
 
-	// count the nodes per group
 	roleCounts := make(map[string]int)
-	for _, node := range clusterInstance.Spec.Nodes {
-		roleCounts[node.Role]++
+	err = utils.ProcessClusterNodeGroups(clusterInstance, nodeGroup, roleCounts)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to get the process node spec err: %w", err)
 	}
 
 	for i, group := range nodeGroup {
@@ -646,6 +648,11 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 	nodePool.Spec.NodeGroup = nodeGroup
 	nodePool.ObjectMeta.Name = clusterInstance.GetName()
 	nodePool.ObjectMeta.Namespace = hwTemplateCm.Data[utils.HwTemplatePluginMgr]
+
+	// Add boot interface label to the generated nodePool
+	annotation := make(map[string]string)
+	annotation[utils.HwTemplateBootIfaceLabel] = hwTemplateCm.Data[utils.HwTemplateBootIfaceLabel]
+	nodePool.SetAnnotations(annotation)
 
 	// Add ClusterRequest labels to the generated nodePool
 	labels := make(map[string]string)
@@ -1552,7 +1559,7 @@ func (t *clusterRequestReconcilerTask) checkNodePoolProvisionStatus(ctx context.
 func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context,
 	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) bool {
 
-	hwNodes, macAddresses := t.collectNodeDetails(ctx, nodePool)
+	hwNodes := t.collectNodeDetails(ctx, nodePool)
 	if hwNodes == nil {
 		return false
 	}
@@ -1561,7 +1568,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context
 		return false
 	}
 
-	if !t.applyNodeConfiguration(ctx, hwNodes, macAddresses, nodePool, clusterInstance) {
+	if !t.applyNodeConfiguration(ctx, hwNodes, nodePool, clusterInstance) {
 		return false
 	}
 
@@ -1588,13 +1595,12 @@ func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
 	return false
 }
 
-// collectNodeDetails collects BMC details and boot MAC addresses.
+// collectNodeDetails collects BMC and node interfaces details
 func (t *clusterRequestReconcilerTask) collectNodeDetails(ctx context.Context,
-	nodePool *hwv1alpha1.NodePool) (map[string][]nodeInfo, map[string]string) {
+	nodePool *hwv1alpha1.NodePool) map[string][]nodeInfo {
 
 	// hwNodes maps a group name to a slice of NodeInfo
 	hwNodes := make(map[string][]nodeInfo)
-	macAddresses := make(map[string]string)
 
 	for _, nodeName := range nodePool.Status.Properties.NodeNames {
 		node := &hwv1alpha1.Node{}
@@ -1608,7 +1614,7 @@ func (t *clusterRequestReconcilerTask) collectNodeDetails(ctx context.Context,
 				slog.String("error", err.Error()),
 				slog.Bool("exists", exists),
 			)
-			return nil, nil
+			return nil
 		}
 		if !exists {
 			t.logger.ErrorContext(
@@ -1618,7 +1624,7 @@ func (t *clusterRequestReconcilerTask) collectNodeDetails(ctx context.Context,
 				slog.String("namespace", nodePool.Namespace),
 				slog.Bool("exists", exists),
 			)
-			return nil, nil
+			return nil
 		}
 		// Verify the node object is generated from the expected pool
 		if node.Spec.NodePool != nodePool.GetName() {
@@ -1628,7 +1634,7 @@ func (t *clusterRequestReconcilerTask) collectNodeDetails(ctx context.Context,
 				slog.String("name", node.GetName()),
 				slog.String("pool", nodePool.GetName()),
 			)
-			return nil, nil
+			return nil
 		}
 
 		if node.Status.BMC == nil {
@@ -1638,21 +1644,18 @@ func (t *clusterRequestReconcilerTask) collectNodeDetails(ctx context.Context,
 				slog.String("name", node.GetName()),
 				slog.String("pool", nodePool.GetName()),
 			)
-			return nil, nil
+			return nil
 		}
 		// Store the nodeInfo per group
 		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], nodeInfo{
 			bmcAddress:     node.Status.BMC.Address,
 			bmcCredentials: node.Status.BMC.CredentialsName,
 			nodeName:       node.Name,
+			interfaces:     node.Status.Interfaces,
 		})
-
-		if node.Status.BootMACAddress != "" {
-			macAddresses[node.Status.BMC.Address] = node.Status.BootMACAddress
-		}
 	}
 
-	return hwNodes, macAddresses
+	return hwNodes
 }
 
 // copyBMCSecrets copies BMC secrets from the plugin namespace to the cluster namespace.
@@ -1677,9 +1680,9 @@ func (t *clusterRequestReconcilerTask) copyBMCSecrets(ctx context.Context, hwNod
 	return true
 }
 
-// applyNodeConfiguration updates the clusterInstance with BMC details and bootMacAddress.
+// applyNodeConfiguration updates the clusterInstance with BMC details, interface MACAddress and bootMACAddress
 func (t *clusterRequestReconcilerTask) applyNodeConfiguration(ctx context.Context, hwNodes map[string][]nodeInfo,
-	macAddresses map[string]string, nodePool *hwv1alpha1.NodePool, clusterInstance *siteconfig.ClusterInstance) bool {
+	nodePool *hwv1alpha1.NodePool, clusterInstance *siteconfig.ClusterInstance) bool {
 
 	for i, node := range clusterInstance.Spec.Nodes {
 		// Check if the node's role matches any key in hwNodes
@@ -1690,10 +1693,29 @@ func (t *clusterRequestReconcilerTask) applyNodeConfiguration(ctx context.Contex
 
 		clusterInstance.Spec.Nodes[i].BmcAddress = nodeInfos[0].bmcAddress
 		clusterInstance.Spec.Nodes[i].BmcCredentialsName = siteconfig.BmcCredentialsName{Name: nodeInfos[0].bmcCredentials}
-		if mac, macExists := macAddresses[nodeInfos[0].bmcAddress]; macExists {
-			clusterInstance.Spec.Nodes[i].BootMACAddress = mac
+		// Get the boot MAC address based on the interface label
+		bootMAC, err := utils.GetBootMacAddress(nodeInfos[0].interfaces, nodePool)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Fail to get the node boot MAC address",
+				slog.String("name", node.HostName),
+				slog.String("error", err.Error()),
+			)
+			return false
 		}
-		// indicates which host has been assigned to the node
+		clusterInstance.Spec.Nodes[i].BootMACAddress = bootMAC
+
+		// Populate the MAC address for each interface
+		for j, iface := range clusterInstance.Spec.Nodes[i].NodeNetwork.Interfaces {
+			for _, nodeIface := range nodeInfos[0].interfaces {
+				if nodeIface.Name == iface.Name {
+					clusterInstance.Spec.Nodes[i].NodeNetwork.Interfaces[j].MacAddress = nodeIface.MACAddress
+				}
+			}
+		}
+
+		// Indicates which host has been assigned to the node
 		if !t.updateNodeStatusWithHostname(ctx, nodeInfos[0].nodeName, node.HostName,
 			nodePool.Namespace) {
 			return false
