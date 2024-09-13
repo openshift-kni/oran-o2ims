@@ -53,13 +53,6 @@ const (
 			"description": "BaseDomain is the base domain to use for the deployed cluster.",
 			"type": "string"
 		  },
-		  "clusterLabels": {
-			"additionalProperties": {
-			  "type": "string"
-			},
-			"description": "ClusterLabels is used to assign labels to the cluster to assist with policy binding.",
-			"type": "object"
-		  },
 		  "clusterName": {
 			"description": "ClusterName is the name of the cluster.",
 			"type": "string"
@@ -254,9 +247,6 @@ const (
 		  "10.16.231.1"
 		],
 		"baseDomain": "example.com",
-		"clusterLabels": {
-		  "cluster-version": "v4.16"
-		},
 		"clusterName": "cluster-1",
 		"machineNetwork": [
 		  {
@@ -271,6 +261,9 @@ const (
 		"extraLabels": {
           "AgentClusterInstall": {
 		    "extra-label-key": "extra-label-value"
+		  },
+		  "ManagedCluster": {
+			"cluster-version": "v4.16"
 		  }
 		},
 		"ingressVIPs": [
