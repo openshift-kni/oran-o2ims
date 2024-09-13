@@ -113,6 +113,26 @@ rules:
   - patch
   - update
 - apiGroups:
+  - hardwaremanagement.oran.openshift.io
+  resources:
+  - nodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hardwaremanagement.oran.openshift.io
+  resources:
+  - nodes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - internal.open-cluster-management.io
   resources:
   - managedclusterinfos
