@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -409,89 +411,756 @@ const (
 }`
 )
 
-/*
-var _ = DescribeTable(
-	"Reconciler",
-	func(objs []client.Object, request reconcile.Request,
-		validate func(result ctrl.Result, reconciler ClusterRequestReconciler)) {
+func verifyStatusCondition(actualCond, expectedCon metav1.Condition) {
+	Expect(actualCond.Type).To(Equal(expectedCon.Type))
+	Expect(actualCond.Status).To(Equal(expectedCon.Status))
+	Expect(actualCond.Reason).To(Equal(expectedCon.Reason))
+	if expectedCon.Message != "" {
+		Expect(actualCond.Message).To(ContainSubstring(expectedCon.Message))
+	}
+}
 
-		// Declare the Namespace for the ClusterRequest resource.
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "cluster-template",
-			},
-		}
-		// Declare the Namespace for the managed cluster resource.
-		nsSite := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "site-sno-du-1",
-			},
-		}
+func removeRequiredFieldFromClusterInstanceCm(
+	ctx context.Context, c client.Client, cmName, cmNamespace string) {
+	// Remove a required field from ClusterInstance default configmap
+	ciConfigmap := &corev1.ConfigMap{}
+	Expect(c.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, ciConfigmap)).To(Succeed())
 
-		// Update the testcase objects to include the Namespace.
-		objs = append(objs, ns, nsSite)
+	ciConfigmap.Data = map[string]string{
+		utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+    clusterImageSetNameRef: "4.15"
+    pullSecretRef:
+      name: "pull-secret"
+    nodes:
+    - hostname: "node1"
+    templateRefs:
+    - name: "ai-node-templates-v1"
+      namespace: "siteconfig-operator"
+    `}
+	Expect(c.Update(ctx, ciConfigmap)).To(Succeed())
+}
 
-		// Get the fake client.
-		fakeClient := getFakeClientFromObjects(objs...)
+func removeRequiredFieldFromClusterInstanceInput(
+	ctx context.Context, c client.Client, crName, crNamespace string) {
+	// Remove required field hostname
+	currentCR := &oranv1alpha1.ClusterRequest{}
+	Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: crNamespace}, currentCR)).To(Succeed())
 
-		// Initialize the O-RAN O2IMS reconciler.
-		r := &ClusterRequestReconciler{
-			Client: fakeClient,
-			Logger: logger,
-		}
+	clusterInstanceInput := make(map[string]any)
+	err := json.Unmarshal([]byte(testClusterTemplateInput), &clusterInstanceInput)
+	Expect(err).ToNot(HaveOccurred())
+	node1 := clusterInstanceInput["nodes"].([]any)[0]
+	delete(node1.(map[string]any), "hostName")
+	updatedClusterInstanceInput, err := json.Marshal(clusterInstanceInput)
+	Expect(err).ToNot(HaveOccurred())
 
-		// Reconcile.
-		result, err := r.Reconcile(context.TODO(), request)
-		Expect(err).ToNot(HaveOccurred())
+	currentCR.Spec.ClusterTemplateInput.ClusterInstanceInput.Raw = updatedClusterInstanceInput
+	Expect(c.Update(ctx, currentCR)).To(Succeed())
+}
 
-		validate(result, *r)
-	},
+var _ = Describe("ClusterRequestReconcile", func() {
+	var (
+		c            client.Client
+		ctx          context.Context
+		reconciler   *ClusterRequestReconciler
+		req          reconcile.Request
+		cr           *oranv1alpha1.ClusterRequest
+		ct           *oranv1alpha1.ClusterTemplate
+		ctName       = "clustertemplate-a-v1"
+		ctNamespace  = "clustertemplate-a-v4-16"
+		ciDefaultsCm = "clusterinstance-defaults-v1"
+		ptDefaultsCm = "policytemplate-defaults-v1"
+		hwTemplateCm = "hwTemplate-v1"
+		crName       = "cluster-1"
+	)
 
-	Entry(
-		"ClusterTemplate specified by ClusterTemplateRef is missing and input is valid",
-		[]client.Object{
-			&oranv1alpha1.ClusterRequest{
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		crs := []client.Object{
+			// Cluster Template Namespace
+			&corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "cluster-request",
-					Namespace:  "cluster-template",
-					Finalizers: []string{clusterRequestFinalizer},
+					Name: ctNamespace,
 				},
-				Spec: oranv1alpha1.ClusterRequestSpec{
-					ClusterTemplateRef: "cluster-template",
-					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
-						ClusterInstanceInput: runtime.RawExtension{
-							Raw: []byte(`{
-								"name": "Bob",
-								"age": 35,
-								"email": "bob@example.com",
-								"phoneNumbers": ["123-456-7890", "987-654-3210"]
-							}`),
-						},
+			},
+			// Configmap for ClusterInstance defaults
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ciDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+    clusterImageSetNameRef: "4.15"
+    pullSecretRef:
+      name: "pull-secret"
+    templateRefs:
+    - name: "ai-cluster-templates-v1"
+      namespace: "siteconfig-operator"
+    nodes:
+    - hostname: "node1"
+      templateRefs:
+      - name: "ai-node-templates-v1"
+        namespace: "siteconfig-operator"
+    `,
+				},
+			},
+			// Configmap for policy template defaults
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ptDefaultsCm,
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.PolicyTemplateDefaultsConfigmapKey: `
+    cpu-isolated: "2-31"
+    cpu-reserved: "0-1"
+    defaultHugepagesSize: "1G"`,
+				},
+			},
+			// Configmap for hareware template
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCm,
+					Namespace: utils.ORANO2IMSNamespace,
+				},
+				Data: map[string]string{
+					"hwMgrId": "hwmgr",
+					utils.HwTemplateNodePool: `
+    - name: master
+      hwProfile: profile-spr-single-processor-64G
+    - name: worker
+      hwProfile: profile-spr-dual-processor-128G`,
+				},
+			},
+			// Pull secret for ClusterInstance
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pull-secret",
+					Namespace: ctNamespace,
+				},
+			},
+		}
+
+		// Define the cluster template.
+		ct = &oranv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ctName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterTemplateSpec{
+				Templates: oranv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+				InputDataSchema: oranv1alpha1.InputDataSchema{
+					ClusterInstanceSchema: runtime.RawExtension{
+						Raw: []byte(testClusterTemplateSchema),
+					},
+					PolicyTemplateSchema: runtime.RawExtension{
+						Raw: []byte(testPolicyTemplateSchema),
 					},
 				},
 			},
-		},
-		reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      "cluster-request",
-				Namespace: "cluster-template",
-			},
-		},
-		func(result ctrl.Result, reconciler ClusterRequestReconciler) {
-			// Get the ClusterRequest and check that everything is valid.
-			clusterRequest := &oranv1alpha1.ClusterRequest{}
-			err := reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      "cluster-request",
-					Namespace: "cluster-template",
+			Status: oranv1alpha1.ClusterTemplateStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(utils.CTconditionTypes.Validated),
+						Reason: string(utils.CTconditionReasons.Completed),
+						Status: metav1.ConditionTrue,
+					},
 				},
-				clusterRequest)
+			},
+		}
+
+		// Define the cluster request.
+		cr = &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       crName,
+				Namespace:  ctNamespace,
+				Finalizers: []string{clusterRequestFinalizer},
+			},
+			Spec: oranv1alpha1.ClusterRequestSpec{
+				ClusterTemplateRef: ctName,
+				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+					ClusterInstanceInput: runtime.RawExtension{
+						Raw: []byte(testClusterTemplateInput),
+					},
+					PolicyTemplateInput: runtime.RawExtension{
+						Raw: []byte(testPolicyTemplateInput),
+					},
+				},
+			},
+		}
+
+		crs = append(crs, cr, ct)
+		c = getFakeClientFromObjects(crs...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+
+		// Request for ClusterRequest
+		req = reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+		}
+	})
+
+	Context("Resources preparation during initial Provisioning", func() {
+		It("Verify status conditions if ClusterRequest validation fails", func() {
+			// Fail the ClusterTemplate validation
+			ctValidatedCond := meta.FindStatusCondition(
+				ct.Status.Conditions, string(utils.CTconditionTypes.Validated))
+			ctValidatedCond.Status = metav1.ConditionFalse
+			ctValidatedCond.Reason = string(utils.CTconditionReasons.Failed)
+			Expect(c.Status().Update(ctx, ct)).To(Succeed())
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
 			Expect(err).ToNot(HaveOccurred())
-		},
-	),
-)
-*/
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(1))
+			verifyStatusCondition(conditions[0], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.Validated),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "Failed to validate the ClusterRequest: the clustertemplate validation has failed",
+			})
+		})
+
+		It("Verify status conditions if ClusterInstance rendering fails", func() {
+			// Fail the ClusterInstance rendering
+			removeRequiredFieldFromClusterInstanceCm(ctx, c, ciDefaultsCm, ctNamespace)
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(2))
+			verifyStatusCondition(conditions[0], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.Validated),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[1], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "spec.nodes[0].templateRefs must be provided",
+			})
+		})
+
+		It("Verify status conditions if Cluster resources creation fails", func() {
+			// Delete the pull secret for ClusterInstance
+			secret := &corev1.Secret{}
+			secret.SetName("pull-secret")
+			secret.SetNamespace(ctNamespace)
+			Expect(c.Delete(ctx, secret)).To(Succeed())
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(requeueWithMediumInterval()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(3))
+			verifyStatusCondition(conditions[0], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.Validated),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[1], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterInstanceRendered),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[2], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ClusterResourcesCreated),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "failed to create pull Secret for cluster cluster-1",
+			})
+		})
+
+		It("Verify status conditions if all preparation work completes", func() {
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify NodePool was created
+			nodePool := &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, types.NamespacedName{
+				Name: crName, Namespace: "hwmgr"}, nodePool)).To(Succeed())
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(4))
+			verifyStatusCondition(conditions[0], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.Validated),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[1], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterInstanceRendered),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[2], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterResourcesCreated),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[3], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.HardwareTemplateRendered),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+		})
+	})
+
+	Context("When NodePool has been created", func() {
+		var nodePool *hwv1alpha1.NodePool
+
+		BeforeEach(func() {
+			// Create NodePool resource
+			nodePool = &hwv1alpha1.NodePool{}
+			nodePool.SetName(crName)
+			nodePool.SetNamespace("hwmgr")
+			nodePool.Status.Conditions = []metav1.Condition{
+				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
+			}
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
+		})
+
+		It("Verify ClusterInstance should not be created when NodePool provision is in-progress", func() {
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// TODO: turn it on when hw plugin is ready
+			//
+			// Verify no ClusterInstance was created
+			// clusterInstance := &siteconfig.ClusterInstance{}
+			// Expect(c.Get(ctx, types.NamespacedName{
+			// 	Name: crName, Namespace: crName}, clusterInstance)).To(HaveOccurred())
+
+			// Verify the ClusterRequest's status conditions
+			// TODO: change the number of conditions to 5 when hw plugin is ready
+			Expect(len(conditions)).To(Equal(6))
+			verifyStatusCondition(conditions[4], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
+				Status: metav1.ConditionFalse,
+				Reason: string(utils.CRconditionReasons.InProgress),
+			})
+		})
+
+		It("Verify ClusterInstance should be created when NodePool has provisioned", func() {
+			// Patch NodePool provision status to Completed
+			npProvisionedCond := meta.FindStatusCondition(
+				nodePool.Status.Conditions, string(hwv1alpha1.Provisioned),
+			)
+			npProvisionedCond.Status = metav1.ConditionTrue
+			npProvisionedCond.Reason = string(hwv1alpha1.Completed)
+			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify the ClusterInstance was created
+			clusterInstance := &siteconfig.ClusterInstance{}
+			Expect(c.Get(ctx, types.NamespacedName{
+				Name: crName, Namespace: crName}, clusterInstance)).To(Succeed())
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(6))
+			verifyStatusCondition(conditions[4], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[5], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterInstanceProcessed),
+				Status: metav1.ConditionUnknown,
+				Reason: string(utils.CRconditionReasons.Unknown),
+			})
+		})
+
+		It("Verify status conditions when configuration change causes ClusterRequest validation to fail but NodePool becomes provsioned ", func() {
+			// Initial reconciliation
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Patch NodePool provision status to Completed
+			currentNp := &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: "hwmgr"}, currentNp)).To(Succeed())
+			npProvisionedCond := meta.FindStatusCondition(
+				currentNp.Status.Conditions, string(hwv1alpha1.Provisioned),
+			)
+			npProvisionedCond.Status = metav1.ConditionTrue
+			npProvisionedCond.Reason = string(hwv1alpha1.Completed)
+			Expect(c.Status().Update(ctx, currentNp)).To(Succeed())
+
+			// Remove required field hostname to fail ClusterRequest validation
+			removeRequiredFieldFromClusterInstanceInput(ctx, c, crName, ctNamespace)
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// TODO: change the number of conditions to 5 when hw plugin is ready
+			// Verify that the validated condition fails but hw provisioned condition
+			// has changed to Completed
+			Expect(len(conditions)).To(Equal(6))
+			verifyStatusCondition(conditions[0], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.Validated),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "nodes.0: hostName is required",
+			})
+			verifyStatusCondition(conditions[4], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+		})
+
+		It("Verify status conditions when configuration change causes ClusterInstance rendering to fail but NodePool becomes provsioned", func() {
+			// Initial reconciliation
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Patch NodePool provision status to Completed
+			currentNp := &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: "hwmgr"}, currentNp)).To(Succeed())
+			npProvisionedCond := meta.FindStatusCondition(
+				currentNp.Status.Conditions, string(hwv1alpha1.Provisioned),
+			)
+			npProvisionedCond.Status = metav1.ConditionTrue
+			npProvisionedCond.Reason = string(hwv1alpha1.Completed)
+			Expect(c.Status().Update(ctx, currentNp)).To(Succeed())
+
+			// Fail the ClusterInstance rendering
+			removeRequiredFieldFromClusterInstanceCm(ctx, c, ciDefaultsCm, ctNamespace)
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// TODO: change the number of conditions to 5 when hw plugin is ready
+			// Verify that the ClusterInstanceRendered condition fails but hw provisioned condition
+			// has changed to Completed
+			Expect(len(conditions)).To(Equal(6))
+			verifyStatusCondition(conditions[1], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "spec.nodes[0].templateRefs must be provided",
+			})
+			verifyStatusCondition(conditions[4], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+		})
+	})
+
+	Context("When ClusterInstance has been created", func() {
+		var (
+			nodePool        *hwv1alpha1.NodePool
+			clusterInstance *siteconfig.ClusterInstance
+			managedCluster  *clusterv1.ManagedCluster
+			policy          *policiesv1.Policy
+		)
+		BeforeEach(func() {
+			// Create NodePool resource that has provisioned
+			nodePool = &hwv1alpha1.NodePool{}
+			nodePool.SetName(crName)
+			nodePool.SetNamespace("hwmgr")
+			nodePool.Status.Conditions = []metav1.Condition{
+				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
+			}
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
+			// Create ClusterInstance resource
+			clusterInstance = &siteconfig.ClusterInstance{}
+			clusterInstance.SetName(crName)
+			clusterInstance.SetNamespace(crName)
+			clusterInstance.Status.Conditions = []metav1.Condition{
+				{Type: "ClusterInstanceValidated", Status: metav1.ConditionTrue},
+				{Type: "RenderedTemplates", Status: metav1.ConditionTrue},
+				{Type: "RenderedTemplatesValidated", Status: metav1.ConditionTrue},
+				{Type: "RenderedTemplatesApplied", Status: metav1.ConditionTrue},
+				{Type: "RenderedTemplatesApplied", Status: metav1.ConditionTrue}}
+			Expect(c.Create(ctx, clusterInstance)).To(Succeed())
+			// Create ManagedCluster
+			managedCluster = &clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: crName},
+				Status: clusterv1.ManagedClusterStatus{
+					Conditions: []metav1.Condition{{Type: clusterv1.ManagedClusterConditionAvailable, Status: metav1.ConditionFalse}},
+				},
+			}
+			Expect(c.Create(ctx, managedCluster)).To(Succeed())
+			// Create Non-compliant enforce policy
+			policy = &policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-15.v1-sriov-configuration-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-15.v1-sriov-configuration-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "NonCompliant",
+				},
+			}
+			Expect(c.Create(ctx, policy)).To(Succeed())
+		})
+
+		It("Verify status conditions when ClusterInstance provision is still in progress and ManagedCluster is not ready", func() {
+			// Patch ClusterInstance provisioned status to InProgress
+			crProvisionedCond := metav1.Condition{
+				Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "InProgress", Message: "Provisioning cluster",
+			}
+			clusterInstance.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
+			Expect(c.Status().Update(ctx, clusterInstance)).To(Succeed())
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(8))
+			verifyStatusCondition(conditions[5], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterInstanceProcessed),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[6], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ClusterProvisioned),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.InProgress),
+				Message: "Provisioning cluster",
+			})
+			verifyStatusCondition(conditions[7], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.InProgress),
+				Message: "The configuration is still being applied",
+			})
+		})
+
+		It("Verify status conditions when ClusterInstance provision has completed, ManagedCluster becomes ready and configuration policy becomes compliant", func() {
+			// Patch ClusterInstance provisioned status to Completed
+			crProvisionedCond := metav1.Condition{
+				Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Provisioning completed",
+			}
+			clusterInstance.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
+			Expect(c.Status().Update(ctx, clusterInstance)).To(Succeed())
+			// Patch ManagedCluster to ready
+			readyCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
+			readyCond.Status = metav1.ConditionTrue
+			Expect(c.Status().Update(ctx, managedCluster)).To(Succeed())
+			// Patch enforce policy to Compliant
+			policy.Status.ComplianceState = "Compliant"
+			Expect(c.Status().Update(ctx, policy)).To(Succeed())
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(8))
+			verifyStatusCondition(conditions[6], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[7], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(utils.CRconditionReasons.Completed),
+				Message: "The configuration is up to date",
+			})
+		})
+
+		It("Verify status conditions when configuration change causes ClusterRequest validation to fail but ClusterInstance becomes provisioned", func() {
+			// Initial reconciliation
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Patch ClusterInstance provisioned status to Completed
+			crProvisionedCond := metav1.Condition{
+				Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Provisioning completed",
+			}
+			currentCI := &siteconfig.ClusterInstance{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: crName}, currentCI)).To(Succeed())
+			currentCI.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
+			Expect(c.Status().Update(ctx, currentCI)).To(Succeed())
+
+			// Remove required field hostname to fail ClusterRequest validation
+			removeRequiredFieldFromClusterInstanceInput(ctx, c, crName, ctNamespace)
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify that the Validated condition fails but ClusterProvisioned condition
+			// has changed to Completed
+			Expect(len(conditions)).To(Equal(8))
+			verifyStatusCondition(conditions[0], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.Validated),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "nodes.0: hostName is required",
+			})
+			verifyStatusCondition(conditions[6], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[7], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.InProgress),
+				Message: "The configuration is still being applied",
+			})
+		})
+
+		It("Verify status conditions when configuration change causes ClusterInstance rendering to fail but configuration policy becomes compliant", func() {
+			// Initial reconciliation
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Patch ClusterInstance provisioned status to Completed
+			crProvisionedCond := metav1.Condition{
+				Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Provisioning completed",
+			}
+			currentCI := &siteconfig.ClusterInstance{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: crName}, currentCI)).To(Succeed())
+			currentCI.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
+			Expect(c.Status().Update(ctx, currentCI)).To(Succeed())
+			// Patch ManagedCluster to ready
+			readyCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
+			readyCond.Status = metav1.ConditionTrue
+			Expect(c.Status().Update(ctx, managedCluster)).To(Succeed())
+			// Patch enforce policy to Compliant
+			policy.Status.ComplianceState = "Compliant"
+			Expect(c.Status().Update(ctx, policy)).To(Succeed())
+
+			// Fail the ClusterInstance rendering
+			removeRequiredFieldFromClusterInstanceCm(ctx, c, ciDefaultsCm, ctNamespace)
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify that the ClusterInstanceRendered condition fails but configurationApplied
+			// has changed to Completed
+			Expect(len(conditions)).To(Equal(8))
+			verifyStatusCondition(conditions[1], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "spec.nodes[0].templateRefs must be provided",
+			})
+			verifyStatusCondition(conditions[6], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[7], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(utils.CRconditionReasons.Completed),
+				Message: "The configuration is up to date",
+			})
+		})
+	})
+})
 
 var _ = Describe("getCrClusterTemplateRef", func() {
 	var (
@@ -857,7 +1526,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 	})
 
 	It("returns false when error fetching NodePool", func() {
-		rt := task.waitForNodePoolProvision(ctx, np)
+		rt := task.checkNodePoolProvisionStatus(ctx, np)
 		Expect(rt).To(Equal(false))
 	})
 
@@ -869,7 +1538,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
 
-		rt := task.waitForNodePoolProvision(ctx, np)
+		rt := task.checkNodePoolProvisionStatus(ctx, np)
 		Expect(rt).To(Equal(false))
 		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
@@ -883,7 +1552,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		}
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
-		rt := task.waitForNodePoolProvision(ctx, np)
+		rt := task.checkNodePoolProvisionStatus(ctx, np)
 		Expect(rt).To(Equal(true))
 		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())

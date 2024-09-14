@@ -1144,7 +1144,6 @@ spec:
 			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.baseDomain cannot be empty"))
-		fmt.Println("Error", err.Error())
 	})
 
 	It("Return error if a required array field is empty", func() {
@@ -1154,7 +1153,6 @@ spec:
 			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.templateRefs cannot be empty"))
-		fmt.Println("Error", err.Error())
 	})
 
 	It("Return error if a required map field is empty", func() {
@@ -1164,7 +1162,6 @@ spec:
 			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.pullSecretRef cannot be empty"))
-		fmt.Println("Error", err.Error())
 	})
 
 	It("Return error if a required field is not provided", func() {
@@ -1176,7 +1173,6 @@ spec:
 			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.nodes[0].hostName must be provided"))
-		fmt.Println("Error", err.Error())
 	})
 
 	It("Return error if expected array field is not an array", func() {
@@ -1189,7 +1185,6 @@ spec:
 			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.nodes[0].nodeNetwork.interfaces must be of type array"))
-		fmt.Println("Error", err.Error())
 	})
 
 	It("Return error if expected map field is not a map", func() {
@@ -1202,7 +1197,6 @@ spec:
 			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.nodes[0].nodeNetwork must be of type map"))
-		fmt.Println("Error", err.Error())
 	})
 })
 

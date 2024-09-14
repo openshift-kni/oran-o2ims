@@ -164,7 +164,7 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 	err := t.handleValidation(ctx)
 	if err != nil {
 		if utils.IsInputError(err) {
-			return doNotRequeue(), nil
+			return t.checkClusterDeployConfigState(ctx)
 		}
 		// internal error that might recover
 		return requeueWithError(err)
@@ -174,7 +174,7 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 	renderedClusterInstance, err := t.handleRenderClusterInstance(ctx)
 	if err != nil {
 		if utils.IsInputError(err) {
-			return doNotRequeue(), nil
+			return t.checkClusterDeployConfigState(ctx)
 		}
 		return requeueWithError(err)
 	}
@@ -183,6 +183,10 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 	err = t.handleClusterResources(ctx, renderedClusterInstance)
 	if err != nil {
 		if utils.IsInputError(err) {
+			_, err = t.checkClusterDeployConfigState(ctx)
+			if err != nil {
+				return requeueWithError(err)
+			}
 			// Requeue since we are not watching for updates to required resources
 			// if they are missing
 			return requeueWithMediumInterval(), nil
@@ -194,7 +198,7 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 	renderedNodePool, err := t.renderHardwareTemplate(ctx, renderedClusterInstance)
 	if err != nil {
 		if utils.IsInputError(err) {
-			return doNotRequeue(), nil
+			return t.checkClusterDeployConfigState(ctx)
 		}
 		return requeueWithError(err)
 	}
@@ -220,7 +224,8 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 	}
 
 	hwProvisionedCond := meta.FindStatusCondition(
-		t.object.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
+		t.object.Status.Conditions,
+		string(utils.CRconditionTypes.HardwareProvisioned))
 	if hwProvisionedCond != nil {
 		// TODO: check hwProvisionedCond.Status == metav1.ConditionTrue
 		// after hw plugin is ready
@@ -228,26 +233,63 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 		// Handle the cluster install with ClusterInstance
 		err = t.handleClusterInstallation(ctx, renderedClusterInstance)
 		if err != nil {
-			if utils.IsInputError(err) {
-				return doNotRequeue(), nil
-			}
 			return requeueWithError(err)
 		}
 	}
 
 	crProvisionedCond := meta.FindStatusCondition(
-		t.object.Status.Conditions, string(utils.CRconditionTypes.ClusterProvisioned))
+		t.object.Status.Conditions,
+		string(utils.CRconditionTypes.ClusterProvisioned))
 	if crProvisionedCond != nil {
 		// Handle configuration through policies.
 		err = t.handleClusterPolicyConfiguration(ctx)
 		if err != nil {
-			if utils.IsInputError(err) {
-				return doNotRequeue(), nil
-			}
 			return requeueWithError(err)
 		}
 	}
 
+	return doNotRequeue(), nil
+}
+
+// checkClusterDeployConfigState checks the current deployment and configuration state of
+// the cluster by evaluating the statuses of related resources like NodePool, ClusterInstance
+// and policy configuration when applicable, and update the corresponding ClusterRequest
+// status conditions
+func (t *clusterRequestReconcilerTask) checkClusterDeployConfigState(ctx context.Context) (ctrl.Result, error) {
+	// Check the NodePool status if exists
+	if t.object.Status.NodePoolRef == nil {
+		return doNotRequeue(), nil
+	}
+	nodePool := &hwv1alpha1.NodePool{}
+	nodePool.SetName(t.object.Status.NodePoolRef.Name)
+	nodePool.SetNamespace(t.object.Status.NodePoolRef.Namespace)
+	t.checkNodePoolProvisionStatus(ctx, nodePool)
+
+	hwProvisionedCond := meta.FindStatusCondition(
+		t.object.Status.Conditions,
+		string(utils.CRconditionTypes.HardwareProvisioned))
+	if hwProvisionedCond != nil {
+		// Check the ClusterInstance status if exists
+		if t.object.Status.ClusterInstanceRef == nil {
+			return doNotRequeue(), nil
+		}
+		err := t.checkClusterProvisionStatus(
+			ctx, t.object.Status.ClusterInstanceRef.Name)
+		if err != nil {
+			return requeueWithError(err)
+		}
+	}
+
+	// Check the policy configuration status
+	crProvisionedCond := meta.FindStatusCondition(
+		t.object.Status.Conditions,
+		string(utils.CRconditionTypes.ClusterProvisioned))
+	if crProvisionedCond != nil {
+		err := t.handleClusterPolicyConfiguration(ctx)
+		if err != nil {
+			return requeueWithError(err)
+		}
+	}
 	return doNotRequeue(), nil
 }
 
@@ -430,7 +472,7 @@ func (t *clusterRequestReconcilerTask) handleRenderClusterInstance(ctx context.C
 	if err != nil {
 		return nil, fmt.Errorf("failed to handle ClusterInstance rendering and validation: %w", err)
 	}
-	return renderedClusterInstance, err
+	return renderedClusterInstance, nil
 }
 
 func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
@@ -467,7 +509,7 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 
 		// Validate the rendered ClusterInstance with dry-run
 		isDryRun := true
-		_, err = t.applyClusterInstance(ctx, renderedClusterInstanceUnstructure, isDryRun)
+		err = t.applyClusterInstance(ctx, renderedClusterInstanceUnstructure, isDryRun)
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
 		}
@@ -646,7 +688,7 @@ func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplate
 	return mergedClusterData, nil
 }
 
-func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance client.Object, isDryRun bool) (*siteconfig.ClusterInstance, error) {
+func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance client.Object, isDryRun bool) error {
 	var operationType string
 
 	// Query the ClusterInstance and its status.
@@ -659,7 +701,7 @@ func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context,
 		existingClusterInstance)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to get ClusterInstance: %w", err)
+			return fmt.Errorf("failed to get ClusterInstance: %w", err)
 		}
 
 		operationType = utils.OperationTypeCreated
@@ -673,10 +715,10 @@ func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context,
 		err = t.client.Create(ctx, clusterInstance, opts...)
 		if err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return nil, fmt.Errorf("failed to create ClusterInstance: %w", err)
+				return fmt.Errorf("failed to create ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
-			return nil, utils.NewInputError(err.Error())
+			return utils.NewInputError(err.Error())
 		}
 	} else {
 		// TODO: only update the existing clusterInstance when a list of allowed fields are changed
@@ -697,10 +739,10 @@ func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context,
 		patch := client.MergeFrom(existingClusterInstance.DeepCopy())
 		if err := t.client.Patch(ctx, clusterInstance, patch, opts...); err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return nil, fmt.Errorf("failed to patch ClusterInstance: %w", err)
+				return fmt.Errorf("failed to patch ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
-			return nil, utils.NewInputError(err.Error())
+			return utils.NewInputError(err.Error())
 		}
 	}
 
@@ -713,20 +755,24 @@ func (t *clusterRequestReconcilerTask) applyClusterInstance(ctx context.Context,
 			operationType,
 		),
 	)
-	return existingClusterInstance, nil
+	return nil
 }
 
-// handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
-func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
-	isDryRun := false
-	existingClusterInstance, err := t.applyClusterInstance(ctx, clusterInstance, isDryRun)
-	t.updateClusterInstanceProcessedStatus(existingClusterInstance, err)
-	t.updateClusterProvisionStatus(existingClusterInstance)
+// checkClusterProvisionStatus checks the status of cluster provisioning
+func (t *clusterRequestReconcilerTask) checkClusterProvisionStatus(
+	ctx context.Context, clusterInstanceName string) error {
 
-	if t.object.Status.ClusterInstanceRef == nil {
-		t.object.Status.ClusterInstanceRef = &oranv1alpha1.ClusterInstanceRef{}
-		t.object.Status.ClusterInstanceRef.Name = clusterInstance.GetName()
+	clusterInstance := &siteconfig.ClusterInstance{}
+	exists, err := utils.DoesK8SResourceExist(ctx, t.client, clusterInstanceName, clusterInstanceName, clusterInstance)
+	if err != nil {
+		return fmt.Errorf("failed to get ClusterInstance %s: %w", clusterInstanceName, err)
 	}
+	if !exists {
+		return nil
+	}
+	// Check ClusterInstance status and update the corresponding ClusterRequest status conditions
+	t.updateClusterInstanceProcessedStatus(clusterInstance)
+	t.updateClusterProvisionStatus(clusterInstance)
 
 	// Check if the cluster provision has completed
 	crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(utils.CRconditionTypes.ClusterProvisioned))
@@ -759,8 +805,36 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
 	}
 
+	return nil
+}
+
+// handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
+func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
+	isDryRun := false
+	err := t.applyClusterInstance(ctx, clusterInstance, isDryRun)
 	if err != nil {
-		return fmt.Errorf("failed to handle ClusterInstallation: %w", err)
+		if !utils.IsInputError(err) {
+			return fmt.Errorf("failed to apply the rendered ClusterInstance (%s): %s", clusterInstance.Name, err.Error())
+		}
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.CRconditionTypes.ClusterInstanceProcessed,
+			utils.CRconditionReasons.NotApplied,
+			metav1.ConditionFalse,
+			fmt.Sprintf(
+				"Failed to apply the rendered ClusterInstance (%s): %s",
+				clusterInstance.Name, err.Error()),
+		)
+	} else {
+		// Set ClusterInstanceRef
+		if t.object.Status.ClusterInstanceRef == nil {
+			t.object.Status.ClusterInstanceRef = &oranv1alpha1.ClusterInstanceRef{}
+		}
+		t.object.Status.ClusterInstanceRef.Name = clusterInstance.GetName()
+	}
+
+	// Continue checking the existing ClusterInstance provision status
+	if err := t.checkClusterProvisionStatus(ctx, clusterInstance.Name); err != nil {
+		return err
 	}
 	return nil
 }
@@ -842,19 +916,7 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 	return nil
 }
 
-func (t *clusterRequestReconcilerTask) updateClusterInstanceProcessedStatus(ci *siteconfig.ClusterInstance, createOrPatchErr error) {
-	if createOrPatchErr != nil {
-		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.CRconditionTypes.ClusterInstanceProcessed,
-			utils.CRconditionReasons.NotApplied,
-			metav1.ConditionFalse,
-			fmt.Sprintf(
-				"Failed to apply the rendered ClusterInstance (%s): %s",
-				ci.Name, createOrPatchErr.Error()),
-		)
-		return
-	}
-
+func (t *clusterRequestReconcilerTask) updateClusterInstanceProcessedStatus(ci *siteconfig.ClusterInstance) {
 	if ci == nil {
 		return
 	}
@@ -1200,8 +1262,16 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 			),
 			slog.String("error", createErr.Error()),
 		)
-		createErr = fmt.Errorf("failed to create/update the NodePool: %s", createErr.Error())
+		return fmt.Errorf("failed to create/update the NodePool: %s", createErr.Error())
 	}
+
+	// Set NodePoolRef
+	if t.object.Status.NodePoolRef == nil {
+		t.object.Status.NodePoolRef = &oranv1alpha1.NodePoolRef{}
+	}
+	t.object.Status.NodePoolRef.Name = nodePool.GetName()
+	t.object.Status.NodePoolRef.Namespace = nodePool.GetNamespace()
+
 	t.logger.InfoContext(
 		ctx,
 		fmt.Sprintf(
@@ -1210,7 +1280,7 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 			nodePool.GetNamespace(),
 		),
 	)
-	return createErr
+	return nil
 }
 
 func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Context) (*oranv1alpha1.ClusterTemplate, error) {
@@ -1401,8 +1471,8 @@ func (r *ClusterRequestReconciler) handleFinalizer(
 	return ctrl.Result{}, false, nil
 }
 
-// waitForNodePoolProvision waits for the NodePool status to be in the provisioned state.
-func (t *clusterRequestReconcilerTask) waitForNodePoolProvision(ctx context.Context,
+// checkNodePoolProvisionStatus checks for the NodePool status to be in the provisioned state.
+func (t *clusterRequestReconcilerTask) checkNodePoolProvisionStatus(ctx context.Context,
 	nodePool *hwv1alpha1.NodePool) bool {
 
 	// Get the generated NodePool and its status.
@@ -1469,7 +1539,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context
 func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
 	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) bool {
 
-	provisioned := t.waitForNodePoolProvision(ctx, nodePool)
+	provisioned := t.checkNodePoolProvisionStatus(ctx, nodePool)
 	if provisioned {
 		t.logger.InfoContext(
 			ctx,
@@ -1634,13 +1704,6 @@ func (t *clusterRequestReconcilerTask) updateNodeStatusWithHostname(ctx context.
 // updateHardwareProvisioningStatus updates the status for the created ClusterInstance
 func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 	ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
-
-	if t.object.Status.NodePoolRef == nil {
-		t.object.Status.NodePoolRef = &oranv1alpha1.NodePoolRef{}
-	}
-
-	t.object.Status.NodePoolRef.Name = nodePool.GetName()
-	t.object.Status.NodePoolRef.Namespace = nodePool.GetNamespace()
 
 	if len(nodePool.Status.Conditions) > 0 {
 		provisionedCondition := meta.FindStatusCondition(
