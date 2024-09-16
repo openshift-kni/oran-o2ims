@@ -81,15 +81,18 @@ type ORANO2IMSSpec struct {
 	// the controller manager.
 	//
 	//+optional
-	Image   string `json:"image"`
+	Image string `json:"image"`
+	// CloudId is used to correlate the SMO inventory record with the deployed cloud instance.
 	CloudId string `json:"cloudId"`
 	//+optional
 	MetadataServerConfig MetadataServerConfig `json:"metadataServerConfig"`
 	//+optional
 	DeploymentManagerServerConfig DeploymentManagerServerConfig `json:"deploymentManagerServerConfig"`
-	ResourceServerConfig          ResourceServerConfig          `json:"resourceServerConfig,omitempty"`
+	//+optional
+	ResourceServerConfig ResourceServerConfig `json:"resourceServerConfig,omitempty"`
 	//+optional
 	AlarmSubscriptionServerConfig AlarmSubscriptionServerConfig `json:"alarmSubscriptionServerConfig"`
+	// IngressHost defines the FQDN for the IMS endpoints.
 	//+optional
 	IngressHost string `json:"ingressHost,omitempty"`
 }

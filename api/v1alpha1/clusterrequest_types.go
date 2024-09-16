@@ -33,7 +33,7 @@ type ClusterRequestSpec struct {
 	// LocationSpec is the geographical location of the requested node.
 	hwv1alpha1.LocationSpec `json:",inline"`
 
-	// Reference to an existing clusterTemplate CR.
+	// ClusterTemplateRef references an existing ClusterTemplate CR.
 	ClusterTemplateRef string `json:"clusterTemplateRef"`
 
 	ClusterTemplateInput ClusterTemplateInput `json:"clusterTemplateInput"`
@@ -73,6 +73,8 @@ type ClusterInstanceRef struct {
 	ZtpStatus string `json:"ztpStatus,omitempty"`
 }
 
+// Timeout contains timeout values for hardware provisioning, cluster provisioning and
+// cluster configuration.
 type Timeout struct {
 	// ClusterProvisioning defines the timeout for the initial cluster installation in minutes.
 	//+kubebuilder:default=90

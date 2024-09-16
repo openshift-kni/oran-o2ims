@@ -53,6 +53,8 @@ spec:
                 - enabled
                 type: object
               cloudId:
+                description: CloudId is used to correlate the SMO inventory record
+                  with the deployed cloud instance.
                 type: string
               deploymentManagerServerConfig:
                 default:
@@ -90,6 +92,7 @@ spec:
                   the controller manager.
                 type: string
               ingressHost:
+                description: IngressHost defines the FQDN for the IMS endpoints.
                 type: string
               metadataServerConfig:
                 default:

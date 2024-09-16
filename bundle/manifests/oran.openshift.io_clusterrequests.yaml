@@ -62,13 +62,17 @@ spec:
                 - policyTemplateInput
                 type: object
               clusterTemplateRef:
-                description: Reference to an existing clusterTemplate CR.
+                description: ClusterTemplateRef references an existing ClusterTemplate
+                  CR.
                 type: string
               location:
                 type: string
               site:
                 type: string
               timeout:
+                description: |-
+                  Timeout contains timeout values for hardware provisioning, cluster provisioning and
+                  cluster configuration.
                 properties:
                   clusterProvisioning:
                     default: 90
