@@ -249,6 +249,9 @@ github.com/peterhellberg/link
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
+# github.com/pmezard/go-difflib v1.0.0
+## explicit
+github.com/pmezard/go-difflib/difflib
 # github.com/prometheus/client_golang v1.18.0
 ## explicit; go 1.19
 github.com/prometheus/client_golang/prometheus
@@ -271,6 +274,9 @@ github.com/prometheus/procfs/internal/util
 # github.com/r3labs/diff/v3 v3.0.1
 ## explicit; go 1.13
 github.com/r3labs/diff/v3
+# github.com/qmuntal/stateless v1.7.1
+## explicit; go 1.19
+github.com/qmuntal/stateless
 # github.com/spf13/cobra v1.7.0
 ## explicit; go 1.15
 github.com/spf13/cobra
@@ -280,6 +286,9 @@ github.com/spf13/pflag
 # github.com/stolostron/siteconfig v0.0.0-20240911204707-0bba68d7dcc0
 ## explicit; go 1.21
 github.com/stolostron/siteconfig/api/v1alpha1
+# github.com/stretchr/testify v1.8.4
+## explicit; go 1.20
+github.com/stretchr/testify/assert
 # github.com/thoas/go-funk v0.9.3
 ## explicit; go 1.13
 github.com/thoas/go-funk
