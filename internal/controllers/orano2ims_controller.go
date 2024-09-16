@@ -56,6 +56,8 @@ import (
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="cluster.open-cluster-management.io",resources=managedclusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
+//+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
 
 // Reconciler reconciles a ORANO2IMS object
 type Reconciler struct {
@@ -119,6 +121,26 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy ServiceAccount for the Resource server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createResourceServerClusterRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create resource server cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createResourceServerClusterRoleBinding(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create resource server cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
@@ -404,7 +426,7 @@ func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context)
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
-			// We need to read manged clusters, as that is the main source for the
+			// We need to read managed clusters, as that is the main source for the
 			// information about clusters.
 			{
 				APIGroups: []string{
@@ -439,7 +461,7 @@ func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context)
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create DeploymentManagerCluster role: %w", err)
+		return fmt.Errorf("failed to create Deployment Manager cluster role: %w", err)
 	}
 
 	return nil
@@ -471,7 +493,98 @@ func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.C
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create DeploymentManagerCluster role binding: %w", err)
+		return fmt.Errorf("failed to create Deployment Manager cluster role binding: %w", err)
+	}
+
+	return nil
+}
+
+func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", t.object.Namespace, utils.ORANO2IMSResourceServerName,
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			// We need to read managed clusters, as that is the main source for the
+			// information about clusters.
+			{
+				APIGroups: []string{
+					"cluster.open-cluster-management.io",
+				},
+				Resources: []string{
+					"managedclusters",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"nodes",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"internal.open-cluster-management.io",
+				},
+				Resources: []string{
+					"managedclusterinfos",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Resource Server cluster role: %w", err)
+	}
+
+	return nil
+}
+
+func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Context) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.ORANO2IMSResourceServerName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.ORANO2IMSResourceServerName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: t.object.Namespace,
+				Name:      utils.ORANO2IMSResourceServerName,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Resource Server cluster role binding: %w", err)
 	}
 
 	return nil

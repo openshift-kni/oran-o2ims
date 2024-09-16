@@ -234,6 +234,14 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - secrets
           verbs:
           - create
@@ -307,6 +315,14 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - internal.open-cluster-management.io
+          resources:
+          - managedclusterinfos
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - networking.k8s.io
           resources:
