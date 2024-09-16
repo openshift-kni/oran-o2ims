@@ -1,11 +1,11 @@
 resources:
 
-# Operator:
-- oran_v1alpha1_orano2ims.yaml
+# Inventory:
+- v1alpha1_orano2ims.yaml
 
 # Hardware management:
-- deployment_manager_template_1.yaml
-- deployment_manager_template_2.yaml
-- deployment_manager_order_1.yaml
-- node_allocation_request_1.yaml
-- node_release_request_1.yaml
+
+# Provisioning:
+- v1alpha1_clustertemplate.yaml
+- v1alpha1_clusterrequest.yaml
+

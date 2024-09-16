@@ -2,13 +2,8 @@ resources:
 
 # Inventory:
 - bases/oran.openshift.io_orano2imses.yaml
-- bases/oran.openshift.io_deploymentmanagers.yaml
-- bases/oran.openshift.io_deploymentmanagerorders.yaml
-- bases/oran.openshift.io_deploymentmanagertemplates.yaml
 
 # Hardware management:
-- bases/hardwaremanagement.oran.openshift.io_nodeallocationrequests.yaml
-- bases/hardwaremanagement.oran.openshift.io_nodereleaserequests.yaml
 - bases/hardwaremanagement.oran.openshift.io_nodepools.yaml
 - bases/hardwaremanagement.oran.openshift.io_nodes.yaml
 

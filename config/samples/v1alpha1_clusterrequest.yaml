@@ -9,12 +9,16 @@ metadata:
     app.kubernetes.io/created-by: oran-o2ims
   name: clusterrequest-sample
 spec:
+  site: "local"
   timeout:
     clusterProvisioning: 80
     configuration: 40
     hardwareProvisioning: 60
   clusterTemplateRef: clustertemplate-sample
   clusterTemplateInput:
+    policyTemplateInput:
+      sriov-network-vlan-1: "114"
+      sriov-network-vlan-2: "111"
     clusterInstanceInput:
       apiVIPs:
         - 192.0.2.2
