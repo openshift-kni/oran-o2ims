@@ -1201,18 +1201,6 @@ func (t *clusterRequestReconcilerTask) hwMgrPluginNamespaceExists(
 }
 
 func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
-	chkNodepool := &hwv1alpha1.NodePool{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      nodePool.Name,
-			Namespace: nodePool.Namespace,
-		},
-	}
-	if exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodePool.Name, nodePool.Namespace, chkNodepool); err != nil {
-		return fmt.Errorf("failed check is nodepool exists %s: %w", nodePool.Name, err)
-	} else if exists {
-		return nil
-	}
-
 	// Create the hardware plugin namespace.
 	pluginNameSpace := nodePool.ObjectMeta.Namespace
 	if exists, err := t.hwMgrPluginNamespaceExists(ctx, pluginNameSpace); err != nil {
@@ -1228,19 +1216,19 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 		return fmt.Errorf("specified hardware manager plugin namespace does not exist: %s", pluginNameSpace)
 	}
 
-	// Create the clusterInstance namespace.
+	// Create/update the clusterInstance namespace, adding ClusterRequest labels to the namespace
 	err := t.createClusterInstanceNamespace(ctx, nodePool.GetName())
 	if err != nil {
 		return err
 	}
 
-	// Create/update the node pool resource
-	createErr := utils.CreateK8sCR(ctx, t.client, nodePool, t.object, utils.UPDATE)
+	// Create the node pool resource
+	createErr := utils.CreateK8sCR(ctx, t.client, nodePool, t.object, "")
 	if createErr != nil {
 		t.logger.ErrorContext(
 			ctx,
 			fmt.Sprintf(
-				"Failed to create/update the NodePool %s in the namespace %s",
+				"Failed to create the NodePool %s in the namespace %s",
 				nodePool.GetName(),
 				nodePool.GetNamespace(),
 			),
@@ -1251,7 +1239,7 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 	t.logger.InfoContext(
 		ctx,
 		fmt.Sprintf(
-			"Created/Updated NodePool %s in the namespace %s",
+			"Created NodePool %s in the namespace %s, if not already exist",
 			nodePool.GetName(),
 			nodePool.GetNamespace(),
 		),
