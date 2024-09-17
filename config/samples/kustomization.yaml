@@ -1,7 +1,7 @@
 resources:
 
 # Inventory:
-- v1alpha1_orano2ims.yaml
+- v1alpha1_inventory.yaml
 
 # Hardware management:
 

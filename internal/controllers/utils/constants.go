@@ -2,16 +2,16 @@ package utils
 
 // Default namespace
 const (
-	ORANO2IMSNamespace = "oran-o2ims"
+	InventoryNamespace = "oran-o2ims"
 )
 
 // Base resource names
 const (
-	ORANO2IMSMetadata          = "metadata"
-	ORANO2IMSDeploymentManager = "deployment-manager"
-	ORANO2IMSResource          = "resource"
-	ORANO2IMSAlarmSubscription = "alarm-subscription"
-	ORANO2IMSAlarmNotification = "alarm-notification"
+	InventoryMetadata          = "metadata"
+	InventoryDeploymentManager = "deployment-manager"
+	InventoryResource          = "resource"
+	InventoryAlarmSubscription = "alarm-subscription"
+	InventoryAlarmNotification = "alarm-notification"
 )
 
 // Suffix for server names
@@ -19,18 +19,18 @@ const serverSuffix = "-server"
 
 // Deployment names
 const (
-	ORANO2IMSMetadataServerName          = ORANO2IMSMetadata + serverSuffix
-	ORANO2IMSDeploymentManagerServerName = ORANO2IMSDeploymentManager + serverSuffix
-	ORANO2IMSResourceServerName          = ORANO2IMSResource + serverSuffix
-	ORANO2IMSAlarmSubscriptionServerName = ORANO2IMSAlarmSubscription + serverSuffix
-	ORANO2IMSAlarmNotificationServerName = ORANO2IMSAlarmNotification + serverSuffix
+	InventoryMetadataServerName          = InventoryMetadata + serverSuffix
+	InventoryDeploymentManagerServerName = InventoryDeploymentManager + serverSuffix
+	InventoryResourceServerName          = InventoryResource + serverSuffix
+	InventoryAlarmSubscriptionServerName = InventoryAlarmSubscription + serverSuffix
+	InventoryAlarmNotificationServerName = InventoryAlarmNotification + serverSuffix
 )
 
 // CR default names
 const (
-	ORANO2IMSIngressName   = "api"
-	ORANO2IMSConfigMapName = "authz"
-	ORANO2IMSClientSAName  = "client"
+	InventoryIngressName   = "api"
+	InventoryConfigMapName = "authz"
+	InventoryClientSAName  = "client"
 )
 
 // Resource operations
@@ -87,7 +87,7 @@ const (
 	ClusterInstanceTemplateName                 = "ClusterInstance"
 	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
 	ClusterInstanceTemplateConfigmapName        = "sc-clusterinstance-template"
-	ClusterInstanceTemplateConfigmapNamespace   = ORANO2IMSNamespace
+	ClusterInstanceTemplateConfigmapNamespace   = InventoryNamespace
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
 	ClusterInstanceSchema                       = "clusterInstanceSchema"
 )

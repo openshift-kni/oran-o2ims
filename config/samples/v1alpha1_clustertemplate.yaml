@@ -1,4 +1,4 @@
-apiVersion: oran.openshift.io/v1alpha1
+apiVersion: o2ims.oran.openshift.io/v1alpha1
 kind: ClusterTemplate
 metadata:
   labels:
@@ -10,8 +10,24 @@ metadata:
   name: clustertemplate-sample
 spec:
   templates:
-    clusterInstanceDefaults: clustertemplate-sample-ci-defaults
+    clusterInstanceDefaults: clusterinstance-defaults-v1
+    hwTemplate: hwtemplate-configmap-v1
+    policyTemplateDefaults: policytemplate-defaults-v1
   inputDataSchema:
+    policyTemplateSchema:
+      policyTemplateSchema:
+      description: policyTemplateSchema defines the available parameters for cluster configuration
+      properties:
+        sriov-network-vlan-1:
+          type: string
+        sriov-network-vlan-2:
+          type: string
+        sriov-network-pfNames-1:
+          type: string
+        sriov-network-pfNames-2:
+          type: string
+        cpu-isolated:
+          type: string
     clusterInstanceSchema:
       description: ClusterInstanceSpec defines the params that are allowed in the ClusterRequest spec.clusterInstanceInput
       properties:

@@ -154,7 +154,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
 		ctx, t.client,
 		t.object.Spec.Templates.HwTemplate,
-		utils.ORANO2IMSNamespace,
+		utils.InventoryNamespace,
 		utils.HwTemplateNodePool)
 	if err != nil {
 		if !utils.IsInputError(err) {
@@ -269,7 +269,7 @@ func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx conte
 func (r *ClusterTemplateReconciler) initConfigmapClusterInstanceTemplate() (err error) {
 	oranNs := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: utils.ORANO2IMSNamespace,
+			Name: utils.InventoryNamespace,
 		},
 	}
 	err = r.Create(context.TODO(), &oranNs)
@@ -329,7 +329,7 @@ func (r *ClusterTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("orano2ims-cluster-template").
+		Named("Inventory-cluster-template").
 		For(&oranv1alpha1.ClusterTemplate{},
 			// Watch for create and update events for ClusterTemplate.
 			builder.WithPredicates(predicate.Funcs{
@@ -387,7 +387,7 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 					},
 				})
 			}
-		} else if obj.GetNamespace() == utils.ORANO2IMSNamespace {
+		} else if obj.GetNamespace() == utils.InventoryNamespace {
 			if clusterTemplate.Spec.Templates.HwTemplate == obj.GetName() {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: types.NamespacedName{

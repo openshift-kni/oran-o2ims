@@ -4,7 +4,7 @@
 # More info: https://book.kubebuilder.io/reference/project-config.html
 domain: openshift.io
 layout:
-- go.kubebuilder.io/v3
+- go.kubebuilder.io/v4
 multigroup: true
 projectName: oran-o2ims
 repo: oran-o2ims
@@ -13,27 +13,45 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: openshift.io
-  group: oran
-  kind: ORANO2IMS
-  path: oran-o2ims/api/v1alpha1
+  domain: oran.openshift.io
+  group: o2ims
+  kind: Inventory
+  path: github.com/openshift-kni/oran-o2ims/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: openshift.io
-  group: oran.openshift.io
+  domain: oran.openshift.io
+  group: o2ims
   kind: ClusterTemplate
-  path: oran-o2ims/api/oran.openshift.io/v1alpha1
+  path: github.com/openshift-kni/oran-o2ims/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: openshift.io
-  group: oran.openshift.io
+  domain: oran.openshift.io
+  group: o2ims
   kind: ClusterRequest
-  path: oran-o2ims/api/oran.openshift.io/v1alpha1
+  path: github.com/openshift-kni/oran-o2ims/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: oran.openshift.io
+  group: o2ims-hardwaremanagement
+  kind: Node
+  path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: oran.openshift.io
+  group: o2ims-hardwaremanagement
+  kind: NodePool
+  path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
   version: v1alpha1
 version: "3"

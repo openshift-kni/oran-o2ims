@@ -265,7 +265,7 @@ const (
 		    "extra-label-key": "extra-label-value"
 		  },
 		  "ManagedCluster": {
-			"cluster-version": "v4.16"
+			"cluster-version": "v4.17"
 		  }
 		},
 		"ingressVIPs": [
@@ -519,11 +519,11 @@ var _ = Describe("ClusterRequestReconcile", func() {
     defaultHugepagesSize: "1G"`,
 				},
 			},
-			// Configmap for hareware template
+			// Configmap for hardware template
 			&corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplateCm,
-					Namespace: utils.ORANO2IMSNamespace,
+					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
 					"hwMgrId": "hwmgr",
@@ -1413,7 +1413,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		cm := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplateCm,
-				Namespace: utils.ORANO2IMSNamespace,
+				Namespace: utils.InventoryNamespace,
 			},
 			Data: map[string]string{
 				"hwMgrId": utils.UnitTestHwmgrID,
@@ -1828,7 +1828,7 @@ defaultHugepagesSize: "1G"`,
 			&corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplateCm,
-					Namespace: utils.ORANO2IMSNamespace,
+					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
 					"hwMgrId": utils.UnitTestHwmgrID,

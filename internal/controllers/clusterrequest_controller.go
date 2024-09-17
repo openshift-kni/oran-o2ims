@@ -616,7 +616,7 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 	}
 
 	hwTemplateCmName := clusterTemplate.Spec.Templates.HwTemplate
-	hwTemplateCm, err := utils.GetConfigmap(ctx, t.client, hwTemplateCmName, utils.ORANO2IMSNamespace)
+	hwTemplateCm, err := utils.GetConfigmap(ctx, t.client, hwTemplateCmName, utils.InventoryNamespace)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get the %s configmap for Hardware Template, err: %w", hwTemplateCmName, err)
@@ -1980,7 +1980,7 @@ func (r *ClusterRequestReconciler) handlePolicyEventUpdate(
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("orano2ims-cluster-request").
+		Named("Inventory-cluster-request").
 		For(
 			&oranv1alpha1.ClusterRequest{},
 			// Watch for create and update event for ClusterRequest.

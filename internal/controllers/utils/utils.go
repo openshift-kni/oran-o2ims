@@ -259,7 +259,7 @@ func extensionsToExtensionArgs(extensions []string) []string {
 }
 
 func GetDeploymentVolumes(serverName string) []corev1.Volume {
-	if serverName == ORANO2IMSMetadataServerName || serverName == ORANO2IMSResourceServerName {
+	if serverName == InventoryMetadataServerName || serverName == InventoryResourceServerName {
 		return []corev1.Volume{
 			{
 				Name: "tls",
@@ -272,7 +272,7 @@ func GetDeploymentVolumes(serverName string) []corev1.Volume {
 		}
 	}
 
-	if serverName == ORANO2IMSDeploymentManagerServerName {
+	if serverName == InventoryDeploymentManagerServerName {
 		return []corev1.Volume{
 			{
 				Name: "tls",
@@ -297,7 +297,7 @@ func GetDeploymentVolumes(serverName string) []corev1.Volume {
 }
 
 func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
-	if serverName == ORANO2IMSMetadataServerName || serverName == ORANO2IMSResourceServerName {
+	if serverName == InventoryMetadataServerName || serverName == InventoryResourceServerName {
 		return []corev1.VolumeMount{
 			{
 				Name:      "tls",
@@ -306,7 +306,7 @@ func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
 		}
 	}
 
-	if serverName == ORANO2IMSDeploymentManagerServerName {
+	if serverName == InventoryDeploymentManagerServerName {
 		return []corev1.VolumeMount{
 			{
 				Name:      "tls",
@@ -377,7 +377,7 @@ func getACMNamespace(ctx context.Context, c client.Client) (string, error) {
 }
 
 // getSearchAPI will dynamically obtain the search API.
-func getSearchAPI(ctx context.Context, c client.Client, orano2ims *oranv1alpha1.ORANO2IMS) (string, error) {
+func getSearchAPI(ctx context.Context, c client.Client, inventory *oranv1alpha1.Inventory) (string, error) {
 	// Find the ACM namespace.
 	acmNamespace, err := getACMNamespace(ctx, c)
 	if err != nil {
@@ -389,10 +389,10 @@ func getSearchAPI(ctx context.Context, c client.Client, orano2ims *oranv1alpha1.
 	// IngressHost example:         o2ims.apps.lab.karmalabs.corp
 	// Note: The domain could also be obtained from the spec.host of the search-api route in the
 	// ACM namespace.
-	ingressSplit := strings.Split(orano2ims.Spec.IngressHost, ".apps")
+	ingressSplit := strings.Split(inventory.Spec.IngressHost, ".apps")
 	if len(ingressSplit) != 2 {
 		return "", fmt.Errorf("the searchAPIBackendURL could not be obtained from the IngressHost. " +
-			"Directly specify the searchAPIBackendURL in the ORANO2IMS CR or update the IngressHost")
+			"Directly specify the searchAPIBackendURL in the Inventory CR or update the IngressHost")
 	}
 	domain := ".apps" + ingressSplit[len(ingressSplit)-1]
 
@@ -403,24 +403,24 @@ func getSearchAPI(ctx context.Context, c client.Client, orano2ims *oranv1alpha1.
 }
 
 func GetServerArgs(ctx context.Context, c client.Client,
-	orano2ims *oranv1alpha1.ORANO2IMS,
+	inventory *oranv1alpha1.Inventory,
 	serverName string) (result []string, err error) {
 	// MetadataServer
-	if serverName == ORANO2IMSMetadataServerName {
+	if serverName == InventoryMetadataServerName {
 		result = slices.Clone(MetadataServerArgs)
 		result = append(
 			result,
-			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
-			fmt.Sprintf("--external-address=https://%s", orano2ims.Spec.IngressHost))
+			fmt.Sprintf("--cloud-id=%s", inventory.Spec.CloudId),
+			fmt.Sprintf("--external-address=https://%s", inventory.Spec.IngressHost))
 
 		return
 	}
 
 	// ResourceServer
-	if serverName == ORANO2IMSResourceServerName {
-		searchAPI := orano2ims.Spec.ResourceServerConfig.BackendURL
+	if serverName == InventoryResourceServerName {
+		searchAPI := inventory.Spec.ResourceServerConfig.BackendURL
 		if searchAPI == "" {
-			searchAPI, err = getSearchAPI(ctx, c, orano2ims)
+			searchAPI, err = getSearchAPI(ctx, c, inventory)
 			if err != nil {
 				return nil, err
 			}
@@ -431,34 +431,34 @@ func GetServerArgs(ctx context.Context, c client.Client,
 		// Add the cloud-id, backend-url, and token args:
 		result = append(
 			result,
-			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+			fmt.Sprintf("--cloud-id=%s", inventory.Spec.CloudId),
 			fmt.Sprintf("--backend-url=%s", searchAPI),
-			GetBackendTokenArg(orano2ims.Spec.ResourceServerConfig.BackendToken))
+			GetBackendTokenArg(inventory.Spec.ResourceServerConfig.BackendToken))
 
 		return result, nil
 	}
 
 	// DeploymentManagerServer
-	if serverName == ORANO2IMSDeploymentManagerServerName {
+	if serverName == InventoryDeploymentManagerServerName {
 		result = slices.Clone(DeploymentManagerServerArgs)
 
 		// Set the cloud identifier:
 		result = append(
 			result,
-			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+			fmt.Sprintf("--cloud-id=%s", inventory.Spec.CloudId),
 		)
 
 		// Set the backend type:
-		if orano2ims.Spec.DeploymentManagerServerConfig.BackendType != "" {
+		if inventory.Spec.DeploymentManagerServerConfig.BackendType != "" {
 			result = append(
 				result,
-				fmt.Sprintf("--backend-type=%s", orano2ims.Spec.DeploymentManagerServerConfig.BackendType),
+				fmt.Sprintf("--backend-type=%s", inventory.Spec.DeploymentManagerServerConfig.BackendType),
 			)
 		}
 
 		// If no backend URL has been provided then use the default URL of the Kubernetes
 		// API server of the cluster:
-		backendURL := orano2ims.Spec.DeploymentManagerServerConfig.BackendURL
+		backendURL := inventory.Spec.DeploymentManagerServerConfig.BackendURL
 		if backendURL == "" {
 			backendURL = defaultBackendURL
 		}
@@ -467,10 +467,10 @@ func GetServerArgs(ctx context.Context, c client.Client,
 		result = append(
 			result,
 			fmt.Sprintf("--backend-url=%s", backendURL),
-			GetBackendTokenArg(orano2ims.Spec.DeploymentManagerServerConfig.BackendToken))
+			GetBackendTokenArg(inventory.Spec.DeploymentManagerServerConfig.BackendToken))
 
 		// Add the extensions:
-		extensionsArgsArray := extensionsToExtensionArgs(orano2ims.Spec.DeploymentManagerServerConfig.Extensions)
+		extensionsArgsArray := extensionsToExtensionArgs(inventory.Spec.DeploymentManagerServerConfig.Extensions)
 		result = append(result, extensionsArgsArray...)
 
 		return

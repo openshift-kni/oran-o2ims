@@ -29,7 +29,11 @@ type ClusterTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Templates       Templates       `json:"templates"`
+	// Templates defines the references to the templates required for ClusterTemplate.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Templates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Templates Templates `json:"templates"`
+	// InputDataSchema encapsulates all the schemas required for ClusterTemplate.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Input Data Schema",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	InputDataSchema InputDataSchema `json:"inputDataSchema"`
 }
 
@@ -78,6 +82,7 @@ type ClusterTemplateStatus struct {
 
 // ClusterTemplate is the Schema for the clustertemplates API
 // +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a ClusterTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='ClusterTemplateValidated' && c.status=='False') || oldSelf.spec == self.spec"
+// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Template",resources={{ConfigMap, v1}}
 type ClusterTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

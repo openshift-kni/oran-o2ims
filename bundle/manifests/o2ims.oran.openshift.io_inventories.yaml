@@ -1,23 +1,23 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: orano2imses.oran.openshift.io
+  creationTimestamp: null
+  name: inventories.o2ims.oran.openshift.io
 spec:
-  group: oran.openshift.io
+  group: o2ims.oran.openshift.io
   names:
-    kind: ORANO2IMS
-    listKind: ORANO2IMSList
-    plural: orano2imses
-    singular: orano2ims
+    kind: Inventory
+    listKind: InventoryList
+    plural: inventories
+    singular: inventory
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ORANO2IMS is the Schema for the orano2ims API
+        description: Inventory is the Schema for the Inventory API
         properties:
           apiVersion:
             description: |-
@@ -37,13 +37,13 @@ spec:
           metadata:
             type: object
           spec:
-            description: ORANO2IMSSpec defines the desired state of ORANO2IMS
+            description: InventorySpec defines the desired state of Inventory
             properties:
               alarmSubscriptionServerConfig:
                 default:
                   enabled: true
                 description: AlarmSubscriptionServerConfig contains the configuration
-                  for the alarm subscription server.
+                  for the alarm server.
                 properties:
                   enabled:
                     default: true
@@ -134,7 +134,7 @@ spec:
             - cloudId
             type: object
           status:
-            description: ORANO2IMSStatus defines the observed state of ORANO2IMS
+            description: InventoryStatus defines the observed state of Inventory
             properties:
               deploymentStatus:
                 description: |-
@@ -240,3 +240,9 @@ spec:
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: clusterrequests.oran.openshift.io
+  name: clusterrequests.o2ims.oran.openshift.io
 spec:
-  group: oran.openshift.io
+  group: o2ims.oran.openshift.io
   names:
     kind: ClusterRequest
     listKind: ClusterRequestList
@@ -62,12 +62,12 @@ spec:
                 - policyTemplateInput
                 type: object
               clusterTemplateRef:
-                description: ClusterTemplateRef references an existing ClusterTemplate
-                  CR.
                 type: string
               location:
+                description: Location
                 type: string
               site:
+                description: Site
                 type: string
               timeout:
                 description: |-

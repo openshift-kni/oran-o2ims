@@ -39,25 +39,25 @@ import (
 // Scheme used for the tests:
 var suitescheme = clientgoscheme.Scheme
 
-func TestORANO2IMSControllerUtils(t *testing.T) {
+func TestInventoryControllerUtils(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controller Utils Suite")
 }
 
 //nolint:unparam
 func getFakeClientFromObjects(objs ...client.Object) (client.WithWatch, error) {
-	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.ORANO2IMS{}).Build(), nil
+	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.Inventory{}).Build(), nil
 }
 
 var _ = Describe("ExtensionUtils", func() {
 	It("The container args contain all the extensions args", func() {
 
-		orano2ims := &oranv1alpha1.ORANO2IMS{
+		Inventory := &oranv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
-				Namespace: ORANO2IMSNamespace,
+				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{
+			Spec: oranv1alpha1.InventorySpec{
 				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
 					// The below extension matches the following CRD extensions entry:
 					//
@@ -81,15 +81,15 @@ var _ = Describe("ExtensionUtils", func() {
 				},
 			},
 		}
-		objs := []client.Object{orano2ims}
+		objs := []client.Object{Inventory}
 		fakeClient, err := getFakeClientFromObjects(objs...)
 		Expect(err).ToNot(HaveOccurred())
 
-		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, orano2ims, ORANO2IMSDeploymentManagerServerName)
+		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
-			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+			fmt.Sprintf("--cloud-id=%s", Inventory.Spec.CloudId),
 			fmt.Sprintf("--backend-url=%s", defaultBackendURL),
 			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
 		)
@@ -100,25 +100,25 @@ var _ = Describe("ExtensionUtils", func() {
 	})
 
 	It("No extension args", func() {
-		orano2ims := &oranv1alpha1.ORANO2IMS{
+		Inventory := &oranv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
-				Namespace: ORANO2IMSNamespace,
+				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{
+			Spec: oranv1alpha1.InventorySpec{
 				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
 			},
 		}
 
-		objs := []client.Object{orano2ims}
+		objs := []client.Object{Inventory}
 		fakeClient, err := getFakeClientFromObjects(objs...)
 		Expect(err).ToNot(HaveOccurred())
 
-		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, orano2ims, ORANO2IMSDeploymentManagerServerName)
+		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
-			fmt.Sprintf("--cloud-id=%s", orano2ims.Spec.CloudId),
+			fmt.Sprintf("--cloud-id=%s", Inventory.Spec.CloudId),
 			fmt.Sprintf("--backend-url=%s", defaultBackendURL),
 			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
 		)
@@ -128,8 +128,8 @@ var _ = Describe("ExtensionUtils", func() {
 
 var _ = Describe("DoesK8SResourceExist", func() {
 
-	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMS{})
-	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ORANO2IMSList{})
+	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.Inventory{})
+	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.InventoryList{})
 	suitescheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.Deployment{})
 	suitescheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
 
@@ -152,12 +152,12 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	It("If deployment does not exist, it will be created", func() {
-		orano2ims := &oranv1alpha1.ORANO2IMS{
+		Inventory := &oranv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
-				Namespace: ORANO2IMSNamespace,
+				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{},
+			Spec: oranv1alpha1.InventorySpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -174,7 +174,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 
 		// Create the deployment.
 		err = CreateK8sCR(context.TODO(), fakeClient,
-			deployment, orano2ims, UPDATE)
+			deployment, Inventory, UPDATE)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check that the deployment has been created.
@@ -185,12 +185,12 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	})
 
 	It("If deployment does exist, it will be updated", func() {
-		orano2ims := &oranv1alpha1.ORANO2IMS{
+		Inventory := &oranv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
-				Namespace: ORANO2IMSNamespace,
+				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{},
+			Spec: oranv1alpha1.InventorySpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -201,7 +201,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 			Spec: appsv1.DeploymentSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
-						ServiceAccountName: ORANO2IMSDeploymentManagerServerName,
+						ServiceAccountName: InventoryDeploymentManagerServerName,
 					},
 				},
 			},
@@ -219,7 +219,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 
 		// Create the deployment.
 		err = CreateK8sCR(context.TODO(), fakeClient,
-			deployment, orano2ims, UPDATE)
+			deployment, Inventory, UPDATE)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check that the deployment has been created.
@@ -235,7 +235,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 		// Update the SA Name.
 		newDeployment.Spec.Template.Spec.ServiceAccountName = "new-sa-name"
 		err = CreateK8sCR(context.TODO(), fakeClient,
-			newDeployment, orano2ims, UPDATE)
+			newDeployment, Inventory, UPDATE)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Get the deployment and check that the SA Name has been updated.
@@ -363,21 +363,21 @@ var _ = Describe("searchAPI", func() {
 			Version: "v1",
 		})
 
-		orano2ims := &oranv1alpha1.ORANO2IMS{
+		Inventory := &oranv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
-				Namespace: ORANO2IMSNamespace,
+				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{
+			Spec: oranv1alpha1.InventorySpec{
 				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
 				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
 			},
 		}
 
-		objs := []client.Object{mce, orano2ims}
+		objs := []client.Object{mce, Inventory}
 		fakeClient, err := getFakeClientFromObjects(objs...)
 		Expect(err).ToNot(HaveOccurred())
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
 		Expect(searchAPI).To(Equal(""))
@@ -404,26 +404,26 @@ var _ = Describe("searchAPI", func() {
 			Version: "v1",
 		})
 
-		orano2ims := &oranv1alpha1.ORANO2IMS{
+		Inventory := &oranv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
-				Namespace: ORANO2IMSNamespace,
+				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{
+			Spec: oranv1alpha1.InventorySpec{
 				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
 				IngressHost:                   "o2ims.app.lab.karmalabs.corp",
 			},
 		}
 
-		objs := []client.Object{mce, orano2ims}
+		objs := []client.Object{mce, Inventory}
 		fakeClient, err := getFakeClientFromObjects(objs...)
 		Expect(err).ToNot(HaveOccurred())
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
 		Expect(searchAPI).To(BeEmpty())
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"the searchAPIBackendURL could not be obtained from the IngressHost. " +
-				"Directly specify the searchAPIBackendURL in the ORANO2IMS CR or update the IngressHost"))
+				"Directly specify the searchAPIBackendURL in the Inventory CR or update the IngressHost"))
 	})
 
 	It("The ingress host has the expected format (containing .apps) and the searchAPI is returned", func() {
@@ -447,21 +447,21 @@ var _ = Describe("searchAPI", func() {
 			Version: "v1",
 		})
 
-		orano2ims := &oranv1alpha1.ORANO2IMS{
+		Inventory := &oranv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
-				Namespace: ORANO2IMSNamespace,
+				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.ORANO2IMSSpec{
+			Spec: oranv1alpha1.InventorySpec{
 				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
 				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
 			},
 		}
 
-		objs := []client.Object{mce, orano2ims}
+		objs := []client.Object{mce, Inventory}
 		fakeClient, err := getFakeClientFromObjects(objs...)
 		Expect(err).ToNot(HaveOccurred())
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, orano2ims)
+		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(searchAPI).To(Equal("https://search-api-open-cluster-management.apps.lab.karmalabs.corp"))
 	})
@@ -1548,7 +1548,7 @@ var _ = Describe("GetLabelsForPolicies", func() {
 
 	It("returns no error if the cluster-version label exists", func() {
 
-		clusterLabels["cluster-version"] = "v4.16"
+		clusterLabels["cluster-version"] = "v4.17"
 		err := CheckClusterLabelsForPolicies(clusterName, clusterLabels)
 		Expect(err).ToNot(HaveOccurred())
 	})
