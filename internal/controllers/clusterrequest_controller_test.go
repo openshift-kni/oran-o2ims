@@ -747,7 +747,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: utils.ORANO2IMSNamespace,
 			},
 			Data: map[string]string{
-				"hwMgrId": "hwmgr",
+				"hwMgrId": utils.UnitTestHwmgrID,
 				utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
@@ -906,9 +906,9 @@ var _ = Describe("updateClusterInstance", func() {
 		wn          = "worker-node"
 		mhost       = "node1.test.com"
 		whost       = "node2.test.com"
-		pns         = "hwmgr"
-		masterNode  = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "site-1-master-bmc-secret", "00:00:00:01:20:30", "master", pns, crName)
-		workerNode  = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1", "site-1-worker-bmc-secret", "00:00:00:01:30:10", "worker", pns, crName)
+		poolns      = utils.UnitTestHwmgrNamespace
+		masterNode  = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "site-1-master-bmc-secret", "00:00:00:01:20:30", "master", poolns, crName)
+		workerNode  = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1", "site-1-worker-bmc-secret", "00:00:00:01:30:10", "worker", poolns, crName)
 	)
 
 	BeforeEach(func() {
@@ -939,7 +939,7 @@ var _ = Describe("updateClusterInstance", func() {
 		np = &hwv1alpha1.NodePool{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
-				Namespace: pns,
+				Namespace: poolns,
 			},
 			Status: hwv1alpha1.NodePoolStatus{
 				Conditions: []metav1.Condition{
@@ -973,7 +973,7 @@ var _ = Describe("updateClusterInstance", func() {
 
 	It("returns true when updateClusterInstance succeeds", func() {
 		nodes := []*hwv1alpha1.Node{masterNode, workerNode}
-		secrets := createSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, pns)
+		secrets := createSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, poolns)
 
 		createResources(c, ctx, nodes, secrets)
 
@@ -1162,7 +1162,7 @@ defaultHugepagesSize: "1G"`,
 					Namespace: utils.ORANO2IMSNamespace,
 				},
 				Data: map[string]string{
-					"hwMgrId": "hwmgr",
+					"hwMgrId": utils.UnitTestHwmgrID,
 					utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G

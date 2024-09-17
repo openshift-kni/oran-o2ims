@@ -164,7 +164,7 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 
 	// Get the name and namespace of the object:
 	key := client.ObjectKeyFromObject(newObject)
-	oranUtilsLog.Info("[CreateK8sCR] Resource", "name", key.Name)
+	oranUtilsLog.Info("[CreateK8sCR] Resource", "name", key.Name, "namespace", key.Namespace, "kind", newObject.GetObjectKind().GroupVersionKind().Kind)
 
 	// We can set the owner reference only for objects that live in the same namespace, as cross
 	// namespace owners are forbidden. This also applies to non-namespaced objects like cluster

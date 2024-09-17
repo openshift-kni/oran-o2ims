@@ -145,3 +145,10 @@ const (
 	ChildPolicyClusterNameLabel      = "policy.open-cluster-management.io/cluster-name"
 	ChildPolicyClusterNamespaceLabel = "policy.open-cluster-management.io/cluster-namespace"
 )
+
+// Hardware Manager plugin constants
+const (
+	UnitTestHwmgrID         = "hwmgr"
+	UnitTestHwmgrNamespace  = "hwmgr"
+	TempDellPluginNamespace = "dell-hwmgr"
+)

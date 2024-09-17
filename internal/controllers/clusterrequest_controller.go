@@ -94,6 +94,8 @@ const (
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodepools/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
@@ -215,8 +217,10 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 				renderedNodePool.GetNamespace(),
 			),
 		)
-		// TODO: enable Requeue after the hardware plugin is ready
-		// return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		// TODO: Remove this check once hwmgr plugin(s) are fully utilized
+		if renderedNodePool.ObjectMeta.Namespace != utils.TempDellPluginNamespace && renderedNodePool.ObjectMeta.Namespace != utils.UnitTestHwmgrNamespace {
+			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		}
 	}
 
 	hwProvisionedCond := meta.FindStatusCondition(
@@ -1073,7 +1077,7 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceNamespace(
 
 // createClusterInstanceBMCSecrets creates all the BMC secrets needed by the nodes included
 // in the ClusterRequest.
-func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
+func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets( // nolint: unused
 	ctx context.Context, clusterName string) error {
 
 	// The BMC credential details are for now obtained from the ClusterRequest.
@@ -1101,7 +1105,9 @@ func (t *clusterRequestReconcilerTask) createClusterInstanceBMCSecrets(
 		username, password, secretName, err :=
 			utils.GetBMCDetailsForClusterInstance(node, t.object.Name)
 		if err != nil {
-			return fmt.Errorf("failed to get BMC details for cluster instance %s: %w", t.object.Name, err)
+			// If a hwmgr plugin is being used, BMC details will not be in the cluster request
+			t.logger.InfoContext(ctx, "BMC details not present in cluster request", "name", t.object.Name)
+			continue
 		}
 
 		// Create the node's BMC secret.
@@ -1173,28 +1179,56 @@ func (t *clusterRequestReconcilerTask) createHwMgrPluginNamespace(
 	return nil
 }
 
-func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
+func (t *clusterRequestReconcilerTask) hwMgrPluginNamespaceExists(
+	ctx context.Context, name string) (bool, error) {
 
+	t.logger.InfoContext(
+		ctx,
+		"Plugin: "+fmt.Sprintf("%v", name),
+	)
+
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	exists, err := utils.DoesK8SResourceExist(ctx, t.client, name, "", namespace)
+	if err != nil {
+		return false, fmt.Errorf("failed check if namespace exists %s: %w", name, err)
+	}
+
+	return exists, nil
+}
+
+func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
 	// Create the hardware plugin namespace.
 	pluginNameSpace := nodePool.ObjectMeta.Namespace
-	createErr := t.createHwMgrPluginNamespace(ctx, pluginNameSpace)
-	if createErr != nil {
-		return fmt.Errorf(
-			"failed to create hardware manager plugin namespace %s, err: %w", pluginNameSpace, createErr)
+	if exists, err := t.hwMgrPluginNamespaceExists(ctx, pluginNameSpace); err != nil {
+		return fmt.Errorf("failed check if hardware manager plugin namespace exists %s, err: %w", pluginNameSpace, err)
+	} else if !exists && (pluginNameSpace == utils.TempDellPluginNamespace || pluginNameSpace == utils.UnitTestHwmgrNamespace) {
+		// TODO: For test purposes only. Code to be removed once hwmgr plugin(s) are fully utilized
+		createErr := t.createHwMgrPluginNamespace(ctx, pluginNameSpace)
+		if createErr != nil {
+			return fmt.Errorf(
+				"failed to create hardware manager plugin namespace %s, err: %w", pluginNameSpace, createErr)
+		}
+	} else if !exists {
+		return fmt.Errorf("specified hardware manager plugin namespace does not exist: %s", pluginNameSpace)
 	}
-	// Create the clusterInstance namespace.
+
+	// Create/update the clusterInstance namespace, adding ClusterRequest labels to the namespace
 	err := t.createClusterInstanceNamespace(ctx, nodePool.GetName())
 	if err != nil {
 		return err
 	}
 
-	// Create/update the node pool resource
-	createErr = utils.CreateK8sCR(ctx, t.client, nodePool, t.object, utils.UPDATE)
+	// Create the node pool resource
+	createErr := utils.CreateK8sCR(ctx, t.client, nodePool, t.object, "")
 	if createErr != nil {
 		t.logger.ErrorContext(
 			ctx,
 			fmt.Sprintf(
-				"Failed to create/update the NodePool %s in the namespace %s",
+				"Failed to create the NodePool %s in the namespace %s",
 				nodePool.GetName(),
 				nodePool.GetNamespace(),
 			),
@@ -1205,7 +1239,7 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 	t.logger.InfoContext(
 		ctx,
 		fmt.Sprintf(
-			"Created/Updated NodePool %s in the namespace %s",
+			"Created NodePool %s in the namespace %s, if not already exist",
 			nodePool.GetName(),
 			nodePool.GetNamespace(),
 		),
@@ -1669,7 +1703,8 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 			)
 			return fmt.Errorf("failed to update HardwareProvisioning status: %w", err)
 		}
-	} else {
+	} else if nodePool.ObjectMeta.Namespace == utils.TempDellPluginNamespace || nodePool.ObjectMeta.Namespace == utils.UnitTestHwmgrNamespace {
+		// TODO: For test purposes only. Code to be removed once hwmgr plugin(s) are fully utilized
 		meta.SetStatusCondition(
 			&nodePool.Status.Conditions,
 			metav1.Condition{
@@ -1687,6 +1722,7 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 			)
 			return fmt.Errorf("failed to update NodePool status: %w", err)
 		}
+
 	}
 	return nil
 }
