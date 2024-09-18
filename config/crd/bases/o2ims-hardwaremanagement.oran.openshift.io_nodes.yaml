@@ -70,8 +70,6 @@ spec:
                       should contain the keys `username` and `password`.
                     type: string
                 type: object
-              bootMACAddress:
-                type: string
               conditions:
                 description: |-
                   Conditions represent the observations of the NodeStatus's current state.
@@ -146,6 +144,22 @@ spec:
                 type: array
               hostname:
                 type: string
+              interfaces:
+                items:
+                  properties:
+                    label:
+                      type: string
+                    macAddress:
+                      pattern: ^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$
+                      type: string
+                    name:
+                      type: string
+                  required:
+                  - label
+                  - macAddress
+                  - name
+                  type: object
+                type: array
             type: object
         type: object
     served: true

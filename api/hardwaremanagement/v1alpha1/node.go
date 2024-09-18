@@ -18,6 +18,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type Interface struct {
+	Name  string `json:"name"`  // The name of the network interface (e.g., eth0, ens33)
+	Label string `json:"label"` // The label of the interface
+	// +kubebuilder:validation:Pattern=`^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$`
+	MACAddress string `json:"macAddress"` // The MAC address of the interface
+}
+
 // NodeSpec describes a node presents a hardware server
 type NodeSpec struct {
 	// NodePool
@@ -45,7 +52,7 @@ type BMC struct {
 type NodeStatus struct {
 	BMC *BMC `json:"bmc,omitempty"`
 
-	BootMACAddress string `json:"bootMACAddress,omitempty"`
+	Interfaces []*Interface `json:"interfaces,omitempty"`
 
 	Hostname string `json:"hostname,omitempty"`
 
