@@ -496,7 +496,7 @@ metadata:
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.17.0
+  name: oran-o2ims.v4.16.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -793,46 +793,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - hardwaremanagement.oran.openshift.io
-          resources:
-          - nodepools
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - hardwaremanagement.oran.openshift.io
-          resources:
-          - nodepools/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - hardwaremanagement.oran.openshift.io
-          resources:
-          - nodes
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - hardwaremanagement.oran.openshift.io
-          resources:
-          - nodes/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
           - internal.open-cluster-management.io
           resources:
           - managedclusterinfos
@@ -853,7 +813,47 @@ spec:
           - update
           - watch
         - apiGroups:
-          - oran.openshift.io
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - nodepools
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - nodepools/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - nodes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - nodes/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims.oran.openshift.io
           resources:
           - clusterrequests
           verbs:
@@ -865,13 +865,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - clusterrequests/finalizers
           verbs:
           - update
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - clusterrequests/status
           verbs:
@@ -879,7 +879,7 @@ spec:
           - patch
           - update
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - clustertemplates
           verbs:
@@ -891,13 +891,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - clustertemplates/finalizers
           verbs:
           - update
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - clustertemplates/status
           verbs:
@@ -905,7 +905,7 @@ spec:
           - patch
           - update
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - inventories
           verbs:
@@ -917,13 +917,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - inventories/finalizers
           verbs:
           - update
         - apiGroups:
-          - oran.openshift.io
+          - o2ims.oran.openshift.io
           resources:
           - inventories/status
           verbs:
@@ -1044,8 +1044,8 @@ spec:
                 - --leader-elect
                 env:
                 - name: IMAGE
-                  value: quay.io/openshift-kni/oran-o2ims-operator:4.17.0
-                image: quay.io/openshift-kni/oran-o2ims-operator:4.17.0
+                  value: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
+                image: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -1136,4 +1136,4 @@ spec:
   provider:
     name: Red Hat
   replaces: oran-o2ims.v0.0.0
-  version: 4.17.0
+  version: 4.16.0

@@ -44,9 +44,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=inventories/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=inventories/finalizers,verbs=update
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories/finalizers,verbs=update
 //+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="networking.k8s.io",resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -1005,7 +1005,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("Inventory").
+		Named("o2ims-inventory").
 		For(&oranv1alpha1.Inventory{},
 			// Watch for create event for Inventory.
 			builder.WithPredicates(predicate.Funcs{
