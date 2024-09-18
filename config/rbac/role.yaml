@@ -93,46 +93,6 @@ rules:
   - list
   - watch
 - apiGroups:
-  - hardwaremanagement.oran.openshift.io
-  resources:
-  - nodepools
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - hardwaremanagement.oran.openshift.io
-  resources:
-  - nodepools/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - hardwaremanagement.oran.openshift.io
-  resources:
-  - nodes
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - hardwaremanagement.oran.openshift.io
-  resources:
-  - nodes/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - internal.open-cluster-management.io
   resources:
   - managedclusterinfos
@@ -153,7 +113,47 @@ rules:
   - update
   - watch
 - apiGroups:
-  - oran.openshift.io
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - nodepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - nodepools/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - nodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - nodes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims.oran.openshift.io
   resources:
   - clusterrequests
   verbs:
@@ -165,13 +165,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - clusterrequests/finalizers
   verbs:
   - update
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - clusterrequests/status
   verbs:
@@ -179,7 +179,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - clustertemplates
   verbs:
@@ -191,13 +191,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - clustertemplates/finalizers
   verbs:
   - update
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - clustertemplates/status
   verbs:
@@ -205,7 +205,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - inventories
   verbs:
@@ -217,13 +217,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - inventories/finalizers
   verbs:
   - update
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.oran.openshift.io
   resources:
   - inventories/status
   verbs:

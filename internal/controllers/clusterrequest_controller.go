@@ -88,15 +88,15 @@ const (
 	ztpDoneLabel                 = "ztp-done"
 )
 
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=clusterrequests/finalizers,verbs=update
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests/finalizers,verbs=update
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodepools/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=hardwaremanagement.oran.openshift.io,resources=nodes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodepools/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
@@ -2002,7 +2002,7 @@ func (r *ClusterRequestReconciler) handlePolicyEventUpdate(
 func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("Inventory-cluster-request").
+		Named("o2ims-cluster-request").
 		For(
 			&oranv1alpha1.ClusterRequest{},
 			// Watch for create and update event for ClusterRequest.

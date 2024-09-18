@@ -79,9 +79,9 @@ func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
 	return ctrl.Result{RequeueAfter: interval}
 }
 
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=clustertemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -329,7 +329,7 @@ func (r *ClusterTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("Inventory-cluster-template").
+		Named("o2ims-cluster-template").
 		For(&oranv1alpha1.ClusterTemplate{},
 			// Watch for create and update events for ClusterTemplate.
 			builder.WithPredicates(predicate.Funcs{
