@@ -1,22 +1,22 @@
 package utils
 
-// ORANO2IMSConditionType defines conditions of an ORANO2IMS deployment.
-type ORANO2IMSConditionType string
+// InventoryConditionType defines conditions of an Inventory deployment.
+type InventoryConditionType string
 
-var ORANO2IMSConditionTypes = struct {
-	Ready                     ORANO2IMSConditionType
-	NotReady                  ORANO2IMSConditionType
-	Error                     ORANO2IMSConditionType
-	Available                 ORANO2IMSConditionType
-	MetadataServerAvailable   ORANO2IMSConditionType
-	DeploymentServerAvailable ORANO2IMSConditionType
-	ResourceServerAvailable   ORANO2IMSConditionType
-	MetadataServerError       ORANO2IMSConditionType
-	DeploymentServerError     ORANO2IMSConditionType
-	ResourceServerError       ORANO2IMSConditionType
+var InventoryConditionTypes = struct {
+	Ready                     InventoryConditionType
+	NotReady                  InventoryConditionType
+	Error                     InventoryConditionType
+	Available                 InventoryConditionType
+	MetadataServerAvailable   InventoryConditionType
+	DeploymentServerAvailable InventoryConditionType
+	ResourceServerAvailable   InventoryConditionType
+	MetadataServerError       InventoryConditionType
+	DeploymentServerError     InventoryConditionType
+	ResourceServerError       InventoryConditionType
 }{
-	Ready:                     "ORANO2IMSReady",
-	NotReady:                  "ORANO2IMSConditionType",
+	Ready:                     "InventoryReady",
+	NotReady:                  "InventoryConditionType",
 	Error:                     "Error",
 	Available:                 "Available",
 	MetadataServerAvailable:   "MetadataServerAvailable",
@@ -27,13 +27,13 @@ var ORANO2IMSConditionTypes = struct {
 	ResourceServerError:       "ResourceServerError",
 }
 
-type ORANO2IMSConditionReason string
+type InventoryConditionReason string
 
-var ORANO2IMSConditionReasons = struct {
-	DeploymentsReady                  ORANO2IMSConditionReason
-	ErrorGettingDeploymentInformation ORANO2IMSConditionReason
-	DeploymentNotFound                ORANO2IMSConditionReason
-	ServerArgumentsError              ORANO2IMSConditionReason
+var InventoryConditionReasons = struct {
+	DeploymentsReady                  InventoryConditionReason
+	ErrorGettingDeploymentInformation InventoryConditionReason
+	DeploymentNotFound                InventoryConditionReason
+	ServerArgumentsError              InventoryConditionReason
 }{
 	DeploymentsReady:                  "AllDeploymentsReady",
 	ErrorGettingDeploymentInformation: "ErrorGettingDeploymentInformation",
@@ -41,14 +41,14 @@ var ORANO2IMSConditionReasons = struct {
 	ServerArgumentsError:              "ServerArgumentsError",
 }
 
-var MapAvailableDeploymentNameConditionType = map[string]ORANO2IMSConditionType{
-	ORANO2IMSMetadataServerName:          ORANO2IMSConditionTypes.MetadataServerAvailable,
-	ORANO2IMSDeploymentManagerServerName: ORANO2IMSConditionTypes.DeploymentServerAvailable,
-	ORANO2IMSResourceServerName:          ORANO2IMSConditionTypes.ResourceServerAvailable,
+var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{
+	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerAvailable,
+	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerAvailable,
+	InventoryResourceServerName:          InventoryConditionTypes.ResourceServerAvailable,
 }
 
-var MapErrorDeploymentNameConditionType = map[string]ORANO2IMSConditionType{
-	ORANO2IMSMetadataServerName:          ORANO2IMSConditionTypes.MetadataServerError,
-	ORANO2IMSDeploymentManagerServerName: ORANO2IMSConditionTypes.DeploymentServerError,
-	ORANO2IMSResourceServerName:          ORANO2IMSConditionTypes.ResourceServerError,
+var MapErrorDeploymentNameConditionType = map[string]InventoryConditionType{
+	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerError,
+	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerError,
+	InventoryResourceServerName:          InventoryConditionTypes.ResourceServerError,
 }

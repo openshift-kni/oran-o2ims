@@ -4,22 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: nodepools.oran.openshift.io
+  name: nodes.o2ims-hardwaremanagement.oran.openshift.io
 spec:
-  group: oran.openshift.io
+  group: o2ims-hardwaremanagement.oran.openshift.io
   names:
-    kind: NodePool
-    listKind: NodePoolList
-    plural: nodepools
-    shortNames:
-    - np
-    singular: nodepool
+    kind: Node
+    listKind: NodeList
+    plural: nodes
+    singular: node
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: NodePool is the schema for an allocation request of nodes
+        description: Node is the schema for an allocated node
         properties:
           apiVersion:
             description: |-
@@ -39,47 +37,45 @@ spec:
           metadata:
             type: object
           spec:
-            description: NodePoolSpec describes a pool of nodes to allocate
+            description: NodeSpec describes a node presents a hardware server
             properties:
-              cloudID:
-                description: |-
-                  CloudID is the identifier of the O-Cloud that generated this request. The hardware
-                  manager may want to use this to tag the nodes in its database, and to generate
-                  statistics.
+              groupName:
+                description: GroupName
                 type: string
-              location:
+              hwProfile:
+                description: HwProfile
                 type: string
-              nodeGroup:
-                items:
-                  properties:
-                    hwProfile:
-                      type: string
-                    name:
-                      type: string
-                    size:
-                      type: integer
-                  required:
-                  - hwProfile
-                  - name
-                  - size
-                  type: object
-                type: array
-              site:
+              nodePool:
+                description: NodePool
                 type: string
             required:
-            - cloudID
-            - nodeGroup
-            - site
+            - groupName
+            - hwProfile
+            - nodePool
             type: object
           status:
             description: |-
-              NodePoolStatus describes the observed state of a request to allocate and prepare
+              NodeStatus describes the observed state of a request to allocate and prepare
               a node that will eventually be part of a deployment manager.
             properties:
+              bmc:
+                properties:
+                  address:
+                    description: The Address contains the URL for accessing the BMC
+                      over the network.
+                    type: string
+                  credentialsName:
+                    description: |-
+                      CredentialsName is a reference to a secret containing the credentials. That secret
+                      should contain the keys `username` and `password`.
+                    type: string
+                type: object
+              bootMACAddress:
+                type: string
               conditions:
                 description: |-
-                  Conditions represent the observations of the current state of the NodePool. Possible
-                  values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+                  Conditions represent the observations of the NodeStatus's current state.
+                  Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -148,14 +144,8 @@ spec:
                   - type
                   type: object
                 type: array
-              properties:
-                description: Properties represents the node properties in the pool
-                properties:
-                  nodeNames:
-                    items:
-                      type: string
-                    type: array
-                type: object
+              hostname:
+                type: string
             type: object
         type: object
     served: true

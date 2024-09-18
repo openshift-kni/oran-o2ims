@@ -18,9 +18,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// LocationSpec is the geographical location of the requested node.
 type LocationSpec struct {
+	// Location
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Location string `json:"location,omitempty"`
-	Site     string `json:"site"`
+	// Site
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Site",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Site string `json:"site"`
 }
 
 // NodePoolSpec describes a pool of nodes to allocate
@@ -30,9 +35,11 @@ type NodePoolSpec struct {
 	// statistics.
 	//
 	// +kubebuilder:validation:Required
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	CloudID string `json:"cloudID"`
 
 	// LocationSpec is the geographical location of the requested node.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	LocationSpec `json:",inline"`
 
 	NodeGroup []NodeGroup `json:"nodeGroup"`
@@ -64,6 +71,7 @@ type NodePoolStatus struct {
 // +kubebuilder:resource:shortName=np
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Request",resources={{Namespace, v1}}
 type NodePool struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

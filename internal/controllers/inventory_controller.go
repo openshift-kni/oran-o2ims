@@ -44,9 +44,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2imses,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2imses/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=oran.openshift.io,resources=orano2imses/finalizers,verbs=update
+//+kubebuilder:rbac:groups=oran.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=oran.openshift.io,resources=inventories/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=oran.openshift.io,resources=inventories/finalizers,verbs=update
 //+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="networking.k8s.io",resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -59,7 +59,7 @@ import (
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
 
-// Reconciler reconciles a ORANO2IMS object
+// Reconciler reconciles a Inventory object
 type Reconciler struct {
 	client.Client
 	Logger *slog.Logger
@@ -73,13 +73,13 @@ type reconcilerTask struct {
 	logger *slog.Logger
 	image  string
 	client client.Client
-	object *oranv1alpha1.ORANO2IMS
+	object *oranv1alpha1.Inventory
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the ORANO2IMS object against the actual cluster state, and then
+// the Inventory object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
@@ -88,7 +88,7 @@ type reconcilerTask struct {
 func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (result ctrl.Result,
 	err error) {
 	// Fetch the object:
-	object := &oranv1alpha1.ORANO2IMS{}
+	object := &oranv1alpha1.Inventory{}
 	if err := r.Client.Get(ctx, request.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
 			err = nil
@@ -96,7 +96,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 		}
 		r.Logger.ErrorContext(
 			ctx,
-			"Unable to fetch ORANO2IMS",
+			"Unable to fetch Inventory",
 			slog.String("error", err.Error()),
 		)
 	}
@@ -116,7 +116,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.ORANO2IMSResourceServerName)
+	err = t.createServiceAccount(ctx, utils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -147,7 +147,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the Service needed for the Resource server.
-	err = t.createService(ctx, utils.ORANO2IMSResourceServerName)
+	err = t.createService(ctx, utils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -158,7 +158,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the resource-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSResourceServerName)
+	errorReason, err := t.deployServer(ctx, utils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -178,7 +178,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.ORANO2IMSMetadataServerName)
+	err = t.createServiceAccount(ctx, utils.InventoryMetadataServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -189,7 +189,7 @@ func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the Service needed for the Metadata server.
-	err = t.createService(ctx, utils.ORANO2IMSMetadataServerName)
+	err = t.createService(ctx, utils.InventoryMetadataServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -200,7 +200,7 @@ func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the metadata-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSMetadataServerName)
+	errorReason, err := t.deployServer(ctx, utils.InventoryMetadataServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -220,7 +220,7 @@ func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultR
 func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+	err = t.createServiceAccount(ctx, utils.InventoryDeploymentManagerServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -249,7 +249,7 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 	}
 
 	// Create authz ConfigMap.
-	err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
+	err = t.createConfigMap(ctx, utils.InventoryConfigMapName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -260,7 +260,7 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 	}
 
 	// Create the Service needed for the Deployment Manager server.
-	err = t.createService(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+	err = t.createService(ctx, utils.InventoryDeploymentManagerServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -271,7 +271,7 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 	}
 
 	// Create the deployment-manager-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+	errorReason, err := t.deployServer(ctx, utils.InventoryDeploymentManagerServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -291,7 +291,7 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createConfigMap(ctx, utils.ORANO2IMSConfigMapName)
+	err = t.createConfigMap(ctx, utils.InventoryConfigMapName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -302,7 +302,7 @@ func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context,
 	}
 
 	// Create the needed ServiceAccount.
-	err = t.createServiceAccount(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
+	err = t.createServiceAccount(ctx, utils.InventoryAlarmSubscriptionServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -313,7 +313,7 @@ func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context,
 	}
 
 	// Create the Service needed for the alarm subscription server.
-	err = t.createService(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
+	err = t.createService(ctx, utils.InventoryAlarmSubscriptionServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -324,7 +324,7 @@ func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context,
 	}
 
 	// Create the alarm subscription-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.ORANO2IMSAlarmSubscriptionServerName)
+	errorReason, err := t.deployServer(ctx, utils.InventoryAlarmSubscriptionServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -359,7 +359,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 
 	// Create the client service account.
-	err = t.createServiceAccount(ctx, utils.ORANO2IMSClientSAName)
+	err = t.createServiceAccount(ctx, utils.InventoryClientSAName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -410,7 +410,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to update status for ORANO2IMS",
+			"Failed to update status for Inventory",
 			slog.String("name", t.object.Name),
 		)
 		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
@@ -422,7 +422,7 @@ func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context)
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.ORANO2IMSDeploymentManagerServerName,
+				"%s-%s", t.object.Namespace, utils.InventoryDeploymentManagerServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -472,7 +472,7 @@ func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.C
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, utils.ORANO2IMSDeploymentManagerServerName,
+				t.object.Namespace, utils.InventoryDeploymentManagerServerName,
 			),
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -480,14 +480,14 @@ func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.C
 			Kind:     "ClusterRole",
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, utils.ORANO2IMSDeploymentManagerServerName,
+				t.object.Namespace, utils.InventoryDeploymentManagerServerName,
 			),
 		},
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
 				Namespace: t.object.Namespace,
-				Name:      utils.ORANO2IMSDeploymentManagerServerName,
+				Name:      utils.InventoryDeploymentManagerServerName,
 			},
 		},
 	}
@@ -503,7 +503,7 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.ORANO2IMSResourceServerName,
+				"%s-%s", t.object.Namespace, utils.InventoryResourceServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -563,7 +563,7 @@ func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Cont
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, utils.ORANO2IMSResourceServerName,
+				t.object.Namespace, utils.InventoryResourceServerName,
 			),
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -571,14 +571,14 @@ func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Cont
 			Kind:     "ClusterRole",
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, utils.ORANO2IMSResourceServerName,
+				t.object.Namespace, utils.InventoryResourceServerName,
 			),
 		},
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
 				Namespace: t.object.Namespace,
-				Name:      utils.ORANO2IMSResourceServerName,
+				Name:      utils.InventoryResourceServerName,
 			},
 		},
 	}
@@ -590,7 +590,7 @@ func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Cont
 	return nil
 }
 
-func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (utils.ORANO2IMSConditionReason, error) {
+func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (utils.InventoryConditionReason, error) {
 	t.logger.InfoContext(ctx, "[deploy server]", "Name", serverName)
 
 	// Server variables.
@@ -600,7 +600,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	// Build the deployment's metadata.
 	deploymentMeta := metav1.ObjectMeta{
 		Name:      serverName,
-		Namespace: utils.ORANO2IMSNamespace,
+		Namespace: utils.InventoryNamespace,
 		Labels: map[string]string{
 			"oran/o2ims": t.object.Name,
 			"app":        serverName,
@@ -611,11 +611,11 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	if err != nil {
 		err2 := t.updateORANO2ISMUsedConfigStatus(
 			ctx, serverName, deploymentContainerArgs,
-			utils.ORANO2IMSConditionReasons.ServerArgumentsError, err)
+			utils.InventoryConditionReasons.ServerArgumentsError, err)
 		if err2 != nil {
 			return "", fmt.Errorf("failed to update ORANO2ISMUsedConfigStatus: %w", err2)
 		}
-		return utils.ORANO2IMSConditionReasons.ServerArgumentsError, fmt.Errorf("failed to get server arguments: %w", err)
+		return utils.InventoryConditionReasons.ServerArgumentsError, fmt.Errorf("failed to get server arguments: %w", err)
 	}
 	err = t.updateORANO2ISMUsedConfigStatus(ctx, serverName, deploymentContainerArgs, "", nil)
 	if err != nil {
@@ -690,7 +690,7 @@ func (t *reconcilerTask) createConfigMap(ctx context.Context, resourceName strin
 			Namespace: t.object.Namespace,
 		},
 		Data: map[string]string{
-			"acl.yaml": fmt.Sprintf("- claim: sub\n  pattern: ^system:serviceaccount:%s:client$", utils.ORANO2IMSNamespace),
+			"acl.yaml": fmt.Sprintf("- claim: sub\n  pattern: ^system:serviceaccount:%s:client$", utils.InventoryNamespace),
 		},
 	}
 
@@ -710,7 +710,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 		Namespace: t.object.Namespace,
 	}
 
-	if resourceName != utils.ORANO2IMSClientSAName {
+	if resourceName != utils.InventoryClientSAName {
 		serviceAccountMeta.Annotations = map[string]string{
 			"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf("%s-tls", resourceName),
 		}
@@ -772,7 +772,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	t.logger.InfoContext(ctx, "[createIngress]")
 	// Build the Ingress object.
 	ingressMeta := metav1.ObjectMeta{
-		Name:      utils.ORANO2IMSIngressName,
+		Name:      utils.InventoryIngressName,
 		Namespace: t.object.Namespace,
 		Annotations: map[string]string{
 			"route.openshift.io/termination": "reencrypt",
@@ -796,7 +796,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: "resource-server",
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.ORANO2IMSIngressName,
+											Name: utils.InventoryIngressName,
 										},
 									},
 								},
@@ -811,7 +811,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: "resource-server",
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.ORANO2IMSIngressName,
+											Name: utils.InventoryIngressName,
 										},
 									},
 								},
@@ -826,7 +826,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: "deployment-manager-server",
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.ORANO2IMSIngressName,
+											Name: utils.InventoryIngressName,
 										},
 									},
 								},
@@ -841,7 +841,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: "metadata-server",
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.ORANO2IMSIngressName,
+											Name: utils.InventoryIngressName,
 										},
 									},
 								},
@@ -856,7 +856,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: "alarm-subscription-server",
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.ORANO2IMSIngressName,
+											Name: utils.InventoryIngressName,
 										},
 									},
 								},
@@ -873,7 +873,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 		Spec:       ingressSpec,
 	}
 
-	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.ORANO2IMSIngressName)
+	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.InventoryIngressName)
 	if err := utils.CreateK8sCR(ctx, t.client, newIngress, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
 	}
@@ -883,17 +883,17 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 
 func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, deploymentName string) {
 	deployment := &appsv1.Deployment{}
-	err := t.client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: utils.ORANO2IMSNamespace}, deployment)
+	err := t.client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: utils.InventoryNamespace}, deployment)
 
 	if err != nil {
-		reason := string(utils.ORANO2IMSConditionReasons.ErrorGettingDeploymentInformation)
+		reason := string(utils.InventoryConditionReasons.ErrorGettingDeploymentInformation)
 		if errors.IsNotFound(err) {
-			reason = string(utils.ORANO2IMSConditionReasons.DeploymentNotFound)
+			reason = string(utils.InventoryConditionReasons.DeploymentNotFound)
 		}
 		meta.SetStatusCondition(
 			&t.object.Status.DeploymentsStatus.Conditions,
 			metav1.Condition{
-				Type:    string(utils.ORANO2IMSConditionTypes.Error),
+				Type:    string(utils.InventoryConditionTypes.Error),
 				Status:  metav1.ConditionTrue,
 				Reason:  reason,
 				Message: fmt.Sprintf("Error when querying for the %s server", deploymentName),
@@ -903,19 +903,19 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 		meta.SetStatusCondition(
 			&t.object.Status.DeploymentsStatus.Conditions,
 			metav1.Condition{
-				Type:    string(utils.ORANO2IMSConditionTypes.Ready),
+				Type:    string(utils.InventoryConditionTypes.Ready),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.ORANO2IMSConditionReasons.DeploymentsReady),
+				Reason:  string(utils.InventoryConditionReasons.DeploymentsReady),
 				Message: "The ORAN O2IMS Deployments are not yet ready",
 			},
 		)
 	} else {
 		meta.RemoveStatusCondition(
 			&t.object.Status.DeploymentsStatus.Conditions,
-			string(utils.ORANO2IMSConditionTypes.Error))
+			string(utils.InventoryConditionTypes.Error))
 		meta.RemoveStatusCondition(
 			&t.object.Status.DeploymentsStatus.Conditions,
-			string(utils.ORANO2IMSConditionTypes.Ready))
+			string(utils.InventoryConditionTypes.Ready))
 		for _, condition := range deployment.Status.Conditions {
 			// Obtain the status directly from the Deployment resources.
 			if condition.Type == "Available" {
@@ -935,18 +935,18 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 
 func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
 	ctx context.Context, serverName string, deploymentArgs []string,
-	errorReason utils.ORANO2IMSConditionReason, err error) error {
+	errorReason utils.InventoryConditionReason, err error) error {
 	t.logger.InfoContext(ctx, "[updateORANO2ISMUsedConfigStatus]")
 
-	if serverName == utils.ORANO2IMSMetadataServerName {
+	if serverName == utils.InventoryMetadataServerName {
 		t.object.Status.UsedServerConfig.MetadataServerUsedConfig = deploymentArgs
 	}
 
-	if serverName == utils.ORANO2IMSDeploymentManagerServerName {
+	if serverName == utils.InventoryDeploymentManagerServerName {
 		t.object.Status.UsedServerConfig.DeploymentManagerServerUsedConfig = deploymentArgs
 	}
 
-	if serverName == utils.ORANO2IMSResourceServerName {
+	if serverName == utils.InventoryResourceServerName {
 		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
 	}
 
@@ -982,15 +982,15 @@ func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) er
 
 	t.logger.InfoContext(ctx, "[updateORANO2ISMDeploymentStatus]")
 	if t.object.Spec.MetadataServerConfig.Enabled {
-		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSMetadataServerName)
+		t.updateORANO2ISMStatusConditions(ctx, utils.InventoryMetadataServerName)
 	}
 
 	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
-		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSDeploymentManagerServerName)
+		t.updateORANO2ISMStatusConditions(ctx, utils.InventoryDeploymentManagerServerName)
 	}
 
 	if t.object.Spec.ResourceServerConfig.Enabled {
-		t.updateORANO2ISMStatusConditions(ctx, utils.ORANO2IMSResourceServerName)
+		t.updateORANO2ISMStatusConditions(ctx, utils.InventoryResourceServerName)
 	}
 
 	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
@@ -1005,16 +1005,16 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("orano2ims").
-		For(&oranv1alpha1.ORANO2IMS{},
-			// Watch for create event for orano2ims.
+		Named("Inventory").
+		For(&oranv1alpha1.Inventory{},
+			// Watch for create event for Inventory.
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Generation is only updated on spec changes (also on deletion),
 					// not metadata or status.
 					oldGeneration := e.ObjectOld.GetGeneration()
 					newGeneration := e.ObjectNew.GetGeneration()
-					// spec update only for orano2ims
+					// spec update only for Inventory
 					return oldGeneration != newGeneration
 				},
 				CreateFunc:  func(e event.CreateEvent) bool { return true },

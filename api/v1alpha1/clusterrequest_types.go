@@ -30,14 +30,16 @@ type ClusterRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// LocationSpec is the geographical location of the requested node.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	hwv1alpha1.LocationSpec `json:",inline"`
 
-	// ClusterTemplateRef references an existing ClusterTemplate CR.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Template Reference",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	ClusterTemplateRef string `json:"clusterTemplateRef"`
 
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Template Input",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	ClusterTemplateInput ClusterTemplateInput `json:"clusterTemplateInput"`
 
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Timeout Timeout `json:"timeout,omitempty"`
 }
 
@@ -58,6 +60,7 @@ type ClusterTemplateInput struct {
 	PolicyTemplateInput runtime.RawExtension `json:"policyTemplateInput"`
 }
 
+// NodePoolRef references a node pool.
 type NodePoolRef struct {
 	// Contains the name of the created NodePool.
 	Name string `json:"name,omitempty"`
@@ -121,6 +124,7 @@ type ClusterRequestStatus struct {
 //+kubebuilder:subresource:status
 
 // ClusterRequest is the Schema for the clusterrequests API
+// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Request",resources={{Namespace, v1},{ClusterInstance, siteconfig.open-cluster-management.io/v1alpha1}}
 type ClusterRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

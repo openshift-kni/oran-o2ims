@@ -1,9 +1,9 @@
-apiVersion: oran.openshift.io/v1alpha1
-kind: ORANO2IMS
+apiVersion: o2ims.oran.openshift.io/v1alpha1
+kind: Inventory
 metadata:
   labels:
-    app.kubernetes.io/name: orano2ims
-    app.kubernetes.io/instance: orano2ims-sample
+    app.kubernetes.io/name: inventory
+    app.kubernetes.io/instance: inventory-sample
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: oran-o2ims

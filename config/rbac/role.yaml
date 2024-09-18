@@ -207,7 +207,7 @@ rules:
 - apiGroups:
   - oran.openshift.io
   resources:
-  - orano2imses
+  - inventories
   verbs:
   - create
   - delete
@@ -219,13 +219,13 @@ rules:
 - apiGroups:
   - oran.openshift.io
   resources:
-  - orano2imses/finalizers
+  - inventories/finalizers
   verbs:
   - update
 - apiGroups:
   - oran.openshift.io
   resources:
-  - orano2imses/status
+  - inventories/status
   verbs:
   - get
   - patch

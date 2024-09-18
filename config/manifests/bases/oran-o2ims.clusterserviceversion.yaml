@@ -17,24 +17,222 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
-    olm.skipRange: '>=4.16.0 <4.16.999'
+    olm.skipRange: '>=4.16.0 <4.18'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
     provider: Red Hat
     repository: https://github.com/openshift-kni/oran-o2ims
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.16.0
+  name: oran-o2ims.v4.17.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
     - description: ORANO2IMS is the Schema for the orano2ims API
-      displayName: ORANO2 IMS
+      displayName: ORAN O2IMS Inventory
       kind: ORANO2IMS
-      name: orano2ims.oran.openshift.io
+      name: orano2ims.o2ims.oran.openshift.io
+      resources:
+      - kind: Deployment
+        name: ""
+        version: apps/v1
+      specDescriptors:
+      - description: AlarmSubscriptionServerConfig contains the configuration for
+          the alarm server.
+        displayName: AlarmSubscriptionServerConfig
+        path: alarmSubscriptionServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: CloudId is used to correlate the SMO inventory record with the
+          deployed cloud instance.
+        displayName: CloudId
+        path: cloudId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: DeploymentManagerServerConfig
+        path: deploymentManagerServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          Image is the full reference of the container image that contains the binary. This is
+          optional and the default will be the value passed to the `--image` command line flag of
+          the controller manager.
+        displayName: Image
+        path: image
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: IngressHost defines the FQDN for the IMS endpoints.
+        displayName: IngressHost
+        path: ingressHost
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: MetadataServerConfig
+        path: metadataServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: ResourceServerConfig contains the configuration for the resource
+          server.
+        displayName: ResourceServerConfig
+        path: resourceServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: BackendToken
+        path: resourceServerConfig.backendToken
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: BackendURL
+        path: resourceServerConfig.backendURL
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: This field allows the addition of extra O-Cloud information for
+          the resource server.
+        displayName: Extensions
+        path: resourceServerConfig.extensions
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
+      - description: |-
+          INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+          Important: Run "make" to regenerate code after modifying this file
+        displayName: DeploymentsStatus
+        path: deploymentStatus
+      - displayName: Conditions
+        path: deploymentStatus.conditions
+      - displayName: DeploymentServerStatus
+        path: deploymentStatus.deploymentServerStatus
+      - displayName: MetadataServer tatus
+        path: deploymentStatus.metadataServerStatus
+      - displayName: ResourceServerStatus
+        path: deploymentStatus.resourceServerStatus
+      - displayName: DeploymentsStatus
+        path: usedServerConfig
+      version: v1alpha1
+    - description: ClusterRequest is the Schema for the clusterrequests API
+      displayName: ORAN O2IMS Cluster Request
+      kind: ClusterRequest
+      name: clusterrequests.o2ims.oran.openshift.io
+      resources:
+      - kind: ClusterInstance
+        name: ""
+        version: siteconfig.open-cluster-management.io/v1alpha1
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - displayName: Cluster Template Input
+        path: clusterTemplateInput
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Cluster Template Reference
+        path: clusterTemplateRef
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Location
+        displayName: Location
+        path: location
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Site
+        displayName: Site
+        path: site
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Timeout
+        path: timeout
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      version: v1alpha1
+    - description: ClusterTemplate is the Schema for the clustertemplates API
+      displayName: ORAN O2IMS Cluster Template
+      kind: ClusterTemplate
+      name: clustertemplates.o2ims.oran.openshift.io
+      resources:
+      - kind: ConfigMap
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: InputDataSchema encapsulates all the schemas required for ClusterTemplate.
+        displayName: Input Data Schema
+        path: inputDataSchema
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Templates defines the references to the templates required for
+          ClusterTemplate.
+        displayName: Templates
+        path: templates
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      version: v1alpha1
+    - description: Inventory is the Schema for the Inventory API
+      displayName: ORAN O2IMS Inventory
+      kind: Inventory
+      name: inventories.o2ims.oran.openshift.io
+      resources:
+      - kind: Deployment
+        name: ""
+        version: apps/v1
+      specDescriptors:
+      - description: AlarmSubscriptionServerConfig contains the configuration for
+          the alarm server.
+        displayName: Alarm Subscription Server Configuration
+        path: alarmSubscriptionServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: CloudId is used to correlate the SMO inventory record with the
+          deployed cloud instance.
+        displayName: Cloud Id
+        path: cloudId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Deployment Manager Server Configuration
+        path: deploymentManagerServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          Image is the full reference of the container image that contains the binary. This is
+          optional and the default will be the value passed to the `--image` command line flag of
+          the controller manager.
+        displayName: Image
+        path: image
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: IngressHost defines the FQDN for the IMS endpoints.
+        displayName: Ingress Host
+        path: ingressHost
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Metadata Server Configuration
+        path: metadataServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: ResourceServerConfig contains the configuration for the resource
+          server.
+        displayName: Resource Server Configuration
+        path: resourceServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Backend Token
+        path: resourceServerConfig.backendToken
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Backend URL
+        path: resourceServerConfig.backendURL
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: This field allows the addition of extra O-Cloud information for
+          the resource server.
+        displayName: Extensions
+        path: resourceServerConfig.extensions
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: |-
+          INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+          Important: Run "make" to regenerate code after modifying this file
+        displayName: Deployments Status
+        path: deploymentStatus
       - displayName: Conditions
         path: deploymentStatus.conditions
       - displayName: Deployment Server Status
@@ -43,6 +241,61 @@ spec:
         path: deploymentStatus.metadataServerStatus
       - displayName: Resource Server Status
         path: deploymentStatus.resourceServerStatus
+      - displayName: Deployments Status
+        path: usedServerConfig
+      version: v1alpha1
+    - description: NodePool is the schema for an allocation request of nodes
+      displayName: ORAN O2IMS Cluster Request
+      kind: NodePool
+      name: nodepools.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: |-
+          CloudID is the identifier of the O-Cloud that generated this request. The hardware
+          manager may want to use this to tag the nodes in its database, and to generate
+          statistics.
+        displayName: Cloud ID
+        path: cloudID
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Location
+        displayName: Location
+        path: location
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Site
+        displayName: Site
+        path: site
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      version: v1alpha1
+    - description: Node is the schema for an allocated node
+      displayName: ORAN O2IMS Cluster Request
+      kind: Node
+      name: nodes.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: GroupName
+        displayName: Group Name
+        path: groupName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwProfile
+        displayName: Hardware Profile
+        path: hwProfile
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: NodePool
+        displayName: Node Pool
+        path: nodePool
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       version: v1alpha1
   description: |
     # O-RAN O2IMS operator

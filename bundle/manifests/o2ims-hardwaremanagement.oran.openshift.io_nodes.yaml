@@ -1,12 +1,12 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: nodes.oran.openshift.io
+  creationTimestamp: null
+  name: nodes.o2ims-hardwaremanagement.oran.openshift.io
 spec:
-  group: oran.openshift.io
+  group: o2ims-hardwaremanagement.oran.openshift.io
   names:
     kind: Node
     listKind: NodeList
@@ -17,6 +17,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
+        description: Node is the schema for an allocated node
         properties:
           apiVersion:
             description: |-
@@ -39,10 +40,13 @@ spec:
             description: NodeSpec describes a node presents a hardware server
             properties:
               groupName:
+                description: GroupName
                 type: string
               hwProfile:
+                description: HwProfile
                 type: string
               nodePool:
+                description: NodePool
                 type: string
             required:
             - groupName
@@ -51,14 +55,14 @@ spec:
             type: object
           status:
             description: |-
-              NodePoolStatus describes the observed state of a request to allocate and prepare
+              NodeStatus describes the observed state of a request to allocate and prepare
               a node that will eventually be part of a deployment manager.
             properties:
               bmc:
                 properties:
                   address:
-                    description: Address contains the URL for accessing the BMC over
-                      the network.
+                    description: The Address contains the URL for accessing the BMC
+                      over the network.
                     type: string
                   credentialsName:
                     description: |-
@@ -66,10 +70,12 @@ spec:
                       should contain the keys `username` and `password`.
                     type: string
                 type: object
+              bootMACAddress:
+                type: string
               conditions:
                 description: |-
-                  Conditions represent the observations of the current state of the NodePool. Possible
-                  values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+                  Conditions represent the observations of the NodeStatus's current state.
+                  Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -138,9 +144,17 @@ spec:
                   - type
                   type: object
                 type: array
+              hostname:
+                type: string
             type: object
         type: object
     served: true
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

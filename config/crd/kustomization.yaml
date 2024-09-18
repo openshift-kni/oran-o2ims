@@ -1,15 +1,15 @@
 resources:
 
 # Inventory:
-- bases/oran.openshift.io_orano2imses.yaml
+- bases/o2ims.oran.openshift.io_inventories.yaml
 
 # Hardware management:
-- bases/hardwaremanagement.oran.openshift.io_nodepools.yaml
-- bases/hardwaremanagement.oran.openshift.io_nodes.yaml
+- bases/o2ims-hardwaremanagement.oran.openshift.io_nodepools.yaml
+- bases/o2ims-hardwaremanagement.oran.openshift.io_nodes.yaml
 
 # Provisioning:
-- bases/oran.openshift.io_clustertemplates.yaml
-- bases/oran.openshift.io_clusterrequests.yaml
+- bases/o2ims.oran.openshift.io_clustertemplates.yaml
+- bases/o2ims.oran.openshift.io_clusterrequests.yaml
 
 configurations:
 - kustomizeconfig.yaml

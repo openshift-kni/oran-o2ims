@@ -72,13 +72,13 @@ var _ = DescribeTable(
 	Entry(
 		"Metadata server deployment is updated after edit",
 		[]client.Object{
-			&oranv1alpha1.ORANO2IMS{
+			&oranv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
-					Namespace:         utils.ORANO2IMSNamespace,
+					Namespace:         utils.InventoryNamespace,
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.ORANO2IMSSpec{
+				Spec: oranv1alpha1.InventorySpec{
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: true,
@@ -94,7 +94,7 @@ var _ = DescribeTable(
 		},
 		reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Namespace: utils.ORANO2IMSNamespace,
+				Namespace: utils.InventoryNamespace,
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
@@ -106,8 +106,8 @@ var _ = DescribeTable(
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSMetadataServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryMetadataServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				metadataDeployment)
 			Expect(err).ToNot(HaveOccurred())
@@ -121,7 +121,7 @@ var _ = DescribeTable(
 			// Run the reconciliation again.
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Namespace: utils.ORANO2IMSNamespace,
+					Namespace: utils.InventoryNamespace,
 					Name:      "oran-o2ims-sample-1",
 				},
 			}
@@ -132,8 +132,8 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSMetadataServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryMetadataServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				metadataDeployment)
 			Expect(err).ToNot(HaveOccurred())
@@ -144,13 +144,13 @@ var _ = DescribeTable(
 	Entry(
 		"Only the metadata server is required",
 		[]client.Object{
-			&oranv1alpha1.ORANO2IMS{
+			&oranv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
-					Namespace:         utils.ORANO2IMSNamespace,
+					Namespace:         utils.InventoryNamespace,
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.ORANO2IMSSpec{
+				Spec: oranv1alpha1.InventorySpec{
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: true,
@@ -166,7 +166,7 @@ var _ = DescribeTable(
 		},
 		reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Namespace: utils.ORANO2IMSNamespace,
+				Namespace: utils.InventoryNamespace,
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
@@ -178,8 +178,8 @@ var _ = DescribeTable(
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSMetadataServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryMetadataServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				metadataDeployment)
 			Expect(err).ToNot(HaveOccurred())
@@ -189,8 +189,8 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSIngressName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryIngressName,
+					Namespace: utils.InventoryNamespace,
 				},
 				ingress)
 			Expect(err).ToNot(HaveOccurred())
@@ -200,8 +200,8 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSMetadataServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryMetadataServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				serviceAccount)
 			Expect(err).ToNot(HaveOccurred())
@@ -211,8 +211,8 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSMetadataServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryMetadataServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				service)
 			Expect(err).ToNot(HaveOccurred())
@@ -222,24 +222,24 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSDeploymentManagerServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryDeploymentManagerServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				deploymentManagerDeployment)
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.ORANO2IMSDeploymentManagerServerName)))
+			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryDeploymentManagerServerName)))
 		},
 	),
 	Entry(
 		"Metadata and deployment manager servers required",
 		[]client.Object{
-			&oranv1alpha1.ORANO2IMS{
+			&oranv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
 					Namespace:         "oran-o2ims",
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.ORANO2IMSSpec{
+				Spec: oranv1alpha1.InventorySpec{
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: true,
@@ -255,7 +255,7 @@ var _ = DescribeTable(
 		},
 		reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Namespace: utils.ORANO2IMSNamespace,
+				Namespace: utils.InventoryNamespace,
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
@@ -267,8 +267,8 @@ var _ = DescribeTable(
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSMetadataServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryMetadataServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				metadataDeployment)
 			Expect(err).ToNot(HaveOccurred())
@@ -278,8 +278,8 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSDeploymentManagerServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryDeploymentManagerServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				deploymentManagerDeployment)
 			Expect(err).ToNot(HaveOccurred())
@@ -288,13 +288,13 @@ var _ = DescribeTable(
 	Entry(
 		"No O-RAN O2IMS server required",
 		[]client.Object{
-			&oranv1alpha1.ORANO2IMS{
+			&oranv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
 					Namespace:         "oran-o2ims",
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.ORANO2IMSSpec{
+				Spec: oranv1alpha1.InventorySpec{
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: false,
@@ -310,7 +310,7 @@ var _ = DescribeTable(
 		},
 		reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Namespace: utils.ORANO2IMSNamespace,
+				Namespace: utils.InventoryNamespace,
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
@@ -321,24 +321,24 @@ var _ = DescribeTable(
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSMetadataServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryMetadataServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				metadataDeployment)
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.ORANO2IMSMetadataServerName)))
+			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryMetadataServerName)))
 
 			// Check the deployment manager server does not exist.
 			deploymentManagerDeployment := &appsv1.Deployment{}
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.ORANO2IMSDeploymentManagerServerName,
-					Namespace: utils.ORANO2IMSNamespace,
+					Name:      utils.InventoryDeploymentManagerServerName,
+					Namespace: utils.InventoryNamespace,
 				},
 				deploymentManagerDeployment)
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.ORANO2IMSDeploymentManagerServerName)))
+			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryDeploymentManagerServerName)))
 		},
 	),
 )

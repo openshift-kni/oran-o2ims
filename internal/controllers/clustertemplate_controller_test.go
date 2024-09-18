@@ -86,7 +86,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplateCm,
-					Namespace: utils.ORANO2IMSNamespace,
+					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
 					utils.HwTemplateNodePool: `
@@ -313,7 +313,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplateCm,
-					Namespace: utils.ORANO2IMSNamespace,
+					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
 					utils.HwTemplateNodePool: `
