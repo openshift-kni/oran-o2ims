@@ -543,8 +543,6 @@ properties:
                     type: string
                   name:
                     type: string
-                required:
-                - macAddress
                 type: object
               minItems: 1
               type: array
@@ -660,8 +658,6 @@ properties:
                     type: string
                   name:
                     type: string
-                required:
-                - macAddress
                 type: object
               minItems: 1
               type: array

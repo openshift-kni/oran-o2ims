@@ -43,7 +43,6 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/files"
 )
 
 // ClusterTemplateReconciler reconciles a ClusterTemplate object
@@ -265,68 +264,8 @@ func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx conte
 	return nil
 }
 
-// initConfigmapClusterInstanceTemplate creates the configmap for cluster instance template
-func (r *ClusterTemplateReconciler) initConfigmapClusterInstanceTemplate() (err error) {
-	oranNs := corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: utils.InventoryNamespace,
-		},
-	}
-	err = r.Create(context.TODO(), &oranNs)
-	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return
-		}
-	}
-
-	// Load the template from yaml file
-	clusterInstanceTmpl, err := files.Controllers.ReadFile(utils.ClusterInstanceTemplatePath)
-	if err != nil {
-		err = fmt.Errorf("error reading template file: %w", err)
-		return
-	}
-
-	// Create immutable configmap
-	immutable := true
-	clusterInstanceTmplCm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.ClusterInstanceTemplateConfigmapName,
-			Namespace: utils.ClusterInstanceTemplateConfigmapNamespace,
-		},
-		Immutable: &immutable,
-		Data: map[string]string{
-			utils.ClusterInstanceTemplateConfigmapName: string(clusterInstanceTmpl),
-		},
-	}
-
-	if err = r.Delete(context.TODO(), clusterInstanceTmplCm); err != nil {
-		if !errors.IsNotFound(err) {
-			return
-		}
-	}
-
-	if err = r.Create(context.TODO(), clusterInstanceTmplCm); err != nil {
-		return
-	}
-
-	r.Logger.Info(
-		"Created the ClusterInstance template ConfigMap",
-		slog.String("name", clusterInstanceTmplCm.Name),
-		slog.String("namespace", clusterInstanceTmplCm.Namespace),
-	)
-	return nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := r.initConfigmapClusterInstanceTemplate(); err != nil {
-		r.Logger.Error(
-			"Error creating the ClusterInstance template ConfigMap",
-			slog.String("error", err.Error()),
-		)
-		return err
-	}
-
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("o2ims-cluster-template").

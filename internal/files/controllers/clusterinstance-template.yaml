@@ -104,6 +104,11 @@ spec:
 {{ .Cluster.suppressedManifests | toYaml | indent 4 }}
 {{- end }}
   nodes:
+  # The fields bmcAddress, bmcCredentialsName, bootMACAddress, and nodeNetwork.interfaces[*].macAddress
+  # are expected to be populated from the NodePool. However, we run the ClusterInstance dry-run validation
+  # before HW provisioning to catch any input errors early. Since these fields are required, we must provide
+  # placeholder values to pass the dry-run validation. These placeholders will be replaced with the actual
+  # data returned from the HW plugin before the ClusterInstance is created.
   {{- $_ := .Cluster.nodes | validateNonEmpty "spec.nodes" }}
   {{- $_ := .Cluster.nodes | validateArrayType "spec.nodes"}}
   {{- range $n_index, $n_ref := .Cluster.nodes }}
@@ -114,10 +119,11 @@ spec:
     {{- if .bmcCredentialsName.name }}
       {{- $bmcCredname = .bmcCredentialsName.name | quote }}
     {{- end }}
-    - bmcAddress: "{{ .bmcAddress }}"
+    - bmcAddress: "{{ default "placeholder" .bmcAddress }}"
       bmcCredentialsName:
         name: {{ $bmcCredname }}
-      bootMACAddress: "{{ .bootMACAddress }}"
+      # This placeholder address (using the “00:00:5E” prefix) is for documentation purpose only
+      bootMACAddress: "{{ default "00:00:5E:00:53:AF" .bootMACAddress }}"
       bootMode: "{{ default "UEFI" .bootMode }}"
       hostName: "{{ .hostName | validateNonEmpty (printf "spec.nodes[%d].hostName" $n_index) }}"
       templateRefs:
@@ -161,7 +167,8 @@ spec:
         {{- $_ := .nodeNetwork.interfaces | validateNonEmpty $i_path }}
         {{- $_ := .nodeNetwork.interfaces | validateArrayType $i_path }}
         {{- range $i_index, $i_ref := .nodeNetwork.interfaces }}
-          - macAddress: "{{ $i_ref.macAddress | validateNonEmpty (printf "%s[%d].macAddress" $i_path $i_index) }}"
+          # This placeholder address (using the “00:00:5E” prefix) is for documentation purpose only
+          - macAddress: "{{ default "00:00:5E:00:53:AF" $i_ref.macAddress }}"
             name: "{{ $i_ref.name | validateNonEmpty (printf "%s[%d].name" $i_path $i_index) }}"
         {{- end }}
       {{- end }}

@@ -374,9 +374,6 @@ metadata:
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "macAddress"
-                                ],
                                 "type": "object"
                               },
                               "minItems": 1,

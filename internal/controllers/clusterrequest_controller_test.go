@@ -186,7 +186,7 @@ const (
 					  "items": {
 						"properties": {
 						  "macAddress": {
-							"description": "mac address present on the host.",
+							"description": "(workaround)mac address present on the host.",
 							"pattern": "^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$",
 							"type": "string"
 						  },
@@ -195,9 +195,6 @@ const (
 							"type": "string"
 						  }
 						},
-						"required": [
-						  "macAddress"
-						],
 						"type": "object"
 					  },
 					  "minItems": 1,
