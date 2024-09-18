@@ -280,11 +280,11 @@ func (t *clusterRequestReconcilerTask) checkClusterDeployConfigState(ctx context
 		string(utils.CRconditionTypes.HardwareProvisioned))
 	if hwProvisionedCond != nil {
 		// Check the ClusterInstance status if exists
-		if t.object.Status.ClusterInstanceRef == nil {
+		if t.object.Status.ClusterDetails == nil {
 			return doNotRequeue(), nil
 		}
 		err := t.checkClusterProvisionStatus(
-			ctx, t.object.Status.ClusterInstanceRef.Name)
+			ctx, t.object.Status.ClusterDetails.Name)
 		if err != nil {
 			return requeueWithError(err)
 		}
@@ -813,9 +813,9 @@ func (t *clusterRequestReconcilerTask) checkClusterProvisionStatus(
 			labels := managedCluster.GetLabels()
 			_, hasZtpDone := labels[ztpDoneLabel]
 			if hasZtpDone {
-				t.object.Status.ClusterInstanceRef.ZtpStatus = utils.ClusterZtpDone
+				t.object.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
 			} else {
-				t.object.Status.ClusterInstanceRef.ZtpStatus = utils.ClusterZtpNotDone
+				t.object.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpNotDone
 			}
 		}
 	}
@@ -844,11 +844,11 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 				clusterInstance.Name, err.Error()),
 		)
 	} else {
-		// Set ClusterInstanceRef
-		if t.object.Status.ClusterInstanceRef == nil {
-			t.object.Status.ClusterInstanceRef = &oranv1alpha1.ClusterInstanceRef{}
+		// Set ClusterDetails
+		if t.object.Status.ClusterDetails == nil {
+			t.object.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{}
 		}
-		t.object.Status.ClusterInstanceRef.Name = clusterInstance.GetName()
+		t.object.Status.ClusterDetails.Name = clusterInstance.GetName()
 	}
 
 	// Continue checking the existing ClusterInstance provision status
@@ -862,8 +862,8 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 // of the policies that match the managed cluster created through the ClusterRequest.
 func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx context.Context) (
 	requeue bool, err error) {
-	if t.object.Status.ClusterInstanceRef == nil {
-		return false, fmt.Errorf("status.clusterInstanceRef is empty")
+	if t.object.Status.ClusterDetails == nil {
+		return false, fmt.Errorf("status.clusterDetails is empty")
 	}
 
 	// Get all the child policies in the namespace of the managed cluster created through
@@ -871,7 +871,7 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 	policies := &policiesv1.PolicyList{}
 	listOpts := []client.ListOption{
 		client.HasLabels{utils.ChildPolicyRootPolicyLabel},
-		client.InNamespace(t.object.Status.ClusterInstanceRef.Name),
+		client.InNamespace(t.object.Status.ClusterDetails.Name),
 	}
 
 	err = t.client.List(ctx, policies, listOpts...)
@@ -924,7 +924,7 @@ func (t *clusterRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx contex
 	// If the condition does not exist, set the non compliant timestamp since we
 	// get here just for policies that have a status different from Compliant.
 	if configurationAppliedCondition == nil {
-		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
 		return policyTimedOut
 	}
 
@@ -933,8 +933,8 @@ func (t *clusterRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx contex
 		switch configurationAppliedCondition.Reason {
 		case string(utils.CRconditionReasons.InProgress):
 			// Check if the configuration application has timed out.
-			if t.object.Status.ClusterInstanceRef.NonCompliantAt.IsZero() {
-				t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+			if t.object.Status.ClusterDetails.NonCompliantAt.IsZero() {
+				t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
 			} else {
 				// If NonCompliantAt has been previously set, check for timeout.
 				policyTimedOut = utils.TimeoutExceeded(t.object)
@@ -942,14 +942,14 @@ func (t *clusterRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx contex
 		case string(utils.CRconditionReasons.TimedOut):
 			policyTimedOut = true
 		case string(utils.CRconditionReasons.Missing):
-			t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+			t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
 		case string(utils.CRconditionReasons.OutOfDate):
-			t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+			t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
 		case string(utils.CRconditionReasons.ClusterNotReady):
 			// The cluster might not be ready because its being initially provisioned or
 			// there are problems after provisionion, so it might be that NonCompliantAt
 			// has been previously set.
-			if !t.object.Status.ClusterInstanceRef.NonCompliantAt.IsZero() {
+			if !t.object.Status.ClusterDetails.NonCompliantAt.IsZero() {
 				// If NonCompliantAt has been previously set, check for timeout.
 				policyTimedOut = utils.TimeoutExceeded(t.object)
 			}
@@ -961,7 +961,7 @@ func (t *clusterRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx contex
 			)
 		}
 	} else if configurationAppliedCondition.Reason == string(utils.CRconditionReasons.Completed) {
-		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Now()
+		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
 	}
 
 	return policyTimedOut
@@ -985,7 +985,7 @@ func (t *clusterRequestReconcilerTask) updateConfigurationAppliedStatus(
 	}()
 
 	if len(targetPolicies) == 0 {
-		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Time{}
+		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ConfigurationApplied,
 			utils.CRconditionReasons.Missing,
@@ -997,7 +997,7 @@ func (t *clusterRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 	// Update the ConfigurationApplied condition.
 	if allPoliciesCompliant {
-		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Time{}
+		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ConfigurationApplied,
 			utils.CRconditionReasons.Completed,
@@ -1008,7 +1008,7 @@ func (t *clusterRequestReconcilerTask) updateConfigurationAppliedStatus(
 	}
 
 	clusterIsReadyForPolicyConfig, err := utils.ClusterIsReadyForPolicyConfig(
-		ctx, t.client, t.object.Status.ClusterInstanceRef.Name,
+		ctx, t.client, t.object.Status.ClusterDetails.Name,
 	)
 	if err != nil {
 		return fmt.Errorf(
@@ -1020,8 +1020,8 @@ func (t *clusterRequestReconcilerTask) updateConfigurationAppliedStatus(
 			ctx,
 			fmt.Sprintf(
 				"Cluster %s (%s) is not ready for policy configuration",
-				t.object.Status.ClusterInstanceRef.Name,
-				t.object.Status.ClusterInstanceRef.Name,
+				t.object.Status.ClusterDetails.Name,
+				t.object.Status.ClusterDetails.Name,
 			),
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
@@ -1050,7 +1050,7 @@ func (t *clusterRequestReconcilerTask) updateConfigurationAppliedStatus(
 		)
 	} else {
 		// No timeout is reported if all policies are in inform, just out of date.
-		t.object.Status.ClusterInstanceRef.NonCompliantAt = metav1.Time{}
+		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ConfigurationApplied,
 			utils.CRconditionReasons.OutOfDate,

@@ -68,7 +68,7 @@ type NodePoolRef struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-type ClusterInstanceRef struct {
+type ClusterDetails struct {
 	// Contains the name of the created ClusterInstance.
 	Name string `json:"name,omitempty"`
 
@@ -113,8 +113,8 @@ type ClusterRequestStatus struct {
 
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// ClusterInstanceRef references to the ClusterInstance.
-	ClusterInstanceRef *ClusterInstanceRef `json:"clusterInstanceRef,omitempty"`
+	// ClusterDetails references to the ClusterInstance.
+	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
 
 	// NodePoolRef references to the NodePool.
 	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`

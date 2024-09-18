@@ -963,7 +963,7 @@ func ClusterIsReadyForPolicyConfig(
 
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.
 func TimeoutExceeded(clusterRequest *oranv1alpha1.ClusterRequest) bool {
-	timeSince := time.Since(clusterRequest.Status.ClusterInstanceRef.NonCompliantAt.Time)
+	timeSince := time.Since(clusterRequest.Status.ClusterDetails.NonCompliantAt.Time)
 	timeout := time.Duration(clusterRequest.Spec.Timeout.Configuration) * time.Minute
 	return timeSince > timeout
 }
