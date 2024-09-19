@@ -420,3 +420,31 @@ $ ./oran-o2ims start alarm-notification-server --help
 
 Inside _VS Code_ use the _Run and Debug_ option with the `start
 alarm-notification-server` [configuration](.vscode/launch.json).
+
+
+## Testing API endpoints on a cluster
+
+**NOTE:** If you already have a user account from which you can generate an API access token then you can skip ahead to step
+3 assuming you have already stored your access token in a variable called `MY_TOKEN`.
+
+1. Apply the test client service account CR instances.
+
+```shell
+$ oc apply -f config/samples/testing/client-service-account-rbac.yaml
+system:admin
+```
+
+2. Generate a token to access the API endpoint
+
+```shell
+$ MY_SECRET_NAME=$(oc get sa -n oran-o2ims test-client -ojsonpath='{.secrets[0].name}')
+$ MY_TOKEN=$(oc get secret -n oran-o2ims ${MY_SECRET_NAME} -ojsonpath='{.metadata.annotations.openshift\.io/token-secret\.value}')
+```
+
+3. Access an API endpoint
+
+```shell
+MY_CLUSTER=your.domain.com
+curl -kq https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v1/api_version \
+-H "Authorization: Bearer ${MY_TOKEN}"
+```

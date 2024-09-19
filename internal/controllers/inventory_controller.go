@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sptr "k8s.io/utils/ptr"
@@ -44,6 +45,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+//+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
+//+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories/finalizers,verbs=update
@@ -146,6 +149,18 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
+	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
+	// API requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryResourceServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create resource server RBAC proxy cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
 	// Create the Service needed for the Resource server.
 	err = t.createService(ctx, utils.InventoryResourceServerName)
 	if err != nil {
@@ -183,6 +198,18 @@ func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultR
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy ServiceAccount for Metadata server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
+	// API requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryMetadataServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create Metadata server RBAC proxy cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
@@ -248,12 +275,13 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 		return
 	}
 
-	// Create authz ConfigMap.
-	err = t.createConfigMap(ctx, utils.InventoryConfigMapName)
+	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
+	// API requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryDeploymentManagerServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy ConfigMap for Deployment Manager server.",
+			"Failed to create deployment manager RBAC proxy cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
@@ -291,22 +319,24 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createConfigMap(ctx, utils.InventoryConfigMapName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy ConfigMap for alarm subscription server.",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-
 	// Create the needed ServiceAccount.
 	err = t.createServiceAccount(ctx, utils.InventoryAlarmSubscriptionServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy ServiceAccount for Alarm Subscription server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
+	// API requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryAlarmSubscriptionServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create alarm subscription RBAC proxy cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
@@ -356,17 +386,17 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 			)
 			return
 		}
-	}
 
-	// Create the client service account.
-	err = t.createServiceAccount(ctx, utils.InventoryClientSAName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create client service account",
-			slog.String("error", err.Error()),
-		)
-		return
+		// Create the shared cluster role for the kube-rbac-proxy
+		err = t.createSharedRbacProxyRole(ctx)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to deploy RBAC Proxy cluster role.",
+				slog.String("error", err.Error()),
+			)
+			return
+		}
 	}
 
 	// Start the resource server if required by the Spec.
@@ -399,7 +429,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 
 	// Start the alarm subscription server if required by the Spec.
 	if t.object.Spec.AlarmSubscriptionServerConfig.Enabled {
-		// Create authz ConfigMap.
+		// Create the alarm subscription server.
 		nextReconcile, err = t.setupAlarmSubscriptionServerConfig(ctx, nextReconcile)
 		if err != nil {
 			return
@@ -499,6 +529,51 @@ func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.C
 	return nil
 }
 
+// createSharedRbacProxyRole creates a cluster role that is used by the kube-rbac-proxy to access the authentication and
+// authorization parts of the kubernetes API so that incoming API requests can be validated.  This same cluster role is
+// attached to each of the server service accounts since each of them has its own kube-rbac-proxy that all share the
+// exact same configuration.
+func (t *reconcilerTask) createSharedRbacProxyRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", t.object.Namespace, "kube-rbac-proxy",
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			// The kube-rbac-proxy needs access to the authentication API to validate tokens and access authorization.
+			{
+				APIGroups: []string{
+					"authentication.k8s.io",
+				},
+				Resources: []string{
+					"tokenreviews",
+				},
+				Verbs: []string{
+					"create",
+				},
+			},
+			{
+				APIGroups: []string{
+					"authorization.k8s.io",
+				},
+				Resources: []string{
+					"subjectaccessreviews",
+				},
+				Verbs: []string{
+					"create",
+				},
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create RBAC Proxy cluster role: %w", err)
+	}
+
+	return nil
+}
+
 func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -590,6 +665,40 @@ func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Cont
 	return nil
 }
 
+// createServerRbacClusterRoleBinding attaches the kube-rbac-proxy cluster role to the server's service account so that
+// its instance of the kube-rbac-proxy can access the kubernetes API via the service account credentials.
+func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context, serverName string) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, serverName+"-kube-rbac-proxy",
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, "kube-rbac-proxy",
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: t.object.Namespace,
+				Name:      serverName,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create RBAC Proxy cluster role binding: %w", err)
+	}
+
+	return nil
+}
+
 func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (utils.InventoryConditionReason, error) {
 	t.logger.InfoContext(ctx, "[deploy server]", "Name", serverName)
 
@@ -628,6 +737,14 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		image = t.image
 	}
 
+	rbacProxyImage := t.object.Spec.KubeRbacProxyImage
+	if rbacProxyImage == "" {
+		rbacProxyImage = utils.KubeRbacProxyDefaultImage
+	}
+
+	// Disable privilege escalation for the RBAC proxy
+	privilegeEscalation := false
+
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
 		Replicas: k8sptr.To(int32(1)),
@@ -638,6 +755,9 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					"kubectl.kubernetes.io/default-container": utils.ServerContainerName,
+				},
 				Labels: map[string]string{
 					"app": serverName,
 				},
@@ -647,9 +767,46 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				Volumes:            deploymentVolumes,
 				Containers: []corev1.Container{
 					{
-						Name:            "server",
+						Name: utils.RbacContainerName,
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: &privilegeEscalation,
+							Capabilities: &corev1.Capabilities{
+								Drop: []corev1.Capability{"ALL"},
+							},
+						},
+						Image:           rbacProxyImage,
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						Args: []string{
+							"--secure-listen-address=0.0.0.0:8443",
+							"--upstream=http://127.0.0.1:8000/",
+							"--logtostderr=true",
+							"--tls-cert-file=/secrets/tls/tls.crt",
+							"--tls-private-key-file=/secrets/tls/tls.key",
+							"--tls-min-version=VersionTLS12",
+							"--v=0"},
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "https",
+								Protocol:      corev1.ProtocolTCP,
+								ContainerPort: 8443,
+							},
+						},
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("128Mi"),
+							},
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("5m"),
+								corev1.ResourceMemory: resource.MustParse("64Mi"),
+							},
+						},
+						VolumeMounts: deploymentVolumeMounts,
+					},
+					{
+						Name:            utils.ServerContainerName,
 						Image:           image,
-						ImagePullPolicy: "Always",
+						ImagePullPolicy: corev1.PullAlways,
 						VolumeMounts:    deploymentVolumeMounts,
 						Command:         []string{"/usr/bin/oran-o2ims"},
 						Args:            deploymentContainerArgs,
@@ -680,40 +837,14 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	return "", nil
 }
 
-func (t *reconcilerTask) createConfigMap(ctx context.Context, resourceName string) error {
-	t.logger.InfoContext(ctx, "[createConfigMap]")
-
-	// Build the ConfigMap object.
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      resourceName,
-			Namespace: t.object.Namespace,
-		},
-		Data: map[string]string{
-			"acl.yaml": fmt.Sprintf("- claim: sub\n  pattern: ^system:serviceaccount:%s:client$", utils.InventoryNamespace),
-		},
-	}
-
-	t.logger.InfoContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
-	if err := utils.CreateK8sCR(ctx, t.client, configMap, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create ConfigMap for deployment: %w", err)
-	}
-
-	return nil
-}
-
 func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName string) error {
 	t.logger.InfoContext(ctx, "[createServiceAccount]")
 	// Build the ServiceAccount object.
 	serviceAccountMeta := metav1.ObjectMeta{
 		Name:      resourceName,
 		Namespace: t.object.Namespace,
-	}
-
-	if resourceName != utils.InventoryClientSAName {
-		serviceAccountMeta.Annotations = map[string]string{
-			"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf("%s-tls", resourceName),
-		}
+		Annotations: map[string]string{
+			"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf("%s-tls", resourceName)},
 	}
 
 	newServiceAccount := &corev1.ServiceAccount{
@@ -750,7 +881,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string)
 			{
 				Name:       "api",
 				Port:       8000,
-				TargetPort: intstr.FromString("api"),
+				TargetPort: intstr.FromString("https"),
 			},
 		},
 	}
@@ -832,21 +963,6 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "metadata-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
 								Path: "/o2ims-infrastructureMonitoring/v1/alarmSubscriptions",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
@@ -855,6 +971,21 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
 										Name: "alarm-subscription-server",
+										Port: networkingv1.ServiceBackendPort{
+											Name: utils.InventoryIngressName,
+										},
+									},
+								},
+							},
+							{
+								Path: "/",
+								PathType: func() *networkingv1.PathType {
+									pathType := networkingv1.PathTypePrefix
+									return &pathType
+								}(),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "metadata-server",
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.InventoryIngressName,
 										},

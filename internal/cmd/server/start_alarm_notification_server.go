@@ -26,8 +26,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/openshift-kni/oran-o2ims/internal"
-	"github.com/openshift-kni/oran-o2ims/internal/authentication"
-	"github.com/openshift-kni/oran-o2ims/internal/authorization"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
@@ -46,9 +44,6 @@ func AlarmNotificationServer() *cobra.Command {
 		RunE:  c.run,
 	}
 	flags := result.Flags()
-
-	authentication.AddFlags(flags)
-	authorization.AddFlags(flags)
 
 	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
@@ -149,30 +144,6 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 
-	// Create the authentication and authorization wrappers:
-	authenticationWrapper, err := authentication.NewHandlerWrapper().
-		SetLogger(logger).
-		SetFlags(flags).
-		Build()
-	if err != nil {
-		logger.Error(
-			"Failed to create authentication wrapper",
-			slog.String("error", err.Error()),
-		)
-		return exit.Error(1)
-	}
-	authorizationWrapper, err := authorization.NewHandlerWrapper().
-		SetLogger(logger).
-		SetFlags(flags).
-		Build()
-	if err != nil {
-		logger.Error(
-			"Failed to create authorization wrapper",
-			slog.String("error", err.Error()),
-		)
-		return exit.Error(1)
-	}
-
 	// Create the metrics wrapper:
 	metricsWrapper, err := metrics.NewHandlerWrapper().
 		AddPaths(
@@ -197,7 +168,7 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		service.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	})
-	router.Use(metricsWrapper, authenticationWrapper, authorizationWrapper)
+	router.Use(metricsWrapper)
 
 	// create k8s client with kube(from env first)
 	kubeClient, err := k8s.NewClient().SetLogger(logger).SetLoggingWrapper(loggingWrapper).Build()
