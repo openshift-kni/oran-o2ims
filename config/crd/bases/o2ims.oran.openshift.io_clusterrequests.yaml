@@ -98,11 +98,16 @@ spec:
           status:
             description: ClusterRequestStatus defines the observed state of ClusterRequest
             properties:
-              clusterInstanceRef:
-                description: ClusterInstanceRef references to the ClusterInstance.
+              clusterDetails:
+                description: ClusterDetails references to the ClusterInstance.
                 properties:
                   name:
                     description: Contains the name of the created ClusterInstance.
+                    type: string
+                  nonCompliantAt:
+                    description: Holds the first timestamp when the configuration
+                      was found NonCompliant for the cluster.
+                    format: date-time
                     type: string
                   ztpStatus:
                     description: Says if ZTP has complete or not.

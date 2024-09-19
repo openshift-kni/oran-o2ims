@@ -68,12 +68,15 @@ type NodePoolRef struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-type ClusterInstanceRef struct {
+type ClusterDetails struct {
 	// Contains the name of the created ClusterInstance.
 	Name string `json:"name,omitempty"`
 
 	// Says if ZTP has complete or not.
 	ZtpStatus string `json:"ztpStatus,omitempty"`
+
+	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
+	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
 }
 
 // Timeout contains timeout values for hardware provisioning, cluster provisioning and
@@ -110,8 +113,8 @@ type ClusterRequestStatus struct {
 
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// ClusterInstanceRef references to the ClusterInstance.
-	ClusterInstanceRef *ClusterInstanceRef `json:"clusterInstanceRef,omitempty"`
+	// ClusterDetails references to the ClusterInstance.
+	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
 
 	// NodePoolRef references to the NodePool.
 	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
