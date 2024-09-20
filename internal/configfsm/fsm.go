@@ -22,7 +22,6 @@ const (
 	// Transitions to ClusterNotReady state
 	MissingToClusterNotReady    Trigger = "Missing->ClusterNotReady"
 	InProgressToClusterNotReady Trigger = "InProgress->ClusterNotReady"
-	TimedOutToClusterNotReady   Trigger = "TimedOut->ClusterNotReady"
 	CompletedToClusterNotReady  Trigger = "Completed->ClusterNotReady"
 	OutOfDateToClusterNotReady  Trigger = "OutOfDate->ClusterNotReady"
 
@@ -173,6 +172,9 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering InProgress")
 			fsmHelper.ResetNonCompliantAt()
+			if !fsmHelper.IsPoliciesMatched() {
+				return fsm.Fire(OutOfDateToMissing, fsmHelper)
+			}
 			if !fsmHelper.IsClusterReady() {
 				return fsm.Fire(OutOfDateToClusterNotReady, fsmHelper)
 			}
@@ -196,6 +198,10 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			}
 			if !fsmHelper.IsClusterReady() {
 				return fsm.Fire(CompletedToClusterNotReady, fsmHelper)
+			}
+			if fsmHelper.IsNonCompliantPolicyInEnforce() &&
+				!fsmHelper.IsAllPoliciesCompliant() {
+				return fsm.Fire(CompletedToInProgress, fsmHelper)
 			}
 			if !fsmHelper.IsNonCompliantPolicyInEnforce() &&
 				!fsmHelper.IsAllPoliciesCompliant() {
@@ -236,7 +242,6 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			}
 			return nil
 		}).
-		Permit(TimedOutToClusterNotReady, ClusterNotReady).
 		Permit(TimedOutToOutOfDate, OutOfDate).
 		Permit(TimedOutToMissing, Missing).
 		PermitReentry(TimedOutToTimedOut)

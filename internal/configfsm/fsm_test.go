@@ -210,6 +210,17 @@ func TestFSMCompleted(t *testing.T) {
 	state, err = aFSM.State(context.Background())
 	assert.Equal(t, nil, err, "err should be nil")
 	assert.Equal(t, "Completed", state, "State should be Completed")
+
+	aTestHelper.AllPoliciesCompliant = false
+
+	_, err = RunFSM(context.Background(), aFSM, &aTestHelper)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	state, err = aFSM.State(context.Background())
+	assert.Equal(t, nil, err, "err should be nil")
+	assert.Equal(t, "InProgress", state, "State should be InProgress")
 }
 
 func TestFSMCompletedAllCompliant(t *testing.T) {
