@@ -594,8 +594,9 @@ var _ = Describe("ClusterRequestReconcile", func() {
 					},
 				},
 				Timeout: oranv1alpha1.Timeout{
-					ClusterProvisioning: 1,
-					Configuration:       1,
+					ClusterProvisioning:  1,
+					Configuration:        1,
+					HardwareProvisioning: 1,
 				},
 			},
 		}
@@ -728,7 +729,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Name: crName, Namespace: "hwmgr"}, nodePool)).To(Succeed())
 
 			// Verify the ClusterRequest's status conditions
-			Expect(len(conditions)).To(Equal(4))
+			Expect(len(conditions)).To(Equal(6))
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
@@ -749,6 +750,18 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Status: metav1.ConditionTrue,
 				Reason: string(utils.CRconditionReasons.Completed),
 			})
+			verifyStatusCondition(conditions[4], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
+				Status: metav1.ConditionUnknown,
+				Reason: string(utils.CRconditionReasons.Unknown),
+			})
+			verifyStatusCondition(conditions[5], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterInstanceProcessed),
+				Status: metav1.ConditionUnknown,
+				Reason: string(utils.CRconditionReasons.Unknown),
+			})
+			// Verify the start timestamp has been set for HardwareProvisioning
+			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 		})
 	})
 
@@ -792,6 +805,8 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Status: metav1.ConditionFalse,
 				Reason: string(utils.CRconditionReasons.InProgress),
 			})
+			// Verify the start timestamp has been set for HardwareProvisioning
+			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 		})
 
 		It("Verify ClusterInstance should be created when NodePool has provisioned", func() {
@@ -1065,6 +1080,8 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
+			// Verify the start timestamp has been set for HardwareProvisioning
+			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 		})
 
 		It("Verify status conditions when ClusterInstance provision has completed, ManagedCluster becomes ready and configuration policy becomes compliant", func() {
@@ -1351,7 +1368,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpNotDone))
 			conditions := reconciledCR.Status.Conditions
 			// Verify the ClusterRequest's status conditions
-			verifyStatusCondition(conditions[5], metav1.Condition{
+			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(utils.CRconditionReasons.InProgress),
@@ -1377,7 +1394,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the ClusterRequest's status conditions
 			conditions := reconciledCR.Status.Conditions
-			verifyStatusCondition(conditions[5], metav1.Condition{
+			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
 				Reason:  string(utils.CRconditionReasons.Completed),
@@ -1402,7 +1419,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			conditions := reconciledCR.Status.Conditions
 			// Verify the ClusterRequest's status conditions
-			verifyStatusCondition(conditions[5], metav1.Condition{
+			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(utils.CRconditionReasons.InProgress),
@@ -1956,6 +1973,11 @@ var _ = Describe("waitForNodePoolProvision", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crName,
 			},
+			Spec: oranv1alpha1.ClusterRequestSpec{
+				Timeout: oranv1alpha1.Timeout{
+					HardwareProvisioning: 1,
+				},
+			},
 		}
 
 		// Define the node pool.
@@ -1981,9 +2003,59 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		}
 	})
 
-	It("returns false when error fetching NodePool", func() {
-		rt := task.checkNodePoolProvisionStatus(ctx, np)
-		Expect(rt).To(Equal(false))
+	It("returns error when error fetching NodePool", func() {
+		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		Expect(provisioned).To(Equal(false))
+		Expect(timedOutOrFailed).To(Equal(false))
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("returns failed when NodePool provisioning failed", func() {
+		provisionedCondition := metav1.Condition{
+			Type:   "Provisioned",
+			Status: metav1.ConditionFalse,
+			Reason: string(hwv1alpha1.Failed),
+		}
+		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, np)).To(Succeed())
+		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		Expect(provisioned).To(Equal(false))
+		Expect(timedOutOrFailed).To(Equal(true)) // It should be failed
+		Expect(err).ToNot(HaveOccurred())
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal(string(hwv1alpha1.Failed)))
+	})
+
+	It("returns timeout when NodePool provisioning timed out", func() {
+		provisionedCondition := metav1.Condition{
+			Type:   "Provisioned",
+			Status: metav1.ConditionFalse,
+		}
+		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, np)).To(Succeed())
+
+		// First call to checkNodePoolProvisionStatus (before timeout)
+		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		Expect(provisioned).To(Equal(false))
+		Expect(timedOutOrFailed).To(Equal(false))
+		Expect(err).ToNot(HaveOccurred())
+
+		// Simulate a timeout by moving the start time back
+		adjustedTime := cr.Status.NodePoolRef.HardwareProvisioningCheckStart.Time.Add(-1 * time.Minute)
+		cr.Status.NodePoolRef.HardwareProvisioningCheckStart = metav1.NewTime(adjustedTime)
+
+		// Call checkNodePoolProvisionStatus again (after timeout)
+		provisioned, timedOutOrFailed, err = task.checkNodePoolProvisionStatus(ctx, np)
+		Expect(provisioned).To(Equal(false))
+		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
+		Expect(err).ToNot(HaveOccurred())
+
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal(string(hwv1alpha1.TimedOut)))
 	})
 
 	It("returns false when NodePool is not provisioned", func() {
@@ -1994,8 +2066,10 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
 
-		rt := task.checkNodePoolProvisionStatus(ctx, np)
-		Expect(rt).To(Equal(false))
+		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		Expect(provisioned).To(Equal(false))
+		Expect(timedOutOrFailed).To(Equal(false))
+		Expect(err).ToNot(HaveOccurred())
 		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
@@ -2008,8 +2082,10 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		}
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
-		rt := task.checkNodePoolProvisionStatus(ctx, np)
-		Expect(rt).To(Equal(true))
+		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		Expect(provisioned).To(Equal(true))
+		Expect(timedOutOrFailed).To(Equal(false))
+		Expect(err).ToNot(HaveOccurred())
 		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.CRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
@@ -2392,8 +2468,9 @@ defaultHugepagesSize: "1G"`,
 						},
 					},
 					Timeout: oranv1alpha1.Timeout{
-						ClusterProvisioning: 1,
-						Configuration:       1,
+						ClusterProvisioning:  1,
+						Configuration:        1,
+						HardwareProvisioning: 1,
 					},
 				},
 				Status: oranv1alpha1.ClusterRequestStatus{

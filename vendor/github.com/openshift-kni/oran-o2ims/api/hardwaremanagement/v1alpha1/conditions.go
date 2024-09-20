@@ -41,4 +41,5 @@ const (
 	Unprovisioned  ConditionReason = "Unprovisioned"
 	Failed         ConditionReason = "Failed"
 	NotInitialized ConditionReason = "NotInitialized"
+	TimedOut       ConditionReason = "TimedOut"
 )

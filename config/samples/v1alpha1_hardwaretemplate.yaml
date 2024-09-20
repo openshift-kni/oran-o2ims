@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dell-intel-cu-template-configmap-v1
+  namespace: oran-o2ims
+data:
+  hwMgrId: dell-hwmgr
+  bootInterfaceLabel: bootable-interface
+  node-pools-data: |
+    - name: master
+      hwProfile: profile-spr-single-processor-64G
+    - name: worker
+      hwProfile: profile-spr-dual-processor-128G

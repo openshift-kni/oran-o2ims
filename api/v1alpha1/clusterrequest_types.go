@@ -66,6 +66,8 @@ type NodePoolRef struct {
 	Name string `json:"name,omitempty"`
 	// Contains the namespace of the created NodePool.
 	Namespace string `json:"namespace,omitempty"`
+	// Represents the timestamp of the first status check for hardware provisioning
+	HardwareProvisioningCheckStart metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
 }
 
 type ClusterDetails struct {

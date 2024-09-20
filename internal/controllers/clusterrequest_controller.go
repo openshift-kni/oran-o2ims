@@ -214,7 +214,15 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 	}
 
 	// wait for the NodePool to be provisioned and update BMC details in ClusterInstance
-	if !t.waitForHardwareData(ctx, renderedClusterInstance, renderedNodePool) {
+	provisioned, timedOutOrFailed, err := t.waitForHardwareData(ctx, renderedClusterInstance, renderedNodePool)
+	if err != nil {
+		return requeueWithError(err)
+	}
+	if timedOutOrFailed {
+		// Timeout occurred or failed, stop requeuing
+		return doNotRequeue(), nil
+	}
+	if !provisioned {
 		t.logger.InfoContext(
 			ctx,
 			fmt.Sprintf(
@@ -225,13 +233,14 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 		)
 		// TODO: Remove this check once hwmgr plugin(s) are fully utilized
 		if renderedNodePool.ObjectMeta.Namespace != utils.TempDellPluginNamespace && renderedNodePool.ObjectMeta.Namespace != utils.UnitTestHwmgrNamespace {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+			return requeueWithMediumInterval(), nil
 		}
 	}
 
 	hwProvisionedCond := meta.FindStatusCondition(
 		t.object.Status.Conditions,
 		string(utils.CRconditionTypes.HardwareProvisioned))
+
 	if hwProvisionedCond != nil {
 		// TODO: check hwProvisionedCond.Status == metav1.ConditionTrue
 		// after hw plugin is ready
@@ -276,7 +285,18 @@ func (t *clusterRequestReconcilerTask) checkClusterDeployConfigState(ctx context
 	nodePool := &hwv1alpha1.NodePool{}
 	nodePool.SetName(t.object.Status.NodePoolRef.Name)
 	nodePool.SetNamespace(t.object.Status.NodePoolRef.Namespace)
-	t.checkNodePoolProvisionStatus(ctx, nodePool)
+	provisioned, timedOutOrFailed, err := t.checkNodePoolProvisionStatus(ctx, nodePool)
+	if err != nil {
+		return requeueWithError(err)
+	}
+	if timedOutOrFailed {
+		// Timeout occurred or failed, stop requeuing
+		return doNotRequeue(), nil
+	}
+	// TODO: remove the namespace check once the hwmgr plugin are fully utilized
+	if !provisioned && nodePool.Namespace != utils.TempDellPluginNamespace && nodePool.Namespace != utils.UnitTestHwmgrNamespace {
+		return requeueWithMediumInterval(), nil
+	}
 
 	hwProvisionedCond := meta.FindStatusCondition(
 		t.object.Status.Conditions,
@@ -1731,45 +1751,31 @@ func (r *ClusterRequestReconciler) handleFinalizer(
 
 // checkNodePoolProvisionStatus checks for the NodePool status to be in the provisioned state.
 func (t *clusterRequestReconcilerTask) checkNodePoolProvisionStatus(ctx context.Context,
-	nodePool *hwv1alpha1.NodePool) bool {
+	nodePool *hwv1alpha1.NodePool) (bool, bool, error) {
 
 	// Get the generated NodePool and its status.
 	exists, err := utils.DoesK8SResourceExist(ctx, t.client, nodePool.GetName(),
 		nodePool.GetNamespace(), nodePool)
 
-	if err != nil || !exists {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to get the NodePools",
-			slog.String("name", nodePool.GetName()),
-			slog.String("namespace", nodePool.GetNamespace()),
-		)
-		return false
+	if err != nil {
+		return false, false, fmt.Errorf("failed to get node pool; %w", err)
+	}
+	if !exists {
+		return false, false, fmt.Errorf("node pool does not exist")
 	}
 
 	// Update the Cluster Request Status with status from the NodePool object.
-	err = t.updateHardwareProvisioningStatus(ctx, nodePool)
+	provisioned, timedOutOrFailed, err := t.updateHardwareProvisioningStatus(ctx, nodePool)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to update the NodePool status for ClusterRequest",
 			slog.String("name", t.object.Name),
+			slog.String("error", err.Error()),
 		)
 	}
-	// Check if provisioning is completed
-	provisionedCondition := meta.FindStatusCondition(nodePool.Status.Conditions, string(hwv1alpha1.Provisioned))
-	if provisionedCondition != nil && provisionedCondition.Status == metav1.ConditionTrue {
-		t.logger.InfoContext(
-			ctx,
-			fmt.Sprintf(
-				"NodePool %s in the namespace %s is provisioned",
-				nodePool.GetName(),
-				nodePool.GetNamespace(),
-			),
-		)
-		return true
-	}
-	return false
+
+	return provisioned, timedOutOrFailed, err
 }
 
 // updateClusterInstance updates the given ClusterInstance object based on the provisioned nodePool.
@@ -1795,10 +1801,10 @@ func (t *clusterRequestReconcilerTask) updateClusterInstance(ctx context.Context
 // waitForHardwareData waits for the NodePool to be provisioned and update BMC details
 // and bootMacAddress in ClusterInstance.
 func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
-	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) bool {
+	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) (bool, bool, error) {
 
-	provisioned := t.checkNodePoolProvisionStatus(ctx, nodePool)
-	if provisioned {
+	provisioned, timedOutOrFailed, err := t.checkNodePoolProvisionStatus(ctx, nodePool)
+	if provisioned && err == nil {
 		t.logger.InfoContext(
 			ctx,
 			fmt.Sprintf(
@@ -1807,9 +1813,11 @@ func (t *clusterRequestReconcilerTask) waitForHardwareData(ctx context.Context,
 				nodePool.GetNamespace(),
 			),
 		)
-		return t.updateClusterInstance(ctx, clusterInstance, nodePool)
+		if !t.updateClusterInstance(ctx, clusterInstance, nodePool) {
+			err = fmt.Errorf("failed to update the rendered cluster instance")
+		}
 	}
-	return false
+	return provisioned, timedOutOrFailed, err
 }
 
 // collectNodeDetails collects BMC and node interfaces details
@@ -1974,59 +1982,83 @@ func (t *clusterRequestReconcilerTask) updateNodeStatusWithHostname(ctx context.
 	return true
 }
 
-// updateHardwareProvisioningStatus updates the status for the created ClusterInstance
+// updateHardwareProvisioningStatus updates the status for the ClusterRequest
 func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
-	ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
+	ctx context.Context, nodePool *hwv1alpha1.NodePool) (bool, bool, error) {
+	var status metav1.ConditionStatus
+	var reason string
+	var message string
+	var err error
+	timedOutOrFailed := false // Default to false unless explicitly needed
 
-	if len(nodePool.Status.Conditions) > 0 {
-		provisionedCondition := meta.FindStatusCondition(
-			nodePool.Status.Conditions, string(hwv1alpha1.Provisioned))
-		if provisionedCondition != nil {
-			utils.SetStatusCondition(&t.object.Status.Conditions,
-				utils.CRconditionTypes.HardwareProvisioned,
-				utils.ConditionReason(provisionedCondition.Reason),
-				provisionedCondition.Status,
-				provisionedCondition.Message)
-		} else {
-			utils.SetStatusCondition(&t.object.Status.Conditions,
-				utils.CRconditionTypes.HardwareProvisioned,
-				utils.CRconditionReasons.Unknown,
-				metav1.ConditionUnknown,
-				"Unknown state of hardware provisioning",
-			)
-		}
-
-		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to update the HardwareProvisioning status for ClusterRequest",
-				slog.String("name", t.object.Name),
-				slog.Any("specificError", err),
-			)
-			return fmt.Errorf("failed to update HardwareProvisioning status: %w", err)
-		}
-	} else if nodePool.ObjectMeta.Namespace == utils.TempDellPluginNamespace || nodePool.ObjectMeta.Namespace == utils.UnitTestHwmgrNamespace {
-		// TODO: For test purposes only. Code to be removed once hwmgr plugin(s) are fully utilized
-		meta.SetStatusCondition(
-			&nodePool.Status.Conditions,
-			metav1.Condition{
-				Type:   string(hwv1alpha1.Unknown),
-				Status: metav1.ConditionUnknown,
-				Reason: string(hwv1alpha1.NotInitialized),
-			},
-		)
-		if err := utils.UpdateK8sCRStatus(ctx, t.client, nodePool); err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to update the NodePool status",
-				slog.String("name", nodePool.Name),
-				slog.Any("specificError", err),
-			)
-			return fmt.Errorf("failed to update NodePool status: %w", err)
-		}
-
+	if t.object.Status.NodePoolRef == nil {
+		t.object.Status.NodePoolRef = &oranv1alpha1.NodePoolRef{}
 	}
-	return nil
+
+	t.object.Status.NodePoolRef.Name = nodePool.GetName()
+	t.object.Status.NodePoolRef.Namespace = nodePool.GetNamespace()
+	if t.object.Status.NodePoolRef.HardwareProvisioningCheckStart.IsZero() {
+		t.object.Status.NodePoolRef.HardwareProvisioningCheckStart = metav1.Now()
+	}
+
+	provisionedCondition := meta.FindStatusCondition(
+		nodePool.Status.Conditions, string(hwv1alpha1.Provisioned))
+	if provisionedCondition != nil {
+		status = provisionedCondition.Status
+		reason = provisionedCondition.Reason
+		message = provisionedCondition.Message
+
+		if provisionedCondition.Status == metav1.ConditionFalse && reason == string(hwv1alpha1.Failed) {
+			t.logger.InfoContext(
+				ctx,
+				fmt.Sprintf(
+					"NodePool %s in the namespace %s provisioning failed",
+					nodePool.GetName(),
+					nodePool.GetNamespace(),
+				),
+			)
+			// Ensure a consistent message for the cluster request, regardless of which plugin is used.
+			message = "Hardware provisioning failed"
+			timedOutOrFailed = true
+		}
+	} else {
+		// No provisioning condition found, set the status to unknown.
+		status = metav1.ConditionUnknown
+		reason = string(utils.CRconditionReasons.Unknown)
+		message = "Unknown state of hardware provisioning"
+	}
+
+	// Check for timeout if not already failed or provisioned
+	if status != metav1.ConditionTrue && reason != string(hwv1alpha1.Failed) {
+		elapsedTime := time.Since(t.object.Status.NodePoolRef.HardwareProvisioningCheckStart.Time)
+		if elapsedTime >= time.Duration(t.object.Spec.Timeout.HardwareProvisioning)*time.Minute {
+			t.logger.InfoContext(
+				ctx,
+				fmt.Sprintf(
+					"NodePool %s in the namespace %s provisioning timed out",
+					nodePool.GetName(),
+					nodePool.GetNamespace(),
+				),
+			)
+			reason = string(hwv1alpha1.TimedOut)
+			message = "Hardware provisioning timed out"
+			status = metav1.ConditionFalse
+			timedOutOrFailed = true
+		}
+	}
+
+	// Set the status condition for hardware provisioning.
+	utils.SetStatusCondition(&t.object.Status.Conditions,
+		utils.CRconditionTypes.HardwareProvisioned,
+		utils.ConditionReason(reason),
+		status,
+		message)
+
+	// Update the CR status for the ClusterRequest.
+	if err = utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		err = fmt.Errorf("failed to update HardwareProvisioning status: %w", err)
+	}
+	return status == metav1.ConditionTrue, timedOutOrFailed, err
 }
 
 // findClusterInstanceForClusterRequest maps the ClusterInstance created by a
