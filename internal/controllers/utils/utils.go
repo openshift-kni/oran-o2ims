@@ -779,32 +779,23 @@ func CheckClusterLabelsForPolicies(
 }
 
 // FindClusterInstanceImmutableFieldUpdates identifies updates made to immutable fields
-// in the ClusterInstance spec. It returns a list of paths for the updated fields that
-// are considered immutable and should not be modified.
+// in the ClusterInstance spec. It returns two lists of paths: a list of updated fields
+// that are considered immutable and should not be modified and a list of fields related
+// to node scaling, indicating nodes that were added or removed.
 func FindClusterInstanceImmutableFieldUpdates(
-	oldClusterInstance, newClusterInstance *unstructured.Unstructured) ([]string, error) {
-
-	// Non-immutable ClusterInstance fields at the cluster-level
-	allowedClusterFields := []string{
-		"extraAnnotations",
-		"extraLabels",
-	}
-	// Non-immutable ClusterInstance fields at the node-level
-	allowedNodeFields := []string{
-		"extraAnnotations",
-		"extraLabels",
-	}
+	oldClusterInstance, newClusterInstance *unstructured.Unstructured) ([]string, []string, error) {
 
 	oldClusterInstanceSpec := oldClusterInstance.Object["spec"].(map[string]any)
 	newClusterInstanceSpec := newClusterInstance.Object["spec"].(map[string]any)
 
 	diffs, err := diff.Diff(oldClusterInstanceSpec, newClusterInstanceSpec)
 	if err != nil {
-		return nil, fmt.Errorf("error comparing differences between existing "+
+		return nil, nil, fmt.Errorf("error comparing differences between existing "+
 			"and newly rendered ClusterInstance: %w", err)
 	}
 
 	var updatedFields []string
+	var scalingNodes []string
 	for _, diff := range diffs {
 		/* Examples of diff result in json format
 
@@ -816,6 +807,9 @@ func FindClusterInstanceImmutableFieldUpdates(
 
 		New node added
 		  {"type": "create", "path": ["nodes", "1"], "from": null, "to": {"hostName": "worker2"}}
+
+		Existing node removed
+		  {"type": "delete", "path": ["nodes", "1"], "from": {"hostName": "worker2"}, "to": null}
 
 		Field updated at the node-level
 		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
@@ -829,15 +823,17 @@ func FindClusterInstanceImmutableFieldUpdates(
 		)
 
 		if diff.Path[0] == "nodes" {
-			if len(diff.Path) == 2 || (len(diff.Path) > 2 && !slices.Contains(allowedNodeFields, diff.Path[2])) {
+			if len(diff.Path) == 2 {
+				scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
+			} else if len(diff.Path) > 2 && !slices.Contains(AllowedClusterInstanceNodeFields, diff.Path[2]) {
 				updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
 			}
-		} else if !slices.Contains(allowedClusterFields, diff.Path[0]) {
+		} else if !slices.Contains(AllowedClusterInstanceClusterFields, diff.Path[0]) {
 			updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
 		}
 	}
 
-	return updatedFields, nil
+	return updatedFields, scalingNodes, nil
 }
 
 // GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting

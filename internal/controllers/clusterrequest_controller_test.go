@@ -1311,11 +1311,13 @@ var _ = Describe("handleRenderClusterInstance", func() {
 clusterImageSetNameRef: "4.15"
 pullSecretRef:
   name: "pull-secret"
+holdInstallation: false
 templateRefs:
   - name: "ai-cluster-templates-v1"
     namespace: "siteconfig-operator"
 nodes:
 - hostname: "node1"
+  ironicInspect: ""
   templateRefs:
     - name: "ai-node-templates-v1"
       namespace: "siteconfig-operator"`,
@@ -1407,7 +1409,13 @@ nodes:
 		_, err = task.handleRenderClusterInstance(ctx)
 		Expect(err).To(HaveOccurred())
 
-		// Check if status condition was updated correctly
+		// Note that the detected changed fields in this unittest include nodes.0.ironicInspect, baseDomain,
+		// and holdInstallation, even though nodes.0.ironicInspect and holdInstallation were not actually changed.
+		// This is due to the difference between the fakeclient and a real cluster. When applying a manifest
+		// to a cluster, the API server preserves the full resource, including optional fields with empty values.
+		// However, the fakeclient in unittests behaves differently, as it uses an in-memory store and
+		// does not go through the API server. As a result, fields with empty values like false or "" are
+		// stripped from the retrieved ClusterInstance CR (existing ClusterInstance) in the fakeclient.
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
 			string(utils.CRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())

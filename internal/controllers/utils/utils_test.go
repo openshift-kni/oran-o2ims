@@ -1219,10 +1219,11 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 	})
 
 	It("should return no updates when specs are identical", func() {
-		updatedFields, err := FindClusterInstanceImmutableFieldUpdates(
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance, newClusterInstance)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
+		Expect(scalingNodes).To(BeEmpty())
 	})
 
 	It("should detect changes in immutable cluster-level fields", func() {
@@ -1230,10 +1231,11 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		spec := newClusterInstance.Object["spec"].(map[string]any)
 		spec["baseDomain"] = "newdomain.example.com"
 
-		updatedFields, err := FindClusterInstanceImmutableFieldUpdates(
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance, newClusterInstance)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(ContainElement("baseDomain"))
+		Expect(scalingNodes).To(BeEmpty())
 	})
 
 	It("should not flag changes in allowed cluster-level fields", func() {
@@ -1243,10 +1245,11 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		labels := spec["extraLabels"].(map[string]any)["ManagedCluster"].(map[string]any)
 		labels["newLabelKey"] = "newLabelValue"
 
-		updatedFields, err := FindClusterInstanceImmutableFieldUpdates(
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance, newClusterInstance)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
+		Expect(scalingNodes).To(BeEmpty())
 	})
 
 	It("should detect changes in disallowed node-level fields", func() {
@@ -1256,11 +1259,12 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
 		node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
 
-		updatedFields, err := FindClusterInstanceImmutableFieldUpdates(
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance, newClusterInstance)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(ContainElement(
 			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
+		Expect(scalingNodes).To(BeEmpty())
 	})
 
 	It("should detect addition of a new node", func() {
@@ -1270,10 +1274,23 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		nodes = append(nodes, map[string]any{"hostName": "worker2"})
 		spec["nodes"] = nodes
 
-		updatedFields, err := FindClusterInstanceImmutableFieldUpdates(
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance, newClusterInstance)
 		Expect(err).To(BeNil())
-		Expect(updatedFields).To(ContainElement("nodes.1"))
+		Expect(updatedFields).To(BeEmpty())
+		Expect(scalingNodes).To(ContainElement("nodes.1"))
+	})
+
+	It("should detect deletion of a node", func() {
+		// Remove the node
+		spec := newClusterInstance.Object["spec"].(map[string]any)
+		spec["nodes"] = []any{}
+
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance, newClusterInstance)
+		Expect(err).To(BeNil())
+		Expect(updatedFields).To(BeEmpty())
+		Expect(scalingNodes).To(ContainElement("nodes.0"))
 	})
 
 	It("should not flag changes in allowed node-level fields", func() {
@@ -1286,10 +1303,11 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			},
 		}
 
-		updatedFields, err := FindClusterInstanceImmutableFieldUpdates(
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance, newClusterInstance)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
+		Expect(scalingNodes).To(BeEmpty())
 	})
 })
 

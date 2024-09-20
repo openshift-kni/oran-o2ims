@@ -87,9 +87,21 @@ const (
 	ClusterInstanceTemplateName                 = "ClusterInstance"
 	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
 	ClusterInstanceTemplateConfigmapName        = "sc-clusterinstance-template"
-	ClusterInstanceTemplateConfigmapNamespace   = InventoryNamespace
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
 	ClusterInstanceSchema                       = "clusterInstanceSchema"
+)
+
+var (
+	// Non-immutable ClusterInstance fields at the cluster-level
+	AllowedClusterInstanceClusterFields = []string{
+		"extraAnnotations",
+		"extraLabels",
+	}
+	// Non-immutable ClusterInstance fields at the node-level
+	AllowedClusterInstanceNodeFields = []string{
+		"extraAnnotations",
+		"extraLabels",
+	}
 )
 
 // PolicyTemplate constants

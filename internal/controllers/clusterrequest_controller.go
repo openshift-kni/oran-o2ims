@@ -522,9 +522,10 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 			return nil, fmt.Errorf("failed to create cluster namespace %s: %w", ciName, err)
 		}
 
-		// Check for updates to immutable fields in ClusterInstance if exists.
-		// If provisioning has started or reached to a final state (Completed or failed),
-		// any updates to immutable fields in the ClusterInstance spec are disallowed.
+		// Check for updates to immutable fields in the ClusterInstance, if it exists.
+		// Once provisioning has started or reached a final state (Completed or Failed),
+		// updates to immutable fields in the ClusterInstance spec are disallowed,
+		// with the exception of scaling up/down when Cluster provisioning is completed.
 		crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions,
 			string(utils.CRconditionTypes.ClusterProvisioned))
 		if crProvisionedCond != nil && crProvisionedCond.Reason != string(utils.CRconditionReasons.Unknown) {
@@ -539,15 +540,26 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 					ciName, err)
 			}
 			if ciExists {
-				updatedFields, err := utils.FindClusterInstanceImmutableFieldUpdates(
+				updatedFields, scalingNodes, err := utils.FindClusterInstanceImmutableFieldUpdates(
 					existingClusterInstance, renderedClusterInstanceUnstructure)
 				if err != nil {
 					return nil, fmt.Errorf(
 						"failed to find immutable field updates for ClusterInstance (%s): %w", ciName, err)
 				}
+
+				var disallowedChanges []string
 				if len(updatedFields) != 0 {
+					disallowedChanges = append(disallowedChanges, updatedFields...)
+				}
+				if len(scalingNodes) != 0 &&
+					crProvisionedCond.Reason != string(utils.CRconditionReasons.Completed) {
+					// In-progress || Failed
+					disallowedChanges = append(disallowedChanges, scalingNodes...)
+				}
+
+				if len(disallowedChanges) != 0 {
 					return nil, utils.NewInputError(fmt.Sprintf(
-						"detected changes in immutable fields: %s", strings.Join(updatedFields, ", ")))
+						"detected changes in immutable fields: %s", strings.Join(disallowedChanges, ", ")))
 				}
 			}
 		}
