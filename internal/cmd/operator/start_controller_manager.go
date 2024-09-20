@@ -17,6 +17,7 @@ package operator
 import (
 	"log/slog"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -73,7 +74,9 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.image,
 		imageFlagName,
-		"quay.io/openshift-kni/oran-o2ims-operator:latest",
+		// Intentionally setting the default value to "" if the environment variable is not set to ensure we never
+		// run an image that we didn't intend on running.
+		utils.GetEnvOrDefault("IMAGE", ""),
 		"Reference of the container image containing the servers.",
 	)
 	return result
