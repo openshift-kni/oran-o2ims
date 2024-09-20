@@ -62,7 +62,7 @@ const (
 	OutOfDate       = "OutOfDate"
 )
 
-// Runs the state machine as much as it can by triggering all Self transitions
+// RunFSM Runs the state machine as much as it can by triggering all Self transitions
 func RunFSM(ctx context.Context, fsm *stateless.StateMachine, fsmHelper FsmHelper) (aState any, err error) {
 	aState, err = fsm.State(ctx)
 	if err != nil {
@@ -113,7 +113,7 @@ func RunFSM(ctx context.Context, fsm *stateless.StateMachine, fsmHelper FsmHelpe
 	return aState, nil
 }
 
-// Initialize the state machine algorithm
+// InitFSM Initialize the state machine algorithm
 func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm = stateless.NewStateMachine(state)
 	fsm.Configure(Start).Permit(StartToMissing, Missing)
@@ -245,7 +245,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	return fsm, nil
 }
 
-// Helper Interface to collect all functions needed for state machine decisions
+// FsmHelper Helper Interface to collect all functions needed for state machine decisions
 type FsmHelper interface {
 	IsPoliciesMatched() bool
 	ResetNonCompliantAt()
@@ -257,7 +257,7 @@ type FsmHelper interface {
 	IsNonCompliantPolicyInEnforce() bool
 }
 
-// Helper struct to store information needed for state machine decisions
+// BaseFSMHelper Helper struct to store information needed for state machine decisions
 type BaseFSMHelper struct {
 	CurrentState                string
 	ClusterReady                bool
@@ -268,38 +268,38 @@ type BaseFSMHelper struct {
 	ConfigTimeout               int
 }
 
-// Returns true if there are policies matched to the managed cluster, false otherwise
+// IsPoliciesMatched Returns true if there are policies matched to the managed cluster, false otherwise
 func (h *BaseFSMHelper) IsPoliciesMatched() bool {
 	return h.PoliciesMatched
 }
 
-// Resets the NonCompliantAt field to zero
+// ResetNonCompliantAt Resets the NonCompliantAt field to zero
 func (h *BaseFSMHelper) ResetNonCompliantAt() {
 	h.NonCompliantAt = time.Time{}
 }
 
-// Returns true if NonCompliantAt is was resetm to zero, false otherwise
+// IsResetNonCompliantAt Returns true if NonCompliantAt is was reset to zero, false otherwise
 func (h *BaseFSMHelper) IsResetNonCompliantAt() bool {
 	return h.NonCompliantAt == time.Time{}
 }
 
-// Sets the NonCompliantAt to the current time
+// SetResetNonCompliantAtNow Sets the NonCompliantAt to the current time
 func (h *BaseFSMHelper) SetResetNonCompliantAtNow() {
 	println("Set NonCompliantAt to now")
 	h.NonCompliantAt = time.Now()
 }
 
-// Returns true if the Managed cluster is ready for policy enforcement, false otherwise
+// IsClusterReady Returns true if the Managed cluster is ready for policy enforcement, false otherwise
 func (h *BaseFSMHelper) IsClusterReady() bool {
 	return h.ClusterReady
 }
 
-// Returns true if all policies are enforced and compliant, false otherwise
+// IsAllPoliciesCompliant Returns true if all policies are enforced and compliant, false otherwise
 func (h *BaseFSMHelper) IsAllPoliciesCompliant() bool {
 	return h.AllPoliciesCompliant
 }
 
-// Returns true if there is at least one non compliant policy in enforce, false otherwise
+// IsNonCompliantPolicyInEnforce Returns true if there is at least one non compliant policy in enforce, false otherwise
 func (h *BaseFSMHelper) IsNonCompliantPolicyInEnforce() bool {
 	return h.NonCompliantPolicyInEnforce
 }
