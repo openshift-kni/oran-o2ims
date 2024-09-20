@@ -73,7 +73,7 @@ func TestFSMTimedout(t *testing.T) {
 
 	state, err = aFSM.State(context.Background())
 	assert.Equal(t, nil, err, "err should be nil")
-	assert.Equal(t, "Completed", state, "State should be Completed")
+	assert.Equal(t, "TimedOut", state, "State should be Completed")
 }
 
 func TestFSMTimedoutClusterNotReady(t *testing.T) {
@@ -158,7 +158,7 @@ func TestFSMTimedoutClusterNotReady(t *testing.T) {
 
 	state, err = aFSM.State(context.Background())
 	assert.Equal(t, nil, err, "err should be nil")
-	assert.Equal(t, "Completed", state, "State should be Completed")
+	assert.Equal(t, TimedOut, state, "State should be Completed")
 }
 
 func TestFSMCompleted(t *testing.T) {

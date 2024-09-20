@@ -37,8 +37,6 @@ const (
 
 	// Transitions to Completed state
 	InProgressToCompleted Trigger = "InProgress->Completed"
-	TimedOutToCompleted   Trigger = "TimedOut->Completed"
-	OutOfDateToCompleted  Trigger = "OutOfDate->Completed"
 
 	// Transitions to OutOfDate state
 	InProgressToOutOfDate      Trigger = "InProgress->OutOfDate"
@@ -179,9 +177,6 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			if !fsmHelper.IsClusterReady() {
 				return fsm.Fire(OutOfDateToClusterNotReady, fsmHelper)
 			}
-			if fsmHelper.IsAllPoliciesCompliant() {
-				return fsm.Fire(OutOfDateToCompleted, fsmHelper)
-			}
 			if fsmHelper.IsNonCompliantPolicyInEnforce() {
 				return fsm.Fire(OutOfDateToInProgress, fsmHelper)
 			}
@@ -190,7 +185,6 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 		Permit(OutOfDateToMissing, Missing).
 		Permit(OutOfDateToClusterNotReady, ClusterNotReady).
 		Permit(OutOfDateToInProgress, InProgress).
-		Permit(OutOfDateToCompleted, Completed).
 		PermitReentry(OutOfDateToOutOfDate)
 	fsm.Configure(Completed).
 		OnEntry(func(_ context.Context, args ...any) error {
@@ -237,9 +231,6 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			if !fsmHelper.IsPoliciesMatched() {
 				return fsm.Fire(TimedOutToMissing, fsmHelper)
 			}
-			if fsmHelper.IsAllPoliciesCompliant() {
-				return fsm.Fire(TimedOutToCompleted, fsmHelper)
-			}
 			if !fsmHelper.IsNonCompliantPolicyInEnforce() &&
 				!fsmHelper.IsAllPoliciesCompliant() {
 				return fsm.Fire(TimedOutToOutOfDate, fsmHelper)
@@ -248,7 +239,6 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 		}).
 		Permit(TimedOutToClusterNotReady, ClusterNotReady).
 		Permit(TimedOutToOutOfDate, OutOfDate).
-		Permit(TimedOutToCompleted, Completed).
 		Permit(TimedOutToMissing, Missing).
 		PermitReentry(TimedOutToTimedOut)
 

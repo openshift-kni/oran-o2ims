@@ -33,13 +33,11 @@ digraph {
 	Missing -> ClusterNotReady [label="Missing-&gt;ClusterNotReady"];
 	Missing -> Missing [label="Missing-&gt;Missing"];
 	OutOfDate -> ClusterNotReady [label="OutOfDate-&gt;ClusterNotReady"];
-	OutOfDate -> Completed [label="OutOfDate-&gt;Completed"];
 	OutOfDate -> InProgress [label="OutOfDate-&gt;InProgress"];
 	OutOfDate -> Missing [label="OutOfDate-&gt;Missing"];
 	OutOfDate -> OutOfDate [label="OutOfDate-&gt;OutOfDate"];
 	Start -> Missing [label="Start-&gt;Missing"];
 	TimedOut -> ClusterNotReady [label="TimedOut-&gt;ClusterNotReady"];
-	TimedOut -> Completed [label="TimedOut-&gt;Completed"];
 	TimedOut -> Missing [label="TimedOut-&gt;Missing"];
 	TimedOut -> OutOfDate [label="TimedOut-&gt;OutOfDate"];
 	TimedOut -> TimedOut [label="TimedOut-&gt;TimedOut"];
