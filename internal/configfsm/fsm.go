@@ -145,21 +145,20 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			if fsmHelper.IsResetNonCompliantAt() {
 				fsmHelper.SetResetNonCompliantAtNow()
 			}
-
-			if fsmHelper.IsTimedOut() {
-				return fsm.Fire(InProgressToTimedOut, fsmHelper)
-			}
-			if fsmHelper.IsAllPoliciesCompliant() {
-				return fsm.Fire(InProgressToCompleted, fsmHelper)
-			}
 			if !fsmHelper.IsPoliciesMatched() {
 				return fsm.Fire(InProgressToMissing, fsmHelper)
 			}
 			if !fsmHelper.IsClusterReady() {
 				return fsm.Fire(InProgressToClusterNotReady, fsmHelper)
 			}
+			if fsmHelper.IsTimedOut() {
+				return fsm.Fire(InProgressToTimedOut, fsmHelper)
+			}
 			if !fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.IsAllPoliciesCompliant() {
 				return fsm.Fire(InProgressToOutOfDate, fsmHelper)
+			}
+			if fsmHelper.IsAllPoliciesCompliant() {
+				return fsm.Fire(InProgressToCompleted, fsmHelper)
 			}
 			return nil
 		}).
