@@ -967,3 +967,13 @@ func TimeoutExceeded(clusterRequest *oranv1alpha1.ClusterRequest) bool {
 	timeout := time.Duration(clusterRequest.Spec.Timeout.Configuration) * time.Minute
 	return timeSince > timeout
 }
+
+// GetEnvOrDefault returns the value of the named environment variable or the supplied default value if the environment
+// variable is not set.
+func GetEnvOrDefault(name, defaultValue string) string {
+	value := os.Getenv(name)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}

@@ -13,9 +13,9 @@ images:
   newTag: 4.16.0
 
 
-# This replacment copies the controller image into the `IMAGE` environment variable of the pod,
-# which is in turn passed to the `--image` command line flag of the `start controller-manager`
-# command. The net result is that the operator knows what is its image and can use it as the
+# This replacement copies the controller image into the `IMAGE` environment variable of the pod,
+# which is in turn used as the default value of the `--image` command line flag of the `start controller-manager`
+# command. The net result is that the operator knows what its image is and can use it as the
 # default for the servers.
 replacements:
 - source:
