@@ -41,6 +41,11 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
+const (
+	ServerTestImage        = "controller-manager:test"
+	KubeRbacProxyTestImage = "kube-rbac-proxy:test"
+)
+
 var _ = DescribeTable(
 	"Reconciler",
 	func(objs []client.Object, request reconcile.Request, validate func(result ctrl.Result, reconciler Reconciler)) {
@@ -79,6 +84,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.InventorySpec{
+					Image:              ServerTestImage,
+					KubeRbacProxyImage: KubeRbacProxyTestImage,
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: true,
@@ -151,6 +158,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.InventorySpec{
+					Image:              ServerTestImage,
+					KubeRbacProxyImage: KubeRbacProxyTestImage,
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: true,
@@ -240,6 +249,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.InventorySpec{
+					Image:              ServerTestImage,
+					KubeRbacProxyImage: KubeRbacProxyTestImage,
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: true,
@@ -295,6 +306,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: oranv1alpha1.InventorySpec{
+					Image:              ServerTestImage,
+					KubeRbacProxyImage: KubeRbacProxyTestImage,
 					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
 						ServerConfig: oranv1alpha1.ServerConfig{
 							Enabled: false,

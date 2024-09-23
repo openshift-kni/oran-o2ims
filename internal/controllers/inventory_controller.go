@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -739,7 +740,10 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 
 	rbacProxyImage := t.object.Spec.KubeRbacProxyImage
 	if rbacProxyImage == "" {
-		rbacProxyImage = utils.KubeRbacProxyDefaultImage
+		rbacProxyImage = os.Getenv(utils.KubeRbacProxyImageName)
+		if rbacProxyImage == "" {
+			return "", fmt.Errorf("missing %s environment variable value", utils.KubeRbacProxyImageName)
+		}
 	}
 
 	// Disable privilege escalation for the RBAC proxy

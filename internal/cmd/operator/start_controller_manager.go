@@ -76,7 +76,7 @@ func ControllerManager() *cobra.Command {
 		imageFlagName,
 		// Intentionally setting the default value to "" if the environment variable is not set to ensure we never
 		// run an image that we didn't intend on running.
-		utils.GetEnvOrDefault("IMAGE", ""),
+		utils.GetEnvOrDefault(utils.ServerImageName, ""),
 		"Reference of the container image containing the servers.",
 	)
 	return result

@@ -74,6 +74,9 @@ spec:
           # since it and all other arguments are implemented as CLI arguments.
         - name: IMAGE
           value: controller:latest
+        - name: KUBE_RBAC_PROXY_IMAGE
+          # A placeholder for the replacement kustomization that will inject the rbac image from that container spec
+          value: kube-rbac-proxy:latest
         command:
           - /usr/bin/oran-o2ims
           -  start

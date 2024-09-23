@@ -146,5 +146,8 @@ const (
 	RbacContainerName   = "rbac"
 )
 
-// KubeRbacProxyDefaultImage Default image for the kube-rbac-proxy
-const KubeRbacProxyDefaultImage = "gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0"
+// Environment values
+const (
+	ServerImageName        = "IMAGE"
+	KubeRbacProxyImageName = "KUBE_RBAC_PROXY_IMAGE"
+)

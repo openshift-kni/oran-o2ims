@@ -140,3 +140,17 @@ patches:
 #          delimiter: '.'
 #          index: 1
 #          create: true
+
+replacements:
+  # This replacement copies the kube-rbac-proxy containers image name to the manager's environment variables so that
+  # it can use it internally for launching other instances of kube-rbac-proxy for its servers as necessary.
+  - source:
+      fieldPath: spec.template.spec.containers.[name=kube-rbac-proxy].image
+      kind: Deployment
+      name: controller-manager
+    targets:
+      - fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=^KUBE_RBAC_PROXY_IMAGE$].value
+        select:
+          kind: Deployment
+          name: controller-manager

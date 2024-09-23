@@ -1054,6 +1054,8 @@ spec:
                 env:
                 - name: IMAGE
                   value: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
+                - name: KUBE_RBAC_PROXY_IMAGE
+                  value: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
                 image: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
                 livenessProbe:
                   httpGet:
