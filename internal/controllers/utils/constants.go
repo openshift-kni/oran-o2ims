@@ -26,12 +26,8 @@ const (
 	InventoryAlarmNotificationServerName = InventoryAlarmNotification + serverSuffix
 )
 
-// CR default names
-const (
-	InventoryIngressName   = "api"
-	InventoryConfigMapName = "authz"
-	InventoryClientSAName  = "client"
-)
+// InventoryIngressName the name of our Ingress controller instance
+const InventoryIngressName = "api"
 
 // Resource operations
 const (
@@ -46,40 +42,30 @@ var (
 		"metadata-server",
 		"--log-level=debug",
 		"--log-file=stdout",
-		"--api-listener-address=0.0.0.0:8000",
-		"--api-listener-tls-crt=/secrets/tls/tls.crt",
-		"--api-listener-tls-key=/secrets/tls/tls.key",
+		"--api-listener-address=127.0.0.1:8000",
 	}
 	DeploymentManagerServerArgs = []string{
 		"start",
 		"deployment-manager-server",
 		"--log-level=debug",
 		"--log-file=stdout",
-		"--api-listener-address=0.0.0.0:8000",
-		"--api-listener-tls-crt=/secrets/tls/tls.crt",
-		"--api-listener-tls-key=/secrets/tls/tls.key",
-		"--authn-jwks-url=https://kubernetes.default.svc/openid/v1/jwks",
-		"--authn-jwks-token-file=/run/secrets/kubernetes.io/serviceaccount/token",
-		"--authn-jwks-ca-file=/run/secrets/kubernetes.io/serviceaccount/ca.crt",
-		"--authz-acl-file=/configmaps/authz/acl.yaml",
+		"--api-listener-address=127.0.0.1:8000",
 	}
 	ResourceServerArgs = []string{
 		"start",
 		"resource-server",
 		"--log-level=debug",
 		"--log-file=stdout",
-		"--api-listener-address=0.0.0.0:8000",
-		"--api-listener-tls-crt=/secrets/tls/tls.crt",
-		"--api-listener-tls-key=/secrets/tls/tls.key",
+		"--api-listener-address=127.0.0.1:8000",
 	}
 )
 
 // Default values for backend URL and token:
 const (
 	defaultBackendURL       = "https://kubernetes.default.svc"
-	defaultBackendTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
-	defaultBackendCABundle  = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
-	defaultServiceCAFile    = "/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
+	defaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
+	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
+	defaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
 )
 
 // ClusterInstance template constants
@@ -152,4 +138,16 @@ const (
 	UnitTestHwmgrID         = "hwmgr"
 	UnitTestHwmgrNamespace  = "hwmgr"
 	TempDellPluginNamespace = "dell-hwmgr"
+)
+
+// POD Container Names
+const (
+	ServerContainerName = "server"
+	RbacContainerName   = "rbac"
+)
+
+// Environment values
+const (
+	ServerImageName        = "IMAGE"
+	KubeRbacProxyImageName = "KUBE_RBAC_PROXY_IMAGE"
 )

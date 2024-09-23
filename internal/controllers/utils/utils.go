@@ -264,35 +264,22 @@ func extensionsToExtensionArgs(extensions []string) []string {
 	return extensionsArgsArray
 }
 
-func GetDeploymentVolumes(serverName string) []corev1.Volume {
-	if serverName == InventoryMetadataServerName || serverName == InventoryResourceServerName {
-		return []corev1.Volume{
-			{
-				Name: "tls",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: fmt.Sprintf("%s-tls", serverName),
-					},
-				},
-			},
-		}
-	}
+// HasApiEndpoints determines whether a server exposes a set of API endpoints
+func HasApiEndpoints(serverName string) bool {
+	return serverName == InventoryMetadataServerName ||
+		serverName == InventoryResourceServerName ||
+		serverName == InventoryDeploymentManagerServerName ||
+		serverName == InventoryAlarmSubscriptionServerName
+}
 
-	if serverName == InventoryDeploymentManagerServerName {
+func GetDeploymentVolumes(serverName string) []corev1.Volume {
+	if HasApiEndpoints(serverName) {
 		return []corev1.Volume{
 			{
 				Name: "tls",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName: fmt.Sprintf("%s-tls", serverName),
-					},
-				},
-			},
-			{
-				Name: "authz",
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "authz"},
 					},
 				},
 			},
@@ -303,24 +290,11 @@ func GetDeploymentVolumes(serverName string) []corev1.Volume {
 }
 
 func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
-	if serverName == InventoryMetadataServerName || serverName == InventoryResourceServerName {
+	if HasApiEndpoints(serverName) {
 		return []corev1.VolumeMount{
 			{
 				Name:      "tls",
 				MountPath: "/secrets/tls",
-			},
-		}
-	}
-
-	if serverName == InventoryDeploymentManagerServerName {
-		return []corev1.VolumeMount{
-			{
-				Name:      "tls",
-				MountPath: "/secrets/tls",
-			},
-			{
-				Name:      "authz",
-				MountPath: "/configmaps/authz",
 			},
 		}
 	}

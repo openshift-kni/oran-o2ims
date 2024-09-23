@@ -782,6 +782,18 @@ spec:
           - update
           - watch
         - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        - apiGroups:
           - cluster.open-cluster-management.io
           resources:
           - managedclusters
@@ -1042,6 +1054,8 @@ spec:
                 env:
                 - name: IMAGE
                   value: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
+                - name: KUBE_RBAC_PROXY_IMAGE
+                  value: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
                 image: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
                 livenessProbe:
                   httpGet:
