@@ -1642,3 +1642,294 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 		Expect(isReadyForConfig).To(BeTrue())
 	})
 })
+
+var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
+	var (
+		dstClusterRequestInput map[string]any
+		srcConfigmap           map[string]any
+	)
+
+	BeforeEach(func() {
+		dstClusterRequestInput = make(map[string]any)
+		srcConfigmap = make(map[string]any)
+	})
+
+	It("should override only existing keys", func() {
+		dstClusterRequestInput = map[string]any{
+			"extraLabels": map[string]any{
+				"ManagedCluster": map[string]any{
+					"label1": "value1",
+				},
+			},
+			"extraAnnotations": map[string]any{
+				"ManagedCluster": map[string]any{
+					"annotation1": "value1",
+				},
+			},
+			"clusterName": "cluster-1",
+		}
+
+		srcConfigmap = map[string]any{
+			"extraLabels": map[string]any{
+				"ManagedCluster": map[string]any{
+					"label1": "new_value1", // Existing key in dst
+					"label2": "value2",     // New key, should be ignored
+				},
+			},
+			"extraAnnotations": map[string]any{
+				"ManagedCluster": map[string]any{
+					"annotation2": "value2", // New key, should be ignored
+				},
+			},
+		}
+
+		expected := map[string]any{
+			"extraLabels": map[string]any{
+				"ManagedCluster": map[string]any{
+					"label1": "new_value1", // Overridden
+				},
+			},
+			"extraAnnotations": map[string]any{
+				"ManagedCluster": map[string]any{
+					"annotation1": "value1",
+				},
+			},
+			"clusterName": "cluster-1",
+		}
+
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dstClusterRequestInput).To(Equal(expected))
+	})
+
+	It("should not add new resource types to dstClusterRequestInput", func() {
+		dstClusterRequestInput = map[string]any{
+			"extraLabels": map[string]any{
+				"ManagedCluster": map[string]any{
+					"label1": "value1",
+				},
+			},
+			"clusterName": "cluster-1",
+		}
+
+		srcConfigmap = map[string]any{
+			"extraLabels": map[string]any{
+				"AgentClusterInstall": map[string]any{
+					"label1": "value1", // New resource type, should be ignored
+				},
+			},
+		}
+
+		expected := map[string]any{
+			"extraLabels": map[string]any{
+				"ManagedCluster": map[string]any{
+					"label1": "value1", // Should remain unchanged
+				},
+			},
+			"clusterName": "cluster-1",
+		}
+
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dstClusterRequestInput).To(Equal(expected))
+	})
+
+	It("should not add extraLabels/extraAnnotations field if not found in ClusterRequestInput", func() {
+		dstClusterRequestInput = map[string]any{
+			"extraLabels": map[string]any{
+				"ManagedCluster": map[string]any{
+					"label1": "value1",
+				},
+			},
+			"clusterName": "cluster-1",
+		}
+
+		srcConfigmap = map[string]any{
+			"extraAnnotations": map[string]any{ // Field does not exist in dstClusterRequestInput
+				"ManagedCluster": map[string]any{
+					"annotation1": "value1",
+				},
+			},
+		}
+
+		expected := map[string]any{
+			"extraLabels": map[string]any{ // Should remain unchanged
+				"ManagedCluster": map[string]any{
+					"label1": "value1",
+				},
+			},
+			"clusterName": "cluster-1",
+		}
+
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dstClusterRequestInput).To(Equal(expected))
+	})
+
+	It("should merge nodes and handle nested labels/annotations", func() {
+		dstClusterRequestInput = map[string]any{
+			"clusterName": "cluster-1",
+			"nodes": []any{
+				map[string]any{
+					"hostName": "node1",
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "value1",
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation1": "value1",
+						},
+					},
+				},
+				map[string]any{
+					"hostName": "node2",
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label2": "value2",
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation2": "value2",
+						},
+					},
+				},
+			},
+		}
+
+		srcConfigmap = map[string]any{
+			"nodes": []any{
+				map[string]any{
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "new_value1", // Existing label, should be overridden
+							"label2": "value2",     // New label, should be ignored
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation2": "value2", // New annotation, should be ignored
+						},
+					},
+				},
+				map[string]any{
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "value1",     // New label, should be ignored
+							"label2": "new_value2", // Existing label, should be overridden
+						},
+					},
+				},
+			},
+		}
+
+		expected := map[string]any{
+			"clusterName": "cluster-1",
+			"nodes": []any{
+				map[string]any{
+					"hostName": "node1",
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "new_value1", // Overridden
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation1": "value1", // no change
+						},
+					},
+				},
+				map[string]any{
+					"hostName": "node2",
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label2": "new_value2", // Overridden
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation2": "value2",
+						},
+					},
+				},
+			},
+		}
+
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dstClusterRequestInput).To(Equal(expected))
+	})
+
+	It("should not add the new node to dstClusterRequestInput", func() {
+		dstClusterRequestInput = map[string]any{
+			"clusterName": "cluster-1",
+			"nodes": []any{
+				map[string]any{
+					"hostName": "node1",
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "value1",
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation1": "value1",
+						},
+					},
+				},
+			},
+		}
+
+		srcConfigmap = map[string]any{
+			"nodes": []any{
+				map[string]any{
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "new_value1", // Existing label, should be overridden
+							"label2": "value2",     // New label, should be ignored
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation2": "value2", // New annotation, should be ignored
+						},
+					},
+				},
+				// New node, should be ignored
+				map[string]any{
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "value1",
+							"label2": "value2",
+						},
+					},
+				},
+			},
+		}
+
+		expected := map[string]any{
+			"clusterName": "cluster-1",
+			"nodes": []any{
+				map[string]any{
+					"hostName": "node1",
+					"extraLabels": map[string]any{
+						"ManagedCluster": map[string]any{
+							"label1": "new_value1", // Overridden
+						},
+					},
+					"extraAnnotations": map[string]any{
+						"ManagedCluster": map[string]any{
+							"annotation1": "value1", // no change
+						},
+					},
+				},
+			},
+		}
+
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dstClusterRequestInput).To(Equal(expected))
+	})
+})

@@ -699,6 +699,73 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	return result, nil
 }
 
+// OverrideClusterInstanceLabelsOrAnnotations handles the overrides of ClusterInstance's extraLabels
+// or extraAnnotations. It overrides the values in the ClusterRequest with those from the default
+// configmap when the same labels/annotations exist in both. Labels/annotations that are not common
+// between the default configmap and ClusterRequest are ignored.
+func OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap map[string]any) error {
+	fields := []string{"extraLabels", "extraAnnotations"}
+
+	for _, field := range fields {
+		srcValue, existsSrc := srcConfigmap[field]
+		dstValue, existsDst := dstClusterRequestInput[field]
+		// Check only when both configmap and ClusterRequestInput contain the field
+		if existsSrc && existsDst {
+			dstMap, okDst := dstValue.(map[string]any)
+			srcMap, okSrc := srcValue.(map[string]any)
+			if !okDst || !okSrc {
+				return fmt.Errorf("type mismatch for field %s: (from ClusterRequest: %T, from default Configmap: %T)",
+					field, dstValue, srcValue)
+			}
+
+			// Iterate over the resource types (e.g., ManagedCluster, AgentClusterInstall)
+			// Check labels/annotations only if the resource exists in both
+			for resourceType, srcFields := range srcMap {
+				if dstFields, exists := dstMap[resourceType]; exists {
+					dstFieldsMap, okDstFields := dstFields.(map[string]any)
+					srcFieldsMap, okSrcFields := srcFields.(map[string]any)
+					if !okDstFields || !okSrcFields {
+						return fmt.Errorf("type mismatch for field %s: (from ClusterRequest: %T, from default Configmap: %T)",
+							field, dstValue, srcValue)
+					}
+
+					// Override ClusterRequestInput's values with defaults if the label/annotation key exists in both
+					for srcFieldKey, srcLabelValue := range srcFieldsMap {
+						if _, exists := dstFieldsMap[srcFieldKey]; exists {
+							oranUtilsLog.Info(fmt.Sprintf("%s.%s.%s found in both default configmap and clusterInstanceInput. "+
+								"Overriding it in ClusterInstanceInput with value %s from the default configmap.",
+								field, resourceType, srcFieldKey, srcLabelValue))
+							dstFieldsMap[srcFieldKey] = srcLabelValue
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Process label/annotation overrides for nodes
+	dstNodes, dstExists := dstClusterRequestInput["nodes"]
+	srcNodes, srcExists := srcConfigmap["nodes"]
+	if dstExists && srcExists {
+		// Determine the minimum length to merge
+		minLen := len(dstNodes.([]any))
+		if len(srcNodes.([]any)) < minLen {
+			minLen = len(srcNodes.([]any))
+		}
+
+		for i := 0; i < minLen; i++ {
+			if err := OverrideClusterInstanceLabelsOrAnnotations(
+				dstNodes.([]any)[i].(map[string]any),
+				srcNodes.([]any)[i].(map[string]any),
+			); err != nil {
+				return fmt.Errorf("type mismatch for nodes: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNamespace, targetNamespace string) error {
 	// Get the secret from the source namespace
 	secret := &corev1.Secret{}
