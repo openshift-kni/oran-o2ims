@@ -147,7 +147,8 @@
                         "mode": "auto",
                         "program": "${workspaceFolder}",
                         "env": {
-                                "KUBECONFIG": "${env:KUBECONFIG}"
+                                "KUBECONFIG": "${env:KUBECONFIG}",
+                                "IMAGE": "quay.io/openshift-kni/oran-o2ims-operator:latest"
                         },
                         "args": [
                                 "start",
