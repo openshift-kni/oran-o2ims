@@ -75,6 +75,9 @@ type ClusterDetails struct {
 	// Says if ZTP has complete or not.
 	ZtpStatus string `json:"ztpStatus,omitempty"`
 
+	// A timestamp indicating the cluster provisoning has started
+	ClusterProvisionStartedAt metav1.Time `json:"clusterProvisionStartedAt,omitempty"`
+
 	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
 	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
 }

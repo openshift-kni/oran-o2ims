@@ -593,6 +593,10 @@ var _ = Describe("ClusterRequestReconcile", func() {
 						Raw: []byte(testPolicyTemplateInput),
 					},
 				},
+				Timeout: oranv1alpha1.Timeout{
+					ClusterProvisioning: 1,
+					Configuration:       1,
+				},
 			},
 		}
 
@@ -987,7 +991,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(requeueWithMediumInterval()))
+			Expect(result).To(Equal(requeueWithLongInterval()))
 
 			reconciledCR := &oranv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
@@ -1005,6 +1009,55 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Status:  metav1.ConditionFalse,
 				Reason:  string(utils.CRconditionReasons.InProgress),
 				Message: "Provisioning cluster",
+			})
+			verifyStatusCondition(conditions[7], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
+				Message: "The Cluster is not yet ready",
+			})
+
+			// Verify the start timestamp has been set for ClusterInstance
+			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			// Verify the nonCompliantAt timestamp is not set, even though Non-compliant enforce policy exists
+			// but Cluster is not ready
+			Expect(reconciledCR.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+		})
+
+		It("Verify status conditions when ClusterInstance provision has timedout", func() {
+			// Initial reconciliation to populate ClusterProvisionStartedAt timestamp
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			cr := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
+			// Verify the start timestamp has been set for ClusterInstance
+			Expect(cr.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			// Verify the nonCompliantAt timestamp is not set, even though Non-compliant enforce policy exists
+			// but Cluster is not ready
+			Expect(cr.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+
+			// Patch ClusterProvisionStartedAt timestamp to mock timeout
+			cr.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{Name: "cluster-1"}
+			cr.Status.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			// Start reconciliation again
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue())) // stop reconciliation on ClusterProvision timeout
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify the ClusterRequest's status conditions
+			Expect(len(conditions)).To(Equal(8))
+			verifyStatusCondition(conditions[6], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionFalse,
+				Reason: string(utils.CRconditionReasons.TimedOut),
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
@@ -1053,6 +1106,11 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Reason:  string(utils.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
+
+			// Verify the start timestamp is not cleared even Cluster provision has completed
+			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			// Verify the nonCompliantAt timestamp is not set since enforce policy is compliant
+			Expect(reconciledCR.Status.ClusterDetails.NonCompliantAt).To(BeZero())
 		})
 
 		It("Verify status conditions when configuration change causes ClusterRequest validation to fail but ClusterInstance becomes provisioned", func() {
@@ -1076,7 +1134,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(requeueWithMediumInterval()))
+			Expect(result).To(Equal(requeueWithLongInterval()))
 
 			reconciledCR := &oranv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
@@ -1095,6 +1153,61 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
 				Reason: string(utils.CRconditionReasons.Completed),
+			})
+			verifyStatusCondition(conditions[7], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
+				Message: "The Cluster is not yet ready",
+			})
+
+			// Verify the start timestamp is not cleared even Cluster provision has completed
+			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			// Verify the nonCompliantAt timestamp is not set, even though Non-compliant enforce policy exists
+			// but Cluster is not ready
+			Expect(reconciledCR.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+		})
+
+		It("Verify status conditions when configuration change causes ClusterRequest validation to fail but ClusterProvision becomes timeout", func() {
+			// Initial reconciliation to populate initial status
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			cr := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
+			// Verify the start timestamp has been set for ClusterInstance
+			Expect(cr.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			// Patch ClusterProvisionStartedAt timestamp to mock timeout
+			cr.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{Name: "cluster-1"}
+			cr.Status.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			// Remove required field hostname to fail ClusterRequest validation
+			removeRequiredFieldFromClusterInstanceInput(ctx, c, crName, ctNamespace)
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue())) // stop reconciliation on ClusterProvision timeout
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			conditions := reconciledCR.Status.Conditions
+
+			// Verify that the Validated condition fails but ClusterProvisioned condition
+			// is also up-to-date with the current status timeout
+			Expect(len(conditions)).To(Equal(8))
+			verifyStatusCondition(conditions[0], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.Validated),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "nodes.0: hostName is required",
+			})
+			verifyStatusCondition(conditions[6], metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionFalse,
+				Reason: string(utils.CRconditionReasons.TimedOut),
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
@@ -2277,7 +2390,8 @@ defaultHugepagesSize: "1G"`,
 						},
 					},
 					Timeout: oranv1alpha1.Timeout{
-						Configuration: 1,
+						ClusterProvisioning: 1,
+						Configuration:       1,
 					},
 				},
 				Status: oranv1alpha1.ClusterRequestStatus{
@@ -2460,6 +2574,7 @@ defaultHugepagesSize: "1G"`,
 			metav1.ConditionFalse,
 			"",
 		)
+		CRTask.object.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
 
 		// Call the Reconciliation function.
@@ -2482,7 +2597,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
-		Expect(result.RequeueAfter).To(Equal(1 * time.Minute)) // Medium interval
+		Expect(result.RequeueAfter).To(Equal(5 * time.Minute)) // Long interval
 		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 		Expect(CRTask.object.Status.Policies).ToNot(BeEmpty())
 	})

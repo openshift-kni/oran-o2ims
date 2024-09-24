@@ -101,6 +101,11 @@ spec:
               clusterDetails:
                 description: ClusterDetails references to the ClusterInstance.
                 properties:
+                  clusterProvisionStartedAt:
+                    description: A timestamp indicating the cluster provisoning has
+                      started
+                    format: date-time
+                    type: string
                   name:
                     description: Contains the name of the created ClusterInstance.
                     type: string
