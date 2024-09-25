@@ -150,6 +150,7 @@ const (
 	UnitTestHwmgrID         = "hwmgr"
 	UnitTestHwmgrNamespace  = "hwmgr"
 	TempDellPluginNamespace = "dell-hwmgr"
+	DefaultPluginNamespace  = "oran-hwmgr-plugin"
 )
 
 // POD Container Names
@@ -162,4 +163,5 @@ const (
 const (
 	ServerImageName        = "IMAGE"
 	KubeRbacProxyImageName = "KUBE_RBAC_PROXY_IMAGE"
+	HwMgrPluginNameSpace   = "HWMGR_PLUGIN_NAMESPACE"
 )

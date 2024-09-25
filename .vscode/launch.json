@@ -148,7 +148,8 @@
                         "program": "${workspaceFolder}",
                         "env": {
                                 "KUBECONFIG": "${env:KUBECONFIG}",
-                                "IMAGE": "quay.io/openshift-kni/oran-o2ims-operator:latest"
+                                "IMAGE": "quay.io/openshift-kni/oran-o2ims-operator:latest",
+                                "HWMGR_PLUGIN_NAMESPACE": "oran-hwmgr-plugin"
                         },
                         "args": [
                                 "start",

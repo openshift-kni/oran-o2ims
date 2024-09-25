@@ -1890,10 +1890,11 @@ var _ = Describe("renderHardwareTemplate", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nodePool).ToNot(BeNil())
 		Expect(nodePool.ObjectMeta.Name).To(Equal(clusterInstance.GetName()))
-		Expect(nodePool.ObjectMeta.Namespace).To(Equal(cm.Data[utils.HwTemplatePluginMgr]))
+		Expect(nodePool.ObjectMeta.Namespace).To(Equal(utils.UnitTestHwmgrNamespace))
 		Expect(nodePool.Annotations[utils.HwTemplateBootIfaceLabel]).To(Equal(cm.Data[utils.HwTemplateBootIfaceLabel]))
 
 		Expect(nodePool.Spec.CloudID).To(Equal(clusterInstance.GetName()))
+		Expect(nodePool.Spec.HwMgrId).To(Equal(cm.Data[utils.HwTemplatePluginMgr]))
 		Expect(nodePool.Labels[clusterRequestNameLabel]).To(Equal(task.object.Name))
 		Expect(nodePool.Labels[clusterRequestNamespaceLabel]).To(Equal(task.object.Namespace))
 

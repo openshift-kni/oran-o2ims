@@ -42,6 +42,9 @@ type NodePoolSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	LocationSpec `json:",inline"`
 
+	// HwMgrId is the identifier for the hardware manager plugin adaptor.
+	HwMgrId string `json:"hwMgrId,omitempty"`
+
 	NodeGroup []NodeGroup `json:"nodeGroup"`
 }
 
@@ -57,6 +60,11 @@ type Properties struct {
 	NodeNames []string `json:"nodeNames,omitempty"`
 }
 
+// GenerationStatus represents the observed generation for an operator.
+type GenerationStatus struct {
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
 // NodePoolStatus describes the observed state of a request to allocate and prepare
 // a node that will eventually be part of a deployment manager.
 type NodePoolStatus struct {
@@ -66,6 +74,9 @@ type NodePoolStatus struct {
 	// Conditions represent the observations of the NodePool's current state.
 	// Possible values of the condition type are `Provisioned` and `Unknown`.
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+
+	CloudManager GenerationStatus `json:"cloudManager,omitempty"`
+	HwMgrPlugin  GenerationStatus `json:"hwMgrPlugin,omitempty"`
 }
 
 // NodePool is the schema for an allocation request of nodes

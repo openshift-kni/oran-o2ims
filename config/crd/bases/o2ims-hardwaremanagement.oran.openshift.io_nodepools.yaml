@@ -47,6 +47,10 @@ spec:
                   manager may want to use this to tag the nodes in its database, and to generate
                   statistics.
                 type: string
+              hwMgrId:
+                description: HwMgrId is the identifier for the hardware manager plugin
+                  adaptor.
+                type: string
               location:
                 description: Location
                 type: string
@@ -83,6 +87,14 @@ spec:
               NodePoolStatus describes the observed state of a request to allocate and prepare
               a node that will eventually be part of a deployment manager.
             properties:
+              cloudManager:
+                description: GenerationStatus represents the observed generation for
+                  an operator.
+                properties:
+                  observedGeneration:
+                    format: int64
+                    type: integer
+                type: object
               conditions:
                 description: |-
                   Conditions represent the observations of the NodePool's current state.
@@ -155,6 +167,14 @@ spec:
                   - type
                   type: object
                 type: array
+              hwMgrPlugin:
+                description: GenerationStatus represents the observed generation for
+                  an operator.
+                properties:
+                  observedGeneration:
+                    format: int64
+                    type: integer
+                type: object
               properties:
                 description: Properties represent the node properties in the pool
                 properties:
