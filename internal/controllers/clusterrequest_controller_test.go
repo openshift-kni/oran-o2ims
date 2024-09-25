@@ -1160,6 +1160,140 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			})
 		})
 	})
+
+	Context("When evaluating ZTP Done", func() {
+		var (
+			policy         *policiesv1.Policy
+			managedCluster *clusterv1.ManagedCluster
+		)
+
+		BeforeEach(func() {
+			policy = &policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: policiesv1.NonCompliant,
+				},
+			}
+			Expect(c.Create(ctx, policy)).To(Succeed())
+
+			managedCluster = &clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+				},
+				Spec: clusterv1.ManagedClusterSpec{
+					HubAcceptsClient: true,
+				},
+				Status: clusterv1.ManagedClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   clusterv1.ManagedClusterConditionAvailable,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   clusterv1.ManagedClusterConditionHubAccepted,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   clusterv1.ManagedClusterConditionJoined,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, managedCluster)).To(Succeed())
+
+			provisionedCond := metav1.Condition{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionFalse,
+			}
+			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
+			cr.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{}
+			cr.Status.ClusterDetails.Name = crName
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+		})
+
+		It("Sets the status to ZTP Not Done", func() {
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(requeueWithMediumInterval()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpNotDone))
+			conditions := reconciledCR.Status.Conditions
+			// Verify the ClusterRequest's status conditions
+			verifyStatusCondition(conditions[5], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.InProgress),
+				Message: "The configuration is still being applied",
+			})
+		})
+
+		It("Sets the status to ZTP Done", func() {
+			// Set the policies to compliant.
+			policy.Status.ComplianceState = policiesv1.Compliant
+			Expect(c.Status().Update(ctx, policy)).To(Succeed())
+			// Complete the cluster provisioning.
+			cr.Status.Conditions[0].Status = metav1.ConditionTrue
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			// Start reconciliation.
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result.
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			// Verify the ClusterRequest's status conditions
+			conditions := reconciledCR.Status.Conditions
+			verifyStatusCondition(conditions[5], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(utils.CRconditionReasons.Completed),
+				Message: "The configuration is up to date",
+			})
+		})
+
+		It("Keeps the ZTP status as ZTP Done if a policy becomes NonCompliant", func() {
+			cr.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			policy.Status.ComplianceState = policiesv1.NonCompliant
+			Expect(c.Status().Update(ctx, policy)).To(Succeed())
+			// Start reconciliation.
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result.
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(requeueWithMediumInterval()))
+
+			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			conditions := reconciledCR.Status.Conditions
+			// Verify the ClusterRequest's status conditions
+			verifyStatusCondition(conditions[5], metav1.Condition{
+				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.InProgress),
+				Message: "The configuration is still being applied",
+			})
+		})
+	})
 })
 
 var _ = Describe("getCrClusterTemplateRef", func() {
@@ -1846,8 +1980,8 @@ func verifyNodeStatus(c client.Client, ctx context.Context, nodes []*hwv1alpha1.
 
 var _ = Describe("policyManagement", func() {
 	var (
-		ctx          context.Context
 		c            client.Client
+		ctx          context.Context
 		CRReconciler *ClusterRequestReconciler
 		CRTask       *clusterRequestReconcilerTask
 		CTReconciler *ClusterTemplateReconciler
@@ -3423,13 +3557,8 @@ defaultHugepagesSize: "1G"`,
 		clusterRequest := &oranv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
-		err = CRReconciler.Client.Get(
-			context.TODO(),
-			types.NamespacedName{
-				Name:      "cluster-1",
-				Namespace: "clustertemplate-a-v4-16",
-			},
-			clusterRequest)
+		namespacedName := types.NamespacedName{Name: "cluster-1", Namespace: "clustertemplate-a-v4-16"}
+		err = c.Get(context.TODO(), namespacedName, clusterRequest)
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &clusterRequestReconcilerTask{
