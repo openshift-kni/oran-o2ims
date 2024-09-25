@@ -13,10 +13,10 @@ spec:
     clusterInstanceDefaults: clusterinstance-defaults-v1
     hwTemplate: hwtemplate-configmap-v1
     policyTemplateDefaults: policytemplate-defaults-v1
-  inputDataSchema:
-    policyTemplateSchema:
-      policyTemplateSchema:
-      description: policyTemplateSchema defines the available parameters for cluster configuration
+  templateParameterSchema:
+    policyTemplateParameters:
+      policyTemplateParameters:
+      description: policyTemplateParameters defines the available parameters for cluster configuration
       properties:
         sriov-network-vlan-1:
           type: string
@@ -28,7 +28,7 @@ spec:
           type: string
         cpu-isolated:
           type: string
-    clusterInstanceSchema:
+    clusterInstanceParameters:
       description: ClusterInstanceSpec defines the params that are allowed in the ClusterRequest spec.clusterInstanceInput
       properties:
         additionalNTPSources:

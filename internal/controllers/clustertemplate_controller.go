@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"log/slog"
@@ -40,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/google/uuid"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -149,8 +151,20 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (ctrl.Result, e
 func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Context) (bool, error) {
 	var validationErrs []string
 
+	// Validate the ClusterInstance name
+	err := validateName(t.client, t.object.Spec.HumanReadableName, t.object.Spec.Version, t.object.Name, t.object.Namespace)
+	if err != nil {
+		validationErrs = append(validationErrs, err.Error())
+	}
+
+	// Validate the ClusterInstance name
+	err = validateTemplateID(ctx, t.client, t.object)
+	if err != nil {
+		validationErrs = append(validationErrs, err.Error())
+	}
+
 	// Validate the HW template configmap
-	err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
+	err = validateConfigmapReference[[]hwv1alpha1.NodeGroup](
 		ctx, t.client,
 		t.object.Spec.Templates.HwTemplate,
 		utils.InventoryNamespace,
@@ -236,6 +250,70 @@ func validateConfigmapReference[T any](
 		}
 	}
 
+	return nil
+}
+
+// validateName return true if the ClusterTemplate name is the
+// format: <name>.<version>, false otherwise
+func validateName(c client.Client, name, version, metadataName, namespace string) error {
+	if metadataName != name+"."+version {
+		return utils.NewInputError("failed to validate ClusterTemplate name %s, should be in the format <spec.name>.<spec.version>: %s", metadataName, name+"."+version)
+	}
+
+	allClusterTemplates := &oranv1alpha1.ClusterTemplateList{}
+	err := c.List(context.Background(), allClusterTemplates)
+	if err != nil {
+		return fmt.Errorf("could not get list of ClusterTemplate across the cluster: %w", err)
+	}
+
+	sameNameVersion := map[string]bool{}
+	sameMetadataName := map[string]bool{}
+	for _, aClusterTemplate := range allClusterTemplates.Items {
+		if aClusterTemplate.Namespace == namespace {
+			continue
+		}
+		if aClusterTemplate.Name == metadataName {
+			sameMetadataName[aClusterTemplate.Namespace] = true
+		}
+		if aClusterTemplate.Spec.HumanReadableName == name &&
+			aClusterTemplate.Spec.Version == version {
+			sameNameVersion[aClusterTemplate.Namespace] = true
+		}
+	}
+	if len(sameMetadataName) != 0 {
+		return utils.NewInputError("failed to validate ClusterTemplate name %s, a identical name already exists in namespaces: %s",
+			metadataName, sliceToString(mapKeysToSlice(sameMetadataName)))
+	}
+	if len(sameMetadataName) != 0 {
+		return utils.NewInputError("failed to validate ClusterTemplate name %s, the combination of <spec.name>.<spec.version>: %s already exists in namespace: %s",
+			metadataName, name+"."+version, sliceToString(mapKeysToSlice(sameNameVersion)))
+	}
+	return nil
+}
+
+// validateName return true if the ClusterTemplate name is the
+// format: <name>.<version>, false otherwise
+func validateTemplateID(ctx context.Context, c client.Client, object *provisioningv1alpha1.ClusterTemplate) error {
+	if object.Spec.TemplateID != "" {
+		_, err := uuid.Parse(object.Spec.TemplateID)
+		if err != nil {
+			return utils.NewInputError("failed to validate templateID, invalid UUID:%s", object.Spec.TemplateID)
+		}
+		return nil
+	}
+
+	newID := uuid.New()
+	newTemplate := object
+	newTemplate.Spec.TemplateID = newID.String()
+
+	err := utils.CreateK8sCR(ctx, c, newTemplate, object, utils.PATCH)
+	if err != nil {
+		return fmt.Errorf("failed to patch templateID in ClusterTemplate %s: %w", object.Name, err)
+	}
+	err = c.Get(ctx, types.NamespacedName{Name: object.Name, Namespace: object.Namespace}, object)
+	if err != nil {
+		return fmt.Errorf("failed to get updated ClusterTemplate %s: %w", object.Name, err)
+	}
 	return nil
 }
 
@@ -338,4 +416,25 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 		}
 	}
 	return requests
+}
+
+// mapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
+func mapKeysToSlice(inputMap map[string]bool) []string {
+	keys := make([]string, 0, len(inputMap))
+	for key := range inputMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// sliceToString takes a slice of strings an returns a comma separated string including the slice content
+func sliceToString(aSlice []string) (out string) {
+	if len(aSlice) != 0 {
+		out += aSlice[0]
+		for _, aString := range aSlice[1:] {
+			out += ", " + aString
+		}
+	}
+	return out
 }

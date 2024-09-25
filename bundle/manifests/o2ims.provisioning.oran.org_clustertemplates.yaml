@@ -39,29 +39,61 @@ spec:
           spec:
             description: ClusterTemplateSpec defines the desired state of ClusterTemplate
             properties:
-              inputDataSchema:
-                description: InputDataSchema encapsulates all the schemas required
-                  for ClusterTemplate.
+              characteristics:
+                additionalProperties:
+                  type: string
+                description: Characteristics defines a List of key/value pairs describing
+                  characteristics associated with the template.>
+                type: object
+              description:
+                description: Description defines a Human readable description of the
+                  Template.
+                type: string
+              metadata:
+                additionalProperties:
+                  type: string
+                description: Metadata  defines a List of key/value pairs describing
+                  metadata associated with the template.>
+                type: object
+              name:
+                description: HumanReadableName defines a Human readable name of the
+                  Template.
+                type: string
+              templateID:
+                description: TemplateID defines a Identifier for the O-Cloud Template.
+                  This identifier is allocated by the O-Cloud.>
+                type: string
+              templateParameterSchema:
+                description: TemplateParameterSchema encapsulates all the schemas
+                  required for ClusterTemplate.
                 properties:
-                  clusterInstanceSchema:
+                  clusterInstanceParameters:
                     description: |-
-                      ClusterInstanceSchema defines the subschema of ClusterInstance parameters that
+                      ClusterInstanceParameters defines the subschema of ClusterInstance parameters that
                       are allowed in the ClusterRequest's spec.clusterTemplateInput.clusterInstanceInput.
                       The parameter definitions should follow the OpenAPI V3 schema and explicitly define
                       the parameter type and required fields. This schema will be used to validate the
                       ClusterInstanceInput provided in a ClusterRequest.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  policyTemplateSchema:
+                  nodeClusterName:
+                    description: NodeClusterName identifies a cluster node.>
+                    type: string
+                  oCloudSiteId:
+                    description: OCloudSiteId identifies a cloud site.>
+                    type: string
+                  policyTemplateParameters:
                     description: |-
-                      PolicyTemplateSchema defines the parameters required for ACM policies.
+                      PolicyTemplateParameters defines the parameters required for ACM policies.
                       The parameter definitions should follow the OpenAPI V3 schema and
                       explicitly define required fields.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                 required:
-                - clusterInstanceSchema
-                - policyTemplateSchema
+                - clusterInstanceParameters
+                - nodeClusterName
+                - oCloudSiteId
+                - policyTemplateParameters
                 type: object
               templates:
                 description: Templates defines the references to the templates required
@@ -86,9 +118,15 @@ spec:
                 - hwTemplate
                 - policyTemplateDefaults
                 type: object
+              version:
+                description: Version defines a version or generation of the resource
+                  as defined by its provider.>
+                type: string
             required:
-            - inputDataSchema
+            - name
+            - templateParameterSchema
             - templates
+            - version
             type: object
           status:
             description: ClusterTemplateStatus defines the observed state of ClusterTemplate

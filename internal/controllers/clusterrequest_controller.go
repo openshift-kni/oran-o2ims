@@ -390,7 +390,7 @@ func (t *clusterRequestReconcilerTask) validateClusterRequestCR(ctx context.Cont
 		return utils.NewInputError("failed to get the ClusterTemplate input for ClusterInstance: %s", err.Error())
 	}
 	err = t.validateClusterTemplateInputMatchesSchema(
-		&clusterTemplate.Spec.InputDataSchema.ClusterInstanceSchema,
+		&clusterTemplate.Spec.TemplateParameterSchema.ClusterInstanceParameters,
 		clusterTemplateInputMap,
 		utils.ClusterInstanceDataType)
 	if err != nil {
@@ -408,7 +408,7 @@ func (t *clusterRequestReconcilerTask) validateClusterRequestCR(ctx context.Cont
 		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
 	err = t.validateClusterTemplateInputMatchesSchema(
-		&clusterTemplate.Spec.InputDataSchema.PolicyTemplateSchema,
+		&clusterTemplate.Spec.TemplateParameterSchema.PolicyTemplateParameters,
 		mergedPolicyTemplateData,
 		utils.PolicyTemplateDataType)
 	if err != nil {
@@ -1598,7 +1598,7 @@ func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Conte
 }
 
 // validateClusterTemplateInputMatchesSchema validates if the given clusterTemplateInput matches the
-// provided inputDataSchema of the ClusterTemplate
+// provided templateParameterSchema of the ClusterTemplate
 func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema(
 	clusterTemplateInputSchema *runtime.RawExtension, clusterTemplateInput map[string]any, dataType string) error {
 	// Get the schema
@@ -1611,7 +1611,7 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema
 		utils.DisallowUnknownFieldsInSchema(schemaMap)
 	}
 
-	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
+	// Check that the clusterTemplateInput matches the templateParameterSchema from the ClusterTemplate.
 	clusterTemplateRefName := getClusterTemplateRefName(
 		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
 	err = utils.ValidateJsonAgainstJsonSchema(

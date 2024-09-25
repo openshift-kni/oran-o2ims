@@ -552,16 +552,18 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				HumanReadableName: tName,
+				Version:           tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				InputDataSchema: provisioningv1alpha1.InputDataSchema{
-					ClusterInstanceSchema: runtime.RawExtension{
+				TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
+					ClusterInstanceParameters: runtime.RawExtension{
 						Raw: []byte(testClusterTemplateSchema),
 					},
-					PolicyTemplateSchema: runtime.RawExtension{
+					PolicyTemplateParameters: runtime.RawExtension{
 						Raw: []byte(testPolicyTemplateSchema),
 					},
 				},
@@ -1476,16 +1478,18 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		// Define the cluster template.
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "other-cluster-template-name",
+				Name:      "other-cluster-template-name.v1.0.0",
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				HumanReadableName: "other-cluster-template-name",
+				Version:           "v1.0.0",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				InputDataSchema: provisioningv1alpha1.InputDataSchema{
-					ClusterInstanceSchema: runtime.RawExtension{},
+				TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
+					ClusterInstanceParameters: runtime.RawExtension{},
 				},
 			},
 		}
@@ -1509,12 +1513,14 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				HumanReadableName: tName,
+				Version:           tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				InputDataSchema: provisioningv1alpha1.InputDataSchema{
-					ClusterInstanceSchema: runtime.RawExtension{},
+				TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
+					ClusterInstanceParameters: runtime.RawExtension{},
 				},
 			},
 		}
@@ -1857,6 +1863,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				HumanReadableName: tName,
+				Version:           tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					HwTemplate: hwTemplateCm,
 				},
@@ -2383,18 +2391,20 @@ var _ = Describe("policyManagement", func() {
 					Namespace: ctNamespace,
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					HumanReadableName: tName,
+					Version:           tVersion,
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwTemplate:              hwTemplateCm,
 					},
-					InputDataSchema: provisioningv1alpha1.InputDataSchema{
+					TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
 						// APIserver has enforced the validation for this field who holds
 						// the arbirary JSON data
-						ClusterInstanceSchema: runtime.RawExtension{
+						ClusterInstanceParameters: runtime.RawExtension{
 							Raw: []byte(testClusterTemplateSchema),
 						},
-						PolicyTemplateSchema: runtime.RawExtension{
+						PolicyTemplateParameters: runtime.RawExtension{
 							Raw: []byte(testPolicyTemplateSchema),
 						},
 					},

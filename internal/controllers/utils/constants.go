@@ -74,7 +74,7 @@ const (
 	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
 	ClusterInstanceTemplateConfigmapName        = "sc-clusterinstance-template"
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
-	ClusterInstanceSchema                       = "clusterInstanceSchema"
+	clusterInstanceParameters                   = "clusterInstanceParameters"
 )
 
 var (
@@ -103,7 +103,7 @@ var (
 // PolicyTemplate constants
 const (
 	PolicyTemplateDefaultsConfigmapKey = "policytemplate-defaults"
-	PolicyTemplateSchema               = "policyTemplateSchema"
+	PolicyTemplateParameters           = "policyTemplateParameters"
 	ClusterVersionLabelKey             = "cluster-version"
 )
 
