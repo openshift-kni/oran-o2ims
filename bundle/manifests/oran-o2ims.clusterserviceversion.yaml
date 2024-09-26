@@ -189,8 +189,9 @@ metadata:
                 "sriov-network-vlan-2": "111"
               }
             },
-            "clusterTemplateRef": "clustertemplate-sample",
             "site": "local",
+            "templateName": "clustertemplate-sample",
+            "templateVersion": "v1.0.0",
             "timeout": {
               "clusterProvisioning": 80,
               "configuration": 40,
@@ -209,7 +210,7 @@ metadata:
               "app.kubernetes.io/name": "clustertemplate",
               "app.kubernetes.io/part-of": "oran-o2ims"
             },
-            "name": "clustertemplate-sample"
+            "name": "clustertemplate-sample.v1.0.0"
           },
           "spec": {
             "inputDataSchema": {
@@ -514,10 +515,6 @@ spec:
         path: clusterTemplateInput
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Cluster Template Reference
-        path: clusterTemplateRef
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: Location
         displayName: Location
         path: location
@@ -526,6 +523,20 @@ spec:
       - description: Site
         displayName: Site
         path: site
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TemplateName defines the base name of the referenced ClusterTemplate.
+          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+        displayName: Template Name
+        path: templateName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TemplateVersion defines the version of the referenced ClusterTemplate.
+          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+        displayName: Template Version
+        path: templateVersion
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Timeout

@@ -14,7 +14,8 @@ spec:
     clusterProvisioning: 80
     configuration: 40
     hardwareProvisioning: 60
-  clusterTemplateRef: clustertemplate-sample
+  templateName: clustertemplate-sample
+  templateVersion: v1.0.0
   clusterTemplateInput:
     policyTemplateInput:
       sriov-network-vlan-1: "114"

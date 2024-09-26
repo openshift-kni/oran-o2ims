@@ -33,8 +33,15 @@ type ClusterRequestSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	hwv1alpha1.LocationSpec `json:",inline"`
 
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Template Reference",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ClusterTemplateRef string `json:"clusterTemplateRef"`
+	// TemplateName defines the base name of the referenced ClusterTemplate.
+	// The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TemplateName string `json:"templateName"`
+
+	// TemplateVersion defines the version of the referenced ClusterTemplate.
+	// The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TemplateVersion string `json:"templateVersion"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Template Input",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	ClusterTemplateInput ClusterTemplateInput `json:"clusterTemplateInput"`

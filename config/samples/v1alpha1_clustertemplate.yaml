@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: oran-o2ims
-  name: clustertemplate-sample
+  name: clustertemplate-sample.v1.0.0
 spec:
   templates:
     clusterInstanceDefaults: clusterinstance-defaults-v1

@@ -125,10 +125,6 @@ spec:
         path: clusterTemplateInput
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Cluster Template Reference
-        path: clusterTemplateRef
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: Location
         displayName: Location
         path: location
@@ -137,6 +133,20 @@ spec:
       - description: Site
         displayName: Site
         path: site
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TemplateName defines the base name of the referenced ClusterTemplate.
+          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+        displayName: Template Name
+        path: templateName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TemplateVersion defines the version of the referenced ClusterTemplate.
+          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+        displayName: Template Version
+        path: templateVersion
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Timeout
