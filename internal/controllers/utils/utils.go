@@ -19,6 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	sprig "github.com/go-task/slim-sprig/v3"
+	diff "github.com/r3labs/diff/v3"
 	"github.com/xeipuuv/gojsonschema"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
@@ -816,6 +817,64 @@ func CheckClusterLabelsForPolicies(
 		)
 	}
 	return nil
+}
+
+// FindClusterInstanceImmutableFieldUpdates identifies updates made to immutable fields
+// in the ClusterInstance spec. It returns two lists of paths: a list of updated fields
+// that are considered immutable and should not be modified and a list of fields related
+// to node scaling, indicating nodes that were added or removed.
+func FindClusterInstanceImmutableFieldUpdates(
+	oldClusterInstance, newClusterInstance *unstructured.Unstructured) ([]string, []string, error) {
+
+	oldClusterInstanceSpec := oldClusterInstance.Object["spec"].(map[string]any)
+	newClusterInstanceSpec := newClusterInstance.Object["spec"].(map[string]any)
+
+	diffs, err := diff.Diff(oldClusterInstanceSpec, newClusterInstanceSpec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error comparing differences between existing "+
+			"and newly rendered ClusterInstance: %w", err)
+	}
+
+	var updatedFields []string
+	var scalingNodes []string
+	for _, diff := range diffs {
+		/* Examples of diff result in json format
+
+		Label added at the cluster-level
+		  {"type": "create", "path": ["extraLabels", "ManagedCluster", "newLabelKey"], "from": null, "to": "newLabelValue"}
+
+		Field updated at the cluster-level
+		  {"type": "update", "path": ["baseDomain"], "from": "domain.example.com", "to": "newdomain.example.com"}
+
+		New node added
+		  {"type": "create", "path": ["nodes", "1"], "from": null, "to": {"hostName": "worker2"}}
+
+		Existing node removed
+		  {"type": "delete", "path": ["nodes", "1"], "from": {"hostName": "worker2"}, "to": null}
+
+		Field updated at the node-level
+		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
+		*/
+
+		oranUtilsLog.Info(
+			fmt.Sprintf(
+				"Detected field change in the newly rendered ClusterInstance(%s) type: %s, path: %s, from: %+v, to: %+v",
+				oldClusterInstance.GetName(), diff.Type, strings.Join(diff.Path, "."), diff.From, diff.To,
+			),
+		)
+
+		if diff.Path[0] == "nodes" {
+			if len(diff.Path) == 2 {
+				scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
+			} else if len(diff.Path) > 2 && !slices.Contains(AllowedClusterInstanceNodeFields, diff.Path[2]) {
+				updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
+			}
+		} else if !slices.Contains(AllowedClusterInstanceClusterFields, diff.Path[0]) {
+			updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
+		}
+	}
+
+	return updatedFields, scalingNodes, nil
 }
 
 // GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting

@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 )
 
 type expectedNodeDetails struct {
@@ -246,13 +247,13 @@ const (
 		  "NTP.server1"
 		],
 		"apiVIPs": [
-		  "10.16.231.1"
+		  "192.0.2.2"
 		],
 		"baseDomain": "example.com",
 		"clusterName": "cluster-1",
 		"machineNetwork": [
 		  {
-			"cidr": "10.16.231.0/24"
+			"cidr": "192.0.2.0/24"
 		  }
 		],
 		"extraAnnotations": {
@@ -269,11 +270,11 @@ const (
 		  }
 		},
 		"ingressVIPs": [
-		  "10.16.231.2"
+		  "192.0.2.4"
 		],
 		"nodes": [
 		  {
-			"bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
+			"bmcAddress": "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
 			"bmcCredentialsName": {
 			  "name": "site-sno-du-1-bmc-secret"
 			},
@@ -292,7 +293,7 @@ const (
 				"dns-resolver": {
 				  "config": {
 					"server": [
-					  "10.19.42.41"
+					  "192.0.2.22"
 					]
 				  }
 				},
@@ -301,15 +302,15 @@ const (
 					"ipv4": {
 					  "address": [
 						{
-						  "ip": "10.16.231.3",
+						  "ip": "192.0.2.10",
 						  "prefix-length": 24
 						},
 						{
-						  "ip": "10.16.231.28",
+						  "ip": "192.0.2.11",
 						  "prefix-length": 24
 						},
 						{
-						  "ip": "10.16.231.31",
+						  "ip": "192.0.2.12",
 						  "prefix-length": 24
 						}
 					  ],
@@ -319,16 +320,16 @@ const (
 					"ipv6": {
 					  "address": [
 						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:601",
-						  "prefix-length": 64
+						  "ip": "2001:db8:0:1::42",
+						  "prefix-length": 32
 						},
 						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:602",
-						  "prefix-length": 64
+						  "ip": "2001:db8:0:1::43",
+						  "prefix-length": 32
 						},
 						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:603",
-						  "prefix-length": 64
+						  "ip": "2001:db8:0:1::44",
+						  "prefix-length": 32
 						}
 					  ],
 					  "dhcp": false,
@@ -341,7 +342,7 @@ const (
 					"ipv6": {
 					  "address": [
 						{
-						  "ip": "2620:52:0:1302::100"
+						  "ip": "2001:db8:abcd:1234::1"
 						}
 					  ],
 					  "enabled": true,
@@ -366,7 +367,7 @@ const (
 				  "config": [
 					{
 					  "destination": "0.0.0.0/0",
-					  "next-hop-address": "10.16.231.254",
+					  "next-hop-address": "192.0.2.254",
 					  "next-hop-interface": "eno1",
 					  "table-id": 254
 					}
@@ -392,7 +393,7 @@ const (
 		],
 		"serviceNetwork": [
 		  {
-			"cidr": "172.30.0.0/16"
+			"cidr": "233.252.0.0/24"
 		  }
 		],
 		"sshPublicKey": "ssh-rsa "
@@ -1255,6 +1256,175 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		Expect(retCt.Namespace).To(Equal(ctNamespace))
 		Expect(retCt.Spec.Templates.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
 		Expect(retCt.Spec.Templates.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
+	})
+})
+
+var _ = Describe("handleRenderClusterInstance", func() {
+	var (
+		ctx          context.Context
+		c            client.Client
+		reconciler   *ClusterRequestReconciler
+		task         *clusterRequestReconcilerTask
+		cr           *oranv1alpha1.ClusterRequest
+		ciDefaultsCm = "clusterinstance-defaults-v1"
+		ctName       = "clustertemplate-a-v1"
+		ctNamespace  = "clustertemplate-a-v4-16"
+		crName       = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		// Define the cluster request.
+		cr = &oranv1alpha1.ClusterRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterRequestSpec{
+				ClusterTemplateRef: ctName,
+				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+					ClusterInstanceInput: runtime.RawExtension{Raw: []byte(testClusterTemplateInput)},
+				},
+			},
+		}
+
+		// Define the cluster template.
+		ct := &oranv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ctName,
+				Namespace: ctNamespace,
+			},
+			Spec: oranv1alpha1.ClusterTemplateSpec{
+				Templates: oranv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+				},
+			},
+		}
+		// Configmap for ClusterInstance defaults
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ciDefaultsCm,
+				Namespace: ctNamespace,
+			},
+			Data: map[string]string{
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.15"
+pullSecretRef:
+  name: "pull-secret"
+holdInstallation: false
+templateRefs:
+  - name: "ai-cluster-templates-v1"
+    namespace: "siteconfig-operator"
+nodes:
+- hostname: "node1"
+  ironicInspect: ""
+  templateRefs:
+    - name: "ai-node-templates-v1"
+      namespace: "siteconfig-operator"`,
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr, ct, cm}...)
+		reconciler = &ClusterRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &clusterRequestReconcilerTask{
+			logger:       reconciler.Logger,
+			client:       reconciler.Client,
+			object:       cr,
+			clusterInput: &clusterInput{},
+		}
+
+		mergedClusterInstanceData, err := task.getMergedClusterInputData(ctx, ct, utils.ClusterInstanceDataType)
+		Expect(err).ToNot(HaveOccurred())
+		task.clusterInput.clusterInstanceData = mergedClusterInstanceData
+	})
+
+	It("should successfully render and validate ClusterInstance with dry-run", func() {
+		renderedClusterInstance, err := task.handleRenderClusterInstance(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(renderedClusterInstance).ToNot(BeNil())
+
+		// Check if status condition was updated correctly
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(utils.CRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(utils.CRconditionReasons.Completed),
+			Message: "ClusterInstance rendered and passed dry-run validation",
+		})
+	})
+
+	It("should fail to render ClusterInstance due to invalid input", func() {
+		// Modify input data to be invalid
+		task.clusterInput.clusterInstanceData["clusterName"] = ""
+		_, err := task.handleRenderClusterInstance(ctx)
+		Expect(err).To(HaveOccurred())
+
+		// Check if status condition was updated correctly
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(utils.CRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(utils.CRconditionReasons.Failed),
+			Message: "spec.clusterName cannot be empty",
+		})
+	})
+
+	It("should detect updates to immutable fields and fail rendering", func() {
+		// Simulate that the ClusterInstance has been provisioned
+		task.object.Status.Conditions = []metav1.Condition{
+			{
+				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			},
+		}
+
+		oldSpec := make(map[string]any)
+		newSpec := make(map[string]any)
+		data, err := yaml.Marshal(task.clusterInput.clusterInstanceData)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(yaml.Unmarshal(data, &oldSpec)).To(Succeed())
+		Expect(yaml.Unmarshal(data, &newSpec)).To(Succeed())
+
+		clusterInstanceObj := map[string]any{
+			"Cluster": task.clusterInput.clusterInstanceData,
+		}
+		oldClusterInstance, err := utils.RenderTemplateForK8sCR(
+			utils.ClusterInstanceTemplateName, utils.ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(c.Create(ctx, oldClusterInstance)).To(Succeed())
+
+		// Update the cluster data with modified field
+		// Change an immutable field at the cluster-level
+		newSpec["baseDomain"] = "newdomain.example.com"
+		task.clusterInput.clusterInstanceData = newSpec
+
+		_, err = task.handleRenderClusterInstance(ctx)
+		Expect(err).To(HaveOccurred())
+
+		// Note that the detected changed fields in this unittest include nodes.0.ironicInspect, baseDomain,
+		// and holdInstallation, even though nodes.0.ironicInspect and holdInstallation were not actually changed.
+		// This is due to the difference between the fakeclient and a real cluster. When applying a manifest
+		// to a cluster, the API server preserves the full resource, including optional fields with empty values.
+		// However, the fakeclient in unittests behaves differently, as it uses an in-memory store and
+		// does not go through the API server. As a result, fields with empty values like false or "" are
+		// stripped from the retrieved ClusterInstance CR (existing ClusterInstance) in the fakeclient.
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(utils.CRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(utils.CRconditionReasons.Failed),
+			Message: "Failed to render and validate ClusterInstance: detected changes in immutable fields",
+		})
 	})
 })
 
