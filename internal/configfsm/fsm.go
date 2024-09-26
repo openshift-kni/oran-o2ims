@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/qmuntal/stateless"
 )
 
@@ -12,45 +13,46 @@ type Trigger string
 
 const (
 	// Transitions to Missing state
-	StartToMissing           Trigger = "Start->Missing"
-	ClusterNotReadyToMissing Trigger = "ClusterNotReady->Missing"
+	StartToMissing           Trigger = Trigger(Start + To + Missing)
+	ClusterNotReadyToMissing Trigger = Trigger(ClusterNotReady + To + Missing)
 
 	// Transitions to ClusterNotReady state
-	MissingToClusterNotReady    Trigger = "Missing->ClusterNotReady"
-	InProgressToClusterNotReady Trigger = "InProgress->ClusterNotReady"
+	MissingToClusterNotReady    Trigger = Trigger(Missing + To + ClusterNotReady)
+	InProgressToClusterNotReady Trigger = Trigger(InProgress + To + ClusterNotReady)
 
 	// Transitions to InProgress state
-	ClusterNotReadyToInProgress Trigger = "ClusterNotReady->InProgress"
-	OutOfDateToInProgress       Trigger = "OutOfDate->InProgress"
-	CompletedToInProgress       Trigger = "Completed->InProgress"
-	TimedOutToInProgress        Trigger = "TimedOut->InProgress"
+	ClusterNotReadyToInProgress Trigger = Trigger(ClusterNotReady + To + InProgress)
+	OutOfDateToInProgress       Trigger = Trigger(OutOfDate + To + InProgress)
+	CompletedToInProgress       Trigger = Trigger(Completed + To + InProgress)
+	TimedOutToInProgress        Trigger = Trigger(TimedOut + To + InProgress)
 
 	// Transitions to TimedOut state
-	ClusterNotReadyToTimedOut Trigger = "ClusterNotReady->TimedOut"
-	InProgressToTimedOut      Trigger = "InProgress->TimedOut"
+	ClusterNotReadyToTimedOut Trigger = Trigger(ClusterNotReady + To + TimedOut)
+	InProgressToTimedOut      Trigger = Trigger(InProgress + To + TimedOut)
 
 	// Transitions to Completed state
-	InProgressToCompleted Trigger = "InProgress->Completed"
+	InProgressToCompleted Trigger = Trigger(InProgress + To + Completed)
 
 	// Transitions to OutOfDate state
-	InProgressToOutOfDate Trigger = "InProgress->OutOfDate"
+	InProgressToOutOfDate Trigger = Trigger(InProgress + To + OutOfDate)
 
 	// Self transitions
-	MissingToMissing                 Trigger = "Missing->Missing"
-	ClusterNotReadyToClusterNotReady Trigger = "ClusterNotReady->ClusterNotReady"
-	InProgressToInProgress           Trigger = "InProgress->InProgress"
-	TimedOutToTimedOut               Trigger = "TimedOut->TimedOut"
-	CompletedToCompleted             Trigger = "Completed->Completed"
-	OutOfDateToOutOfDate             Trigger = "OutOfDate->OutOfDate"
+	MissingToMissing                 Trigger = Trigger(Missing + To + Missing)
+	ClusterNotReadyToClusterNotReady Trigger = Trigger(ClusterNotReady + To + ClusterNotReady)
+	InProgressToInProgress           Trigger = Trigger(InProgress + To + InProgress)
+	TimedOutToTimedOut               Trigger = Trigger(TimedOut + To + TimedOut)
+	CompletedToCompleted             Trigger = Trigger(Completed + To + Completed)
+	OutOfDateToOutOfDate             Trigger = Trigger(OutOfDate + To + OutOfDate)
 
 	// States
-	Missing         = "Missing"
 	Start           = "Start"
-	ClusterNotReady = "ClusterNotReady"
-	InProgress      = "InProgress"
-	TimedOut        = "TimedOut"
-	Completed       = "Completed"
-	OutOfDate       = "OutOfDate"
+	Missing         = string(utils.Missing)
+	ClusterNotReady = string(utils.ClusterNotReady)
+	InProgress      = string(utils.InProgress)
+	TimedOut        = string(utils.TimedOut)
+	Completed       = string(utils.Completed)
+	OutOfDate       = string(utils.OutOfDate)
+	To              = "->"
 )
 
 // RunFSM Runs the state machine as much as it can by triggering all Self transitions

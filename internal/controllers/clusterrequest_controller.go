@@ -324,7 +324,7 @@ func (t *clusterRequestReconcilerTask) handleValidation(ctx context.Context) err
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.Validated,
-			utils.CRconditionReasons.Failed,
+			utils.Failed,
 			metav1.ConditionFalse,
 			"Failed to validate the ClusterRequest: "+err.Error(),
 		)
@@ -336,7 +336,7 @@ func (t *clusterRequestReconcilerTask) handleValidation(ctx context.Context) err
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.Validated,
-			utils.CRconditionReasons.Completed,
+			utils.Completed,
 			metav1.ConditionTrue,
 			"The cluster request validation succeeded",
 		)
@@ -475,7 +475,7 @@ func (t *clusterRequestReconcilerTask) handleRenderClusterInstance(ctx context.C
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ClusterInstanceRendered,
-			utils.CRconditionReasons.Failed,
+			utils.Failed,
 			metav1.ConditionFalse,
 			"Failed to render and validate ClusterInstance: "+err.Error(),
 		)
@@ -488,7 +488,7 @@ func (t *clusterRequestReconcilerTask) handleRenderClusterInstance(ctx context.C
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ClusterInstanceRendered,
-			utils.CRconditionReasons.Completed,
+			utils.Completed,
 			metav1.ConditionTrue,
 			"ClusterInstance rendered and passed dry-run validation",
 		)
@@ -609,7 +609,7 @@ func (t *clusterRequestReconcilerTask) handleClusterResources(ctx context.Contex
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ClusterResourcesCreated,
-			utils.CRconditionReasons.Failed,
+			utils.Failed,
 			metav1.ConditionFalse,
 			"Failed to apply the required cluster resource: "+err.Error(),
 		)
@@ -622,7 +622,7 @@ func (t *clusterRequestReconcilerTask) handleClusterResources(ctx context.Contex
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ClusterResourcesCreated,
-			utils.CRconditionReasons.Completed,
+			utils.Completed,
 			metav1.ConditionTrue,
 			"Cluster resources applied",
 		)
@@ -647,7 +647,7 @@ func (t *clusterRequestReconcilerTask) renderHardwareTemplate(ctx context.Contex
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.HardwareTemplateRendered,
-			utils.CRconditionReasons.Failed,
+			utils.Failed,
 			metav1.ConditionFalse,
 			"Failed to render the Hardware template: "+err.Error(),
 		)
@@ -660,7 +660,7 @@ func (t *clusterRequestReconcilerTask) renderHardwareTemplate(ctx context.Contex
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.HardwareTemplateRendered,
-			utils.CRconditionReasons.Completed,
+			utils.Completed,
 			metav1.ConditionTrue,
 			"Rendered Hardware template successfully",
 		)
@@ -874,7 +874,7 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 		}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ClusterInstanceProcessed,
-			utils.CRconditionReasons.NotApplied,
+			utils.NotApplied,
 			metav1.ConditionFalse,
 			fmt.Sprintf(
 				"Failed to apply the rendered ClusterInstance (%s): %s",
@@ -1028,7 +1028,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstanceProcessedStatus(ci *
 	if len(ci.Status.Conditions) == 0 {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.CRconditionTypes.ClusterInstanceProcessed,
-			utils.CRconditionReasons.Unknown,
+			utils.Unknown,
 			metav1.ConditionUnknown,
 			fmt.Sprintf("Waiting for ClusterInstance (%s) to be processed", ci.Name),
 		)
@@ -1051,7 +1051,7 @@ func (t *clusterRequestReconcilerTask) updateClusterInstanceProcessedStatus(ci *
 
 	utils.SetStatusCondition(&t.object.Status.Conditions,
 		utils.CRconditionTypes.ClusterInstanceProcessed,
-		utils.CRconditionReasons.Completed,
+		utils.Completed,
 		metav1.ConditionTrue,
 		fmt.Sprintf("Applied and processed ClusterInstance (%s) successfully", ci.Name),
 	)
@@ -1072,7 +1072,7 @@ func (t *clusterRequestReconcilerTask) updateClusterProvisionStatus(ci *siteconf
 		if crClusterInstanceProcessedCond != nil && crClusterInstanceProcessedCond.Status == metav1.ConditionTrue {
 			utils.SetStatusCondition(&t.object.Status.Conditions,
 				utils.CRconditionTypes.ClusterProvisioned,
-				utils.CRconditionReasons.Unknown,
+				utils.Unknown,
 				metav1.ConditionUnknown,
 				"Waiting for cluster provisioning to start",
 			)
@@ -1880,7 +1880,7 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 		} else {
 			utils.SetStatusCondition(&t.object.Status.Conditions,
 				utils.CRconditionTypes.HardwareProvisioned,
-				utils.CRconditionReasons.Unknown,
+				utils.Unknown,
 				metav1.ConditionUnknown,
 				"Unknown state of hardware provisioning",
 			)
