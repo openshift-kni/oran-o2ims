@@ -27,8 +27,7 @@ const (
 	TimedOutToInProgress        Trigger = Trigger(TimedOut + To + InProgress)
 
 	// Transitions to TimedOut state
-	ClusterNotReadyToTimedOut Trigger = Trigger(ClusterNotReady + To + TimedOut)
-	InProgressToTimedOut      Trigger = Trigger(InProgress + To + TimedOut)
+	InProgressToTimedOut Trigger = Trigger(InProgress + To + TimedOut)
 
 	// Transitions to Completed state
 	InProgressToCompleted Trigger = Trigger(InProgress + To + Completed)
@@ -129,17 +128,14 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			if !fsmHelper.ArePoliciesMatched() {
 				return fsm.Fire(ClusterNotReadyToMissing, fsmHelper)
 			}
-			if fsmHelper.IsTimedOut() {
-				return fsm.Fire(ClusterNotReadyToTimedOut, fsmHelper)
-			}
-			if fsmHelper.IsClusterReady() {
+			if fsmHelper.IsClusterReady() ||
+				fsmHelper.IsTimedOut() {
 				return fsm.Fire(ClusterNotReadyToInProgress, fsmHelper)
 			}
 			return nil
 		}).
 		Permit(ClusterNotReadyToMissing, Missing).
 		Permit(ClusterNotReadyToInProgress, InProgress).
-		Permit(ClusterNotReadyToTimedOut, TimedOut).
 		PermitReentry(ClusterNotReadyToClusterNotReady)
 	fsm.Configure(InProgress).
 		OnEntry(func(_ context.Context, args ...any) error {
@@ -150,12 +146,14 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 				(!fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.IsAllPoliciesCompliant()) {
 				fsmHelper.SetNonCompliantAtNow()
 			}
-			if !fsmHelper.ArePoliciesMatched() ||
-				!fsmHelper.IsClusterReady() {
+			if !fsmHelper.ArePoliciesMatched() {
 				return fsm.Fire(InProgressToClusterNotReady, fsmHelper)
 			}
 			if fsmHelper.IsTimedOut() {
 				return fsm.Fire(InProgressToTimedOut, fsmHelper)
+			}
+			if !fsmHelper.IsClusterReady() {
+				return fsm.Fire(InProgressToClusterNotReady, fsmHelper)
 			}
 			if !fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.IsAllPoliciesCompliant() {
 				return fsm.Fire(InProgressToOutOfDate, fsmHelper)
