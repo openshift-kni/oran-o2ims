@@ -865,25 +865,25 @@ var testClusterInstanceData = map[string]interface{}{
 	"clusterImageSetNameRef": "4.16",
 	"pullSecretRef":          map[string]interface{}{"name": "pullSecretName"},
 	"templateRefs":           []map[string]interface{}{{"name": "aci-cluster-crs-v1", "namespace": "siteconfig-system"}},
-	"additionalNTPSources":   []string{"NTP.server1", "10.16.231.22"},
-	"apiVIPs":                []string{"10.0.0.1", "10.0.0.2"},
+	"additionalNTPSources":   []string{"NTP.server1", "1.1.1.1"},
+	"apiVIPs":                []string{"192.0.2.2", "192.0.2.3"},
 	"caBundleRef":            map[string]interface{}{"name": "my-bundle-ref"},
 	"extraLabels":            map[string]map[string]string{"ManagedCluster": {"cluster-version": "v4.16", "clustertemplate-a-policy": "v1"}},
 	"clusterType":            "SNO",
-	"clusterNetwork":         []map[string]interface{}{{"cidr": "10.128.0.0/14", "hostPrefix": 23}},
-	"machineNetwork":         []map[string]interface{}{{"cidr": "10.16.231.0/24"}},
+	"clusterNetwork":         []map[string]interface{}{{"cidr": "203.0.113.0/24", "hostPrefix": 23}},
+	"machineNetwork":         []map[string]interface{}{{"cidr": "192.0.2.0/24"}},
 	"networkType":            "OVNKubernetes",
 	"cpuPartitioningMode":    "AllNodes",
-	"diskEncryption":         map[string]interface{}{"tang": []map[string]interface{}{{"thumbprint": "1234567890", "url": "http://10.0.0.1:7500"}}, "type": "nbde"},
+	"diskEncryption":         map[string]interface{}{"tang": []map[string]interface{}{{"thumbprint": "1234567890", "url": "http://198.51.100.1:7500"}}, "type": "nbde"},
 	"extraManifestsRefs":     []map[string]interface{}{{"name": "foobar1"}, {"name": "foobar2"}},
 	"ignitionConfigOverride": "igen",
 	"installConfigOverrides": "{\"capabilities\":{\"baselineCapabilitySet\": \"None\", \"additionalEnabledCapabilities\": [ \"marketplace\", \"NodeTuning\" ] }}",
 	"proxy":                  map[string]interface{}{"noProxy": "foobar"},
-	"serviceNetwork":         []map[string]interface{}{{"cidr": "172.30.0.0/16"}},
+	"serviceNetwork":         []map[string]interface{}{{"cidr": "233.252.0.0/24"}},
 	"sshPublicKey":           "ssh-rsa",
 	"nodes": []map[string]interface{}{
 		{
-			"bmcAddress":             "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
+			"bmcAddress":             "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
 			"bmcCredentialsName":     map[string]interface{}{"name": "node1-bmc-secret"},
 			"bootMACAddress":         "00:00:00:01:20:30",
 			"bootMode":               "UEFI",
@@ -899,25 +899,25 @@ var testClusterInstanceData = map[string]interface{}{
 				"config": map[string]interface{}{
 					"dns-resolver": map[string]interface{}{
 						"config": map[string]interface{}{
-							"server": []string{"10.19.42.41"},
+							"server": []string{"192.0.2.22"},
 						},
 					},
 					"interfaces": []map[string]interface{}{
 						{
 							"ipv4": map[string]interface{}{
 								"address": []map[string]interface{}{
-									{"ip": "10.16.231.3", "prefix-length": 24},
-									{"ip": "10.16.231.28", "prefix-length": 24},
-									{"ip": "10.16.231.31", "prefix-length": 24},
+									{"ip": "192.0.2.10", "prefix-length": 24},
+									{"ip": "192.0.2.11", "prefix-length": 24},
+									{"ip": "192.0.2.12", "prefix-length": 24},
 								},
 								"dhcp":    false,
 								"enabled": true,
 							},
 							"ipv6": map[string]interface{}{
 								"address": []map[string]interface{}{
-									{"ip": "2620:52:0:10e7:e42:a1ff:fe8a:601", "prefix-length": 64},
-									{"ip": "2620:52:0:10e7:e42:a1ff:fe8a:602", "prefix-length": 64},
-									{"ip": "2620:52:0:10e7:e42:a1ff:fe8a:603", "prefix-length": 64},
+									{"ip": "2001:db8:0:1::42", "prefix-length": 32},
+									{"ip": "2001:db8:0:1::43", "prefix-length": 32},
+									{"ip": "2001:db8:0:1::44", "prefix-length": 32},
 								},
 								"dhcp":    false,
 								"enabled": true,
@@ -928,7 +928,7 @@ var testClusterInstanceData = map[string]interface{}{
 						{
 							"ipv6": map[string]interface{}{
 								"address": []map[string]interface{}{
-									{"ip": "2620:52:0:1302::100"},
+									{"ip": "2001:db8:abcd:1234::1"},
 								},
 								"enabled": true,
 								"link-aggregation": map[string]interface{}{
@@ -938,7 +938,7 @@ var testClusterInstanceData = map[string]interface{}{
 									},
 									"slaves": []string{"eth0", "eth1"},
 								},
-								"prefix-length": 64,
+								"prefix-length": 32,
 							},
 							"name":  "bond99",
 							"state": "up",
@@ -949,7 +949,7 @@ var testClusterInstanceData = map[string]interface{}{
 						"config": []map[string]interface{}{
 							{
 								"destination":        "0.0.0.0/0",
-								"next-hop-address":   "10.16.231.254",
+								"next-hop-address":   "192.0.2.254",
 								"next-hop-interface": "eno1",
 								"table":              "",
 							},
@@ -990,10 +990,10 @@ metadata:
 spec:
   additionalNTPSources:
   - NTP.server1
-  - 10.16.231.22
+  - 1.1.1.1
   apiVIPs:
-  - 10.0.0.1
-  - 10.0.0.2
+  - 192.0.2.2
+  - 192.0.2.3
   baseDomain: example.com
   caBundleRef:
     name: my-bundle-ref
@@ -1004,14 +1004,14 @@ spec:
       clustertemplate-a-policy: v1
   clusterName: site-sno-du-1
   clusterNetwork:
-  - cidr: 10.128.0.0/14
+  - cidr: 203.0.113.0/24
     hostPrefix: 23
   clusterType: SNO
   cpuPartitioningMode: AllNodes
   diskEncryption:
     tang:
     - thumbprint: "1234567890"
-      url: http://10.0.0.1:7500
+      url: http://198.51.100.1:7500
     type: nbde
   extraManifestsRefs:
   - name: foobar1
@@ -1021,11 +1021,11 @@ spec:
   installConfigOverrides: '{"capabilities":{"baselineCapabilitySet": "None", "additionalEnabledCapabilities":
     [ "marketplace", "NodeTuning" ] }}'
   machineNetwork:
-  - cidr: 10.16.231.0/24
+  - cidr: 192.0.2.0/24
   networkType: OVNKubernetes
   nodes:
   - automatedCleaningMode: disabled
-    bmcAddress: idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1
+    bmcAddress: idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1
     bmcCredentialsName:
       name: node1-bmc-secret
     bootMACAddress: "00:00:00:01:20:30"
@@ -1041,33 +1041,33 @@ spec:
         dns-resolver:
           config:
             server:
-            - 10.19.42.41
+            - 192.0.2.22
         interfaces:
         - ipv4:
             address:
-            - ip: 10.16.231.3
+            - ip: 192.0.2.10
               prefix-length: 24
-            - ip: 10.16.231.28
+            - ip: 192.0.2.11
               prefix-length: 24
-            - ip: 10.16.231.31
+            - ip: 192.0.2.12
               prefix-length: 24
             dhcp: false
             enabled: true
           ipv6:
             address:
-            - ip: 2620:52:0:10e7:e42:a1ff:fe8a:601
-              prefix-length: 64
-            - ip: 2620:52:0:10e7:e42:a1ff:fe8a:602
-              prefix-length: 64
-            - ip: 2620:52:0:10e7:e42:a1ff:fe8a:603
-              prefix-length: 64
+            - ip: 2001:db8:0:1::42
+              prefix-length: 32
+            - ip: 2001:db8:0:1::43
+              prefix-length: 32
+            - ip: 2001:db8:0:1::44
+              prefix-length: 32
             dhcp: false
             enabled: true
           name: eno1
           type: ethernet
         - ipv6:
             address:
-            - ip: 2620:52:0:1302::100
+            - ip: 2001:db8:abcd:1234::1
             enabled: true
             link-aggregation:
               mode: balance-rr
@@ -1076,14 +1076,14 @@ spec:
               slaves:
               - eth0
               - eth1
-            prefix-length: 64
+            prefix-length: 32
           name: bond99
           state: up
           type: bond
         routes:
           config:
           - destination: 0.0.0.0/0
-            next-hop-address: 10.16.231.254
+            next-hop-address: 192.0.2.254
             next-hop-interface: eno1
             table: ""
       interfaces:
@@ -1102,7 +1102,7 @@ spec:
   pullSecretRef:
     name: pullSecretName
   serviceNetwork:
-  - cidr: 172.30.0.0/16
+  - cidr: 233.252.0.0/24
   sshPublicKey: ssh-rsa
   templateRefs:
   - name: aci-cluster-crs-v1

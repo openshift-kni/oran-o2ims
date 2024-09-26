@@ -247,13 +247,13 @@ const (
 		  "NTP.server1"
 		],
 		"apiVIPs": [
-		  "10.16.231.1"
+		  "192.0.2.2"
 		],
 		"baseDomain": "example.com",
 		"clusterName": "cluster-1",
 		"machineNetwork": [
 		  {
-			"cidr": "10.16.231.0/24"
+			"cidr": "192.0.2.0/24"
 		  }
 		],
 		"extraAnnotations": {
@@ -270,11 +270,11 @@ const (
 		  }
 		},
 		"ingressVIPs": [
-		  "10.16.231.2"
+		  "192.0.2.4"
 		],
 		"nodes": [
 		  {
-			"bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
+			"bmcAddress": "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
 			"bmcCredentialsName": {
 			  "name": "site-sno-du-1-bmc-secret"
 			},
@@ -293,7 +293,7 @@ const (
 				"dns-resolver": {
 				  "config": {
 					"server": [
-					  "10.19.42.41"
+					  "192.0.2.22"
 					]
 				  }
 				},
@@ -302,15 +302,15 @@ const (
 					"ipv4": {
 					  "address": [
 						{
-						  "ip": "10.16.231.3",
+						  "ip": "192.0.2.10",
 						  "prefix-length": 24
 						},
 						{
-						  "ip": "10.16.231.28",
+						  "ip": "192.0.2.11",
 						  "prefix-length": 24
 						},
 						{
-						  "ip": "10.16.231.31",
+						  "ip": "192.0.2.12",
 						  "prefix-length": 24
 						}
 					  ],
@@ -320,16 +320,16 @@ const (
 					"ipv6": {
 					  "address": [
 						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:601",
-						  "prefix-length": 64
+						  "ip": "2001:db8:0:1::42",
+						  "prefix-length": 32
 						},
 						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:602",
-						  "prefix-length": 64
+						  "ip": "2001:db8:0:1::43",
+						  "prefix-length": 32
 						},
 						{
-						  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:603",
-						  "prefix-length": 64
+						  "ip": "2001:db8:0:1::44",
+						  "prefix-length": 32
 						}
 					  ],
 					  "dhcp": false,
@@ -342,7 +342,7 @@ const (
 					"ipv6": {
 					  "address": [
 						{
-						  "ip": "2620:52:0:1302::100"
+						  "ip": "2001:db8:abcd:1234::1"
 						}
 					  ],
 					  "enabled": true,
@@ -367,7 +367,7 @@ const (
 				  "config": [
 					{
 					  "destination": "0.0.0.0/0",
-					  "next-hop-address": "10.16.231.254",
+					  "next-hop-address": "192.0.2.254",
 					  "next-hop-interface": "eno1",
 					  "table-id": 254
 					}
@@ -393,7 +393,7 @@ const (
 		],
 		"serviceNetwork": [
 		  {
-			"cidr": "172.30.0.0/16"
+			"cidr": "233.252.0.0/24"
 		  }
 		],
 		"sshPublicKey": "ssh-rsa "
