@@ -115,7 +115,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering Missing")
 			fsmHelper.ResetNonCompliantAt()
-			if fsmHelper.IsPoliciesMatched() {
+			if fsmHelper.ArePoliciesMatched() {
 				return fsm.Fire(MissingToClusterNotReady, fsmHelper)
 			}
 			return nil
@@ -126,7 +126,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering ClusterNotReady")
-			if !fsmHelper.IsPoliciesMatched() {
+			if !fsmHelper.ArePoliciesMatched() {
 				return fsm.Fire(ClusterNotReadyToMissing, fsmHelper)
 			}
 			if fsmHelper.IsTimedOut() {
@@ -145,12 +145,12 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering InProgress")
-			if fsmHelper.IsResetNonCompliantAt() ||
+			if fsmHelper.IsNonCompliantAtZero() ||
 				fsmHelper.IsAllPoliciesCompliant() ||
 				(!fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.IsAllPoliciesCompliant()) {
-				fsmHelper.SetResetNonCompliantAtNow()
+				fsmHelper.SetNonCompliantAtNow()
 			}
-			if !fsmHelper.IsPoliciesMatched() ||
+			if !fsmHelper.ArePoliciesMatched() ||
 				!fsmHelper.IsClusterReady() {
 				return fsm.Fire(InProgressToClusterNotReady, fsmHelper)
 			}
@@ -175,7 +175,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering InProgress")
 			fsmHelper.ResetNonCompliantAt()
-			if !fsmHelper.IsPoliciesMatched() ||
+			if !fsmHelper.ArePoliciesMatched() ||
 				!fsmHelper.IsClusterReady() ||
 				fsmHelper.IsNonCompliantPolicyInEnforce() {
 				return fsm.Fire(OutOfDateToInProgress, fsmHelper)
@@ -190,7 +190,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			fmt.Println("Entering Completed")
 			fsmHelper.ResetNonCompliantAt()
 
-			if !fsmHelper.IsPoliciesMatched() ||
+			if !fsmHelper.ArePoliciesMatched() ||
 				!fsmHelper.IsClusterReady() ||
 				fsmHelper.IsNonCompliantPolicyInEnforce() &&
 					!fsmHelper.IsAllPoliciesCompliant() {
@@ -205,7 +205,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering TimedOut")
 
-			if !fsmHelper.IsPoliciesMatched() ||
+			if !fsmHelper.ArePoliciesMatched() ||
 				(!fsmHelper.IsNonCompliantPolicyInEnforce() &&
 					!fsmHelper.IsAllPoliciesCompliant()) ||
 				fsmHelper.IsAllPoliciesCompliant() {
@@ -221,10 +221,10 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 
 // FsmHelper Helper Interface to collect all functions needed for state machine decisions
 type FsmHelper interface {
-	IsPoliciesMatched() bool
+	ArePoliciesMatched() bool
 	ResetNonCompliantAt()
-	IsResetNonCompliantAt() bool
-	SetResetNonCompliantAtNow()
+	IsNonCompliantAtZero() bool
+	SetNonCompliantAtNow()
 	IsTimedOut() bool
 	IsClusterReady() bool
 	IsAllPoliciesCompliant() bool
@@ -242,8 +242,8 @@ type BaseFSMHelper struct {
 	ConfigTimeout               int
 }
 
-// IsPoliciesMatched Returns true if there are policies matched to the managed cluster, false otherwise
-func (h *BaseFSMHelper) IsPoliciesMatched() bool {
+// ArePoliciesMatched Returns true if there are policies matched to the managed cluster, false otherwise
+func (h *BaseFSMHelper) ArePoliciesMatched() bool {
 	return h.PoliciesMatched
 }
 
@@ -252,13 +252,13 @@ func (h *BaseFSMHelper) ResetNonCompliantAt() {
 	h.NonCompliantAt = time.Time{}
 }
 
-// IsResetNonCompliantAt Returns true if NonCompliantAt is was reset to zero, false otherwise
-func (h *BaseFSMHelper) IsResetNonCompliantAt() bool {
+// IsNonCompliantAtZero Returns true if NonCompliantAt is was reset to zero, false otherwise
+func (h *BaseFSMHelper) IsNonCompliantAtZero() bool {
 	return h.NonCompliantAt == time.Time{}
 }
 
-// SetResetNonCompliantAtNow Sets the NonCompliantAt to the current time
-func (h *BaseFSMHelper) SetResetNonCompliantAtNow() {
+// SetNonCompliantAtNow Sets the NonCompliantAt to the current time
+func (h *BaseFSMHelper) SetNonCompliantAtNow() {
 	println("Set NonCompliantAt to now")
 	h.NonCompliantAt = time.Now()
 }

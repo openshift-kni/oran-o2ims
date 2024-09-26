@@ -2282,7 +2282,7 @@ func (h *configFSMHelper) InitFromCluster(ctx context.Context, t *clusterRequest
 }
 
 func (h *configFSMHelper) IsTimedOut() bool {
-	if h.IsResetNonCompliantAt() {
+	if h.IsNonCompliantAtZero() {
 		return false
 	}
 	return time.Since(h.NonCompliantAt) > time.Duration(h.ConfigTimeout)*time.Minute

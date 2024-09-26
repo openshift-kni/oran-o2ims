@@ -450,7 +450,7 @@ func (h *BaseFSMHelper) Init(configTimeout int) {
 }
 
 func (h *BaseFSMHelper) IsTimedOut() bool {
-	if h.IsResetNonCompliantAt() {
+	if h.IsNonCompliantAtZero() {
 		return false
 	}
 	return time.Since(h.NonCompliantAt) > time.Duration(h.ConfigTimeout)*time.Second
