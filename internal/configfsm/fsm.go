@@ -14,21 +14,16 @@ const (
 	// Transitions to Missing state
 	StartToMissing           Trigger = "Start->Missing"
 	ClusterNotReadyToMissing Trigger = "ClusterNotReady->Missing"
-	InProgressToMissing      Trigger = "InProgress->Missing"
-	CompletedToMissing       Trigger = "Completed->Missing"
-	TimedOutToMissing        Trigger = "TimedOut->Missing"
-	OutOfDateToMissing       Trigger = "OutOfDate->Missing"
 
 	// Transitions to ClusterNotReady state
 	MissingToClusterNotReady    Trigger = "Missing->ClusterNotReady"
 	InProgressToClusterNotReady Trigger = "InProgress->ClusterNotReady"
-	CompletedToClusterNotReady  Trigger = "Completed->ClusterNotReady"
-	OutOfDateToClusterNotReady  Trigger = "OutOfDate->ClusterNotReady"
 
 	// Transitions to InProgress state
 	ClusterNotReadyToInProgress Trigger = "ClusterNotReady->InProgress"
 	OutOfDateToInProgress       Trigger = "OutOfDate->InProgress"
 	CompletedToInProgress       Trigger = "Completed->InProgress"
+	TimedOutToInProgress        Trigger = "TimedOut->InProgress"
 
 	// Transitions to TimedOut state
 	ClusterNotReadyToTimedOut Trigger = "ClusterNotReady->TimedOut"
@@ -38,10 +33,7 @@ const (
 	InProgressToCompleted Trigger = "InProgress->Completed"
 
 	// Transitions to OutOfDate state
-	InProgressToOutOfDate      Trigger = "InProgress->OutOfDate"
-	TimedOutToOutOfDate        Trigger = "TimedOut->OutOfDate"
-	ClusterNotReadyToOutOfDate Trigger = "ClusterNotReady->OutOfDate"
-	CompletedToOutOfDate       Trigger = "Completed->OutOfDate"
+	InProgressToOutOfDate Trigger = "InProgress->OutOfDate"
 
 	// Self transitions
 	MissingToMissing                 Trigger = "Missing->Missing"
@@ -116,38 +108,48 @@ func RunFSM(ctx context.Context, fsm *stateless.StateMachine, fsmHelper FsmHelpe
 func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm = stateless.NewStateMachine(state)
 	fsm.Configure(Start).Permit(StartToMissing, Missing)
+	fsm.Configure(Missing).
+		OnEntry(func(_ context.Context, args ...any) error {
+			fsmHelper := args[0].(FsmHelper)
+			fmt.Println("Entering Missing")
+			fsmHelper.ResetNonCompliantAt()
+			if fsmHelper.IsPoliciesMatched() {
+				return fsm.Fire(MissingToClusterNotReady, fsmHelper)
+			}
+			return nil
+		}).
+		Permit(MissingToClusterNotReady, ClusterNotReady).
+		PermitReentry(MissingToMissing)
 	fsm.Configure(ClusterNotReady).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering ClusterNotReady")
+			if !fsmHelper.IsPoliciesMatched() {
+				return fsm.Fire(ClusterNotReadyToMissing, fsmHelper)
+			}
 			if fsmHelper.IsTimedOut() {
 				return fsm.Fire(ClusterNotReadyToTimedOut, fsmHelper)
 			}
 			if fsmHelper.IsClusterReady() {
-				if fsmHelper.IsNonCompliantPolicyInEnforce() || fsmHelper.IsAllPoliciesCompliant() {
-					return fsm.Fire(ClusterNotReadyToInProgress, fsmHelper)
-				} else {
-					return fsm.Fire(ClusterNotReadyToOutOfDate, fsmHelper)
-				}
+				return fsm.Fire(ClusterNotReadyToInProgress, fsmHelper)
 			}
 			return nil
 		}).
 		Permit(ClusterNotReadyToMissing, Missing).
 		Permit(ClusterNotReadyToInProgress, InProgress).
 		Permit(ClusterNotReadyToTimedOut, TimedOut).
-		Permit(ClusterNotReadyToOutOfDate, OutOfDate).
 		PermitReentry(ClusterNotReadyToClusterNotReady)
 	fsm.Configure(InProgress).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering InProgress")
-			if fsmHelper.IsResetNonCompliantAt() {
+			if fsmHelper.IsResetNonCompliantAt() ||
+				fsmHelper.IsAllPoliciesCompliant() ||
+				(!fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.IsAllPoliciesCompliant()) {
 				fsmHelper.SetResetNonCompliantAtNow()
 			}
-			if !fsmHelper.IsPoliciesMatched() {
-				return fsm.Fire(InProgressToMissing, fsmHelper)
-			}
-			if !fsmHelper.IsClusterReady() {
+			if !fsmHelper.IsPoliciesMatched() ||
+				!fsmHelper.IsClusterReady() {
 				return fsm.Fire(InProgressToClusterNotReady, fsmHelper)
 			}
 			if fsmHelper.IsTimedOut() {
@@ -161,7 +163,6 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			}
 			return nil
 		}).
-		Permit(InProgressToMissing, Missing).
 		Permit(InProgressToClusterNotReady, ClusterNotReady).
 		Permit(InProgressToTimedOut, TimedOut).
 		Permit(InProgressToOutOfDate, OutOfDate).
@@ -172,19 +173,13 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering InProgress")
 			fsmHelper.ResetNonCompliantAt()
-			if !fsmHelper.IsPoliciesMatched() {
-				return fsm.Fire(OutOfDateToMissing, fsmHelper)
-			}
-			if !fsmHelper.IsClusterReady() {
-				return fsm.Fire(OutOfDateToClusterNotReady, fsmHelper)
-			}
-			if fsmHelper.IsNonCompliantPolicyInEnforce() {
+			if !fsmHelper.IsPoliciesMatched() ||
+				!fsmHelper.IsClusterReady() ||
+				fsmHelper.IsNonCompliantPolicyInEnforce() {
 				return fsm.Fire(OutOfDateToInProgress, fsmHelper)
 			}
 			return nil
 		}).
-		Permit(OutOfDateToMissing, Missing).
-		Permit(OutOfDateToClusterNotReady, ClusterNotReady).
 		Permit(OutOfDateToInProgress, InProgress).
 		PermitReentry(OutOfDateToOutOfDate)
 	fsm.Configure(Completed).
@@ -193,57 +188,30 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			fmt.Println("Entering Completed")
 			fsmHelper.ResetNonCompliantAt()
 
-			if !fsmHelper.IsPoliciesMatched() {
-				return fsm.Fire(CompletedToMissing, fsmHelper)
-			}
-			if !fsmHelper.IsClusterReady() {
-				return fsm.Fire(CompletedToClusterNotReady, fsmHelper)
-			}
-			if fsmHelper.IsNonCompliantPolicyInEnforce() &&
-				!fsmHelper.IsAllPoliciesCompliant() {
+			if !fsmHelper.IsPoliciesMatched() ||
+				!fsmHelper.IsClusterReady() ||
+				fsmHelper.IsNonCompliantPolicyInEnforce() &&
+					!fsmHelper.IsAllPoliciesCompliant() {
 				return fsm.Fire(CompletedToInProgress, fsmHelper)
 			}
-			if !fsmHelper.IsNonCompliantPolicyInEnforce() &&
-				!fsmHelper.IsAllPoliciesCompliant() {
-				return fsm.Fire(CompletedToOutOfDate, fsmHelper)
-			}
 			return nil
 		}).
-		Permit(CompletedToMissing, Missing).
-		Permit(CompletedToClusterNotReady, ClusterNotReady).
 		Permit(CompletedToInProgress, InProgress).
-		Permit(CompletedToOutOfDate, OutOfDate).
 		PermitReentry(CompletedToCompleted)
-
-	fsm.Configure(Missing).
-		OnEntry(func(_ context.Context, args ...any) error {
-			fsmHelper := args[0].(FsmHelper)
-			fmt.Println("Entering Missing")
-			fsmHelper.ResetNonCompliantAt()
-			if fsmHelper.IsPoliciesMatched() {
-				return fsm.Fire(MissingToClusterNotReady, fsmHelper)
-			}
-			return nil
-		}).
-		Permit(MissingToClusterNotReady, ClusterNotReady).
-		PermitReentry(MissingToMissing)
-
 	fsm.Configure(TimedOut).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering TimedOut")
 
-			if !fsmHelper.IsPoliciesMatched() {
-				return fsm.Fire(TimedOutToMissing, fsmHelper)
-			}
-			if !fsmHelper.IsNonCompliantPolicyInEnforce() &&
-				!fsmHelper.IsAllPoliciesCompliant() {
-				return fsm.Fire(TimedOutToOutOfDate, fsmHelper)
+			if !fsmHelper.IsPoliciesMatched() ||
+				(!fsmHelper.IsNonCompliantPolicyInEnforce() &&
+					!fsmHelper.IsAllPoliciesCompliant()) ||
+				fsmHelper.IsAllPoliciesCompliant() {
+				return fsm.Fire(TimedOutToInProgress, fsmHelper)
 			}
 			return nil
 		}).
-		Permit(TimedOutToOutOfDate, OutOfDate).
-		Permit(TimedOutToMissing, Missing).
+		Permit(TimedOutToInProgress, InProgress).
 		PermitReentry(TimedOutToTimedOut)
 
 	return fsm, nil
