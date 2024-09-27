@@ -848,36 +848,9 @@ func (t *clusterRequestReconcilerTask) checkClusterProvisionStatus(
 	if !exists {
 		return nil
 	}
-	// Check ClusterInstance status and update the corresponding ClusterRequest status conditions
+	// Check ClusterInstance status and update the corresponding ClusterRequest status conditions.
 	t.updateClusterInstanceProcessedStatus(clusterInstance)
 	t.updateClusterProvisionStatus(clusterInstance)
-
-	// Check if the cluster provision has completed
-	crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(utils.CRconditionTypes.ClusterProvisioned))
-	if crProvisionedCond != nil && crProvisionedCond.Status == metav1.ConditionTrue {
-		// Check the managed cluster for updating the ztpDone status.
-		managedCluster := &clusterv1.ManagedCluster{}
-		managedClusterExists, err := utils.DoesK8SResourceExist(
-			ctx, t.client,
-			clusterInstance.GetName(),
-			clusterInstance.GetName(),
-			managedCluster,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to check if managed cluster exists: %w", err)
-		}
-
-		if managedClusterExists {
-			// If the ztp-done label exists, update the status to complete.
-			labels := managedCluster.GetLabels()
-			_, hasZtpDone := labels[ztpDoneLabel]
-			if hasZtpDone {
-				t.object.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
-			} else {
-				t.object.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpNotDone
-			}
-		}
-	}
 
 	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ClusterRequest %s: %w", t.object.Name, updateErr)
@@ -965,10 +938,36 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 	if err != nil {
 		return false, err
 	}
+	err = t.updateZTPStatus(ctx, allPoliciesCompliant)
+	if err != nil {
+		return false, err
+	}
 
 	// If there are policies that are not Compliant, we need to requeue and see if they
 	// time out or complete.
 	return nonCompliantPolicyInEnforce, nil
+}
+
+// updateZTPStatus updates status.ClusterDetails.ZtpStatus.
+func (t *clusterRequestReconcilerTask) updateZTPStatus(ctx context.Context, allPoliciesCompliant bool) error {
+	// Check if the cluster provision has started.
+	crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(utils.CRconditionTypes.ClusterProvisioned))
+	if crProvisionedCond != nil {
+		// If the provisioning has started, and the ZTP status is empty or not done.
+		if t.object.Status.ClusterDetails.ZtpStatus != utils.ClusterZtpDone {
+			t.object.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpNotDone
+			// If the provisioning finished and all the policies are compliant, then ZTP is done.
+			if crProvisionedCond.Status == metav1.ConditionTrue && allPoliciesCompliant {
+				// Once the ZTPStatus reaches ZTP Done, it will stay that way.
+				t.object.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
+			}
+		}
+	}
+
+	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update the ZTP status for ClusterRequest %s: %w", t.object.Name, err)
+	}
+	return nil
 }
 
 // hasPolicyConfigurationTimedOut determines if the policy configuration for the
