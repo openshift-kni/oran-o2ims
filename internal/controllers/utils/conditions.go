@@ -86,7 +86,7 @@ func SetStatusCondition(existingConditions *[]metav1.Condition, conditionType Co
 	)
 }
 
-// IsStatusConditionPresent checks if the cluster provision condition is present
+// IsClusterProvisionPresent checks if the cluster provision condition is present
 func IsClusterProvisionPresent(cr *oranv1alpha1.ClusterRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
 	return condition != nil

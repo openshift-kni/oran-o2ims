@@ -1197,7 +1197,7 @@ func (t *clusterRequestReconcilerTask) updateClusterProvisionStatus(ci *siteconf
 	}
 
 	if utils.IsClusterProvisionPresent(t.object) {
-		// Set the start timestamp if it's already set
+		// Set the start timestamp if it's not already set
 		if t.object.Status.ClusterDetails.ClusterProvisionStartedAt.IsZero() {
 			t.object.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 		}

@@ -1334,6 +1334,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
 			cr.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{}
 			cr.Status.ClusterDetails.Name = crName
+			cr.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 		})
 
@@ -1342,7 +1343,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(requeueWithMediumInterval()))
+			Expect(result).To(Equal(requeueWithLongInterval()))
 
 			reconciledCR := &oranv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
@@ -1364,6 +1365,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(c.Status().Update(ctx, policy)).To(Succeed())
 			// Complete the cluster provisioning.
 			cr.Status.Conditions[0].Status = metav1.ConditionTrue
+			cr.Status.Conditions[0].Reason = string(utils.CRconditionReasons.Completed)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 			// Start reconciliation.
 			result, err := reconciler.Reconcile(ctx, req)
@@ -1392,7 +1394,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result.
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(requeueWithMediumInterval()))
+			Expect(result).To(Equal(requeueWithLongInterval()))
 
 			reconciledCR := &oranv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
