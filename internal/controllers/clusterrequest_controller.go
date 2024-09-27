@@ -935,8 +935,10 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 	}
 
 	// If there are policies that are not Compliant, we need to requeue and see if they
-	// time out or complete.
-	return aConfigFSMHelper.NonCompliantPolicyInEnforce, nil
+	// time out. If the TimedOut state is reached, there is no need to requeue since reconcile will
+	// be called again if there is a change in the watched policies.
+	return aConfigFSMHelper.NonCompliantPolicyInEnforce &&
+		nextState != configfsm.TimedOut, nil
 }
 
 // updateZTPStatus updates status.ClusterDetails.ZtpStatus.
