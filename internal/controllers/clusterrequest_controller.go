@@ -237,25 +237,27 @@ func (t *clusterRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, er
 		// after hw plugin is ready
 
 		// Handle the cluster install with ClusterInstance
-		err = t.handleClusterInstallation(ctx, renderedClusterInstance)
+		err := t.handleClusterInstallation(ctx, renderedClusterInstance)
 		if err != nil {
 			return requeueWithError(err)
 		}
 	}
 
 	// Handle policy configuration only after the cluster provisioning
-	// has started.
-	crProvisionedCond := meta.FindStatusCondition(
-		t.object.Status.Conditions,
-		string(utils.CRconditionTypes.ClusterProvisioned))
-	if crProvisionedCond != nil {
+	// has started, and not failed or timedout (completed, in-progress or unknown)
+	if utils.IsClusterProvisionPresent(t.object) &&
+		!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+
 		// Handle configuration through policies.
 		requeue, err := t.handleClusterPolicyConfiguration(ctx)
 		if err != nil {
 			return requeueWithError(err)
 		}
-		if requeue {
-			return requeueWithMediumInterval(), nil
+
+		// Requeue if cluster provisioning is not completed (in-progress or unknown)
+		// or there are enforce policies that are not Compliant
+		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
+			return requeueWithLongInterval(), nil
 		}
 	}
 
@@ -291,17 +293,18 @@ func (t *clusterRequestReconcilerTask) checkClusterDeployConfigState(ctx context
 		}
 	}
 
-	// Check the policy configuration status
-	crProvisionedCond := meta.FindStatusCondition(
-		t.object.Status.Conditions,
-		string(utils.CRconditionTypes.ClusterProvisioned))
-	if crProvisionedCond != nil {
+	// Check the policy configuration status only after the cluster provisioning
+	// has started, and not failed or timedout
+	if utils.IsClusterProvisionPresent(t.object) &&
+		!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
 		requeue, err := t.handleClusterPolicyConfiguration(ctx)
 		if err != nil {
 			return requeueWithError(err)
 		}
-		if requeue {
-			return requeueWithMediumInterval(), nil
+		// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
+		// or there are enforce policies that are not Compliant
+		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
+			return requeueWithLongInterval(), nil
 		}
 	}
 	return doNotRequeue(), nil
@@ -1191,6 +1194,27 @@ func (t *clusterRequestReconcilerTask) updateClusterProvisionStatus(ci *siteconf
 			ciProvisionedCondition.Status,
 			ciProvisionedCondition.Message,
 		)
+	}
+
+	if utils.IsClusterProvisionPresent(t.object) {
+		// Set the start timestamp if it's not already set
+		if t.object.Status.ClusterDetails.ClusterProvisionStartedAt.IsZero() {
+			t.object.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+		}
+
+		// If it's not failed or completed, check if it has timed out
+		if !utils.IsClusterProvisionCompletedOrFailed(t.object) {
+			if time.Since(t.object.Status.ClusterDetails.ClusterProvisionStartedAt.Time) >
+				time.Duration(t.object.Spec.Timeout.ClusterProvisioning)*time.Minute {
+				// timed out
+				utils.SetStatusCondition(&t.object.Status.Conditions,
+					utils.CRconditionTypes.ClusterProvisioned,
+					utils.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Cluster provisioning timed out",
+				)
+			}
+		}
 	}
 }
 

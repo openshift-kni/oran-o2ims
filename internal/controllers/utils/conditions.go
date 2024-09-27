@@ -1,6 +1,7 @@
 package utils
 
 import (
+	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -83,4 +84,47 @@ func SetStatusCondition(existingConditions *[]metav1.Condition, conditionType Co
 			LastTransitionTime: metav1.Now(),
 		},
 	)
+}
+
+// IsClusterProvisionPresent checks if the cluster provision condition is present
+func IsClusterProvisionPresent(cr *oranv1alpha1.ClusterRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
+	return condition != nil
+}
+
+// IsClusterProvisionCompleted checks if the cluster provision condition status is completed
+func IsClusterProvisionCompleted(cr *oranv1alpha1.ClusterRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
+	if condition != nil {
+		if condition.Status == metav1.ConditionTrue && condition.Reason == string(CRconditionReasons.Completed) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsClusterProvisionTimedOutOrFailed checks if the cluster provision condition status is timedout or failed
+func IsClusterProvisionTimedOutOrFailed(cr *oranv1alpha1.ClusterRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
+	if condition != nil {
+		if condition.Status == metav1.ConditionFalse &&
+			(condition.Reason == string(CRconditionReasons.Failed) ||
+				condition.Reason == string(CRconditionReasons.TimedOut)) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsClusterProvisionCompletedOrFailed checks if the cluster provision condition status is completed or failed
+func IsClusterProvisionCompletedOrFailed(cr *oranv1alpha1.ClusterRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
+	if condition != nil {
+		if condition.Status == metav1.ConditionTrue ||
+			(condition.Status == metav1.ConditionFalse &&
+				condition.Reason == string(CRconditionReasons.Failed)) {
+			return true
+		}
+	}
+	return false
 }
