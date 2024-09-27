@@ -62,6 +62,29 @@ const (
 	Unknown         ConditionReason = "Unknown"
 )
 
+// The following variable groups the different reasons that conditions will be set for ClusterRequest
+var CRconditionReasons = struct {
+	NotApplied      ConditionReason
+	ClusterNotReady ConditionReason
+	Completed       ConditionReason
+	Failed          ConditionReason
+	InProgress      ConditionReason
+	Missing         ConditionReason
+	OutOfDate       ConditionReason
+	TimedOut        ConditionReason
+	Unknown         ConditionReason
+}{
+	NotApplied:      NotApplied,
+	ClusterNotReady: ClusterNotReady,
+	Completed:       Completed,
+	Failed:          Failed,
+	InProgress:      InProgress,
+	Missing:         Missing,
+	OutOfDate:       OutOfDate,
+	TimedOut:        TimedOut,
+	Unknown:         Unknown,
+}
+
 // SetStatusCondition is a convenience wrapper for meta.SetStatusCondition that takes in the types defined here and converts them to strings
 func SetStatusCondition(existingConditions *[]metav1.Condition, conditionType ConditionType, conditionReason ConditionReason, conditionStatus metav1.ConditionStatus, message string) {
 	meta.SetStatusCondition(

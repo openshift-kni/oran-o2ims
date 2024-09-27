@@ -640,7 +640,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.Failed),
+				Reason:  string(utils.CRconditionReasons.Failed),
 				Message: "Failed to validate the ClusterRequest: the clustertemplate validation has failed",
 			})
 		})
@@ -664,12 +664,12 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[1], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.Failed),
+				Reason:  string(utils.CRconditionReasons.Failed),
 				Message: "spec.nodes[0].templateRefs must be provided",
 			})
 		})
@@ -696,17 +696,17 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[1], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterInstanceRendered),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[2], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ClusterResourcesCreated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.Failed),
+				Reason:  string(utils.CRconditionReasons.Failed),
 				Message: "failed to create pull Secret for cluster cluster-1",
 			})
 		})
@@ -732,22 +732,22 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[1], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterInstanceRendered),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[2], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterResourcesCreated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[3], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.HardwareTemplateRendered),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 		})
 	})
@@ -790,7 +790,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[4], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.InProgress),
+				Reason: string(utils.CRconditionReasons.InProgress),
 			})
 		})
 
@@ -823,12 +823,12 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[4], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterInstanceProcessed),
 				Status: metav1.ConditionUnknown,
-				Reason: string(utils.Unknown),
+				Reason: string(utils.CRconditionReasons.Unknown),
 			})
 		})
 
@@ -867,13 +867,13 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.Failed),
+				Reason:  string(utils.CRconditionReasons.Failed),
 				Message: "nodes.0: hostName is required",
 			})
 			verifyStatusCondition(conditions[4], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 		})
 
@@ -912,13 +912,13 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[1], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.Failed),
+				Reason:  string(utils.CRconditionReasons.Failed),
 				Message: "spec.nodes[0].templateRefs must be provided",
 			})
 			verifyStatusCondition(conditions[4], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 		})
 	})
@@ -1004,18 +1004,18 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterInstanceProcessed),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[6], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ClusterProvisioned),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.InProgress),
+				Reason:  string(utils.CRconditionReasons.InProgress),
 				Message: "Provisioning cluster",
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.ClusterNotReady),
+				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
 
@@ -1107,12 +1107,12 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[6], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.Completed),
+				Reason:  string(utils.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
 
@@ -1155,18 +1155,18 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.Failed),
+				Reason:  string(utils.CRconditionReasons.Failed),
 				Message: "nodes.0: hostName is required",
 			})
 			verifyStatusCondition(conditions[6], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.ClusterNotReady),
+				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
 
@@ -1273,18 +1273,18 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[1], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.Failed),
+				Reason:  string(utils.CRconditionReasons.Failed),
 				Message: "spec.nodes[0].templateRefs must be provided",
 			})
 			verifyStatusCondition(conditions[6], metav1.Condition{
 				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.Completed),
+				Reason:  string(utils.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
 		})
@@ -1369,7 +1369,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.InProgress),
+				Reason:  string(utils.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
 		})
@@ -1395,7 +1395,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.Completed),
+				Reason:  string(utils.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
 		})
@@ -1420,7 +1420,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.InProgress),
+				Reason:  string(utils.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
 		})
@@ -1617,7 +1617,7 @@ nodes:
 		verifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionTrue,
-			Reason:  string(utils.Completed),
+			Reason:  string(utils.CRconditionReasons.Completed),
 			Message: "ClusterInstance rendered and passed dry-run validation",
 		})
 	})
@@ -1635,7 +1635,7 @@ nodes:
 		verifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.Failed),
+			Reason:  string(utils.CRconditionReasons.Failed),
 			Message: "spec.clusterName cannot be empty",
 		})
 	})
@@ -1646,7 +1646,7 @@ nodes:
 			{
 				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.Completed),
+				Reason: string(utils.CRconditionReasons.Completed),
 			},
 		}
 
@@ -1686,7 +1686,7 @@ nodes:
 		verifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.Failed),
+			Reason:  string(utils.CRconditionReasons.Failed),
 			Message: "Failed to render and validate ClusterInstance: detected changes in immutable fields",
 		})
 	})
@@ -2587,7 +2587,7 @@ defaultHugepagesSize: "1G"`,
 
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			utils.CRconditionTypes.ClusterProvisioned,
-			utils.InProgress,
+			utils.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"",
 		)
@@ -2720,7 +2720,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -2741,7 +2741,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -2767,7 +2767,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.OutOfDate)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is out of date"))
 	})
@@ -2850,7 +2850,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 
 		// Step 2: Update the managed cluster to make it not ready.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -2889,7 +2889,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.ClusterNotReady)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.ClusterNotReady)))
 
 		// Step 3: Update the managed cluster to make it ready again.
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
@@ -2924,7 +2924,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 	})
 
 	It("It sets ClusterNotReady if the cluster is unstable/not ready", func() {
@@ -3017,7 +3017,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.ClusterNotReady)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.ClusterNotReady)))
 	})
 
 	It("Sets the NonCompliantAt timestamp and times out", func() {
@@ -3129,7 +3129,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.OutOfDate)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is out of date"))
 
 		// Enforce the NonCompliant policy.
@@ -3175,7 +3175,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -3196,7 +3196,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -3214,7 +3214,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 	})
@@ -3264,7 +3264,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.Missing)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Missing)))
 	})
 
 	It("It handles updated/deleted policies for matched clusters", func() {
@@ -3479,7 +3479,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.OutOfDate)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is out of date"))
 	})
 
@@ -3583,7 +3583,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.Completed)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is up to date"))
 	})
 
@@ -3687,7 +3687,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 
@@ -3786,7 +3786,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 })
