@@ -26,6 +26,7 @@ require (
 	github.com/openshift/assisted-service/api v0.0.0-20240405132132-484ec5c683c6
 	github.com/peterhellberg/link v1.2.0
 	github.com/prometheus/client_golang v1.18.0
+	github.com/r3labs/diff/v3 v3.0.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	github.com/stolostron/siteconfig v0.0.0-20240911204707-0bba68d7dcc0
@@ -94,6 +95,8 @@ require (
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	go.mongodb.org/mongo-driver v1.10.0 // indirect
