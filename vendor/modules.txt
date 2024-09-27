@@ -271,12 +271,12 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/r3labs/diff/v3 v3.0.1
-## explicit; go 1.13
-github.com/r3labs/diff/v3
 # github.com/qmuntal/stateless v1.7.1
 ## explicit; go 1.19
 github.com/qmuntal/stateless
+# github.com/r3labs/diff/v3 v3.0.1
+## explicit; go 1.13
+github.com/r3labs/diff/v3
 # github.com/spf13/cobra v1.7.0
 ## explicit; go 1.15
 github.com/spf13/cobra

@@ -543,7 +543,7 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 		// with the exception of scaling up/down when Cluster provisioning is completed.
 		crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions,
 			string(utils.CRconditionTypes.ClusterProvisioned))
-		if crProvisionedCond != nil && crProvisionedCond.Reason != string(utils.CRconditionReasons.Unknown) {
+		if crProvisionedCond != nil && crProvisionedCond.Reason != string(utils.Unknown) {
 			existingClusterInstance := &unstructured.Unstructured{}
 			existingClusterInstance.SetGroupVersionKind(
 				renderedClusterInstanceUnstructure.GroupVersionKind())
@@ -567,7 +567,7 @@ func (t *clusterRequestReconcilerTask) renderClusterInstanceTemplate(
 					disallowedChanges = append(disallowedChanges, updatedFields...)
 				}
 				if len(scalingNodes) != 0 &&
-					crProvisionedCond.Reason != string(utils.CRconditionReasons.Completed) {
+					crProvisionedCond.Reason != string(utils.Completed) {
 					// In-progress || Failed
 					disallowedChanges = append(disallowedChanges, scalingNodes...)
 				}

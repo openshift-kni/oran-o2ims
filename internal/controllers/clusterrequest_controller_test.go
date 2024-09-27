@@ -1354,7 +1354,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(utils.InProgress),
 				Message: "The configuration is still being applied",
 			})
 		})
@@ -1380,7 +1380,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.CRconditionReasons.Completed),
+				Reason:  string(utils.Completed),
 				Message: "The configuration is up to date",
 			})
 		})
@@ -1405,7 +1405,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			verifyStatusCondition(conditions[5], metav1.Condition{
 				Type:    string(utils.CRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(utils.InProgress),
 				Message: "The configuration is still being applied",
 			})
 		})
@@ -1602,7 +1602,7 @@ nodes:
 		verifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionTrue,
-			Reason:  string(utils.CRconditionReasons.Completed),
+			Reason:  string(utils.Completed),
 			Message: "ClusterInstance rendered and passed dry-run validation",
 		})
 	})
@@ -1620,7 +1620,7 @@ nodes:
 		verifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.CRconditionReasons.Failed),
+			Reason:  string(utils.Failed),
 			Message: "spec.clusterName cannot be empty",
 		})
 	})
@@ -1631,7 +1631,7 @@ nodes:
 			{
 				Type:   string(utils.CRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(utils.Completed),
 			},
 		}
 
@@ -1671,7 +1671,7 @@ nodes:
 		verifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(utils.CRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.CRconditionReasons.Failed),
+			Reason:  string(utils.Failed),
 			Message: "Failed to render and validate ClusterInstance: detected changes in immutable fields",
 		})
 	})

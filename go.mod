@@ -26,8 +26,8 @@ require (
 	github.com/openshift/assisted-service/api v0.0.0-20240405132132-484ec5c683c6
 	github.com/peterhellberg/link v1.2.0
 	github.com/prometheus/client_golang v1.18.0
-	github.com/r3labs/diff/v3 v3.0.1
 	github.com/qmuntal/stateless v1.7.1
+	github.com/r3labs/diff/v3 v3.0.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	github.com/stolostron/siteconfig v0.0.0-20240911204707-0bba68d7dcc0
