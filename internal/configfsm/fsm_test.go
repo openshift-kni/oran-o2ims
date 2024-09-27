@@ -428,6 +428,32 @@ func TestFSMTimedoutOutOfDate(t *testing.T) {
 	state, err = aFSM.State(context.Background())
 	assert.Equal(t, nil, err, "err should be nil")
 	assert.Equal(t, OutOfDate, state, "State should be OutOfDate")
+
+	aTestHelper.ClusterReady = true
+	aTestHelper.NonCompliantPolicyInEnforce = false
+	aTestHelper.AllPoliciesCompliant = true
+
+	_, err = RunFSM(context.Background(), aFSM, &aTestHelper)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	state, err = aFSM.State(context.Background())
+	assert.Equal(t, nil, err, "err should be nil")
+	assert.Equal(t, Completed, state, "State should be Completed")
+
+	aTestHelper.ClusterReady = true
+	aTestHelper.NonCompliantPolicyInEnforce = false
+	aTestHelper.AllPoliciesCompliant = false
+
+	_, err = RunFSM(context.Background(), aFSM, &aTestHelper)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	state, err = aFSM.State(context.Background())
+	assert.Equal(t, nil, err, "err should be nil")
+	assert.Equal(t, OutOfDate, state, "State should be OutOfDate")
 }
 
 func TestDisplayGraph(t *testing.T) {

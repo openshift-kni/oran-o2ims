@@ -112,7 +112,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm.Configure(Missing).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
-			fmt.Println("Entering Missing")
+			fmt.Println("Entering " + Missing)
 			fsmHelper.ResetNonCompliantAt()
 			if fsmHelper.ArePoliciesMatched() {
 				return fsm.Fire(MissingToClusterNotReady, fsmHelper)
@@ -124,7 +124,7 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm.Configure(ClusterNotReady).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
-			fmt.Println("Entering ClusterNotReady")
+			fmt.Println("Entering " + ClusterNotReady)
 			if !fsmHelper.ArePoliciesMatched() {
 				return fsm.Fire(ClusterNotReadyToMissing, fsmHelper)
 			}
@@ -140,10 +140,10 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm.Configure(InProgress).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
-			fmt.Println("Entering InProgress")
+			fmt.Println("Entering " + InProgress)
 			if fsmHelper.IsNonCompliantAtZero() ||
-				fsmHelper.IsAllPoliciesCompliant() ||
-				(!fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.IsAllPoliciesCompliant()) {
+				fsmHelper.AreAllPoliciesCompliant() ||
+				(!fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.AreAllPoliciesCompliant()) {
 				fsmHelper.SetNonCompliantAtNow()
 			}
 			if !fsmHelper.ArePoliciesMatched() {
@@ -155,10 +155,10 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 			if !fsmHelper.IsClusterReady() {
 				return fsm.Fire(InProgressToClusterNotReady, fsmHelper)
 			}
-			if !fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.IsAllPoliciesCompliant() {
+			if fsmHelper.ArePoliciesOutOfDate() {
 				return fsm.Fire(InProgressToOutOfDate, fsmHelper)
 			}
-			if fsmHelper.IsAllPoliciesCompliant() {
+			if fsmHelper.AreAllPoliciesCompliant() {
 				return fsm.Fire(InProgressToCompleted, fsmHelper)
 			}
 			return nil
@@ -171,11 +171,12 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm.Configure(OutOfDate).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
-			fmt.Println("Entering InProgress")
+			fmt.Println("Entering " + OutOfDate)
 			fsmHelper.ResetNonCompliantAt()
 			if !fsmHelper.ArePoliciesMatched() ||
 				!fsmHelper.IsClusterReady() ||
-				fsmHelper.IsNonCompliantPolicyInEnforce() {
+				fsmHelper.IsNonCompliantPolicyInEnforce() ||
+				fsmHelper.AreAllPoliciesCompliant() {
 				return fsm.Fire(OutOfDateToInProgress, fsmHelper)
 			}
 			return nil
@@ -185,13 +186,12 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm.Configure(Completed).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
-			fmt.Println("Entering Completed")
+			fmt.Println("Entering " + Completed)
 			fsmHelper.ResetNonCompliantAt()
 
 			if !fsmHelper.ArePoliciesMatched() ||
 				!fsmHelper.IsClusterReady() ||
-				fsmHelper.IsNonCompliantPolicyInEnforce() &&
-					!fsmHelper.IsAllPoliciesCompliant() {
+				!fsmHelper.AreAllPoliciesCompliant() {
 				return fsm.Fire(CompletedToInProgress, fsmHelper)
 			}
 			return nil
@@ -201,12 +201,11 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 	fsm.Configure(TimedOut).
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
-			fmt.Println("Entering TimedOut")
+			fmt.Println("Entering " + TimedOut)
 
 			if !fsmHelper.ArePoliciesMatched() ||
-				(!fsmHelper.IsNonCompliantPolicyInEnforce() &&
-					!fsmHelper.IsAllPoliciesCompliant()) ||
-				fsmHelper.IsAllPoliciesCompliant() {
+				fsmHelper.ArePoliciesOutOfDate() ||
+				fsmHelper.AreAllPoliciesCompliant() {
 				return fsm.Fire(TimedOutToInProgress, fsmHelper)
 			}
 			return nil
@@ -225,7 +224,8 @@ type FsmHelper interface {
 	SetNonCompliantAtNow()
 	IsTimedOut() bool
 	IsClusterReady() bool
-	IsAllPoliciesCompliant() bool
+	AreAllPoliciesCompliant() bool
+	ArePoliciesOutOfDate() bool
 	IsNonCompliantPolicyInEnforce() bool
 }
 
@@ -266,9 +266,15 @@ func (h *BaseFSMHelper) IsClusterReady() bool {
 	return h.ClusterReady
 }
 
-// IsAllPoliciesCompliant Returns true if all policies are enforced and compliant, false otherwise
-func (h *BaseFSMHelper) IsAllPoliciesCompliant() bool {
+// AreAllPoliciesCompliant Returns true if all policies are enforced and compliant, false otherwise
+func (h *BaseFSMHelper) AreAllPoliciesCompliant() bool {
 	return h.AllPoliciesCompliant
+}
+
+// ArePoliciesOutOfDate Returns true if there are some non compliant policies that are not
+// in enforce, false otherwise
+func (h *BaseFSMHelper) ArePoliciesOutOfDate() bool {
+	return !h.AllPoliciesCompliant && !h.NonCompliantPolicyInEnforce
 }
 
 // IsNonCompliantPolicyInEnforce Returns true if there is at least one non compliant policy in enforce, false otherwise

@@ -1034,6 +1034,8 @@ func ClusterIsReadyForPolicyConfig(
 	}
 
 	available := false
+	hubAccepted := false
+	joined := false
 
 	availableCondition := meta.FindStatusCondition(
 		managedCluster.Status.Conditions,
@@ -1042,7 +1044,21 @@ func ClusterIsReadyForPolicyConfig(
 		available = true
 	}
 
-	return available, nil
+	acceptedCondition := meta.FindStatusCondition(
+		managedCluster.Status.Conditions,
+		clusterv1.ManagedClusterConditionHubAccepted)
+	if acceptedCondition != nil && acceptedCondition.Status == metav1.ConditionTrue {
+		hubAccepted = true
+	}
+
+	joinedCondition := meta.FindStatusCondition(
+		managedCluster.Status.Conditions,
+		clusterv1.ManagedClusterConditionJoined)
+	if joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue {
+		joined = true
+	}
+
+	return available && hubAccepted && joined, nil
 }
 
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.

@@ -954,7 +954,9 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			managedCluster = &clusterv1.ManagedCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: crName},
 				Status: clusterv1.ManagedClusterStatus{
-					Conditions: []metav1.Condition{{Type: clusterv1.ManagedClusterConditionAvailable, Status: metav1.ConditionFalse}},
+					Conditions: []metav1.Condition{{Type: clusterv1.ManagedClusterConditionAvailable, Status: metav1.ConditionFalse},
+						{Type: clusterv1.ManagedClusterConditionJoined, Status: metav1.ConditionFalse},
+						{Type: clusterv1.ManagedClusterConditionHubAccepted, Status: metav1.ConditionFalse}},
 				},
 			}
 			Expect(c.Create(ctx, managedCluster)).To(Succeed())
@@ -1075,9 +1077,16 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			clusterInstance.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
 			Expect(c.Status().Update(ctx, clusterInstance)).To(Succeed())
 			// Patch ManagedCluster to ready
-			readyCond := meta.FindStatusCondition(
+			availableCond := meta.FindStatusCondition(
 				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
-			readyCond.Status = metav1.ConditionTrue
+			joinedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionJoined)
+			acceptedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionHubAccepted)
+			availableCond.Status = metav1.ConditionTrue
+			joinedCond.Status = metav1.ConditionTrue
+			acceptedCond.Status = metav1.ConditionTrue
+
 			Expect(c.Status().Update(ctx, managedCluster)).To(Succeed())
 			// Patch enforce policy to Compliant
 			policy.Status.ComplianceState = "Compliant"
@@ -1231,9 +1240,15 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			currentCI.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
 			Expect(c.Status().Update(ctx, currentCI)).To(Succeed())
 			// Patch ManagedCluster to ready
-			readyCond := meta.FindStatusCondition(
+			availableCond := meta.FindStatusCondition(
 				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
-			readyCond.Status = metav1.ConditionTrue
+			joinedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionJoined)
+			acceptedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionHubAccepted)
+			availableCond.Status = metav1.ConditionTrue
+			joinedCond.Status = metav1.ConditionTrue
+			acceptedCond.Status = metav1.ConditionTrue
 			Expect(c.Status().Update(ctx, managedCluster)).To(Succeed())
 			// Patch enforce policy to Compliant
 			policy.Status.ComplianceState = "Compliant"
