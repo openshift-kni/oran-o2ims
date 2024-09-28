@@ -84,11 +84,9 @@ type deleteOrUpdateEvent interface {
 }
 
 const (
-	provisioningRequestFinalizer    = "provisioningrequest.o2ims.provisioning.oran.org/finalizer"
-	provisioningRequestNameLabel    = "provisioningrequest.o2ims.provisioning.oran.org/name"
-	ztpDoneLabel                    = "ztp-done"
-	clusterInstanceParametersString = "clusterInstanceParameters"
-	policyTemplateParametersString  = "policyTemplateParameters"
+	provisioningRequestFinalizer = "provisioningrequest.o2ims.provisioning.oran.org/finalizer"
+	provisioningRequestNameLabel = "provisioningrequest.o2ims.provisioning.oran.org/name"
+	ztpDoneLabel                 = "ztp-done"
 )
 
 func getClusterTemplateRefName(name, version string) string {
@@ -386,81 +384,189 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 		return utils.NewInputError("the clustertemplate validation has failed")
 	}
 
-	// Validate the clusterinstance input from ProvisioningRequest against the schema
-	clusterTemplateInputMap, err := t.getClusterTemplateInputFromProvisioningRequest(
-		&t.object.Spec.ClusterTemplateInput.ClusterInstanceInput)
-	if err != nil {
-		return utils.NewInputError("failed to get the ClusterTemplate input for ClusterInstance: %s", err.Error())
+	if err = t.validateTemplateInputMatchesSchema(clusterTemplate); err != nil {
+		return utils.NewInputError(err.Error())
 	}
-	var subSchema []byte
-	subSchema, err = utils.ExtractSubSchema(clusterTemplate.Spec.TemplateParameterSchema.Raw, clusterInstanceParametersString)
-	if err != nil {
-		return utils.NewInputError("failed to extract clusterInstanceParameters subSchema: %s", err.Error())
+
+	if err = t.validateClusterInstanceInputMatchesSchema(ctx, clusterTemplate); err != nil {
+		return fmt.Errorf("failed to validate ClusterInstance input: %w", err)
 	}
-	err = t.validateClusterTemplateInputMatchesSchema(
-		&runtime.RawExtension{Raw: subSchema},
-		clusterTemplateInputMap,
-		utils.ClusterInstanceDataType)
-	if err != nil {
-		return utils.NewInputError("failed to validate ClusterTemplate input matches schema: %s", err.Error())
+
+	if err = t.validatePolicyTemplateInputMatchesSchema(ctx, clusterTemplate); err != nil {
+		return fmt.Errorf("failed to validate PolicyTemplate input: %w", err)
 	}
-	// Get the merged clusterinstance input data
-	mergedClusterInstanceData, err := t.getMergedClusterInputData(ctx, clusterTemplate, utils.ClusterInstanceDataType)
+
+	// TODO: Verify that ClusterInstance is per ClusterRequest basis.
+	//       There should not be multiple ClusterRequests for the same ClusterInstance.
+	return nil
+}
+
+// validateClusterInstanceInputMatchesSchema validates that the ClusterInstance input
+// from the ProvisioningRequest matches the schema defined in the ClusterTemplate.
+// If valid, the merged ClusterInstance data is stored in the clusterInput.
+func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesSchema(
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
+
+	// Get the subschema for ClusterInstanceParameters
+	clusterInstanceSubSchema, err := utils.ExtractSubSchema(
+		clusterTemplate.Spec.TemplateParameterSchema.Raw, utils.TemplateParamClusterInstance)
+	if err != nil {
+		return utils.NewInputError(
+			"failed to extract %s subschema: %s", utils.TemplateParamClusterInstance, err.Error())
+	}
+	// Any unknown fields not defined in the schema will be disallowed
+	utils.DisallowUnknownFieldsInSchema(clusterInstanceSubSchema)
+
+	// Get the matching input for ClusterInstanceParameters
+	clusterInstanceMatchingInput, err := utils.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+	if err != nil {
+		return utils.NewInputError(
+			"failed to extract matching input for subSchema %s: %w", utils.TemplateParamClusterInstance, err)
+	}
+	clusterInstanceMatchingInputMap := clusterInstanceMatchingInput.(map[string]any)
+
+	// The schema defined in ClusterTemplate's spec.templateParameterSchema for
+	// clusterInstanceParameters represents a subschema of ClusterInstance parameters that
+	// are allowed/exposed only to the ProvisioningRequest. Therefore, validate the ClusterInstance
+	// input from the ProvisioningRequest against this schema, rather than validating the merged
+	// ClusterInstance data. A full validation of the complete ClusterInstance input will be
+	// performed during the ClusterInstance dry-run later.
+	err = utils.ValidateJsonAgainstJsonSchema(
+		clusterInstanceSubSchema, clusterInstanceMatchingInput)
+	if err != nil {
+		return utils.NewInputError(
+			"the provided %s does not match the schema from ClusterTemplate (%s): %w",
+			utils.TemplateParamClusterInstance, clusterTemplate.Name, err)
+	}
+
+	// Get the merged ClusterInstance input data
+	mergedClusterInstanceData, err := t.getMergedClusterInputData(
+		ctx, clusterTemplate.Spec.Templates.ClusterInstanceDefaults,
+		clusterInstanceMatchingInputMap,
+		utils.TemplateParamClusterInstance)
 	if err != nil {
 		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
 
-	// Validate the merged policytemplate input data matches the schema
-	mergedPolicyTemplateData, err := t.getMergedClusterInputData(ctx, clusterTemplate, utils.PolicyTemplateDataType)
-	if err != nil {
-		return fmt.Errorf("failed to get merged cluster input data: %w", err)
-	}
-	subSchema, err = utils.ExtractSubSchema(clusterTemplate.Spec.TemplateParameterSchema.Raw, policyTemplateParametersString)
-	if err != nil {
-		return utils.NewInputError("failed to extract policyTemplateParameters subSchema: %s", err.Error())
-	}
-	err = t.validateClusterTemplateInputMatchesSchema(
-		&runtime.RawExtension{Raw: subSchema},
-		mergedPolicyTemplateData,
-		utils.PolicyTemplateDataType)
-	if err != nil {
-		return utils.NewInputError("failed to validate ClusterTemplate input matches schema: %s", err.Error())
-	}
-
-	// TODO: Verify that ClusterInstance is per ProvisioningRequest basis.
-	//       There should not be multiple ProvisioningRequests for the same ClusterInstance.
-
-	// The ProvisioningRequest is valid
-	// Set the clusterInput with the merged clusterinstance and policy template data
 	t.clusterInput.clusterInstanceData = mergedClusterInstanceData
+	return nil
+}
+
+// validatePolicyTemplateInputMatchesSchema validates that the merged PolicyTemplate input
+// (from both the ProvisioningRequest and the default configmap) matches the schema defined
+// in the ClusterTemplate. If valid, the merged PolicyTemplate data is stored in clusterInput.
+func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSchema(
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
+
+	// Get the subschema for PolicyTemplateParameters
+	policyTemplateSubSchema, err := utils.ExtractSubSchema(
+		clusterTemplate.Spec.TemplateParameterSchema.Raw, utils.TemplateParamPolicyConfig)
+	if err != nil {
+		return utils.NewInputError(
+			"failed to extract %s subschema: %s", utils.TemplateParamPolicyConfig, err.Error())
+	}
+	// Get the matching input for PolicyTemplateParameters
+	policyTemplateMatchingInput, err := utils.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamPolicyConfig)
+	if err != nil {
+		return utils.NewInputError(
+			"failed to extract matching input for subschema %s: %w", utils.TemplateParamPolicyConfig, err)
+	}
+	policyTemplateMatchingInputMap := policyTemplateMatchingInput.(map[string]any)
+
+	// Get the merged PolicyTemplate input data
+	mergedPolicyTemplateData, err := t.getMergedClusterInputData(
+		ctx, clusterTemplate.Spec.Templates.PolicyTemplateDefaults,
+		policyTemplateMatchingInputMap,
+		utils.TemplateParamPolicyConfig)
+	if err != nil {
+		return fmt.Errorf("failed to get merged cluster input data: %w", err)
+	}
+
+	// Validate the merged PolicyTemplate input data matches the schema
+	err = utils.ValidateJsonAgainstJsonSchema(
+		policyTemplateSubSchema, mergedPolicyTemplateData)
+	if err != nil {
+		return utils.NewInputError(
+			"the provided %s does not match the schema from ClusterTemplate (%s): %w",
+			utils.TemplateParamPolicyConfig, clusterTemplate.Name, err)
+	}
+
 	t.clusterInput.policyTemplateData = mergedPolicyTemplateData
 	return nil
 }
 
-func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
-	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate, dataType string) (map[string]any, error) {
-
-	var clusterTemplateInput runtime.RawExtension
-	var templateDefaultsCm string
-	var templateDefaultsCmKey string
-
-	switch dataType {
-	case utils.ClusterInstanceDataType:
-		clusterTemplateInput = t.object.Spec.ClusterTemplateInput.ClusterInstanceInput
-		templateDefaultsCm = clusterTemplate.Spec.Templates.ClusterInstanceDefaults
-		templateDefaultsCmKey = utils.ClusterInstanceTemplateDefaultsConfigmapKey
-	case utils.PolicyTemplateDataType:
-		clusterTemplateInput = t.object.Spec.ClusterTemplateInput.PolicyTemplateInput
-		templateDefaultsCm = clusterTemplate.Spec.Templates.PolicyTemplateDefaults
-		templateDefaultsCmKey = utils.PolicyTemplateDefaultsConfigmapKey
-	default:
-		return nil, utils.NewInputError("unsupported data type")
+// validateTemplateInputMatchesSchema validates the input parameters from the ProvisioningRequest
+// against the schema defined in the ClusterTemplate. This function focuses on validating the
+// input other than clusterInstanceParameters and policyTemplateParameters, as those will be
+// validated separately. It ensures the input parameters have the expected types and any
+// required parameters are present.
+func (t *provisioningRequestReconcilerTask) validateTemplateInputMatchesSchema(
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
+	// Unmarshal the full schema from the ClusterTemplate
+	templateParamSchema := make(map[string]any)
+	err := json.Unmarshal(clusterTemplate.Spec.TemplateParameterSchema.Raw, &templateParamSchema)
+	if err != nil {
+		// Unlikely to happen since it has been validated by API server
+		return utils.NewInputError("error unmarshaling template schema: %w", err)
 	}
 
-	// Get the clustertemplate input from provisioning request.
-	clusterTemplateInputMap, err := t.getClusterTemplateInputFromProvisioningRequest(&clusterTemplateInput)
+	// Unmarshal the template input from the ProvisioningRequest
+	templateParamsInput := make(map[string]any)
+	if err = json.Unmarshal(t.object.Spec.TemplateParameters.Raw, &templateParamsInput); err != nil {
+		// Unlikely to happen since it has been validated by API server
+		return utils.NewInputError("error unmarshaling templateParameters: %w", err)
+	}
+
+	// The following errors of missing keys are unlikely since the schema should already
+	// be validated by ClusterTemplate controller
+	schemaProperties, ok := templateParamSchema["properties"]
+	if !ok {
+		return utils.NewInputError(
+			"missing keyword 'properties' in the schema from ClusterTemplate (%s)", clusterTemplate.Name)
+	}
+	clusterInstanceSubSchema, ok := schemaProperties.(map[string]any)[utils.TemplateParamClusterInstance]
+	if !ok {
+		return utils.NewInputError(
+			"missing required property '%s' in the schema from ClusterTemplate (%s)",
+			utils.TemplateParamClusterInstance, clusterTemplate.Name)
+	}
+	policyTemplateSubSchema, ok := schemaProperties.(map[string]any)[utils.TemplateParamPolicyConfig]
+	if !ok {
+		return utils.NewInputError(
+			"missing required property '%s' in the schema from ClusterTemplate (%s)",
+			utils.TemplateParamPolicyConfig, clusterTemplate.Name)
+	}
+
+	// The ClusterInstance and PolicyTemplate parameters have their own specific validation rules
+	// and will be handled separately. For now, remove the subschemas for those parameters to
+	// ensure they are not validated at this stage.
+	delete(clusterInstanceSubSchema.(map[string]any), "properties")
+	delete(policyTemplateSubSchema.(map[string]any), "properties")
+
+	err = utils.ValidateJsonAgainstJsonSchema(templateParamSchema, templateParamsInput)
 	if err != nil {
-		return nil, utils.NewInputError("failed to get the ClusterTemplate input for %s: %s", dataType, err.Error())
+		return utils.NewInputError(
+			"the provided templateParameters does not match the schema from ClusterTemplate (%s): %w",
+			clusterTemplate.Name, err)
+	}
+
+	return nil
+}
+
+func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
+	ctx context.Context, templateDefaultsCm string, clusterTemplateInput map[string]any, templateParam string) (map[string]any, error) {
+
+	var templateDefaultsCmKey string
+
+	switch templateParam {
+	case utils.TemplateParamClusterInstance:
+		templateDefaultsCmKey = utils.ClusterInstanceTemplateDefaultsConfigmapKey
+	case utils.TemplateParamPolicyConfig:
+		templateDefaultsCmKey = utils.PolicyTemplateDefaultsConfigmapKey
+	default:
+		return nil, utils.NewInputError("unsupported template parameter")
 	}
 
 	// Retrieve the configmap that holds the default data.
@@ -474,24 +580,24 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 		return nil, fmt.Errorf("failed to get template defaults from ConfigMap %s: %w", templateDefaultsCm, err)
 	}
 
-	if dataType == utils.ClusterInstanceDataType {
+	if templateParam == utils.TemplateParamClusterInstance {
 		// Special handling for overrides of ClusterInstance's extraLabels and extraAnnotations.
-		// The clusterTemplateInputMap will be overridden with the values from defaut configmap
+		// The clusterTemplateInput will be overridden with the values from defaut configmap
 		// if same labels/annotations exist in both.
 		if err := utils.OverrideClusterInstanceLabelsOrAnnotations(
-			clusterTemplateInputMap, clusterTemplateDefaultsMap); err != nil {
+			clusterTemplateInput, clusterTemplateDefaultsMap); err != nil {
 			return nil, utils.NewInputError(err.Error())
 		}
 	}
 
 	// Get the merged cluster data
-	mergedClusterDataMap, err := mergeClusterTemplateInputWithDefaults(clusterTemplateInputMap, clusterTemplateDefaultsMap)
+	mergedClusterDataMap, err := mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplateDefaultsMap)
 	if err != nil {
-		return nil, utils.NewInputError("failed to merge data for %s: %s", dataType, err.Error())
+		return nil, utils.NewInputError("failed to merge data for %s: %s", templateParam, err.Error())
 	}
 
 	t.logger.Info(
-		fmt.Sprintf("Merged the %s default data with the clusterTemplateInput data for ProvisioningRequest", dataType),
+		fmt.Sprintf("Merged the %s default data with the clusterTemplateInput data for ProvisioningRequest", templateParam),
 		slog.String("name", t.object.Name),
 	)
 	return mergedClusterDataMap, nil
@@ -742,9 +848,15 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 			nodeGroup[i].Size = count
 		}
 	}
+
+	siteId, err := utils.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamOCloudSiteId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamOCloudSiteId, err)
+	}
+
 	nodePool.Spec.CloudID = clusterInstance.GetName()
-	nodePool.Spec.LocationSpec = t.object.Spec.LocationSpec
-	nodePool.Spec.Site = t.object.Spec.Site
+	nodePool.Spec.Site = siteId.(string)
 	nodePool.Spec.HwMgrId = hwTemplateCm.Data[utils.HwTemplatePluginMgr]
 	nodePool.Spec.NodeGroup = nodeGroup
 	nodePool.ObjectMeta.Name = clusterInstance.GetName()
@@ -760,16 +872,6 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	labels[provisioningRequestNameLabel] = t.object.Name
 	nodePool.SetLabels(labels)
 	return nodePool, nil
-}
-
-func (t *provisioningRequestReconcilerTask) getClusterTemplateInputFromProvisioningRequest(clusterTemplateInput *runtime.RawExtension) (map[string]any, error) {
-	clusterTemplateInputMap := make(map[string]any)
-	err := json.Unmarshal(clusterTemplateInput.Raw, &clusterTemplateInputMap)
-	if err != nil {
-		// Unlikely to happen since it has been validated by API server
-		return nil, fmt.Errorf("error unmarshaling the cluster template input from ProvisioningRequest: %w", err)
-	}
-	return clusterTemplateInputMap, nil
 }
 
 // mergeClusterTemplateInputWithDefaults merges the cluster template input with the default data
@@ -1401,14 +1503,16 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceBMCSecrets( // 
 	ctx context.Context, clusterName string) error {
 
 	// The BMC credential details are for now obtained from the ProvisioningRequest.
-	inputData, err := t.getClusterTemplateInputFromProvisioningRequest(&t.object.Spec.ClusterTemplateInput.ClusterInstanceInput)
+	clusterTemplateInputParams := make(map[string]any)
+	err := json.Unmarshal(t.object.Spec.TemplateParameters.Raw, &clusterTemplateInputParams)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal ClusterInstanceInput raw data: %w", err)
+		// Unlikely to happen since it has been validated by API server
+		return fmt.Errorf("error unmarshaling templateParameters: %w", err)
 	}
 
 	// If we got to this point, we can assume that all the keys up to the BMC details
 	// exists since ClusterInstance has nodes mandatory.
-	nodesInterface, nodesExist := inputData["nodes"]
+	nodesInterface, nodesExist := clusterTemplateInputParams[utils.TemplateParamClusterInstance].(map[string]any)["nodes"]
 	if !nodesExist {
 		// Unlikely to happen
 		return utils.NewInputError(
@@ -1610,33 +1714,6 @@ func (t *provisioningRequestReconcilerTask) getCrClusterTemplateRef(ctx context.
 		fmt.Sprintf(
 			"a valid (%s) ClusterTemplate does not exist in any namespace",
 			clusterTemplateRefName))
-}
-
-// validateClusterTemplateInputMatchesSchema validates if the given clusterTemplateInput matches the
-// provided templateParameterSchema of the ClusterTemplate
-func (t *provisioningRequestReconcilerTask) validateClusterTemplateInputMatchesSchema(
-	clusterTemplateInputSchema *runtime.RawExtension, clusterTemplateInput map[string]any, dataType string) error {
-	// Get the schema
-	schemaMap := make(map[string]any)
-	err := json.Unmarshal(clusterTemplateInputSchema.Raw, &schemaMap)
-	if err != nil {
-		return fmt.Errorf("error marshaling the ClusterTemplate schema data: %w", err)
-	}
-	if dataType == utils.ClusterInstanceDataType {
-		utils.DisallowUnknownFieldsInSchema(schemaMap)
-	}
-
-	// Check that the clusterTemplateInput matches the templateParameterSchema from the ClusterTemplate.
-	clusterTemplateRefName := getClusterTemplateRefName(
-		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
-	err = utils.ValidateJsonAgainstJsonSchema(
-		schemaMap, clusterTemplateInput)
-	if err != nil {
-		return fmt.Errorf("the provided clusterTemplateInput for %s does not "+
-			"match the schema from the ClusterTemplate (%s): %w", dataType, clusterTemplateRefName, err)
-	}
-
-	return nil
 }
 
 // createPoliciesConfigMap creates the cluster ConfigMap which will be used

@@ -68,13 +68,19 @@ const (
 	defaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
 )
 
+// Required template schema parameters
+const (
+	TemplateParamNodeClusterName = "nodeClusterName"
+	TemplateParamOCloudSiteId    = "oCloudSiteId"
+	TemplateParamClusterInstance = "clusterInstanceParameters"
+	TemplateParamPolicyConfig    = "policyTemplateParameters"
+)
+
 // ClusterInstance template constants
 const (
 	ClusterInstanceTemplateName                 = "ClusterInstance"
 	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
-	ClusterInstanceTemplateConfigmapName        = "sc-clusterinstance-template"
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
-	clusterInstanceParameters                   = "clusterInstanceParameters"
 )
 
 var (
@@ -103,7 +109,6 @@ var (
 // PolicyTemplate constants
 const (
 	PolicyTemplateDefaultsConfigmapKey = "policytemplate-defaults"
-	PolicyTemplateParameters           = "policyTemplateParameters"
 	ClusterVersionLabelKey             = "cluster-version"
 )
 
@@ -129,11 +134,6 @@ const (
 	HwTemplatePluginMgr      = "hwMgrId"
 	HwTemplateNodePool       = "node-pools-data"
 	HwTemplateBootIfaceLabel = "bootInterfaceLabel"
-)
-
-const (
-	ClusterInstanceDataType = "ClusterInstance"
-	PolicyTemplateDataType  = "PolicyTemplate"
 )
 
 const (

@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -30,8 +29,13 @@ type ProvisioningRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	hwv1alpha1.LocationSpec `json:",inline"`
+	// Name specifies a human-readable name for this provisioning request, intended for identification and descriptive purposes.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Name string `json:"name,omitempty"`
+
+	// Description specifies a brief description of this provisioning request, providing additional context or details.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Description string `json:"description,omitempty"`
 
 	// TemplateName defines the base name of the referenced ClusterTemplate.
 	// The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
@@ -43,28 +47,16 @@ type ProvisioningRequestSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	TemplateVersion string `json:"templateVersion"`
 
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Template Input",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ClusterTemplateInput ClusterTemplateInput `json:"clusterTemplateInput"`
+	// TemplateParameters provides the input data that conforms to the OpenAPI v3 schema defined in the referenced ClusterTemplate's spec.templateParameterSchema.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Parameters",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TemplateParameters runtime.RawExtension `json:"templateParameters"`
+
+	// Extensions holds additional custom key-value pairs that can be used to extend the cluster's configuration.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Extensions",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Extensions runtime.RawExtension `json:"extensions,omitempty"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Timeout Timeout `json:"timeout,omitempty"`
-}
-
-// ClusterTemplateInput provides the input data that follows the schema defined in the referenced ClusterTemplate.
-type ClusterTemplateInput struct {
-	// ClusterInstanceInput provides the input values required for provisioning.
-	// The input must adhere to the schema defined in the referenced ClusterTemplate's
-	// spec.inputDataSchema.clusterInstanceSchema.
-	// +kubebuilder:validation:Type=object
-	// +kubebuilder:pruning:PreserveUnknownFields
-	ClusterInstanceInput runtime.RawExtension `json:"clusterInstanceInput"`
-
-	// PolicyTemplateInput provides input values for ACM configuration policies.
-	// The input follows the schema defined in the referenced ClusterTemplate's
-	// spec.inputDataSchema.policyTemplateSchema.
-	// +kubebuilder:validation:Type=object
-	// +kubebuilder:pruning:PreserveUnknownFields
-	PolicyTemplateInput runtime.RawExtension `json:"policyTemplateInput"`
 }
 
 // NodePoolRef references a node pool.

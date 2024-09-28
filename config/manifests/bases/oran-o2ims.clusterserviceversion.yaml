@@ -233,18 +233,22 @@ spec:
         name: ""
         version: v1
       specDescriptors:
-      - displayName: Cluster Template Input
-        path: clusterTemplateInput
+      - description: Description specifies a brief description of this provisioning
+          request, providing additional context or details.
+        displayName: Description
+        path: description
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Location
-        displayName: Location
-        path: location
+      - description: Extensions holds additional custom key-value pairs that can be
+          used to extend the cluster's configuration.
+        displayName: Extensions
+        path: extensions
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Site
-        displayName: Site
-        path: site
+      - description: Name specifies a human-readable name for this provisioning request,
+          intended for identification and descriptive purposes.
+        displayName: Name
+        path: name
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
@@ -252,6 +256,12 @@ spec:
           The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
         displayName: Template Name
         path: templateName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: TemplateParameters provides the input data that conforms to the
+          OpenAPI v3 schema defined in the referenced ClusterTemplate's spec.templateParameterSchema.
+        displayName: Template Parameters
+        path: templateParameters
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-

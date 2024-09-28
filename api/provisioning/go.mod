@@ -3,7 +3,6 @@ module github.com/openshift-kni/oran-o2ims/api/provisioning
 go 1.21
 
 require (
-	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241001130125-a052f08603f7
 	k8s.io/apimachinery v0.28.4
 	sigs.k8s.io/controller-runtime v0.16.3
 )

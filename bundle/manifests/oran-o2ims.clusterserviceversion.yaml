@@ -358,8 +358,11 @@ metadata:
             "name": "provisioningrequest-sample"
           },
           "spec": {
-            "clusterTemplateInput": {
-              "clusterInstanceInput": {
+            "description": "Provisioning request for setting up a Single Node OpenShift (SNO) in the test environment.",
+            "name": "TestEnv-SNO-Provisioning",
+            "templateName": "clustertemplate-sample",
+            "templateParameters": {
+              "clusterInstanceParameters": {
                 "additionalNTPSources": [
                   "NTP.server1",
                   "1.1.1.1"
@@ -524,13 +527,13 @@ metadata:
                 ],
                 "sshPublicKey": "ssh-rsa"
               },
-              "policyTemplateInput": {
+              "nodeClusterName": "site-sno-du-1",
+              "oCloudSiteId": "local-west-12345",
+              "policyTemplateParameters": {
                 "sriov-network-vlan-1": "114",
                 "sriov-network-vlan-2": "111"
               }
             },
-            "site": "local",
-            "templateName": "clustertemplate-sample",
             "templateVersion": "v1.0.0",
             "timeout": {
               "clusterProvisioning": 80,
@@ -772,18 +775,22 @@ spec:
         name: ""
         version: v1
       specDescriptors:
-      - displayName: Cluster Template Input
-        path: clusterTemplateInput
+      - description: Description specifies a brief description of this provisioning
+          request, providing additional context or details.
+        displayName: Description
+        path: description
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Location
-        displayName: Location
-        path: location
+      - description: Extensions holds additional custom key-value pairs that can be
+          used to extend the cluster's configuration.
+        displayName: Extensions
+        path: extensions
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Site
-        displayName: Site
-        path: site
+      - description: Name specifies a human-readable name for this provisioning request,
+          intended for identification and descriptive purposes.
+        displayName: Name
+        path: name
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
@@ -791,6 +798,12 @@ spec:
           The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
         displayName: Template Name
         path: templateName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: TemplateParameters provides the input data that conforms to the
+          OpenAPI v3 schema defined in the referenced ClusterTemplate's spec.templateParameterSchema.
+        displayName: Template Parameters
+        path: templateParameters
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-

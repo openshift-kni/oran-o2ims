@@ -2139,7 +2139,7 @@ func TestExtractSubSchema(t *testing.T) {
 	tests := []struct {
 		name          string
 		args          args
-		wantSubSchema []byte
+		wantSubSchema map[string]any
 		wantErr       bool
 	}{
 		{
@@ -2148,8 +2148,17 @@ func TestExtractSubSchema(t *testing.T) {
 				mainSchema: []byte(testTemplate),
 				node:       "clusterInstanceParameters",
 			},
-			wantSubSchema: []byte(`{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}`),
-			wantErr:       false,
+			wantSubSchema: map[string]any{
+				"description": "clusterInstanceParameters.",
+				"properties": map[string]any{
+					"additionalNTPSources": map[string]any{
+						"description": "AdditionalNTPSources.",
+						"items":       map[string]any{"type": "string"},
+						"type":        "array",
+					},
+				},
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -2161,6 +2170,80 @@ func TestExtractSubSchema(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotSubSchema, tt.wantSubSchema) {
 				t.Errorf("ExtractSubSchema() = %v, want %v", gotSubSchema, tt.wantSubSchema)
+			}
+		})
+	}
+}
+
+func TestExtractMatchingInput(t *testing.T) {
+	type args struct {
+		input        []byte
+		subSchemaKey string
+	}
+	tests := []struct {
+		name              string
+		args              args
+		wantMatchingInput any
+		wantErr           bool
+	}{
+		{
+			name: "ok - valid map input",
+			args: args{
+				input: []byte(`{
+					"clusterInstanceParameters": {
+						"additionalNTPSources": ["1.1.1.1"]
+					}
+				}`),
+				subSchemaKey: "clusterInstanceParameters",
+			},
+			wantMatchingInput: map[string]any{
+				"additionalNTPSources": []any{"1.1.1.1"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "ok - valid string input",
+			args: args{
+				input: []byte(`{
+					"oCloudSiteId": "local-123"
+				}`),
+				subSchemaKey: "oCloudSiteId",
+			},
+			wantMatchingInput: "local-123",
+			wantErr:           false,
+		},
+		{
+			name: "error - missing subSchemaKey",
+			args: args{
+				input: []byte(`{
+					"clusterInstanceParameters": {
+						"additionalNTPSources": ["1.1.1.1"]
+					}
+				}`),
+				subSchemaKey: "oCloudSiteId",
+			},
+			wantMatchingInput: nil,
+			wantErr:           true,
+		},
+		{
+			name: "error - invalid JSON",
+			args: args{
+				input:        []byte(`{invalid JSON}`),
+				subSchemaKey: "clusterInstance",
+			},
+			wantMatchingInput: nil,
+			wantErr:           true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMatchingInput, err := ExtractMatchingInput(tt.args.input, tt.args.subSchemaKey)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractMatchingInput() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotMatchingInput, tt.wantMatchingInput) {
+				t.Errorf("ExtractMatchingInput() = %s, want %s", gotMatchingInput, tt.wantMatchingInput)
 			}
 		})
 	}

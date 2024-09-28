@@ -101,7 +101,7 @@ func DisallowUnknownFieldsInSchema(schema map[string]any) {
 	// Ignore other keywords that could have "properties"
 }
 
-func ValidateJsonAgainstJsonSchema(schema, input map[string]any) error {
+func ValidateJsonAgainstJsonSchema(schema, input any) error {
 	schemaLoader := gojsonschema.NewGoLoader(schema)
 	inputLoader := gojsonschema.NewGoLoader(input)
 
@@ -1164,7 +1164,7 @@ func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodeP
 }
 
 // ExtractSubSchema extracts a Sub schema indexed by subSchemaKey from a Main schema
-func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema []byte, err error) {
+func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema map[string]any, err error) {
 	jsonObject := make(map[string]any)
 	if len(mainSchema) == 0 {
 		return subSchema, nil
@@ -1180,11 +1180,33 @@ func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema []byte,
 	if !ok {
 		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
 	}
-	subSchema, err = json.Marshal(properties[subSchemaKey])
-	if err != nil {
-		return subSchema, fmt.Errorf("failed to Marshall Schema: %w", err)
+
+	subSchemaValue, ok := properties[subSchemaKey]
+	if !ok {
+		return subSchema, fmt.Errorf("subSchema %s does not exist: %w", subSchemaKey, err)
+	}
+
+	subSchema, ok = subSchemaValue.(map[string]any)
+	if !ok {
+		return subSchema, fmt.Errorf("subSchema %s is not a valid map: %w", subSchemaKey, err)
 	}
 	return subSchema, nil
+}
+
+// ExtractMatchingInput extracts the portion of the input data that corresponds to a given subSchema key.
+func ExtractMatchingInput(input []byte, subSchemaKey string) (any, error) {
+	inputData := make(map[string]any)
+	err := json.Unmarshal(input, &inputData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal input: %w", err)
+	}
+
+	// Check if the input contains the subSchema key
+	matchingInput, ok := inputData[subSchemaKey]
+	if !ok {
+		return nil, fmt.Errorf("input does not contain key %s: %w", subSchemaKey, err)
+	}
+	return matchingInput, nil
 }
 
 // MapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
