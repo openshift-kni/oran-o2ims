@@ -21,6 +21,7 @@ ginkgo_flags:=
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 4.16.0
+
 # DEFAULT_CHANNEL defines the default channel used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g DEFAULT_CHANNEL = "stable")
 # To re-generate a bundle for any other default channel without changing the default setup, you can:
@@ -81,13 +82,11 @@ CONTAINER_TOOL ?= docker
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# generating the backend token 
+# setting  the backend token and the backend URL 
 TOKEN_BACKEND := $(shell oc create token -n open-cluster-management multicluster-operators --duration=24h)
 BACKEND_TOKEN_RS := $(shell oc create token oauth-apiserver-sa -n openshift-oauth-apiserver --duration=48h)
 BACKEND_URL := $(shell oc get route -n open-cluster-management search-api -o json | jq -r '"https://" + .spec.host')
 
-
-#CURRENTUSER    := $$(id -u)
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
 
@@ -128,7 +127,7 @@ build: manifests generate fmt vet ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet binary ## Run a controller from your host.
-	./oran-o2ims start controller-manager
+	IMAGE=$(IMAGE_TAG_BASE):$(VERSION) ./oran-o2ims start controller-manager
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -175,23 +174,13 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
-	
-         
-.PHONY: undeploy
-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
-
-.PHONY: deploy-service
-deploy-service: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	@sed -i '' -e 's/ingressHost:.*/ingressHost: $(INGRESS_HOST)/' config/services/metadata-server.yaml 
 	@sed -i '' -e 's/cloudId: .*/cloudId: $(CLOUD_ID)/' config/services/metadata-server.yaml
-	$(KUSTOMIZE) build config/deployment | $(KUBECTL) apply -f -
+	$(KUSTOMIZE) build config/services | $(KUBECTL) apply -f -
 
-.PHONY: undeploy-service
-undeploy-service: undeploy controller and deleting services from K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/deployment| $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+.PHONY: undeploy
+undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	$(KUSTOMIZE) build config/services | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
 
