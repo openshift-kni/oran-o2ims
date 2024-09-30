@@ -13,11 +13,11 @@ metadata:
 spec:
   alarmSubscriptionServerConfig:
     enabled: false
-  cloudId: c0332915-6bbb-4d8d-8628-0ab3cc2c7e5e
+  cloudId: 9b504da0-727a-494f-b470-3eca88a1d13d
   deploymentManagerServerConfig:
     enabled: false
   image: quay.io/openshift-kni/oran-o2ims:4.16
-  ingressHost: o2ims.apps.hubcluster-1.hubcluster-1.lab.eng.cert.redhat.com
+  ingressHost: apps.hubcluster-1.hubcluster-1.lab.eng.cert.redhat.com
   metadataServerConfig:
     enabled: true
   resourceServerConfig:

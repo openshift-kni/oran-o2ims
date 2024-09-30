@@ -87,6 +87,12 @@ TOKEN_BACKEND := $(shell oc create token -n open-cluster-management multicluster
 BACKEND_TOKEN_RS := $(shell oc create token oauth-apiserver-sa -n openshift-oauth-apiserver --duration=48h)
 BACKEND_URL := $(shell oc get route -n open-cluster-management search-api -o json | jq -r '"https://" + .spec.host')
 
+# getting the cloud id and the IngressHost 
+
+CLOUD_ID := $(shell oc get clusterversion -o jsonpath='{.items[].spec.clusterID}{"\n"}')
+INGRESS_HOST := $(shell oc get ingresscontrollers.operator.openshift.io -n openshift-ingress-operator default -o json | jq -r .status.domain)
+
+
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
 
@@ -174,13 +180,13 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	@sed -i '' -e 's/ingressHost:.*/ingressHost: $(INGRESS_HOST)/' config/services/metadata-server.yaml 
-	@sed -i '' -e 's/cloudId: .*/cloudId: $(CLOUD_ID)/' config/services/metadata-server.yaml
-	$(KUSTOMIZE) build config/services | $(KUBECTL) apply -f -
+	@sed -i '' -e 's/ingressHost:.*/ingressHost: $(INGRESS_HOST)/' config/manager/metadata-server.yaml 
+	@sed -i '' -e 's/cloudId: .*/cloudId: $(CLOUD_ID)/' config/manager/metadata-server.yaml
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/services | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
 
