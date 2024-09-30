@@ -1538,7 +1538,8 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		task         *clusterRequestReconcilerTask
 		cr           *oranv1alpha1.ClusterRequest
 		ciDefaultsCm = "clusterinstance-defaults-v1"
-		ctName       = "clustertemplate-a-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "clustertemplate-a-v4-16"
 		crName       = "cluster-1"
 	)
@@ -1552,7 +1553,8 @@ var _ = Describe("handleRenderClusterInstance", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterRequestSpec{
-				ClusterTemplateRef: ctName,
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
 				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
 					ClusterInstanceInput: runtime.RawExtension{Raw: []byte(testClusterTemplateInput)},
 				},
@@ -1562,7 +1564,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		// Define the cluster template.
 		ct := &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
