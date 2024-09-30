@@ -969,7 +969,9 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			managedCluster = &clusterv1.ManagedCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: crName},
 				Status: clusterv1.ManagedClusterStatus{
-					Conditions: []metav1.Condition{{Type: clusterv1.ManagedClusterConditionAvailable, Status: metav1.ConditionFalse}},
+					Conditions: []metav1.Condition{{Type: clusterv1.ManagedClusterConditionAvailable, Status: metav1.ConditionFalse},
+						{Type: clusterv1.ManagedClusterConditionJoined, Status: metav1.ConditionFalse},
+						{Type: clusterv1.ManagedClusterConditionHubAccepted, Status: metav1.ConditionFalse}},
 				},
 			}
 			Expect(c.Create(ctx, managedCluster)).To(Succeed())
@@ -1092,9 +1094,16 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			clusterInstance.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
 			Expect(c.Status().Update(ctx, clusterInstance)).To(Succeed())
 			// Patch ManagedCluster to ready
-			readyCond := meta.FindStatusCondition(
+			availableCond := meta.FindStatusCondition(
 				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
-			readyCond.Status = metav1.ConditionTrue
+			joinedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionJoined)
+			acceptedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionHubAccepted)
+			availableCond.Status = metav1.ConditionTrue
+			joinedCond.Status = metav1.ConditionTrue
+			acceptedCond.Status = metav1.ConditionTrue
+
 			Expect(c.Status().Update(ctx, managedCluster)).To(Succeed())
 			// Patch enforce policy to Compliant
 			policy.Status.ComplianceState = "Compliant"
@@ -1248,9 +1257,15 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			currentCI.Status.Conditions = append(clusterInstance.Status.Conditions, crProvisionedCond)
 			Expect(c.Status().Update(ctx, currentCI)).To(Succeed())
 			// Patch ManagedCluster to ready
-			readyCond := meta.FindStatusCondition(
+			availableCond := meta.FindStatusCondition(
 				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
-			readyCond.Status = metav1.ConditionTrue
+			joinedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionJoined)
+			acceptedCond := meta.FindStatusCondition(
+				managedCluster.Status.Conditions, clusterv1.ManagedClusterConditionHubAccepted)
+			availableCond.Status = metav1.ConditionTrue
+			joinedCond.Status = metav1.ConditionTrue
+			acceptedCond.Status = metav1.ConditionTrue
 			Expect(c.Status().Update(ctx, managedCluster)).To(Succeed())
 			// Patch enforce policy to Compliant
 			policy.Status.ComplianceState = "Compliant"
@@ -2681,120 +2696,6 @@ defaultHugepagesSize: "1G"`,
 		Expect(CRTask.object.Status.Policies).ToNot(BeEmpty())
 	})
 
-	It("Moves from TimedOut to Completed if all the policies are compliant", func() {
-		req := reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      "cluster-1",
-				Namespace: ctNamespace,
-			},
-		}
-
-		result, err := CRReconciler.Reconcile(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-		// Expect to not requeue on valid cluster request.
-		Expect(result.Requeue).To(BeFalse())
-
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
-
-		// Create the ClusterRequest reconciliation task.
-		err = CRReconciler.Client.Get(
-			context.TODO(),
-			types.NamespacedName{
-				Name:      "cluster-1",
-				Namespace: "clustertemplate-a-v4-16",
-			},
-			clusterRequest)
-		Expect(err).ToNot(HaveOccurred())
-
-		CRTask = &clusterRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: clusterRequest, // cluster-1 request
-		}
-
-		// Update the ClusterRequest ConfigurationApplied condition to TimedOut.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.CRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.TimedOut,
-			metav1.ConditionFalse,
-			"The configuration is still being applied, but it timed out",
-		)
-		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
-
-		// Create the policies, all Compliant, one in inform and one in enforce.
-		newPolicies := []client.Object{
-			&policiesv1.Policy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-					Namespace: "cluster-1",
-					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
-					},
-				},
-				Spec: policiesv1.PolicySpec{
-					RemediationAction: "enforce",
-				},
-				Status: policiesv1.PolicyStatus{
-					ComplianceState: "Compliant",
-				},
-			},
-			&policiesv1.Policy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-					Namespace: "cluster-1",
-					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
-					},
-				},
-				Spec: policiesv1.PolicySpec{
-					RemediationAction: "inform",
-				},
-				Status: policiesv1.PolicyStatus{
-					ComplianceState: "Compliant",
-				},
-			},
-		}
-		for _, newPolicy := range newPolicies {
-			Expect(c.Create(ctx, newPolicy)).To(Succeed())
-		}
-
-		// Call the handleClusterPolicyConfiguration function.
-		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeFalse()) // there are no NonCompliant policies
-		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
-				{
-					Compliant:         "Compliant",
-					PolicyName:        "v1-sriov-configuration-policy",
-					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
-					RemediationAction: "inform",
-				},
-				{
-					Compliant:         "Compliant",
-					PolicyName:        "v1-subscriptions-policy",
-					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
-					RemediationAction: "enforce",
-				},
-			},
-		))
-
-		// Check the status conditions.
-		conditions := CRTask.object.Status.Conditions
-		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.CRconditionTypes.ConfigurationApplied))
-		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.CRconditionTypes.ConfigurationApplied)))
-		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
-		Expect(configAppliedCond.Message).To(Equal("The configuration is up to date"))
-	})
-
 	It("Clears the NonCompliantAt timestamp and timeout when policies are switched to inform", func() {
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
@@ -2906,7 +2807,8 @@ defaultHugepagesSize: "1G"`,
 
 		// Call the handleClusterPolicyConfiguration function.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		Expect(requeue).To(BeFalse()) // there are NonCompliant policies in enforce but
+		// we are now in timedOut state so no need to requeue
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check the status conditions.
@@ -3360,7 +3262,8 @@ defaultHugepagesSize: "1G"`,
 
 		// Call the handleClusterPolicyConfiguration function.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		Expect(requeue).To(BeFalse()) // there are NonCompliant policies in enforce but
+		// we are now in timedOut state so no need to requeue
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check the status conditions.
@@ -3377,7 +3280,8 @@ defaultHugepagesSize: "1G"`,
 		// Check that another handleClusterPolicyConfiguration call doesn't change the status if
 		// the policies are the same.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		Expect(requeue).To(BeFalse()) // there are NonCompliant policies in enforce but
+		// we are now in timedOut state so no need to requeue
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check the status conditions.
@@ -3961,169 +3865,5 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
-	})
-})
-
-var _ = Describe("hasPolicyConfigurationTimedOut", func() {
-	var (
-		ctx          context.Context
-		c            client.Client
-		CRReconciler *ClusterRequestReconciler
-		CRTask       *clusterRequestReconcilerTask
-		CTReconciler *ClusterTemplateReconciler
-		ctName       = "clustertemplate-a-v1"
-		ctNamespace  = "clustertemplate-a-v4-16"
-	)
-
-	BeforeEach(func() {
-		// Define the needed resources.
-		crs := []client.Object{
-			// Cluster Template Namespace.
-			&corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: ctNamespace,
-				},
-			},
-			// Cluster Request.
-			&oranv1alpha1.ClusterRequest{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "cluster-1",
-					Namespace:  ctNamespace,
-					Finalizers: []string{clusterRequestFinalizer},
-				},
-				Spec: oranv1alpha1.ClusterRequestSpec{
-					ClusterTemplateRef: ctName,
-					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
-						ClusterInstanceInput: runtime.RawExtension{
-							Raw: []byte(testClusterTemplateInput),
-						},
-						PolicyTemplateInput: runtime.RawExtension{
-							Raw: []byte(testPolicyTemplateInput),
-						},
-					},
-					Timeout: oranv1alpha1.Timeout{
-						Configuration: 1,
-					},
-				},
-				Status: oranv1alpha1.ClusterRequestStatus{
-					ClusterDetails: &oranv1alpha1.ClusterDetails{},
-				},
-			},
-		}
-
-		c = getFakeClientFromObjects(crs...)
-		// Reconcile the ClusterTemplate.
-		CTReconciler = &ClusterTemplateReconciler{
-			Client: c,
-			Logger: logger,
-		}
-
-		req := reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      ctName,
-				Namespace: ctNamespace,
-			},
-		}
-
-		_, err := CTReconciler.Reconcile(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-
-		CRReconciler = &ClusterRequestReconciler{
-			Client: c,
-			Logger: logger,
-		}
-
-		CRTask = &clusterRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: crs[1].(*oranv1alpha1.ClusterRequest), // cluster-1 request
-		}
-	})
-
-	It("Returns false if the status is unexpected and NonCompliantAt is not set", func() {
-		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.CRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Unknown,
-			metav1.ConditionFalse,
-			"",
-		)
-		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
-		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
-		// Check that NonCompliantAt was set and that the return is false.
-		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
-	})
-
-	It("Returns false if the status is Completed and sets NonCompliantAt", func() {
-		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.CRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Completed,
-			metav1.ConditionTrue,
-			"",
-		)
-		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
-		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
-		// Check that NonCompliantAt was set and that the return is false.
-		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
-	})
-
-	It("Returns false if the status is OutOfDate and sets NonCompliantAt", func() {
-		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.CRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.OutOfDate,
-			metav1.ConditionFalse,
-			"",
-		)
-		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
-		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
-		// Check that NonCompliantAt was set and that the return is false.
-		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
-	})
-
-	It("Returns false if the status is Missing and sets NonCompliantAt", func() {
-		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.CRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Missing,
-			metav1.ConditionFalse,
-			"",
-		)
-		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
-		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
-		// Check that NonCompliantAt was set and that the return is false.
-		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
-	})
-
-	It("Returns true if the status is InProgress and the timeout has passed", func() {
-		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.CRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.InProgress,
-			metav1.ConditionFalse,
-			"",
-		)
-		// Set NonCompliantAt.
-		nonCompliantAt := metav1.Now().Add(-2 * time.Minute)
-		CRTask.object.Status.ClusterDetails.NonCompliantAt.Time = nonCompliantAt
-		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
-		// Check that NonCompliantAt wasn't changed and that the return is true.
-		Expect(policyTimedOut).To(BeTrue())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(Equal(nonCompliantAt))
-	})
-
-	It("Sets NonCompliantAt if there is no ConfigurationApplied condition", func() {
-		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
-		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 })
