@@ -1,0 +1,24 @@
+apiVersion: o2ims.oran.openshift.io/v1alpha1
+kind: Inventory
+metadata:
+  annotations:
+  labels:
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/instance: orano2ims-sample
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: orano2ims
+    app.kubernetes.io/part-of: oran-o2ims
+  name: sample
+  namespace: oran-o2ims
+spec:
+  alarmSubscriptionServerConfig:
+    enabled: false
+  cloudId: c0332915-6bbb-4d8d-8628-0ab3cc2c7e5e
+  deploymentManagerServerConfig:
+    enabled: false
+  image: quay.io/openshift-kni/oran-o2ims:4.16
+  ingressHost: o2ims.apps.hubcluster-1.hubcluster-1.lab.eng.cert.redhat.com
+  metadataServerConfig:
+    enabled: true
+  resourceServerConfig:
+    enabled: false
