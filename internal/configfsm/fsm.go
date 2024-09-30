@@ -141,10 +141,12 @@ func InitFSM(state string) (fsm *stateless.StateMachine, err error) {
 		OnEntry(func(_ context.Context, args ...any) error {
 			fsmHelper := args[0].(FsmHelper)
 			fmt.Println("Entering " + InProgress)
-			if fsmHelper.IsNonCompliantAtZero() ||
-				fsmHelper.AreAllPoliciesCompliant() ||
-				(!fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.AreAllPoliciesCompliant()) {
+			if fsmHelper.IsNonCompliantAtZero() {
 				fsmHelper.SetNonCompliantAtNow()
+			}
+			if fsmHelper.AreAllPoliciesCompliant() ||
+				(!fsmHelper.IsNonCompliantPolicyInEnforce() && !fsmHelper.AreAllPoliciesCompliant()) {
+				fsmHelper.ResetNonCompliantAt()
 			}
 			if !fsmHelper.ArePoliciesMatched() {
 				return fsm.Fire(InProgressToClusterNotReady, fsmHelper)
