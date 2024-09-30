@@ -152,12 +152,12 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	var validationErrs []string
 
 	// Validate the ClusterInstance name
-	err := validateName(t.client, t.object.Spec.HumanReadableName, t.object.Spec.Version, t.object.Name, t.object.Namespace)
+	err := validateName(t.client, t.object.Spec.Name, t.object.Spec.Version, t.object.Name, t.object.Namespace)
 	if err != nil {
 		validationErrs = append(validationErrs, err.Error())
 	}
 
-	// Validate the ClusterInstance name
+	// Validate the Template ID
 	err = validateTemplateID(ctx, t.client, t.object)
 	if err != nil {
 		validationErrs = append(validationErrs, err.Error())
@@ -275,7 +275,7 @@ func validateName(c client.Client, name, version, metadataName, namespace string
 		if aClusterTemplate.Name == metadataName {
 			sameMetadataName[aClusterTemplate.Namespace] = true
 		}
-		if aClusterTemplate.Spec.HumanReadableName == name &&
+		if aClusterTemplate.Spec.Name == name &&
 			aClusterTemplate.Spec.Version == version {
 			sameNameVersion[aClusterTemplate.Namespace] = true
 		}

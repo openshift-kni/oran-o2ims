@@ -530,8 +530,8 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -553,8 +553,8 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -568,8 +568,8 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Namespace: "namespace1",
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -599,8 +599,8 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -641,9 +641,9 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
-				TemplateID:        "",
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "",
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -667,9 +667,9 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
-				TemplateID:        "kjwchbjkdbckj",
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "kjwchbjkdbckj",
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -689,9 +689,9 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
-				TemplateID:        "71ba1920-77f8-4842-a474-010b1af1d40b",
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "71ba1920-77f8-4842-a474-010b1af1d40b",
 				Templates: oranv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,

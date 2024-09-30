@@ -127,8 +127,8 @@ spec:
         path: metadata
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HumanReadableName defines a Human readable name of the Template.
-        displayName: HumanReadableName
+      - description: Name defines a Human readable name of the Template.
+        displayName: Name
         path: name
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
