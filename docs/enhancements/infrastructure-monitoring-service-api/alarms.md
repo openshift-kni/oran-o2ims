@@ -64,7 +64,6 @@ Comments for each attribute is taken from o-ran spec doc.
 Please note that this is not an exhaustive list but are here to help the reader get a feel for the Alarm specific data we are dealing with.
 
 - AlarmDictionary
-
     This is primarily the link between Alarms and Inventory. A ResourceType (currently we are mostly dealing with type "cluster") can have exactly one AlarmDictionary.
     
     ```go
@@ -181,6 +180,7 @@ Please note that this is not an exhaustive list but are here to help the reader 
 #### Steps for `/O2ims_infrastructureMonitoring/{apiVersion}/alarms/{alarmEventRecordId}` with PATCH
 1. Client calls with an AlarmEventRecordID and `AlarmEventRecordModifications` as patch payload
 2. If `AlarmEventRecordModifications.alarmAcknowledged` is True, update `alarm_event_record` table
+   - Note: `alarmAcknowledged` will be updated to `false` if `alarm_event_record.alarm_changed_time` changes (TODO: update DB to auto handle this)
 3. Response with `AlarmEventRecordModifications` and appropriate code
 
 ### `alarmSubscriptions` family
@@ -196,7 +196,7 @@ Please note that this is not an exhaustive list but are here to help the reader 
 4. Response with `AlarmSubscriptionInfo` and appropriate code
 
 #### Steps for `/O2ims_infrastructureMonitoring/{apiVersion}/alarmSubscriptions/{alarmSubscriptionId}` with GET
-1. Client calls with an `alarmSubscriptionId` (update to new standerd)
+1. Client calls with an `alarmSubscriptionId`
 2. Query the storage `alarm_subscription_info` table using `alarmSubscriptionId`
 3. Response with retrieved instance of `AlarmSubscriptionInfo` and appropriate code
 
@@ -490,6 +490,7 @@ Notes on Init phase
     ```shell
     oc get managedclusters
     ```
+  
     ```yaml
     apiVersion: cluster.open-cluster-management.io/v1
     kind: ManagedCluster
@@ -506,7 +507,8 @@ Notes on Init phase
    
     `entity_type` data should be coming from Inventory API but for now we can hard-code it. `telco-model-OpenShift-<Full Version>`
 - `alarm_definitions` reflects Rules in PromRule CR. We only grab the full set based on unique entries in `Versions` table 
-    ```yaml
+   
+   ```yaml
     # Partial PrometheusRule to show NodeClockNotSynchronising
     apiVersion: monitoring.coreos.com/v1
     kind: PrometheusRule
