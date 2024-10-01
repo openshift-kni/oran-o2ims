@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -41,7 +42,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
+var (
+	oranUtilsLog         = ctrl.Log.WithName("oranUtilsLog")
+	hwMgrPluginNameSpace string
+	once                 sync.Once
+)
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -1076,4 +1081,39 @@ func GetEnvOrDefault(name, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// GetHwMgrPluginNS returns the value of environment variable HWMGR_PLUGIN_NAMESPACE
+func GetHwMgrPluginNS() string {
+	// Ensure that this code only runs once
+	once.Do(func() {
+		hwMgrPluginNameSpace = GetEnvOrDefault(HwMgrPluginNameSpace, DefaultPluginNamespace)
+	})
+	return hwMgrPluginNameSpace
+}
+
+// SetCloudManagerGenerationStatus sets the CloudManager's ObservedGeneration on the node pool resource status field
+func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodePool *hwv1alpha1.NodePool) error {
+	// Get the generated NodePool and its metadata.generation
+	exists, err := DoesK8SResourceExist(ctx, c, nodePool.GetName(),
+		nodePool.GetNamespace(), nodePool)
+	if err != nil {
+		return fmt.Errorf("failed to get NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
+	}
+	if !exists {
+		return fmt.Errorf("nodePool %s does not exist in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
+	}
+	// We only set ObservedGeneration when the NodePool is first created because we do not update the spec after creation.
+	// Once ObservedGeneration is set, no need to update it again.
+	if nodePool.Status.CloudManager.ObservedGeneration != 0 {
+		// ObservedGeneration is already set, so we do nothing.
+		return nil
+	}
+	// Set ObservedGeneration to the current generation of the resource
+	nodePool.Status.CloudManager.ObservedGeneration = nodePool.ObjectMeta.Generation
+	err = UpdateK8sCRStatus(ctx, c, nodePool)
+	if err != nil {
+		return fmt.Errorf("failed to update status for NodePool %s %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
+	}
+	return nil
 }

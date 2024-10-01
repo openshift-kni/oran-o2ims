@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
 - manager.yaml
+- env-config.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -25,6 +26,16 @@ replacements:
   targets:
   - fieldPaths:
     - spec.template.spec.containers.[name=manager].env.[name=^IMAGE$].value
+    select:
+      kind: Deployment
+      name: controller-manager
+- source:
+    fieldPath: data.HWMGR_PLUGIN_NAMESPACE
+    kind: ConfigMap
+    name: env-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=manager].env.[name=HWMGR_PLUGIN_NAMESPACE].value
     select:
       kind: Deployment
       name: controller-manager

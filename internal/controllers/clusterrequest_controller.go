@@ -734,9 +734,10 @@ func (t *clusterRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.
 	nodePool.Spec.CloudID = clusterInstance.GetName()
 	nodePool.Spec.LocationSpec = t.object.Spec.LocationSpec
 	nodePool.Spec.Site = t.object.Spec.Site
+	nodePool.Spec.HwMgrId = hwTemplateCm.Data[utils.HwTemplatePluginMgr]
 	nodePool.Spec.NodeGroup = nodeGroup
 	nodePool.ObjectMeta.Name = clusterInstance.GetName()
-	nodePool.ObjectMeta.Namespace = hwTemplateCm.Data[utils.HwTemplatePluginMgr]
+	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
 
 	// Add boot interface label to the generated nodePool
 	annotation := make(map[string]string)
@@ -1564,6 +1565,11 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 			nodePool.GetNamespace(),
 		),
 	)
+	// Set the CloudManager's ObservedGeneration on the node pool resource status field
+	err = utils.SetCloudManagerGenerationStatus(ctx, t.client, nodePool)
+	if err != nil {
+		return fmt.Errorf("failed to set CloudManager's ObservedGeneration: %w", err)
+	}
 	return nil
 }
 

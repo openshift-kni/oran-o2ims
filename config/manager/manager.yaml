@@ -77,6 +77,9 @@ spec:
         - name: KUBE_RBAC_PROXY_IMAGE
           # A placeholder for the replacement kustomization that will inject the rbac image from that container spec
           value: kube-rbac-proxy:latest
+        - name: HWMGR_PLUGIN_NAMESPACE
+          # A placeholder for the replacement kustomization that will inject the value from the config map
+          value: plugin-namespace-placeholder
         command:
           - /usr/bin/oran-o2ims
           -  start
