@@ -467,7 +467,8 @@ var _ = Describe("ClusterRequestReconcile", func() {
 		req          reconcile.Request
 		cr           *oranv1alpha1.ClusterRequest
 		ct           *oranv1alpha1.ClusterTemplate
-		ctName       = "clustertemplate-a-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "clustertemplate-a-v4-16"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
@@ -547,7 +548,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 		// Define the cluster template.
 		ct = &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
@@ -584,7 +585,8 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Finalizers: []string{clusterRequestFinalizer},
 			},
 			Spec: oranv1alpha1.ClusterRequestSpec{
-				ClusterTemplateRef: ctName,
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
 				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
 					ClusterInstanceInput: runtime.RawExtension{
 						Raw: []byte(testClusterTemplateInput),
@@ -1435,7 +1437,8 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		c            client.Client
 		reconciler   *ClusterRequestReconciler
 		task         *clusterRequestReconcilerTask
-		ctName       = "clustertemplate-a-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "clustertemplate-a-v4-16"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
@@ -1452,7 +1455,8 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterRequestSpec{
-				ClusterTemplateRef: ctName,
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
 			},
 		}
 
@@ -1492,12 +1496,13 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			fmt.Sprintf("the referenced ClusterTemplate (%s) does not exist in the %s namespace",
-				ctName, ctNamespace)))
+				getClusterTemplateRefName(tName, tVersion), ctNamespace)))
 		Expect(retCt).To(Equal((*oranv1alpha1.ClusterTemplate)(nil)))
 	})
 
 	It("returns the referred ClusterTemplate if it exists", func() {
 		// Define the cluster template.
+		ctName := getClusterTemplateRefName(tName, tVersion)
 		ct := &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ctName,
@@ -1533,7 +1538,8 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		task         *clusterRequestReconcilerTask
 		cr           *oranv1alpha1.ClusterRequest
 		ciDefaultsCm = "clusterinstance-defaults-v1"
-		ctName       = "clustertemplate-a-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "clustertemplate-a-v4-16"
 		crName       = "cluster-1"
 	)
@@ -1547,7 +1553,8 @@ var _ = Describe("handleRenderClusterInstance", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterRequestSpec{
-				ClusterTemplateRef: ctName,
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
 				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
 					ClusterInstanceInput: runtime.RawExtension{Raw: []byte(testClusterTemplateInput)},
 				},
@@ -1557,7 +1564,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		// Define the cluster template.
 		ct := &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
@@ -1700,7 +1707,8 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 		c           client.Client
 		reconciler  *ClusterRequestReconciler
 		task        *clusterRequestReconcilerTask
-		ctName      = "clustertemplate-a-v1"
+		tName       = "clustertemplate-a"
+		tVersion    = "v1.0.0"
 		ctNamespace = "clustertemplate-a-v4-16"
 		crName      = "cluster-1"
 	)
@@ -1714,7 +1722,8 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterRequestSpec{
-				ClusterTemplateRef: ctName,
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
 			},
 		}
 
@@ -1781,7 +1790,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 		task            *clusterRequestReconcilerTask
 		clusterInstance *siteconfig.ClusterInstance
 		ct              *oranv1alpha1.ClusterTemplate
-		ctName          = "clustertemplate-a-v1"
+		tName           = "clustertemplate-a"
+		tVersion        = "v1.0.0"
 		ctNamespace     = "clustertemplate-a-v4-16"
 		hwTemplateCm    = "hwTemplate-v1"
 		crName          = "cluster-1"
@@ -1835,14 +1845,15 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterRequestSpec{
-				ClusterTemplateRef: ctName,
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
 			},
 		}
 
 		// Define the cluster template.
 		ct = &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: oranv1alpha1.ClusterTemplateSpec{
@@ -2346,7 +2357,8 @@ var _ = Describe("policyManagement", func() {
 		CRReconciler *ClusterRequestReconciler
 		CRTask       *clusterRequestReconcilerTask
 		CTReconciler *ClusterTemplateReconciler
-		ctName       = "clustertemplate-a-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "clustertemplate-a-v4-16"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
@@ -2366,7 +2378,7 @@ var _ = Describe("policyManagement", func() {
 			// Cluster Template.
 			&oranv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      ctName,
+					Name:      getClusterTemplateRefName(tName, tVersion),
 					Namespace: ctNamespace,
 				},
 				Spec: oranv1alpha1.ClusterTemplateSpec{
@@ -2458,7 +2470,8 @@ defaultHugepagesSize: "1G"`,
 					Finalizers: []string{clusterRequestFinalizer},
 				},
 				Spec: oranv1alpha1.ClusterRequestSpec{
-					ClusterTemplateRef: ctName,
+					TemplateName:    tName,
+					TemplateVersion: tVersion,
 					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
 						ClusterInstanceInput: runtime.RawExtension{
 							Raw: []byte(testClusterTemplateInput),
@@ -2503,7 +2516,7 @@ defaultHugepagesSize: "1G"`,
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -3971,7 +3984,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		CRReconciler *ClusterRequestReconciler
 		CRTask       *clusterRequestReconcilerTask
 		CTReconciler *ClusterTemplateReconciler
-		ctName       = "clustertemplate-a-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "clustertemplate-a-v4-16"
 	)
 
@@ -3992,7 +4006,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 					Finalizers: []string{clusterRequestFinalizer},
 				},
 				Spec: oranv1alpha1.ClusterRequestSpec{
-					ClusterTemplateRef: ctName,
+					TemplateName:    tName,
+					TemplateVersion: tVersion,
 					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
 						ClusterInstanceInput: runtime.RawExtension{
 							Raw: []byte(testClusterTemplateInput),
@@ -4020,7 +4035,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}

@@ -89,6 +89,10 @@ const (
 	ztpDoneLabel                 = "ztp-done"
 )
 
+func getClusterTemplateRefName(name, version string) string {
+	return fmt.Sprintf("%s.%s", name, version)
+}
+
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests/finalizers,verbs=update
@@ -1314,6 +1318,8 @@ func (t *clusterRequestReconcilerTask) createExtraManifestsConfigMap(
 func (t *clusterRequestReconcilerTask) createPullSecret(
 	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 
+	clusterTemplateRefName := getClusterTemplateRefName(
+		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
 	// If we got to this point, we can assume that all the keys exist, including
 	// clusterName
 
@@ -1326,13 +1332,13 @@ func (t *clusterRequestReconcilerTask) createPullSecret(
 	if err != nil {
 		return fmt.Errorf(
 			"failed to check if pull secret %s exists in namespace %s: %w",
-			t.object.Spec.ClusterTemplateRef, t.object.Spec.ClusterTemplateRef, err,
+			pullSecretName, clusterTemplateRefName, err,
 		)
 	}
 	if !pullSecretExistsInTemplateNamespace {
 		return utils.NewInputError(
 			"pull secret %s expected to exist in the %s namespace, but it is missing",
-			pullSecretName, t.object.Spec.ClusterTemplateRef)
+			pullSecretName, clusterTemplateRefName)
 	}
 
 	newClusterInstancePullSecret := &corev1.Secret{
@@ -1565,8 +1571,10 @@ func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Conte
 	// Check the clusterTemplateRef references an existing template in the same namespace
 	// as the current clusterRequest.
 	clusterTemplateRef := &oranv1alpha1.ClusterTemplate{}
+	clusterTemplateRefName := getClusterTemplateRefName(
+		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
 	clusterTemplateRefExists, err := utils.DoesK8SResourceExist(
-		ctx, t.client, t.object.Spec.ClusterTemplateRef, t.object.Namespace, clusterTemplateRef)
+		ctx, t.client, clusterTemplateRefName, t.object.Namespace, clusterTemplateRef)
 
 	// If there was an error in trying to get the ClusterTemplate, return it.
 	if err != nil {
@@ -1578,7 +1586,7 @@ func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Conte
 		return nil, utils.NewInputError(
 			fmt.Sprintf(
 				"the referenced ClusterTemplate (%s) does not exist in the %s namespace",
-				t.object.Spec.ClusterTemplateRef, t.object.Namespace))
+				clusterTemplateRefName, t.object.Namespace))
 	}
 	return clusterTemplateRef, nil
 }
@@ -1598,11 +1606,13 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema
 	}
 
 	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
+	clusterTemplateRefName := getClusterTemplateRefName(
+		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
 	err = utils.ValidateJsonAgainstJsonSchema(
 		schemaMap, clusterTemplateInput)
 	if err != nil {
 		return fmt.Errorf("the provided clusterTemplateInput for %s does not "+
-			"match the schema from the ClusterTemplate (%s): %w", dataType, t.object.Spec.ClusterTemplateRef, err)
+			"match the schema from the ClusterTemplate (%s): %w", dataType, clusterTemplateRefName, err)
 	}
 
 	return nil
@@ -2134,7 +2144,9 @@ func (r *ClusterRequestReconciler) findClusterTemplateForClusterRequest(
 	// Create reconciling requests only for the clusterRequests that are using the
 	// current clusterTemplate.
 	for _, clusterRequest := range clusterRequests.Items {
-		if clusterRequest.Spec.ClusterTemplateRef == newClusterTemplate.GetName() {
+		clusterTemplateRefName := getClusterTemplateRefName(
+			clusterRequest.Spec.TemplateName, clusterRequest.Spec.TemplateVersion)
+		if clusterTemplateRefName == newClusterTemplate.GetName() {
 			r.Logger.Info(
 				"[findClusterRequestsForClusterTemplate] Add new reconcile request for ClusterRequest",
 				"name", clusterRequest.Name)
