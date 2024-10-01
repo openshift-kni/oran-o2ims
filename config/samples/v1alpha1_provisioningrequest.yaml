@@ -1,13 +1,13 @@
-apiVersion: o2ims.oran.openshift.io/v1alpha1
-kind: ClusterRequest
+apiVersion: o2ims.provisioning.oran.org/v1alpha1
+kind: ProvisioningRequest
 metadata:
   labels:
-    app.kubernetes.io/name: clusterrequest
-    app.kubernetes.io/instance: clusterrequest-sample
+    app.kubernetes.io/name: provisioningrequest
+    app.kubernetes.io/instance: provisioningrequest-sample
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: oran-o2ims
-  name: clusterrequest-sample
+  name: provisioningrequest-sample
 spec:
   site: "local"
   timeout:

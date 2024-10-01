@@ -84,7 +84,7 @@ type NodePoolStatus struct {
 // +kubebuilder:resource:shortName=np
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Request",resources={{Namespace, v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Node Pool",resources={{Namespace, v1}}
 type NodePool struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

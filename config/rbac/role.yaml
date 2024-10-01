@@ -193,32 +193,6 @@ rules:
 - apiGroups:
   - o2ims.provisioning.oran.org
   resources:
-  - clusterrequests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - clusterrequests/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - clusterrequests/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
   - clustertemplates
   verbs:
   - create
@@ -238,6 +212,32 @@ rules:
   - o2ims.provisioning.oran.org
   resources:
   - clustertemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - provisioningrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - provisioningrequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - provisioningrequests/status
   verbs:
   - get
   - patch

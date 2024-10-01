@@ -1,4 +1,4 @@
-apiVersion: o2ims.oran.openshift.io/v1alpha1
+apiVersion: o2ims.provisioning.oran.org/v1alpha1
 kind: ClusterTemplate
 metadata:
   labels:
@@ -44,7 +44,7 @@ spec:
             type: string
             default: Automatic
       clusterInstanceParameters:
-        description: clusterInstanceParameters defines the params that are allowed in the ClusterRequest spec.clusterInstanceInput
+        description: clusterInstanceParameters defines the params that are allowed in the ProvisioningRequest spec.clusterInstanceInput
         properties:
           additionalNTPSources:
             description: AdditionalNTPSources is a list of NTP sources (hostname
@@ -128,7 +128,7 @@ spec:
                   - name
                   type: object
                 bmcCredentialsDetails:
-                  description: A workaround to provide bmc creds through ClusterRequest
+                  description: A workaround to provide bmc creds through ProvisioningRequest
                   properties:
                     username:
                       type: string

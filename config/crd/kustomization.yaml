@@ -9,7 +9,7 @@ resources:
 
 # Provisioning:
 - bases/o2ims.provisioning.oran.org_clustertemplates.yaml
-- bases/o2ims.provisioning.oran.org_clusterrequests.yaml
+- bases/o2ims.provisioning.oran.org_provisioningrequests.yaml
 
 configurations:
 - kustomizeconfig.yaml

@@ -123,7 +123,7 @@ func ValidateJsonAgainstJsonSchema(schema, input map[string]any) error {
 	}
 }
 
-func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest string) (
+func GetBMCDetailsForClusterInstance(node map[string]interface{}, provisioningRequest string) (
 	string, string, string, error) {
 	// Get the BMC details.
 	bmcCredentialsDetailsInterface, bmcCredentialsDetailsExist := node["bmcCredentialsDetails"]
@@ -131,8 +131,8 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 	if !bmcCredentialsDetailsExist {
 		return "", "", "", NewInputError(
 			`\"bmcCredentialsDetails\" key expected to exist in ClusterTemplateInput 
-			of ClusterRequest %s, but it's missing`,
-			clusterRequest,
+			of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
 		)
 	}
 
@@ -143,8 +143,8 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 	if !usernameExists {
 		return "", "", "", NewInputError(
 			`\"bmcCredentialsDetails.username\" key expected to exist in ClusterTemplateInput 
-			of ClusterRequest %s, but it's missing`,
-			clusterRequest,
+			of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
 		)
 	}
 
@@ -152,8 +152,8 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 	if !passwordExists {
 		return "", "", "", NewInputError(
 			`\"bmcCredentialsDetails.password\" key expected to exist in ClusterTemplateInput 
-			of ClusterRequest %s, but it's missing`,
-			clusterRequest,
+			of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
 		)
 	}
 
@@ -163,7 +163,7 @@ func GetBMCDetailsForClusterInstance(node map[string]interface{}, clusterRequest
 	if !bmcCredentialsNameExist {
 		nodeHostnameInterface, nodeHostnameExists := node["hostName"]
 		if !nodeHostnameExists {
-			secretName = clusterRequest
+			secretName = provisioningRequest
 		} else {
 			secretName =
 				extractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) +
@@ -713,21 +713,21 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 }
 
 // OverrideClusterInstanceLabelsOrAnnotations handles the overrides of ClusterInstance's extraLabels
-// or extraAnnotations. It overrides the values in the ClusterRequest with those from the default
+// or extraAnnotations. It overrides the values in the ProvisioningRequest with those from the default
 // configmap when the same labels/annotations exist in both. Labels/annotations that are not common
-// between the default configmap and ClusterRequest are ignored.
-func OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap map[string]any) error {
+// between the default configmap and ProvisioningRequest are ignored.
+func OverrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap map[string]any) error {
 	fields := []string{"extraLabels", "extraAnnotations"}
 
 	for _, field := range fields {
 		srcValue, existsSrc := srcConfigmap[field]
-		dstValue, existsDst := dstClusterRequestInput[field]
-		// Check only when both configmap and ClusterRequestInput contain the field
+		dstValue, existsDst := dstProvisioningRequestInput[field]
+		// Check only when both configmap and ProvisioningRequestInput contain the field
 		if existsSrc && existsDst {
 			dstMap, okDst := dstValue.(map[string]any)
 			srcMap, okSrc := srcValue.(map[string]any)
 			if !okDst || !okSrc {
-				return fmt.Errorf("type mismatch for field %s: (from ClusterRequest: %T, from default Configmap: %T)",
+				return fmt.Errorf("type mismatch for field %s: (from ProvisioningRequest: %T, from default Configmap: %T)",
 					field, dstValue, srcValue)
 			}
 
@@ -738,11 +738,11 @@ func OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfi
 					dstFieldsMap, okDstFields := dstFields.(map[string]any)
 					srcFieldsMap, okSrcFields := srcFields.(map[string]any)
 					if !okDstFields || !okSrcFields {
-						return fmt.Errorf("type mismatch for field %s: (from ClusterRequest: %T, from default Configmap: %T)",
+						return fmt.Errorf("type mismatch for field %s: (from ProvisioningRequest: %T, from default Configmap: %T)",
 							field, dstValue, srcValue)
 					}
 
-					// Override ClusterRequestInput's values with defaults if the label/annotation key exists in both
+					// Override ProvisioningRequestInput's values with defaults if the label/annotation key exists in both
 					for srcFieldKey, srcLabelValue := range srcFieldsMap {
 						if _, exists := dstFieldsMap[srcFieldKey]; exists {
 							oranUtilsLog.Info(fmt.Sprintf("%s.%s.%s found in both default configmap and clusterInstanceInput. "+
@@ -757,7 +757,7 @@ func OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfi
 	}
 
 	// Process label/annotation overrides for nodes
-	dstNodes, dstExists := dstClusterRequestInput["nodes"]
+	dstNodes, dstExists := dstProvisioningRequestInput["nodes"]
 	srcNodes, srcExists := srcConfigmap["nodes"]
 	if dstExists && srcExists {
 		// Determine the minimum length to merge
@@ -1112,9 +1112,9 @@ func ClusterIsReadyForPolicyConfig(
 }
 
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.
-func TimeoutExceeded(clusterRequest *provisioningv1alpha1.ClusterRequest) bool {
-	timeSince := time.Since(clusterRequest.Status.ClusterDetails.NonCompliantAt.Time)
-	timeout := time.Duration(clusterRequest.Spec.Timeout.Configuration) * time.Minute
+func TimeoutExceeded(provisioningRequest *provisioningv1alpha1.ProvisioningRequest) bool {
+	timeSince := time.Since(provisioningRequest.Status.ClusterDetails.NonCompliantAt.Time)
+	timeout := time.Duration(provisioningRequest.Spec.Timeout.Configuration) * time.Minute
 	return timeSince > timeout
 }
 

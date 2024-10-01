@@ -1800,17 +1800,17 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 
 var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 	var (
-		dstClusterRequestInput map[string]any
-		srcConfigmap           map[string]any
+		dstProvisioningRequestInput map[string]any
+		srcConfigmap                map[string]any
 	)
 
 	BeforeEach(func() {
-		dstClusterRequestInput = make(map[string]any)
+		dstProvisioningRequestInput = make(map[string]any)
 		srcConfigmap = make(map[string]any)
 	})
 
 	It("should override only existing keys", func() {
-		dstClusterRequestInput = map[string]any{
+		dstProvisioningRequestInput = map[string]any{
 			"extraLabels": map[string]any{
 				"ManagedCluster": map[string]any{
 					"label1": "value1",
@@ -1852,13 +1852,13 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 			"clusterName": "cluster-1",
 		}
 
-		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dstClusterRequestInput).To(Equal(expected))
+		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 
-	It("should not add new resource types to dstClusterRequestInput", func() {
-		dstClusterRequestInput = map[string]any{
+	It("should not add new resource types to dstProvisioningRequestInput", func() {
+		dstProvisioningRequestInput = map[string]any{
 			"extraLabels": map[string]any{
 				"ManagedCluster": map[string]any{
 					"label1": "value1",
@@ -1884,13 +1884,13 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 			"clusterName": "cluster-1",
 		}
 
-		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dstClusterRequestInput).To(Equal(expected))
+		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 
-	It("should not add extraLabels/extraAnnotations field if not found in ClusterRequestInput", func() {
-		dstClusterRequestInput = map[string]any{
+	It("should not add extraLabels/extraAnnotations field if not found in ProvisioningRequestInput", func() {
+		dstProvisioningRequestInput = map[string]any{
 			"extraLabels": map[string]any{
 				"ManagedCluster": map[string]any{
 					"label1": "value1",
@@ -1900,7 +1900,7 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 		}
 
 		srcConfigmap = map[string]any{
-			"extraAnnotations": map[string]any{ // Field does not exist in dstClusterRequestInput
+			"extraAnnotations": map[string]any{ // Field does not exist in dstProvisioningRequestInput
 				"ManagedCluster": map[string]any{
 					"annotation1": "value1",
 				},
@@ -1916,13 +1916,13 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 			"clusterName": "cluster-1",
 		}
 
-		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dstClusterRequestInput).To(Equal(expected))
+		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 
 	It("should merge nodes and handle nested labels/annotations", func() {
-		dstClusterRequestInput = map[string]any{
+		dstProvisioningRequestInput = map[string]any{
 			"clusterName": "cluster-1",
 			"nodes": []any{
 				map[string]any{
@@ -2012,13 +2012,13 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 			},
 		}
 
-		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dstClusterRequestInput).To(Equal(expected))
+		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 
-	It("should not add the new node to dstClusterRequestInput", func() {
-		dstClusterRequestInput = map[string]any{
+	It("should not add the new node to dstProvisioningRequestInput", func() {
+		dstProvisioningRequestInput = map[string]any{
 			"clusterName": "cluster-1",
 			"nodes": []any{
 				map[string]any{
@@ -2083,9 +2083,9 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 			},
 		}
 
-		err := OverrideClusterInstanceLabelsOrAnnotations(dstClusterRequestInput, srcConfigmap)
+		err := OverrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dstClusterRequestInput).To(Equal(expected))
+		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 })
 

@@ -25,8 +25,8 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// ClusterRequestSpec defines the desired state of ClusterRequest
-type ClusterRequestSpec struct {
+// ProvisioningRequestSpec defines the desired state of ProvisioningRequest
+type ProvisioningRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -107,7 +107,7 @@ type Timeout struct {
 
 // PolicyDetails holds information about an ACM policy.
 type PolicyDetails struct {
-	// The compliance of the ManagedCluster created through a ClusterRequest with the current
+	// The compliance of the ManagedCluster created through a ProvisioningRequest with the current
 	// policy.
 	Compliant string `json:"compliant,omitempty"`
 	// The policy's name.
@@ -118,8 +118,8 @@ type PolicyDetails struct {
 	RemediationAction string `json:"remediationAction,omitempty"`
 }
 
-// ClusterRequestStatus defines the observed state of ClusterRequest
-type ClusterRequestStatus struct {
+// ProvisioningRequestStatus defines the observed state of ProvisioningRequest
+type ProvisioningRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -131,32 +131,33 @@ type ClusterRequestStatus struct {
 	// NodePoolRef references to the NodePool.
 	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
 
-	// Holds policies that are matched with the ManagedCluster created by the ClusterRequest.
+	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
 	Policies []PolicyDetails `json:"policies,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:scope=Cluster
 
-// ClusterRequest is the Schema for the clusterrequests API
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Request",resources={{Namespace, v1},{ClusterInstance, siteconfig.open-cluster-management.io/v1alpha1}}
-type ClusterRequest struct {
+// ProvisioningRequest is the Schema for the provisioningrequests API
+// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Provisioning Request",resources={{Namespace, v1},{ClusterInstance, siteconfig.open-cluster-management.io/v1alpha1}}
+type ProvisioningRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ClusterRequestSpec   `json:"spec,omitempty"`
-	Status ClusterRequestStatus `json:"status,omitempty"`
+	Spec   ProvisioningRequestSpec   `json:"spec,omitempty"`
+	Status ProvisioningRequestStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// ClusterRequestList contains a list of ClusterRequest
-type ClusterRequestList struct {
+// ProvisioningRequestList contains a list of ProvisioningRequest
+type ProvisioningRequestList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ClusterRequest `json:"items"`
+	Items           []ProvisioningRequest `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterRequest{}, &ClusterRequestList{})
+	SchemeBuilder.Register(&ProvisioningRequest{}, &ProvisioningRequestList{})
 }
