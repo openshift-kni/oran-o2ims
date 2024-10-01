@@ -1,4 +1,4 @@
----
+```yaml
 title: lifecycle-of-infrastructure-monitoring-alarms-api
 authors:
   - @browsell
@@ -20,7 +20,7 @@ replaces:
   - "None"
 superseded-by:
   - "None"
----
+```
 
 # Lifecycle of infrastructure monitoring alarms api
 
