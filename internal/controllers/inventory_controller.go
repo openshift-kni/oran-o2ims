@@ -896,7 +896,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string)
 	}
 
 	t.logger.InfoContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
-	if err := utils.CreateK8sCR(ctx, t.client, newService, t.object, utils.PATCH); err != nil {
+	if err := utils.CreateK8sCR(ctx, t.client, newService, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Service for deployment: %w", err)
 	}
 
