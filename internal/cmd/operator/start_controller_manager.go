@@ -31,6 +31,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/go-logr/logr"
+	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal"
@@ -108,6 +109,7 @@ func init() {
 	utilruntime.Must(hwv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
+	utilruntime.Must(ibgu.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.

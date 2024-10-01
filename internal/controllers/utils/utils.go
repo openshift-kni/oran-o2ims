@@ -874,7 +874,7 @@ func FindClusterInstanceImmutableFieldUpdates(
 			} else if len(diff.Path) > 2 && !slices.Contains(AllowedClusterInstanceNodeFields, diff.Path[2]) {
 				updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
 			}
-		} else if !slices.Contains(AllowedClusterInstanceClusterFields, diff.Path[0]) {
+		} else if slices.Contains(AllowedClusterInstanceClusterFields, diff.Path[0]) {
 			updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
 		}
 	}
