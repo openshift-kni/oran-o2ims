@@ -41,15 +41,14 @@ superseded-by:
 
 ## Summary
 
-`o-ran` requires `InfrastructureMonitoring Service API` which is a collection of APIs that can be queried by client to 
-monitor the health of the `o-cloud`. This enhancement describes initialization steps and ready steps for `InfrastructureMonitoring Service API`.
-
-More specifically we will describe everything needed for `Alarms`. 
+`o-ran` requires `InfrastructureMonitoring Service Alarms API` which is a collection of APIs that can be queried by client to 
+monitor the health of the `o-cloud`. This enhancement describes initialization steps and ready steps for `InfrastructureMonitoring Service Alarms API` 
+as well everything that's needed to fully develop the app.
 
 At a high level, this service can be viewed as a thin wrapper of ACM observability stack which translates 
 OCP cluster resources to data structures understood and defined by `o-ran` spec. Among other things
 the service exposes APIs, configures Alertmanager deployment, read PrometheusRules from managedclusters and finally 
-store data in a persistence storage. 
+store data in a persistent storage. 
 
 ### Goals
 - Define steps to initialize and for when ready serve API calls
