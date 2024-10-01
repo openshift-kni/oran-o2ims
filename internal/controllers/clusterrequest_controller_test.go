@@ -544,6 +544,11 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				},
 			},
 		}
+		schema := []byte(`{"properties":{}}`)
+		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte(testClusterTemplateSchema))
+		Expect(err).ToNot(HaveOccurred())
+		schema, err = utils.InsertSubSchema(schema, policyTemplateParametersString, []byte(testPolicyTemplateSchema))
+		Expect(err).ToNot(HaveOccurred())
 
 		// Define the cluster template.
 		ct = &provisioningv1alpha1.ClusterTemplate{
@@ -559,14 +564,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
-					ClusterInstanceParameters: runtime.RawExtension{
-						Raw: []byte(testClusterTemplateSchema),
-					},
-					PolicyTemplateParameters: runtime.RawExtension{
-						Raw: []byte(testPolicyTemplateSchema),
-					},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: schema},
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
 				Conditions: []metav1.Condition{
@@ -1475,6 +1473,7 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 	})
 
 	It("returns error if the referred ClusterTemplate is missing", func() {
+		schema := []byte{}
 		// Define the cluster template.
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1488,9 +1487,7 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
-					ClusterInstanceParameters: runtime.RawExtension{},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: schema},
 			},
 		}
 
@@ -1505,6 +1502,9 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 	})
 
 	It("returns the referred ClusterTemplate if it exists", func() {
+		schema := []byte(`{"properties":{}}`)
+		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte{})
+		Expect(err).ToNot(HaveOccurred())
 		// Define the cluster template.
 		ctName := getClusterTemplateRefName(tName, tVersion)
 		ct := &provisioningv1alpha1.ClusterTemplate{
@@ -1519,9 +1519,7 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
-					ClusterInstanceParameters: runtime.RawExtension{},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: schema},
 			},
 		}
 
@@ -2376,6 +2374,11 @@ var _ = Describe("policyManagement", func() {
 	)
 
 	BeforeEach(func() {
+		schema := []byte(`{"properties":{}}`)
+		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte(testClusterTemplateSchema))
+		Expect(err).ToNot(HaveOccurred())
+		schema, err = utils.InsertSubSchema(schema, policyTemplateParametersString, []byte(testPolicyTemplateSchema))
+		Expect(err).ToNot(HaveOccurred())
 		// Define the needed resources.
 		crs := []client.Object{
 			// Cluster Template Namespace.
@@ -2398,16 +2401,7 @@ var _ = Describe("policyManagement", func() {
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwTemplate:              hwTemplateCm,
 					},
-					TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
-						// APIserver has enforced the validation for this field who holds
-						// the arbirary JSON data
-						ClusterInstanceParameters: runtime.RawExtension{
-							Raw: []byte(testClusterTemplateSchema),
-						},
-						PolicyTemplateParameters: runtime.RawExtension{
-							Raw: []byte(testPolicyTemplateSchema),
-						},
-					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: schema},
 				},
 			},
 			// ConfigMaps.
@@ -2532,7 +2526,7 @@ defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		_, err := CTReconciler.Reconcile(ctx, req)
+		_, err = CTReconciler.Reconcile(ctx, req)
 		Expect(err).ToNot(HaveOccurred())
 
 		CRReconciler = &ClusterRequestReconciler{

@@ -254,7 +254,8 @@ func validateConfigmapReference[T any](
 }
 
 // validateName return true if the ClusterTemplate name is the
-// format: <name>.<version>, false otherwise
+// format: <name>.<version> or if the cluster <name> is used in
+// another namespace for a ClusterTemplate, false otherwise
 func validateName(c client.Client, name, version, metadataName, namespace string) error {
 	if metadataName != name+"."+version {
 		return utils.NewInputError("failed to validate ClusterTemplate name %s, should be in the format <spec.name>.<spec.version>: %s", metadataName, name+"."+version)
@@ -303,7 +304,7 @@ func validateTemplateID(ctx context.Context, c client.Client, object *provisioni
 	}
 
 	newID := uuid.New()
-	newTemplate := object
+	newTemplate := object.DeepCopy()
 	newTemplate.Spec.TemplateID = newID.String()
 
 	err := utils.CreateK8sCR(ctx, c, newTemplate, object, utils.PATCH)

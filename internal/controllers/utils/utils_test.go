@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2088,3 +2089,118 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 		Expect(dstClusterRequestInput).To(Equal(expected))
 	})
 })
+
+const testTemplate = `{
+  "properties": {
+    "nodeClusterName": {
+      "type": "string"
+    },
+    "oCloudSiteId": {
+      "type": "string"
+    },
+    "policyTemplateParameters": {
+      "description": "policyTemplateParameters.",
+      "properties": {
+        "sriov-network-vlan-1": {
+          "type": "string"
+        },
+        "install-plan-approval": {
+          "type": "string",
+          "default": "Automatic"
+        }
+      }
+    },
+    "clusterInstanceParameters": {
+      "description": "clusterInstanceParameters.",
+      "properties": {
+        "additionalNTPSources": {
+          "description": "AdditionalNTPSources.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "required": [
+    "nodeClusterName",
+    "oCloudSiteId",
+    "policyTemplateParameters",
+    "clusterInstanceParameters"
+  ],
+  "type": "object"
+}`
+
+func TestExtractSubSchema(t *testing.T) {
+	type args struct {
+		mainSchema []byte
+		node       string
+	}
+	tests := []struct {
+		name          string
+		args          args
+		wantSubSchema []byte
+		wantErr       bool
+	}{
+		{
+			name: "ok",
+			args: args{
+				mainSchema: []byte(testTemplate),
+				node:       "clusterInstanceParameters",
+			},
+			wantSubSchema: []byte(`{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}`),
+			wantErr:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSubSchema, err := ExtractSubSchema(tt.args.mainSchema, tt.args.node)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractSubSchema() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotSubSchema, tt.wantSubSchema) {
+				t.Errorf("ExtractSubSchema() = %v, want %v", gotSubSchema, tt.wantSubSchema)
+			}
+		})
+	}
+}
+
+func TestInsertSubSchema(t *testing.T) {
+	type args struct {
+		mainSchema []byte
+		node       string
+		subSchema  []byte
+	}
+	tests := []struct {
+		name                  string
+		args                  args
+		wantUpdatedMainSchema []byte
+		wantErr               bool
+	}{
+		{
+			name: "ok",
+			args: args{
+				mainSchema: []byte(`{"properties":{}}`),
+				node:       "clusterInstanceParameters",
+				subSchema:  []byte(`{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}`),
+			},
+			wantUpdatedMainSchema: []byte(`{"properties":{"clusterInstanceParameters":{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}}}`),
+			wantErr:               false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotUpdatedMainSchema, err := InsertSubSchema(tt.args.mainSchema, tt.args.node, tt.args.subSchema)
+			fmt.Println(string(gotUpdatedMainSchema))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("InsertSubSchema() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotUpdatedMainSchema, tt.wantUpdatedMainSchema) {
+				t.Errorf("InsertSubSchema() = %v, want %v", gotUpdatedMainSchema, tt.wantUpdatedMainSchema)
+			}
+		})
+	}
+}

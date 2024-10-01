@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -41,6 +42,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
+)
+
+const (
+	propertiesString = "properties"
 )
 
 var (
@@ -1155,4 +1160,59 @@ func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodeP
 		return fmt.Errorf("failed to update status for NodePool %s %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
 	}
 	return nil
+}
+
+// ParseJSON parse the yaml in arguments to a data structure T
+func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema []byte, err error) {
+	jsonObject := make(map[string]any)
+	if len(mainSchema) == 0 {
+		return subSchema, nil
+	}
+	err = json.Unmarshal(mainSchema, &jsonObject)
+	if err != nil {
+		return subSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
+	}
+	if _, ok := jsonObject[propertiesString]; !ok {
+		return subSchema, fmt.Errorf("non compliant Main Schema, missing properties: %w", err)
+	}
+	properties, ok := jsonObject[propertiesString].(map[string]any)
+	if !ok {
+		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
+	}
+	subSchema, err = json.Marshal(properties[subSchemaKey])
+	if err != nil {
+		return subSchema, fmt.Errorf("failed to Marshall Schema: %w", err)
+	}
+	return subSchema, nil
+}
+
+func InsertSubSchema(mainSchema []byte, subSchemaKey string, subSchema []byte) (updatedMainSchema []byte, err error) {
+	jsonObject := make(map[string]any)
+	if len(mainSchema) != 0 {
+		err = json.Unmarshal(mainSchema, &jsonObject)
+		if err != nil {
+			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
+		}
+	}
+	if _, ok := jsonObject[propertiesString]; !ok {
+		return subSchema, fmt.Errorf("non compliant Main Schema, missing properties: %w", err)
+	}
+	properties, ok := jsonObject[propertiesString].(map[string]any)
+	if !ok {
+		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
+	}
+
+	jsonSubObject := make(map[string]any)
+	if len(subSchema) != 0 {
+		err = json.Unmarshal(subSchema, &jsonSubObject)
+		if err != nil {
+			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Sub Schema: %w", err)
+		}
+	}
+	properties[subSchemaKey] = jsonSubObject
+	updatedMainSchema, err = json.Marshal(jsonObject)
+	if err != nil {
+		return updatedMainSchema, fmt.Errorf("failed to Marshall updated main Schema: %w", err)
+	}
+	return updatedMainSchema, nil
 }

@@ -63,37 +63,12 @@ spec:
                   This identifier is allocated by the O-Cloud.>
                 type: string
               templateParameterSchema:
-                description: TemplateParameterSchema encapsulates all the schemas
-                  required for ClusterTemplate.
-                properties:
-                  clusterInstanceParameters:
-                    description: |-
-                      ClusterInstanceParameters defines the subschema of ClusterInstance parameters that
-                      are allowed in the ClusterRequest's spec.clusterTemplateInput.clusterInstanceInput.
-                      The parameter definitions should follow the OpenAPI V3 schema and explicitly define
-                      the parameter type and required fields. This schema will be used to validate the
-                      ClusterInstanceInput provided in a ClusterRequest.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  nodeClusterName:
-                    description: NodeClusterName identifies a cluster node.>
-                    type: string
-                  oCloudSiteId:
-                    description: OCloudSiteId identifies a cloud site.>
-                    type: string
-                  policyTemplateParameters:
-                    description: |-
-                      PolicyTemplateParameters defines the parameters required for ACM policies.
-                      The parameter definitions should follow the OpenAPI V3 schema and
-                      explicitly define required fields.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                required:
-                - clusterInstanceParameters
-                - nodeClusterName
-                - oCloudSiteId
-                - policyTemplateParameters
+                description: |-
+                  TemplateParameterSchema defines the parameters required for ClusterTemplate.
+                  The parameter definitions should follow the OpenAPI V3 schema and
+                  explicitly define required fields.
                 type: object
+                x-kubernetes-preserve-unknown-fields: true
               templates:
                 description: Templates defines the references to the templates required
                   for ClusterTemplate.
@@ -205,7 +180,11 @@ spec:
         - message: Spec changes are not allowed for a ClusterTemplate that has passed
             the validation
           rule: '!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type==''ClusterTemplateValidated''
-            && c.status==''False'') || oldSelf.spec == self.spec'
+            && c.status==''False'') || (oldSelf.spec.name == self.spec.name && oldSelf.spec.description
+            == self.spec.description && oldSelf.spec.version == self.spec.version
+            && oldSelf.spec.characteristics == self.spec.characteristics && oldSelf.spec.metadata
+            == self.spec.metadata && oldSelf.spec.templates == self.spec.templates
+            && oldSelf.spec.templateParameterSchema == self.spec.templateParameterSchema)'
     served: true
     storage: true
     subresources:

@@ -33,8 +33,10 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-
-		ct := &provisioningv1alpha1.ClusterTemplate{
+		schema := []byte(`{"properties":{}}`)
+		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte{})
+		Expect(err).ToNot(HaveOccurred())
+		ct := &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
@@ -47,11 +49,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				TemplateParameterSchema: provisioningv1alpha1.TemplateParameterSchema{
-					// APIserver has enforced the validation for this field who holds
-					// the arbirary JSON data
-					ClusterInstanceParameters: runtime.RawExtension{},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: schema},
 			},
 		}
 

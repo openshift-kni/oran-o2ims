@@ -112,22 +112,6 @@ spec:
         path: templateID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: TemplateParameterSchema encapsulates all the schemas required
-          for ClusterTemplate.
-        displayName: Input Data Schema
-        path: templateParameterSchema
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodeClusterName identifies a cluster node.>
-        displayName: NodeClusterName
-        path: templateParameterSchema.nodeClusterName
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: OCloudSiteId identifies a cloud site.>
-        displayName: OCloudSiteId
-        path: templateParameterSchema.oCloudSiteId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: Templates defines the references to the templates required for
           ClusterTemplate.
         displayName: Templates

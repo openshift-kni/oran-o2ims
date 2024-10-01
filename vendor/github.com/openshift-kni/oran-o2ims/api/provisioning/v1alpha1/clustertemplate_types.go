@@ -32,9 +32,12 @@ type ClusterTemplateSpec struct {
 	// Templates defines the references to the templates required for ClusterTemplate.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Templates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Templates Templates `json:"templates"`
-	// InputDataSchema encapsulates all the schemas required for ClusterTemplate.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Input Data Schema",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	InputDataSchema InputDataSchema `json:"inputDataSchema"`
+	// TemplateParameterSchema defines the parameters required for ClusterTemplate.
+	// The parameter definitions should follow the OpenAPI V3 schema and
+	// explicitly define required fields.
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	TemplateParameterSchema runtime.RawExtension `json:"templateParameterSchema"`
 }
 
 // Templates defines the references to the templates required for ClusterTemplate.
@@ -50,25 +53,6 @@ type Templates struct {
 	PolicyTemplateDefaults string `json:"policyTemplateDefaults"`
 }
 
-// InputDataSchema encapsulates all the schemas required for ClusterTemplate.
-type InputDataSchema struct {
-	// ClusterInstanceSchema defines the subschema of ClusterInstance parameters that
-	// are allowed in the ClusterRequest's spec.clusterTemplateInput.clusterInstanceInput.
-	// The parameter definitions should follow the OpenAPI V3 schema and explicitly define
-	// the parameter type and required fields. This schema will be used to validate the
-	// ClusterInstanceInput provided in a ClusterRequest.
-	// +kubebuilder:validation:Type=object
-	// +kubebuilder:pruning:PreserveUnknownFields
-	ClusterInstanceSchema runtime.RawExtension `json:"clusterInstanceSchema"`
-
-	// PolicyTemplateSchema defines the parameters required for ACM policies.
-	// The parameter definitions should follow the OpenAPI V3 schema and
-	// explicitly define required fields.
-	// +kubebuilder:validation:Type=object
-	// +kubebuilder:pruning:PreserveUnknownFields
-	PolicyTemplateSchema runtime.RawExtension `json:"policyTemplateSchema"`
-}
-
 // ClusterTemplateStatus defines the observed state of ClusterTemplate
 type ClusterTemplateStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -81,7 +65,7 @@ type ClusterTemplateStatus struct {
 //+kubebuilder:subresource:status
 
 // ClusterTemplate is the Schema for the clustertemplates API
-// +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a ClusterTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='ClusterTemplateValidated' && c.status=='False') || oldSelf.spec == self.spec"
+// +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a ClusterTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='ClusterTemplateValidated' && c.status=='False') || (oldSelf.spec.name == self.spec.name && oldSelf.spec.description == self.spec.description && oldSelf.spec.version == self.spec.version && oldSelf.spec.characteristics == self.spec.characteristics && oldSelf.spec.metadata == self.spec.metadata && oldSelf.spec.templates == self.spec.templates && oldSelf.spec.templateParameterSchema == self.spec.templateParameterSchema)"
 // +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Template",resources={{ConfigMap, v1}}
 type ClusterTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
