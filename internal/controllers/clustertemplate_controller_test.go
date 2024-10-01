@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,18 +32,18 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ctName,
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
-				Templates: oranv1alpha1.Templates{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				InputDataSchema: oranv1alpha1.InputDataSchema{
+				InputDataSchema: provisioningv1alpha1.InputDataSchema{
 					// APIserver has enforced the validation for this field who holds
 					// the arbirary JSON data
 					ClusterInstanceSchema: runtime.RawExtension{},
@@ -114,7 +114,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(result.Requeue).To(BeFalse())
 
 		// Check the status condition
-		updatedCT := &oranv1alpha1.ClusterTemplate{}
+		updatedCT := &provisioningv1alpha1.ClusterTemplate{}
 		Expect(c.Get(ctx, req.NamespacedName, updatedCT)).To(Succeed())
 		conditions := updatedCT.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
@@ -138,7 +138,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(result).To(Equal(requeueWithLongInterval()))
 
 		// Check the status condition
-		updatedCT := &oranv1alpha1.ClusterTemplate{}
+		updatedCT := &provisioningv1alpha1.ClusterTemplate{}
 		Expect(c.Get(ctx, req.NamespacedName, updatedCT)).To(Succeed())
 		conditions := updatedCT.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
@@ -159,19 +159,19 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 		r            *ClusterTemplateReconciler
 		cm           *corev1.ConfigMap
 		ciDefaultsCm = "clusterinstance-defaults-v1"
-		cts          []*oranv1alpha1.ClusterTemplate
+		cts          []*provisioningv1alpha1.ClusterTemplate
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		cts = []*oranv1alpha1.ClusterTemplate{
+		cts = []*provisioningv1alpha1.ClusterTemplate{
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-template-a-v1",
 					Namespace: "cluster-template-a",
 				},
-				Spec: oranv1alpha1.ClusterTemplateSpec{
-					Templates: oranv1alpha1.Templates{},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 			{
@@ -179,8 +179,8 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Name:      "cluster-template-a-v2",
 					Namespace: "cluster-template-a",
 				},
-				Spec: oranv1alpha1.ClusterTemplateSpec{
-					Templates: oranv1alpha1.Templates{},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 			{
@@ -188,8 +188,8 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Name:      "cluster-template-b-v1",
 					Namespace: "cluster-template-b",
 				},
-				Spec: oranv1alpha1.ClusterTemplateSpec{
-					Templates: oranv1alpha1.Templates{},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 		}
@@ -263,13 +263,13 @@ var _ = Describe("validateClusterTemplateCR", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ctName,
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
-				Templates: oranv1alpha1.Templates{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,

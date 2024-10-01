@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sptr "k8s.io/utils/ptr"
 
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -77,7 +77,7 @@ type reconcilerTask struct {
 	logger *slog.Logger
 	image  string
 	client client.Client
-	object *oranv1alpha1.Inventory
+	object *inventoryv1alpha1.Inventory
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -92,7 +92,7 @@ type reconcilerTask struct {
 func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (result ctrl.Result,
 	err error) {
 	// Fetch the object:
-	object := &oranv1alpha1.Inventory{}
+	object := &inventoryv1alpha1.Inventory{}
 	if err := r.Client.Get(ctx, request.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
 			err = nil
@@ -1141,7 +1141,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("o2ims-inventory").
-		For(&oranv1alpha1.Inventory{},
+		For(&inventoryv1alpha1.Inventory{},
 			// Watch for create event for Inventory.
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {

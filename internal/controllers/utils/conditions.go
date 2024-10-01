@@ -1,7 +1,7 @@
 package utils
 
 import (
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -87,13 +87,13 @@ func SetStatusCondition(existingConditions *[]metav1.Condition, conditionType Co
 }
 
 // IsClusterProvisionPresent checks if the cluster provision condition is present
-func IsClusterProvisionPresent(cr *oranv1alpha1.ClusterRequest) bool {
+func IsClusterProvisionPresent(cr *provisioningv1alpha1.ClusterRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
 	return condition != nil
 }
 
 // IsClusterProvisionCompleted checks if the cluster provision condition status is completed
-func IsClusterProvisionCompleted(cr *oranv1alpha1.ClusterRequest) bool {
+func IsClusterProvisionCompleted(cr *provisioningv1alpha1.ClusterRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
 	if condition != nil {
 		if condition.Status == metav1.ConditionTrue && condition.Reason == string(CRconditionReasons.Completed) {
@@ -104,7 +104,7 @@ func IsClusterProvisionCompleted(cr *oranv1alpha1.ClusterRequest) bool {
 }
 
 // IsClusterProvisionTimedOutOrFailed checks if the cluster provision condition status is timedout or failed
-func IsClusterProvisionTimedOutOrFailed(cr *oranv1alpha1.ClusterRequest) bool {
+func IsClusterProvisionTimedOutOrFailed(cr *provisioningv1alpha1.ClusterRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
 	if condition != nil {
 		if condition.Status == metav1.ConditionFalse &&
@@ -117,7 +117,7 @@ func IsClusterProvisionTimedOutOrFailed(cr *oranv1alpha1.ClusterRequest) bool {
 }
 
 // IsClusterProvisionCompletedOrFailed checks if the cluster provision condition status is completed or failed
-func IsClusterProvisionCompletedOrFailed(cr *oranv1alpha1.ClusterRequest) bool {
+func IsClusterProvisionCompletedOrFailed(cr *provisioningv1alpha1.ClusterRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(CRconditionTypes.ClusterProvisioned)))
 	if condition != nil {
 		if condition.Status == metav1.ConditionTrue ||

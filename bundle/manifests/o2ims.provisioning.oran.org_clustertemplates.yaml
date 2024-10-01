@@ -4,20 +4,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
   creationTimestamp: null
-  name: clusterrequests.o2ims.oran.openshift.io
+  name: clustertemplates.o2ims.provisioning.oran.org
 spec:
-  group: o2ims.oran.openshift.io
+  group: o2ims.provisioning.oran.org
   names:
-    kind: ClusterRequest
-    listKind: ClusterRequestList
-    plural: clusterrequests
-    singular: clusterrequest
+    kind: ClusterTemplate
+    listKind: ClusterTemplateList
+    plural: clustertemplates
+    singular: clustertemplate
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterRequest is the Schema for the clusterrequests API
+        description: ClusterTemplate is the Schema for the clustertemplates API
         properties:
           apiVersion:
             description: |-
@@ -37,96 +37,62 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClusterRequestSpec defines the desired state of ClusterRequest
+            description: ClusterTemplateSpec defines the desired state of ClusterTemplate
             properties:
-              clusterTemplateInput:
-                description: ClusterTemplateInput provides the input data that follows
-                  the schema defined in the referenced ClusterTemplate.
+              inputDataSchema:
+                description: InputDataSchema encapsulates all the schemas required
+                  for ClusterTemplate.
                 properties:
-                  clusterInstanceInput:
+                  clusterInstanceSchema:
                     description: |-
-                      ClusterInstanceInput provides the input values required for provisioning.
-                      The input must adhere to the schema defined in the referenced ClusterTemplate's
-                      spec.inputDataSchema.clusterInstanceSchema.
+                      ClusterInstanceSchema defines the subschema of ClusterInstance parameters that
+                      are allowed in the ClusterRequest's spec.clusterTemplateInput.clusterInstanceInput.
+                      The parameter definitions should follow the OpenAPI V3 schema and explicitly define
+                      the parameter type and required fields. This schema will be used to validate the
+                      ClusterInstanceInput provided in a ClusterRequest.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  policyTemplateInput:
+                  policyTemplateSchema:
                     description: |-
-                      PolicyTemplateInput provides input values for ACM configuration policies.
-                      The input follows the schema defined in the referenced ClusterTemplate's
-                      spec.inputDataSchema.policyTemplateSchema.
+                      PolicyTemplateSchema defines the parameters required for ACM policies.
+                      The parameter definitions should follow the OpenAPI V3 schema and
+                      explicitly define required fields.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                 required:
-                - clusterInstanceInput
-                - policyTemplateInput
+                - clusterInstanceSchema
+                - policyTemplateSchema
                 type: object
-              location:
-                description: Location
-                type: string
-              site:
-                description: Site
-                type: string
-              templateName:
-                description: |-
-                  TemplateName defines the base name of the referenced ClusterTemplate.
-                  The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
-                type: string
-              templateVersion:
-                description: |-
-                  TemplateVersion defines the version of the referenced ClusterTemplate.
-                  The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
-                type: string
-              timeout:
-                description: |-
-                  Timeout contains timeout values for hardware provisioning, cluster provisioning and
-                  cluster configuration.
+              templates:
+                description: Templates defines the references to the templates required
+                  for ClusterTemplate.
                 properties:
-                  clusterProvisioning:
-                    default: 90
-                    description: ClusterProvisioning defines the timeout for the initial
-                      cluster installation in minutes.
-                    type: integer
-                  configuration:
-                    default: 30
-                    description: Configuration defines the timeout for ACM policy
-                      configuration.
-                    type: integer
-                  hardwareProvisioning:
-                    default: 90
-                    description: HardwareProvisioning defines the timeout for the
-                      hardware provisioning in minutes.
-                    type: integer
+                  clusterInstanceDefaults:
+                    description: |-
+                      ClusterInstanceDefaults defines a reference to a configmap with
+                      default values for ClusterInstance
+                    type: string
+                  hwTemplate:
+                    description: HwTemplate defines a reference to a hardware template
+                      config map
+                    type: string
+                  policyTemplateDefaults:
+                    description: |-
+                      PolicyTemplateDefaults defines a reference to a configmap with
+                      default values for ACM policies
+                    type: string
+                required:
+                - clusterInstanceDefaults
+                - hwTemplate
+                - policyTemplateDefaults
                 type: object
             required:
-            - clusterTemplateInput
-            - site
-            - templateName
-            - templateVersion
+            - inputDataSchema
+            - templates
             type: object
           status:
-            description: ClusterRequestStatus defines the observed state of ClusterRequest
+            description: ClusterTemplateStatus defines the observed state of ClusterTemplate
             properties:
-              clusterDetails:
-                description: ClusterDetails references to the ClusterInstance.
-                properties:
-                  clusterProvisionStartedAt:
-                    description: A timestamp indicating the cluster provisoning has
-                      started
-                    format: date-time
-                    type: string
-                  name:
-                    description: Contains the name of the created ClusterInstance.
-                    type: string
-                  nonCompliantAt:
-                    description: Holds the first timestamp when the configuration
-                      was found NonCompliant for the cluster.
-                    format: date-time
-                    type: string
-                  ztpStatus:
-                    description: Says if ZTP has complete or not.
-                    type: string
-                type: object
               conditions:
                 items:
                   description: "Condition contains details for one aspect of the current
@@ -196,45 +162,13 @@ spec:
                   - type
                   type: object
                 type: array
-              nodePoolRef:
-                description: NodePoolRef references to the NodePool.
-                properties:
-                  hardwareProvisioningCheckStart:
-                    description: Represents the timestamp of the first status check
-                      for hardware provisioning
-                    format: date-time
-                    type: string
-                  name:
-                    description: Contains the name of the created NodePool.
-                    type: string
-                  namespace:
-                    description: Contains the namespace of the created NodePool.
-                    type: string
-                type: object
-              policies:
-                description: Holds policies that are matched with the ManagedCluster
-                  created by the ClusterRequest.
-                items:
-                  description: PolicyDetails holds information about an ACM policy.
-                  properties:
-                    compliant:
-                      description: |-
-                        The compliance of the ManagedCluster created through a ClusterRequest with the current
-                        policy.
-                      type: string
-                    policyName:
-                      description: The policy's name.
-                      type: string
-                    policyNamespace:
-                      description: The policy's namespace.
-                      type: string
-                    remediationAction:
-                      description: The policy's remediation action.
-                      type: string
-                  type: object
-                type: array
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: Spec changes are not allowed for a ClusterTemplate that has passed
+            the validation
+          rule: '!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type==''ClusterTemplateValidated''
+            && c.status==''False'') || oldSelf.spec == self.spec'
     served: true
     storage: true
     subresources:

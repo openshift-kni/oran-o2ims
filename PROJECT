@@ -16,25 +16,25 @@ resources:
   domain: oran.openshift.io
   group: o2ims
   kind: Inventory
-  path: github.com/openshift-kni/oran-o2ims/api/v1alpha1
+  path: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: oran.openshift.io
+  domain: provisioning.oran.org
   group: o2ims
   kind: ClusterTemplate
-  path: github.com/openshift-kni/oran-o2ims/api/v1alpha1
+  path: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: oran.openshift.io
+  domain: provisioning.oran.org
   group: o2ims
   kind: ClusterRequest
-  path: github.com/openshift-kni/oran-o2ims/api/v1alpha1
+  path: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1

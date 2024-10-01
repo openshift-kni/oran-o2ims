@@ -41,7 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -54,7 +54,7 @@ type ClusterTemplateReconciler struct {
 type clusterTemplateReconcilerTask struct {
 	logger *slog.Logger
 	client client.Client
-	object *oranv1alpha1.ClusterTemplate
+	object *provisioningv1alpha1.ClusterTemplate
 }
 
 func doNotRequeue() ctrl.Result {
@@ -78,9 +78,9 @@ func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
 	return ctrl.Result{RequeueAfter: interval}
 }
 
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -98,7 +98,7 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	result = doNotRequeue()
 
 	// Fetch the object:
-	object := &oranv1alpha1.ClusterTemplate{}
+	object := &provisioningv1alpha1.ClusterTemplate{}
 	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
 			// The cluster template could have been deleted
@@ -269,7 +269,7 @@ func (r *ClusterTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("o2ims-cluster-template").
-		For(&oranv1alpha1.ClusterTemplate{},
+		For(&provisioningv1alpha1.ClusterTemplate{},
 			// Watch for create and update events for ClusterTemplate.
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
@@ -306,7 +306,7 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 	var requests []reconcile.Request
 
 	// Get all the cluster templates
-	clusterTemplates := &oranv1alpha1.ClusterTemplateList{}
+	clusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
 	err := r.List(ctx, clusterTemplates)
 	if err != nil {
 		r.Logger.Error("Unable to list ClusterTemplate resources. ", "error: ", err.Error())

@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	//+kubebuilder:scaffold:imports
 )
@@ -77,22 +77,22 @@ var _ = DescribeTable(
 	Entry(
 		"Metadata server deployment is updated after edit",
 		[]client.Object{
-			&oranv1alpha1.Inventory{
+			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
 					Namespace:         utils.InventoryNamespace,
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.InventorySpec{
+				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              ServerTestImage,
 					KubeRbacProxyImage: KubeRbacProxyTestImage,
-					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
 					},
-					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
 					},
@@ -151,22 +151,22 @@ var _ = DescribeTable(
 	Entry(
 		"Only the metadata server is required",
 		[]client.Object{
-			&oranv1alpha1.Inventory{
+			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
 					Namespace:         utils.InventoryNamespace,
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.InventorySpec{
+				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              ServerTestImage,
 					KubeRbacProxyImage: KubeRbacProxyTestImage,
-					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
 					},
-					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
 					},
@@ -242,22 +242,22 @@ var _ = DescribeTable(
 	Entry(
 		"Metadata and deployment manager servers required",
 		[]client.Object{
-			&oranv1alpha1.Inventory{
+			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
 					Namespace:         "oran-o2ims",
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.InventorySpec{
+				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              ServerTestImage,
 					KubeRbacProxyImage: KubeRbacProxyTestImage,
-					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
 					},
-					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
 					},
@@ -299,22 +299,22 @@ var _ = DescribeTable(
 	Entry(
 		"No O-RAN O2IMS server required",
 		[]client.Object{
-			&oranv1alpha1.Inventory{
+			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "oran-o2ims-sample-1",
 					Namespace:         "oran-o2ims",
 					CreationTimestamp: metav1.Now(),
 				},
-				Spec: oranv1alpha1.InventorySpec{
+				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              ServerTestImage,
 					KubeRbacProxyImage: KubeRbacProxyTestImage,
-					MetadataServerConfig: oranv1alpha1.MetadataServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
 					},
-					DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
-						ServerConfig: oranv1alpha1.ServerConfig{
+					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
 					},
