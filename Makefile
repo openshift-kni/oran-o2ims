@@ -85,7 +85,6 @@ SHELL = /usr/bin/env bash -o pipefail
 # setting  the backend token and the backend URL 
 TOKEN_BACKEND := $(shell oc create token -n open-cluster-management multicluster-operators --duration=24h)
 BACKEND_TOKEN_RS := $(shell oc create token oauth-apiserver-sa -n openshift-oauth-apiserver --duration=48h)
-BACKEND_URL := $(shell oc get route -n open-cluster-management search-api -o json | jq -r '"https://" + .spec.host')
 
 # getting the cloud id and the IngressHost 
 
