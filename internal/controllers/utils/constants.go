@@ -82,6 +82,7 @@ var (
 	AllowedClusterInstanceClusterFields = []string{
 		"extraAnnotations",
 		"extraLabels",
+		"clusterImageSetNameRef",
 	}
 	// Non-immutable ClusterInstance fields at the node-level
 	AllowedClusterInstanceNodeFields = []string{

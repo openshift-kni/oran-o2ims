@@ -1608,9 +1608,10 @@ nodes:
 	})
 
 	It("should successfully render and validate ClusterInstance with dry-run", func() {
-		renderedClusterInstance, err := task.handleRenderClusterInstance(ctx)
+		renderedClusterInstance, shouldUpgrade, err := task.handleRenderClusterInstance(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(renderedClusterInstance).ToNot(BeNil())
+		Expect(shouldUpgrade).To(BeFalse())
 
 		// Check if status condition was updated correctly
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
@@ -1627,7 +1628,7 @@ nodes:
 	It("should fail to render ClusterInstance due to invalid input", func() {
 		// Modify input data to be invalid
 		task.clusterInput.clusterInstanceData["clusterName"] = ""
-		_, err := task.handleRenderClusterInstance(ctx)
+		_, _, err := task.handleRenderClusterInstance(ctx)
 		Expect(err).To(HaveOccurred())
 
 		// Check if status condition was updated correctly
@@ -1672,7 +1673,7 @@ nodes:
 		newSpec["baseDomain"] = "newdomain.example.com"
 		task.clusterInput.clusterInstanceData = newSpec
 
-		_, err = task.handleRenderClusterInstance(ctx)
+		_, _, err = task.handleRenderClusterInstance(ctx)
 		Expect(err).To(HaveOccurred())
 
 		// Note that the detected changed fields in this unittest include nodes.0.ironicInspect, baseDomain,

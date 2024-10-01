@@ -63,6 +63,30 @@ spec:
                 - clusterInstanceSchema
                 - policyTemplateSchema
                 type: object
+              seedImageRef:
+                description: SeedImageRef defines the seed image and OCP version for
+                  the upgrade
+                properties:
+                  image:
+                    description: Image defines the full pull-spec of the seed container
+                      image to use.
+                    minLength: 1
+                    pattern: ^([a-z0-9]+://)?[\S]+$
+                    type: string
+                  pullSecretRef:
+                    description: PullSecretRef defines the reference to a secret with
+                      credentials to pull container images.
+                    properties:
+                      name:
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  version:
+                    description: Version defines the target platform version. The
+                      value must match the version of the seed image.
+                    type: string
+                type: object
               templates:
                 description: Templates defines the references to the templates required
                   for ClusterTemplate.
