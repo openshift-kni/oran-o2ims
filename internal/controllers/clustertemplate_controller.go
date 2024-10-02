@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"log/slog"
@@ -283,11 +282,11 @@ func validateName(c client.Client, name, version, metadataName, namespace string
 	}
 	if len(sameMetadataName) != 0 {
 		return utils.NewInputError("failed to validate ClusterTemplate name %s, a identical name already exists in namespaces: %s",
-			metadataName, sliceToString(mapKeysToSlice(sameMetadataName)))
+			metadataName, strings.Join(utils.MapKeysToSlice(sameMetadataName), ","))
 	}
 	if len(sameMetadataName) != 0 {
 		return utils.NewInputError("failed to validate ClusterTemplate name %s, the combination of <spec.name>.<spec.version>: %s already exists in namespace: %s",
-			metadataName, name+"."+version, sliceToString(mapKeysToSlice(sameNameVersion)))
+			metadataName, name+"."+version, strings.Join(utils.MapKeysToSlice(sameNameVersion), ","))
 	}
 	return nil
 }
@@ -417,25 +416,4 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 		}
 	}
 	return requests
-}
-
-// mapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
-func mapKeysToSlice(inputMap map[string]bool) []string {
-	keys := make([]string, 0, len(inputMap))
-	for key := range inputMap {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-// sliceToString takes a slice of strings an returns a comma separated string including the slice content
-func sliceToString(aSlice []string) (out string) {
-	if len(aSlice) != 0 {
-		out += aSlice[0]
-		for _, aString := range aSlice[1:] {
-			out += ", " + aString
-		}
-	}
-	return out
 }

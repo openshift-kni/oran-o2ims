@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
@@ -34,7 +35,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		schema := []byte(`{"properties":{}}`)
-		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte{})
+		schema, err := InsertSubSchema(schema, clusterInstanceParametersString, []byte{})
 		Expect(err).ToNot(HaveOccurred())
 		ct := &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
@@ -703,54 +704,73 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 	})
 })
 
-func Test_mapKeysToSlice(t *testing.T) {
+func TestInsertSubSchema(t *testing.T) {
 	type args struct {
-		inputMap map[string]bool
+		mainSchema []byte
+		node       string
+		subSchema  []byte
 	}
 	tests := []struct {
-		name string
-		args args
-		want []string
+		name                  string
+		args                  args
+		wantUpdatedMainSchema []byte
+		wantErr               bool
 	}{
 		{
 			name: "ok",
 			args: args{
-				inputMap: map[string]bool{"banana": true, "apple": false, "grape": true},
+				mainSchema: []byte(`{"properties":{}}`),
+				node:       "clusterInstanceParameters",
+				subSchema:  []byte(`{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}`),
 			},
-			want: []string{"apple", "banana", "grape"},
+			wantUpdatedMainSchema: []byte(`{"properties":{"clusterInstanceParameters":{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}}}`),
+			wantErr:               false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := mapKeysToSlice(tt.args.inputMap); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("mapKeysToSlice() = %v, want %v", got, tt.want)
+			gotUpdatedMainSchema, err := InsertSubSchema(tt.args.mainSchema, tt.args.node, tt.args.subSchema)
+			fmt.Println(string(gotUpdatedMainSchema))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("InsertSubSchema() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotUpdatedMainSchema, tt.wantUpdatedMainSchema) {
+				t.Errorf("InsertSubSchema() = %v, want %v", gotUpdatedMainSchema, tt.wantUpdatedMainSchema)
 			}
 		})
 	}
 }
 
-func Test_sliceToString(t *testing.T) {
-	type args struct {
-		aSlice []string
+// InsertSubSchema Inserts a subschema in a Main schema using the subSchemaKey.
+// returns an updated schema
+func InsertSubSchema(mainSchema []byte, subSchemaKey string, subSchema []byte) (updatedMainSchema []byte, err error) {
+	jsonObject := make(map[string]any)
+	if len(mainSchema) != 0 {
+		err = json.Unmarshal(mainSchema, &jsonObject)
+		if err != nil {
+			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
+		}
 	}
-	tests := []struct {
-		name    string
-		args    args
-		wantOut string
-	}{
-		{
-			name: "ok",
-			args: args{
-				aSlice: []string{"apple", "banana", "grape"},
-			},
-			wantOut: "apple, banana, grape",
-		},
+	if _, ok := jsonObject[utils.PropertiesString]; !ok {
+		return subSchema, fmt.Errorf("non compliant Main Schema, missing properties: %w", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if gotOut := sliceToString(tt.args.aSlice); gotOut != tt.wantOut {
-				t.Errorf("sliceToString() = %v, want %v", gotOut, tt.wantOut)
-			}
-		})
+	properties, ok := jsonObject[utils.PropertiesString].(map[string]any)
+	if !ok {
+		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
 	}
+
+	jsonSubObject := make(map[string]any)
+	if len(subSchema) != 0 {
+		err = json.Unmarshal(subSchema, &jsonSubObject)
+		if err != nil {
+			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Sub Schema: %w", err)
+		}
+	}
+	properties[subSchemaKey] = jsonSubObject
+	updatedMainSchema, err = json.Marshal(jsonObject)
+	if err != nil {
+		return updatedMainSchema, fmt.Errorf("failed to Marshall updated main Schema: %w", err)
+	}
+	return updatedMainSchema, nil
 }

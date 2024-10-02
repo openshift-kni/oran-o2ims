@@ -11,6 +11,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,7 +46,7 @@ import (
 )
 
 const (
-	propertiesString = "properties"
+	PropertiesString = "properties"
 )
 
 var (
@@ -1162,7 +1163,7 @@ func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodeP
 	return nil
 }
 
-// ParseJSON parse the yaml in arguments to a data structure T
+// ExtractSubSchema extracts a Sub schema indexed by subSchemaKey from a Main schema
 func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema []byte, err error) {
 	jsonObject := make(map[string]any)
 	if len(mainSchema) == 0 {
@@ -1172,10 +1173,10 @@ func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema []byte,
 	if err != nil {
 		return subSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
 	}
-	if _, ok := jsonObject[propertiesString]; !ok {
+	if _, ok := jsonObject[PropertiesString]; !ok {
 		return subSchema, fmt.Errorf("non compliant Main Schema, missing properties: %w", err)
 	}
-	properties, ok := jsonObject[propertiesString].(map[string]any)
+	properties, ok := jsonObject[PropertiesString].(map[string]any)
 	if !ok {
 		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
 	}
@@ -1186,33 +1187,12 @@ func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema []byte,
 	return subSchema, nil
 }
 
-func InsertSubSchema(mainSchema []byte, subSchemaKey string, subSchema []byte) (updatedMainSchema []byte, err error) {
-	jsonObject := make(map[string]any)
-	if len(mainSchema) != 0 {
-		err = json.Unmarshal(mainSchema, &jsonObject)
-		if err != nil {
-			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
-		}
+// MapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
+func MapKeysToSlice(inputMap map[string]bool) []string {
+	keys := make([]string, 0, len(inputMap))
+	for key := range inputMap {
+		keys = append(keys, key)
 	}
-	if _, ok := jsonObject[propertiesString]; !ok {
-		return subSchema, fmt.Errorf("non compliant Main Schema, missing properties: %w", err)
-	}
-	properties, ok := jsonObject[propertiesString].(map[string]any)
-	if !ok {
-		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
-	}
-
-	jsonSubObject := make(map[string]any)
-	if len(subSchema) != 0 {
-		err = json.Unmarshal(subSchema, &jsonSubObject)
-		if err != nil {
-			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Sub Schema: %w", err)
-		}
-	}
-	properties[subSchemaKey] = jsonSubObject
-	updatedMainSchema, err = json.Marshal(jsonObject)
-	if err != nil {
-		return updatedMainSchema, fmt.Errorf("failed to Marshall updated main Schema: %w", err)
-	}
-	return updatedMainSchema, nil
+	sort.Strings(keys)
+	return keys
 }

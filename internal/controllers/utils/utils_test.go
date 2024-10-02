@@ -2167,39 +2167,27 @@ func TestExtractSubSchema(t *testing.T) {
 	}
 }
 
-func TestInsertSubSchema(t *testing.T) {
+func Test_mapKeysToSlice(t *testing.T) {
 	type args struct {
-		mainSchema []byte
-		node       string
-		subSchema  []byte
+		inputMap map[string]bool
 	}
 	tests := []struct {
-		name                  string
-		args                  args
-		wantUpdatedMainSchema []byte
-		wantErr               bool
+		name string
+		args args
+		want []string
 	}{
 		{
 			name: "ok",
 			args: args{
-				mainSchema: []byte(`{"properties":{}}`),
-				node:       "clusterInstanceParameters",
-				subSchema:  []byte(`{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}`),
+				inputMap: map[string]bool{"banana": true, "apple": false, "grape": true},
 			},
-			wantUpdatedMainSchema: []byte(`{"properties":{"clusterInstanceParameters":{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}}}`),
-			wantErr:               false,
+			want: []string{"apple", "banana", "grape"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotUpdatedMainSchema, err := InsertSubSchema(tt.args.mainSchema, tt.args.node, tt.args.subSchema)
-			fmt.Println(string(gotUpdatedMainSchema))
-			if (err != nil) != tt.wantErr {
-				t.Errorf("InsertSubSchema() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotUpdatedMainSchema, tt.wantUpdatedMainSchema) {
-				t.Errorf("InsertSubSchema() = %v, want %v", gotUpdatedMainSchema, tt.wantUpdatedMainSchema)
+			if got := MapKeysToSlice(tt.args.inputMap); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("mapKeysToSlice() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -545,9 +545,9 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			},
 		}
 		schema := []byte(`{"properties":{}}`)
-		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte(testClusterTemplateSchema))
+		schema, err := InsertSubSchema(schema, clusterInstanceParametersString, []byte(testClusterTemplateSchema))
 		Expect(err).ToNot(HaveOccurred())
-		schema, err = utils.InsertSubSchema(schema, policyTemplateParametersString, []byte(testPolicyTemplateSchema))
+		schema, err = InsertSubSchema(schema, policyTemplateParametersString, []byte(testPolicyTemplateSchema))
 		Expect(err).ToNot(HaveOccurred())
 
 		// Define the cluster template.
@@ -1503,7 +1503,7 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 
 	It("returns the referred ClusterTemplate if it exists", func() {
 		schema := []byte(`{"properties":{}}`)
-		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte{})
+		schema, err := InsertSubSchema(schema, clusterInstanceParametersString, []byte{})
 		Expect(err).ToNot(HaveOccurred())
 		// Define the cluster template.
 		ctName := getClusterTemplateRefName(tName, tVersion)
@@ -2375,9 +2375,9 @@ var _ = Describe("policyManagement", func() {
 
 	BeforeEach(func() {
 		schema := []byte(`{"properties":{}}`)
-		schema, err := utils.InsertSubSchema(schema, clusterInstanceParametersString, []byte(testClusterTemplateSchema))
+		schema, err := InsertSubSchema(schema, clusterInstanceParametersString, []byte(testClusterTemplateSchema))
 		Expect(err).ToNot(HaveOccurred())
-		schema, err = utils.InsertSubSchema(schema, policyTemplateParametersString, []byte(testPolicyTemplateSchema))
+		schema, err = InsertSubSchema(schema, policyTemplateParametersString, []byte(testPolicyTemplateSchema))
 		Expect(err).ToNot(HaveOccurred())
 		// Define the needed resources.
 		crs := []client.Object{
