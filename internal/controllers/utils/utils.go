@@ -824,6 +824,35 @@ func CheckClusterLabelsForPolicies(
 	return nil
 }
 
+// matchesPattern checks if the path matches the pattern
+func matchesPattern(path, pattern []string) bool {
+	if len(path) < len(pattern) {
+		return false
+	}
+
+	for i, p := range pattern {
+		if p == "*" {
+			// Wildcard matches any single element
+			continue
+		}
+		if path[i] != p {
+			return false
+		}
+	}
+
+	return true
+}
+
+// matchesAnyPattern checks if the given path matches any pattern in the provided list.
+func matchesAnyPattern(path []string, patterns [][]string) bool {
+	for _, pattern := range patterns {
+		if matchesPattern(path, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // FindClusterInstanceImmutableFieldUpdates identifies updates made to immutable fields
 // in the ClusterInstance spec. It returns two lists of paths: a list of updated fields
 // that are considered immutable and should not be modified and a list of fields related
@@ -868,15 +897,24 @@ func FindClusterInstanceImmutableFieldUpdates(
 			),
 		)
 
-		if diff.Path[0] == "nodes" {
-			if len(diff.Path) == 2 {
-				scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
-			} else if len(diff.Path) > 2 && !slices.Contains(AllowedClusterInstanceNodeFields, diff.Path[2]) {
-				updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
-			}
-		} else if !slices.Contains(AllowedClusterInstanceClusterFields, diff.Path[0]) {
-			updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
+		// Check if the path matches any allowed fields
+		if matchesAnyPattern(diff.Path, AllowedClusterInstanceFields) {
+			// Allowed field; skip
+			continue
 		}
+		// Check if the path matches any ignored fields
+		if matchesAnyPattern(diff.Path, IgnoredClusterInstanceFields) {
+			// Ignored field; skip
+			continue
+		}
+
+		// Check if the change is adding or removing a node.
+		// Path like ["nodes", "1"], indicating node addition or removal.
+		if diff.Path[0] == "nodes" && len(diff.Path) == 2 {
+			scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
+			continue
+		}
+		updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
 	}
 
 	return updatedFields, scalingNodes, nil

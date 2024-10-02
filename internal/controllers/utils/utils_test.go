@@ -869,6 +869,7 @@ var testClusterInstanceData = map[string]interface{}{
 	"apiVIPs":                []string{"192.0.2.2", "192.0.2.3"},
 	"caBundleRef":            map[string]interface{}{"name": "my-bundle-ref"},
 	"extraLabels":            map[string]map[string]string{"ManagedCluster": {"cluster-version": "v4.16", "clustertemplate-a-policy": "v1"}},
+	"extraAnnotations":       map[string]map[string]string{"ManagedCluster": {"annKey": "annValue"}},
 	"clusterType":            "SNO",
 	"clusterNetwork":         []map[string]interface{}{{"cidr": "203.0.113.0/24", "hostPrefix": 23}},
 	"machineNetwork":         []map[string]interface{}{{"cidr": "192.0.2.0/24"}},
@@ -1002,6 +1003,9 @@ spec:
     ManagedCluster:
       cluster-version: v4.16
       clustertemplate-a-policy: v1
+  extraAnnotations:
+    ManagedCluster:
+      annKey: annValue
   clusterName: site-sno-du-1
   clusterNetwork:
   - cidr: 203.0.113.0/24
@@ -1238,17 +1242,21 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		Expect(scalingNodes).To(BeEmpty())
 	})
 
-	It("should not flag changes in allowed cluster-level fields", func() {
+	It("should not flag changes in allowed cluster-level fields alongside immutable fields", func() {
 		// Add an allowed extra label
 		spec := newClusterInstance.Object["spec"].(map[string]any)
-		fmt.Println("extraLabels ", spec["extraLabels"])
+		// Change allowed fields
 		labels := spec["extraLabels"].(map[string]any)["ManagedCluster"].(map[string]any)
 		labels["newLabelKey"] = "newLabelValue"
+		delete(spec, "extraAnnotations")
+		// Change immutable field
+		spec["clusterName"] = "newName"
 
 		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance, newClusterInstance)
 		Expect(err).To(BeNil())
-		Expect(updatedFields).To(BeEmpty())
+		Expect(updatedFields).To(ContainElement("clusterName"))
+		Expect(len(updatedFields)).To(Equal(1))
 		Expect(scalingNodes).To(BeEmpty())
 	})
 
@@ -1264,6 +1272,47 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(ContainElement(
 			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
+		Expect(scalingNodes).To(BeEmpty())
+	})
+
+	It("should not flag changes in allowed node-level fields alongside immutable fields", func() {
+		// Change an allowed field and an immutable field in the same node
+		spec := newClusterInstance.Object["spec"].(map[string]any)
+		// Change allowed field
+		nodes := spec["nodes"].([]any)
+		nodes[0].(map[string]any)["extraAnnotations"] = map[string]map[string]string{
+			"BareMetalHost": {
+				"newAnnotationKey": "newAnnotationValue",
+			},
+		}
+		// Change immutable field
+		node0 := spec["nodes"].([]any)[0].(map[string]any)
+		node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
+		node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
+
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance, newClusterInstance)
+		Expect(err).To(BeNil())
+		Expect(updatedFields).To(ContainElement(
+			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
+		Expect(len(updatedFields)).To(Equal(1))
+		Expect(scalingNodes).To(BeEmpty())
+	})
+
+	It("should not flag changes in ignored node-level fields alongside immutable fields", func() {
+		// Change ignored fields
+		spec := newClusterInstance.Object["spec"].(map[string]any)
+		node0 := spec["nodes"].([]any)[0].(map[string]any)
+		node0["bmcAddress"] = "placeholder"
+		node0["bmcCredentialsName"].(map[string]any)["name"] = "myCreds"
+		node0["bootMACAddress"] = "00:00:5E:00:53:AF"
+		node0NetworkInterfaces := node0["nodeNetwork"].(map[string]any)["interfaces"].([]any)
+		node0NetworkInterfaces[0].(map[string]any)["macAddress"] = "00:00:5E:00:53:AF"
+
+		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance, newClusterInstance)
+		Expect(err).To(BeNil())
+		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(BeEmpty())
 	})
 
@@ -1291,23 +1340,6 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(ContainElement("nodes.0"))
-	})
-
-	It("should not flag changes in allowed node-level fields", func() {
-		// Add an allowed extra annotation at the node level
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		nodes := spec["nodes"].([]any)
-		nodes[0].(map[string]any)["extraAnnotations"] = map[string]map[string]string{
-			"BareMetalHost": {
-				"newAnnotationKey": "newAnnotationValue",
-			},
-		}
-
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
-		Expect(err).To(BeNil())
-		Expect(updatedFields).To(BeEmpty())
-		Expect(scalingNodes).To(BeEmpty())
 	})
 })
 
