@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	ibuv1 "github.com/openshift-kni/lifecycle-agent/api/imagebasedupgrade/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -29,6 +30,7 @@ type ClusterTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	SeedImageRef ibuv1.SeedImageRef `json:"seedImageRef,omitempty"`
 	// Templates defines the references to the templates required for ClusterTemplate.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Templates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Templates Templates `json:"templates"`
