@@ -78,15 +78,25 @@ const (
 )
 
 var (
-	// Non-immutable ClusterInstance fields at the cluster-level
-	AllowedClusterInstanceClusterFields = []string{
-		"extraAnnotations",
-		"extraLabels",
+	// AllowedClusterInstanceFields contains path patterns for fields that are allowed to be updated.
+	// The wildcard "*" is used to match any index in a list.
+	AllowedClusterInstanceFields = [][]string{
+		// Cluster-level non-immutable fields
+		{"extraAnnotations"},
+		{"extraLabels"},
+		// Node-level non-immutable fields
+		{"nodes", "*", "extraAnnotations"},
+		{"nodes", "*", "extraLabels"},
 	}
-	// Non-immutable ClusterInstance fields at the node-level
-	AllowedClusterInstanceNodeFields = []string{
-		"extraAnnotations",
-		"extraLabels",
+
+	// IgnoredClusterInstanceFields contains path patterns for fields that should be ignored.
+	// The wildcard "*" is used to match any index in a list.
+	IgnoredClusterInstanceFields = [][]string{
+		// Node-level ignored fields
+		{"nodes", "*", "bmcAddress"},
+		{"nodes", "*", "bmcCredentialsName"},
+		{"nodes", "*", "bootMACAddress"},
+		{"nodes", "*", "nodeNetwork", "interfaces", "*", "macAddress"},
 	}
 )
 
