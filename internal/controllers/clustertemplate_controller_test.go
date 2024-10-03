@@ -2,10 +2,7 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"reflect"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,9 +31,22 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		schema := []byte(`{"properties":{}}`)
-		schema, err := InsertSubSchema(schema, clusterInstanceParametersString, []byte{})
-		Expect(err).ToNot(HaveOccurred())
+		var (
+			testFullTemplateSchema = fmt.Sprintf(`{
+				"properties": {
+					"nodeClusterName": {"type": "string"},
+					"oCloudSiteId": {"type": "string"},
+					"%s": {}
+				},
+				"type": "object",
+				"required": [
+    "nodeClusterName",
+    "oCloudSiteId",
+    "policyTemplateParameters",
+    "clusterInstanceParameters"
+  ]
+			}`, clusterInstanceParametersString)
+		)
 		ct := &oranv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
@@ -50,7 +60,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: schema},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
 		}
 
@@ -703,74 +713,3 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 })
-
-func TestInsertSubSchema(t *testing.T) {
-	type args struct {
-		mainSchema []byte
-		node       string
-		subSchema  []byte
-	}
-	tests := []struct {
-		name                  string
-		args                  args
-		wantUpdatedMainSchema []byte
-		wantErr               bool
-	}{
-		{
-			name: "ok",
-			args: args{
-				mainSchema: []byte(`{"properties":{}}`),
-				node:       "clusterInstanceParameters",
-				subSchema:  []byte(`{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}`),
-			},
-			wantUpdatedMainSchema: []byte(`{"properties":{"clusterInstanceParameters":{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}}}`),
-			wantErr:               false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotUpdatedMainSchema, err := InsertSubSchema(tt.args.mainSchema, tt.args.node, tt.args.subSchema)
-			fmt.Println(string(gotUpdatedMainSchema))
-			if (err != nil) != tt.wantErr {
-				t.Errorf("InsertSubSchema() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotUpdatedMainSchema, tt.wantUpdatedMainSchema) {
-				t.Errorf("InsertSubSchema() = %v, want %v", gotUpdatedMainSchema, tt.wantUpdatedMainSchema)
-			}
-		})
-	}
-}
-
-// InsertSubSchema Inserts a subschema in a Main schema using the subSchemaKey.
-// returns an updated schema
-func InsertSubSchema(mainSchema []byte, subSchemaKey string, subSchema []byte) (updatedMainSchema []byte, err error) {
-	jsonObject := make(map[string]any)
-	if len(mainSchema) != 0 {
-		err = json.Unmarshal(mainSchema, &jsonObject)
-		if err != nil {
-			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
-		}
-	}
-	if _, ok := jsonObject[utils.PropertiesString]; !ok {
-		return subSchema, fmt.Errorf("non compliant Main Schema, missing properties: %w", err)
-	}
-	properties, ok := jsonObject[utils.PropertiesString].(map[string]any)
-	if !ok {
-		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
-	}
-
-	jsonSubObject := make(map[string]any)
-	if len(subSchema) != 0 {
-		err = json.Unmarshal(subSchema, &jsonSubObject)
-		if err != nil {
-			return updatedMainSchema, fmt.Errorf("failed to UnMarshall Sub Schema: %w", err)
-		}
-	}
-	properties[subSchemaKey] = jsonSubObject
-	updatedMainSchema, err = json.Marshal(jsonObject)
-	if err != nil {
-		return updatedMainSchema, fmt.Errorf("failed to Marshall updated main Schema: %w", err)
-	}
-	return updatedMainSchema, nil
-}
