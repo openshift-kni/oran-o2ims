@@ -31,6 +31,7 @@ superseded-by:
 - [InfrastructureMonitoring Service API](#Infrastructure-Monitoring-Service-Alarms-API)
 - [Database schema](#schema)
 - [Init behaviour](#init)
+  - [Detailed Steps](#detailed-server-instantiation)
 - [Ready behaviour](#ready)
   - [Find AlarmDefinitionID and ProbableCauseID from current Alerts](#for-a-given-resourcetypeid-and-alarmname-coming-from-am-alert-find-the-alarmdefinitionid-and-probablecauseid)
   - [Notification tracking](#notification-tracking)
@@ -303,6 +304,27 @@ Eventually data in `alarm_event_record_archive` will be cleared (hardcoded to 24
  ]
 ```
 
+Equivalent AlarmEventRecord in Go 
+
+```go
+alarmEventRecord := AlarmEventRecord{
+		AlarmDefinitionID: "82139b9c-3683-427b-a1f5-4bf9d6dbb0d8", // See section "For a given ResourceTypeID and AlarmName (coming from AM alert), find the AlarmDefinitionID and ProbableCauseID"
+		ProbableCauseID:   "7fe31219-c2a2-48c7-a2f5-f4bcfe0486e7", // See section "For a given ResourceTypeID and AlarmName (coming from AM alert), find the AlarmDefinitionID and ProbableCauseID"
+        AlarmEventRecordID: uuid.New(), // Auto generated with DB                 
+		ResourceTypeID:     "c9d3f9c5-8429-4484-8179-2a7977071bbf", // See section "Notes on Init phase" on how labels.managed_cluster mapped to resourceTypeID
+		ResourceID:        "d43bf16b-c9c6-432b-934e-7b670cc6a2cc", // labels.managed_cluster
+		AlarmRaisedTime:   "12-31-1920 12:32:14Z",                              // comes from alertmanager `startsAt`
+		AlarmAcknowledged: false,                                                        
+		PerceivedSeverity: SeverityCritical,                                     // comes from labels.severity
+		Extensions:        []KeyValue{{Key: "namespace", Value: "openshift-cluster-version"}, ....}, // any labels that are not processed already (e.g skip labels.severity)
+		
+		// Optionally 
+        AlarmChangedTime         // use changedAt
+        AlarmClearedTime         // use endsAt or potentially current time if we missed the resolved notification
+		AlarmAcknowledgedTime    // Done through API request AlarmEventRecordModifications.alarmAcknowledged (update AlarmAcknowledged)
+}
+```
+
 
 
 ## Schema
@@ -497,9 +519,9 @@ VALUES
 
 -- probable_cause will be auto populated
 ```
-## Detailed Server Instantiation:
+## Detailed Server Instantiation
 
-For a given OCP release, the alarmDefinitions and probableCauses are fixed, so these can be built up front.
+For a given OCP release, the alarmDefinitions and probableCauses are fixed, so these can be built up front. For CaaS alarms only one resource type, “NodeCluster”, all alarms map to it.
 
 1. Query all managed clusters to get list of unique major.minor versions
    - Need to monitor for major.minor new versions
@@ -514,39 +536,12 @@ For a given OCP release, the alarmDefinitions and probableCauses are fixed, so t
 4. Assuming DB table already created, persist each alarmDictionary as a DB table
 
 5. Take all the PromRules and build the AlarmDefinition. See [here](#prometheusrule-to-alarmdefinition-mapping) for mapping. 
+   - A corresponding probablyCause row will be autometically added.
 
-6. Create a probableCause  table. There will need to be a one to one mapping with each alarm dictionary.
+6. Apply the required CR to activate the internal endpoint for alertmanager notification. See [here](#steps-internalv1caas-alertsalertmanager) for more.
 
-7. Build probableCause  table and persist to the DB table
+7. The server should now be ready to take requests. 
 
-
-For CaaS alarms only one resource type, “NodeCluster”, all alarms map to it
-
-The alarm server subscribes for alerts from the HUB alertmanager. The alarm server will receive all active alerts after it has successfully subscribed, no need for a subsequent query
-We will leverage the webhook feature from AM to get callbacks. https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
-The only required config is “url” which in our case should be the alarm server. For this we can leverage dns name for Services in k8s: my-service.my-namespace.svc.cluster.local
-Endpoints to exposed are documented under “Alarm Notification” section
-Additionally, there are a few *interval values that we can configure, but default values seem reasonable to start with. All default values can be seen here https://prometheus.io/docs/alerting/latest/configuration
-Finally the alertmanager config is applied through ACM, as documented here https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.11/html-single/observability/index#configuring-alertmanager
-
-The O-Cloud alarm server converts the alerts to AlarmEventRecord  and persists in the active alarm database table. For each active alert:
-Generate the AlarmDefinitionID based on the string (name ++++)
-Map ResourceID to managed_cluster label
-Look up ProbableCauseID based on fixed uuid generated on the string (name+++)
-Extract from the alert:
-AlarmRaisedTime
-AlarmChangedTime
-PerceivedSeverity
-Add to extensions from the alert
-description
-summary
-managed_cluster
-alertname
-instance
-N/A for new alert, AlarmClearedTime
-TBD
-AlarmAcknowledgedTime
-AlarmAcknowledged
 
 ### PrometheusRule to AlarmDefinition mapping
 ```yaml
