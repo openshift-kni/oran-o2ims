@@ -410,6 +410,26 @@ const (
 	testPolicyTemplateInput = `{
 	"cpu-isolated": "1-2"
 }`
+	testFullClusterSchemaTemplate = `{
+	"properties": {
+		"nodeClusterName": {"type": "string"},
+		"oCloudSiteId": {"type": "string"},
+		"%s": %s,
+		"%s": %s
+	},
+	"type": "object",
+	"required": [
+"nodeClusterName",
+"oCloudSiteId",
+"policyTemplateParameters",
+"clusterInstanceParameters"
+]
+}`
+)
+
+var (
+	testFullTemplateSchema = fmt.Sprintf(testFullClusterSchemaTemplate, clusterInstanceParametersString, testClusterTemplateSchema,
+		policyTemplateParametersString, testPolicyTemplateSchema)
 )
 
 func verifyStatusCondition(actualCond, expectedCon metav1.Condition) {
@@ -544,24 +564,6 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				},
 			},
 		}
-		var (
-			testFullTemplateSchema = fmt.Sprintf(`{
-				"properties": {
-					"nodeClusterName": {"type": "string"},
-					"oCloudSiteId": {"type": "string"},
-					"%s": %s,
-					"%s": %s
-				},
-				"type": "object",
-				"required": [
-    "nodeClusterName",
-    "oCloudSiteId",
-    "policyTemplateParameters",
-    "clusterInstanceParameters"
-  ]
-			}`, clusterInstanceParametersString, testClusterTemplateSchema,
-				policyTemplateParametersString, testPolicyTemplateSchema)
-		)
 		// Define the cluster template.
 		ct = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1514,21 +1516,6 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 	})
 
 	It("returns the referred ClusterTemplate if it exists", func() {
-		var (
-			testFullTemplateSchema = fmt.Sprintf(`{
-				"properties": {
-					"nodeClusterName": {"type": "string"},
-					"oCloudSiteId": {"type": "string"},
-					"%s": {}
-				},
-				"type": "object",
-				"required": [
-    "nodeClusterName",
-    "oCloudSiteId",
-    "policyTemplateParameters",
-    "clusterInstanceParameters"
-  ]}`, clusterInstanceParametersString)
-		)
 		// Define the cluster template.
 		ctName := getClusterTemplateRefName(tName, tVersion)
 		ct := &provisioningv1alpha1.ClusterTemplate{
@@ -2398,24 +2385,6 @@ var _ = Describe("policyManagement", func() {
 	)
 
 	BeforeEach(func() {
-		var (
-			testFullTemplateSchema = fmt.Sprintf(`{
-				"properties": {
-					"nodeClusterName": {"type": "string"},
-					"oCloudSiteId": {"type": "string"},
-					"%s": %s,
-					"%s": %s
-				},
-				"type": "object",
-				"required": [
-    "nodeClusterName",
-    "oCloudSiteId",
-    "policyTemplateParameters",
-    "clusterInstanceParameters"
-  ]
-			}`, clusterInstanceParametersString, testClusterTemplateSchema,
-				policyTemplateParametersString, testPolicyTemplateSchema)
-		)
 		// Define the needed resources.
 		crs := []client.Object{
 			// Cluster Template Namespace.

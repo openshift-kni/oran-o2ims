@@ -31,22 +31,6 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		var (
-			testFullTemplateSchema = fmt.Sprintf(`{
-				"properties": {
-					"nodeClusterName": {"type": "string"},
-					"oCloudSiteId": {"type": "string"},
-					"%s": {}
-				},
-				"type": "object",
-				"required": [
-    "nodeClusterName",
-    "oCloudSiteId",
-    "policyTemplateParameters",
-    "clusterInstanceParameters"
-  ]
-			}`, clusterInstanceParametersString)
-		)
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
