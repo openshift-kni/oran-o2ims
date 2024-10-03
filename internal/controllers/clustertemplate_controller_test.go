@@ -6,7 +6,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +21,8 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 		ctx          context.Context
 		c            client.Client
 		reconciler   *ClusterTemplateReconciler
-		ctName       = "cluster-template-a-v1"
+		tName        = "cluster-template-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
@@ -31,23 +31,20 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				InputDataSchema: provisioningv1alpha1.InputDataSchema{
-					// APIserver has enforced the validation for this field who holds
-					// the arbirary JSON data
-					ClusterInstanceSchema: runtime.RawExtension{},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
 		}
 
@@ -103,7 +100,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -127,7 +124,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 	It("should requeue an invalid ClusterTemplate", func() {
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -167,28 +164,34 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 		cts = []*provisioningv1alpha1.ClusterTemplate{
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster-template-a-v1",
+					Name:      "cluster-template-a.v1",
 					Namespace: "cluster-template-a",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:      "cluster-template-a",
+					Version:   "v1",
 					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster-template-a-v2",
+					Name:      "cluster-template-a.v2",
 					Namespace: "cluster-template-a",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:      "cluster-template-a",
+					Version:   "v2",
 					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster-template-b-v1",
+					Name:      "cluster-template-b.v1",
 					Namespace: "cluster-template-b",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:      "cluster-template-b",
+					Version:   "v1",
 					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
@@ -227,8 +230,8 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 		// Verify the result
 		Expect(reqs).To(HaveLen(2))
 		Expect(reqs).To(ContainElements(
-			reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-template-a-v1", Namespace: "cluster-template-a"}},
-			reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-template-a-v2", Namespace: "cluster-template-a"}},
+			reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-template-a.v1", Namespace: "cluster-template-a"}},
+			reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-template-a.v2", Namespace: "cluster-template-a"}},
 		))
 	})
 
@@ -253,7 +256,8 @@ var _ = Describe("validateClusterTemplateCR", func() {
 	var (
 		c            client.Client
 		ctx          context.Context
-		ctName       = "cluster-template-a-v1"
+		tName        = "cluster-template-a"
+		tVersion     = "v1.0.0"
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-ci-defaults"
 		ptDefaultsCm = "policytemplate-ci-defaults"
@@ -265,10 +269,12 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ctx = context.Background()
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctName,
+				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -489,5 +495,205 @@ key: value`,
 		Expect(c.Get(ctx, client.ObjectKey{Name: configmapName, Namespace: namespace}, updatedCM)).To(Succeed())
 		Expect(updatedCM.Immutable).ToNot(BeNil())
 		Expect(*updatedCM.Immutable).To(BeTrue())
+	})
+})
+
+var _ = Describe("Validate Cluster Instance Name", func() {
+	var (
+		c            client.Client
+		ctx          context.Context
+		tName        = "cluster-template-a"
+		tVersion     = "v1.0.0"
+		ctNamespace  = "cluster-template-a"
+		ciDefaultsCm = "clusterinstance-ci-defaults"
+		ptDefaultsCm = "policytemplate-ci-defaults"
+		hwTemplateCm = "hwTemplate-v1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		c = getFakeClientFromObjects()
+	})
+
+	It("should validate a cluster template name", func() {
+		// Create a valid cluster template
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+			},
+		}
+		Expect(c.Create(ctx, ct)).To(Succeed())
+		err := validateName(
+			c, "myClusterInstance", "v11", "myClusterInstance.v11", "namespace1")
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should validate a cluster template name, if a cluster template with a different name exists", func() {
+		// Create a valid cluster template
+		ct1 := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+			},
+		}
+		ct2 := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: "namespace1",
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+			},
+		}
+		Expect(c.Create(ctx, ct1)).To(Succeed())
+		Expect(c.Create(ctx, ct2)).To(Succeed())
+		err := validateName(
+			c, "myClusterInstance", "v11", "myClusterInstance.v11", "namespace1")
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should fail cluster template validation if metadata name is incorrect", func() {
+		err := validateName(
+			c, "cluster-template-a", "v1", "cluster-template-a.v1", "cluster-template-a")
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should fail cluster template validation if a cluster template with a same name"+
+		" but in a different namespace exists", func() {
+		// Create a valid cluster template
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+			},
+		}
+		Expect(c.Create(ctx, ct)).To(Succeed())
+		err := validateName(
+			c, "cluster-template-a", "v1.0.0", "cluster-template-a.v1.0.0", "cluster-template-b")
+		Expect(err).To(HaveOccurred())
+	})
+})
+
+// new
+var _ = Describe("Validate Cluster Instance TemplateID", func() {
+	var (
+		c            client.Client
+		ctx          context.Context
+		tName        = "cluster-template-a"
+		tVersion     = "v1.0.0"
+		ctNamespace  = "cluster-template-a"
+		ciDefaultsCm = "clusterinstance-ci-defaults"
+		ptDefaultsCm = "policytemplate-ci-defaults"
+		hwTemplateCm = "hwTemplate-v1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		c = getFakeClientFromObjects()
+	})
+
+	It("should fill templateID if is empty", func() {
+		// Create a valid cluster template
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "",
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+			},
+		}
+		Expect(c.Create(ctx, ct)).To(Succeed())
+		err := validateTemplateID(ctx, c, ct)
+		Expect(err).ToNot(HaveOccurred())
+		ct1 := &provisioningv1alpha1.ClusterTemplate{}
+		err = c.Get(ctx, client.ObjectKeyFromObject(ct), ct1)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ct1.Spec.TemplateID).NotTo(Equal(""))
+	})
+	It("should validate templateID if is not empty, bad UUID", func() {
+		// Create a valid cluster template
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "kjwchbjkdbckj",
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+			},
+		}
+		Expect(c.Create(ctx, ct)).To(Succeed())
+		err := validateTemplateID(ctx, c, ct)
+		Expect(err).To(HaveOccurred())
+	})
+	It("should validate templateID if is not empty, good UUID", func() {
+		// Create a valid cluster template
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "71ba1920-77f8-4842-a474-010b1af1d40b",
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+					PolicyTemplateDefaults:  ptDefaultsCm,
+					HwTemplate:              hwTemplateCm,
+				},
+			},
+		}
+		Expect(c.Create(ctx, ct)).To(Succeed())
+		err := validateTemplateID(ctx, c, ct)
+		Expect(err).ToNot(HaveOccurred())
 	})
 })

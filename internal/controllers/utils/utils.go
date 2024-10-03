@@ -5,11 +5,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"reflect"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +43,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
+)
+
+const (
+	PropertiesString = "properties"
 )
 
 var (
@@ -1155,4 +1161,38 @@ func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodeP
 		return fmt.Errorf("failed to update status for NodePool %s %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
 	}
 	return nil
+}
+
+// ExtractSubSchema extracts a Sub schema indexed by subSchemaKey from a Main schema
+func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema []byte, err error) {
+	jsonObject := make(map[string]any)
+	if len(mainSchema) == 0 {
+		return subSchema, nil
+	}
+	err = json.Unmarshal(mainSchema, &jsonObject)
+	if err != nil {
+		return subSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
+	}
+	if _, ok := jsonObject[PropertiesString]; !ok {
+		return subSchema, fmt.Errorf("non compliant Main Schema, missing properties: %w", err)
+	}
+	properties, ok := jsonObject[PropertiesString].(map[string]any)
+	if !ok {
+		return subSchema, fmt.Errorf("could not cast properties as map[string]any: %w", err)
+	}
+	subSchema, err = json.Marshal(properties[subSchemaKey])
+	if err != nil {
+		return subSchema, fmt.Errorf("failed to Marshall Schema: %w", err)
+	}
+	return subSchema, nil
+}
+
+// MapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
+func MapKeysToSlice(inputMap map[string]bool) []string {
+	keys := make([]string, 0, len(inputMap))
+	for key := range inputMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

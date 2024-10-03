@@ -39,30 +39,36 @@ spec:
           spec:
             description: ClusterTemplateSpec defines the desired state of ClusterTemplate
             properties:
-              inputDataSchema:
-                description: InputDataSchema encapsulates all the schemas required
-                  for ClusterTemplate.
-                properties:
-                  clusterInstanceSchema:
-                    description: |-
-                      ClusterInstanceSchema defines the subschema of ClusterInstance parameters that
-                      are allowed in the ClusterRequest's spec.clusterTemplateInput.clusterInstanceInput.
-                      The parameter definitions should follow the OpenAPI V3 schema and explicitly define
-                      the parameter type and required fields. This schema will be used to validate the
-                      ClusterInstanceInput provided in a ClusterRequest.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  policyTemplateSchema:
-                    description: |-
-                      PolicyTemplateSchema defines the parameters required for ACM policies.
-                      The parameter definitions should follow the OpenAPI V3 schema and
-                      explicitly define required fields.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                required:
-                - clusterInstanceSchema
-                - policyTemplateSchema
+              characteristics:
+                additionalProperties:
+                  type: string
+                description: Characteristics defines a List of key/value pairs describing
+                  characteristics associated with the template.
                 type: object
+              description:
+                description: Description defines a Human readable description of the
+                  Template.
+                type: string
+              metadata:
+                additionalProperties:
+                  type: string
+                description: Metadata defines a List of key/value pairs describing
+                  metadata associated with the template.
+                type: object
+              name:
+                description: Name defines a Human readable name of the Template.
+                type: string
+              templateId:
+                description: TemplateId defines a Identifier for the O-Cloud Template.
+                  This identifier is allocated by the O-Cloud.
+                type: string
+              templateParameterSchema:
+                description: |-
+                  TemplateParameterSchema defines the parameters required for ClusterTemplate.
+                  The parameter definitions should follow the OpenAPI V3 schema and
+                  explicitly define required fields.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               templates:
                 description: Templates defines the references to the templates required
                   for ClusterTemplate.
@@ -86,9 +92,15 @@ spec:
                 - hwTemplate
                 - policyTemplateDefaults
                 type: object
+              version:
+                description: Version defines a version or generation of the resource
+                  as defined by its provider.
+                type: string
             required:
-            - inputDataSchema
+            - name
+            - templateParameterSchema
             - templates
+            - version
             type: object
           status:
             description: ClusterTemplateStatus defines the observed state of ClusterTemplate
@@ -169,6 +181,8 @@ spec:
             the validation
           rule: '!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type==''ClusterTemplateValidated''
             && c.status==''False'') || oldSelf.spec == self.spec'
+        - message: metadata.name must be in the form of spec.name + '.' + spec.version
+          rule: self.metadata.name == (self.spec.name + '.' + self.spec.version)
     served: true
     storage: true
     subresources:

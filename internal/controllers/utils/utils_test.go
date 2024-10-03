@@ -2088,3 +2088,106 @@ var _ = Describe("OverrideClusterInstanceLabelsOrAnnotations", func() {
 		Expect(dstClusterRequestInput).To(Equal(expected))
 	})
 })
+
+const testTemplate = `{
+  "properties": {
+    "nodeClusterName": {
+      "type": "string"
+    },
+    "oCloudSiteId": {
+      "type": "string"
+    },
+    "policyTemplateParameters": {
+      "description": "policyTemplateParameters.",
+      "properties": {
+        "sriov-network-vlan-1": {
+          "type": "string"
+        },
+        "install-plan-approval": {
+          "type": "string",
+          "default": "Automatic"
+        }
+      }
+    },
+    "clusterInstanceParameters": {
+      "description": "clusterInstanceParameters.",
+      "properties": {
+        "additionalNTPSources": {
+          "description": "AdditionalNTPSources.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "required": [
+    "nodeClusterName",
+    "oCloudSiteId",
+    "policyTemplateParameters",
+    "clusterInstanceParameters"
+  ],
+  "type": "object"
+}`
+
+func TestExtractSubSchema(t *testing.T) {
+	type args struct {
+		mainSchema []byte
+		node       string
+	}
+	tests := []struct {
+		name          string
+		args          args
+		wantSubSchema []byte
+		wantErr       bool
+	}{
+		{
+			name: "ok",
+			args: args{
+				mainSchema: []byte(testTemplate),
+				node:       "clusterInstanceParameters",
+			},
+			wantSubSchema: []byte(`{"description":"clusterInstanceParameters.","properties":{"additionalNTPSources":{"description":"AdditionalNTPSources.","items":{"type":"string"},"type":"array"}}}`),
+			wantErr:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSubSchema, err := ExtractSubSchema(tt.args.mainSchema, tt.args.node)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractSubSchema() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotSubSchema, tt.wantSubSchema) {
+				t.Errorf("ExtractSubSchema() = %v, want %v", gotSubSchema, tt.wantSubSchema)
+			}
+		})
+	}
+}
+
+func Test_mapKeysToSlice(t *testing.T) {
+	type args struct {
+		inputMap map[string]bool
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{
+			name: "ok",
+			args: args{
+				inputMap: map[string]bool{"banana": true, "apple": false, "grape": true},
+			},
+			want: []string{"apple", "banana", "grape"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MapKeysToSlice(tt.args.inputMap); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("mapKeysToSlice() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

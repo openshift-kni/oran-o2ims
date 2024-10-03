@@ -410,6 +410,26 @@ const (
 	testPolicyTemplateInput = `{
 	"cpu-isolated": "1-2"
 }`
+	testFullClusterSchemaTemplate = `{
+	"properties": {
+		"nodeClusterName": {"type": "string"},
+		"oCloudSiteId": {"type": "string"},
+		"%s": %s,
+		"%s": %s
+	},
+	"type": "object",
+	"required": [
+"nodeClusterName",
+"oCloudSiteId",
+"policyTemplateParameters",
+"clusterInstanceParameters"
+]
+}`
+)
+
+var (
+	testFullTemplateSchema = fmt.Sprintf(testFullClusterSchemaTemplate, clusterInstanceParametersString, testClusterTemplateSchema,
+		policyTemplateParametersString, testPolicyTemplateSchema)
 )
 
 func verifyStatusCondition(actualCond, expectedCon metav1.Condition) {
@@ -544,7 +564,6 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				},
 			},
 		}
-
 		// Define the cluster template.
 		ct = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
@@ -552,19 +571,14 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				InputDataSchema: provisioningv1alpha1.InputDataSchema{
-					ClusterInstanceSchema: runtime.RawExtension{
-						Raw: []byte(testClusterTemplateSchema),
-					},
-					PolicyTemplateSchema: runtime.RawExtension{
-						Raw: []byte(testPolicyTemplateSchema),
-					},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
 				Conditions: []metav1.Condition{
@@ -1473,20 +1487,21 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 	})
 
 	It("returns error if the referred ClusterTemplate is missing", func() {
+		schema := []byte{}
 		// Define the cluster template.
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "other-cluster-template-name",
+				Name:      "other-cluster-template-name.v1.0.0",
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    "other-cluster-template-name",
+				Version: "v1.0.0",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				InputDataSchema: provisioningv1alpha1.InputDataSchema{
-					ClusterInstanceSchema: runtime.RawExtension{},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: schema},
 			},
 		}
 
@@ -1509,13 +1524,13 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				InputDataSchema: provisioningv1alpha1.InputDataSchema{
-					ClusterInstanceSchema: runtime.RawExtension{},
-				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
 		}
 
@@ -1857,6 +1872,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					HwTemplate: hwTemplateCm,
 				},
@@ -2383,21 +2400,14 @@ var _ = Describe("policyManagement", func() {
 					Namespace: ctNamespace,
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:    tName,
+					Version: tVersion,
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwTemplate:              hwTemplateCm,
 					},
-					InputDataSchema: provisioningv1alpha1.InputDataSchema{
-						// APIserver has enforced the validation for this field who holds
-						// the arbirary JSON data
-						ClusterInstanceSchema: runtime.RawExtension{
-							Raw: []byte(testClusterTemplateSchema),
-						},
-						PolicyTemplateSchema: runtime.RawExtension{
-							Raw: []byte(testPolicyTemplateSchema),
-						},
-					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 				},
 			},
 			// ConfigMaps.

@@ -1,7 +1,7 @@
 # All the values from this schema are of string type as they will
 # end up as key:value pairs in a ConfigMap.
-policyTemplateSchema:
-  description: policyTemplateSchema defines the available configuration for templated policies
+policyTemplateParameters:
+  description: policyTemplateParameters defines the available configuration for templated policies
   properties:
     sriov-network-vlan-1:
       type: string

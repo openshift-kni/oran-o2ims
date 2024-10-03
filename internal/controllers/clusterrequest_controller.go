@@ -83,10 +83,12 @@ type deleteOrUpdateEvent interface {
 }
 
 const (
-	clusterRequestFinalizer      = "clusterrequest.oran.openshift.io/finalizer"
-	clusterRequestNameLabel      = "clusterrequest.oran.openshift.io/name"
-	clusterRequestNamespaceLabel = "clusterrequest.oran.openshift.io/namespace"
-	ztpDoneLabel                 = "ztp-done"
+	clusterRequestFinalizer         = "clusterrequest.oran.openshift.io/finalizer"
+	clusterRequestNameLabel         = "clusterrequest.oran.openshift.io/name"
+	clusterRequestNamespaceLabel    = "clusterrequest.oran.openshift.io/namespace"
+	ztpDoneLabel                    = "ztp-done"
+	clusterInstanceParametersString = "clusterInstanceParameters"
+	policyTemplateParametersString  = "policyTemplateParameters"
 )
 
 func getClusterTemplateRefName(name, version string) string {
@@ -389,8 +391,13 @@ func (t *clusterRequestReconcilerTask) validateClusterRequestCR(ctx context.Cont
 	if err != nil {
 		return utils.NewInputError("failed to get the ClusterTemplate input for ClusterInstance: %s", err.Error())
 	}
+	var subSchema []byte
+	subSchema, err = utils.ExtractSubSchema(clusterTemplate.Spec.TemplateParameterSchema.Raw, clusterInstanceParametersString)
+	if err != nil {
+		return utils.NewInputError("failed to extract clusterInstanceParameters subSchema: %s", err.Error())
+	}
 	err = t.validateClusterTemplateInputMatchesSchema(
-		&clusterTemplate.Spec.InputDataSchema.ClusterInstanceSchema,
+		&runtime.RawExtension{Raw: subSchema},
 		clusterTemplateInputMap,
 		utils.ClusterInstanceDataType)
 	if err != nil {
@@ -407,8 +414,12 @@ func (t *clusterRequestReconcilerTask) validateClusterRequestCR(ctx context.Cont
 	if err != nil {
 		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
+	subSchema, err = utils.ExtractSubSchema(clusterTemplate.Spec.TemplateParameterSchema.Raw, policyTemplateParametersString)
+	if err != nil {
+		return utils.NewInputError("failed to extract policyTemplateParameters subSchema: %s", err.Error())
+	}
 	err = t.validateClusterTemplateInputMatchesSchema(
-		&clusterTemplate.Spec.InputDataSchema.PolicyTemplateSchema,
+		&runtime.RawExtension{Raw: subSchema},
 		mergedPolicyTemplateData,
 		utils.PolicyTemplateDataType)
 	if err != nil {
@@ -1598,7 +1609,7 @@ func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Conte
 }
 
 // validateClusterTemplateInputMatchesSchema validates if the given clusterTemplateInput matches the
-// provided inputDataSchema of the ClusterTemplate
+// provided templateParameterSchema of the ClusterTemplate
 func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema(
 	clusterTemplateInputSchema *runtime.RawExtension, clusterTemplateInput map[string]any, dataType string) error {
 	// Get the schema
@@ -1611,7 +1622,7 @@ func (t *clusterRequestReconcilerTask) validateClusterTemplateInputMatchesSchema
 		utils.DisallowUnknownFieldsInSchema(schemaMap)
 	}
 
-	// Check that the clusterTemplateInput matches the inputDataSchema from the ClusterTemplate.
+	// Check that the clusterTemplateInput matches the templateParameterSchema from the ClusterTemplate.
 	clusterTemplateRefName := getClusterTemplateRefName(
 		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
 	err = utils.ValidateJsonAgainstJsonSchema(

@@ -110,15 +110,44 @@ spec:
         name: ""
         version: v1
       specDescriptors:
-      - description: InputDataSchema encapsulates all the schemas required for ClusterTemplate.
-        displayName: Input Data Schema
-        path: inputDataSchema
+      - description: Characteristics defines a List of key/value pairs describing
+          characteristics associated with the template.
+        displayName: Characteristics
+        path: characteristics
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Description defines a Human readable description of the Template.
+        displayName: Description
+        path: description
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Metadata defines a List of key/value pairs describing metadata
+          associated with the template.
+        displayName: Metadata
+        path: metadata
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Name defines a Human readable name of the Template.
+        displayName: Name
+        path: name
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: TemplateId defines a Identifier for the O-Cloud Template. This
+          identifier is allocated by the O-Cloud.
+        displayName: TemplateId
+        path: templateId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Templates defines the references to the templates required for
           ClusterTemplate.
         displayName: Templates
         path: templates
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Version defines a version or generation of the resource as defined
+          by its provider.
+        displayName: Version
+        path: version
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       version: v1alpha1
