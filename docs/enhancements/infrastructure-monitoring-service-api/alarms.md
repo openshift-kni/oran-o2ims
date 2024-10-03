@@ -325,8 +325,6 @@ alarmEventRecord := AlarmEventRecord{
 }
 ```
 
-
-
 ## Schema
 All O-RAN services will use the same O-CLOUD DB service. More on DB deployment [here](#postgres).
 
@@ -693,7 +691,7 @@ This is essentially a typical CRUD app and we need the following
 - Deployment: It should have one initContainers that runs to completion to perform DB migration and one main container which starts the main server. 
   No HA, so set replica to 1. It should also contain all the ENV variables needed to talk to postgres deployment DB_HOST, DB_PORT, DB_NAME, DB_USER etc.
   Suitable resources should be provided but not much memory and CPU is need for CRUD apps. 
-- Secrets and ConfigMap: DB creds and configs should be read from here. We can probably use the configs from Postgres (seen below) for user and password. 
+- Secrets: DB creds and configs should be read from postgres deployment. 
 - Service: Expose and balance using `ClusterIP` (though to start with we will set replica to 1)
 - Ingress: Expose service so that it can be called by users from outside the cluster
 
@@ -706,7 +704,21 @@ This deployment can be leveraged by many microservices by creating their own Dat
   Deployment should also mount to the right path `/var/lib/postgresql/data` (please check the latest docs).
 - PersistentVolumeClaim: At least 20G PVC should be used. Using test, we used about 60k rows DB which took about ~2Gb
 - Service: ClusterIP should be good as it's only used within the cluster. 
-- Secrets and Config: default creds needed to spin postgres 
+- Secrets: default creds needed to spin postgres, with type: Opaque. This secret will then be ready by 
+   - POSTGRES_USER: `o-ran`
+   - POSTGRES_PASSWORD: `o-ran`
+- ConfigMap: For others to know the hostname and port
+   - POSTGRES_HOST: "postgres.o-ran-namespace.svc.cluster.local"
+   - POSTGRES_PORT: "5432"
+
+With the Secrets and ConfigMap applied, an app may connect to the DB with the following given the service (assuming migration already and `o-ran-infrastructure-monitoring-alarms` already created):
+```go
+connStr := "postgres://o-ran:o-ran@postgres.o-ran-namespace.svc.cluster.local:5432/o-ran-infrastructure-monitoring-alarms?sslmode=disable"
+```
+
+Note:
+- ODF (ceph operator) must be deployed on the hub cluster that database requests a pvc from (same storageclass).
+  This will allow for replicated persistent storage
 
 ## Tooling and general dev guidelines
 - Note on concurrency: The new alarm servers provide alarm query, alarm subscription, and alarm notification functional modules and 
