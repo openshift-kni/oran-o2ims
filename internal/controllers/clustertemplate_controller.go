@@ -266,7 +266,6 @@ func validateName(c client.Client, name, version, metadataName, namespace string
 		return fmt.Errorf("could not get list of ClusterTemplate across the cluster: %w", err)
 	}
 
-	sameNameVersion := map[string]bool{}
 	sameMetadataName := map[string]bool{}
 	for _, aClusterTemplate := range allClusterTemplates.Items {
 		if aClusterTemplate.Namespace == namespace {
@@ -275,18 +274,10 @@ func validateName(c client.Client, name, version, metadataName, namespace string
 		if aClusterTemplate.Name == metadataName {
 			sameMetadataName[aClusterTemplate.Namespace] = true
 		}
-		if aClusterTemplate.Spec.Name == name &&
-			aClusterTemplate.Spec.Version == version {
-			sameNameVersion[aClusterTemplate.Namespace] = true
-		}
 	}
 	if len(sameMetadataName) != 0 {
 		return utils.NewInputError("failed to validate ClusterTemplate name %s, a identical name already exists in namespaces: %s",
 			metadataName, strings.Join(utils.MapKeysToSlice(sameMetadataName), ","))
-	}
-	if len(sameMetadataName) != 0 {
-		return utils.NewInputError("failed to validate ClusterTemplate name %s, the combination of <spec.name>.<spec.version>: %s already exists in namespace: %s",
-			metadataName, name+"."+version, strings.Join(utils.MapKeysToSlice(sameNameVersion), ","))
 	}
 	return nil
 }
