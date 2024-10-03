@@ -29,6 +29,24 @@ type ClusterTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// Name defines a Human readable name of the Template.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Name string `json:"name"`
+	// Description defines a Human readable description of the Template.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Description string `json:"description,omitempty"`
+	// Version defines a version or generation of the resource as defined by its provider.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Version string `json:"version"`
+	// TemplateID defines a Identifier for the O-Cloud Template. This identifier is allocated by the O-Cloud.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TemplateID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TemplateID string `json:"templateID,omitempty"`
+	// Characteristics defines a List of key/value pairs describing characteristics associated with the template.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Characteristics",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Characteristics map[string]string `json:"characteristics,omitempty"`
+	// Metadata  defines a List of key/value pairs describing metadata associated with the template.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Characteristics",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// Templates defines the references to the templates required for ClusterTemplate.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Templates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Templates Templates `json:"templates"`
@@ -66,6 +84,7 @@ type ClusterTemplateStatus struct {
 
 // ClusterTemplate is the Schema for the clustertemplates API
 // +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a ClusterTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='ClusterTemplateValidated' && c.status=='False') || oldSelf.spec == self.spec"
+// +kubebuilder:validation:XValidation:message="metadata.name must be in the form of spec.name + '.' + spec.version", rule="self.metadata.name == (self.spec.name + '.' + self.spec.version)"
 // +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Template",resources={{ConfigMap, v1}}
 type ClusterTemplate struct {
 	metav1.TypeMeta   `json:",inline"`

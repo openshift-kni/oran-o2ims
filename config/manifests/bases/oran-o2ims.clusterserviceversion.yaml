@@ -85,7 +85,7 @@ spec:
         version: v1
       specDescriptors:
       - description: Characteristics defines a List of key/value pairs describing
-          characteristics associated with the template.>
+          characteristics associated with the template.
         displayName: Characteristics
         path: characteristics
         x-descriptors:
@@ -96,7 +96,7 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Metadata  defines a List of key/value pairs describing metadata
-          associated with the template.>
+          associated with the template.
         displayName: Characteristics
         path: metadata
         x-descriptors:
@@ -107,7 +107,7 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: TemplateID defines a Identifier for the O-Cloud Template. This
-          identifier is allocated by the O-Cloud.>
+          identifier is allocated by the O-Cloud.
         displayName: TemplateID
         path: templateID
         x-descriptors:
@@ -119,7 +119,7 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Version defines a version or generation of the resource as defined
-          by its provider.>
+          by its provider.
         displayName: Version
         path: version
         x-descriptors:
