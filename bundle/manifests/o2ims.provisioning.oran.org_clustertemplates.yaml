@@ -52,14 +52,14 @@ spec:
               metadata:
                 additionalProperties:
                   type: string
-                description: Metadata  defines a List of key/value pairs describing
+                description: Metadata defines a List of key/value pairs describing
                   metadata associated with the template.
                 type: object
               name:
                 description: Name defines a Human readable name of the Template.
                 type: string
-              templateID:
-                description: TemplateID defines a Identifier for the O-Cloud Template.
+              templateId:
+                description: TemplateId defines a Identifier for the O-Cloud Template.
                   This identifier is allocated by the O-Cloud.
                 type: string
               templateParameterSchema:

@@ -121,9 +121,9 @@ spec:
         path: description
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Metadata  defines a List of key/value pairs describing metadata
+      - description: Metadata defines a List of key/value pairs describing metadata
           associated with the template.
-        displayName: Characteristics
+        displayName: Metadata
         path: metadata
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
@@ -132,10 +132,10 @@ spec:
         path: name
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: TemplateID defines a Identifier for the O-Cloud Template. This
+      - description: TemplateId defines a Identifier for the O-Cloud Template. This
           identifier is allocated by the O-Cloud.
-        displayName: TemplateID
-        path: templateID
+        displayName: TemplateId
+        path: templateId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Templates defines the references to the templates required for

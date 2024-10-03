@@ -38,14 +38,14 @@ type ClusterTemplateSpec struct {
 	// Version defines a version or generation of the resource as defined by its provider.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Version string `json:"version"`
-	// TemplateID defines a Identifier for the O-Cloud Template. This identifier is allocated by the O-Cloud.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TemplateID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	TemplateID string `json:"templateID,omitempty"`
+	// TemplateId defines a Identifier for the O-Cloud Template. This identifier is allocated by the O-Cloud.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TemplateId",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TemplateID string `json:"templateId,omitempty"`
 	// Characteristics defines a List of key/value pairs describing characteristics associated with the template.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Characteristics",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Characteristics map[string]string `json:"characteristics,omitempty"`
-	// Metadata  defines a List of key/value pairs describing metadata associated with the template.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Characteristics",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	// Metadata defines a List of key/value pairs describing metadata associated with the template.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Metadata",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Templates defines the references to the templates required for ClusterTemplate.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Templates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
