@@ -485,9 +485,37 @@ VALUES
     ('NodeClockNotSynchronising','4.16', 'Clock not synchronising.','Clock at {{ $labels.instance }} is not synchronising. Ensure NTP is configured on this host.','{"CustomKey": "CustomValue"}'),
     ('LowMemory','4.16','Low memory.','Low memory, with a longer description to help user fix the issue','{"CustomKey2": "CustomValue"}'),
     ('NodeClockNotSynchronising','4.17','Clock not synchronising.','Clock at {{ $labels.instance }} is not synchronising. Ensure NTP2 is configured on this host.', '{"CustomKey3": "CustomValue"}');
+-- The data here mapped from PrometheusRule. See ##PrometheusRule to AlarmDefinition mapping section for more.
 
 -- probable_cause will be auto populated
 ```
+
+### PrometheusRule to AlarmDefinition mapping
+```yaml
+    # Partial PrometheusRule to show NodeClockNotSynchronising
+    apiVersion: monitoring.coreos.com/v1
+    kind: PrometheusRule
+    metadata:
+      name: node-exporter-rules
+      namespace: openshift-monitoring
+    spec:
+      groups:
+        - name: node-exporter
+          rules:
+            - alert: NodeClockNotSynchronising  #### (alarm_definitions.alarm_name)
+              annotations:
+                description: Clock at {{ $labels.instance }} is not synchronising. Ensure NTP is configured on this host.
+                runbook_url: https://github.com/openshift/runbooks/blob/master/alerts/cluster-monitoring-operator/NodeClockNotSynchronising.md #### (alarm_definitions.proposed_repair_actions)
+                summary: Clock not synchronising. #### (alarm_definitions.alarm_description)
+              expr: |
+                min_over_time(node_timex_sync_status{job="node-exporter"}[5m]) == 0
+                and
+                node_timex_maxerror_seconds{job="node-exporter"} >= 16
+              for: 10m
+              labels: 
+                severity: critical #### (alarm_definitions.alarm_additional_fields)
+ ```
+
 Notes on Init phase 
 - `versions` table reflects unique `major-minor` version `ManagedClusters` currently deployed.
   To get available `major-minor` managed cluster, we can list `ManagedCluster` CR and look for label `openshiftVersion-major-minor`.
@@ -510,32 +538,7 @@ Notes on Init phase
     | f90561e2-6420-4924-b081-f4f8eaf50618   | f90561e2-6420-4924-b081-f4f8eaf50618            | 4586f964-6c6f-407b-9b18-cb3c9a712ec4                                                                      |
    
     `entity_type` data should be coming from Inventory API but for now we can hard-code it. `telco-model-OpenShift-<Full Version>`
-- `alarm_definitions` reflects Rules in PromRule CR. We only grab the full set based on unique entries in `Versions` table 
-   
-   ```yaml
-    # Partial PrometheusRule to show NodeClockNotSynchronising
-    apiVersion: monitoring.coreos.com/v1
-    kind: PrometheusRule
-    metadata:
-      name: node-exporter-rules
-      namespace: openshift-monitoring
-    spec:
-      groups:
-        - name: node-exporter
-          rules:
-            - alert: NodeClockNotSynchronising  #### (alarm_definitions.alarm_name)
-              annotations:
-                description: Clock at {{ $labels.instance }} is not synchronising. Ensure NTP is configured on this host.
-                runbook_url: https://github.com/openshift/runbooks/blob/master/alerts/cluster-monitoring-operator/NodeClockNotSynchronising.md #### (alarm_definitions.proposed_repair_actions)
-                summary: Clock not synchronising. #### (alarm_definitions.alarm_description)
-              expr: |
-                min_over_time(node_timex_sync_status{job="node-exporter"}[5m]) == 0
-                and
-                node_timex_maxerror_seconds{job="node-exporter"} >= 16
-              for: 10m
-              labels: 
-                severity: critical #### (alarm_definitions.extensions)
-    ```
+- `alarm_definitions` reflects Rules in PromRule CR. We only grab the full set based on unique entries in `Versions` table
     - Use ACM to get credentials of the unique major.minor clusters and retrieve all the PrometheusRules from them to parse. 
       E.g if we are managing 3 clusters 4.16.2, 4.17.2 and 4.16.8, Pick 4.16.8 and 4.17.2 which effectively represents all the rules in 4.16.z and 4.17.z clusters. 
 - Build out a mapping between cluster ID, resource type ID and resource ID in memory as needed for quick lookup during runtime.
