@@ -56,6 +56,7 @@ store data in a persistent storage.
 - Define database schema
 - Define K8s CRs
 - Define developer tools
+- Allow future integration of alarms from additional sources (e.g H/W)
 
 ## Key O-RAN data structures
 `InfrastructureMonitoring Service API Alarms`, primarily deals with the following O-RAN data structures during initialization. 
@@ -65,10 +66,11 @@ Please note that this is not an exhaustive list but are here to help the reader 
 See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (download from [here](https://specifications.o-ran.org/download?id=674)) for more.
 
 - AlarmDictionary
-    This is primarily the link between Alarms and Inventory. A ResourceType (currently we are mostly dealing with type "cluster") can have exactly one AlarmDictionary.
+    This is primarily the link between Alarms and Inventory. A ResourceType which is currently a "NodeCluster" (Kind: Logical and Class: Compute) 
+    can have exactly one AlarmDictionary. Each dictionary instance will have version that corresponds to the major.minor 
+    version of the ResourceType. This version is later used to find an AlarmDefinition given an alert name and ResourceTypeID.
     
     ```go
-    // 3.2.6.2.8-1
     type AlarmDictionary struct {
         AlarmDictionaryVersion       string                  `json:"alarmDictionaryVersion"`       // M, 1, Version of the Alarm Dictionary. Version is vendor defined such that the version of the dictionary can be associated with a specific version of the software delivery of this product.
         AlarmDictionarySchemaVersion string                  `json:"alarmDictionarySchemaVersion"` // M, 1, Version of the Alarm Dictionary Schema to which this alarm dictionary conforms. Note: The specific value for this should be defined in the IM/DM specification for the Alarm Dictionary Model Schema when it is published at a future date
@@ -82,10 +84,9 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (downlo
 
 - AlarmDefinition
 
-    AlarmDefinition is what stores rules and it's metadata that is always evaluated to see if an alert is fired by a Resource Type. For caas, this is effectively the content of `PrometheusRules`.
+    AlarmDefinition is what stores rules that are always evaluated to see if an alert is fired by a ResourceType. For caas, this is effectively the content of `PrometheusRules`.
     
     ```go
-    // 3.2.6.2.9-1
     type AlarmDefinition struct {
         AlarmDefinitionID     uuid.UUID               `json:"alarmDefinitionID"`               // M, 1, Provides a unique identifier of the alarm being raised.  This is the Primary Key into the Alarm Dictionary.
         AlarmName             string                  `json:"alarmName"`                       // M, 1, Provides short name for the alarm.
@@ -105,7 +106,6 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (downlo
     ProbableCause is a subset of data present in AlarmDefinition
     
     ```go
-    // 2.1.3.3
     type ProbableCause struct {
         ProbableCauseID uuid.UUID `json:"probableCauseId"` // M, Identifier of the ProbableCause. 
         Name            string    `json:"name"`            // M, Human readable text of the probable cause.
@@ -239,7 +239,7 @@ route:
 receivers:
   - name: webhook_receiver
     webhook_configs:
-      - url: "o-ran-inventory-api-alarms.kubernetes.svc/internal/v1/caasAlerts/alertmanager" # this will be derived from 
+      - url: "o-ran-inventory-api-alarms.kubernetes.svc/internal/v1/caasAlerts/alertmanager" # this will be derived from deployment
         send_resolved: true 
 ```
 
@@ -247,34 +247,7 @@ receivers:
 oc -n open-cluster-management-observability create secret generic alertmanager-config --from-file=alertmanager.yaml --dry-run -o=yaml |  oc -n open-cluster-management-observability replace secret --filename=-
 ```
 
-1. Example payload
-    ```json
-   "receiver": "webhook_receiver",
-   "status": "firing"
-   "alerts": [
-        {
-            "status": "firing",
-            "labels": {
-                "alertname": "UpdateAvailable",
-                "channel": "stable-4.16",
-                "managed_cluster": "89070983-a62f-4dbe-9457-7e0c27832c63",
-                "namespace": "openshift-cluster-version",
-                "openshift_io_alert_source": "platform",
-                "prometheus": "openshift-monitoring/k8s",
-                "severity": "info",
-                "upstream": "<default>"
-            },
-            "annotations": {
-                "description": "For more information refer to 'oc adm upgrade' or https://console-openshift-console.apps.cnfdf27.sno.telco5gran.eng.rdu2.redhat.com/settings/cluster/.",
-                "summary": "Your upstream update recommendation service recommends you update your cluster."
-            },
-            "startsAt": "2024-08-28T11:39:17.958Z",
-            "endsAt": "0001-01-01T00:00:00Z",
-            "generatorURL": "https://console-openshift-console.apps.cnfdf27.sno.telco5gran.eng.rdu2.redhat.com/monitoring/graph?g0.expr=sum+by+%28channel%2C+namespace%2C+upstream%29+%28cluster_version_available_updates%29+%3E+0&g0.tab=1",
-            "fingerprint": "91406cd113ad87e5"
-        },
-   ]
-    ```
+1. Example payload [here](#alertmanager-example-payload)
 2. Sync `alarm_event_record` Table
    - Update rows to "resolved" that are missing in the current payload (i.e previously seen but somehow missed the "resolved" notification)
      ```sql
@@ -285,7 +258,7 @@ oc -n open-cluster-management-observability create secret generic alertmanager-c
       );
      ```
    - Create new AlarmEventRecord. Alert entry payload will require Alarm Definition ID and Probable Cause ID which can retrieved as shown [here](#for-a-given-resourcetypeid-and-alarmname-coming-from-am-alert-find-the-alarmdefinitionid-and-probablecauseid)
-   - Upsert all AlarmEventRecord all the "firing" and "resolved" alerts as indicated by `alerts[].status` i.e a bulk insert + update operation 
+   - Upsert (i.e an insert + update operation) all AlarmEventRecord all the "firing" and "resolved" alerts as indicated by `alerts[].status`  
      ```sql
       -- ...INSERT, follwed by...
       ON CONFLICT ON CONSTRAINT unique_finger_print_alarm_raised_time DO UPDATE -- defined in schema 
@@ -298,6 +271,39 @@ oc -n open-cluster-management-observability create secret generic alertmanager-c
 4. Move all the `status: resolved` rows from `alarm_event_record` to `alarm_event_record_archive`
 
 Eventually data in `alarm_event_record_archive` will be cleared (hardcoded to 24hr) as seen [here](#daily-archive-cleanup-)
+
+
+## Alertmanager Example payload
+
+```json
+ "receiver": "webhook_receiver",
+ "status": "firing"
+ "alerts": [
+      {
+          "status": "firing",
+          "labels": {
+              "alertname": "UpdateAvailable",
+              "channel": "stable-4.16",
+              "managed_cluster": "89070983-a62f-4dbe-9457-7e0c27832c63",
+              "namespace": "openshift-cluster-version",
+              "openshift_io_alert_source": "platform",
+              "prometheus": "openshift-monitoring/k8s",
+              "severity": "info",
+              "upstream": "<default>"
+          },
+          "annotations": {
+              "description": "For more information refer to 'oc adm upgrade' or https://console-openshift-console.apps.cnfdf27.sno.telco5gran.eng.rdu2.redhat.com/settings/cluster/.",
+              "summary": "Your upstream update recommendation service recommends you update your cluster."
+          },
+          "startsAt": "2024-08-28T11:39:17.958Z",
+          "endsAt": "0001-01-01T00:00:00Z",
+          "generatorURL": "https://console-openshift-console.apps.cnfdf27.sno.telco5gran.eng.rdu2.redhat.com/monitoring/graph?g0.expr=sum+by+%28channel%2C+namespace%2C+upstream%29+%28cluster_version_available_updates%29+%3E+0&g0.tab=1",
+          "fingerprint": "91406cd113ad87e5"
+      },
+ ]
+```
+
+
 
 ## Schema
 All O-RAN services will use the same O-CLOUD DB service. More on DB deployment [here](#postgres).
@@ -491,6 +497,56 @@ VALUES
 
 -- probable_cause will be auto populated
 ```
+## Detailed Server Instantiation:
+
+For a given OCP release, the alarmDefinitions and probableCauses are fixed, so these can be built up front.
+
+1. Query all managed clusters to get list of unique major.minor versions
+   - Need to monitor for major.minor new versions
+   - Audit on restarts
+
+2. For each major.minor version query PromRules from one cluster of that version
+
+3. Take the rules and build the corresponding alarmDefinition dictionary
+   - Link alarm dictionary to the resourceType
+   - alarmDictionary version will be that major.minor of cluster
+
+4. Assuming DB table already created, persist each alarmDictionary as a DB table
+
+5. Take all the PromRules and build the AlarmDefinition. See [here](#prometheusrule-to-alarmdefinition-mapping) for mapping. 
+
+6. Create a probableCause  table. There will need to be a one to one mapping with each alarm dictionary.
+
+7. Build probableCause  table and persist to the DB table
+
+
+For CaaS alarms only one resource type, “NodeCluster”, all alarms map to it
+
+The alarm server subscribes for alerts from the HUB alertmanager. The alarm server will receive all active alerts after it has successfully subscribed, no need for a subsequent query
+We will leverage the webhook feature from AM to get callbacks. https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
+The only required config is “url” which in our case should be the alarm server. For this we can leverage dns name for Services in k8s: my-service.my-namespace.svc.cluster.local
+Endpoints to exposed are documented under “Alarm Notification” section
+Additionally, there are a few *interval values that we can configure, but default values seem reasonable to start with. All default values can be seen here https://prometheus.io/docs/alerting/latest/configuration
+Finally the alertmanager config is applied through ACM, as documented here https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.11/html-single/observability/index#configuring-alertmanager
+
+The O-Cloud alarm server converts the alerts to AlarmEventRecord  and persists in the active alarm database table. For each active alert:
+Generate the AlarmDefinitionID based on the string (name ++++)
+Map ResourceID to managed_cluster label
+Look up ProbableCauseID based on fixed uuid generated on the string (name+++)
+Extract from the alert:
+AlarmRaisedTime
+AlarmChangedTime
+PerceivedSeverity
+Add to extensions from the alert
+description
+summary
+managed_cluster
+alertname
+instance
+N/A for new alert, AlarmClearedTime
+TBD
+AlarmAcknowledgedTime
+AlarmAcknowledged
 
 ### PrometheusRule to AlarmDefinition mapping
 ```yaml
@@ -675,10 +731,8 @@ This deployment can be leveraged by many microservices by creating their own Dat
   important features such as automatic type mapping, detailed error reporting (capture performance info) etc. 
   There's also many ORM and SQL query builder libraries but pgx looks like the best of both worlds.
 - DB migration is generally handled with a different tool. [golang-migrate](https://github.com/golang-migrate/migrate) is generally used for this which we can call during service init. 
-- Cobra CLI should be used to have better control of the servers. Each microservice should own its verbs, allowing them to develop independently. E.g
+- Introduce server specific commands. In this case we need something that can init a new DB and migrate as needed E.g
   ```shell
-  oran-o2ims alarms -h
-  oran-o2ims alarms start -h
   oran-o2ims alarms db-migration -h
   ```
   
