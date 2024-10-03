@@ -27,7 +27,7 @@ superseded-by:
 # Table of Contents
 - [Summary](#Summary)
 - [Goals](#Goals)
-- [Key o-ran data structures](#key-o-ran-data-structures)
+- [Key O-RAN data structures](#key-O-RAN-data-structures)
 - [InfrastructureMonitoring Service API](#Infrastructure-Monitoring-Service-Alarms-API)
 - [Database schema](#schema)
 - [Init behaviour](#init)
@@ -41,14 +41,16 @@ superseded-by:
 
 ## Summary
 
-`o-ran` requires `InfrastructureMonitoring Service Alarms API` which is a collection of APIs that can be queried by client to 
+`O-RAN` requires `InfrastructureMonitoring Service Alarms API` which is a collection of APIs that can be queried by client to 
 monitor the health of the `o-cloud`. This enhancement describes initialization steps and ready steps for `InfrastructureMonitoring Service Alarms API` 
 as well everything that's needed to fully develop the app.
 
 At a high level, this service can be viewed as a thin wrapper of ACM observability stack which translates 
-OCP cluster resources to data structures understood and defined by `o-ran` spec. Among other things
+OCP cluster resources to data structures defined by `O-RAN` spec. Among other things
 the service exposes APIs, configures Alertmanager deployment, read PrometheusRules from managedclusters and finally 
 store data in a persistent storage. 
+
+See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` for more (download from [here](https://specifications.o-ran.org/download?id=674)).
 
 ### Goals
 - Define steps to initialize and for when ready serve API calls
@@ -56,9 +58,9 @@ store data in a persistent storage.
 - Define K8s CRs
 - Define developer tools
 
-## Key o-ran data structures
-`InfrastructureMonitoring Service API Alarms`, primarily deals with the following o-ran data structures during initialization. 
-Comments for each attribute is taken from o-ran spec doc. 
+## Key O-RAN data structures
+`InfrastructureMonitoring Service API Alarms`, primarily deals with the following O-RAN data structures during initialization. 
+Comments for each attribute is taken from O-RAN spec doc. 
 
 Please note that this is not an exhaustive list but are here to help the reader get a feel for the Alarm specific data we are dealing with.
 
@@ -158,6 +160,12 @@ Please note that this is not an exhaustive list but are here to help the reader 
 | `/O2ims_infrastructureMonitoring/{apiVersion}/probableCause/{probableCauseId}`          | GET             | Retrieve exactly one probable cause using `probableCauseId`.        | None                                                                         | Exactly one `ProbableCause`         |
 
 
+| **Endpoint for clients but not currently in spec**                              | **HTTP Method** | **Description**                                              | **Input Payload** | **Returned Data**           |
+|---------------------------------------------------------------------------------|-----------------|--------------------------------------------------------------|-------------------|-----------------------------|
+| `/O2ims_infrastructureMonitoring/{apiVersion}/probableCauses`                   | GET             | Retrieve all probable causes                                 | None              | A list of `ProbableCause`   |
+| `/O2ims_infrastructureMonitoring/{apiVersion}/probableCauses/{probableCauseId}` | GET             | Retrieve exactly one probable cause using `probableCauseId`. | None              | Exactly one `ProbableCause` |
+
+
 
 | **Internal Endpoint**                           | **HTTP Method** | **Description**                              | **Input Payload**                                                        | **Returned Data** |
 |-------------------------------------------------|-----------------|----------------------------------------------|--------------------------------------------------------------------------|-------------------|
@@ -229,7 +237,7 @@ route:
 receivers:
   - name: webhook_receiver
     webhook_configs:
-      - url: "o-ran-inventory-api-alarms.kubernetes.svc/internal/v1/caasAlerts/alertmanager"
+      - url: "o-ran-inventory-api-alarms.kubernetes.svc/internal/v1/caasAlerts/alertmanager" # this will be derived from 
         send_resolved: true 
 ```
 
@@ -290,15 +298,12 @@ oc -n open-cluster-management-observability create secret generic alertmanager-c
 Eventually data in `alarm_event_record_archive` will be cleared (hardcoded to 24hr) as seen [here](#daily-archive-cleanup-)
 
 ## Schema
-We only take care of Alarms* data contained within a specific DB, this approach allows for
-- Decoupling: each microservice can independently manage its own data allowing them to evolve schema as needed
-- Scale: No cross service dependency
+All O-RAN services will use the same O-CLOUD DB service. More on DB deployment [here](#postgres).
 
-Each table is modeled after o-ran data structures. DB in our case maybe called `o-ran-infrastructure-monitoring-alarms`
-
+Each table is modeled after O-RAN data structures. DB in our case wil be called `o-ran-infrastructure-monitoring-alarms`.
 Init SQL may look like the following:
 ```sql
-CREATE DATABASE infrastructure-monitoring-alarms;
+CREATE DATABASE o-ran-infrastructure-monitoring-alarms;
 
 -- ENUM for ManagementInterfaceID
 DROP TYPE IF EXISTS ManagementInterfaceID CASCADE;
@@ -578,7 +583,7 @@ Notes on Init phase
       and aer.perceived_severity = 'CRITICAL'
     ORDER BY aer.alarm_sequence_number;
     ```
-- Process and notify by deriving `AlarmEventRecordModifications` o-ran DS + callback.
+- Process and notify by deriving `AlarmEventRecordModifications` O-RAN DS + callback.
 - Update sequence for subscription indicating the latest event sent so far
     ```go
     var largestProcessedSequenceNumber int64
@@ -596,6 +601,8 @@ Notes on Init phase
   See notification conditions [here](#conditions-for-notifying-subscriber)
   
 ### Conditions for Notifying subscriber
+Details under 3.7.2 Alarm Notification Use Case in O-RAN-WG6.ORCH-USE-CASES-R003-v10.00 June 2024 (download from [here](https://specifications.o-ran.org/download?id=672))
+
 - When alarm is `firing` for the first time
 - When alarm is updated to `resolved`
 - When `alarm_changed_time` changes (could be multiple times)
@@ -634,6 +641,14 @@ This deployment can be leveraged by many microservices by creating their own Dat
 - Secrets and Config: default creds needed to spin postgres 
 
 ## Tooling and general dev guidelines
+- Note on concurrency: The new alarm servers provide alarm query, alarm subscription, and alarm notification functional modules and 
+  will be running under the single daemon and single instance of the alarm daemon. 
+  The alarm data entries and alarm subscription entries and other related alarm management 
+  data will be stored in the postgres db tables described in this PR. 
+  1st phase alarm delivery has low scale of alarm subscriptions, and alarm counts to be supported. 
+  The new daemon will rely on the DB and the concurrency features offered by postgres db, and the usage of semaphore 
+  is tried to be avoided. The approach will be re-evaluated during performance and scaling optimization (preferably running as part of our CI)
+  as well as when more alarm features such as HW manager alarms is supported and when HA support is enabled.
 - The HTTP server should be built with latest Go 1.22 `net/http` std lib. The latest update in the package brings in 
   many requested features including mapping URI pattern. This allows to drop third party lib `gorilla/mux`.
 - Prefer creating structs to hold HTTP data for idiomatic Go code.
