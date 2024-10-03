@@ -569,8 +569,8 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -1493,8 +1493,8 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: "other-cluster-template-name",
-				Version:           "v1.0.0",
+				Name:    "other-cluster-template-name",
+				Version: "v1.0.0",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -1537,8 +1537,8 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -1885,8 +1885,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					HwTemplate: hwTemplateCm,
 				},
@@ -2431,8 +2431,8 @@ var _ = Describe("policyManagement", func() {
 					Namespace: ctNamespace,
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					HumanReadableName: tName,
-					Version:           tVersion,
+					Name:    tName,
+					Version: tVersion,
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,

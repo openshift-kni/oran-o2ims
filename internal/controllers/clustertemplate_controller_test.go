@@ -47,14 +47,14 @@ var _ = Describe("ClusterTemplateReconciler", func() {
   ]
 			}`, clusterInstanceParametersString)
 		)
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -184,9 +184,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Namespace: "cluster-template-a",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					HumanReadableName: "cluster-template-a",
-					Version:           "v1",
-					Templates:         provisioningv1alpha1.Templates{},
+					Name:      "cluster-template-a",
+					Version:   "v1",
+					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 			{
@@ -195,9 +195,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Namespace: "cluster-template-a",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					HumanReadableName: "cluster-template-a",
-					Version:           "v2",
-					Templates:         provisioningv1alpha1.Templates{},
+					Name:      "cluster-template-a",
+					Version:   "v2",
+					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 			{
@@ -206,9 +206,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Namespace: "cluster-template-b",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					HumanReadableName: "cluster-template-b",
-					Version:           "v1",
-					Templates:         provisioningv1alpha1.Templates{},
+					Name:      "cluster-template-b",
+					Version:   "v1",
+					Templates: provisioningv1alpha1.Templates{},
 				},
 			},
 		}
@@ -289,8 +289,8 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				HumanReadableName: tName,
-				Version:           tVersion,
+				Name:    tName,
+				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -533,15 +533,15 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 
 	It("should validate a cluster template name", func() {
 		// Create a valid cluster template
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: oranv1alpha1.Templates{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
@@ -556,30 +556,30 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 
 	It("should validate a cluster template name, if a cluster template with a different name exists", func() {
 		// Create a valid cluster template
-		ct1 := &oranv1alpha1.ClusterTemplate{
+		ct1 := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: oranv1alpha1.Templates{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
 			},
 		}
-		ct2 := &oranv1alpha1.ClusterTemplate{
+		ct2 := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: "namespace1",
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: oranv1alpha1.Templates{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
@@ -602,15 +602,15 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 	It("should fail cluster template validation if a cluster template with a same name"+
 		" but in a different namespace exists", func() {
 		// Create a valid cluster template
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: oranv1alpha1.Templates{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
@@ -644,16 +644,16 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 
 	It("should fill templateID if is empty", func() {
 		// Create a valid cluster template
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "",
-				Templates: oranv1alpha1.Templates{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
@@ -663,23 +663,23 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		Expect(c.Create(ctx, ct)).To(Succeed())
 		err := validateTemplateID(ctx, c, ct)
 		Expect(err).ToNot(HaveOccurred())
-		ct1 := &oranv1alpha1.ClusterTemplate{}
+		ct1 := &provisioningv1alpha1.ClusterTemplate{}
 		err = c.Get(ctx, client.ObjectKeyFromObject(ct), ct1)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ct1.Spec.TemplateID).NotTo(Equal(""))
 	})
 	It("should validate templateID if is not empty, bad UUID", func() {
 		// Create a valid cluster template
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "kjwchbjkdbckj",
-				Templates: oranv1alpha1.Templates{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
@@ -692,16 +692,16 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 	})
 	It("should validate templateID if is not empty, good UUID", func() {
 		// Create a valid cluster template
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "71ba1920-77f8-4842-a474-010b1af1d40b",
-				Templates: oranv1alpha1.Templates{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,

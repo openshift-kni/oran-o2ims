@@ -47,14 +47,14 @@ spec:
                     description: |-
                       ClusterInstanceInput provides the input values required for provisioning.
                       The input must adhere to the schema defined in the referenced ClusterTemplate's
-                      spec.templateParameterSchema.clusterInstanceParameters.
+                      spec.inputDataSchema.clusterInstanceSchema.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   policyTemplateInput:
                     description: |-
                       PolicyTemplateInput provides input values for ACM configuration policies.
                       The input follows the schema defined in the referenced ClusterTemplate's
-                      spec.templateParameterSchema.policyTemplateParameters.
+                      spec.inputDataSchema.policyTemplateSchema.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                 required:

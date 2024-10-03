@@ -97,8 +97,10 @@ spec:
                   as defined by its provider.
                 type: string
             required:
-            - inputDataSchema
+            - name
+            - templateParameterSchema
             - templates
+            - version
             type: object
           status:
             description: ClusterTemplateStatus defines the observed state of ClusterTemplate

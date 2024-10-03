@@ -260,7 +260,7 @@ func validateName(c client.Client, name, version, metadataName, namespace string
 		return utils.NewInputError("failed to validate ClusterTemplate name %s, should be in the format <spec.name>.<spec.version>: %s", metadataName, name+"."+version)
 	}
 
-	allClusterTemplates := &oranv1alpha1.ClusterTemplateList{}
+	allClusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
 	err := c.List(context.Background(), allClusterTemplates)
 	if err != nil {
 		return fmt.Errorf("could not get list of ClusterTemplate across the cluster: %w", err)
