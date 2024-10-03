@@ -35,6 +35,7 @@ superseded-by:
   - [Find AlarmDefinitionID and ProbableCauseID from current Alerts](#for-a-given-resourcetypeid-and-alarmname-coming-from-am-alert-find-the-alarmdefinitionid-and-probablecauseid)
   - [Notification tracking](#notification-tracking)
   - [Cleaning historical data](#daily-archive-cleanup)
+  - [Get ProbableCause ID, name and description](#get-probable-cause-id-name-and-description)
 - [Kubernetes](#k8s-resources)
 - [Tooling](#tooling-and-general-dev-guidelines)
 - [Future Updates](#future-updates)
@@ -50,8 +51,6 @@ OCP cluster resources to data structures defined by `O-RAN` spec. Among other th
 the service exposes APIs, configures Alertmanager deployment, read PrometheusRules from managedclusters and finally 
 store data in a persistent storage. 
 
-See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` for more (download from [here](https://specifications.o-ran.org/download?id=674)).
-
 ### Goals
 - Define steps to initialize and for when ready serve API calls
 - Define database schema
@@ -60,9 +59,10 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` for mor
 
 ## Key O-RAN data structures
 `InfrastructureMonitoring Service API Alarms`, primarily deals with the following O-RAN data structures during initialization. 
-Comments for each attribute is taken from O-RAN spec doc. 
+Comments for each attribute is taken from O-RAN spec doc.
 
 Please note that this is not an exhaustive list but are here to help the reader get a feel for the Alarm specific data we are dealing with.
+See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (download from [here](https://specifications.o-ran.org/download?id=674)) for more.
 
 - AlarmDictionary
     This is primarily the link between Alarms and Inventory. A ResourceType (currently we are mostly dealing with type "cluster") can have exactly one AlarmDictionary.
@@ -147,6 +147,8 @@ Please note that this is not an exhaustive list but are here to help the reader 
     ```
 
 ## Infrastructure Monitoring Service Alarms API
+See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (download from [here](https://specifications.o-ran.org/download?id=674)) to check APIs that we need to expose.
+
 | **Endpoint**                                                                            | **HTTP Method** | **Description**                                                     | **Input Payload**                                                            | **Returned Data**                   |
 |-----------------------------------------------------------------------------------------|-----------------|---------------------------------------------------------------------|------------------------------------------------------------------------------|-------------------------------------|
 | `/O2ims_infrastructureMonitoring/{apiVersion}/alarms`                                   | GET             | Retrieve the list of alarms.                                        | Optional query parameters `filter`                                           | A list of `AlarmEventRecord`        |
@@ -167,10 +169,10 @@ Please note that this is not an exhaustive list but are here to help the reader 
 
 
 
-| **Internal Endpoint**                           | **HTTP Method** | **Description**                              | **Input Payload**                                                        | **Returned Data** |
-|-------------------------------------------------|-----------------|----------------------------------------------|--------------------------------------------------------------------------|-------------------|
-| `/internal/v1/caas-alerts/alertmanager`         | POST            | Alertmanager notifications come through here | https://prometheus.io/docs/alerting/latest/configuration/#webhook_config | None              |
-| `/internal/v1/hardware-alerts/{hw-vendor-name}` | POST            | TBD                                          | TBD                                                                      | TBD               |
+| **Internal Endpoint**                           | **HTTP Method** | **Description**                              | **Input Payload**                                                                                | **Returned Data** |
+|-------------------------------------------------|-----------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|-------------------|
+| `/internal/v1/caas-alerts/alertmanager`         | POST            | Alertmanager notifications come through here | Payload defined [here](https://prometheus.io/docs/alerting/latest/configuration/#webhook_config) | None              |
+| `/internal/v1/hardware-alerts/{hw-vendor-name}` | POST            | TBD                                          | TBD                                                                                              | TBD               |
 
 
 ### `alarms` family
@@ -618,6 +620,18 @@ DELETE FROM alarm_event_record_archive
 WHERE alarm_cleared_time < NOW() - INTERVAL '24 hour' and status = 'resolved';
 ```
 We can apply the CR before server starts and remove it during shutdown as part of teardown e.g inside `server.RegisterOnShutdown`
+
+### Get Probable cause ID, name and description
+```sql
+SELECT
+    probable_causes.probable_cause_id,
+    ad.alarm_name,
+    ad.alarm_description
+FROM probable_causes
+         JOIN alarm_definitions ad
+              on ad.alarm_definition_id = probable_causes.alarm_definition_id
+WHERE probable_causes.probable_cause_id = 'f5ac4ac7-0ff3-40a2-b305-77313c28136a';
+```
 
 ## K8s resources
 We will need few K8s resources that will be eventually applied by the Operator. 
