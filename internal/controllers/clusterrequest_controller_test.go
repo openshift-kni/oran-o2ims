@@ -11,7 +11,7 @@ import (
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -444,7 +444,7 @@ func removeRequiredFieldFromClusterInstanceCm(
 func removeRequiredFieldFromClusterInstanceInput(
 	ctx context.Context, c client.Client, crName, crNamespace string) {
 	// Remove required field hostname
-	currentCR := &oranv1alpha1.ClusterRequest{}
+	currentCR := &provisioningv1alpha1.ClusterRequest{}
 	Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: crNamespace}, currentCR)).To(Succeed())
 
 	clusterInstanceInput := make(map[string]any)
@@ -465,8 +465,8 @@ var _ = Describe("ClusterRequestReconcile", func() {
 		ctx          context.Context
 		reconciler   *ClusterRequestReconciler
 		req          reconcile.Request
-		cr           *oranv1alpha1.ClusterRequest
-		ct           *oranv1alpha1.ClusterTemplate
+		cr           *provisioningv1alpha1.ClusterRequest
+		ct           *provisioningv1alpha1.ClusterTemplate
 		tName        = "clustertemplate-a"
 		tVersion     = "v1.0.0"
 		ctNamespace  = "clustertemplate-a-v4-16"
@@ -546,18 +546,18 @@ var _ = Describe("ClusterRequestReconcile", func() {
 		}
 
 		// Define the cluster template.
-		ct = &oranv1alpha1.ClusterTemplate{
+		ct = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
-				Templates: oranv1alpha1.Templates{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
-				InputDataSchema: oranv1alpha1.InputDataSchema{
+				InputDataSchema: provisioningv1alpha1.InputDataSchema{
 					ClusterInstanceSchema: runtime.RawExtension{
 						Raw: []byte(testClusterTemplateSchema),
 					},
@@ -566,7 +566,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 					},
 				},
 			},
-			Status: oranv1alpha1.ClusterTemplateStatus{
+			Status: provisioningv1alpha1.ClusterTemplateStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   string(utils.CTconditionTypes.Validated),
@@ -578,16 +578,16 @@ var _ = Describe("ClusterRequestReconcile", func() {
 		}
 
 		// Define the cluster request.
-		cr = &oranv1alpha1.ClusterRequest{
+		cr = &provisioningv1alpha1.ClusterRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       crName,
 				Namespace:  ctNamespace,
 				Finalizers: []string{clusterRequestFinalizer},
 			},
-			Spec: oranv1alpha1.ClusterRequestSpec{
+			Spec: provisioningv1alpha1.ClusterRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
-				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+				ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
 					ClusterInstanceInput: runtime.RawExtension{
 						Raw: []byte(testClusterTemplateInput),
 					},
@@ -595,7 +595,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 						Raw: []byte(testPolicyTemplateInput),
 					},
 				},
-				Timeout: oranv1alpha1.Timeout{
+				Timeout: provisioningv1alpha1.Timeout{
 					ClusterProvisioning:  1,
 					Configuration:        1,
 					HardwareProvisioning: 1,
@@ -634,7 +634,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -658,7 +658,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -690,7 +690,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(requeueWithMediumInterval()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -721,7 +721,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -788,7 +788,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -826,7 +826,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -873,7 +873,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -918,7 +918,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -1010,7 +1010,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(requeueWithLongInterval()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -1046,7 +1046,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			_, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
 
-			cr := &oranv1alpha1.ClusterRequest{}
+			cr := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
 			// Verify the start timestamp has been set for ClusterInstance
 			Expect(cr.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
@@ -1055,7 +1055,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(cr.Status.ClusterDetails.NonCompliantAt).To(BeZero())
 
 			// Patch ClusterProvisionStartedAt timestamp to mock timeout
-			cr.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{Name: "cluster-1"}
+			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
 			cr.Status.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
@@ -1065,7 +1065,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue())) // stop reconciliation on ClusterProvision timeout
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -1108,7 +1108,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -1155,7 +1155,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(requeueWithLongInterval()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -1192,12 +1192,12 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			_, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
 
-			cr := &oranv1alpha1.ClusterRequest{}
+			cr := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
 			// Verify the start timestamp has been set for ClusterInstance
 			Expect(cr.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Patch ClusterProvisionStartedAt timestamp to mock timeout
-			cr.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{Name: "cluster-1"}
+			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
 			cr.Status.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
@@ -1210,7 +1210,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue())) // stop reconciliation on ClusterProvision timeout
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -1267,7 +1267,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
@@ -1351,7 +1351,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 				Status: metav1.ConditionFalse,
 			}
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
-			cr.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{}
+			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 			cr.Status.ClusterDetails.Name = crName
 			cr.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
@@ -1364,7 +1364,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(requeueWithLongInterval()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
 			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpNotDone))
@@ -1391,7 +1391,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			// Verify the reconciliation result.
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the ClusterRequest's status conditions
@@ -1415,7 +1415,7 @@ var _ = Describe("ClusterRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(requeueWithLongInterval()))
 
-			reconciledCR := &oranv1alpha1.ClusterRequest{}
+			reconciledCR := &provisioningv1alpha1.ClusterRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
 			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
@@ -1449,12 +1449,12 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		ctx = context.Background()
 
 		// Define the cluster request.
-		cr := &oranv1alpha1.ClusterRequest{
+		cr := &provisioningv1alpha1.ClusterRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterRequestSpec{
+			Spec: provisioningv1alpha1.ClusterRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
 			},
@@ -1474,17 +1474,17 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 
 	It("returns error if the referred ClusterTemplate is missing", func() {
 		// Define the cluster template.
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "other-cluster-template-name",
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
-				Templates: oranv1alpha1.Templates{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				InputDataSchema: oranv1alpha1.InputDataSchema{
+				InputDataSchema: provisioningv1alpha1.InputDataSchema{
 					ClusterInstanceSchema: runtime.RawExtension{},
 				},
 			},
@@ -1497,23 +1497,23 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		Expect(err.Error()).To(ContainSubstring(
 			fmt.Sprintf("the referenced ClusterTemplate (%s) does not exist in the %s namespace",
 				getClusterTemplateRefName(tName, tVersion), ctNamespace)))
-		Expect(retCt).To(Equal((*oranv1alpha1.ClusterTemplate)(nil)))
+		Expect(retCt).To(Equal((*provisioningv1alpha1.ClusterTemplate)(nil)))
 	})
 
 	It("returns the referred ClusterTemplate if it exists", func() {
 		// Define the cluster template.
 		ctName := getClusterTemplateRefName(tName, tVersion)
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ctName,
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
-				Templates: oranv1alpha1.Templates{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
-				InputDataSchema: oranv1alpha1.InputDataSchema{
+				InputDataSchema: provisioningv1alpha1.InputDataSchema{
 					ClusterInstanceSchema: runtime.RawExtension{},
 				},
 			},
@@ -1536,7 +1536,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		c            client.Client
 		reconciler   *ClusterRequestReconciler
 		task         *clusterRequestReconcilerTask
-		cr           *oranv1alpha1.ClusterRequest
+		cr           *provisioningv1alpha1.ClusterRequest
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		tName        = "clustertemplate-a"
 		tVersion     = "v1.0.0"
@@ -1547,28 +1547,28 @@ var _ = Describe("handleRenderClusterInstance", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		// Define the cluster request.
-		cr = &oranv1alpha1.ClusterRequest{
+		cr = &provisioningv1alpha1.ClusterRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterRequestSpec{
+			Spec: provisioningv1alpha1.ClusterRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
-				ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+				ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
 					ClusterInstanceInput: runtime.RawExtension{Raw: []byte(testClusterTemplateInput)},
 				},
 			},
 		}
 
 		// Define the cluster template.
-		ct := &oranv1alpha1.ClusterTemplate{
+		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
-				Templates: oranv1alpha1.Templates{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 				},
 			},
@@ -1716,12 +1716,12 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 	BeforeEach(func() {
 		ctx := context.Background()
 		// Define the cluster request.
-		cr := &oranv1alpha1.ClusterRequest{
+		cr := &provisioningv1alpha1.ClusterRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterRequestSpec{
+			Spec: provisioningv1alpha1.ClusterRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
 			},
@@ -1789,7 +1789,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		reconciler      *ClusterRequestReconciler
 		task            *clusterRequestReconcilerTask
 		clusterInstance *siteconfig.ClusterInstance
-		ct              *oranv1alpha1.ClusterTemplate
+		ct              *provisioningv1alpha1.ClusterTemplate
 		tName           = "clustertemplate-a"
 		tVersion        = "v1.0.0"
 		ctNamespace     = "clustertemplate-a-v4-16"
@@ -1839,25 +1839,25 @@ var _ = Describe("renderHardwareTemplate", func() {
 		}
 
 		// Define the cluster request.
-		cr := &oranv1alpha1.ClusterRequest{
+		cr := &provisioningv1alpha1.ClusterRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterRequestSpec{
+			Spec: provisioningv1alpha1.ClusterRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
 			},
 		}
 
 		// Define the cluster template.
-		ct = &oranv1alpha1.ClusterTemplate{
+		ct = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
-			Spec: oranv1alpha1.ClusterTemplateSpec{
-				Templates: oranv1alpha1.Templates{
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
 					HwTemplate: hwTemplateCm,
 				},
 			},
@@ -1957,7 +1957,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		c           client.Client
 		reconciler  *ClusterRequestReconciler
 		task        *clusterRequestReconcilerTask
-		cr          *oranv1alpha1.ClusterRequest
+		cr          *provisioningv1alpha1.ClusterRequest
 		ci          *unstructured.Unstructured
 		np          *hwv1alpha1.NodePool
 		crName      = "cluster-1"
@@ -1981,12 +1981,12 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		}
 
 		// Define the cluster request.
-		cr = &oranv1alpha1.ClusterRequest{
+		cr = &provisioningv1alpha1.ClusterRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crName,
 			},
-			Spec: oranv1alpha1.ClusterRequestSpec{
-				Timeout: oranv1alpha1.Timeout{
+			Spec: provisioningv1alpha1.ClusterRequestSpec{
+				Timeout: provisioningv1alpha1.Timeout{
 					HardwareProvisioning: 1,
 				},
 			},
@@ -2110,7 +2110,7 @@ var _ = Describe("updateClusterInstance", func() {
 		c           client.Client
 		reconciler  *ClusterRequestReconciler
 		task        *clusterRequestReconcilerTask
-		cr          *oranv1alpha1.ClusterRequest
+		cr          *provisioningv1alpha1.ClusterRequest
 		ci          *siteconfig.ClusterInstance
 		np          *hwv1alpha1.NodePool
 		crName      = "cluster-1"
@@ -2182,7 +2182,7 @@ var _ = Describe("updateClusterInstance", func() {
 		}
 
 		// Define the cluster request.
-		cr = &oranv1alpha1.ClusterRequest{
+		cr = &provisioningv1alpha1.ClusterRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crName,
 			},
@@ -2377,18 +2377,18 @@ var _ = Describe("policyManagement", func() {
 				},
 			},
 			// Cluster Template.
-			&oranv1alpha1.ClusterTemplate{
+			&provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      getClusterTemplateRefName(tName, tVersion),
 					Namespace: ctNamespace,
 				},
-				Spec: oranv1alpha1.ClusterTemplateSpec{
-					Templates: oranv1alpha1.Templates{
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwTemplate:              hwTemplateCm,
 					},
-					InputDataSchema: oranv1alpha1.InputDataSchema{
+					InputDataSchema: provisioningv1alpha1.InputDataSchema{
 						// APIserver has enforced the validation for this field who holds
 						// the arbirary JSON data
 						ClusterInstanceSchema: runtime.RawExtension{
@@ -2464,16 +2464,16 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 			// Cluster Requests.
-			&oranv1alpha1.ClusterRequest{
+			&provisioningv1alpha1.ClusterRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "cluster-1",
 					Namespace:  ctNamespace,
 					Finalizers: []string{clusterRequestFinalizer},
 				},
-				Spec: oranv1alpha1.ClusterRequestSpec{
+				Spec: provisioningv1alpha1.ClusterRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
-					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+					ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
 						ClusterInstanceInput: runtime.RawExtension{
 							Raw: []byte(testClusterTemplateInput),
 						},
@@ -2481,13 +2481,13 @@ defaultHugepagesSize: "1G"`,
 							Raw: []byte(testPolicyTemplateInput),
 						},
 					},
-					Timeout: oranv1alpha1.Timeout{
+					Timeout: provisioningv1alpha1.Timeout{
 						ClusterProvisioning:  1,
 						Configuration:        1,
 						HardwareProvisioning: 1,
 					},
 				},
-				Status: oranv1alpha1.ClusterRequestStatus{
+				Status: provisioningv1alpha1.ClusterRequestStatus{
 					// Fake the hw provision status
 					Conditions: []metav1.Condition{
 						{
@@ -2571,7 +2571,7 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
 
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -2708,7 +2708,7 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
 
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -2782,7 +2782,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -2822,7 +2822,7 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
 
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -2887,7 +2887,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -2974,7 +2974,7 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
 
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -3020,7 +3020,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeTrue()) // we have non compliant enforce policies
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
 					PolicyName:        "v1-subscriptions-policy",
@@ -3059,7 +3059,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
 					PolicyName:        "v1-subscriptions-policy",
@@ -3094,7 +3094,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
 					PolicyName:        "v1-subscriptions-policy",
@@ -3129,7 +3129,7 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
 
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -3188,7 +3188,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "",
 					PolicyName:        "v1-subscriptions-policy",
@@ -3222,7 +3222,7 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
 
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -3295,7 +3295,7 @@ defaultHugepagesSize: "1G"`,
 		// NonCompliantAt should still be zero since we don't consider inform policies in the timeout.
 		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -3341,7 +3341,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -3419,7 +3419,7 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid cluster request.
 		Expect(result.Requeue).To(BeFalse())
 
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -3620,7 +3620,7 @@ defaultHugepagesSize: "1G"`,
 		for _, newPolicy := range newPolicies {
 			Expect(c.Create(ctx, newPolicy)).To(Succeed())
 		}
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -3643,7 +3643,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -3724,7 +3724,7 @@ defaultHugepagesSize: "1G"`,
 		for _, newPolicy := range newPolicies {
 			Expect(c.Create(ctx, newPolicy)).To(Succeed())
 		}
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -3747,7 +3747,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -3828,7 +3828,7 @@ defaultHugepagesSize: "1G"`,
 		for _, newPolicy := range newPolicies {
 			Expect(c.Create(ctx, newPolicy)).To(Succeed())
 		}
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		err = CRReconciler.Client.Get(
@@ -3851,7 +3851,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -3932,7 +3932,7 @@ defaultHugepagesSize: "1G"`,
 		for _, newPolicy := range newPolicies {
 			Expect(c.Create(ctx, newPolicy)).To(Succeed())
 		}
-		clusterRequest := &oranv1alpha1.ClusterRequest{}
+		clusterRequest := &provisioningv1alpha1.ClusterRequest{}
 
 		// Create the ClusterRequest reconciliation task.
 		namespacedName := types.NamespacedName{Name: "cluster-1", Namespace: "clustertemplate-a-v4-16"}
@@ -3950,7 +3950,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
-			[]oranv1alpha1.PolicyDetails{
+			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Pending",
 					PolicyName:        "v1-sriov-configuration-policy",
@@ -4000,16 +4000,16 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 				},
 			},
 			// Cluster Request.
-			&oranv1alpha1.ClusterRequest{
+			&provisioningv1alpha1.ClusterRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "cluster-1",
 					Namespace:  ctNamespace,
 					Finalizers: []string{clusterRequestFinalizer},
 				},
-				Spec: oranv1alpha1.ClusterRequestSpec{
+				Spec: provisioningv1alpha1.ClusterRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
-					ClusterTemplateInput: oranv1alpha1.ClusterTemplateInput{
+					ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
 						ClusterInstanceInput: runtime.RawExtension{
 							Raw: []byte(testClusterTemplateInput),
 						},
@@ -4017,12 +4017,12 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 							Raw: []byte(testPolicyTemplateInput),
 						},
 					},
-					Timeout: oranv1alpha1.Timeout{
+					Timeout: provisioningv1alpha1.Timeout{
 						Configuration: 1,
 					},
 				},
-				Status: oranv1alpha1.ClusterRequestStatus{
-					ClusterDetails: &oranv1alpha1.ClusterDetails{},
+				Status: provisioningv1alpha1.ClusterRequestStatus{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{},
 				},
 			},
 		}
@@ -4052,7 +4052,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		CRTask = &clusterRequestReconcilerTask{
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
-			object: crs[1].(*oranv1alpha1.ClusterRequest), // cluster-1 request
+			object: crs[1].(*provisioningv1alpha1.ClusterRequest), // cluster-1 request
 		}
 	})
 

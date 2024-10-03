@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
 
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 )
 
 // Scheme used for the tests:
@@ -47,19 +47,19 @@ func TestInventoryControllerUtils(t *testing.T) {
 
 //nolint:unparam
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&oranv1alpha1.Inventory{}).Build()
+	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&inventoryv1alpha1.Inventory{}).Build()
 }
 
 var _ = Describe("ExtensionUtils", func() {
 	It("The container args contain all the extensions args", func() {
 
-		Inventory := &oranv1alpha1.Inventory{
+		Inventory := &inventoryv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{
+			Spec: inventoryv1alpha1.InventorySpec{
+				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
 					// The below extension matches the following CRD extensions entry:
 					//
 					// extensions:
@@ -100,13 +100,13 @@ var _ = Describe("ExtensionUtils", func() {
 	})
 
 	It("No extension args", func() {
-		Inventory := &oranv1alpha1.Inventory{
+		Inventory := &inventoryv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
+			Spec: inventoryv1alpha1.InventorySpec{
+				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
 			},
 		}
 
@@ -127,8 +127,8 @@ var _ = Describe("ExtensionUtils", func() {
 
 var _ = Describe("DoesK8SResourceExist", func() {
 
-	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.Inventory{})
-	suitescheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.InventoryList{})
+	suitescheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.Inventory{})
+	suitescheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.InventoryList{})
 	suitescheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.Deployment{})
 	suitescheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
 
@@ -150,12 +150,12 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	fakeClient := getFakeClientFromObjects(objs...)
 
 	It("If deployment does not exist, it will be created", func() {
-		Inventory := &oranv1alpha1.Inventory{
+		Inventory := &inventoryv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.InventorySpec{},
+			Spec: inventoryv1alpha1.InventorySpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -183,12 +183,12 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	})
 
 	It("If deployment does exist, it will be updated", func() {
-		Inventory := &oranv1alpha1.Inventory{
+		Inventory := &inventoryv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.InventorySpec{},
+			Spec: inventoryv1alpha1.InventorySpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -358,13 +358,13 @@ var _ = Describe("searchAPI", func() {
 			Version: "v1",
 		})
 
-		Inventory := &oranv1alpha1.Inventory{
+		Inventory := &inventoryv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
+			Spec: inventoryv1alpha1.InventorySpec{
+				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
 				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
 			},
 		}
@@ -398,13 +398,13 @@ var _ = Describe("searchAPI", func() {
 			Version: "v1",
 		})
 
-		Inventory := &oranv1alpha1.Inventory{
+		Inventory := &inventoryv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
+			Spec: inventoryv1alpha1.InventorySpec{
+				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
 				IngressHost:                   "o2ims.app.lab.karmalabs.corp",
 			},
 		}
@@ -440,13 +440,13 @@ var _ = Describe("searchAPI", func() {
 			Version: "v1",
 		})
 
-		Inventory := &oranv1alpha1.Inventory{
+		Inventory := &inventoryv1alpha1.Inventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: oranv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: oranv1alpha1.DeploymentManagerServerConfig{},
+			Spec: inventoryv1alpha1.InventorySpec{
+				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
 				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
 			},
 		}

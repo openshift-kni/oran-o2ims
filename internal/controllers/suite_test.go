@@ -34,7 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 )
 
 func TestControllers(t *testing.T) {
@@ -46,9 +47,9 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	return fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
-		WithStatusSubresource(&oranv1alpha1.Inventory{}).
-		WithStatusSubresource(&oranv1alpha1.ClusterTemplate{}).
-		WithStatusSubresource(&oranv1alpha1.ClusterRequest{}).
+		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
+		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
+		WithStatusSubresource(&provisioningv1alpha1.ClusterRequest{}).
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		WithStatusSubresource(&hwv1alpha1.NodePool{}).
@@ -79,12 +80,12 @@ var _ = BeforeSuite(func() {
 	klog.SetLogger(adapter)
 
 	// Add all the required types to the scheme used by the tests:
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.Inventory{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.InventoryList{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplate{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterTemplateList{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterRequest{})
-	scheme.AddKnownTypes(oranv1alpha1.GroupVersion, &oranv1alpha1.ClusterRequestList{})
+	scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.Inventory{})
+	scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.InventoryList{})
+	scheme.AddKnownTypes(provisioningv1alpha1.GroupVersion, &provisioningv1alpha1.ClusterTemplate{})
+	scheme.AddKnownTypes(provisioningv1alpha1.GroupVersion, &provisioningv1alpha1.ClusterTemplateList{})
+	scheme.AddKnownTypes(provisioningv1alpha1.GroupVersion, &provisioningv1alpha1.ClusterRequest{})
+	scheme.AddKnownTypes(provisioningv1alpha1.GroupVersion, &provisioningv1alpha1.ClusterRequestList{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.Ingress{})
 	scheme.AddKnownTypes(networkingv1.SchemeGroupVersion, &networkingv1.IngressList{})
 	scheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ServiceAccount{})

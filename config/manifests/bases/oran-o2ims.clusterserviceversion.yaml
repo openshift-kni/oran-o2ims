@@ -30,89 +30,10 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: ORANO2IMS is the Schema for the orano2ims API
-      displayName: ORAN O2IMS Inventory
-      kind: ORANO2IMS
-      name: orano2ims.o2ims.oran.openshift.io
-      resources:
-      - kind: Deployment
-        name: ""
-        version: apps/v1
-      specDescriptors:
-      - description: AlarmSubscriptionServerConfig contains the configuration for
-          the alarm server.
-        displayName: AlarmSubscriptionServerConfig
-        path: alarmSubscriptionServerConfig
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: CloudId is used to correlate the SMO inventory record with the
-          deployed cloud instance.
-        displayName: CloudId
-        path: cloudId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: DeploymentManagerServerConfig
-        path: deploymentManagerServerConfig
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          Image is the full reference of the container image that contains the binary. This is
-          optional and the default will be the value passed to the `--image` command line flag of
-          the controller manager.
-        displayName: Image
-        path: image
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: IngressHost defines the FQDN for the IMS endpoints.
-        displayName: IngressHost
-        path: ingressHost
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: MetadataServerConfig
-        path: metadataServerConfig
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: ResourceServerConfig contains the configuration for the resource
-          server.
-        displayName: ResourceServerConfig
-        path: resourceServerConfig
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: BackendToken
-        path: resourceServerConfig.backendToken
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: BackendURL
-        path: resourceServerConfig.backendURL
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: This field allows the addition of extra O-Cloud information for
-          the resource server.
-        displayName: Extensions
-        path: resourceServerConfig.extensions
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      statusDescriptors:
-      - description: |-
-          INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-          Important: Run "make" to regenerate code after modifying this file
-        displayName: DeploymentsStatus
-        path: deploymentStatus
-      - displayName: Conditions
-        path: deploymentStatus.conditions
-      - displayName: DeploymentServerStatus
-        path: deploymentStatus.deploymentServerStatus
-      - displayName: MetadataServer tatus
-        path: deploymentStatus.metadataServerStatus
-      - displayName: ResourceServerStatus
-        path: deploymentStatus.resourceServerStatus
-      - displayName: DeploymentsStatus
-        path: usedServerConfig
-      version: v1alpha1
     - description: ClusterRequest is the Schema for the clusterrequests API
       displayName: ORAN O2IMS Cluster Request
       kind: ClusterRequest
-      name: clusterrequests.o2ims.oran.openshift.io
+      name: clusterrequests.o2ims.provisioning.oran.org
       resources:
       - kind: ClusterInstance
         name: ""
@@ -157,7 +78,7 @@ spec:
     - description: ClusterTemplate is the Schema for the clustertemplates API
       displayName: ORAN O2IMS Cluster Template
       kind: ClusterTemplate
-      name: clustertemplates.o2ims.oran.openshift.io
+      name: clustertemplates.o2ims.provisioning.oran.org
       resources:
       - kind: ConfigMap
         name: ""

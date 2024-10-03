@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: clusterrequests.o2ims.oran.openshift.io
+  name: clusterrequests.o2ims.provisioning.oran.org
 spec:
-  group: o2ims.oran.openshift.io
+  group: o2ims.provisioning.oran.org
   names:
     kind: ClusterRequest
     listKind: ClusterRequestList

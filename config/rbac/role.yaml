@@ -167,58 +167,6 @@ rules:
 - apiGroups:
   - o2ims.oran.openshift.io
   resources:
-  - clusterrequests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims.oran.openshift.io
-  resources:
-  - clusterrequests/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - o2ims.oran.openshift.io
-  resources:
-  - clusterrequests/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims.oran.openshift.io
-  resources:
-  - clustertemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims.oran.openshift.io
-  resources:
-  - clustertemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - o2ims.oran.openshift.io
-  resources:
-  - clustertemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims.oran.openshift.io
-  resources:
   - inventories
   verbs:
   - create
@@ -238,6 +186,58 @@ rules:
   - o2ims.oran.openshift.io
   resources:
   - inventories/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - clusterrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - clusterrequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - clusterrequests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - clustertemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - clustertemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - o2ims.provisioning.oran.org
+  resources:
+  - clustertemplates/status
   verbs:
   - get
   - patch

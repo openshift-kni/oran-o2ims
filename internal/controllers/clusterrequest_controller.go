@@ -43,7 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -61,7 +61,7 @@ type ClusterRequestReconciler struct {
 type clusterRequestReconcilerTask struct {
 	logger       *slog.Logger
 	client       client.Client
-	object       *oranv1alpha1.ClusterRequest
+	object       *provisioningv1alpha1.ClusterRequest
 	clusterInput *clusterInput
 }
 
@@ -93,10 +93,10 @@ func getClusterTemplateRefName(name, version string) string {
 	return fmt.Sprintf("%s.%s", name, version)
 }
 
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clusterrequests/finalizers,verbs=update
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clusterrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clusterrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clusterrequests/finalizers,verbs=update
+//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodepools/status,verbs=get;update;patch
@@ -128,7 +128,7 @@ func (r *ClusterRequestReconciler) Reconcile(
 	time.Sleep(100 * time.Millisecond)
 
 	// Fetch the object:
-	object := &oranv1alpha1.ClusterRequest{}
+	object := &provisioningv1alpha1.ClusterRequest{}
 	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
 			// The cluster request could have been deleted
@@ -426,7 +426,7 @@ func (t *clusterRequestReconcilerTask) validateClusterRequestCR(ctx context.Cont
 }
 
 func (t *clusterRequestReconcilerTask) getMergedClusterInputData(
-	ctx context.Context, clusterTemplate *oranv1alpha1.ClusterTemplate, dataType string) (map[string]any, error) {
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate, dataType string) (map[string]any, error) {
 
 	var clusterTemplateInput runtime.RawExtension
 	var templateDefaultsCm string
@@ -906,7 +906,7 @@ func (t *clusterRequestReconcilerTask) handleClusterInstallation(ctx context.Con
 	} else {
 		// Set ClusterDetails
 		if t.object.Status.ClusterDetails == nil {
-			t.object.Status.ClusterDetails = &oranv1alpha1.ClusterDetails{}
+			t.object.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 		}
 		t.object.Status.ClusterDetails.Name = clusterInstance.GetName()
 	}
@@ -941,7 +941,7 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 
 	allPoliciesCompliant := true
 	nonCompliantPolicyInEnforce := false
-	var targetPolicies []oranv1alpha1.PolicyDetails
+	var targetPolicies []provisioningv1alpha1.PolicyDetails
 	// Go through all the policies and get those that are matched with the managed cluster created
 	// by the current cluster request.
 	for _, policy := range policies.Items {
@@ -953,7 +953,7 @@ func (t *clusterRequestReconcilerTask) handleClusterPolicyConfiguration(ctx cont
 		}
 		// Child policy name = parent_policy_namespace.parent_policy_name
 		policyNameArr := strings.Split(policy.Name, ".")
-		targetPolicy := &oranv1alpha1.PolicyDetails{
+		targetPolicy := &provisioningv1alpha1.PolicyDetails{
 			Compliant:         string(policy.Status.ComplianceState),
 			PolicyName:        policyNameArr[1],
 			PolicyNamespace:   policyNameArr[0],
@@ -1056,7 +1056,7 @@ func (t *clusterRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx contex
 // updateConfigurationAppliedStatus updates the ClusterRequest ConfigurationApplied condition
 // based on the state of the policies matched with the managed cluster.
 func (t *clusterRequestReconcilerTask) updateConfigurationAppliedStatus(
-	ctx context.Context, targetPolicies []oranv1alpha1.PolicyDetails, allPoliciesCompliant bool,
+	ctx context.Context, targetPolicies []provisioningv1alpha1.PolicyDetails, allPoliciesCompliant bool,
 	nonCompliantPolicyInEnforce bool) (err error) {
 	err = nil
 
@@ -1552,7 +1552,7 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 
 	// Set NodePoolRef
 	if t.object.Status.NodePoolRef == nil {
-		t.object.Status.NodePoolRef = &oranv1alpha1.NodePoolRef{}
+		t.object.Status.NodePoolRef = &provisioningv1alpha1.NodePoolRef{}
 	}
 	t.object.Status.NodePoolRef.Name = nodePool.GetName()
 	t.object.Status.NodePoolRef.Namespace = nodePool.GetNamespace()
@@ -1573,10 +1573,10 @@ func (t *clusterRequestReconcilerTask) createNodePoolResources(ctx context.Conte
 	return nil
 }
 
-func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Context) (*oranv1alpha1.ClusterTemplate, error) {
+func (t *clusterRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Context) (*provisioningv1alpha1.ClusterTemplate, error) {
 	// Check the clusterTemplateRef references an existing template in the same namespace
 	// as the current clusterRequest.
-	clusterTemplateRef := &oranv1alpha1.ClusterTemplate{}
+	clusterTemplateRef := &provisioningv1alpha1.ClusterTemplate{}
 	clusterTemplateRefName := getClusterTemplateRefName(
 		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
 	clusterTemplateRefExists, err := utils.DoesK8SResourceExist(
@@ -1675,7 +1675,7 @@ func (t *clusterRequestReconcilerTask) createPolicyTemplateConfigMap(
 }
 
 func (r *ClusterRequestReconciler) finalizeClusterRequest(
-	ctx context.Context, clusterRequest *oranv1alpha1.ClusterRequest) error {
+	ctx context.Context, clusterRequest *provisioningv1alpha1.ClusterRequest) error {
 
 	var labels = map[string]string{
 		clusterRequestNameLabel:      clusterRequest.Name,
@@ -1729,7 +1729,7 @@ func (r *ClusterRequestReconciler) finalizeClusterRequest(
 }
 
 func (r *ClusterRequestReconciler) handleFinalizer(
-	ctx context.Context, clusterRequest *oranv1alpha1.ClusterRequest) (ctrl.Result, bool, error) {
+	ctx context.Context, clusterRequest *provisioningv1alpha1.ClusterRequest) (ctrl.Result, bool, error) {
 
 	// Check if the ClusterRequest is marked to be deleted, which is
 	// indicated by the deletion timestamp being set.
@@ -2008,7 +2008,7 @@ func (t *clusterRequestReconcilerTask) updateHardwareProvisioningStatus(
 	timedOutOrFailed := false // Default to false unless explicitly needed
 
 	if t.object.Status.NodePoolRef == nil {
-		t.object.Status.NodePoolRef = &oranv1alpha1.NodePoolRef{}
+		t.object.Status.NodePoolRef = &provisioningv1alpha1.NodePoolRef{}
 	}
 
 	t.object.Status.NodePoolRef.Name = nodePool.GetName()
@@ -2137,10 +2137,10 @@ func (r *ClusterRequestReconciler) findClusterTemplateForClusterRequest(
 	queue workqueue.RateLimitingInterface) {
 
 	// For this case, we can use either new or old object.
-	newClusterTemplate := event.ObjectNew.(*oranv1alpha1.ClusterTemplate)
+	newClusterTemplate := event.ObjectNew.(*provisioningv1alpha1.ClusterTemplate)
 
 	// Get all the clusterRequests.
-	clusterRequests := &oranv1alpha1.ClusterRequestList{}
+	clusterRequests := &provisioningv1alpha1.ClusterRequestList{}
 	err := r.Client.List(ctx, clusterRequests, client.InNamespace(newClusterTemplate.GetNamespace()))
 	if err != nil {
 		r.Logger.Error("[findClusterRequestsForClusterTemplate] Error listing ClusterRequests. ", "Error: ", err)
@@ -2271,11 +2271,11 @@ func (r *ClusterRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("o2ims-cluster-request").
 		For(
-			&oranv1alpha1.ClusterRequest{},
+			&provisioningv1alpha1.ClusterRequest{},
 			// Watch for create and update event for ClusterRequest.
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
-			&oranv1alpha1.ClusterTemplate{},
+			&provisioningv1alpha1.ClusterTemplate{},
 			handler.Funcs{UpdateFunc: r.findClusterTemplateForClusterRequest},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {

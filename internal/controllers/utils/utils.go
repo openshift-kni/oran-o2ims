@@ -24,7 +24,8 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	oranv1alpha1 "github.com/openshift-kni/oran-o2ims/api/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -363,7 +364,7 @@ func getACMNamespace(ctx context.Context, c client.Client) (string, error) {
 }
 
 // getSearchAPI will dynamically obtain the search API.
-func getSearchAPI(ctx context.Context, c client.Client, inventory *oranv1alpha1.Inventory) (string, error) {
+func getSearchAPI(ctx context.Context, c client.Client, inventory *inventoryv1alpha1.Inventory) (string, error) {
 	// Find the ACM namespace.
 	acmNamespace, err := getACMNamespace(ctx, c)
 	if err != nil {
@@ -389,7 +390,7 @@ func getSearchAPI(ctx context.Context, c client.Client, inventory *oranv1alpha1.
 }
 
 func GetServerArgs(ctx context.Context, c client.Client,
-	inventory *oranv1alpha1.Inventory,
+	inventory *inventoryv1alpha1.Inventory,
 	serverName string) (result []string, err error) {
 	// MetadataServer
 	if serverName == InventoryMetadataServerName {
@@ -1105,7 +1106,7 @@ func ClusterIsReadyForPolicyConfig(
 }
 
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.
-func TimeoutExceeded(clusterRequest *oranv1alpha1.ClusterRequest) bool {
+func TimeoutExceeded(clusterRequest *provisioningv1alpha1.ClusterRequest) bool {
 	timeSince := time.Since(clusterRequest.Status.ClusterDetails.NonCompliantAt.Time)
 	timeout := time.Duration(clusterRequest.Spec.Timeout.Configuration) * time.Minute
 	return timeSince > timeout
