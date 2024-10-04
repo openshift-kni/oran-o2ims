@@ -64,6 +64,9 @@ IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.0
 
+# OPCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
+OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
+
 # HWMGR_PLUGIN_NAMESPACE refers to the namespace of the hardware manager plugin.
 HWMGR_PLUGIN_NAMESPACE ?= oran-hwmgr-plugin
 
@@ -347,3 +350,8 @@ clean:
 	rm -rf \
 	oran-o2ims \
 	$(NULL)
+
+.PHONY: scorecard-test
+scorecard-test: operator-sdk
+	@test -n "$(KUBECONFIG)" || (echo "The environment variable KUBECONFIG must not empty" && false)
+	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE)
