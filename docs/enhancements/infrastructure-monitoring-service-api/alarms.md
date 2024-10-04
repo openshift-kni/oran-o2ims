@@ -726,7 +726,9 @@ Note:
   This will allow for replicated persistent storage
 
 ## Tooling and general dev guidelines
-- All the features stated above will be developed within in the same controller driven by APIs that are published.
+- All the features stated above will be developed within in the same server. 
+  It will expose all the external apis (o-ran) and internal apis (alertmanager + future h/w) and 
+  handle them concurrently to drive all the features.
 - The HTTP server should be built with latest Go 1.22 `net/http` std lib. The latest update in the package brings in 
   many requested features including mapping URI pattern. This allows to drop third party lib `gorilla/mux`.
 - Prefer creating structs to hold HTTP data for idiomatic Go code.
