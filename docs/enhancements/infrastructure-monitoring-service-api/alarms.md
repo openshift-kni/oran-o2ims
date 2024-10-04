@@ -319,8 +319,8 @@ alarmEventRecord := AlarmEventRecord{
         AlarmAcknowledged: false, 
         PerceivedSeverity: SeverityCritical,                      // comes from labels.severity
         Extensions:        []KeyValue{{Key: "namespace", Value: "openshift-cluster-version"}, ....}, // any labels that are not processed already (e.g skip labels.severity)
-		
-		// Optionally 
+
+        // Optionally 
         AlarmChangedTime         // use changedAt
         AlarmClearedTime         // use endsAt or potentially current time if we missed the resolved notification
         AlarmAcknowledgedTime    // Done through API request AlarmEventRecordModifications.alarmAcknowledged (update AlarmAcknowledged)
