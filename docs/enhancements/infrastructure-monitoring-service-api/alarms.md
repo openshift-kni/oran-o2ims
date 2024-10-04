@@ -502,7 +502,7 @@ VALUES
     ('4.16'),
     ('4.17');
 
--- Most of the data in this table will come from k8s calls for now
+-- Most of the data in this table will come client-go calls
 INSERT INTO alarm_dictionary (alarm_dictionary_version, resource_type_id, entity_type, vendor)
 VALUES
     ('4.16', 'b3e7149e-d471-4d0f-aaa6-d5e9aa9e713a', 'telco-model-OpenShift-4.16.2', 'Red Hat'),
@@ -512,12 +512,11 @@ VALUES
 -- Insert into alarm_definitions
 INSERT INTO alarm_definitions (alarm_name, alarm_last_change, alarm_description, proposed_repair_actions , alarm_additional_fields)
 VALUES
-    ('NodeClockNotSynchronising','4.16', 'Clock not synchronising.','Clock at {{ $labels.instance }} is not synchronising. Ensure NTP is configured on this host.','{"CustomKey": "CustomValue"}'),
-    ('LowMemory','4.16','Low memory.','Low memory, with a longer description to help user fix the issue','{"CustomKey2": "CustomValue"}'),
-    ('NodeClockNotSynchronising','4.17','Clock not synchronising.','Clock at {{ $labels.instance }} is not synchronising. Ensure NTP2 is configured on this host.', '{"CustomKey3": "CustomValue"}');
+    ('NodeClockNotSynchronising','4.16', 'Clock not synchronising.','https://github.com/openshift/runbooks/blob/master/alerts/cluster-monitoring-operator/NodeClockNotSynchronising.md','{"customKey": "customValue"}'),
+    ('NodeClockNotSynchronising','4.17','Clock not synchronising.','https://github.com/openshift/runbooks/blob/master/alerts/cluster-monitoring-operator/NodeClockNotSynchronising.md', '{"customKey": "customValue"}');
 -- The data here mapped from PrometheusRule. See ##PrometheusRule to AlarmDefinition mapping section for more.
 
--- probable_cause will be auto populated
+-- probable_cause will be auto populated. see the section "##Get Probable cause ID, name and description" for more details
 ```
 ## Detailed Server Instantiation
 
@@ -567,6 +566,7 @@ For a given OCP release, the alarmDefinitions and probableCauses are fixed, so t
               for: 10m
               labels: 
                 severity: critical #### (alarm_definitions.alarm_additional_fields)
+                customKey: customValue
  ```
 
 Notes on Init phase 
@@ -673,6 +673,9 @@ WHERE alarm_cleared_time < NOW() - INTERVAL '24 hour' and status = 'resolved';
 We can apply the CR before server starts and remove it during shutdown as part of teardown e.g inside `server.RegisterOnShutdown`
 
 ### Get Probable cause ID, name and description
+As soon as a new AlarmDefinition row is added, we generate a new UUID and add a row to probable_cause table automatically (leveraging postgres trigger function) .
+When a user queries for all or a specific probableCause, we will simply join the tables to get the data.
+
 ```sql
 SELECT
     probable_causes.probable_cause_id,
@@ -723,14 +726,7 @@ Note:
   This will allow for replicated persistent storage
 
 ## Tooling and general dev guidelines
-- Note on concurrency: The new alarm servers provide alarm query, alarm subscription, and alarm notification functional modules and 
-  will be running under the single daemon and single instance of the alarm daemon. 
-  The alarm data entries and alarm subscription entries and other related alarm management 
-  data will be stored in the postgres db tables described in this PR. 
-  1st phase alarm delivery has low scale of alarm subscriptions, and alarm counts to be supported. 
-  The new daemon will rely on the DB and the concurrency features offered by postgres db, and the usage of semaphore 
-  is tried to be avoided. The approach will be re-evaluated during performance and scaling optimization (preferably running as part of our CI)
-  as well as when more alarm features such as HW manager alarms is supported and when HA support is enabled.
+- All the features stated above will be developed within in the same controller driven by APIs that are published.
 - The HTTP server should be built with latest Go 1.22 `net/http` std lib. The latest update in the package brings in 
   many requested features including mapping URI pattern. This allows to drop third party lib `gorilla/mux`.
 - Prefer creating structs to hold HTTP data for idiomatic Go code.
