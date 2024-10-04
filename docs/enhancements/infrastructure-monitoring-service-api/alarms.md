@@ -5,15 +5,17 @@ authors:
   - @Jennifer-chen-rh
   - @pixelsoccupied
 reviewers: # Include a comment about what domain expertise a reviewer is expected to bring and what area of the enhancement you expect them to focus on. For example: - "@networkguru, for networking aspects, please look at IP bootstrapping aspect"
-  - TBD
+  - @bartwensley
+  - @browsell
+  - @Jennifer-chen-rh
 approvers: # A single approver is preferred, the role of the approver is to raise important questions, help ensure the enhancement receives reviews from all applicable areas/SMEs, and determine when consensus is achieved such that the EP can move forward to implementation.  Having multiple approvers makes it difficult to determine who is responsible for the actual approval.
   - @browsell
 api-approvers: # In case of new or modified APIs or API extensions (CRDs, aggregated apiservers, webhooks, finalizers). If there is no API change, use "None"
   - TBD
 creation-date: 2024-08-26
-last-updated: yyyy-mm-dd
+last-updated: 2024-09-04
 tracking-link: # link to the tracking ticket (for example: Jira Feature or Epic ticket) that corresponds to this enhancement
-  - TBD
+  - CNF-13185
 see-also:
   - "None"
 replaces:
@@ -313,9 +315,9 @@ alarmEventRecord := AlarmEventRecord{
         AlarmEventRecordID: uuid.New(), // Auto generated with DB                 
 		ResourceTypeID:     "c9d3f9c5-8429-4484-8179-2a7977071bbf", // See section "Notes on Init phase" on how labels.managed_cluster mapped to resourceTypeID
 		ResourceID:        "d43bf16b-c9c6-432b-934e-7b670cc6a2cc", // labels.managed_cluster
-		AlarmRaisedTime:   "12-31-1920 12:32:14Z",                              // comes from alertmanager `startsAt`
+		AlarmRaisedTime:   "12-31-1920 12:32:14Z",                 // comes from alertmanager `startsAt`
 		AlarmAcknowledged: false,                                                        
-		PerceivedSeverity: SeverityCritical,                                     // comes from labels.severity
+		PerceivedSeverity: SeverityCritical,                      // comes from labels.severity
 		Extensions:        []KeyValue{{Key: "namespace", Value: "openshift-cluster-version"}, ....}, // any labels that are not processed already (e.g skip labels.severity)
 		
 		// Optionally 
