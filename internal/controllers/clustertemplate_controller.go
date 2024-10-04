@@ -294,6 +294,12 @@ func validateConfigmapReference[T any](
 		return err
 	}
 
+	if templateDataKey == utils.HwTemplateNodePool {
+		if err = utils.ValidateConfigMapFields(existingConfigmap); err != nil {
+			return utils.NewInputError("failed to validate the hardware template ConfigMap %s: %w", existingConfigmap.Name, err)
+		}
+	}
+
 	// Extract and validate the timeout from the configmap
 	_, err = utils.ExtractTimeoutFromConfigMap(existingConfigmap, timeoutConfigKey)
 	if err != nil {

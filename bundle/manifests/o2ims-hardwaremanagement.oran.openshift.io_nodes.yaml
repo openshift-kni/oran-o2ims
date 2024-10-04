@@ -68,6 +68,7 @@ spec:
               a node that will eventually be part of a deployment manager.
             properties:
               bmc:
+                description: BMC describes BMC details of a hardware server
                 properties:
                   address:
                     description: The Address contains the URL for accessing the BMC
@@ -153,8 +154,11 @@ spec:
                 type: array
               hostname:
                 type: string
+              hwProfile:
+                type: string
               interfaces:
                 items:
+                  description: Interface describes an interface of a hardware server
                   properties:
                     label:
                       type: string

@@ -508,7 +508,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 				Data: map[string]string{
 					utils.HardwareProvisioningTimeoutConfigKey: "1m",
-					"hwMgrId": utils.UnitTestHwmgrID,
+					utils.HwTemplateBootIfaceLabel:             "label",
+					utils.HwTemplatePluginMgr:                  "hwmgr",
 					utils.HwTemplateNodePool: `
     - name: master
       hwProfile: profile-spr-single-processor-64G
@@ -749,9 +750,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool = &hwv1alpha1.NodePool{}
 			nodePool.SetName(crName)
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
+			nodePool.Spec.HwMgrId = "hwmgr"
+			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
+				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
+			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
 			}
+			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "label"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 		})
 
@@ -888,6 +895,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: metav1.ConditionFalse,
 				Reason: string(utils.CRconditionReasons.TimedOut),
 			})
+
 			// Verify the provisioningState moves to failed when HW provisioning times out
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateFailed, "Hardware provisioning timed out", nil)
@@ -1001,9 +1009,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool = &hwv1alpha1.NodePool{}
 			nodePool.SetName(crName)
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
+			nodePool.Spec.HwMgrId = "hwmgr"
+			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
+				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
+			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
+			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "label"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			// Create ClusterInstance resource
 			clusterInstance = &siteconfig.ClusterInstance{}
@@ -1700,6 +1714,25 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
 					Namespace: utils.UnitTestHwmgrNamespace,
+					Annotations: map[string]string{
+						utils.HwTemplateBootIfaceLabel: "label",
+					},
+				},
+				Spec: hwv1alpha1.NodePoolSpec{
+					HwMgrId: utils.UnitTestHwmgrID,
+					NodeGroup: []hwv1alpha1.NodeGroup{
+						{
+							Name:       "master",
+							HwProfile:  "profile-spr-single-processor-64G",
+							Size:       1,
+							Interfaces: []string{"eno1", "eth0", "eth1"},
+						},
+						{
+							Name:      "worker",
+							HwProfile: "profile-spr-dual-processor-128G",
+							Size:      0,
+						},
+					},
 				},
 				Status: hwv1alpha1.NodePoolStatus{
 					Conditions: []metav1.Condition{

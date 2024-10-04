@@ -890,6 +890,8 @@ spec:
         path: conditions
       - displayName: Hostname
         path: hostname
+      - displayName: Hw Profile
+        path: hwProfile
       - displayName: Interfaces
         path: interfaces
       version: v1alpha1
