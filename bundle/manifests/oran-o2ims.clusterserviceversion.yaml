@@ -1395,15 +1395,13 @@ spec:
                   capabilities:
                     drop:
                     - ALL
-              - args:
-                - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
-                - --leader-elect
-                command:
+              - command:
                 - /usr/bin/oran-o2ims
                 - start
                 - controller-manager
                 - --leader-elect
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
                 env:
                 - name: IMAGE
                   value: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
