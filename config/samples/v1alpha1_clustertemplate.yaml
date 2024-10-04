@@ -6,7 +6,6 @@ metadata:
 spec:
   name: clustertemplate-a 
   description:   nice description
-  templateId: 57b39bda-ac56-4143-9b10-d1a71517d04f
   version: v1.0.0
   characteristics:
     age: "31"

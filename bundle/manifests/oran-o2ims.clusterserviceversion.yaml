@@ -42,7 +42,6 @@ metadata:
               "apple": "23"
             },
             "name": "clustertemplate-a",
-            "templateId": "57b39bda-ac56-4143-9b10-d1a71517d04f",
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {

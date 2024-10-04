@@ -75,8 +75,8 @@ func requeueWithMediumInterval() ctrl.Result {
 	return requeueWithCustomInterval(1 * time.Minute)
 }
 
-func requeueImmediatly() ctrl.Result {
-	return requeueWithCustomInterval(0)
+func requeueImmediately() ctrl.Result {
+	return ctrl.Result{Requeue: true}
 }
 
 func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
@@ -102,6 +102,8 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	_ = log.FromContext(ctx)
 	result = doNotRequeue()
 
+	// Wait a bit before getting the object to allow it to be updated to
+	// its current version and avoid older version during updates
 	time.Sleep(100 * time.Millisecond)
 	// Fetch the object:
 	object := &provisioningv1alpha1.ClusterTemplate{}
@@ -137,7 +139,7 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (ctrl.Result, e
 		if err != nil {
 			return requeueWithError(err)
 		}
-		return requeueImmediatly(), nil
+		return requeueImmediately(), nil
 	}
 
 	valid, err := t.validateClusterTemplateCR(ctx)
@@ -321,10 +323,7 @@ func generateTemplateID(ctx context.Context, c client.Client, object *provisioni
 	if err != nil {
 		return fmt.Errorf("failed to patch templateID in ClusterTemplate %s: %w", object.Name, err)
 	}
-	err = c.Get(ctx, types.NamespacedName{Name: object.Name, Namespace: object.Namespace}, object)
-	if err != nil {
-		return fmt.Errorf("failed to get updated ClusterTemplate %s: %w", object.Name, err)
-	}
+
 	return nil
 }
 
