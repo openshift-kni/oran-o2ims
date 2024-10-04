@@ -29,11 +29,10 @@ resources:
   version: v1alpha1
 - api:
     crdVersion: v1
-    namespaced: true
   controller: true
   domain: provisioning.oran.org
   group: o2ims
-  kind: ClusterRequest
+  kind: ProvisioningRequest
   path: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
   version: v1alpha1
 - api:

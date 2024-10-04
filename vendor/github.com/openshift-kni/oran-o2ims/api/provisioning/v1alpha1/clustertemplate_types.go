@@ -55,6 +55,7 @@ type ClusterTemplateSpec struct {
 	// explicitly define required fields.
 	// +kubebuilder:validation:Type=object
 	// +kubebuilder:pruning:PreserveUnknownFields
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Parameter Schema",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	TemplateParameterSchema runtime.RawExtension `json:"templateParameterSchema"`
 }
 

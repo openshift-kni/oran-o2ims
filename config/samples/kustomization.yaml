@@ -7,5 +7,5 @@ resources:
 
 # Provisioning:
 - v1alpha1_clustertemplate.yaml
-- v1alpha1_clusterrequest.yaml
+- v1alpha1_provisioningrequest.yaml
 

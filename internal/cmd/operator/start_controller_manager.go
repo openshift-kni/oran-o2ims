@@ -207,15 +207,15 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	// Start the Cluster Request controller.
-	if err = (&controllers.ClusterRequestReconciler{
+	// Start the Provisioning Request controller.
+	if err = (&controllers.ProvisioningRequestReconciler{
 		Client: mgr.GetClient(),
-		Logger: slog.With("controller", "ClusterRequest"),
+		Logger: slog.With("controller", "ProvisioningRequest"),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Unable to create controller",
-			slog.String("controller", "ClusterRequest"),
+			slog.String("controller", "ProvisioningRequest"),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)

@@ -30,51 +30,6 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: ClusterRequest is the Schema for the clusterrequests API
-      displayName: ORAN O2IMS Cluster Request
-      kind: ClusterRequest
-      name: clusterrequests.o2ims.provisioning.oran.org
-      resources:
-      - kind: ClusterInstance
-        name: ""
-        version: siteconfig.open-cluster-management.io/v1alpha1
-      - kind: Namespace
-        name: ""
-        version: v1
-      specDescriptors:
-      - displayName: Cluster Template Input
-        path: clusterTemplateInput
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Location
-        displayName: Location
-        path: location
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Site
-        displayName: Site
-        path: site
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          TemplateName defines the base name of the referenced ClusterTemplate.
-          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
-        displayName: Template Name
-        path: templateName
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          TemplateVersion defines the version of the referenced ClusterTemplate.
-          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
-        displayName: Template Version
-        path: templateVersion
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Timeout
-        path: timeout
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      version: v1alpha1
     - description: ClusterTemplate is the Schema for the clustertemplates API
       displayName: ORAN O2IMS Cluster Template
       kind: ClusterTemplate
@@ -110,6 +65,14 @@ spec:
           identifier is allocated by the O-Cloud.
         displayName: TemplateId
         path: templateId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TemplateParameterSchema defines the parameters required for ClusterTemplate.
+          The parameter definitions should follow the OpenAPI V3 schema and
+          explicitly define required fields.
+        displayName: Template Parameter Schema
+        path: templateParameterSchema
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Templates defines the references to the templates required for
@@ -205,7 +168,7 @@ spec:
         path: usedServerConfig
       version: v1alpha1
     - description: NodePool is the schema for an allocation request of nodes
-      displayName: ORAN O2IMS Cluster Request
+      displayName: Node Pool
       kind: NodePool
       name: nodepools.o2ims-hardwaremanagement.oran.openshift.io
       resources:
@@ -233,7 +196,7 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       version: v1alpha1
     - description: Node is the schema for an allocated node
-      displayName: ORAN O2IMS Cluster Request
+      displayName: Node
       kind: Node
       name: nodes.o2ims-hardwaremanagement.oran.openshift.io
       resources:
@@ -254,6 +217,52 @@ spec:
       - description: NodePool
         displayName: Node Pool
         path: nodePool
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      version: v1alpha1
+    - description: ProvisioningRequest is the Schema for the provisioningrequests
+        API
+      displayName: ORAN O2IMS Provisioning Request
+      kind: ProvisioningRequest
+      name: provisioningrequests.o2ims.provisioning.oran.org
+      resources:
+      - kind: ClusterInstance
+        name: ""
+        version: siteconfig.open-cluster-management.io/v1alpha1
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - displayName: Cluster Template Input
+        path: clusterTemplateInput
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Location
+        displayName: Location
+        path: location
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Site
+        displayName: Site
+        path: site
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TemplateName defines the base name of the referenced ClusterTemplate.
+          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+        displayName: Template Name
+        path: templateName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TemplateVersion defines the version of the referenced ClusterTemplate.
+          The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+        displayName: Template Version
+        path: templateVersion
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Timeout
+        path: timeout
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       version: v1alpha1
