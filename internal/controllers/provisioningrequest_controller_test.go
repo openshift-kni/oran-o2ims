@@ -571,8 +571,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:    tName,
-				Version: tVersion,
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -1496,8 +1497,9 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:    "other-cluster-template-name",
-				Version: "v1.0.0",
+				Name:       "other-cluster-template-name",
+				Version:    "v1.0.0",
+				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -1526,8 +1528,9 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:    tName,
-				Version: tVersion,
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -2421,8 +2424,9 @@ var _ = Describe("policyManagement", func() {
 					Namespace: ctNamespace,
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					Name:    tName,
-					Version: tVersion,
+					Name:       tName,
+					Version:    tVersion,
+					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,

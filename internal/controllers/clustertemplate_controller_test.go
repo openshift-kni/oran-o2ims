@@ -37,8 +37,9 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:    tName,
-				Version: tVersion,
+				Name:       tName,
+				Version:    tVersion,
+				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -626,7 +627,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		c = getFakeClientFromObjects()
 	})
 
-	It("should fill templateID if is empty", func() {
+	It("Generate templateID", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
@@ -645,7 +646,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 			},
 		}
 		Expect(c.Create(ctx, ct)).To(Succeed())
-		err := validateTemplateID(ctx, c, ct)
+		err := generateTemplateID(ctx, c, ct)
 		Expect(err).ToNot(HaveOccurred())
 		ct1 := &provisioningv1alpha1.ClusterTemplate{}
 		err = c.Get(ctx, client.ObjectKeyFromObject(ct), ct1)
@@ -671,7 +672,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 			},
 		}
 		Expect(c.Create(ctx, ct)).To(Succeed())
-		err := validateTemplateID(ctx, c, ct)
+		err := validateTemplateID(ct)
 		Expect(err).To(HaveOccurred())
 	})
 	It("should validate templateID if is not empty, good UUID", func() {
@@ -693,7 +694,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 			},
 		}
 		Expect(c.Create(ctx, ct)).To(Succeed())
-		err := validateTemplateID(ctx, c, ct)
+		err := validateTemplateID(ct)
 		Expect(err).ToNot(HaveOccurred())
 	})
 })
