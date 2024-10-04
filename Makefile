@@ -336,6 +336,16 @@ lint:
 	@echo "Run lint"
 	hack/golangci-lint.sh
 
+.PHONY: shellcheck
+shellcheck: ## Run shellcheck.
+	@echo "Running shellcheck"
+	hack/shellcheck.sh
+
+.PHONY: bashate
+bashate: ## Run bashate.
+	@echo "Running bashate"
+	hack/bashate.sh
+
 .PHONY: deps-update
 deps-update:
 	@echo "Update dependencies"
@@ -343,7 +353,7 @@ deps-update:
 	hack/install_test_deps.sh
 
 .PHONY: ci-job
-ci-job: deps-update generate fmt vet lint fmt test bundle-check
+ci-job: deps-update generate fmt vet lint shellcheck bashate fmt test bundle-check
 
 .PHONY: clean
 clean:

@@ -19,79 +19,79 @@
 
 # Stop the servers when finished:
 function clean {
-  kill -9 ${pids}
+    kill -9 ${pids}
 }
 trap clean EXIT
 
 # Start the metadata server:
 ./oran-o2ims start metadata-server \
---log-file="servers.log" \
---log-level="debug" \
---log-field="server=metadata" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8000" \
---cloud-id="123" \
-&
+    --log-file="servers.log" \
+    --log-level="debug" \
+    --log-field="server=metadata" \
+    --log-field="pid=%p" \
+    --api-listener-address="127.0.0.1:8000" \
+    --cloud-id="123" \
+    &
 pids="${pids} $!"
 
 # Start the deployment manager server:
 ./oran-o2ims start deployment-manager-server \
---log-file="servers.log" \
---log-level="debug" \
---log-field="server=deployment-manager" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8001" \
---cloud-id="123" \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}" \
-&
+    --log-file="servers.log" \
+    --log-level="debug" \
+    --log-field="server=deployment-manager" \
+    --log-field="pid=%p" \
+    --api-listener-address="127.0.0.1:8001" \
+    --cloud-id="123" \
+    --backend-url="${BACKEND_URL}" \
+    --backend-token="${BACKEND_TOKEN}" \
+    &
 pids="${pids} $!"
 
 # Start the resource server:
 ./oran-o2ims start resource-server \
---log-file="servers.log" \
---log-level="debug" \
---log-field="server=resource" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8002" \
---cloud-id="123" \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}" \
-&
+    --log-file="servers.log" \
+    --log-level="debug" \
+    --log-field="server=resource" \
+    --log-field="pid=%p" \
+    --api-listener-address="127.0.0.1:8002" \
+    --cloud-id="123" \
+    --backend-url="${BACKEND_URL}" \
+    --backend-token="${BACKEND_TOKEN}" \
+    &
 pids="${pids} $!"
 
 # Start the alert subscription server:
 ./oran-o2ims start alarm-subscription-server \
---log-file="servers.log" \
---log-level="debug" \
---log-field="server=alarm-subscription" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8010" \
---metrics-listener-address="127.0.0.1:8095" \
---namespace="orantest" \
---configmap-name="oran-o2ims-alarm-subscriptions" \
---cloud-id="123" \
-&
+    --log-file="servers.log" \
+    --log-level="debug" \
+    --log-field="server=alarm-subscription" \
+    --log-field="pid=%p" \
+    --api-listener-address="127.0.0.1:8010" \
+    --metrics-listener-address="127.0.0.1:8095" \
+    --namespace="orantest" \
+    --configmap-name="oran-o2ims-alarm-subscriptions" \
+    --cloud-id="123" \
+    &
 pids="${pids} $!"
 #### start notificaton server deamon from cmd line
 # Start the alert notification debug server:
 ./oran-o2ims start alarm-notification-server \
---log-level="debug" \
---log-field="server=alarm-notification" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8030" \
---metrics-listener-address="127.0.0.1:8070" \
---resource-server-url="${RESOURCE_SERVER_URL}" \
---resource-server-token="${RESOURCE_SERVER_TOKEN}" \
---cloud-id="123" \
-&
+    --log-level="debug" \
+    --log-field="server=alarm-notification" \
+    --log-field="pid=%p" \
+    --api-listener-address="127.0.0.1:8030" \
+    --metrics-listener-address="127.0.0.1:8070" \
+    --resource-server-url="${RESOURCE_SERVER_URL}" \
+    --resource-server-token="${RESOURCE_SERVER_TOKEN}" \
+    --cloud-id="123" \
+    &
 pids="${pids} $!"
 
 # Start the reverse proxy:
 podman run \
---rm \
---network="host" \
---volume="${PWD}/proxy.yaml:/etc/proxy.yaml:z" \
---entrypoint="/usr/local/bin/envoy" \
-docker.io/envoyproxy/envoy:v1.28.0 \
---config-path "/etc/proxy.yaml"
+    --rm \
+    --network="host" \
+    --volume="${PWD}/proxy.yaml:/etc/proxy.yaml:z" \
+    --entrypoint="/usr/local/bin/envoy" \
+    docker.io/envoyproxy/envoy:v1.28.0 \
+    --config-path "/etc/proxy.yaml"
