@@ -316,7 +316,7 @@ alarmEventRecord := AlarmEventRecord{
 		ResourceTypeID:     "c9d3f9c5-8429-4484-8179-2a7977071bbf", // See section "Notes on Init phase" on how labels.managed_cluster mapped to resourceTypeID
 		ResourceID:        "d43bf16b-c9c6-432b-934e-7b670cc6a2cc", // labels.managed_cluster
 		AlarmRaisedTime:   "12-31-1920 12:32:14Z",                 // comes from alertmanager `startsAt`
-		AlarmAcknowledged: false,                                                        
+        AlarmAcknowledged: false,                                                        
 		PerceivedSeverity: SeverityCritical,                      // comes from labels.severity
 		Extensions:        []KeyValue{{Key: "namespace", Value: "openshift-cluster-version"}, ....}, // any labels that are not processed already (e.g skip labels.severity)
 		
