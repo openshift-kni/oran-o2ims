@@ -30,16 +30,19 @@ metadata:
           "apiVersion": "o2ims.provisioning.oran.org/v1alpha1",
           "kind": "ClusterTemplate",
           "metadata": {
-            "labels": {
-              "app.kubernetes.io/created-by": "oran-o2ims",
-              "app.kubernetes.io/instance": "clustertemplate-sample",
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "clustertemplate",
-              "app.kubernetes.io/part-of": "oran-o2ims"
-            },
-            "name": "clustertemplate-sample.v1.0.0"
+            "name": "clustertemplate-sample.v1.0.0",
+            "namespace": "clustertemplate-a-v4-16"
           },
           "spec": {
+            "characteristics": {
+              "age": "31"
+            },
+            "description": "nice description",
+            "metadata": {
+              "apple": "23"
+            },
+            "name": "clustertemplate-a",
+            "templateId": "57b39bda-ac56-4143-9b10-d1a71517d04f",
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {
@@ -339,9 +342,10 @@ metadata:
             },
             "templates": {
               "clusterInstanceDefaults": "clusterinstance-defaults-v1",
-              "hwTemplate": "hwtemplate-configmap-v1",
+              "hwTemplate": "dell-intel-cu-template-configmap-v1",
               "policyTemplateDefaults": "policytemplate-defaults-v1"
-            }
+            },
+            "version": "v1.0.0"
           }
         },
         {
