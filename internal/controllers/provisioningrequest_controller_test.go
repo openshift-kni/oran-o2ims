@@ -1117,6 +1117,16 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 				Status: policiesv1.PolicyStatus{
 					ComplianceState: "NonCompliant",
+					Details: []*policiesv1.DetailsPerTemplate{
+						{
+							History: []policiesv1.ComplianceHistory{
+								{
+									LastTimestamp: metav1.Now(),
+									Message:       "NonCompliant;",
+								},
+							},
+						},
+					},
 				},
 			}
 			Expect(c.Create(ctx, policy)).To(Succeed())
@@ -1163,9 +1173,6 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			// Verify the start timestamp has been set for ClusterInstance
 			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
-			// Verify the nonCompliantAt timestamp is not set, even though Non-compliant enforce policy exists
-			// but Cluster is not ready
-			Expect(reconciledCR.Status.ClusterDetails.NonCompliantAt).To(BeZero())
 			// Verify the provisioningState remains progressing when cluster provisioning is in-progress
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Cluster installation is in progress", nil)
@@ -1180,9 +1187,6 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
 			// Verify the start timestamp has been set for ClusterInstance
 			Expect(cr.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
-			// Verify the nonCompliantAt timestamp is not set, even though Non-compliant enforce policy exists
-			// but Cluster is not ready
-			Expect(cr.Status.ClusterDetails.NonCompliantAt).To(BeZero())
 
 			// Patch ClusterProvisionStartedAt timestamp to mock timeout
 			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
@@ -1347,8 +1351,6 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			// Verify the start timestamp is not cleared even Cluster provision has completed
 			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
-			// Verify the nonCompliantAt timestamp is not set since enforce policy is compliant
-			Expect(reconciledCR.Status.ClusterDetails.NonCompliantAt).To(BeZero())
 			// Verify the ztpStatus is set to ZTP done
 			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the provisioningState sets to fulfilled when the provisioning process is completed
@@ -1741,6 +1743,16 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 				Status: policiesv1.PolicyStatus{
 					ComplianceState: policiesv1.NonCompliant,
+					Details: []*policiesv1.DetailsPerTemplate{
+						{
+							History: []policiesv1.ComplianceHistory{
+								{
+									LastTimestamp: metav1.Now(),
+									Message:       "NonCompliant;",
+								},
+							},
+						},
+					},
 				},
 			}
 			Expect(c.Create(ctx, policy)).To(Succeed())

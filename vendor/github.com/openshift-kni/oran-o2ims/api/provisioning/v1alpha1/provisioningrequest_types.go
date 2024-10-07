@@ -75,9 +75,6 @@ type ClusterDetails struct {
 
 	// A timestamp indicating the cluster provisoning has started
 	ClusterProvisionStartedAt metav1.Time `json:"clusterProvisionStartedAt,omitempty"`
-
-	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
-	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
 }
 
 // PolicyDetails holds information about an ACM policy.
