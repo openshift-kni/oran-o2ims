@@ -888,6 +888,8 @@ var testClusterInstanceData = map[string]interface{}{
 			"bmcCredentialsName":     map[string]interface{}{"name": "node1-bmc-secret"},
 			"bootMACAddress":         "00:00:00:01:20:30",
 			"bootMode":               "UEFI",
+			"extraLabels":            map[string]map[string]string{"NMStateConfig": {"labelKey": "labelValue"}},
+			"extraAnnotations":       map[string]map[string]string{"NMStateConfig": {"annKey": "annValue"}},
 			"hostName":               "node1.baseDomain.com",
 			"ignitionConfigOverride": "{\"ignition\": {\"version\": \"3.1.0\"}, \"storage\": {\"files\": [{\"path\": \"/etc/containers/registries.conf\", \"overwrite\": true, \"contents\": {\"source\": \"data:text/plain;base64,aGVsbG8gZnJvbSB6dHAgcG9saWN5IGdlbmVyYXRvcg==\"}}]}}",
 			"installerArgs":          "[\"--append-karg\", \"nameserver=8.8.8.8\", \"-n\"]",
@@ -1034,6 +1036,12 @@ spec:
       name: node1-bmc-secret
     bootMACAddress: "00:00:00:01:20:30"
     bootMode: UEFI
+    extraLabels:
+      NMStateConfig:
+        labelKey: labelValue
+    extraAnnotations:
+      NMStateConfig:
+        annKey: annValue
     hostName: node1.baseDomain.com
     ignitionConfigOverride: '{"ignition": {"version": "3.1.0"}, "storage": {"files":
       [{"path": "/etc/containers/registries.conf", "overwrite": true, "contents":
