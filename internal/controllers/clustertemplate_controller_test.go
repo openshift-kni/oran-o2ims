@@ -282,6 +282,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
 		}
 

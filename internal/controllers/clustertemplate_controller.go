@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"log/slog"
@@ -173,6 +174,12 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 	// Validate the Template ID
 	err = validateTemplateID(t.object)
+	if err != nil {
+		validationErrs = append(validationErrs, err.Error())
+	}
+
+	// Validate templateParameterSchema field
+	err = validateTemplateParameterSchema(t.object)
 	if err != nil {
 		validationErrs = append(validationErrs, err.Error())
 	}
@@ -333,6 +340,54 @@ func generateTemplateID(ctx context.Context, c client.Client, object *provisioni
 		return fmt.Errorf("failed to patch templateID in ClusterTemplate %s: %w", object.Name, err)
 	}
 
+	return nil
+}
+
+// validateTemplateParameterSchema return true if the schema contained in the templateParameterSchema
+// field contains the required mandatory parameters
+// - nodeClusterName
+// - oCloudSiteId
+// - policyTemplateParameters
+// - clusterInstanceParameters
+func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplate) error {
+	mandatoryParams := []string{"nodeClusterName",
+		"oCloudSiteId",
+		"policyTemplateParameters",
+		"clusterInstanceParameters"}
+	if object.Spec.TemplateParameterSchema.Size() == 0 {
+		return utils.NewInputError("templateParameterSchema is present but empty:")
+	}
+	var missingParameter []string
+	for _, param := range mandatoryParams {
+		_, err := utils.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, param)
+		if err != nil && strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema %s does not exist:", param)) {
+			missingParameter = append(missingParameter, param)
+		} else if err != nil {
+			return fmt.Errorf("error extracting subschema at key %s: %w", param, err)
+		}
+	}
+	var missingRequired []string
+	requiredList, err := utils.ExtractSchemaRequired(object.Spec.TemplateParameterSchema.Raw)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling required subschema: %w", err)
+	}
+	for _, param := range mandatoryParams {
+		if !slices.Contains(requiredList, param) {
+			missingRequired = append(missingRequired, param)
+		}
+	}
+	validationFailureReason := fmt.Sprintf("failed to validate ClusterTemplate name:%s. ", object.Name)
+	if len(missingParameter) != 0 {
+		validationFailureReason = fmt.Sprintf(" The following mandatory fields are missing: %s", strings.Join(missingParameter, ","))
+	}
+	if len(missingRequired) != 0 {
+		if len(missingParameter) != 0 {
+			validationFailureReason += " and"
+		}
+		validationFailureReason += fmt.Sprintf(" the following entries are missing in the required section of the template: %s",
+			strings.Join(missingRequired, ","))
+		return utils.NewInputError(validationFailureReason)
+	}
 	return nil
 }
 
