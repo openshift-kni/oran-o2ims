@@ -18,6 +18,8 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apimachinery/pkg/util/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -29,6 +31,7 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
+	openshiftv1 "github.com/openshift/api/config/v1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -44,6 +47,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 )
+
+// OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
+// from an OAuth capable authorization server.
+type OAuthClientConfig struct {
+	// Defines a PEM encoded set of CA certificates used to validate server certificates.  If not provided then the
+	// default root CA bundle will be used.
+	CaBundle []byte
+	// Defines the OAuth client-id attribute to be used when acquiring a token.  If not provided (for debug/testing)
+	// then a normal HTTP client without OAuth capabilities will be created
+	ClientId     string
+	ClientSecret string
+	// The absolute URL of the API endpoint to be used to acquire a token
+	// (e.g., http://example.com/realms/oran/protocol/openid-connect/token)
+	TokenUrl string
+	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
+	// the token.
+	Scopes []string
+}
 
 const (
 	PropertiesString = "properties"
@@ -563,6 +584,32 @@ func extractBeforeDot(s string) string {
 	return s[:dotIndex]
 }
 
+// GetSecret attempts to retrieve a Secret object for the given name
+func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*corev1.Secret, error) {
+	secret := &corev1.Secret{}
+	exists, err := DoesK8SResourceExist(ctx, c, name, namespace, secret)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		return nil, NewInputError(
+			"the Secret '%s' is not found in the namespace '%s'", name, namespace)
+	}
+	return secret, nil
+}
+
+// GetSecretField attempts to retrieve the value of the field using the provided field name
+func GetSecretField(secret *corev1.Secret, fieldName string) (string, error) {
+	encoded, ok := secret.Data[fieldName]
+	if !ok {
+		return "", NewInputError("the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName)
+	}
+
+	return string(encoded), nil
+}
+
+// GetConfigmap attempts to retrieve a ConfigMap object for the given name
 func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) (*corev1.ConfigMap, error) {
 	existingConfigmap := &corev1.ConfigMap{}
 	cmExists, err := DoesK8SResourceExist(
@@ -574,25 +621,34 @@ func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) 
 	if !cmExists {
 		// Check if the configmap is missing
 		return nil, NewInputError(
-			"the ConfigMap %s is not found in the namespace %s", name, namespace)
+			"the ConfigMap '%s' is not found in the namespace '%s'", name, namespace)
 	}
 	return existingConfigmap, nil
 }
 
-// ExtractTemplateDataFromConfigMap extractes the template data associated with the specified key
+// GetConfigMapField attempts to retrieve the value of the field using the provided field name
+func GetConfigMapField(cm *corev1.ConfigMap, fieldName string) (string, error) {
+	data, ok := cm.Data[fieldName]
+	if !ok {
+		return data, NewInputError("the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName)
+	}
+
+	return data, nil
+}
+
+// ExtractTemplateDataFromConfigMap extracts the template data associated with the specified key
 // from the provided ConfigMap. The data is expected to be in YAML format.
 func ExtractTemplateDataFromConfigMap[T any](ctx context.Context, c client.Client, cm *corev1.ConfigMap, expectedKey string) (T, error) {
 	var validData T
 
 	// Find the expected key is present in the configmap data
-	defaults, exists := cm.Data[expectedKey]
-	if !exists {
-		return validData, NewInputError(
-			"the expected key %s does not exist in the ConfigMap %s data", expectedKey, cm.GetName())
+	defaults, err := GetConfigMapField(cm, expectedKey)
+	if err != nil {
+		return validData, err
 	}
 
 	// Parse the YAML data into a map
-	err := yaml.Unmarshal([]byte(defaults), &validData)
+	err = yaml.Unmarshal([]byte(defaults), &validData)
 	if err != nil {
 		return validData, NewInputError(
 			"the value of key %s from ConfigMap %s is not in a valid YAML string: %s",
@@ -1217,4 +1273,60 @@ func MapKeysToSlice(inputMap map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// SetupOAuthClient creates an HTTP client capable of acquiring an OAuth token used to authorize client requests.  If
+// the config excludes the OAuth specific sections then the client produced is a simple HTTP client without OAuth
+// capabilities.
+func SetupOAuthClient(ctx context.Context, config OAuthClientConfig) (*http.Client, error) {
+	tlsConfig, _ := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
+
+	if len(config.CaBundle) != 0 {
+		// If the user has provided a CA bundle then we must use it to build our client so that we can verify the
+		// identity of remote servers.
+		if tlsConfig.RootCAs == nil {
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(config.CaBundle) {
+				return nil, fmt.Errorf("failed to append certificate bundle to pool")
+			}
+			tlsConfig.RootCAs = certPool
+		} else {
+			// We may not need the default CA bundles in this case but there's no harm in keeping them in the pool
+			// to handle cases where they may be needed.
+			tlsConfig.RootCAs.AppendCertsFromPEM(config.CaBundle)
+		}
+	}
+
+	c := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig}}
+
+	if config.ClientId != "" {
+		config := clientcredentials.Config{
+			ClientID:       config.ClientId,
+			ClientSecret:   config.ClientSecret,
+			TokenURL:       config.TokenUrl,
+			Scopes:         config.Scopes,
+			EndpointParams: nil,
+			AuthStyle:      oauth2.AuthStyleInParams,
+		}
+
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, c)
+
+		c = config.Client(ctx)
+	}
+
+	return c, nil
+}
+
+// GetClusterId retrieves the UUID value for the cluster specified by name
+func GetClusterId(ctx context.Context, c client.Client, name string) (string, error) {
+	object := &openshiftv1.ClusterVersion{}
+
+	err := c.Get(ctx, types.NamespacedName{Name: name}, object)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve ClusterVersion '%s', error: %w", name, err)
+	} else {
+		return string(object.Spec.ClusterID), nil
+	}
 }

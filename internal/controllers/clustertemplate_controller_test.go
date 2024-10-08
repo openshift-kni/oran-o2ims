@@ -144,9 +144,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
+			"the ConfigMap '%s' is not found in the namespace '%s'", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
+			"the ConfigMap '%s' is not found in the namespace '%s'", ptDefaultsCm, ctNamespace)))
 	})
 })
 
@@ -361,9 +361,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the ConfigMap %s is not found in the namespace %s", ciDefaultsCm, ctNamespace)))
+			"the ConfigMap '%s' is not found in the namespace '%s'", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the ConfigMap %s is not found in the namespace %s", ptDefaultsCm, ctNamespace)))
+			"the ConfigMap '%s' is not found in the namespace '%s'", ptDefaultsCm, ctNamespace)))
 	})
 })
 
@@ -405,7 +405,7 @@ key: value`,
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
-			"failed to get ConfigmapReference: the ConfigMap %s is not found in the namespace %s", configmapName, namespace)))
+			"failed to get ConfigmapReference: the ConfigMap '%s' is not found in the namespace '%s'", configmapName, namespace)))
 	})
 
 	It("should return validation error message for missing expected key in configmap", func() {
@@ -426,7 +426,7 @@ key: value`,
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
-			"the expected key %s does not exist in the ConfigMap %s data", utils.ClusterInstanceTemplateDefaultsConfigmapKey, configmapName)))
+			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, utils.ClusterInstanceTemplateDefaultsConfigmapKey)))
 	})
 
 	It("should return validation error message for invalid YAML in configmap data", func() {

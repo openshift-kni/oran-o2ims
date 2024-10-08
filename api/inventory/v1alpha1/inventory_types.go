@@ -23,6 +23,41 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// OAuthConfig defines the configurable attributes that represent the authentication mechanism.  This is currently
+// expected to be a way to acquire a token from an OAuth2 server.
+type OAuthConfig struct {
+	// Url represents the base URL of the authorization server. (e.g., https://keycloak.example.com/realms/oran)
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth URL",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Url string `json:"url"`
+	// TokenEndpoint represents the API endpoint used to acquire a token (e.g., /protocol/openid-connect/token) which
+	// will be appended to the base URL to form the full URL
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Token Endpoint",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TokenEndpoint string `json:"tokenEndpoint"`
+	// ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
+	// client-secret values used by the OAuth client.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client Secret",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ClientSecretName string `json:"clientSecretName"`
+	// Scopes represents the OAuth scope values to request when acquiring a token.  Typically, this should be set to
+	// "openid" in addition to any other scopes that the SMO specifically requires (e.g., "roles", "groups", etc...) to
+	// authorize our requests
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Scopes",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Scopes []string `json:"scopes"`
+}
+
+// SmoConfig defines the configurable attributes to represent the SMO instance
+type SmoConfig struct {
+	// Url represents the base URL of the SMO instance
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO URL",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	Url string `json:"url"`
+	// RegistrationEndpoint represents the API endpoint used to register the O2IMS with the SMO.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Registration API Endpoint",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	RegistrationEndpoint string `json:"registrationEndpoint"`
+	// OAuthConfig defines the configurable attributes required to access the OAuth2 authorization server
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO OAuth Configuration"
+	OAuthConfig *OAuthConfig `json:"oauth,omitempty"`
+}
+
 type ServerConfig struct {
 	// Enabled indicates if the server should be started.
 	//
@@ -108,6 +143,16 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ingress Host",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	IngressHost string `json:"ingressHost,omitempty"`
+	// SmoConfig defines the configurable attributes to represent the SMO instance
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO Configuration"
+	SmoConfig *SmoConfig `json:"smo,omitempty"`
+	// CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
+	// with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
+	// a non-public CA certificate.
+	// +optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Custom CA Certificates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	CaBundleName *string `json:"caBundleName,omitempty"`
 }
 
 type DeploymentsStatus struct {

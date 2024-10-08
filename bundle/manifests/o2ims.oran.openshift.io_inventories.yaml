@@ -52,6 +52,12 @@ spec:
                 required:
                 - enabled
                 type: object
+              caBundleName:
+                description: |-
+                  CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
+                  with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
+                  a non-public CA certificate.
+                type: string
               cloudId:
                 description: CloudId is used to correlate the SMO inventory record
                   with the deployed cloud instance.
@@ -133,6 +139,53 @@ spec:
                     type: array
                 required:
                 - enabled
+                type: object
+              smo:
+                description: SmoConfig defines the configurable attributes to represent
+                  the SMO instance
+                properties:
+                  oauth:
+                    description: OAuthConfig defines the configurable attributes required
+                      to access the OAuth2 authorization server
+                    properties:
+                      clientSecretName:
+                        description: |-
+                          ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
+                          client-secret values used by the OAuth client.
+                        type: string
+                      scopes:
+                        description: |-
+                          Scopes represents the OAuth scope values to request when acquiring a token.  Typically, this should be set to
+                          "openid" in addition to any other scopes that the SMO specifically requires (e.g., "roles", "groups", etc...) to
+                          authorize our requests
+                        items:
+                          type: string
+                        type: array
+                      tokenEndpoint:
+                        description: |-
+                          TokenEndpoint represents the API endpoint used to acquire a token (e.g., /protocol/openid-connect/token) which
+                          will be appended to the base URL to form the full URL
+                        type: string
+                      url:
+                        description: Url represents the base URL of the authorization
+                          server. (e.g., https://keycloak.example.com/realms/oran)
+                        type: string
+                    required:
+                    - clientSecretName
+                    - scopes
+                    - tokenEndpoint
+                    - url
+                    type: object
+                  registrationEndpoint:
+                    description: RegistrationEndpoint represents the API endpoint
+                      used to register the O2IMS with the SMO.
+                    type: string
+                  url:
+                    description: Url represents the base URL of the SMO instance
+                    type: string
+                required:
+                - registrationEndpoint
+                - url
                 type: object
             required:
             - cloudId

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -127,4 +128,11 @@ func IsClusterProvisionCompletedOrFailed(cr *provisioningv1alpha1.ProvisioningRe
 		}
 	}
 	return false
+}
+
+// IsSmoRegistrationCompleted checks if registration with SMO has been completed
+func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
+	condition := meta.FindStatusCondition(cr.Status.DeploymentsStatus.Conditions,
+		string(InventoryConditionTypes.SmoRegistrationCompleted))
+	return condition != nil && condition.Status == metav1.ConditionTrue
 }
