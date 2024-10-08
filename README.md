@@ -454,7 +454,7 @@ Once the hub cluster is setup and the O2IMS application is started the end user 
 configure the SMO attributes so that the application can register with the SMO. In a production environment this
 requires that an OAuth2 authorization server be available and configured with the appropriate client configurations for
 both the SMO and the O2IMS applications. In debug/test environments, the OAuth2 can also be used if the appropriate
-server and configurations exist but OAuth2 can also be disabled to simply the configuration requirements.
+server and configurations exist but OAuth2 can also be disabled to simplify the configuration requirements.
 
 1. Create a ConfigMap that contains the custom X.509 CA certificate bundle if either of the SMO or OAuth2 server TLS
    certificates are signed by a non-public CA certificate.
