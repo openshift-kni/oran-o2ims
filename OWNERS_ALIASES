@@ -2,8 +2,6 @@
 
 aliases:
   oran-o2ims-reviewers:
-    - jhernand
-    - danielerez
     - irinamihai
     - bartwensley
     - browsell
@@ -13,9 +11,9 @@ aliases:
     - pixelsoccupied
     - tliu2021
     - alegacy
+    - edcdavid
+    - sudomakeinstall2
   oran-o2ims-approvers:
-    - jhernand
-    - danielerez
     - irinamihai
     - bartwensley
     - browsell
@@ -25,3 +23,5 @@ aliases:
     - pixelsoccupied
     - tliu2021
     - alegacy
+    - edcdavid
+    - sudomakeinstall2
