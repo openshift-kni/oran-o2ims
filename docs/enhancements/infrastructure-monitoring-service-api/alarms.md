@@ -699,7 +699,8 @@ We will need few K8s resources that will be eventually applied by the Operator.
 #### Alarm server
 This is essentially a typical CRUD app and we need the following
 
-- Deployment: It should have one initContainers that runs to completion to perform DB migration and one main container which starts the main server. 
+- Deployment: It should have one initiContainer to create a DB, one initContainers that perform DB migration (create/alter table etc) 
+  and one main container which starts the main server. 
   No HA, so set replica to 1. It should also contain all the ENV variables needed to talk to postgres deployment DB_HOST, DB_PORT, DB_NAME, DB_USER etc.
   Suitable resources should be provided but not much memory and CPU is need for CRUD apps. 
 - Secrets: DB creds and configs should be read from postgres deployment. 
@@ -718,11 +719,13 @@ This deployment can be leveraged by many microservices by creating their own Dat
 - Secrets: default creds needed to spin postgres, with type: Opaque. This secret will then be ready by 
    - POSTGRES_USER: `o-ran`
    - POSTGRES_PASSWORD: `o-ran`
+   - POSTGRES_DB: `o-ran` # Note: this is simply there to be explicit.  
+                                   If not provided `POSTGRES_USER` is used to create default DB. But ultimately this DB not used as each service will create their own.
 - ConfigMap: For others to know the hostname and port
    - POSTGRES_HOST: "postgres.o-ran-namespace.svc.cluster.local"
    - POSTGRES_PORT: "5432"
 
-With the Secrets and ConfigMap applied, an app may connect to the DB with the following given the service (assuming migration already and `o-ran-infrastructure-monitoring-alarms` already created):
+With the Secrets and ConfigMap applied, an app may connect to the DB with the following given the service (assuming initContainer of app already created DB `o-ran-infrastructure-monitoring-alarms`):
 ```go
 connStr := "postgres://o-ran:o-ran@postgres.o-ran-namespace.svc.cluster.local:5432/o-ran-infrastructure-monitoring-alarms?sslmode=disable"
 ```
@@ -736,7 +739,7 @@ Note:
   It will expose all the external apis (o-ran) and internal apis (alertmanager + future h/w) and 
   handle them concurrently to drive all the features.
 - The HTTP server should be built with latest Go 1.22 `net/http` std lib. The latest update in the package brings in 
-  many requested features including mapping URI pattern. This allows to drop third party lib `gorilla/mux`.
+  many requested features including mapping URI pattern. This allows us to not rely on third party lib such as `gorilla/mux`.
 - Prefer creating structs to hold HTTP data for idiomatic Go code.
 - OpenAPI spec should be the source of truth. Other than standardization, free validation and documentation,
   with it, we can leverage a code generator such [this](https://github.com/oapi-codegen/oapi-codegen), allowing us to avoid writing boilerplate code. 
