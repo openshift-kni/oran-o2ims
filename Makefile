@@ -260,7 +260,7 @@ bundle-build: bundle docker-push ## Build the bundle image.
 	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
-bundle-push: bundle-push ## Push the bundle image.
+bundle-push: bundle-build ## Push the bundle image.
 	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
 
 .PHONY: bundle-check
