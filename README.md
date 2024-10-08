@@ -431,7 +431,6 @@ alarm-notification-server` [configuration](.vscode/launch.json).
 
 ```shell
 $ oc apply -f config/samples/testing/client-service-account-rbac.yaml
-system:admin
 ```
 
 2. Generate a token to access the API endpoint
@@ -447,4 +446,72 @@ $ MY_TOKEN=$(oc get secret -n oran-o2ims ${MY_SECRET_NAME} -ojsonpath='{.metadat
 MY_CLUSTER=your.domain.com
 curl -kq https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v1/api_version \
 -H "Authorization: Bearer ${MY_TOKEN}"
+```
+
+## Registering the O2IMS application with the SMO
+
+Once the hub cluster is setup and the O2IMS application is started the end user must update the Inventory CR to
+configure the SMO attributes so that the application can register with the SMO. In a production environment this
+requires that an OAuth2 authorization server be available and configured with the appropriate client configurations for
+both the SMO and the O2IMS applications. In debug/test environments, the OAuth2 can also be used if the appropriate
+server and configurations exist but OAuth2 can also be disabled to simply the configuration requirements.
+
+1. Create a ConfigMap that contains the custom X.509 CA certificate bundle if either of the SMO or OAuth2 server TLS
+   certificates are signed by a non-public CA certificate.
+
+```shell
+oc create configmap -n oran-o2ims o2ims-custom-ca-certs --from-file=ca-bundle.pem=/some/path/to/ca-bundle.pem
+```
+
+2. Create a Secret that contains the OAuth client-id and client-secret for the O2IMS application. These values should
+   be obtained from the administrator of the OAuth server that set up the client credentials. The client secrets must
+   not
+   be stored locally once the secret is created. The values used here are for example purposes only, your values may
+   differ for the client-id and will definitely differ for the client-secret.
+
+```shell
+oc create secret generic -n oran-o2ims oauth-client-secrets --from-literal=client-id=o2ims-client --from-literal=client-secret=SFuwTyqfWK5vSwaCPSLuFzW57HyyQPHg
+```
+
+3. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
+   on the domain names used in your environment and by the type of OAuth2 server deployed. Check the configuration
+   documentation for the actual server being used.
+
+The following block can be added to the `spec` section of the Inventory CR.
+
+```yaml
+    smo:
+       url: https://smo.example.com
+       registrationEndpoint: /mock_smo/v1/ocloud_observer
+       oauth:
+          url: https://keycloak.example.com/realms/oran
+          clientSecretName: oauth-client-secrets
+          tokenEndpoint: /protocol/openid-connect/token
+          scopes:
+             - profile
+             - smo-audience
+    caBundleName: o2ims-custom-ca-certs
+```
+
+notes:</p>
+a) The `caBundleName` can be omitted if step 1 was skipped.</p>
+b) The `scopes` attribute will vary based on the actual configuration of the OAuth2 server. At a minimum there must be
+scopes established on the server to allow a client to request its profile info (i.e., account info), and the intended
+audience identifier (i.e., the OAuth client-id of the SMO application).
+
+4. Once the Inventory CR is updated the following condition will be used updated to reflect the status of the SMO
+   registration. If an error occurred that prevented registration from completing the error will be noted here.
+
+```shell
+oc describe inventories.o2ims.oran.openshift.io sample
+...
+Status:
+  Deployment Status:
+    Conditions:
+      Last Transition Time:  2024-10-04T15:39:46Z
+      Message:               Registered with SMO at: https://smo.example.com
+      Reason:                SmoRegistrationSuccessful
+      Status:                True
+      Type:                  SmoRegistrationCompleted
+...
 ```

@@ -17,12 +17,16 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -31,8 +35,6 @@ import (
 	k8sptr "k8s.io/utils/ptr"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -62,6 +64,7 @@ import (
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
+//+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -371,9 +374,155 @@ func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context,
 	return
 }
 
+// setupOAuthClient is a wrapper around the similarly named method in the utils package.  The purpose for this wrapper
+// is to gather the parameters required by the utils version of this function before invoking it.  The reason for the
+// two layers is that it is expected that other parts of the system will need to get these inputs parameters differently
+// (i.e., from mounted files rather than API objects) but will need to share the underlying client creation code.
+func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, error) {
+	var caBundle string
+	if t.object.Spec.CaBundleName != nil {
+		cm, err := utils.GetConfigmap(ctx, t.client, *t.object.Spec.CaBundleName, t.object.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get configmap: %s", err.Error())
+		}
+
+		caBundle, err = utils.GetConfigMapField(cm, "ca-bundle.pem")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get certificate bundle from configmap: %s", err.Error())
+		}
+	}
+
+	config := utils.OAuthClientConfig{
+		CaBundle: []byte(caBundle),
+	}
+
+	oAuthConfig := t.object.Spec.SmoConfig.OAuthConfig
+	if oAuthConfig != nil {
+		clientSecrets, err := utils.GetSecret(ctx, t.client, oAuthConfig.ClientSecretName, t.object.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client secret: %w", err)
+		}
+
+		clientId, err := utils.GetSecretField(clientSecrets, "client-id")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client-id from secret: %s, %w", oAuthConfig.ClientSecretName, err)
+		}
+
+		clientSecret, err := utils.GetSecretField(clientSecrets, "client-secret")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client-secret from secret: %s, %w", oAuthConfig.ClientSecretName, err)
+		}
+
+		config.ClientId = clientId
+		config.ClientSecret = clientSecret
+		config.TokenUrl = fmt.Sprintf("%s%s", oAuthConfig.Url, oAuthConfig.TokenEndpoint)
+		config.Scopes = oAuthConfig.Scopes
+	}
+
+	httpClient, err := utils.SetupOAuthClient(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)
+	}
+
+	return httpClient, nil
+}
+
+// registerWithSmo sends a message to the SMO to register our identifiers and URL
+func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
+	// Retrieve the local cluster id value.  It appears to always be identified as "version" in its metadata
+	clusterId, err := utils.GetClusterId(ctx, t.client, "version")
+	if err != nil {
+		return fmt.Errorf("failed to get cluster id: %w", err)
+	}
+
+	httpClient, err := t.setupOAuthClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to setup oauth client: %w", err)
+	}
+
+	data := utils.AvailableNotification{
+		GlobalCloudId: t.object.Spec.CloudId,
+		OCloudId:      clusterId,
+		ImsEndpoint:   fmt.Sprintf("https://%s/o2ims-infrastructureInventory/v1", t.object.Spec.IngressHost),
+	}
+
+	body, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal AvailableNotification: %s", err.Error())
+	}
+
+	smo := t.object.Spec.SmoConfig
+	url := fmt.Sprintf("%s%s", smo.Url, smo.RegistrationEndpoint)
+	result, err := httpClient.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to send registration request to '%s': %s", url, err.Error())
+	}
+
+	if result.StatusCode != http.StatusOK {
+		return fmt.Errorf("registration request failed to '%s', HTTP code=%s", url, result.Status)
+	}
+
+	return nil
+}
+
+// setupSmo executes the high-level action set register with the SMO and set up the related conditions accordingly
+func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
+	if t.object.Spec.SmoConfig != nil {
+		if !utils.IsSmoRegistrationCompleted(t.object) {
+			err = t.registerWithSmo(ctx)
+			if err != nil {
+				t.logger.ErrorContext(
+					ctx, "Failed to register with SMO.",
+					slog.String("error", err.Error()),
+				)
+
+				meta.SetStatusCondition(
+					&t.object.Status.DeploymentsStatus.Conditions,
+					metav1.Condition{
+						Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
+						Status:  metav1.ConditionFalse,
+						Reason:  err.Error(),
+						Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.Url),
+					},
+				)
+
+				return
+			}
+
+			meta.SetStatusCondition(
+				&t.object.Status.DeploymentsStatus.Conditions,
+				metav1.Condition{
+					Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
+					Status:  metav1.ConditionTrue,
+					Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
+					Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.Url),
+				},
+			)
+			t.logger.InfoContext(
+				ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+			)
+		} else {
+			t.logger.InfoContext(
+				ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+			)
+		}
+	} else {
+		meta.RemoveStatusCondition(&t.object.Status.DeploymentsStatus.Conditions,
+			string(utils.InventoryConditionTypes.SmoRegistrationCompleted))
+	}
+
+	return nil
+}
+
 func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
+
+	// Register with SMO (if necessary)
+	err = t.setupSmo(ctx)
+	if err != nil {
+		return
+	}
 
 	// Create the needed Ingress if at least one server is required by the Spec.
 	if t.object.Spec.MetadataServerConfig.Enabled || t.object.Spec.DeploymentManagerServerConfig.Enabled ||

@@ -103,6 +103,14 @@ spec:
         path: alarmSubscriptionServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
+          with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
+          a non-public CA certificate.
+        displayName: Custom CA Certificates
+        path: caBundleName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: CloudId is used to correlate the SMO inventory record with the
           deployed cloud instance.
         displayName: Cloud Id
@@ -148,6 +156,53 @@ spec:
           the resource server.
         displayName: Extensions
         path: resourceServerConfig.extensions
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: SmoConfig defines the configurable attributes to represent the
+          SMO instance
+        displayName: SMO Configuration
+        path: smo
+      - description: OAuthConfig defines the configurable attributes required to access
+          the OAuth2 authorization server
+        displayName: SMO OAuth Configuration
+        path: smo.oauth
+      - description: |-
+          ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
+          client-secret values used by the OAuth client.
+        displayName: Client Secret
+        path: smo.oauth.clientSecretName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          Scopes represents the OAuth scope values to request when acquiring a token.  Typically, this should be set to
+          "openid" in addition to any other scopes that the SMO specifically requires (e.g., "roles", "groups", etc...) to
+          authorize our requests
+        displayName: OAuth Scopes
+        path: smo.oauth.scopes
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TokenEndpoint represents the API endpoint used to acquire a token (e.g., /protocol/openid-connect/token) which
+          will be appended to the base URL to form the full URL
+        displayName: OAuth Token Endpoint
+        path: smo.oauth.tokenEndpoint
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Url represents the base URL of the authorization server. (e.g.,
+          https://keycloak.example.com/realms/oran)
+        displayName: OAuth URL
+        path: smo.oauth.url
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: RegistrationEndpoint represents the API endpoint used to register
+          the O2IMS with the SMO.
+        displayName: Registration API Endpoint
+        path: smo.registrationEndpoint
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Url represents the base URL of the SMO instance
+        displayName: SMO URL
+        path: smo.url
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
