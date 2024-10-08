@@ -618,7 +618,7 @@ func GetConfigMapField(cm *corev1.ConfigMap, fieldName string) (string, error) {
 	return data, nil
 }
 
-// ExtractTemplateDataFromConfigMap extractes the template data associated with the specified key
+// ExtractTemplateDataFromConfigMap extracts the template data associated with the specified key
 // from the provided ConfigMap. The data is expected to be in YAML format.
 func ExtractTemplateDataFromConfigMap[T any](ctx context.Context, c client.Client, cm *corev1.ConfigMap, expectedKey string) (T, error) {
 	var validData T

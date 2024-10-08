@@ -134,10 +134,5 @@ func IsClusterProvisionCompletedOrFailed(cr *provisioningv1alpha1.ProvisioningRe
 func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
 	condition := meta.FindStatusCondition(cr.Status.DeploymentsStatus.Conditions,
 		string(InventoryConditionTypes.SmoRegistrationCompleted))
-	if condition != nil {
-		if condition.Status == metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
+	return condition != nil && condition.Status == metav1.ConditionTrue
 }

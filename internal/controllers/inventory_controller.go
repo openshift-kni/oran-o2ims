@@ -467,48 +467,56 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 
 // setupSmo executes the high-level action set register with the SMO and set up the related conditions accordingly
 func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
-	if t.object.Spec.SmoConfig != nil {
-		if !utils.IsSmoRegistrationCompleted(t.object) {
-			err = t.registerWithSmo(ctx)
-			if err != nil {
-				t.logger.ErrorContext(
-					ctx, "Failed to register with SMO.",
-					slog.String("error", err.Error()),
-				)
+	if t.object.Spec.SmoConfig == nil {
+		meta.SetStatusCondition(
+			&t.object.Status.DeploymentsStatus.Conditions,
+			metav1.Condition{
+				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
+				Message: "SMO configuration not present",
+			},
+		)
+		return nil
+	}
 
-				meta.SetStatusCondition(
-					&t.object.Status.DeploymentsStatus.Conditions,
-					metav1.Condition{
-						Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
-						Status:  metav1.ConditionFalse,
-						Reason:  err.Error(),
-						Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.Url),
-					},
-				)
-
-				return
-			}
+	if !utils.IsSmoRegistrationCompleted(t.object) {
+		err = t.registerWithSmo(ctx)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx, "Failed to register with SMO.",
+				slog.String("error", err.Error()),
+			)
 
 			meta.SetStatusCondition(
 				&t.object.Status.DeploymentsStatus.Conditions,
 				metav1.Condition{
 					Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
-					Status:  metav1.ConditionTrue,
-					Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
-					Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.Url),
+					Status:  metav1.ConditionFalse,
+					Reason:  err.Error(),
+					Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.Url),
 				},
 			)
-			t.logger.InfoContext(
-				ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
-			)
-		} else {
-			t.logger.InfoContext(
-				ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
-			)
+
+			return
 		}
+
+		meta.SetStatusCondition(
+			&t.object.Status.DeploymentsStatus.Conditions,
+			metav1.Condition{
+				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
+				Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.Url),
+			},
+		)
+		t.logger.InfoContext(
+			ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+		)
 	} else {
-		meta.RemoveStatusCondition(&t.object.Status.DeploymentsStatus.Conditions,
-			string(utils.InventoryConditionTypes.SmoRegistrationCompleted))
+		t.logger.InfoContext(
+			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+		)
 	}
 
 	return nil

@@ -38,6 +38,7 @@ var InventoryConditionReasons = struct {
 	ServerArgumentsError              InventoryConditionReason
 	SmoRegistrationSuccessful         InventoryConditionReason
 	SmoRegistrationFailed             InventoryConditionReason
+	SmoNotConfigured                  InventoryConditionReason
 }{
 	DeploymentsReady:                  "AllDeploymentsReady",
 	ErrorGettingDeploymentInformation: "ErrorGettingDeploymentInformation",
@@ -45,6 +46,7 @@ var InventoryConditionReasons = struct {
 	ServerArgumentsError:              "ServerArgumentsError",
 	SmoRegistrationSuccessful:         "SmoRegistrationSuccessful",
 	SmoRegistrationFailed:             "SmoRegistrationFailed",
+	SmoNotConfigured:                  "SmoNotConfigured",
 }
 
 var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{
