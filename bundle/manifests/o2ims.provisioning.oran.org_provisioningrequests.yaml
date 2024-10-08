@@ -69,27 +69,6 @@ spec:
                   TemplateVersion defines the version of the referenced ClusterTemplate.
                   The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
                 type: string
-              timeout:
-                description: |-
-                  Timeout contains timeout values for hardware provisioning, cluster provisioning and
-                  cluster configuration.
-                properties:
-                  clusterProvisioning:
-                    default: 90
-                    description: ClusterProvisioning defines the timeout for the initial
-                      cluster installation in minutes.
-                    type: integer
-                  configuration:
-                    default: 30
-                    description: Configuration defines the timeout for ACM policy
-                      configuration.
-                    type: integer
-                  hardwareProvisioning:
-                    default: 90
-                    description: HardwareProvisioning defines the timeout for the
-                      hardware provisioning in minutes.
-                    type: integer
-                type: object
             required:
             - templateName
             - templateParameters

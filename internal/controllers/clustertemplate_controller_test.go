@@ -257,6 +257,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 	var (
 		c            client.Client
 		ctx          context.Context
+		cms          []*corev1.ConfigMap
 		tName        = "cluster-template-a"
 		tVersion     = "v1.0.0"
 		ctNamespace  = "cluster-template-a"
@@ -284,23 +285,15 @@ var _ = Describe("validateClusterTemplateCR", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{ct}...)
-		t = &clusterTemplateReconcilerTask{
-			client: c,
-			logger: logger,
-			object: ct,
-		}
-	})
-
-	It("should validate a valid ClusterTemplate and set status condition to true", func() {
-		// Create valid ConfigMaps
-		cms := []*corev1.ConfigMap{
+		// Valid ConfigMaps
+		cms = []*corev1.ConfigMap{
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      ciDefaultsCm,
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
+					utils.ClusterProvisioningTimeoutConfigKey: "80",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
 				},
@@ -311,6 +304,7 @@ key: value`,
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
+					utils.ClusterConfigurationTimeoutConfigKey: "40",
 					utils.PolicyTemplateDefaultsConfigmapKey: `
 clustertemplate-a-policy-v1-cpu-isolated: "2-31"
 clustertemplate-a-policy-v1-cpu-reserved: "0-1"
@@ -331,6 +325,16 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				},
 			},
 		}
+
+		c = getFakeClientFromObjects([]client.Object{ct}...)
+		t = &clusterTemplateReconcilerTask{
+			client: c,
+			logger: logger,
+			object: ct,
+		}
+	})
+
+	It("should validate a valid ClusterTemplate and set status condition to true", func() {
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
@@ -365,6 +369,32 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the ConfigMap '%s' is not found in the namespace '%s'", ptDefaultsCm, ctNamespace)))
 	})
+
+	It("should return false and set status condition to false if timeouts in ConfigMaps are invalid", func() {
+		cms[0].Data[utils.ClusterProvisioningTimeoutConfigKey] = "invalidCiTimeout"
+		cms[1].Data[utils.ClusterConfigurationTimeoutConfigKey] = "invalidPtTimeout"
+		cms[2].Data[utils.HardwareProvisioningTimeoutConfigKey] = "invalidHwTimeout"
+		for _, cm := range cms {
+			Expect(c.Create(ctx, cm)).To(Succeed())
+		}
+
+		valid, err := t.validateClusterTemplateCR(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(valid).To(BeFalse())
+
+		// Check the status condition
+		conditions := t.object.Status.Conditions
+		Expect(conditions).To(HaveLen(1))
+		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"the value of key %s from ConfigMap %s is not an integer", utils.HardwareProvisioningTimeoutConfigKey, hwTemplateCm)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"the value of key %s from ConfigMap %s is not an integer", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"the value of key %s from ConfigMap %s is not an integer", utils.ClusterProvisioningTimeoutConfigKey, ciDefaultsCm)))
+	})
 })
 
 var _ = Describe("validateConfigmapReference", func() {
@@ -388,27 +418,32 @@ var _ = Describe("validateConfigmapReference", func() {
 				Namespace: namespace,
 			},
 			Data: map[string]string{
+				utils.ClusterProvisioningTimeoutConfigKey: "40",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterProvisioningTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should return validation error message for a missing configmap", func() {
 		// No ConfigMap created
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterProvisioningTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"failed to get ConfigmapReference: the ConfigMap '%s' is not found in the namespace '%s'", configmapName, namespace)))
 	})
 
-	It("should return validation error message for missing expected key in configmap", func() {
+	It("should return validation error message for missing template data key in configmap", func() {
 		// Create a ConfigMap without the expected key
 		cm := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -422,15 +457,17 @@ key: value`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterProvisioningTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, utils.ClusterInstanceTemplateDefaultsConfigmapKey)))
 	})
 
-	It("should return validation error message for invalid YAML in configmap data", func() {
-		// Create a ConfigMap with invalid YAML
+	It("should return validation error message for invalid YAML in configmap template data", func() {
+		// Create a ConfigMap with invalid data YAML
 		cm := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      configmapName,
@@ -443,10 +480,36 @@ key: value`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterProvisioningTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("the value of key"))
+	})
+
+	It("should return validation error message for invalid timeout value in configmap", func() {
+		// Create a ConfigMap with non-integer string
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.ClusterProvisioningTimeoutConfigKey: "invalid-timeout",
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+key: value`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := validateConfigmapReference[map[string]any](
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterProvisioningTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("is not an integer"))
 	})
 
 	It("should return validation error message if configmap is mutable", func() {
@@ -466,7 +529,9 @@ key: value`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterProvisioningTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
@@ -488,7 +553,9 @@ key: value`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace, utils.ClusterInstanceTemplateDefaultsConfigmapKey)
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterProvisioningTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that the configmap is patched to be immutable

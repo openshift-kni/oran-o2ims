@@ -11,10 +11,6 @@ metadata:
 spec:
   name: "TestEnv-SNO-Provisioning"
   description: "Provisioning request for setting up a Single Node OpenShift (SNO) in the test environment."
-  timeout:
-    clusterProvisioning: 80
-    configuration: 40
-    hardwareProvisioning: 60
   templateName: clustertemplate-sample
   templateVersion: v1.0.0
   templateParameters:
@@ -118,5 +114,5 @@ spec:
               - macAddress: 02:00:00:80:12:15
                 name: eth1
       serviceNetwork:
-        - cidr: 172.30.0.0/16
+        - cidr: 233.252.0.0/24
       sshPublicKey: ssh-rsa

@@ -54,9 +54,6 @@ type ProvisioningRequestSpec struct {
 	// Extensions holds additional custom key-value pairs that can be used to extend the cluster's configuration.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Extensions",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Extensions runtime.RawExtension `json:"extensions,omitempty"`
-
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Timeout Timeout `json:"timeout,omitempty"`
 }
 
 // NodePoolRef references a node pool.
@@ -81,20 +78,6 @@ type ClusterDetails struct {
 
 	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
 	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
-}
-
-// Timeout contains timeout values for hardware provisioning, cluster provisioning and
-// cluster configuration.
-type Timeout struct {
-	// ClusterProvisioning defines the timeout for the initial cluster installation in minutes.
-	//+kubebuilder:default=90
-	ClusterProvisioning int `json:"clusterProvisioning,omitempty"`
-	// HardwareProvisioning defines the timeout for the hardware provisioning in minutes.
-	//+kubebuilder:default=90
-	HardwareProvisioning int `json:"hardwareProvisioning,omitempty"`
-	// Configuration defines the timeout for ACM policy configuration.
-	//+kubebuilder:default=30
-	Configuration int `json:"configuration,omitempty"`
 }
 
 // PolicyDetails holds information about an ACM policy.

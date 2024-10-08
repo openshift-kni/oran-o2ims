@@ -4,6 +4,7 @@ metadata:
   name: dell-intel-cu-template-configmap-v1
   namespace: oran-o2ims
 data:
+  hardwareProvisioningTimeout: "60" # optional
   hwMgrId: dell-hwmgr
   bootInterfaceLabel: bootable-interface
   node-pools-data: |
