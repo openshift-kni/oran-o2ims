@@ -139,7 +139,7 @@ docker-build: ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile .
 
 .PHONY: docker-push
-docker-push: ## Push docker image with the manager.
+docker-push: docker-build ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
@@ -256,16 +256,30 @@ bundle: operator-sdk manifests kustomize kubectl ## Generate bundle manifests an
 	sed -i '/^[[:space:]]*createdAt:/d' bundle/manifests/oran-o2ims.clusterserviceversion.yaml
 
 .PHONY: bundle-build
-bundle-build: bundle ## Build the bundle image.
+bundle-build: bundle docker-push ## Build the bundle image.
 	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
-bundle-push: ## Push the bundle image.
+bundle-push: bundle-build ## Push the bundle image.
 	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
 
 .PHONY: bundle-check
 bundle-check: bundle
 	hack/check-git-tree.sh
+
+.PHONY: bundle-run
+bundle-run: # Install bundle on cluster using operator sdk.
+	oc create ns oran-o2ims
+	$(OPERATOR_SDK) --security-context-config restricted -n oran-o2ims run bundle $(BUNDLE_IMG)
+
+.PHONY: bundle-upgrade
+bundle-upgrade: # Upgrade bundle on cluster using operator sdk.
+	$(OPERATOR_SDK) run bundle-upgrade $(BUNDLE_IMG)
+
+.PHONY: bundle-clean
+bundle-clean: # Uninstall bundle on cluster using operator sdk.
+	$(OPERATOR_SDK) cleanup oran-o2ims -n oran-o2ims
+	oc delete ns oran-o2ims
 
 .PHONY: opm
 OPM = ./bin/opm
