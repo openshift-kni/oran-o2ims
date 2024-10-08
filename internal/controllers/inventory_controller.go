@@ -430,7 +430,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 // registerWithSmo sends a message to the SMO to register our identifiers and URL
 func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 	// Retrieve the local cluster id value.  It appears to always be identified as "version" in its metadata
-	clusterId, err := utils.GetClusterId(ctx, t.client, "version")
+	clusterId, err := utils.GetClusterId(ctx, t.client, utils.ClusterVersionName)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster id: %w", err)
 	}

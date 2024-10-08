@@ -48,6 +48,24 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
+// from an OAuth capable authorization server.
+type OAuthClientConfig struct {
+	// Defines a PEM encoded set of CA certificates used to validate server certificates.  If not provided then the
+	// default root CA bundle will be used.
+	CaBundle []byte
+	// Defines the OAuth client-id attribute to be used when acquiring a token.  If not provided (for debug/testing)
+	// then a normal HTTP client without OAuth capabilities will be created
+	ClientId     string
+	ClientSecret string
+	// The absolute URL of the API endpoint to be used to acquire a token
+	// (e.g., http://example.com/realms/oran/protocol/openid-connect/token)
+	TokenUrl string
+	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
+	// the token.
+	Scopes []string
+}
+
 const (
 	PropertiesString = "properties"
 )
@@ -1257,24 +1275,6 @@ func MapKeysToSlice(inputMap map[string]bool) []string {
 	return keys
 }
 
-// OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
-// from an OAuth capable authorization server.
-type OAuthClientConfig struct {
-	// Defines a PEM encoded set of CA certificates used to validate server certificates.  If not provided then the
-	// default root CA bundle will be used.
-	CaBundle []byte
-	// Defines the OAuth client-id attribute to be used when acquiring a token.  If not provided (for debug/testing)
-	// then a normal HTTP client without OAuth capabilities will be created
-	ClientId     string
-	ClientSecret string
-	// The absolute URL of the API endpoint to be used to acquire a token
-	// (e.g., http://example.com/realms/oran/protocol/openid-connect/token)
-	TokenUrl string
-	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
-	// the token.
-	Scopes []string
-}
-
 // SetupOAuthClient creates an HTTP client capable of acquiring an OAuth token used to authorize client requests.  If
 // the config excludes the OAuth specific sections then the client produced is a simple HTTP client without OAuth
 // capabilities.
@@ -1282,7 +1282,7 @@ func SetupOAuthClient(ctx context.Context, config OAuthClientConfig) (*http.Clie
 	tlsConfig, _ := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
 
 	if len(config.CaBundle) != 0 {
-		// If the user has provided a CA bundle them we must use it to build our client so that we can verify the
+		// If the user has provided a CA bundle then we must use it to build our client so that we can verify the
 		// identity of remote servers.
 		if tlsConfig.RootCAs == nil {
 			certPool := x509.NewCertPool()

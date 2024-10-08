@@ -175,3 +175,6 @@ const (
 	KubeRbacProxyImageName = "KUBE_RBAC_PROXY_IMAGE"
 	HwMgrPluginNameSpace   = "HWMGR_PLUGIN_NAMESPACE"
 )
+
+// ClusterVersionName is the name given to the default ClusterVersion object
+const ClusterVersionName = "version"
