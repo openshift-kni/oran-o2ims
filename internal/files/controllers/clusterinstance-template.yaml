@@ -140,9 +140,9 @@ spec:
       extraAnnotations:
 {{ .extraAnnotations | toYaml | indent 8 }}
       {{- end }}
-      {{- if .Cluster.extraLabels }}
+      {{- if .extraLabels }}
       extraLabels:
-{{ .Cluster.extraLabels | toYaml | indent 8 }}
+{{ .extraLabels | toYaml | indent 8 }}
       {{- end }}
       {{- if .ignitionConfigOverride }}
       ignitionConfigOverride: {{ .ignitionConfigOverride | quote }}
@@ -177,9 +177,9 @@ spec:
       rootDeviceHints:
 {{ .rootDeviceHints | toYaml | indent 8 }}
       {{- end }}
-      {{- if .Cluster.pruneManifests }}
+      {{- if .pruneManifests }}
       pruneManifests:
-{{ .Cluster.pruneManifests | toYaml | indent 8 }}
+{{ .pruneManifests | toYaml | indent 8 }}
       {{- end }}
       {{- if .suppressedManifests }}
       suppressedManifests:

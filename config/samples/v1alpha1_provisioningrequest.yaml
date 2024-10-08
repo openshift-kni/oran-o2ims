@@ -9,18 +9,21 @@ metadata:
     app.kubernetes.io/created-by: oran-o2ims
   name: provisioningrequest-sample
 spec:
-  site: "local"
+  name: "TestEnv-SNO-Provisioning"
+  description: "Provisioning request for setting up a Single Node OpenShift (SNO) in the test environment."
   timeout:
     clusterProvisioning: 80
     configuration: 40
     hardwareProvisioning: 60
   templateName: clustertemplate-sample
   templateVersion: v1.0.0
-  clusterTemplateInput:
-    policyTemplateInput:
+  templateParameters:
+    nodeClusterName: "site-sno-du-1"
+    oCloudSiteId: "local-west-12345"
+    policyTemplateParameters:
       sriov-network-vlan-1: "114"
       sriov-network-vlan-2: "111"
-    clusterInstanceInput:
+    clusterInstanceParameters:
       apiVIPs:
         - 192.0.2.2
       additionalNTPSources:

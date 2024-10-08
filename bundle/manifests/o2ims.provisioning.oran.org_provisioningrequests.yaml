@@ -40,39 +40,30 @@ spec:
           spec:
             description: ProvisioningRequestSpec defines the desired state of ProvisioningRequest
             properties:
-              clusterTemplateInput:
-                description: ClusterTemplateInput provides the input data that follows
-                  the schema defined in the referenced ClusterTemplate.
-                properties:
-                  clusterInstanceInput:
-                    description: |-
-                      ClusterInstanceInput provides the input values required for provisioning.
-                      The input must adhere to the schema defined in the referenced ClusterTemplate's
-                      spec.inputDataSchema.clusterInstanceSchema.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  policyTemplateInput:
-                    description: |-
-                      PolicyTemplateInput provides input values for ACM configuration policies.
-                      The input follows the schema defined in the referenced ClusterTemplate's
-                      spec.inputDataSchema.policyTemplateSchema.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                required:
-                - clusterInstanceInput
-                - policyTemplateInput
-                type: object
-              location:
-                description: Location
+              description:
+                description: Description specifies a brief description of this provisioning
+                  request, providing additional context or details.
                 type: string
-              site:
-                description: Site
+              extensions:
+                description: Extensions holds additional custom key-value pairs that
+                  can be used to extend the cluster's configuration.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              name:
+                description: Name specifies a human-readable name for this provisioning
+                  request, intended for identification and descriptive purposes.
                 type: string
               templateName:
                 description: |-
                   TemplateName defines the base name of the referenced ClusterTemplate.
                   The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
                 type: string
+              templateParameters:
+                description: TemplateParameters provides the input data that conforms
+                  to the OpenAPI v3 schema defined in the referenced ClusterTemplate's
+                  spec.templateParameterSchema.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               templateVersion:
                 description: |-
                   TemplateVersion defines the version of the referenced ClusterTemplate.
@@ -100,9 +91,8 @@ spec:
                     type: integer
                 type: object
             required:
-            - clusterTemplateInput
-            - site
             - templateName
+            - templateParameters
             - templateVersion
             type: object
           status:

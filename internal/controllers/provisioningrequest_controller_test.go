@@ -37,7 +37,7 @@ type expectedNodeDetails struct {
 }
 
 const (
-	testClusterTemplateSchema = `{
+	testClusterInstanceSchema = `{
 		"description": "ClusterInstanceSpec defines the params that are allowed in the ProvisioningRequest spec.clusterInstanceInput",
 		"properties": {
 		  "additionalNTPSources": {
@@ -242,7 +242,7 @@ const (
 		"type": "object"
 	  }`
 
-	testClusterTemplateInput = `{
+	testClusterInstanceInput = `{
 		"additionalNTPSources": [
 		  "NTP.server1"
 		],
@@ -428,8 +428,21 @@ const (
 )
 
 var (
-	testFullTemplateSchema = fmt.Sprintf(testFullClusterSchemaTemplate, clusterInstanceParametersString, testClusterTemplateSchema,
-		policyTemplateParametersString, testPolicyTemplateSchema)
+	testFullTemplateSchema = fmt.Sprintf(testFullClusterSchemaTemplate, utils.TemplateParamClusterInstance, testClusterInstanceSchema,
+		utils.TemplateParamPolicyConfig, testPolicyTemplateSchema)
+
+	testFullTemplateParameters = fmt.Sprintf(`{
+		"%s": "exampleCluster",
+		"%s": "local-123",
+		"%s": %s,
+		"%s": %s
+	}`, utils.TemplateParamNodeClusterName,
+		utils.TemplateParamOCloudSiteId,
+		utils.TemplateParamClusterInstance,
+		testClusterInstanceInput,
+		utils.TemplateParamPolicyConfig,
+		testPolicyTemplateInput,
+	)
 )
 
 func verifyStatusCondition(actualCond, expectedCon metav1.Condition) {
@@ -467,15 +480,15 @@ func removeRequiredFieldFromClusterInstanceInput(
 	currentCR := &provisioningv1alpha1.ProvisioningRequest{}
 	Expect(c.Get(ctx, types.NamespacedName{Name: crName}, currentCR)).To(Succeed())
 
-	clusterInstanceInput := make(map[string]any)
-	err := json.Unmarshal([]byte(testClusterTemplateInput), &clusterInstanceInput)
+	clusterTemplateInput := make(map[string]any)
+	err := json.Unmarshal([]byte(testFullTemplateParameters), &clusterTemplateInput)
 	Expect(err).ToNot(HaveOccurred())
-	node1 := clusterInstanceInput["nodes"].([]any)[0]
+	node1 := clusterTemplateInput["clusterInstanceParameters"].(map[string]any)["nodes"].([]any)[0]
 	delete(node1.(map[string]any), "hostName")
-	updatedClusterInstanceInput, err := json.Marshal(clusterInstanceInput)
+	updatedClusterTemplateInput, err := json.Marshal(clusterTemplateInput)
 	Expect(err).ToNot(HaveOccurred())
 
-	currentCR.Spec.ClusterTemplateInput.ClusterInstanceInput.Raw = updatedClusterInstanceInput
+	currentCR.Spec.TemplateParameters.Raw = updatedClusterTemplateInput
 	Expect(c.Update(ctx, currentCR)).To(Succeed())
 }
 
@@ -601,13 +614,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
-				ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
-					ClusterInstanceInput: runtime.RawExtension{
-						Raw: []byte(testClusterTemplateInput),
-					},
-					PolicyTemplateInput: runtime.RawExtension{
-						Raw: []byte(testPolicyTemplateInput),
-					},
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testFullTemplateParameters),
 				},
 				Timeout: provisioningv1alpha1.Timeout{
 					ClusterProvisioning:  1,
@@ -1584,8 +1592,8 @@ var _ = Describe("handleRenderClusterInstance", func() {
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
-				ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
-					ClusterInstanceInput: runtime.RawExtension{Raw: []byte(testClusterTemplateInput)},
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testFullTemplateParameters),
 				},
 			},
 		}
@@ -1639,7 +1647,11 @@ nodes:
 			ctNamespace:  ctNamespace,
 		}
 
-		mergedClusterInstanceData, err := task.getMergedClusterInputData(ctx, ct, utils.ClusterInstanceDataType)
+		clusterInstanceInputParams, err := utils.ExtractMatchingInput(
+			cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		mergedClusterInstanceData, err := task.getMergedClusterInputData(
+			ctx, ciDefaultsCm, clusterInstanceInputParams.(map[string]any), utils.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		task.clusterInput.clusterInstanceData = mergedClusterInstanceData
 	})
@@ -1878,6 +1890,9 @@ var _ = Describe("renderHardwareTemplate", func() {
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testFullTemplateParameters),
+				},
 			},
 		}
 
@@ -2516,13 +2531,8 @@ defaultHugepagesSize: "1G"`,
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
-					ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
-						ClusterInstanceInput: runtime.RawExtension{
-							Raw: []byte(testClusterTemplateInput),
-						},
-						PolicyTemplateInput: runtime.RawExtension{
-							Raw: []byte(testPolicyTemplateInput),
-						},
+					TemplateParameters: runtime.RawExtension{
+						Raw: []byte(testFullTemplateParameters),
 					},
 					Timeout: provisioningv1alpha1.Timeout{
 						ClusterProvisioning:  1,
@@ -3969,13 +3979,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
-					ClusterTemplateInput: provisioningv1alpha1.ClusterTemplateInput{
-						ClusterInstanceInput: runtime.RawExtension{
-							Raw: []byte(testClusterTemplateInput),
-						},
-						PolicyTemplateInput: runtime.RawExtension{
-							Raw: []byte(testPolicyTemplateInput),
-						},
+					TemplateParameters: runtime.RawExtension{
+						Raw: []byte(testFullTemplateParameters),
 					},
 					Timeout: provisioningv1alpha1.Timeout{
 						Configuration: 1,
