@@ -52,7 +52,7 @@ as well everything that's needed to fully develop the app.
 At a high level, this service can be viewed as a thin wrapper of ACM observability stack which translates 
 OCP cluster resources to data structures defined by `O-RAN` spec. Among other things
 the service exposes APIs, configures Alertmanager deployment, read PrometheusRules from managedclusters and finally 
-store data in a persistent storage. 
+store data in a persistent storage.
 
 ### Goals
 - Define steps to initialize and for when ready serve API calls
@@ -232,8 +232,14 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (downlo
 
 NOTE: These APIs are not exposed to client and available only internally 
 
-#### Steps `internal/v1/caas-alerts/alertmanager`
-This API is activated only after configuring ACM alertmanager that can it can call back alarm service
+#### Steps for `internal/v1/caas-alerts/alertmanager`
+This API is activated only after configuring ACM alertmanager that can call back alarm service.
+
+All the alerts coming through this endpoint are of ResourceType that's "Logical"(kind) and "Compute"(class) which is
+effectively a cluster. For additional types of ResourceType we would like support in the future, 
+we can simply follow the same pattern
+i.e figure out the Kind and Class to get the ID + understand the source of Definitions + potentially open up another 
+endpoint if alert aggregator is not Alertmanager. 
 
 A minimal configuration
 ```yaml
