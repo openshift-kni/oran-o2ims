@@ -1,0 +1,128 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: PolicyGenerator
+metadata:
+  name: sno-ran-du-pg-v4-16-v1
+policyDefaults:
+  namespace: ztp-sno-ran-du-v4-16
+  # Use an existing placement rule so that placement bindings can be consolidated
+  placement:
+    # These labels must match the labels set for the ManagedCluster either through the ProvisioningRequest
+    # or the ClusterInstance ConfigMap.
+    labelSelector:
+      cluster-version: "v4-Y-Z-1"
+      sno-ran-du-policy: "v1"
+  remediationAction: enforce
+  severity: low
+  namespaceSelector:
+    exclude:
+      - kube-*
+    include:
+      - '*'
+  evaluationInterval:
+    compliant: 5s
+    noncompliant: 10s
+  consolidateManifests: false
+  orderPolicies: true
+policies:
+- name: v1-subscriptions-policy
+  manifests:
+    - path: source-crs/DefaultCatsrc.yaml
+      patches:
+      - metadata:
+          name: redhat-operators
+        spec:
+          displayName: redhat-operators
+          image: registry.redhat.io/redhat/redhat-operator-index:v4.16
+    # Logging operator
+    - path: source-crs/ClusterLogNS.yaml
+    - path: source-crs/ClusterLogOperGroup.yaml
+    - path: source-crs/ClusterLogSubscription.yaml
+      patches:
+      - spec:
+          source: redhat-operators
+          installPlanApproval:
+            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
+    - path: source-crs/ClusterLogOperatorStatus.yaml
+    # Ptp operator
+    - path: source-crs/PtpSubscriptionNS.yaml
+    - path: source-crs/PtpSubscription.yaml
+      patches:
+      - spec:
+          source: redhat-operators
+          installPlanApproval:
+            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub or (index $configMap.data "install-plan-approval") "Manual" hub}}'
+    - path: source-crs/PtpSubscriptionOperGroup.yaml
+    - path: source-crs/PtpOperatorStatus.yaml
+    # SRIOV operator
+    - path: source-crs/SriovSubscriptionNS.yaml
+    - path: source-crs/SriovSubscriptionOperGroup.yaml
+    - path: source-crs/SriovSubscription.yaml
+      patches:
+      - spec:
+          source: redhat-operators
+          installPlanApproval:
+            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
+    - path: source-crs/SriovOperatorStatus.yaml
+- name: v1-perf-configuration-policy
+  manifests:
+    - path: source-crs/PerformanceProfile-SetSelector.yaml
+      patches:
+      - metadata:
+          name: openshift-node-performance-profile
+        spec:
+          additionalKernelArgs:
+          - rcupdate.rcu_normal_after_boot=0
+          - vfio_pci.enable_sriov=1
+          - vfio_pci.disable_idle_d3=1
+          - efi=runtime
+          cpu:
+            # These must be tailored for the specific hardware platform
+            isolated: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "cpu-isolated" hub}}'
+            reserved: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "cpu-reserved" hub}}'
+          hugepages:
+            defaultHugepagesSize: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "hugepages-default" hub}}'
+            pages:
+              - size: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "hugepages-size" hub}}'
+                count: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "hugepages-count" | toInt hub}}'
+          realTimeKernel:
+            enabled: true
+          machineConfigPoolSelector:
+            pools.operator.machineconfiguration.openshift.io/master: ""
+          nodeSelector:
+            node-role.kubernetes.io/master: ''
+- name: v1-sriov-configuration-policy
+  manifests:
+    - path: source-crs/SriovNetwork.yaml
+      patches:
+      - metadata:
+          name: sriov-nw-du-fh
+        spec:
+          resourceName: du_fh
+          vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-1" | toInt hub}}'
+    - path: source-crs/SriovNetwork.yaml # wave 100
+      patches:
+      - metadata:
+          name: sriov-nw-du-mh
+        spec:
+          resourceName: du_mh
+          vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-2" | toInt hub}}'
+- name: v1-tuned-configuration-policy
+  manifests:
+    - path: source-crs/TunedPerformancePatch.yaml    
+      patches:
+      - spec:
+          profile:
+            - name: performance-patch
+              data: |
+                [main]
+                summary=Configuration changes profile inherited from performance created tuned
+                include=openshift-node-performance-openshift-node-performance-profile
+                [bootloader]
+                cmdline_crash=-tsc=nowatchdog
+                cmdline_crash1=tsc=reliable
+                [scheduler]
+                group.ice-ptp=0:f:10:*:ice-ptp.*
+                group.ice-gnss=0:f:10:*:ice-gnss.*
+                [service]
+                service.stalld=start,enable
+                service.chronyd=stop,disable

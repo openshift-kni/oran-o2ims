@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: clustertemplate-sample.v1.0.0-clusterinstance-defaults
-  namespace: clustertemplate-a-v4-16
+  name: clusterinstance-defaults-v1
+  namespace: sno-ran-du-v4-16
 data:
   # clusterProvisioningTimeout is optional.
   # The value should be a duration string
@@ -12,10 +12,10 @@ data:
     baseDomain: example.com
     extraLabels:
       ManagedCluster:
-        cluster-version: "v4.16"
-        clustertemplate-a-policy: "v1"
+        cluster-version: "v4-Y-Z-1"
+        sno-ran-du-policy: "v1"
     clusterType: SNO
-    clusterImageSetNameRef: "4.16"
+    clusterImageSetNameRef: "4.Y.Z"
     pullSecretRef:
       name: pull-secret
     networkType: OVNKubernetes

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: placeholder-du-template-configmap-v1
+  namespace: oran-o2ims
+data:
+  # hardwareProvisioningTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "30m" for 30 minutes)
+  hardwareProvisioningTimeout: "30m"
+  hwMgrId: oran-hwmgr-plugin-test
+  bootInterfaceLabel: bootable-interface
+  node-pools-data: |
+    - name: master
+      hwProfile: profile-proliant-gen11-dual-processor-256G
