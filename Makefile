@@ -261,7 +261,7 @@ bundle-build: bundle docker-push ## Build the bundle image.
 
 .PHONY: bundle-push
 bundle-push: bundle-build ## Push the bundle image.
-	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+	$(CONTAINER_TOOL) push $(BUNDLE_IMG)
 
 .PHONY: bundle-check
 bundle-check: bundle
@@ -269,8 +269,8 @@ bundle-check: bundle
 
 .PHONY: bundle-run
 bundle-run: # Install bundle on cluster using operator sdk.
-	oc create ns oran-o2ims
-	$(OPERATOR_SDK) --security-context-config restricted -n oran-o2ims run bundle $(BUNDLE_IMG)
+	oc create ns $(OCLOUD_MANAGER_NAMESPACE)
+	$(OPERATOR_SDK) --security-context-config restricted -n $(OCLOUD_MANAGER_NAMESPACE) run bundle $(BUNDLE_IMG)
 
 .PHONY: bundle-upgrade
 bundle-upgrade: # Upgrade bundle on cluster using operator sdk.
@@ -278,8 +278,8 @@ bundle-upgrade: # Upgrade bundle on cluster using operator sdk.
 
 .PHONY: bundle-clean
 bundle-clean: # Uninstall bundle on cluster using operator sdk.
-	$(OPERATOR_SDK) cleanup oran-o2ims -n oran-o2ims
-	oc delete ns oran-o2ims
+	$(OPERATOR_SDK) cleanup oran-o2ims -n $(OCLOUD_MANAGER_NAMESPACE)
+	oc delete ns $(OCLOUD_MANAGER_NAMESPACE)
 
 .PHONY: opm
 OPM = ./bin/opm
