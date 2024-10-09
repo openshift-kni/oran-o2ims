@@ -87,6 +87,9 @@ spec:
         path: version
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: Conditions
+        path: conditions
       version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
       displayName: ORAN O2IMS Inventory
@@ -239,16 +242,36 @@ spec:
         path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
+        displayName: Hardware Manager ID
+        path: hwMgrId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: Location
         displayName: Location
         path: location
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Node Group
+        path: nodeGroup
       - description: Site
         displayName: Site
         path: site
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: Cloud Manager
+        path: cloudManager
+      - description: |-
+          Conditions represent the observations of the NodePool's current state.
+          Possible values of the condition type are `Provisioned` and `Unknown`.
+        displayName: Conditions
+        path: conditions
+      - displayName: Hw Mgr Plugin
+        path: hwMgrPlugin
+      - description: Properties represent the node properties in the pool
+        displayName: Properties
+        path: properties
       version: v1alpha1
     - description: Node is the schema for an allocated node
       displayName: Node
@@ -274,6 +297,18 @@ spec:
         path: nodePool
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: BMC
+        path: bmc
+      - description: |-
+          Conditions represent the observations of the NodeStatus's current state.
+          Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+        displayName: Conditions
+        path: conditions
+      - displayName: Hostname
+        path: hostname
+      - displayName: Interfaces
+        path: interfaces
       version: v1alpha1
     - description: ProvisioningRequest is the Schema for the provisioningrequests
         API
@@ -326,6 +361,19 @@ spec:
         path: templateVersion
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: ClusterDetails references to the ClusterInstance.
+        displayName: Cluster Details
+        path: clusterDetails
+      - displayName: Conditions
+        path: conditions
+      - description: NodePoolRef references to the NodePool.
+        displayName: Node Pool Ref
+        path: nodePoolRef
+      - description: Holds policies that are matched with the ManagedCluster created
+          by the ProvisioningRequest.
+        displayName: Policies
+        path: policies
       version: v1alpha1
   description: |
     # O-RAN O2IMS operator
@@ -364,6 +412,7 @@ spec:
   - email: imihai@redhat.com
     name: IrinaMihai
   maturity: alpha
+  minKubeVersion: 1.28.0
   provider:
     name: Red Hat
   replaces: oran-o2ims.v0.0.0

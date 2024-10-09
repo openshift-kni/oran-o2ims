@@ -378,4 +378,5 @@ clean:
 .PHONY: scorecard-test
 scorecard-test: operator-sdk
 	@test -n "$(KUBECONFIG)" || (echo "The environment variable KUBECONFIG must not empty" && false)
-	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE)
+	oc create ns $(OCLOUD_MANAGER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
+	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE) --pod-security=restricted

@@ -116,3 +116,5 @@ spec:
       serviceNetwork:
         - cidr: 233.252.0.0/24
       sshPublicKey: ssh-rsa
+status:
+  conditions: []
