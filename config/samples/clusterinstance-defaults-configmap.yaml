@@ -4,7 +4,10 @@ metadata:
   name: clustertemplate-sample.v1.0.0-clusterinstance-defaults
   namespace: clustertemplate-a-v4-16
 data:
-  clusterProvisioningTimeout: "80" # optional
+  # clusterProvisioningTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "80m" for 80 minutes)
+  clusterProvisioningTimeout: "80m"
   clusterinstance-defaults: |
     baseDomain: example.com
     extraLabels:

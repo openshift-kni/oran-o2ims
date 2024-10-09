@@ -4,7 +4,10 @@ metadata:
   name: clustertemplate-sample.v1.0.0-policytemplate-defaults
   namespace: clustertemplate-a-v4-16
 data:
-  clusterConfigurationTimeout: "40" # optional
+  # clusterConfigurationTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "40m" for 40 minutes)
+  clusterConfigurationTimeout: "40m"
   policytemplate-defaults: |
     sriov-network-pfNames-1: "eno2"
     sriov-network-pfNames-2: "eno3"

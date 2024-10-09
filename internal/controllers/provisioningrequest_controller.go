@@ -84,9 +84,9 @@ type nodeInfo struct {
 // for hardware provisioning, cluster provisioning
 // and cluster configuration.
 type timeouts struct {
-	hardwareProvisioningMinutes int
-	clusterProvisioningMinutes  int
-	configurationMinutes        int
+	hardwareProvisioning time.Duration
+	clusterProvisioning  time.Duration
+	clusterConfiguration time.Duration
 }
 
 type deleteOrUpdateEvent interface {
@@ -389,9 +389,9 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
 	// Initialize with default timeouts
-	t.timeouts.clusterProvisioningMinutes = utils.DefaultClusterProvisioningTimeoutMinutes
-	t.timeouts.hardwareProvisioningMinutes = utils.DefaultHardwareProvisioningTimeoutMinutes
-	t.timeouts.configurationMinutes = utils.DefaultClusterConfigurationTimeoutMinutes
+	t.timeouts.clusterProvisioning = utils.DefaultClusterProvisioningTimeout
+	t.timeouts.hardwareProvisioning = utils.DefaultHardwareProvisioningTimeout
+	t.timeouts.clusterConfiguration = utils.DefaultClusterConfigurationTimeout
 
 	// Load hardware provisioning timeout if exists.
 	hwCmName := clusterTemplate.Spec.Templates.HwTemplate
@@ -406,7 +406,7 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 		return fmt.Errorf("failed to get timeout config for hardware provisioning: %w", err)
 	}
 	if hwTimeout != 0 {
-		t.timeouts.hardwareProvisioningMinutes = hwTimeout
+		t.timeouts.hardwareProvisioning = hwTimeout
 	}
 
 	// Load cluster provisioning timeout if exists.
@@ -422,7 +422,7 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 		return fmt.Errorf("failed to get timeout config for cluster provisioning: %w", err)
 	}
 	if ciTimeout != 0 {
-		t.timeouts.clusterProvisioningMinutes = ciTimeout
+		t.timeouts.clusterProvisioning = ciTimeout
 	}
 
 	// Load configuration timeout if exists.
@@ -438,7 +438,7 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 		return fmt.Errorf("failed to get timeout config for cluster configuration: %w", err)
 	}
 	if ptTimeout != 0 {
-		t.timeouts.configurationMinutes = ptTimeout
+		t.timeouts.clusterConfiguration = ptTimeout
 	}
 	return nil
 }
@@ -1211,7 +1211,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 				// If NonCompliantAt has been previously set, check for timeout.
 				policyTimedOut = utils.TimeoutExceeded(
 					t.object.Status.ClusterDetails.NonCompliantAt.Time,
-					t.timeouts.configurationMinutes)
+					t.timeouts.clusterConfiguration)
 			}
 		case string(utils.CRconditionReasons.TimedOut):
 			policyTimedOut = true
@@ -1227,7 +1227,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 				// If NonCompliantAt has been previously set, check for timeout.
 				policyTimedOut = utils.TimeoutExceeded(
 					t.object.Status.ClusterDetails.NonCompliantAt.Time,
-					t.timeouts.configurationMinutes)
+					t.timeouts.clusterConfiguration)
 			}
 		default:
 			t.logger.InfoContext(ctx,
@@ -1421,7 +1421,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		if !utils.IsClusterProvisionCompletedOrFailed(t.object) {
 			if utils.TimeoutExceeded(
 				t.object.Status.ClusterDetails.ClusterProvisionStartedAt.Time,
-				t.timeouts.clusterProvisioningMinutes) {
+				t.timeouts.clusterProvisioning) {
 				// timed out
 				utils.SetStatusCondition(&t.object.Status.Conditions,
 					utils.PRconditionTypes.ClusterProvisioned,
@@ -2218,7 +2218,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareProvisioningStatus(
 	if status != metav1.ConditionTrue && reason != string(hwv1alpha1.Failed) {
 		if utils.TimeoutExceeded(
 			t.object.Status.NodePoolRef.HardwareProvisioningCheckStart.Time,
-			t.timeouts.hardwareProvisioningMinutes) {
+			t.timeouts.hardwareProvisioning) {
 			t.logger.InfoContext(
 				ctx,
 				fmt.Sprintf(

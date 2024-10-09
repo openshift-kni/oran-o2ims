@@ -45,7 +45,7 @@ metadata:
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {
-                  "description": "clusterInstanceParameters defines the params that are allowed in the ProvisioningRequest",
+                  "description": "clusterInstanceParameters defines the available parameters for cluster provisioning",
                   "properties": {
                     "additionalNTPSources": {
                       "description": "AdditionalNTPSources is a list of NTP sources (hostname or IP) to be added to all cluster hosts. They are added to any NTP sources that were configured through other means.",

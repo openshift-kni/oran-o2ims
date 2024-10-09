@@ -46,7 +46,7 @@ spec:
             type: string
         type: object
       clusterInstanceParameters:
-        description: clusterInstanceParameters defines the params that are allowed in the ProvisioningRequest
+        description: clusterInstanceParameters defines the available parameters for cluster provisioning
         properties:
           additionalNTPSources:
             description: AdditionalNTPSources is a list of NTP sources (hostname

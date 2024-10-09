@@ -657,15 +657,16 @@ func ExtractTemplateDataFromConfigMap[T any](cm *corev1.ConfigMap, expectedKey s
 	return validData, nil
 }
 
-// ExtractTimeoutFromConfigMap extracts the timeout config from the ConfigMap by key if exits,
-// converting it from string to integer. Returns an error if the value is not a valid integer.
-func ExtractTimeoutFromConfigMap(cm *corev1.ConfigMap, key string) (int, error) {
+// ExtractTimeoutFromConfigMap extracts the timeout config from the ConfigMap by key if exits.
+// converting it from duration string to time.Duration. Returns an error if the value is not a
+// valid duration string.
+func ExtractTimeoutFromConfigMap(cm *corev1.ConfigMap, key string) (time.Duration, error) {
 	if timeoutStr, err := GetConfigMapField(cm, key); err == nil {
-		timeoutInt, err := strconv.Atoi(timeoutStr)
+		timeout, err := time.ParseDuration(timeoutStr)
 		if err != nil {
-			return 0, NewInputError("the value of key %s from ConfigMap %s is not an integer: %v", key, cm.GetName(), err)
+			return 0, NewInputError("the value of key %s from ConfigMap %s is not a valid duration string: %v", key, cm.GetName(), err)
 		}
-		return timeoutInt, nil
+		return timeout, nil
 	}
 
 	return 0, nil
@@ -1181,8 +1182,8 @@ func ClusterIsReadyForPolicyConfig(
 }
 
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.
-func TimeoutExceeded(startTime time.Time, timeout int) bool {
-	return time.Since(startTime) > time.Duration(timeout)*time.Minute
+func TimeoutExceeded(startTime time.Time, timeout time.Duration) bool {
+	return time.Since(startTime) > timeout
 }
 
 // GetEnvOrDefault returns the value of the named environment variable or the supplied default value if the environment

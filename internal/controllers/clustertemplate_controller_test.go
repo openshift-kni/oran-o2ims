@@ -293,7 +293,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterProvisioningTimeoutConfigKey: "80",
+					utils.ClusterProvisioningTimeoutConfigKey: "80m",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
 				},
@@ -304,7 +304,7 @@ key: value`,
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterConfigurationTimeoutConfigKey: "40",
+					utils.ClusterConfigurationTimeoutConfigKey: "40m",
 					utils.PolicyTemplateDefaultsConfigmapKey: `
 clustertemplate-a-policy-v1-cpu-isolated: "2-31"
 clustertemplate-a-policy-v1-cpu-reserved: "0-1"
@@ -373,7 +373,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 	It("should return false and set status condition to false if timeouts in ConfigMaps are invalid", func() {
 		cms[0].Data[utils.ClusterProvisioningTimeoutConfigKey] = "invalidCiTimeout"
 		cms[1].Data[utils.ClusterConfigurationTimeoutConfigKey] = "invalidPtTimeout"
-		cms[2].Data[utils.HardwareProvisioningTimeoutConfigKey] = "invalidHwTimeout"
+		cms[2].Data[utils.HardwareProvisioningTimeoutConfigKey] = "40"
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
@@ -389,11 +389,11 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the value of key %s from ConfigMap %s is not an integer", utils.HardwareProvisioningTimeoutConfigKey, hwTemplateCm)))
+			"the value of key %s from ConfigMap %s is not a valid duration string", utils.HardwareProvisioningTimeoutConfigKey, hwTemplateCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the value of key %s from ConfigMap %s is not an integer", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
+			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the value of key %s from ConfigMap %s is not an integer", utils.ClusterProvisioningTimeoutConfigKey, ciDefaultsCm)))
+			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterProvisioningTimeoutConfigKey, ciDefaultsCm)))
 	})
 })
 
@@ -418,7 +418,7 @@ var _ = Describe("validateConfigmapReference", func() {
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterProvisioningTimeoutConfigKey: "40",
+				utils.ClusterProvisioningTimeoutConfigKey: "40m",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
 			},
@@ -509,7 +509,7 @@ key: value`,
 			utils.ClusterProvisioningTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("is not an integer"))
+		Expect(err.Error()).To(ContainSubstring("is not a valid duration string"))
 	})
 
 	It("should return validation error message if configmap is mutable", func() {

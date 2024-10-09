@@ -4,7 +4,10 @@ metadata:
   name: dell-intel-cu-template-configmap-v1
   namespace: oran-o2ims
 data:
-  hardwareProvisioningTimeout: "60" # optional
+  # hardwareProvisioningTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "60m" for 60 minutes)
+  hardwareProvisioningTimeout: "60m"
   hwMgrId: dell-hwmgr
   bootInterfaceLabel: bootable-interface
   node-pools-data: |

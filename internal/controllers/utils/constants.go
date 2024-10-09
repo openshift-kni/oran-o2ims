@@ -1,5 +1,7 @@
 package utils
 
+import "time"
+
 // Default namespace
 const (
 	InventoryNamespace = "oran-o2ims"
@@ -70,9 +72,9 @@ const (
 
 // Default timeout values
 const (
-	DefaultHardwareProvisioningTimeoutMinutes = 90
-	DefaultClusterProvisioningTimeoutMinutes  = 90
-	DefaultClusterConfigurationTimeoutMinutes = 30
+	DefaultHardwareProvisioningTimeout = 90 * time.Minute
+	DefaultClusterProvisioningTimeout  = 90 * time.Minute
+	DefaultClusterConfigurationTimeout = 30 * time.Minute
 )
 
 // These are optional keys in the respective ConfigMaps defined in ClusterTemplate

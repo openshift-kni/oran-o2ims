@@ -526,7 +526,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterProvisioningTimeoutConfigKey: "1",
+					utils.ClusterProvisioningTimeoutConfigKey: "60s",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
     clusterImageSetNameRef: "4.15"
     pullSecretRef:
@@ -549,7 +549,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterConfigurationTimeoutConfigKey: "1",
+					utils.ClusterConfigurationTimeoutConfigKey: "1m",
 					utils.PolicyTemplateDefaultsConfigmapKey: `
     cpu-isolated: "2-31"
     cpu-reserved: "0-1"
@@ -563,7 +563,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
-					utils.HardwareProvisioningTimeoutConfigKey: "1",
+					utils.HardwareProvisioningTimeoutConfigKey: "1m",
 					"hwMgrId": "hwmgr",
 					utils.HwTemplateNodePool: `
     - name: master
@@ -2062,7 +2062,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 			client: reconciler.Client,
 			object: cr,
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: 1,
+				hardwareProvisioning: 1 * time.Minute,
 			},
 		}
 	})
@@ -2626,9 +2626,9 @@ defaultHugepagesSize: "1G"`,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -2700,9 +2700,9 @@ defaultHugepagesSize: "1G"`,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -2728,9 +2728,9 @@ defaultHugepagesSize: "1G"`,
 			object:       provisioningRequest, // cluster-1 request
 			clusterInput: &clusterInput{},
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 		result, err = CRTask.run(ctx)
@@ -2768,9 +2768,9 @@ defaultHugepagesSize: "1G"`,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -2879,9 +2879,9 @@ defaultHugepagesSize: "1G"`,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        1,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: 60 * time.Second,
 			},
 		}
 
@@ -3028,9 +3028,9 @@ defaultHugepagesSize: "1G"`,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 		// Create policies.
@@ -3180,9 +3180,9 @@ defaultHugepagesSize: "1G"`,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 		// Update the managed cluster to make it not ready.
@@ -3273,9 +3273,9 @@ defaultHugepagesSize: "1G"`,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        1,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: 1 * time.Minute,
 			},
 		}
 
@@ -3470,9 +3470,9 @@ defaultHugepagesSize: "1G"`,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -3653,9 +3653,9 @@ defaultHugepagesSize: "1G"`,
 			clusterInput: &clusterInput{},
 			ctNamespace:  ctNamespace,
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -3758,9 +3758,9 @@ defaultHugepagesSize: "1G"`,
 			clusterInput: &clusterInput{},
 			ctNamespace:  ctNamespace,
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -3862,9 +3862,9 @@ defaultHugepagesSize: "1G"`,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -3966,9 +3966,9 @@ defaultHugepagesSize: "1G"`,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        utils.DefaultClusterConfigurationTimeoutMinutes,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -4072,9 +4072,9 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			client: CRReconciler.Client,
 			object: crs[1].(*provisioningv1alpha1.ProvisioningRequest), // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioningMinutes: utils.DefaultHardwareProvisioningTimeoutMinutes,
-				clusterProvisioningMinutes:  utils.DefaultClusterProvisioningTimeoutMinutes,
-				configurationMinutes:        1,
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: 1 * time.Minute,
 			},
 		}
 	})
