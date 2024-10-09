@@ -14,4 +14,6 @@ spec:
   ingressHost: o2ims.apps.global-hub.karmalabs.corp
   resourceServerConfig:
     enabled: false
-
+status:
+  deploymentStatus: {}
+  usedServerConfig: {}
