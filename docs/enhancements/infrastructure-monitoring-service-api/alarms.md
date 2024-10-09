@@ -248,7 +248,7 @@ route:
 receivers:
   - name: webhook_receiver
     webhook_configs:
-      - url: "o-ran-inventory-api-alarms.kubernetes.svc/internal/v1/caasAlerts/alertmanager" # this will be derived from deployment
+      - url: "alarm-server.oran-o2ims.svc.cluster.local/internal/v1/caas-alerts/alertmanager" # this will be derived from deployment
         send_resolved: true 
 ```
 
@@ -493,7 +493,23 @@ CREATE TABLE alarm_event_record_archive
 (LIKE alarm_event_record INCLUDING ALL);
 ```
 
-Please note that script above was used test and need some updates for production e.g use `CREATE TABLE IF NOT EXISTS` and remove `DROP TABLE IF EXISTS`. 
+Please note that script above was used to test and need some updates for production e.g 
+- use `CREATE TABLE IF NOT EXISTS` and remove `DROP TABLE IF EXISTS`. 
+- do not use * when query 
+- do no use enum and instead go with a lookup table 
+  ```sql
+  CREATE TABLE management_interfaces (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL
+  );
+
+    INSERT INTO management_interfaces (name) VALUES ('O1'), ('O2DMS'), ('O2IMS'), ('OpenFH');
+    CREATE TABLE alarms_table (
+    ...
+    management_interface_id INT REFERENCES management_interfaces(id) NOT NULL DEFAULT 3
+    );
+  ```
+
 Apply this during deployment as specified [here](#k8s-resources) via a migration tool as specified [here](#tooling-and-general-dev-guidelines). 
 
 ## Init
@@ -753,6 +769,8 @@ Note:
   ```
   
 ## Future Updates
+Update `sslmode` to true as needed to securely communicate with pods. E.g postgres and alertmanager  
+
 Phase 2: CaaS + H/W Alarms
 - Add H/W alarms with phase 1 capabilities
 
