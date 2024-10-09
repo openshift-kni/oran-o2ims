@@ -5,6 +5,7 @@ authors:
   - @Jennifer-chen-rh
   - @pixelsoccupied
 reviewers: # Include a comment about what domain expertise a reviewer is expected to bring and what area of the enhancement you expect them to focus on. For example: - "@networkguru, for networking aspects, please look at IP bootstrapping aspect"
+  - @alegacy
   - @bartwensley
   - @browsell
   - @Jennifer-chen-rh
@@ -12,8 +13,8 @@ approvers: # A single approver is preferred, the role of the approver is to rais
   - @browsell
 api-approvers: # In case of new or modified APIs or API extensions (CRDs, aggregated apiservers, webhooks, finalizers). If there is no API change, use "None"
   - TBD
-creation-date: 2024-08-26
-last-updated: 2024-09-04
+creation-date: 2024-09-26
+last-updated: 2024-10-09
 tracking-link: # link to the tracking ticket (for example: Jira Feature or Epic ticket) that corresponds to this enhancement
   - CNF-13185
 see-also:
