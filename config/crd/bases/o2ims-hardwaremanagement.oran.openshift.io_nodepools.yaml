@@ -94,6 +94,8 @@ spec:
                   observedGeneration:
                     format: int64
                     type: integer
+                  specHash:
+                    type: string
                 type: object
               conditions:
                 description: |-
@@ -174,6 +176,8 @@ spec:
                   observedGeneration:
                     format: int64
                     type: integer
+                  specHash:
+                    type: string
                 type: object
               properties:
                 description: Properties represent the node properties in the pool

@@ -3,8 +3,10 @@ package utils
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1205,9 +1207,9 @@ func GetHwMgrPluginNS() string {
 	return hwMgrPluginNameSpace
 }
 
-// SetCloudManagerGenerationStatus sets the CloudManager's ObservedGeneration on the node pool resource status field
-func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodePool *hwv1alpha1.NodePool) error {
-	// Get the generated NodePool and its metadata.generation
+// SetCloudManagerInitialObservedGeneration sets the CloudManager's ObservedGeneration
+func SetCloudManagerInitialObservedGeneration(ctx context.Context, c client.Client, nodePool *hwv1alpha1.NodePool, specHash string) error {
+	// Get the generated NodePool
 	exists, err := DoesK8SResourceExist(ctx, c, nodePool.GetName(),
 		nodePool.GetNamespace(), nodePool)
 	if err != nil {
@@ -1216,19 +1218,29 @@ func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodeP
 	if !exists {
 		return fmt.Errorf("nodePool %s does not exist in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
 	}
-	// We only set ObservedGeneration when the NodePool is first created because we do not update the spec after creation.
-	// Once ObservedGeneration is set, no need to update it again.
-	if nodePool.Status.CloudManager.ObservedGeneration != 0 {
-		// ObservedGeneration is already set, so we do nothing.
-		return nil
-	}
 	// Set ObservedGeneration to the current generation of the resource
 	nodePool.Status.CloudManager.ObservedGeneration = nodePool.ObjectMeta.Generation
+	nodePool.Status.CloudManager.SpecHash = specHash
 	err = UpdateK8sCRStatus(ctx, c, nodePool)
 	if err != nil {
 		return fmt.Errorf("failed to update status for NodePool %s %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
 	}
 	return nil
+}
+
+// GenerateSpecHash generates a SHA-256 hash for a given spec field.
+func GenerateSpecHash(spec interface{}) (string, error) {
+	// Serialize the spec to a JSON byte array
+	specBytes, err := json.Marshal(spec)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling spec: %w", err)
+	}
+
+	// Compute the SHA-256 hash of the serialized spec
+	hash := sha256.Sum256(specBytes)
+
+	// Return the hash as a hexadecimal string
+	return hex.EncodeToString(hash[:]), nil
 }
 
 // ExtractSubSchema extracts a Sub schema indexed by subSchemaKey from a Main schema
