@@ -350,22 +350,38 @@ func generateTemplateID(ctx context.Context, c client.Client, object *provisioni
 // - policyTemplateParameters
 // - clusterInstanceParameters
 func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplate) error {
-	mandatoryParams := []string{utils.TemplateParamNodeClusterName,
-		utils.TemplateParamOCloudSiteId,
-		utils.TemplateParamPolicyConfig,
-		utils.TemplateParamClusterInstance}
+	const (
+		typeString   = "type"
+		stringString = "string"
+		objectString = "object"
+	)
+	mandatoryParams := [][]string{{utils.TemplateParamNodeClusterName, stringString},
+		{utils.TemplateParamOCloudSiteId, stringString},
+		{utils.TemplateParamPolicyConfig, objectString},
+		{utils.TemplateParamClusterInstance, objectString}}
 	if object.Spec.TemplateParameterSchema.Size() == 0 {
 		return utils.NewInputError("templateParameterSchema is present but empty:")
 	}
 	var missingParameter []string
+	var badType []string
 	for _, param := range mandatoryParams {
-		_, err := utils.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, param)
+		expectedName := param[0]
+		expectedType := param[1]
+		aSubschema, err := utils.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
 		if err != nil {
-			if strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema %s does not exist:", param)) {
-				missingParameter = append(missingParameter, param)
+			if strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema %s does not exist:", expectedName)) {
+				missingParameter = append(missingParameter, expectedName)
+				continue
 			} else {
-				return fmt.Errorf("error extracting subschema at key %s: %w", param, err)
+				return fmt.Errorf("error extracting subschema at key %s: %w", expectedName, err)
 			}
+		}
+		if aType, ok := aSubschema[typeString]; ok {
+			if aType != expectedType {
+				badType = append(badType, fmt.Sprintf("%s (expected = %s actual= %s)", expectedName, expectedType, aType))
+			}
+		} else {
+			badType = append(badType, fmt.Sprintf("%s (expected = %s actual= none)", expectedName, expectedType))
 		}
 	}
 	var missingRequired []string
@@ -374,13 +390,19 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		return fmt.Errorf("error unmarshalling required subschema: %w", err)
 	}
 	for _, param := range mandatoryParams {
-		if !slices.Contains(requiredList, param) {
-			missingRequired = append(missingRequired, param)
+		expectedName := param[0]
+		if !slices.Contains(requiredList, expectedName) {
+			missingRequired = append(missingRequired, expectedName)
 		}
 	}
-	validationFailureReason := fmt.Sprintf("failed to validate ClusterTemplate: %s. ", object.Name)
+	validationFailureReason := fmt.Sprintf("failed to validate ClusterTemplate: %s.", object.Name)
 	if len(missingParameter) != 0 {
-		validationFailureReason = fmt.Sprintf(" The following mandatory fields are missing: %s.", strings.Join(missingParameter, ","))
+		validationFailureReason += fmt.Sprintf(" The following mandatory fields are missing: %s.", strings.Join(missingParameter, ","))
+	}
+	if len(badType) != 0 {
+		validationFailureReason += fmt.Sprintf(" The following entries are present but have a unexpected type: %s.",
+			strings.Join(badType, ","))
+		return utils.NewInputError(validationFailureReason)
 	}
 	if len(missingRequired) != 0 {
 		validationFailureReason += fmt.Sprintf(" The following entries are missing in the required section of the template: %s",
