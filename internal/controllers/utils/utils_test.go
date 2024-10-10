@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,8 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
-
-	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 )
 
 // Scheme used for the tests:
@@ -2213,6 +2212,22 @@ func TestExtractMatchingInput(t *testing.T) {
 			name: "ok - valid string input",
 			args: args{
 				input: []byte(`{
+  "required": [
+    "nodeClusterName",
+    "oCloudSiteId",
+    "policyTemplateParameters",
+    "clusterInstanceParameters"
+  ]
+}`),
+				subSchemaKey: "required",
+			},
+			wantMatchingInput: []any{"nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"},
+			wantErr:           false,
+		},
+		{
+			name: "ok - valid string input",
+			args: args{
+				input: []byte(`{
 					"oCloudSiteId": "local-123"
 				}`),
 				subSchemaKey: "oCloudSiteId",
@@ -2278,6 +2293,46 @@ func Test_mapKeysToSlice(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := MapKeysToSlice(tt.args.inputMap); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("mapKeysToSlice() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractSchemaRequired(t *testing.T) {
+	type args struct {
+		mainSchema []byte
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "ok",
+			args: args{
+				mainSchema: []byte(`{
+					"required": [
+					  "nodeClusterName",
+					  "oCloudSiteId",
+					  "policyTemplateParameters",
+					  "clusterInstanceParameters"
+					]
+				  }`),
+			},
+			want:    []string{"nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ExtractSchemaRequired(tt.args.mainSchema)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractSchemaRequired() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ExtractSchemaRequired() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -282,6 +283,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplateCm,
 				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
 		}
 
@@ -765,3 +767,145 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 })
+
+var (
+	tName    = "cluster-template-a"
+	tVersion = "v1.0.0"
+)
+
+func Test_validateTemplateParameterSchema(t *testing.T) {
+	type args struct {
+		object *provisioningv1alpha1.ClusterTemplate
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+		errText string
+	}{
+		{
+			name: "ok",
+			args: args{
+				object: &provisioningv1alpha1.ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: getClusterTemplateRefName(tName, tVersion),
+					},
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"nodeClusterName": {"type": "string"},
+			"oCloudSiteId": {"type": "string"},
+			"clusterInstanceParameters": {"type": "object"},
+			"policyTemplateParameters": {"type": "object"}
+		},
+		"type": "object",
+		"required": [
+	"nodeClusterName",
+	"oCloudSiteId",
+	"policyTemplateParameters",
+	"clusterInstanceParameters"
+	]
+	}`)},
+					},
+				},
+			},
+			wantErr: false,
+			errText: "",
+		},
+		{
+			name: "bad type",
+			args: args{
+				object: &provisioningv1alpha1.ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: getClusterTemplateRefName(tName, tVersion),
+					},
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"nodeClusterName": {"type": "string"},
+			"oCloudSiteId": {"type": "string"},
+			"clusterInstanceParameters": {"type": "string"},
+			"policyTemplateParameters": {"type": "object"}
+		},
+		"type": "object",
+		"required": [
+	"nodeClusterName",
+	"oCloudSiteId",
+	"policyTemplateParameters",
+	"clusterInstanceParameters"
+	]
+	}`)},
+					},
+				},
+			},
+			wantErr: true,
+			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following entries are present but have a unexpected type: clusterInstanceParameters (expected = object actual= string).",
+		},
+		{
+			name: "missing parameter and bad type",
+			args: args{
+				object: &provisioningv1alpha1.ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: getClusterTemplateRefName(tName, tVersion),
+					},
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"oCloudSiteId": {"type": "string"},
+			"clusterInstanceParameters": {"type": "string"},
+			"policyTemplateParameters": {"type": "object"}
+		},
+		"type": "object",
+		"required": [
+	"nodeClusterName",
+	"oCloudSiteId",
+	"policyTemplateParameters",
+	"clusterInstanceParameters"
+	]
+	}`)},
+					},
+				},
+			},
+			wantErr: true,
+			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following mandatory fields are missing: nodeClusterName. The following entries are present but have a unexpected type: clusterInstanceParameters (expected = object actual= string).",
+		},
+		{
+			name: "missing parameter and bad type, and missing required entry",
+			args: args{
+				object: &provisioningv1alpha1.ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: getClusterTemplateRefName(tName, tVersion),
+					},
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"oCloudSiteId": {"type": "string"},
+			"clusterInstanceParameters": {"type": "string"},
+			"policyTemplateParameters": {"type": "object"}
+		},
+		"type": "object",
+		"required": [
+	"nodeClusterName",
+	"policyTemplateParameters",
+	"clusterInstanceParameters"
+	]
+	}`)},
+					},
+				},
+			},
+			wantErr: true,
+			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following mandatory fields are missing: nodeClusterName. The following entries are present but have a unexpected type: clusterInstanceParameters (expected = object actual= string).",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var err error
+			if err = validateTemplateParameterSchema(tt.args.object); (err != nil) != tt.wantErr {
+				t.Errorf("validateTemplateParameterSchema() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && err.Error() != tt.errText {
+				t.Errorf("validateTemplateParameterSchema() errorText = %s, wantErrorText %s", err.Error(), tt.errText)
+			}
+		})
+	}
+}
