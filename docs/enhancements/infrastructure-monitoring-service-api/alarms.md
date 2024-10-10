@@ -713,17 +713,23 @@ WHERE probable_causes.probable_cause_id = 'f5ac4ac7-0ff3-40a2-b305-77313c28136a'
 ## K8s resources
 We will need few K8s resources that will be eventually applied by the Operator. 
 
+### Jobs to Initialize Alarm Server DB
+We need two Jobs that can help with DB
+
+- One job that creates a Database using `CREATE DATBASE` cmd
+- One job that creates all the tables as part of migration (create new tables, updates, etc)
+  See [postgres](#postgres) for all the required credentials
+
 #### Alarm server
 This is essentially a typical CRUD app and we need the following
 
-- Deployment: It should have one initiContainer to create a DB, one initContainers that perform DB migration (create/alter table etc) 
-  and one main container which starts the main server. 
-  No HA, so set replica to 1. It should also contain all the ENV variables needed to talk to postgres deployment DB_HOST, DB_PORT, DB_NAME, DB_USER etc.
-  Suitable resources should be provided but not much memory and CPU is need for CRUD apps. 
+- Deployment: one main container which starts the main server. 
+  No HA, so set replica to 1. It should also contain all the ENV variables needed to talk to postgres deployment DB_HOST, DB_PORT, DB_USER etc (consult with POSTGRES deployment for latest).
+  DB_NAME will be set to whatever is used in [here](#jobs-to-initialize-alarm-server-db).
+  Suitable resources should be provided but not much memory and CPU is need for CRUD apps (TBD, need to experiment for exact values). 
 - Secrets: DB creds and configs should be read from postgres deployment. 
 - Service: Expose and balance using `ClusterIP` (though to start with we will set replica to 1)
 - Ingress: Expose service so that it can be called by users from outside the cluster
-
 
 #### Postgres
 This deployment can be leveraged by many microservices by creating their own Database. 
@@ -736,8 +742,7 @@ This deployment can be leveraged by many microservices by creating their own Dat
 - Secrets: default creds needed to spin postgres, with type: Opaque. This secret will then be ready by 
    - POSTGRES_USER: `o-ran`
    - POSTGRES_PASSWORD: `o-ran`
-   - POSTGRES_DB: `o-ran` # Note: this is simply there to be explicit.  
-                                   If not provided `POSTGRES_USER` is used to create default DB. But ultimately this DB not used as each service will create their own.
+   - POSTGRES_DB: `o-ran` # Note: this is simply there to be explicit. If not provided `POSTGRES_USER` is used to create default DB. But ultimately this DB will not be used as each service will create their own.
 - ConfigMap: For others to know the hostname and port
    - POSTGRES_HOST: "postgres.o-ran-namespace.svc.cluster.local"
    - POSTGRES_PORT: "5432"
