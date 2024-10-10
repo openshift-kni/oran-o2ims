@@ -29,7 +29,6 @@ import (
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	openshiftv1 "github.com/openshift/api/config/v1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -638,7 +637,7 @@ func GetConfigMapField(cm *corev1.ConfigMap, fieldName string) (string, error) {
 
 // ExtractTemplateDataFromConfigMap extracts the template data associated with the specified key
 // from the provided ConfigMap. The data is expected to be in YAML format.
-func ExtractTemplateDataFromConfigMap[T any](ctx context.Context, c client.Client, cm *corev1.ConfigMap, expectedKey string) (T, error) {
+func ExtractTemplateDataFromConfigMap[T any](cm *corev1.ConfigMap, expectedKey string) (T, error) {
 	var validData T
 
 	// Find the expected key is present in the configmap data
@@ -656,6 +655,21 @@ func ExtractTemplateDataFromConfigMap[T any](ctx context.Context, c client.Clien
 		)
 	}
 	return validData, nil
+}
+
+// ExtractTimeoutFromConfigMap extracts the timeout config from the ConfigMap by key if exits.
+// converting it from duration string to time.Duration. Returns an error if the value is not a
+// valid duration string.
+func ExtractTimeoutFromConfigMap(cm *corev1.ConfigMap, key string) (time.Duration, error) {
+	if timeoutStr, err := GetConfigMapField(cm, key); err == nil {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			return 0, NewInputError("the value of key %s from ConfigMap %s is not a valid duration string: %v", key, cm.GetName(), err)
+		}
+		return timeout, nil
+	}
+
+	return 0, nil
 }
 
 // DeepMergeMaps performs a deep merge of the src map into the dst map.
@@ -1168,10 +1182,8 @@ func ClusterIsReadyForPolicyConfig(
 }
 
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.
-func TimeoutExceeded(provisioningRequest *provisioningv1alpha1.ProvisioningRequest) bool {
-	timeSince := time.Since(provisioningRequest.Status.ClusterDetails.NonCompliantAt.Time)
-	timeout := time.Duration(provisioningRequest.Spec.Timeout.Configuration) * time.Minute
-	return timeSince > timeout
+func TimeoutExceeded(startTime time.Time, timeout time.Duration) bool {
+	return time.Since(startTime) > timeout
 }
 
 // GetEnvOrDefault returns the value of the named environment variable or the supplied default value if the environment

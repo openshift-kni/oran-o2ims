@@ -45,7 +45,7 @@ metadata:
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {
-                  "description": "clusterInstanceParameters defines the params that are allowed in the ProvisioningRequest spec.clusterInstanceInput",
+                  "description": "clusterInstanceParameters defines the available parameters for cluster provisioning",
                   "properties": {
                     "additionalNTPSources": {
                       "description": "AdditionalNTPSources is a list of NTP sources (hostname or IP) to be added to all cluster hosts. They are added to any NTP sources that were configured through other means.",
@@ -313,7 +313,6 @@ metadata:
                       "type": "string"
                     },
                     "install-plan-approval": {
-                      "default": "Automatic",
                       "type": "string"
                     },
                     "sriov-network-pfNames-1": {
@@ -328,7 +327,8 @@ metadata:
                     "sriov-network-vlan-2": {
                       "type": "string"
                     }
-                  }
+                  },
+                  "type": "object"
                 }
               },
               "required": [
@@ -340,9 +340,9 @@ metadata:
               "type": "object"
             },
             "templates": {
-              "clusterInstanceDefaults": "clusterinstance-defaults-v1",
+              "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
               "hwTemplate": "dell-intel-cu-template-configmap-v1",
-              "policyTemplateDefaults": "policytemplate-defaults-v1"
+              "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults"
             },
             "version": "v1.0.0"
           }
@@ -525,7 +525,7 @@ metadata:
                 ],
                 "serviceNetwork": [
                   {
-                    "cidr": "172.30.0.0/16"
+                    "cidr": "233.252.0.0/24"
                   }
                 ],
                 "sshPublicKey": "ssh-rsa"
@@ -537,12 +537,7 @@ metadata:
                 "sriov-network-vlan-2": "111"
               }
             },
-            "templateVersion": "v1.0.0",
-            "timeout": {
-              "clusterProvisioning": 80,
-              "configuration": 40,
-              "hardwareProvisioning": 60
-            }
+            "templateVersion": "v1.0.0"
           }
         }
       ]
@@ -869,10 +864,6 @@ spec:
           The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
         displayName: Template Version
         path: templateVersion
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Timeout
-        path: timeout
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       version: v1alpha1

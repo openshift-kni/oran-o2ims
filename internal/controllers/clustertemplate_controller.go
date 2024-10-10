@@ -182,7 +182,8 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		ctx, t.client,
 		t.object.Spec.Templates.HwTemplate,
 		utils.InventoryNamespace,
-		utils.HwTemplateNodePool)
+		utils.HwTemplateNodePool,
+		utils.HardwareProvisioningTimeoutConfigKey)
 	if err != nil {
 		if !utils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for hw template: %w",
@@ -196,7 +197,8 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		ctx, t.client,
 		t.object.Spec.Templates.ClusterInstanceDefaults,
 		t.object.Namespace,
-		utils.ClusterInstanceTemplateDefaultsConfigmapKey)
+		utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+		utils.ClusterProvisioningTimeoutConfigKey)
 	if err != nil {
 		if !utils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for ClusterInstance defaults: %w",
@@ -210,7 +212,8 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		ctx, t.client,
 		t.object.Spec.Templates.PolicyTemplateDefaults,
 		t.object.Namespace,
-		utils.PolicyTemplateDefaultsConfigmapKey)
+		utils.PolicyTemplateDefaultsConfigmapKey,
+		utils.ClusterConfigurationTimeoutConfigKey)
 	if err != nil {
 		if !utils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for policy template defaults: %w",
@@ -237,7 +240,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 // validateConfigmapReference validates a given configmap reference within the ClusterTemplate
 func validateConfigmapReference[T any](
-	ctx context.Context, c client.Client, name, namespace, expectedKey string) error {
+	ctx context.Context, c client.Client, name, namespace, templateDataKey, timeoutConfigKey string) error {
 
 	existingConfigmap, err := utils.GetConfigmap(ctx, c, name, namespace)
 	if err != nil {
@@ -245,9 +248,15 @@ func validateConfigmapReference[T any](
 	}
 
 	// Extract and validate the template from the configmap
-	_, err = utils.ExtractTemplateDataFromConfigMap[T](ctx, c, existingConfigmap, expectedKey)
+	_, err = utils.ExtractTemplateDataFromConfigMap[T](existingConfigmap, templateDataKey)
 	if err != nil {
 		return err
+	}
+
+	// Extract and validate the timeout from the configmap
+	_, err = utils.ExtractTimeoutFromConfigMap(existingConfigmap, timeoutConfigKey)
+	if err != nil {
+		return fmt.Errorf("failed to validate timeout config: %w", err)
 	}
 
 	// Check if the configmap is set to mutable

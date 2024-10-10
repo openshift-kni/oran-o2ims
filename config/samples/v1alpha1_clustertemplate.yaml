@@ -13,8 +13,8 @@ spec:
     apple: "23"
   templates:
     hwTemplate: dell-intel-cu-template-configmap-v1
-    clusterInstanceDefaults: clusterinstance-defaults-v1
-    policyTemplateDefaults: policytemplate-defaults-v1
+    clusterInstanceDefaults: clustertemplate-sample.v1.0.0-clusterinstance-defaults
+    policyTemplateDefaults: clustertemplate-sample.v1.0.0-policytemplate-defaults
   templateParameterSchema:
     properties:
       nodeClusterName:
@@ -44,9 +44,9 @@ spec:
             type: string
           install-plan-approval:
             type: string
-            default: Automatic
+        type: object
       clusterInstanceParameters:
-        description: clusterInstanceParameters defines the params that are allowed in the ProvisioningRequest spec.clusterInstanceInput
+        description: clusterInstanceParameters defines the available parameters for cluster provisioning
         properties:
           additionalNTPSources:
             description: AdditionalNTPSources is a list of NTP sources (hostname

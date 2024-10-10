@@ -64,6 +64,7 @@ type provisioningRequestReconcilerTask struct {
 	object       *provisioningv1alpha1.ProvisioningRequest
 	clusterInput *clusterInput
 	ctNamespace  string
+	timeouts     *timeouts
 }
 
 // clusterInput holds the merged input data for a cluster
@@ -77,6 +78,15 @@ type nodeInfo struct {
 	bmcCredentials string
 	nodeName       string
 	interfaces     []*hwv1alpha1.Interface
+}
+
+// timeouts holds the timeout values, in minutes,
+// for hardware provisioning, cluster provisioning
+// and cluster configuration.
+type timeouts struct {
+	hardwareProvisioning time.Duration
+	clusterProvisioning  time.Duration
+	clusterConfiguration time.Duration
 }
 
 type deleteOrUpdateEvent interface {
@@ -163,6 +173,7 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 		object:       object,
 		clusterInput: &clusterInput{},
 		ctNamespace:  "",
+		timeouts:     &timeouts{},
 	}
 	result, err = task.run(ctx)
 	return
@@ -372,6 +383,66 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 	return err
 }
 
+// validateAndLoadTimeouts validates and loads timeout values from configmaps for
+// hardware provisioning, cluster provisioning, and configuration into timeouts variable.
+// If a timeout is not defined in the configmap, the default timeout value is used.
+func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
+	// Initialize with default timeouts
+	t.timeouts.clusterProvisioning = utils.DefaultClusterProvisioningTimeout
+	t.timeouts.hardwareProvisioning = utils.DefaultHardwareProvisioningTimeout
+	t.timeouts.clusterConfiguration = utils.DefaultClusterConfigurationTimeout
+
+	// Load hardware provisioning timeout if exists.
+	hwCmName := clusterTemplate.Spec.Templates.HwTemplate
+	hwCm, err := utils.GetConfigmap(
+		ctx, t.client, hwCmName, utils.InventoryNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigMap %s: %w", hwCmName, err)
+	}
+	hwTimeout, err := utils.ExtractTimeoutFromConfigMap(
+		hwCm, utils.HardwareProvisioningTimeoutConfigKey)
+	if err != nil {
+		return fmt.Errorf("failed to get timeout config for hardware provisioning: %w", err)
+	}
+	if hwTimeout != 0 {
+		t.timeouts.hardwareProvisioning = hwTimeout
+	}
+
+	// Load cluster provisioning timeout if exists.
+	ciCmName := clusterTemplate.Spec.Templates.ClusterInstanceDefaults
+	ciCm, err := utils.GetConfigmap(
+		ctx, t.client, ciCmName, clusterTemplate.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigMap %s: %w", ciCmName, err)
+	}
+	ciTimeout, err := utils.ExtractTimeoutFromConfigMap(
+		ciCm, utils.ClusterProvisioningTimeoutConfigKey)
+	if err != nil {
+		return fmt.Errorf("failed to get timeout config for cluster provisioning: %w", err)
+	}
+	if ciTimeout != 0 {
+		t.timeouts.clusterProvisioning = ciTimeout
+	}
+
+	// Load configuration timeout if exists.
+	ptCmName := clusterTemplate.Spec.Templates.PolicyTemplateDefaults
+	ptCm, err := utils.GetConfigmap(
+		ctx, t.client, ptCmName, clusterTemplate.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigMap %s: %w", ptCmName, err)
+	}
+	ptTimeout, err := utils.ExtractTimeoutFromConfigMap(
+		ptCm, utils.ClusterConfigurationTimeoutConfigKey)
+	if err != nil {
+		return fmt.Errorf("failed to get timeout config for cluster configuration: %w", err)
+	}
+	if ptTimeout != 0 {
+		t.timeouts.clusterConfiguration = ptTimeout
+	}
+	return nil
+}
+
 // validateProvisioningRequestCR validates the ProvisioningRequest CR
 func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx context.Context) error {
 	// Check the referenced cluster template is present and valid
@@ -396,6 +467,9 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 		return fmt.Errorf("failed to validate PolicyTemplate input: %w", err)
 	}
 
+	if err = t.validateAndLoadTimeouts(ctx, clusterTemplate); err != nil {
+		return fmt.Errorf("failed to load timeouts: %w", err)
+	}
 	// TODO: Verify that ClusterInstance is per ClusterRequest basis.
 	//       There should not be multiple ClusterRequests for the same ClusterInstance.
 	return nil
@@ -575,7 +649,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", templateDefaultsCm, err)
 	}
 	clusterTemplateDefaultsMap, err := utils.ExtractTemplateDataFromConfigMap[map[string]any](
-		ctx, t.client, templateCm, templateDefaultsCmKey)
+		templateCm, templateDefaultsCmKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get template defaults from ConfigMap %s: %w", templateDefaultsCm, err)
 	}
@@ -830,7 +904,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	}
 
 	nodeGroup, err := utils.ExtractTemplateDataFromConfigMap[[]hwv1alpha1.NodeGroup](
-		ctx, t.client, hwTemplateCm, utils.HwTemplateNodePool)
+		hwTemplateCm, utils.HwTemplateNodePool)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get the Hardware template from ConfigMap %s, err: %w", hwTemplateCmName, err)
@@ -1135,7 +1209,9 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 				t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
 			} else {
 				// If NonCompliantAt has been previously set, check for timeout.
-				policyTimedOut = utils.TimeoutExceeded(t.object)
+				policyTimedOut = utils.TimeoutExceeded(
+					t.object.Status.ClusterDetails.NonCompliantAt.Time,
+					t.timeouts.clusterConfiguration)
 			}
 		case string(utils.CRconditionReasons.TimedOut):
 			policyTimedOut = true
@@ -1149,7 +1225,9 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 			// has been previously set.
 			if !t.object.Status.ClusterDetails.NonCompliantAt.IsZero() {
 				// If NonCompliantAt has been previously set, check for timeout.
-				policyTimedOut = utils.TimeoutExceeded(t.object)
+				policyTimedOut = utils.TimeoutExceeded(
+					t.object.Status.ClusterDetails.NonCompliantAt.Time,
+					t.timeouts.clusterConfiguration)
 			}
 		default:
 			t.logger.InfoContext(ctx,
@@ -1341,8 +1419,9 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 
 		// If it's not failed or completed, check if it has timed out
 		if !utils.IsClusterProvisionCompletedOrFailed(t.object) {
-			if time.Since(t.object.Status.ClusterDetails.ClusterProvisionStartedAt.Time) >
-				time.Duration(t.object.Spec.Timeout.ClusterProvisioning)*time.Minute {
+			if utils.TimeoutExceeded(
+				t.object.Status.ClusterDetails.ClusterProvisionStartedAt.Time,
+				t.timeouts.clusterProvisioning) {
 				// timed out
 				utils.SetStatusCondition(&t.object.Status.Conditions,
 					utils.PRconditionTypes.ClusterProvisioned,
@@ -2137,8 +2216,9 @@ func (t *provisioningRequestReconcilerTask) updateHardwareProvisioningStatus(
 
 	// Check for timeout if not already failed or provisioned
 	if status != metav1.ConditionTrue && reason != string(hwv1alpha1.Failed) {
-		elapsedTime := time.Since(t.object.Status.NodePoolRef.HardwareProvisioningCheckStart.Time)
-		if elapsedTime >= time.Duration(t.object.Spec.Timeout.HardwareProvisioning)*time.Minute {
+		if utils.TimeoutExceeded(
+			t.object.Status.NodePoolRef.HardwareProvisioningCheckStart.Time,
+			t.timeouts.hardwareProvisioning) {
 			t.logger.InfoContext(
 				ctx,
 				fmt.Sprintf(

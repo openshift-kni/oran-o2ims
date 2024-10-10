@@ -1,5 +1,7 @@
 package utils
 
+import "time"
+
 // Default namespace
 const (
 	InventoryNamespace = "oran-o2ims"
@@ -68,6 +70,22 @@ const (
 	defaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
 )
 
+// Default timeout values
+const (
+	DefaultHardwareProvisioningTimeout = 90 * time.Minute
+	DefaultClusterProvisioningTimeout  = 90 * time.Minute
+	DefaultClusterConfigurationTimeout = 30 * time.Minute
+)
+
+// These are optional keys in the respective ConfigMaps defined in ClusterTemplate
+// spec.templates, used to configure the timeout values for each operation.
+// If not specified, the default timeout values will be applied.
+const (
+	HardwareProvisioningTimeoutConfigKey = "hardwareProvisioningTimeout"
+	ClusterProvisioningTimeoutConfigKey  = "clusterProvisioningTimeout"
+	ClusterConfigurationTimeoutConfigKey = "clusterConfigurationTimeout"
+)
+
 // Required template schema parameters
 const (
 	TemplateParamNodeClusterName = "nodeClusterName"
@@ -112,21 +130,10 @@ const (
 	ClusterVersionLabelKey             = "cluster-version"
 )
 
-// ClusterInstance status
+// Cluster status
 const (
-	ClusterInstalling = "In progress"
-	ClusterCompleted  = "Completed"
-	ClusterFailed     = "Failed"
 	ClusterZtpDone    = "ZTP Done"
 	ClusterZtpNotDone = "ZTP Not Done"
-)
-
-// Hardware Provisioning status
-const (
-	HardwareProvisioningInProgress = "InProgress"
-	HardwareProvisioningCompleted  = "Completed"
-	HardwareProvisioningFailed     = "Failed"
-	HardwareProvisioningUnknown    = "Unknown"
 )
 
 // Hardeware template constants

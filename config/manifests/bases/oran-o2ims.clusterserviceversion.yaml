@@ -326,10 +326,6 @@ spec:
         path: templateVersion
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Timeout
-        path: timeout
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       version: v1alpha1
   description: |
     # O-RAN O2IMS operator

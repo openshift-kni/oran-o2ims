@@ -526,6 +526,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
+					utils.ClusterProvisioningTimeoutConfigKey: "60s",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
     clusterImageSetNameRef: "4.15"
     pullSecretRef:
@@ -548,6 +549,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
+					utils.ClusterConfigurationTimeoutConfigKey: "1m",
 					utils.PolicyTemplateDefaultsConfigmapKey: `
     cpu-isolated: "2-31"
     cpu-reserved: "0-1"
@@ -561,6 +563,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
+					utils.HardwareProvisioningTimeoutConfigKey: "1m",
 					"hwMgrId": "hwmgr",
 					utils.HwTemplateNodePool: `
     - name: master
@@ -616,11 +619,6 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				TemplateVersion: tVersion,
 				TemplateParameters: runtime.RawExtension{
 					Raw: []byte(testFullTemplateParameters),
-				},
-				Timeout: provisioningv1alpha1.Timeout{
-					ClusterProvisioning:  1,
-					Configuration:        1,
-					HardwareProvisioning: 1,
 				},
 			},
 		}
@@ -2041,11 +2039,6 @@ var _ = Describe("waitForNodePoolProvision", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crName,
 			},
-			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
-				Timeout: provisioningv1alpha1.Timeout{
-					HardwareProvisioning: 1,
-				},
-			},
 		}
 
 		// Define the node pool.
@@ -2068,6 +2061,9 @@ var _ = Describe("waitForNodePoolProvision", func() {
 			logger: reconciler.Logger,
 			client: reconciler.Client,
 			object: cr,
+			timeouts: &timeouts{
+				hardwareProvisioning: 1 * time.Minute,
+			},
 		}
 	})
 
@@ -2534,11 +2530,6 @@ defaultHugepagesSize: "1G"`,
 					TemplateParameters: runtime.RawExtension{
 						Raw: []byte(testFullTemplateParameters),
 					},
-					Timeout: provisioningv1alpha1.Timeout{
-						ClusterProvisioning:  1,
-						Configuration:        1,
-						HardwareProvisioning: 1,
-					},
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
 					// Fake the hw provision status
@@ -2634,6 +2625,11 @@ defaultHugepagesSize: "1G"`,
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		// Create the policies, all Compliant, one in inform and one in enforce.
@@ -2703,6 +2699,11 @@ defaultHugepagesSize: "1G"`,
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
@@ -2726,6 +2727,11 @@ defaultHugepagesSize: "1G"`,
 			client:       CRReconciler.Client,
 			object:       provisioningRequest, // cluster-1 request
 			clusterInput: &clusterInput{},
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 		result, err = CRTask.run(ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -2761,6 +2767,11 @@ defaultHugepagesSize: "1G"`,
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		// Update the ProvisioningRequest ConfigurationApplied condition to TimedOut.
@@ -2867,6 +2878,11 @@ defaultHugepagesSize: "1G"`,
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: 60 * time.Second,
+			},
 		}
 
 		// Create inform policies, one Compliant and one NonCompliant.
@@ -3011,6 +3027,11 @@ defaultHugepagesSize: "1G"`,
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 		// Create policies.
 		newPolicies := []client.Object{
@@ -3158,6 +3179,11 @@ defaultHugepagesSize: "1G"`,
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
 			object: provisioningRequest, // cluster-1 request
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 		// Update the managed cluster to make it not ready.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -3246,6 +3272,11 @@ defaultHugepagesSize: "1G"`,
 			client:      CRReconciler.Client,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: 1 * time.Minute,
+			},
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -3438,6 +3469,11 @@ defaultHugepagesSize: "1G"`,
 			client:      CRReconciler.Client,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -3616,6 +3652,11 @@ defaultHugepagesSize: "1G"`,
 			object:       provisioningRequest, // cluster-1 request
 			clusterInput: &clusterInput{},
 			ctNamespace:  ctNamespace,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -3716,6 +3757,11 @@ defaultHugepagesSize: "1G"`,
 			object:       provisioningRequest, // cluster-1 request
 			clusterInput: &clusterInput{},
 			ctNamespace:  ctNamespace,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -3815,6 +3861,11 @@ defaultHugepagesSize: "1G"`,
 			client:      CRReconciler.Client,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -3914,6 +3965,11 @@ defaultHugepagesSize: "1G"`,
 			client:      CRReconciler.Client,
 			object:      provisioningRequest, // cluster-1 request
 			ctNamespace: ctNamespace,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -3982,9 +4038,6 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 					TemplateParameters: runtime.RawExtension{
 						Raw: []byte(testFullTemplateParameters),
 					},
-					Timeout: provisioningv1alpha1.Timeout{
-						Configuration: 1,
-					},
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
 					ClusterDetails: &provisioningv1alpha1.ClusterDetails{},
@@ -4018,6 +4071,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			logger: CRReconciler.Logger,
 			client: CRReconciler.Client,
 			object: crs[1].(*provisioningv1alpha1.ProvisioningRequest), // cluster-1 request
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterConfiguration: 1 * time.Minute,
+			},
 		}
 	})
 
