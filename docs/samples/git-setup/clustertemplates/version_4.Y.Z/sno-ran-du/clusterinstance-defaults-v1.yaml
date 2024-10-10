@@ -43,8 +43,11 @@ data:
         nodeNetwork:
           interfaces:
             - name: eno1
+              label: bootable-interface
             - name: eth0
+              label: base-interface
             - name: eth1
+              label: data-interface
           config:
             routes:
               config:

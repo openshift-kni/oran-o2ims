@@ -2588,7 +2588,7 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 			{
 				Name:       "eth1",
-				Label:      "",
+				Label:      "test2",
 				MACAddress: "66:77:88:99:CC:BB",
 			},
 		}
@@ -2600,7 +2600,7 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 			{
 				Name:       "eno2",
-				Label:      "",
+				Label:      "test2",
 				MACAddress: "66:77:88:99:AA:BB",
 			},
 		}
@@ -2676,25 +2676,60 @@ var _ = Describe("updateClusterInstance", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:       reconciler.Logger,
+			client:       reconciler.Client,
+			object:       cr,
+			clusterInput: &clusterInput{},
 		}
 	})
 
-	It("returns false when failing to get the Node object", func() {
-		rt := task.updateClusterInstance(ctx, ci, np)
-		Expect(rt).To(Equal(false))
+	It("returns error when failing to get the Node object", func() {
+		err := task.updateClusterInstance(ctx, ci, np)
+		Expect(err).To(HaveOccurred())
 	})
 
-	It("returns true when updateClusterInstance succeeds", func() {
+	It("returns no error when updateClusterInstance succeeds", func() {
+		task.clusterInput.clusterInstanceData = map[string]any{
+			"nodes": []any{
+				map[string]any{
+					"hostName": mhost,
+					"nodeNetwork": map[string]any{
+						"interfaces": []any{
+							map[string]any{
+								"name":  "eth0",
+								"label": "test",
+							},
+							map[string]any{
+								"name":  "eth1",
+								"label": "test2",
+							},
+						},
+					},
+				},
+				map[string]any{
+					"hostName": whost,
+					"nodeNetwork": map[string]any{
+						"interfaces": []any{
+							map[string]any{
+								"name":  "eno1",
+								"label": "test",
+							},
+							map[string]any{
+								"name":  "eno2",
+								"label": "test2",
+							},
+						},
+					},
+				},
+			},
+		}
 		nodes := []*hwv1alpha1.Node{masterNode, workerNode}
 		secrets := createSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, poolns)
 
 		createResources(c, ctx, nodes, secrets)
 
-		rt := task.updateClusterInstance(ctx, ci, np)
-		Expect(rt).To(Equal(true))
+		err := task.updateClusterInstance(ctx, ci, np)
+		Expect(err).ToNot(HaveOccurred())
 
 		masterBootMAC, err := utils.GetBootMacAddress(masterNode.Status.Interfaces, np)
 		Expect(err).ToNot(HaveOccurred())
