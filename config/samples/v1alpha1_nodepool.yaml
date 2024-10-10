@@ -1,0 +1,40 @@
+apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+kind: NodePool
+metadata:
+  annotations:
+    bootInterfaceLabel: bootable-interface
+  generation: 1
+  labels:
+    app.kubernetes.io/name: inventory
+    app.kubernetes.io/instance: inventory-sample
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: oran-o2ims
+  name: sample-nodepool
+  namespace: oran-hwmgr-plugin
+spec:
+  cloudID: sample
+  hwMgrId: loopback-1
+  nodeGroup:
+  - hwProfile: sample-master-profile
+    interfaces:
+    - eno1
+    name: master
+    size: 1
+  - hwProfile: sample-worker-profile
+    name: worker
+    size: 0
+  site: ottawa
+status:
+  cloudManager:
+    observedGeneration: 1
+  conditions:
+  - lastTransitionTime: "2024-10-09T15:36:41Z"
+    message: Created
+    reason: Completed
+    status: "True"
+    type: Provisioned
+  hwMgrPlugin: {}
+  properties:
+    nodeNames:
+    - sample-node

@@ -120,3 +120,5 @@ spec:
       serviceNetwork:
         - cidr: 172.30.0.0/16
       sshPublicKey: ssh-rsa
+status:
+  conditions: []

@@ -1,0 +1,33 @@
+apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+kind: Node
+metadata:
+  labels:
+    app.kubernetes.io/name: inventory
+    app.kubernetes.io/instance: inventory-sample
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: oran-o2ims
+  name: sample-node
+  namespace: oran-hwmgr-plugin
+spec:
+  groupName: master
+  hwProfile: sample-profile
+  nodePool: sample-nodepool
+status:
+  bmc:
+    address: idrac-virtualmedia+https://198.51.100.1/redfish/v1/Systems/System.Embedded.1
+    credentialsName: sample-node-bmc-secret
+  conditions:
+  - lastTransitionTime: "2024-10-09T15:36:31Z"
+    message: Provisioned
+    reason: Completed
+    status: "True"
+    type: Provisioned
+  hostname: sample-node.example.com
+  interfaces:
+  - label: bootable-interface
+    macAddress: 00:11:22:33:44:55
+    name: eno1
+  - label: ""
+    macAddress: 00:11:22:33:44:66
+    name: eno2
