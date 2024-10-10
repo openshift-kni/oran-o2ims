@@ -350,20 +350,22 @@ func generateTemplateID(ctx context.Context, c client.Client, object *provisioni
 // - policyTemplateParameters
 // - clusterInstanceParameters
 func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplate) error {
-	mandatoryParams := []string{"nodeClusterName",
-		"oCloudSiteId",
-		"policyTemplateParameters",
-		"clusterInstanceParameters"}
+	mandatoryParams := []string{utils.TemplateParamNodeClusterName,
+		utils.TemplateParamOCloudSiteId,
+		utils.TemplateParamPolicyConfig,
+		utils.TemplateParamClusterInstance}
 	if object.Spec.TemplateParameterSchema.Size() == 0 {
 		return utils.NewInputError("templateParameterSchema is present but empty:")
 	}
 	var missingParameter []string
 	for _, param := range mandatoryParams {
 		_, err := utils.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, param)
-		if err != nil && strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema %s does not exist:", param)) {
-			missingParameter = append(missingParameter, param)
-		} else if err != nil {
-			return fmt.Errorf("error extracting subschema at key %s: %w", param, err)
+		if err != nil {
+			if strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema %s does not exist:", param)) {
+				missingParameter = append(missingParameter, param)
+			} else {
+				return fmt.Errorf("error extracting subschema at key %s: %w", param, err)
+			}
 		}
 	}
 	var missingRequired []string
@@ -376,15 +378,12 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 			missingRequired = append(missingRequired, param)
 		}
 	}
-	validationFailureReason := fmt.Sprintf("failed to validate ClusterTemplate name:%s. ", object.Name)
+	validationFailureReason := fmt.Sprintf("failed to validate ClusterTemplate: %s. ", object.Name)
 	if len(missingParameter) != 0 {
-		validationFailureReason = fmt.Sprintf(" The following mandatory fields are missing: %s", strings.Join(missingParameter, ","))
+		validationFailureReason = fmt.Sprintf(" The following mandatory fields are missing: %s.", strings.Join(missingParameter, ","))
 	}
 	if len(missingRequired) != 0 {
-		if len(missingParameter) != 0 {
-			validationFailureReason += " and"
-		}
-		validationFailureReason += fmt.Sprintf(" the following entries are missing in the required section of the template: %s",
+		validationFailureReason += fmt.Sprintf(" The following entries are missing in the required section of the template: %s",
 			strings.Join(missingRequired, ","))
 		return utils.NewInputError(validationFailureReason)
 	}
