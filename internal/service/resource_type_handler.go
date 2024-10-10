@@ -252,7 +252,7 @@ func (h *ResourceTypeHandler) getUniqueSlice(items []data.Object) []data.Object 
 	allKeys := make(map[string]bool)
 	list := []data.Object{}
 	for _, item := range items {
-		id := item["resourceTypeID"].(string)
+		id := item["resourceTypeId"].(string)
 		if _, value := allKeys[id]; !value {
 			allKeys[id] = true
 			list = append(list, item)
@@ -380,7 +380,7 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 	}
 
 	to = data.Object{
-		"resourceTypeID":  resourceTypeID,
+		"resourceTypeId":  resourceTypeID,
 		"name":            resourceTypeID,
 		"resourceKind":    resourceKind,
 		"resourceClass":   resourceClass,

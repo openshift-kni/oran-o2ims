@@ -330,14 +330,14 @@ func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 	}
 
 	to = data.Object{
-		"resourcePoolID": resourcePoolID,
+		"resourcePoolId": resourcePoolID,
 		"name":           name,
-		"oCloudID":       r.cloudID,
+		"oCloudId":       r.cloudID,
 		"extensions":     extensionsMap,
 		"location":       location,
 		"description":    description,
 		// TODO: no direct mapping to a property in Cluster object
-		"globalLocationID": "",
+		"globalLocationId": "",
 	}
 
 	return
