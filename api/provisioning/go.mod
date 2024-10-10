@@ -1,6 +1,6 @@
 module github.com/openshift-kni/oran-o2ims/api/provisioning
 
-go 1.21
+go 1.22.0
 
 require (
 	k8s.io/apimachinery v0.28.4
