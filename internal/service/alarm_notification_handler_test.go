@@ -113,7 +113,7 @@ var _ = Describe("alarm Notification handler", func() {
 
 				requestObj := data.Object{
 					"alarmEventRecordId": "a267bbd0-57aa-4ea1-b030-a300d420ef19",
-					"resourceTypeID":     "c1fe0c43-28e3-4b61-aac5-84bea67551ea",
+					"resourceTypeId":     "c1fe0c43-28e3-4b61-aac5-84bea67551ea",
 					"resourceID":         "my-host",
 					"alarmDefinitionID":  "4db97698-e612-430a-9520-c00e214c39e1",
 					"probableCauseID":    "4a02fdab-e135-4919-b60c-96af08bd088b",
@@ -157,7 +157,7 @@ var _ = Describe("alarm Notification handler", func() {
 						"endpoint":                  "https",
 					},
 					"resourceID":         "1cf16c13-f5cb-497a-97d5-e909cba396a3",
-					"resourceTypeID":     "node_8_cores_amd64",
+					"resourceTypeId":     "node_8_cores_amd64",
 					"alarmEventRecordId": "NodeClockNotSynchronising_spoke1_ostest-extraworker-1",
 					"probableCauseID":    "NodeClockNotSynchronising",
 				}

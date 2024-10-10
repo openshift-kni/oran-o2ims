@@ -252,7 +252,7 @@ func (h *ResourceTypeHandler) getUniqueSlice(items []data.Object) []data.Object 
 	allKeys := make(map[string]bool)
 	list := []data.Object{}
 	for _, item := range items {
-		id := item["resourceTypeID"].(string)
+		id := item["resourceTypeId"].(string)
 		if _, value := allKeys[id]; !value {
 			allKeys[id] = true
 			list = append(list, item)
@@ -276,7 +276,7 @@ func (h *ResourceTypeHandler) fetchItem(ctx context.Context,
 	resourceTypes = data.Select(
 		resourceTypes,
 		func(ctx context.Context, item data.Object) (result bool, err error) {
-			result = item["resourceTypeID"] == id
+			result = item["resourceTypeId"] == id
 			return
 		},
 	)
@@ -363,12 +363,12 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 		return
 	}
 
-	var resourceClass, resourceKind, resourceTypeID string
+	var resourceClass, resourceKind, resourceTypeId string
 	switch kind { // nolint: gocritic
 	case KindNode:
 		resourceClass = ResourceClassCompute
 		resourceKind = ResourceKindPhysical
-		resourceTypeID, err = h.resourceFetcher.GetResourceTypeID(from)
+		resourceTypeId, err = h.resourceFetcher.GetResourceTypeID(from)
 		if err != nil {
 			return
 		}
@@ -380,8 +380,8 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 	}
 
 	to = data.Object{
-		"resourceTypeID":  resourceTypeID,
-		"name":            resourceTypeID,
+		"resourceTypeId":  resourceTypeId,
+		"name":            resourceTypeId,
 		"resourceKind":    resourceKind,
 		"resourceClass":   resourceClass,
 		"alarmDictionary": alarmDictionary,

@@ -226,7 +226,7 @@ var _ = Describe("Alarm handler", func() {
 					RespondWithList(
 						data.Object{
 							"name":           "spoke0",
-							"resourcePoolID": "spoke0",
+							"resourcePoolId": "spoke0",
 						},
 					),
 				)
@@ -234,7 +234,7 @@ var _ = Describe("Alarm handler", func() {
 					RespondWithList(
 						data.Object{
 							"resourceID":     "host0",
-							"resourceTypeID": "type0",
+							"resourceTypeId": "type0",
 						},
 					),
 				)
@@ -250,7 +250,7 @@ var _ = Describe("Alarm handler", func() {
 				// Verify first result:
 				Expect(items[0]).To(MatchJQ(`.alarmEventRecordId`, "alert1_spoke0"))
 				Expect(items[0]).To(MatchJQ(`.resourceID`, "spoke0"))
-				Expect(items[0]).To(MatchJQ(`.resourceTypeID`, ""))
+				Expect(items[0]).To(MatchJQ(`.resourceTypeId`, ""))
 				Expect(items[0]).To(MatchJQ(`.alarmRaisedTime`, "00:00"))
 				Expect(items[0]).To(MatchJQ(`.alarmChangedTime`, "01:00"))
 				Expect(items[0]).To(MatchJQ(`.alarmDefinitionID`, "alert1"))
@@ -262,7 +262,7 @@ var _ = Describe("Alarm handler", func() {
 				// Verify seconds result:
 				Expect(items[1]).To(MatchJQ(`.alarmEventRecordId`, "alert2_spoke0_host0"))
 				Expect(items[1]).To(MatchJQ(`.resourceID`, "host0"))
-				Expect(items[1]).To(MatchJQ(`.resourceTypeID`, "type0"))
+				Expect(items[1]).To(MatchJQ(`.resourceTypeId`, "type0"))
 				Expect(items[1]).To(MatchJQ(`.alarmRaisedTime`, "00:00"))
 				Expect(items[1]).To(MatchJQ(`.alarmChangedTime`, "01:00"))
 				Expect(items[1]).To(MatchJQ(`.alarmDefinitionID`, "alert2"))
@@ -429,7 +429,7 @@ var _ = Describe("Alarm handler", func() {
 						RespondWithList(
 							data.Object{
 								"name":           "spoke0",
-								"resourcePoolID": "spoke0",
+								"resourcePoolId": "spoke0",
 							},
 						),
 					),
@@ -509,7 +509,7 @@ var _ = Describe("Alarm handler", func() {
 						RespondWithList(
 							data.Object{
 								"name":           "spoke0",
-								"resourcePoolID": "spoke0",
+								"resourcePoolId": "spoke0",
 							},
 						),
 					),
@@ -525,7 +525,7 @@ var _ = Describe("Alarm handler", func() {
 				// Verify the result:
 				Expect(response.Object).To(MatchJQ(`.alarmEventRecordId`, "alert_spoke0"))
 				Expect(response.Object).To(MatchJQ(`.resourceID`, "spoke0"))
-				Expect(response.Object).To(MatchJQ(`.resourceTypeID`, ""))
+				Expect(response.Object).To(MatchJQ(`.resourceTypeId`, ""))
 				Expect(response.Object).To(MatchJQ(`.alarmRaisedTime`, "00:00"))
 				Expect(response.Object).To(MatchJQ(`.alarmChangedTime`, "01:00"))
 				Expect(response.Object).To(MatchJQ(`.alarmDefinitionID`, "alert"))

@@ -35,7 +35,7 @@ const (
 	pGlobalAssetID  = "globalAssetID"
 	pName           = "name"
 	pResourceID     = "resourceID"
-	pResourcePoolID = "resourcePoolID"
+	pResourcePoolID = "resourcePoolId"
 	pSystemUUID     = "_systemUUID"
 	pUid            = "_uid"
 )
