@@ -412,12 +412,12 @@ func (r *ResourceHandler) mapNodeItem(ctx context.Context, // nolint: unparam
 	}
 
 	to = data.Object{
-		"resourceID":     resourceID,
-		"resourceTypeID": resourceTypeID,
+		"resourceId":     resourceID,
+		"resourceTypeId": resourceTypeID,
 		"description":    description,
 		"extensions":     extensionsMap,
-		"resourcePoolID": resourcePoolID,
-		"globalAssetID":  globalAssetID,
+		"resourcePoolId": resourcePoolID,
+		"globalAssetId":  globalAssetID,
 	}
 	return
 }
