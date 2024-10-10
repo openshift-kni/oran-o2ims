@@ -203,14 +203,14 @@ var _ = Describe("Resource type handler", func() {
 				Expect(items).To(HaveLen(2))
 
 				// Verify first result:
-				Expect(items[0]).To(MatchJQ(`.resourceTypeID`, "node_8_cores_amd64"))
+				Expect(items[0]).To(MatchJQ(`.resourceTypeId`, "node_8_cores_amd64"))
 				Expect(items[0]).To(MatchJQ(`.name`, "node_8_cores_amd64"))
 				Expect(items[0]).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
 				Expect(items[0]).To(MatchJQ(`.resourceClass`, "COMPUTE"))
 				Expect(items[0]).To(HaveKey("alarmDictionary"))
 
 				// Verify second result:
-				Expect(items[1]).To(MatchJQ(`.resourceTypeID`, "node_4_cores_arm64"))
+				Expect(items[1]).To(MatchJQ(`.resourceTypeId`, "node_4_cores_arm64"))
 				Expect(items[1]).To(MatchJQ(`.name`, "node_4_cores_arm64"))
 				Expect(items[1]).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
 				Expect(items[1]).To(MatchJQ(`.resourceClass`, "COMPUTE"))
@@ -258,7 +258,7 @@ var _ = Describe("Resource type handler", func() {
 				Expect(response).ToNot(BeNil())
 
 				// Verify the result:
-				Expect(response.Object).To(MatchJQ(`.resourceTypeID`, "node_8_cores_amd64"))
+				Expect(response.Object).To(MatchJQ(`.resourceTypeId`, "node_8_cores_amd64"))
 				Expect(response.Object).To(MatchJQ(`.name`, "node_8_cores_amd64"))
 				Expect(response.Object).To(MatchJQ(`.resourceKind`, "PHYSICAL"))
 				Expect(response.Object).To(MatchJQ(`.resourceClass`, "COMPUTE"))

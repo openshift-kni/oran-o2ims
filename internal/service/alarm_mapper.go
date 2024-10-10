@@ -183,7 +183,7 @@ func (r *AlarmMapper) MapItem(ctx context.Context,
 	if err != nil {
 		// Instance is not available for cluster global alerts
 		alarmEventRecordId = fmt.Sprintf("%s_%s", alertName, resourcePoolName)
-		resourceID = resourcePool["resourcePoolID"].(string)
+		resourceID = resourcePool["resourcePoolId"].(string)
 	} else {
 		alarmEventRecordId = fmt.Sprintf("%s_%s_%s", alertName, resourcePoolName, alertInstance)
 		resource, err := r.fetchResource(ctx, resourcePoolName, alertInstance)

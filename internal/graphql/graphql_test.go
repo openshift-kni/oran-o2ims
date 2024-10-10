@@ -43,7 +43,7 @@ var _ = Describe("GraphQL filters", func() {
 			search.Term{
 				Operator: search.Eq,
 				Path: []string{
-					"resourcePoolID",
+					"resourcePoolId",
 				},
 				Values: []any{
 					"spoke0",
@@ -63,7 +63,7 @@ var _ = Describe("GraphQL filters", func() {
 			search.Term{
 				Operator: search.Eq,
 				Path: []string{
-					"resourcePoolID",
+					"resourcePoolId",
 				},
 				Values: []any{
 					"spoke0",

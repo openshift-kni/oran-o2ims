@@ -360,7 +360,7 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 	// Create the routes:
 	adapter, err := service.NewAdapter().
 		SetLogger(c.logger).
-		SetPathVariables("resourcePoolID").
+		SetPathVariables("resourcePoolId").
 		SetHandler(handler).
 		Build()
 	if err != nil {
@@ -376,7 +376,7 @@ func (c *ResourceServerCommand) createResourcePoolHandler(
 		adapter,
 	).Methods(http.MethodGet)
 	router.Handle(
-		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}",
+		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolId}",
 		adapter,
 	).Methods(http.MethodGet)
 
@@ -412,7 +412,7 @@ func (c *ResourceServerCommand) createResourceHandler(
 	// Create the routes:
 	adapter, err := service.NewAdapter().
 		SetLogger(c.logger).
-		SetPathVariables("resourcePoolID", "resourceID").
+		SetPathVariables("resourcePoolId", "resourceID").
 		SetHandler(handler).
 		Build()
 	if err != nil {
@@ -424,11 +424,11 @@ func (c *ResourceServerCommand) createResourceHandler(
 		return exit.Error(1)
 	}
 	router.Handle(
-		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}/resources",
+		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolId}/resources",
 		adapter,
 	).Methods(http.MethodGet)
 	router.Handle(
-		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolID}/resources/{resourceID}",
+		"/o2ims-infrastructureInventory/{version}/resourcePools/{resourcePoolId}/resources/{resourceID}",
 		adapter,
 	).Methods(http.MethodGet)
 
@@ -463,7 +463,7 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 	// Create the collection adapter:
 	adapter, err := service.NewAdapter().
 		SetLogger(c.logger).
-		SetPathVariables("resourceTypeID").
+		SetPathVariables("resourceTypeId").
 		SetHandler(handler).
 		Build()
 	if err != nil {
@@ -479,7 +479,7 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 		adapter,
 	).Methods(http.MethodGet)
 	router.Handle(
-		"/o2ims-infrastructureInventory/{version}/resourceTypes/{resourceTypeID}",
+		"/o2ims-infrastructureInventory/{version}/resourceTypes/{resourceTypeId}",
 		adapter,
 	).Methods(http.MethodGet)
 
