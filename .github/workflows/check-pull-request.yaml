@@ -42,7 +42,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
+        go-version: '1.22'
 
     - name: Install Go tools
       run: |
@@ -69,7 +69,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
+        go-version: '1.22'
 
     - name: Install Go tools
       run: |
@@ -91,7 +91,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
+        go-version: '1.22'
 
     - name: Run the linter
       uses: golangci/golangci-lint-action@v6

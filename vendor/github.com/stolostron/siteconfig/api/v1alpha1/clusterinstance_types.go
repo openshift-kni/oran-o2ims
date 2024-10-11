@@ -60,8 +60,14 @@ type BmcCredentialsName struct {
 	Name string `json:"name"`
 }
 
-// IronicInspect
+// IronicInspect is used to specify if automatic introspection carried out during registration
+// of BMH is enabled or disabled.
+// +kubebuilder:validation:Enum="";disabled
 type IronicInspect string
+
+// PlatformType is a specific supported infrastructure provider.
+// +kubebuilder:validation:Enum="";BareMetal;None;VSphere;Nutanix;External
+type PlatformType string
 
 type TangConfig struct {
 	URL        string `json:"url,omitempty"`
@@ -283,6 +289,10 @@ type ClusterInstanceSpec struct {
 	// +optional
 	NetworkType string `json:"networkType,omitempty"`
 
+	// PlatformType is the name for the specific platform upon which to perform the installation.
+	// +optional
+	PlatformType PlatformType `json:"platformType,omitempty"`
+
 	// Additional cluster-wide annotations to be applied to the rendered templates
 	// +optional
 	ExtraAnnotations map[string]map[string]string `json:"extraAnnotations,omitempty"`
@@ -354,6 +364,7 @@ const (
 	ManifestRenderedFailure   = "failed"
 	ManifestRenderedValidated = "validated"
 	ManifestSuppressed        = "suppressed"
+	ManifestPruneFailure      = "pruning-attempt-failed"
 )
 
 // ManifestReference contains enough information to let you locate the
