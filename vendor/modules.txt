@@ -283,8 +283,6 @@ github.com/spf13/pflag
 # github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 ## explicit; go 1.21
 github.com/stolostron/siteconfig/api/v1alpha1
-# github.com/stretchr/testify v1.9.0
-## explicit; go 1.17
 # github.com/thoas/go-funk v0.9.3
 ## explicit; go 1.13
 github.com/thoas/go-funk
