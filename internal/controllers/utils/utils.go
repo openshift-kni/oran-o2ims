@@ -67,6 +67,7 @@ type OAuthClientConfig struct {
 
 const (
 	PropertiesString = "properties"
+	requiredString   = "required"
 )
 
 var (
@@ -1275,6 +1276,26 @@ func ExtractMatchingInput(input []byte, subSchemaKey string) (any, error) {
 		return nil, fmt.Errorf("input does not contain key %s: %w", subSchemaKey, err)
 	}
 	return matchingInput, nil
+}
+
+// ExtractSchemaRequired extracts the required field of a subschema
+func ExtractSchemaRequired(mainSchema []byte) (required []string, err error) {
+	requireListAny, err := ExtractMatchingInput(mainSchema, requiredString)
+	if err != nil {
+		return required, fmt.Errorf("could not extract required fields: %w", err)
+	}
+	requiredAny, ok := requireListAny.([]any)
+	if !ok {
+		return required, fmt.Errorf("could not cast required as []any")
+	}
+	for _, item := range requiredAny {
+		itemString, ok := item.(string)
+		if !ok {
+			return required, fmt.Errorf("could not cast []any item as string")
+		}
+		required = append(required, itemString)
+	}
+	return required, nil
 }
 
 // MapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
