@@ -12,7 +12,7 @@ data:
     baseDomain: example.com
     extraLabels:
       ManagedCluster:
-        cluster-version: "v4-Y-Z-1"
+        cluster-version: "v4-Y-Z"
         sno-ran-du-policy: "v1"
     clusterType: SNO
     clusterImageSetNameRef: "4.Y.Z"

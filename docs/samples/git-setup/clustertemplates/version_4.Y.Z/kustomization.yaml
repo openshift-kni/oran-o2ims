@@ -9,7 +9,11 @@ generatorOptions:
 
 resources:
 - sno-ran-du/ns.yaml
-- sno-ran-du/sno-ran-du-v1.yaml
-- sno-ran-du/clusterinstance-defaults.yaml
-- sno-ran-du/policytemplates-defaults.yaml
 - sno-ran-du/pull-secret.yaml
+- sno-ran-du/policytemplates-defaults-v1.yaml
+# sno-ran-du.v4-Y-Z-1 ClusterTemplate:
+- sno-ran-du/sno-ran-du-v1.yaml
+- sno-ran-du/clusterinstance-defaults-v1.yaml
+# sno-ran-du.v4-Y-Z-2 ClusterTemplate:
+- sno-ran-du/sno-ran-du-v1.yaml
+- sno-ran-du/clusterinstance-defaults-v2.yaml

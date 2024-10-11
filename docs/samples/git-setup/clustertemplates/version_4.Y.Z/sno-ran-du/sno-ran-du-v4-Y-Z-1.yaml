@@ -1,0 +1,289 @@
+apiVersion: o2ims.provisioning.oran.org/v1alpha1
+kind: ClusterTemplate
+metadata:
+  name: sno-ran-du.v4-Y-Z-1
+  namespace: sno-ran-du-v4-16
+spec:
+  name: sno-ran-du
+  version: v4-Y-Z-1
+  templates:
+    hwTemplate: placeholder-du-template-configmap-v1
+    clusterInstanceDefaults: clusterinstance-defaults-v1
+    policyTemplateDefaults: policytemplate-defaults-v1
+  templateParameterSchema:
+    properties:
+      nodeClusterName:
+        type: string
+      oCloudSiteId:
+        type: string
+      policyTemplateParameters:
+        description: policyTemplateSchema defines the available parameters for cluster configuration
+        properties:
+          sriov-network-vlan-1:
+            type: string
+          sriov-network-vlan-2:
+            type: string
+          sriov-network-pfNames-1:
+            type: string
+          sriov-network-pfNames-2:
+            type: string
+          cpu-isolated:
+            type: string
+          cpu-reserved:
+            type: string
+          hugepages-default:
+            type: string
+          hugepages-size:
+            type: string
+          hugepages-count:
+            type: string
+          install-plan-approval:
+            type: string
+        type: object
+      clusterInstanceParameters:
+        description: clusterInstanceParameters defines the available parameters for cluster installation
+        properties:
+          additionalNTPSources:
+            description: AdditionalNTPSources is a list of NTP sources (hostname
+              or IP) to be added to all cluster hosts. They are added to any NTP
+              sources that were configured through other means.
+            items:
+              type: string
+            type: array
+          apiVIPs:
+            description: APIVIPs are the virtual IPs used to reach the OpenShift
+              cluster's API. Enter one IP address for single-stack clusters, or
+              up to two for dual-stack clusters (at most one IP address per IP
+              stack used). The order of stacks should be the same as order of
+              subnets in Cluster Networks, Service Networks, and Machine Networks.
+            items:
+              type: string
+            maxItems: 2
+            type: array
+          baseDomain:
+            description: BaseDomain is the base domain to use for the deployed
+              cluster.
+            type: string
+          clusterName:
+            description: ClusterName is the name of the cluster.
+            type: string
+          extraAnnotations:
+            additionalProperties:
+              additionalProperties:
+                type: string
+              type: object
+            description: Additional cluster-wide annotations to be applied to
+              the rendered templates
+            type: object
+          extraLabels:
+            additionalProperties:
+              additionalProperties:
+                type: string
+              type: object
+            description: Additional cluster-wide labels to be applied to the rendered
+              templates
+            type: object
+          ingressVIPs:
+            description: IngressVIPs are the virtual IPs used for cluster ingress
+              traffic. Enter one IP address for single-stack clusters, or up to
+              two for dual-stack clusters (at most one IP address per IP stack
+              used). The order of stacks should be the same as order of subnets
+              in Cluster Networks, Service Networks, and Machine Networks.
+            items:
+              type: string
+            maxItems: 2
+            type: array
+          machineNetwork:
+            description: MachineNetwork is the list of IP address pools for machines.
+            items:
+              description: MachineNetworkEntry is a single IP address block for
+                node IP blocks.
+              properties:
+                cidr:
+                  description: CIDR is the IP block address pool for machines
+                    within the cluster.
+                  type: string
+              required:
+              - cidr
+              type: object
+            type: array
+          nodes:
+            items:
+              description: NodeSpec
+              properties:
+                bmcAddress:
+                  description: BmcAddress holds the URL for accessing the controller
+                    on the network.
+                  type: string
+                bmcCredentialsName:
+                  description: BmcCredentialsName is the name of the secret containing
+                    the BMC credentials (requires keys "username" and "password").
+                  properties:
+                    name:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                bmcCredentialsDetails:
+                  description: A workaround to provide bmc creds through ClusterRequest
+                  properties:
+                    username:
+                      type: string
+                    password:
+                      type: string
+                bootMACAddress:
+                  description: Which MAC address will PXE boot? This is optional
+                    for some types, but required for libvirt VMs driven by vbmc.
+                  pattern: '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}'
+                  type: string
+                extraAnnotations:
+                  additionalProperties:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  description: Additional node-level annotations to be applied
+                    to the rendered templates
+                  type: object
+                extraLabels:
+                  additionalProperties:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  description: Additional node-level labels to be applied to the
+                    rendered templates
+                  type: object
+                hostName:
+                  description: Hostname is the desired hostname for the host
+                  type: string
+                nodeLabels:
+                  additionalProperties:
+                    type: string
+                  description: NodeLabels allows the specification of custom roles
+                    for your nodes in your managed clusters. These are additional
+                    roles are not used by any OpenShift Container Platform components,
+                    only by the user. When you add a custom role, it can be associated
+                    with a custom machine config pool that references a specific
+                    configuration for that role. Adding custom labels or roles
+                    during installation makes the deployment process more effective
+                    and prevents the need for additional reboots after the installation
+                    is complete.
+                  type: object
+                nodeNetwork:
+                  description: NodeNetwork is a set of configurations pertaining
+                    to the network settings for the node.
+                  properties:
+                    config:
+                      description: yaml that can be processed by nmstate, using
+                        custom marshaling/unmarshaling that will allow to populate
+                        nmstate config as plain yaml.
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    interfaces:
+                      description: Interfaces is an array of interface objects
+                        containing the name and MAC address for interfaces that
+                        are referenced in the raw nmstate config YAML. Interfaces
+                        listed here will be automatically renamed in the nmstate
+                        config YAML to match the real device name that is observed
+                        to have the corresponding MAC address. At least one interface
+                        must be listed so that it can be used to identify the
+                        correct host, which is done by matching any MAC address
+                        in this list to any MAC address observed on the host.
+                      items:
+                        properties:
+                          macAddress:
+                            description: mac address present on the host.
+                            pattern: ^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$
+                            type: string
+                          name:
+                            description: 'nic name used in the yaml, which relates
+                              1:1 to the mac address. Name in REST API: logicalNICName'
+                            type: string
+                        required:
+                        - macAddress
+                        type: object
+                      minItems: 1
+                      type: array
+                  type: object
+                rootDeviceHints:
+                  description: 'RootDeviceHints specifies the device for deployment.
+                    Identifiers that are stable across reboots are recommended,
+                    for example, wwn: <disk_wwn> or deviceName: /dev/disk/by-path/<device_path>'
+                  properties:
+                    deviceName:
+                      description: A Linux device name like "/dev/vda", or a by-path
+                        link to it like "/dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0".
+                        The hint must match the actual value exactly.
+                      type: string
+                    hctl:
+                      description: A SCSI bus address like 0:0:0:0. The hint must
+                        match the actual value exactly.
+                      type: string
+                    minSizeGigabytes:
+                      description: The minimum size of the device in Gigabytes.
+                      minimum: 0
+                      type: integer
+                    model:
+                      description: A vendor-specific device identifier. The hint
+                        can be a substring of the actual value.
+                      type: string
+                    rotational:
+                      description: True if the device should use spinning media,
+                        false otherwise.
+                      type: boolean
+                    serialNumber:
+                      description: Device serial number. The hint must match the
+                        actual value exactly.
+                      type: string
+                    vendor:
+                      description: The name of the vendor or manufacturer of the
+                        device. The hint can be a substring of the actual value.
+                      type: string
+                    wwn:
+                      description: Unique storage identifier. The hint must match
+                        the actual value exactly.
+                      type: string
+                    wwnVendorExtension:
+                      description: Unique vendor storage identifier. The hint
+                        must match the actual value exactly.
+                      type: string
+                    wwnWithExtension:
+                      description: Unique storage identifier with the vendor extension
+                        appended. The hint must match the actual value exactly.
+                      type: string
+                  type: object
+              required:
+              - hostName
+              type: object
+            type: array
+          serviceNetwork:
+            description: ServiceNetwork is the list of IP address pools for services.
+            items:
+              description: ServiceNetworkEntry is a single IP address block for
+                node IP blocks.
+              properties:
+                cidr:
+                  description: CIDR is the IP block address pool for machines
+                    within the cluster.
+                  type: string
+              required:
+              - cidr
+              type: object
+            type: array
+          sshPublicKey:
+            description: SSHPublicKey is the public Secure Shell (SSH) key to
+              provide access to instances. This key will be added to the host
+              to allow ssh access
+            type: string
+        required:
+        - clusterName
+        - nodes
+        type: object
+
+# Notes:
+# clusterInstanceParameters contains only params that are exposed to the ProvisioningRequest.
+#
+# When HW is ready, bmcAddress, bmcCredentialsName, bootMACAddress and nodes.nodeNetwork.macAddress
+# should be removed from the schema as they are supposed to come from HW.
+#
+# Ideally, rootDeviceHints should come from default configmap. Keep it in the schema to make this template
+# be able to used for multiple SNOs with different rootDeviceHints.

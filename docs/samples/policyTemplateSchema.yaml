@@ -19,5 +19,4 @@ policyTemplateParameters:
       type: string
     install-plan-approval:
       type: string
-      default: Automatic
 
