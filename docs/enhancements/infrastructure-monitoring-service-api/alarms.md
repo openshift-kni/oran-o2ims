@@ -153,23 +153,23 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (downlo
 ## Infrastructure Monitoring Service Alarms API
 See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (download from [here](https://specifications.o-ran.org/download?id=674)) to check APIs that we need to expose.
 
-| **Endpoint**                                                                       | **HTTP Method** | **Description**                                                     | **Input Payload**                                                            | **Returned Data**                   |
-|------------------------------------------------------------------------------------|-----------------|---------------------------------------------------------------------|------------------------------------------------------------------------------|-------------------------------------|
-| `/O2ims_infrastructureMonitoring/v1alpha/alarms`                                   | GET             | Retrieve the list of alarms.                                        | Optional query parameters `filter`                                           | A list of `AlarmEventRecord`        |
-| `/O2ims_infrastructureMonitoring/v1alpha/alarms/{alarmEventRecordId}`              | GET             | Retrieve exactly one alarm identified by `alarmEventRecordId`.      | None                                                                         | Exactly one `AlarmEventRecord`      |
-| `/O2ims_infrastructureMonitoring/v1alpha/alarms/{alarmEventRecordId}`              | PATCH           | Modify exactly one alarm identified by `alarmEventRecordId` to ack. | `AlarmEventRecordModifications`(no perceivedSeverity only alarmAcknowledged) | `AlarmEventRecordModifications`     |
-| `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions`                       | GET             | Retrieve the list of alarm subscriptions.                           | Optional query parameters `filter`                                           | A list of `AlarmSubscriptionInfo`   |
-| `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions`                       | POST            | Create a new alarm subscriptions.                                   | `AlarmSubscriptionInfo`                                                      | Exactly one `AlarmSubscriptionInfo` |
-| `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions/{alarmSubscriptionId}` | GET             | Retrieve exactly one subscription using `alarmSubscriptionId`.      | None                                                                         | Exactly one `AlarmSubscriptionInfo` |
-| `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions/{alarmSubscriptionId}` | DELETE          | Delete exactly one subscription using `alarmSubscriptionId`.        | None                                                                         | None                                |
-| `/O2ims_infrastructureMonitoring/v1alpha/probableCause`                            | GET             | Retrieve all probable causes                                        | None                                                                         | A list of `ProbableCause`           |
-| `/O2ims_infrastructureMonitoring/v1alpha/probableCause/{probableCauseId}`          | GET             | Retrieve exactly one probable cause using `probableCauseId`.        | None                                                                         | Exactly one `ProbableCause`         |
+| **Endpoint**                                                                  | **HTTP Method** | **Description**                                                     | **Input Payload**                                                            | **Returned Data**                   |
+|-------------------------------------------------------------------------------|-----------------|---------------------------------------------------------------------|------------------------------------------------------------------------------|-------------------------------------|
+| `/O2ims_infrastructureMonitoring/v1/alarms`                                   | GET             | Retrieve the list of alarms.                                        | Optional query parameters `filter`                                           | A list of `AlarmEventRecord`        |
+| `/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}`              | GET             | Retrieve exactly one alarm identified by `alarmEventRecordId`.      | None                                                                         | Exactly one `AlarmEventRecord`      |
+| `/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}`              | PATCH           | Modify exactly one alarm identified by `alarmEventRecordId` to ack. | `AlarmEventRecordModifications`(no perceivedSeverity only alarmAcknowledged) | `AlarmEventRecordModifications`     |
+| `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions`                       | GET             | Retrieve the list of alarm subscriptions.                           | Optional query parameters `filter`                                           | A list of `AlarmSubscriptionInfo`   |
+| `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions`                       | POST            | Create a new alarm subscriptions.                                   | `AlarmSubscriptionInfo`                                                      | Exactly one `AlarmSubscriptionInfo` |
+| `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}` | GET             | Retrieve exactly one subscription using `alarmSubscriptionId`.      | None                                                                         | Exactly one `AlarmSubscriptionInfo` |
+| `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}` | DELETE          | Delete exactly one subscription using `alarmSubscriptionId`.        | None                                                                         | None                                |
+| `/O2ims_infrastructureMonitoring/v1/probableCause`                            | GET             | Retrieve all probable causes                                        | None                                                                         | A list of `ProbableCause`           |
+| `/O2ims_infrastructureMonitoring/v1/probableCause/{probableCauseId}`          | GET             | Retrieve exactly one probable cause using `probableCauseId`.        | None                                                                         | Exactly one `ProbableCause`         |
 
 
-| **Endpoint for clients but not currently in spec**                         | **HTTP Method** | **Description**                                              | **Input Payload** | **Returned Data**           |
-|----------------------------------------------------------------------------|-----------------|--------------------------------------------------------------|-------------------|-----------------------------|
-| `/O2ims_infrastructureMonitoring/v1alpha/probableCauses`                   | GET             | Retrieve all probable causes                                 | None              | A list of `ProbableCause`   |
-| `/O2ims_infrastructureMonitoring/v1alpha/probableCauses/{probableCauseId}` | GET             | Retrieve exactly one probable cause using `probableCauseId`. | None              | Exactly one `ProbableCause` |
+| **Endpoint for clients but not currently in spec**                    | **HTTP Method** | **Description**                                              | **Input Payload** | **Returned Data**           |
+|-----------------------------------------------------------------------|-----------------|--------------------------------------------------------------|-------------------|-----------------------------|
+| `/O2ims_infrastructureMonitoring/v1/probableCauses`                   | GET             | Retrieve all probable causes                                 | None              | A list of `ProbableCause`   |
+| `/O2ims_infrastructureMonitoring/v1/probableCauses/{probableCauseId}` | GET             | Retrieve exactly one probable cause using `probableCauseId`. | None              | Exactly one `ProbableCause` |
 
 
 
@@ -181,16 +181,16 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (downlo
 
 ### `alarms` family
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/alarms` with GET
+#### Steps for `/O2ims_infrastructureMonitoring/v1/alarms` with GET
 1. Get all alarms from `alarm_event_record` table (optionally using `?filter` param values)
 2. Response with retrieved list of AlarmEventRecord and appropriate code
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/alarms/{alarmEventRecordId}` with GET
+#### Steps for `/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}` with GET
 1. Client calls with an AlarmEventRecordID
 2. Search in both `alarm_event_record` and `alarm_event_record_archive` with `AlarmEventRecordID`
 3. Response with retrieved instance of AlarmEventRecord and appropriate code
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/alarms/{alarmEventRecordId}` with PATCH
+#### Steps for `/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}` with PATCH
 1. Client calls with an AlarmEventRecordID and `AlarmEventRecordModifications` as patch payload
 2. If `AlarmEventRecordModifications.alarmAcknowledged` is True, update `alarm_event_record` table
    - Note: `alarmAcknowledged` will be updated to `false` if `alarm_event_record.alarm_changed_time` changes (TODO: update DB to auto handle this)
@@ -198,33 +198,33 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (downlo
 
 ### `alarmSubscriptions` family
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions` with GET
+#### Steps for `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions` with GET
 1. Query the storage `alarm_subscription_info` (optionally using `?filter` param values)
 2. Response with a list of `AlarmSubscriptionInfo` and appropriate code
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions` with POST
+#### Steps for `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions` with POST
 1. Client calls with `AlarmSubscriptionInfo` payload
 2. Validate the filter (e.g check if the columns actually exist)
 3. Insert `alarm_subscription_info`, for now we limit to 5 (if already 5, return with an error).
 4. Response with `AlarmSubscriptionInfo` and appropriate code
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions/{alarmSubscriptionId}` with GET
+#### Steps for `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}` with GET
 1. Client calls with an `alarmSubscriptionId`
 2. Query the storage `alarm_subscription_info` table using `alarmSubscriptionId`
 3. Response with retrieved instance of `AlarmSubscriptionInfo` and appropriate code
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/alarmSubscriptions/{alarmSubscriptionId}` with DELETE
+#### Steps for `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}` with DELETE
 1. Client calls with an `alarmSubscriptionId`
 2. Delete the row `alarm_subscription_info` using `alarmSubscriptionId`
 3. No special response (only appropriate code)
 
 ### `probableCause` family
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/probableCause` with GET
+#### Steps for `/O2ims_infrastructureMonitoring/v1/probableCause` with GET
 1. Query the tables `probable_causes` and `alarm_definitions` to fetch probableCause ID, alarm name and alarm description
 2. Response with a list of `probableCause` and appropriate code
 
-#### Steps for `/O2ims_infrastructureMonitoring/v1alpha/probableCause/{probableCauseId}` with GET
+#### Steps for `/O2ims_infrastructureMonitoring/v1/probableCause/{probableCauseId}` with GET
 1. Query the tables `probable_causes` and `alarm_definitions` using `probableCauseId` to fetch probableCause ID (should be same as probableCauseId from input ), alarm name and alarm description
 2. Response with retrieved instance of `probableCause` and appropriate code
 
