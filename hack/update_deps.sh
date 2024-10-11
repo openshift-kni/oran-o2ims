@@ -7,6 +7,6 @@ pushd api/hardwaremanagement >/dev/null
 go mod tidy
 popd >/dev/null
 
-go mod vendor
+go work vendor
 go mod tidy
 

@@ -4,6 +4,8 @@
 !/README.md
 !/go.mod
 !/go.sum
+!/go.work
+!/go.work.sum
 !/internal
 !/main.go
 !/cmd
