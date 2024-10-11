@@ -50,14 +50,18 @@ type BMC struct {
 // NodeStatus describes the observed state of a request to allocate and prepare
 // a node that will eventually be part of a deployment manager.
 type NodeStatus struct {
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	BMC *BMC `json:"bmc,omitempty"`
 
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Interfaces []*Interface `json:"interfaces,omitempty"`
 
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Hostname string `json:"hostname,omitempty"`
 
 	// Conditions represent the observations of the NodeStatus's current state.
 	// Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

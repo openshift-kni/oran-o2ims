@@ -98,15 +98,19 @@ type ProvisioningRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// ClusterDetails references to the ClusterInstance.
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
 
 	// NodePoolRef references to the NodePool.
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
 
 	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Policies []PolicyDetails `json:"policies,omitempty"`
 }
 

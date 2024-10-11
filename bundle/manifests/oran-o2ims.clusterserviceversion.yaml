@@ -5,6 +5,113 @@ metadata:
     alm-examples: |-
       [
         {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "Node",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "oran-o2ims",
+              "app.kubernetes.io/instance": "inventory-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "inventory",
+              "app.kubernetes.io/part-of": "oran-o2ims"
+            },
+            "name": "sample-node",
+            "namespace": "oran-hwmgr-plugin"
+          },
+          "spec": {
+            "groupName": "master",
+            "hwProfile": "sample-profile",
+            "nodePool": "sample-nodepool"
+          },
+          "status": {
+            "bmc": {
+              "address": "idrac-virtualmedia+https://198.51.100.1/redfish/v1/Systems/System.Embedded.1",
+              "credentialsName": "sample-node-bmc-secret"
+            },
+            "conditions": [
+              {
+                "lastTransitionTime": "2024-10-09T15:36:31Z",
+                "message": "Provisioned",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Provisioned"
+              }
+            ],
+            "hostname": "sample-node.example.com",
+            "interfaces": [
+              {
+                "label": "bootable-interface",
+                "macAddress": "00:11:22:33:44:55",
+                "name": "eno1"
+              },
+              {
+                "label": "",
+                "macAddress": "00:11:22:33:44:66",
+                "name": "eno2"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "NodePool",
+          "metadata": {
+            "annotations": {
+              "bootInterfaceLabel": "bootable-interface"
+            },
+            "generation": 1,
+            "labels": {
+              "app.kubernetes.io/created-by": "oran-o2ims",
+              "app.kubernetes.io/instance": "inventory-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "inventory",
+              "app.kubernetes.io/part-of": "oran-o2ims"
+            },
+            "name": "sample-nodepool",
+            "namespace": "oran-hwmgr-plugin"
+          },
+          "spec": {
+            "cloudID": "sample",
+            "hwMgrId": "loopback-1",
+            "nodeGroup": [
+              {
+                "hwProfile": "sample-master-profile",
+                "interfaces": [
+                  "eno1"
+                ],
+                "name": "master",
+                "size": 1
+              },
+              {
+                "hwProfile": "sample-worker-profile",
+                "name": "worker",
+                "size": 0
+              }
+            ],
+            "site": "ottawa"
+          },
+          "status": {
+            "cloudManager": {
+              "observedGeneration": 1
+            },
+            "conditions": [
+              {
+                "lastTransitionTime": "2024-10-09T15:36:41Z",
+                "message": "Created",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Provisioned"
+              }
+            ],
+            "hwMgrPlugin": {},
+            "properties": {
+              "nodeNames": [
+                "sample-node"
+              ]
+            }
+          }
+        },
+        {
           "apiVersion": "o2ims.oran.openshift.io/v1alpha1",
           "kind": "Inventory",
           "metadata": {
@@ -24,6 +131,10 @@ metadata:
             "resourceServerConfig": {
               "enabled": false
             }
+          },
+          "status": {
+            "deploymentStatus": {},
+            "usedServerConfig": {}
           }
         },
         {
@@ -345,6 +456,9 @@ metadata:
               "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults"
             },
             "version": "v1.0.0"
+          },
+          "status": {
+            "conditions": []
           }
         },
         {
@@ -538,6 +652,9 @@ metadata:
               }
             },
             "templateVersion": "v1.0.0"
+          },
+          "status": {
+            "conditions": []
           }
         }
       ]
@@ -627,6 +744,9 @@ spec:
         path: version
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: Conditions
+        path: conditions
       version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
       displayName: ORAN O2IMS Inventory
@@ -779,16 +899,36 @@ spec:
         path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
+        displayName: Hardware Manager ID
+        path: hwMgrId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: Location
         displayName: Location
         path: location
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Node Group
+        path: nodeGroup
       - description: Site
         displayName: Site
         path: site
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: Cloud Manager
+        path: cloudManager
+      - description: |-
+          Conditions represent the observations of the NodePool's current state.
+          Possible values of the condition type are `Provisioned` and `Unknown`.
+        displayName: Conditions
+        path: conditions
+      - displayName: Hw Mgr Plugin
+        path: hwMgrPlugin
+      - description: Properties represent the node properties in the pool
+        displayName: Properties
+        path: properties
       version: v1alpha1
     - description: Node is the schema for an allocated node
       displayName: Node
@@ -814,6 +954,18 @@ spec:
         path: nodePool
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: BMC
+        path: bmc
+      - description: |-
+          Conditions represent the observations of the NodeStatus's current state.
+          Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+        displayName: Conditions
+        path: conditions
+      - displayName: Hostname
+        path: hostname
+      - displayName: Interfaces
+        path: interfaces
       version: v1alpha1
     - description: ProvisioningRequest is the Schema for the provisioningrequests
         API
@@ -866,6 +1018,19 @@ spec:
         path: templateVersion
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: ClusterDetails references to the ClusterInstance.
+        displayName: Cluster Details
+        path: clusterDetails
+      - displayName: Conditions
+        path: conditions
+      - description: NodePoolRef references to the NodePool.
+        displayName: Node Pool Ref
+        path: nodePoolRef
+      - description: Holds policies that are matched with the ManagedCluster created
+          by the ProvisioningRequest.
+        displayName: Policies
+        path: policies
       version: v1alpha1
   description: |
     # O-RAN O2IMS operator
@@ -1334,6 +1499,7 @@ spec:
   - email: imihai@redhat.com
     name: IrinaMihai
   maturity: alpha
+  minKubeVersion: 1.28.0
   provider:
     name: Red Hat
   replaces: oran-o2ims.v0.0.0
