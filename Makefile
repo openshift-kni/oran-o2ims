@@ -160,9 +160,19 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	rm Dockerfile.cross
 
 ##@ Deployment
+## settings parameter for deployment 
+# setting  the backend token and the backend URL 
+TOKEN_BACKEND := $(shell oc create token -n open-cluster-management multicluster-operators --duration=24h)
+BACKEND_TOKEN_RS := $(shell oc create token oauth-apiserver-sa -n openshift-oauth-apiserver --duration=48h)
+
+# getting the cloud id and the IngressHost 
+
+CLOUD_ID := $(shell oc get clusterversion -o jsonpath='{.items[].spec.clusterID}{"\n"}')
+INGRESS_HOST := $(shell oc get ingresscontrollers.operator.openshift.io -n openshift-ingress-operator default -o json | jq -r .status.domain)
+
 
 ifndef ignore-not-found
-  ignore-not-found = false
+  ignore-not-found = true
 endif
 
 .PHONY: install
@@ -181,6 +191,18 @@ deploy: manifests kustomize kubectl ## Deploy controller to the K8s cluster spec
 
 .PHONY: undeploy
 undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+
+.PHONY: deploy-service
+deploy-service: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	@sed -i '' -e 's/ingressHost:.*/ingressHost: $(INGRESS_HOST)/' config/manager/metadata-server.yaml 
+	@sed -i '' -e 's/cloudId: .*/cloudId: $(CLOUD_ID)/' config/manager/metadata-server.yaml
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+
+.PHONY: undeploy-service
+undeploy-service: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
