@@ -8,6 +8,7 @@ reviewers: # Include a comment about what domain expertise a reviewer is expecte
   - @alegacy
   - @bartwensley
   - @browsell
+  - @edcdavid
   - @Jennifer-chen-rh
 approvers: # A single approver is preferred, the role of the approver is to raise important questions, help ensure the enhancement receives reviews from all applicable areas/SMEs, and determine when consensus is achieved such that the EP can move forward to implementation.  Having multiple approvers makes it difficult to determine who is responsible for the actual approval.
   - @browsell
@@ -337,10 +338,10 @@ alarmEventRecord := AlarmEventRecord{
 ## Schema
 All O-RAN services will use the same O-CLOUD DB service. More on DB deployment [here](#postgres).
 
-Each table is modeled after O-RAN data structures. DB in our case wil be called `o-ran-infrastructure-monitoring-alarms`.
+Each table is modeled after O-RAN data structures. DB in our case wil be called `alarms`.
 Init SQL may look like the following:
 ```sql
-CREATE DATABASE o-ran-infrastructure-monitoring-alarms;
+CREATE DATABASE alarms;
 
 -- ENUM for ManagementInterfaceID
 DROP TYPE IF EXISTS ManagementInterfaceID CASCADE;
@@ -425,7 +426,7 @@ CREATE TABLE alarm_subscription_info (
              consumer_subscription_id UUID,
              filter TEXT,
              callback TEXT NOT NULL,
-             largest_number_alarm_event_seen_so_far BIGINT NOT NULL DEFAULT 0,
+             event_cursor BIGINT NOT NULL DEFAULT 0,
              created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -560,7 +561,7 @@ For a given OCP release, the alarmDefinitions and probableCauses are fixed, so t
 5. Take all the PromRules and build the AlarmDefinition. See [here](#prometheusrule-to-alarmdefinition-mapping) for mapping. 
    - A corresponding probablyCause row will be autometically added.
 
-6. Apply the required CR to activate the internal endpoint for alertmanager notification. See [here](#steps-internalv1caas-alertsalertmanager) for more.
+6. Apply the required CR to activate the internal endpoint for alertmanager notification. See [here](#steps-for-internalv1caas-alertsalertmanager) for more.
 
 7. The server should now be ready to take requests. 
 
@@ -658,7 +659,7 @@ Notes on Init phase
     SELECT aer.*
     FROM alarm_event_record aer
              JOIN alarm_subscription_info asi ON asi.alarm_subscription_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
-    WHERE aer.alarm_sequence_number > asi.largest_number_alarm_event_seen_so_far
+    WHERE aer.alarm_sequence_number > asi.event_cursor
       and aer.perceived_severity = 'CRITICAL'
     ORDER BY aer.alarm_sequence_number;
     ```
@@ -673,7 +674,7 @@ Notes on Init phase
   And finally update 
   ```sql
   UPDATE alarm_subscription_info
-  SET largest_number_alarm_event_seen_so_far = $largestProcessedSequenceNumber
+  SET event_cursor = $largestProcessedSequenceNumber
   WHERE alarm_subscription_id = 'a2eebc99-9c0b-4ef8-bb6d-6bb9bd380a13';
   ```
 - NOTE: `alarm_sequence_number` is automatically handled from inside the DB. When the sequence increments, subscriber is notified. 
@@ -717,6 +718,9 @@ We will need few K8s resources that will be eventually applied by the Operator.
 We need two Jobs that can help with DB
 
 - One job that creates a Database using `CREATE DATBASE` cmd
+  - ALARMS_DB: `alarms`
+  - ALARMS_USER: `alarms`
+  - ALARM_PASSWORD: `alarms`
 - One job that creates all the tables as part of migration (create new tables, updates, etc)
   See [postgres](#postgres) for all the required credentials
 
@@ -724,7 +728,7 @@ We need two Jobs that can help with DB
 This is essentially a typical CRUD app and we need the following
 
 - Deployment: one main container which starts the main server. 
-  No HA, so set replica to 1. It should also contain all the ENV variables needed to talk to postgres deployment DB_HOST, DB_PORT, DB_USER etc (consult with POSTGRES deployment for latest).
+  No HA, so set replica to 1. It should also contain all the ENV variables needed to talk to postgres deployment ALARMS_DB, POSTGRES_PORT, ALARMS_USER etc (consult with POSTGRES deployment + Init JOB for alarms for latest).
   DB_NAME will be set to whatever is used in [here](#jobs-to-initialize-alarm-server-db).
   Suitable resources should be provided but not much memory and CPU is need for CRUD apps (TBD, need to experiment for exact values). 
 - Secrets: DB creds and configs should be read from postgres deployment. 
@@ -739,17 +743,18 @@ This deployment can be leveraged by many microservices by creating their own Dat
   Deployment should also mount to the right path `/var/lib/postgresql/data` (please check the latest docs).
 - PersistentVolumeClaim: At least 20G PVC should be used. Using test, we used about 60k rows DB which took about ~2Gb
 - Service: ClusterIP should be good as it's only used within the cluster. 
-- Secrets: default creds needed to spin postgres, with type: Opaque. This secret will then be ready by 
-   - POSTGRES_USER: `o-ran`
-   - POSTGRES_PASSWORD: `o-ran`
-   - POSTGRES_DB: `o-ran` # Note: this is simply there to be explicit. If not provided `POSTGRES_USER` is used to create default DB. But ultimately this DB will not be used as each service will create their own.
-- ConfigMap: For others to know the hostname and port
+- Secrets: default creds needed to spin postgres 
+   - POSTGRES_ADMIN_USER: `o-ran`
+   - POSTGRES_ADMIN_PASSWORD: `o-ran`
+- ConfigMap:
    - POSTGRES_HOST: "postgres.o-ran-namespace.svc.cluster.local"
    - POSTGRES_PORT: "5432"
+   - POSTGRES_DEFAULT_DB: `o-ran` # Note: this is simply there to be explicit. If not provided `POSTGRES_USER` is used to create default DB. But ultimately this DB will not be used as each service will create their own.
 
-With the Secrets and ConfigMap applied, an app may connect to the DB with the following given the service (assuming initContainer of app already created DB `o-ran-infrastructure-monitoring-alarms`):
+
+With the Secrets and ConfigMap applied, an app may connect to the DB with the following given the service (assuming initContainer of app already created DB `alarms`):
 ```go
-connStr := "postgres://o-ran:o-ran@postgres.o-ran-namespace.svc.cluster.local:5432/o-ran-infrastructure-monitoring-alarms?sslmode=disable"
+connStr := "postgres://alarms:alarms@postgres.o-ran-namespace.svc.cluster.local:5432/alarms?sslmode=disable"
 ```
 
 Note:
