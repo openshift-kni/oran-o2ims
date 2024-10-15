@@ -163,8 +163,6 @@ See the official doc `O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)` (downlo
 | `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions`                       | POST            | Create a new alarm subscriptions.                                   | `AlarmSubscriptionInfo`                                                      | Exactly one `AlarmSubscriptionInfo` |
 | `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}` | GET             | Retrieve exactly one subscription using `alarmSubscriptionId`.      | None                                                                         | Exactly one `AlarmSubscriptionInfo` |
 | `/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}` | DELETE          | Delete exactly one subscription using `alarmSubscriptionId`.        | None                                                                         | None                                |
-| `/O2ims_infrastructureMonitoring/v1/probableCause`                            | GET             | Retrieve all probable causes                                        | None                                                                         | A list of `ProbableCause`           |
-| `/O2ims_infrastructureMonitoring/v1/probableCause/{probableCauseId}`          | GET             | Retrieve exactly one probable cause using `probableCauseId`.        | None                                                                         | Exactly one `ProbableCause`         |
 
 
 | **Endpoint for clients but not currently in spec**                    | **HTTP Method** | **Description**                                              | **Input Payload** | **Returned Data**           |
