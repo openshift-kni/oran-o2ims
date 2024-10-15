@@ -11,10 +11,25 @@ spec:
     kind: ProvisioningRequest
     listKind: ProvisioningRequestList
     plural: provisioningrequests
+    shortNames:
+    - oranpr
     singular: provisioningrequest
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.conditions[?(@.type=='HardwareProvisioned')].reason
+      name: HW Provisioning
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='ClusterProvisioned')].reason
+      name: Installation
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='ConfigurationApplied')].reason
+      name: Configuration
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ProvisioningRequest is the Schema for the provisioningrequests

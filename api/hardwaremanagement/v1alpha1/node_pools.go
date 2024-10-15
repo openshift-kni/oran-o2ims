@@ -88,9 +88,11 @@ type NodePoolStatus struct {
 
 // NodePool is the schema for an allocation request of nodes
 //
-// +kubebuilder:resource:shortName=np
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=nodepools,shortName=orannp
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
 // +operator-sdk:csv:customresourcedefinitions:displayName="Node Pool",resources={{Namespace, v1}}
 type NodePool struct {
 	metav1.TypeMeta   `json:",inline"`

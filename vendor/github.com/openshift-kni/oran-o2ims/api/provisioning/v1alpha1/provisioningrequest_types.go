@@ -116,7 +116,11 @@ type ProvisioningRequestStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:scope=Cluster,shortName=oranpr
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+//+kubebuilder:printcolumn:name="HW Provisioning",type="string",JSONPath=".status.conditions[?(@.type=='HardwareProvisioned')].reason"
+//+kubebuilder:printcolumn:name="Installation",type="string",JSONPath=".status.conditions[?(@.type=='ClusterProvisioned')].reason"
+//+kubebuilder:printcolumn:name="Configuration",type="string",JSONPath=".status.conditions[?(@.type=='ConfigurationApplied')].reason"
 
 // ProvisioningRequest is the Schema for the provisioningrequests API
 // +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Provisioning Request",resources={{Namespace, v1},{ClusterInstance, siteconfig.open-cluster-management.io/v1alpha1}}

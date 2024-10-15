@@ -12,11 +12,18 @@ spec:
     listKind: NodePoolList
     plural: nodepools
     shortNames:
-    - np
+    - orannp
     singular: nodepool
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.conditions[-1:].reason
+      name: State
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: NodePool is the schema for an allocation request of nodes
