@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: orano2ims
     app.kubernetes.io/part-of: oran-o2ims
-  name: sample
+  name: metadata-server
   namespace: oran-o2ims
 spec:
   alarmSubscriptionServerConfig:
