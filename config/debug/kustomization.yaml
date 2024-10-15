@@ -1,0 +1,17 @@
+# Applies patches to the default resources so that debugging is simplified and compatible with using the DLV debugger.
+# Since using the debugger implies that the program will occasionally be suspended we must ensure that critical parts
+# of the process do not erroneously flagged errors or cause shutdowns (i.e., health probes, and leader election)
+#
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - ../default
+patches:
+    -   target:
+            kind: Deployment
+            name: controller-manager
+        path: disable-health-probes.yaml
+    -   target:
+            kind: Deployment
+            name: controller-manager
+        path: disable-leader-election.yaml

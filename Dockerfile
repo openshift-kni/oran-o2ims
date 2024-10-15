@@ -1,5 +1,10 @@
 # Build the manager binary
-FROM registry.hub.docker.com/library/golang:1.22 as builder
+FROM registry.hub.docker.com/library/golang:1.22 as dlvbuilder
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+FROM dlvbuilder as builder
+ARG GOBUILD_GCFLAGS=""
+
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -22,12 +27,20 @@ COPY internal internal
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod=vendor -a
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -gcflags "${GOBUILD_GCFLAGS}" -mod=vendor -a
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot as production
 WORKDIR /
+COPY --from=builder /workspace/oran-o2ims /usr/bin
+USER 65532:65532
+
+ENTRYPOINT ["/usr/bin/oran-o2ims"]
+
+FROM registry.access.redhat.com/ubi9/ubi:9.2 as debug
+
+COPY --from=dlvbuilder /go/bin/dlv /usr/bin
 COPY --from=builder /workspace/oran-o2ims /usr/bin
 USER 65532:65532
 
