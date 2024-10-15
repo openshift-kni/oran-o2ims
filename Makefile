@@ -187,23 +187,13 @@ uninstall: manifests kustomize kubectl ## Uninstall CRDs from the K8s cluster sp
 deploy: manifests kustomize kubectl ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	@$(KUBECTL) create configmap env-config --from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) --dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	@sed -i '' -e 's/cloudId: .*/cloudId: $(CLOUD_ID)/' config/manager/metadata-server.yaml
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
-
-.PHONY: service-deploy
-service-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	@sed -i '' -e 's/ingressHost:.*/ingressHost: $(INGRESS_HOST)/' config/manager/metadata-server.yaml 
-	@sed -i '' -e 's/cloudId: .*/cloudId: $(CLOUD_ID)/' config/manager/metadata-server.yaml
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
-
-.PHONY: service-undeploy
-service-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
 
