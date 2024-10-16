@@ -1243,21 +1243,21 @@ func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema map[str
 		return subSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
 	}
 	if _, ok := jsonObject[PropertiesString]; !ok {
-		return subSchema, fmt.Errorf(`non compliant Main Schema, missing "properties" section: %w`, err)
+		return subSchema, fmt.Errorf("non compliant Main Schema, missing 'properties' section: %w", err)
 	}
 	properties, ok := jsonObject[PropertiesString].(map[string]any)
 	if !ok {
-		return subSchema, fmt.Errorf(`could not cast "properties" section of schema as map[string]any: %w`, err)
+		return subSchema, fmt.Errorf("could not cast 'properties' section of schema as map[string]any: %w", err)
 	}
 
 	subSchemaValue, ok := properties[subSchemaKey]
 	if !ok {
-		return subSchema, fmt.Errorf(`subSchema "%s" does not exist: %w`, subSchemaKey, err)
+		return subSchema, fmt.Errorf("subSchema '%s' does not exist: %w", subSchemaKey, err)
 	}
 
 	subSchema, ok = subSchemaValue.(map[string]any)
 	if !ok {
-		return subSchema, fmt.Errorf(`subSchema "%s" is not a valid map: %w`, subSchemaKey, err)
+		return subSchema, fmt.Errorf("subSchema '%s' is not a valid map: %w", subSchemaKey, err)
 	}
 	return subSchema, nil
 }
@@ -1273,7 +1273,7 @@ func ExtractMatchingInput(parentSchema []byte, subSchemaKey string) (any, error)
 	// Check if the input contains the subSchema key
 	matchingInput, ok := inputData[subSchemaKey]
 	if !ok {
-		return nil, fmt.Errorf(`parent schema does not contain key "%s": %w`, subSchemaKey, err)
+		return nil, fmt.Errorf("parent schema does not contain key '%s': %w", subSchemaKey, err)
 	}
 	return matchingInput, nil
 }
@@ -1282,16 +1282,16 @@ func ExtractMatchingInput(parentSchema []byte, subSchemaKey string) (any, error)
 func ExtractSchemaRequired(mainSchema []byte) (required []string, err error) {
 	requireListAny, err := ExtractMatchingInput(mainSchema, requiredString)
 	if err != nil {
-		return required, fmt.Errorf(`could not extract the "required" section of schema: %w`, err)
+		return required, fmt.Errorf("could not extract the 'required' section of schema: %w", err)
 	}
 	requiredAny, ok := requireListAny.([]any)
 	if !ok {
-		return required, fmt.Errorf(`could not cast "required" section as []any`)
+		return required, fmt.Errorf("could not cast 'required' section as []any")
 	}
 	for _, item := range requiredAny {
 		itemString, ok := item.(string)
 		if !ok {
-			return required, fmt.Errorf(`could not cast "required" section item as a string`)
+			return required, fmt.Errorf(`could not cast 'required' section item as a string`)
 		}
 		required = append(required, itemString)
 	}
