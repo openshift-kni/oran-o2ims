@@ -1,7 +1,7 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
-  name: sno-ran-du-pg-v4-16-v1
+  name: sno-ran-du-pg-v4-16-v2
 policyDefaults:
   namespace: ztp-sno-ran-du-v4-16
   # Use an existing placement rule so that placement bindings can be consolidated
@@ -10,7 +10,7 @@ policyDefaults:
     # or the ClusterInstance ConfigMap.
     labelSelector:
       cluster-version: "v4-Y-Z"
-      sno-ran-du-policy: "v1"
+      sno-ran-du-policy: "v2"
   remediationAction: enforce
   severity: low
   namespaceSelector:
@@ -24,7 +24,7 @@ policyDefaults:
   consolidateManifests: false
   orderPolicies: true
 policies:
-- name: v1-subscriptions-policy
+- name: v2-subscriptions-policy
   manifests:
     - path: source-crs/DefaultCatsrc.yaml
       patches:
@@ -63,7 +63,7 @@ policies:
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
     - path: source-crs/SriovOperatorStatus.yaml
-- name: v1-perf-configuration-policy
+- name: v2-perf-configuration-policy
   manifests:
     - path: source-crs/PerformanceProfile-SetSelector.yaml
       patches:
@@ -90,7 +90,7 @@ policies:
             pools.operator.machineconfiguration.openshift.io/master: ""
           nodeSelector:
             node-role.kubernetes.io/master: ''
-- name: v1-sriov-configuration-policy
+- name: v2-sriov-configuration-policy
   manifests:
     - path: source-crs/SriovNetwork.yaml
       patches:
@@ -106,7 +106,7 @@ policies:
         spec:
           resourceName: du_mh
           vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-2" | toInt hub}}'
-- name: v1-tuned-configuration-policy
+- name: v2-tuned-configuration-policy
   manifests:
     - path: source-crs/TunedPerformancePatch.yaml    
       patches:
@@ -120,6 +120,11 @@ policies:
                 [bootloader]
                 cmdline_crash=-tsc=nowatchdog
                 cmdline_crash1=tsc=reliable
+                [sysctl]
+                kernel.timer_migration=1
+                kernel.sysrq=1
+                kernel.panic_on_rcu_stall=1
+                kernel.hung_task_panic=1
                 [scheduler]
                 group.ice-ptp=0:f:10:*:ice-ptp.*
                 group.ice-gnss=0:f:10:*:ice-gnss.*

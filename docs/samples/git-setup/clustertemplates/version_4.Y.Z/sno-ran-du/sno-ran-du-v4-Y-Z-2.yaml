@@ -1,14 +1,14 @@
 apiVersion: o2ims.provisioning.oran.org/v1alpha1
 kind: ClusterTemplate
 metadata:
-  name: sno-ran-du.v4-Y-Z-1
+  name: sno-ran-du.v4-Y-Z-2
   namespace: sno-ran-du-v4-16
 spec:
   name: sno-ran-du
-  version: v4-Y-Z-1
+  version: v4-Y-Z-2
   templates:
     hwTemplate: placeholder-du-template-configmap-v1
-    clusterInstanceDefaults: clusterinstance-defaults-v1
+    clusterInstanceDefaults: clusterinstance-defaults-v2
     policyTemplateDefaults: policytemplate-defaults-v1
   templateParameterSchema:
     properties:
@@ -39,9 +39,10 @@ spec:
             type: string
           install-plan-approval:
             type: string
+            default: Automatic
         type: object
       clusterInstanceParameters:
-        description: clusterInstanceParameters defines the available parameters for cluster installation
+        description: clusterInstanceParameters defines the available parameters for cluster provisioning
         properties:
           additionalNTPSources:
             description: AdditionalNTPSources is a list of NTP sources (hostname
@@ -280,10 +281,10 @@ spec:
         type: object
 
 # Notes:
-# clusterInstanceSchema contains only params that are exposed to ClusterRequest.
+# clusterInstanceParameters contains only params that are exposed to the ProvisioningRequest.
 #
 # When HW is ready, bmcAddress, bmcCredentialsName, bootMACAddress and nodes.nodeNetwork.macAddress
 # should be removed from the schema as they are supposed to come from HW.
 #
 # Ideally, rootDeviceHints should come from default configmap. Keep it in the schema to make this template
-# be able to used for mulitple SNOs with different rootDeviceHints.
+# be able to used for multiple SNOs with different rootDeviceHints.
