@@ -15,7 +15,6 @@ spec:
   cloudId: ae6bd821-a4a4-4e53-89d1-94609968e40e
   deploymentManagerServerConfig:
     enabled: false
-  image: quay.io/openshift-kni/oran-o2ims:4.16
   metadataServerConfig:
     enabled: true
   resourceServerConfig:
