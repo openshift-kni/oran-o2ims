@@ -161,15 +161,10 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 
 ##@ Deployment
 ## settings parameter for deployment 
-# setting  the backend token and the backend URL 
-TOKEN_BACKEND := $(shell oc create token -n open-cluster-management multicluster-operators --duration=24h)
-BACKEND_TOKEN_RS := $(shell oc create token oauth-apiserver-sa -n openshift-oauth-apiserver --duration=48h)
 
 # getting the cloud id and the IngressHost 
 
 CLOUD_ID := $(shell oc get clusterversion -o jsonpath='{.items[].spec.clusterID}{"\n"}')
-INGRESS_HOST := $(shell oc get ingresscontrollers.operator.openshift.io -n openshift-ingress-operator default -o json | jq -r .status.domain)
-
 
 ifndef ignore-not-found
   ignore-not-found = true
