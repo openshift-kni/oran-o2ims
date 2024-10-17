@@ -70,6 +70,10 @@ spec:
               name:
                 description: Name defines a Human readable name of the Template.
                 type: string
+              release:
+                description: Release defines the openshift release version of the
+                  template
+                type: string
               templateId:
                 description: TemplateId defines a Identifier for the O-Cloud Template.
                   This identifier is allocated by the O-Cloud.
@@ -99,10 +103,13 @@ spec:
                       PolicyTemplateDefaults defines a reference to a configmap with
                       default values for ACM policies
                     type: string
+                  upgradeDefaults:
+                    type: string
                 required:
                 - clusterInstanceDefaults
                 - hwTemplate
                 - policyTemplateDefaults
+                - upgradeDefaults
                 type: object
               version:
                 description: Version defines a version or generation of the resource
@@ -110,6 +117,7 @@ spec:
                 type: string
             required:
             - name
+            - release
             - templateParameterSchema
             - templates
             - version
