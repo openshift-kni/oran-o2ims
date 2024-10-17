@@ -69,6 +69,9 @@ type NodeStatus struct {
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=nodes,shortName=orannode
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
 // +operator-sdk:csv:customresourcedefinitions:displayName="Node",resources={{Namespace, v1}}
 type Node struct {
 	metav1.TypeMeta   `json:",inline"`

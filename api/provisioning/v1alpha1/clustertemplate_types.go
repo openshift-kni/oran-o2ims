@@ -83,6 +83,10 @@ type ClusterTemplateStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:path=clustertemplates,shortName=oranct
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+//+kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
+//+kubebuilder:printcolumn:name="Details",type="string",JSONPath=".status.conditions[-1:].message"
 
 // ClusterTemplate is the Schema for the clustertemplates API
 // +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a ClusterTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='ClusterTemplateValidated' && c.status=='False') || oldSelf.spec == self.spec"
