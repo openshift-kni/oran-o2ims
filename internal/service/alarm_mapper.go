@@ -178,18 +178,18 @@ func (r *AlarmMapper) MapItem(ctx context.Context,
 		return
 	}
 
-	var alarmEventRecordId, resourceID, resourceTypeID string
+	var alarmEventRecordId, resourceID, resourceTypeId string
 	alertInstance, err := data.GetString(from, "labels.instance")
 	if err != nil {
 		// Instance is not available for cluster global alerts
 		alarmEventRecordId = fmt.Sprintf("%s_%s", alertName, resourcePoolName)
-		resourceID = resourcePool["resourcePoolID"].(string)
+		resourceID = resourcePool["resourcePoolId"].(string)
 	} else {
 		alarmEventRecordId = fmt.Sprintf("%s_%s_%s", alertName, resourcePoolName, alertInstance)
 		resource, err := r.fetchResource(ctx, resourcePoolName, alertInstance)
 		if err == nil {
 			resourceID = resource["resourceID"].(string)
-			resourceTypeID = resource["resourceTypeID"].(string)
+			resourceTypeId = resource["resourceTypeId"].(string)
 		}
 	}
 
@@ -222,7 +222,7 @@ func (r *AlarmMapper) MapItem(ctx context.Context,
 	to = data.Object{
 		"alarmEventRecordId": alarmEventRecordId,
 		"resourceID":         resourceID,
-		"resourceTypeID":     resourceTypeID,
+		"resourceTypeId":     resourceTypeId,
 		"alarmRaisedTime":    alarmRaisedTime,
 		"alarmChangedTime":   alarmChangedTime,
 		"alarmDefinitionID":  alertName,

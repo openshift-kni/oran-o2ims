@@ -372,8 +372,8 @@ func (r *ResourceHandler) mapNodeItem(ctx context.Context, // nolint: unparam
 		return
 	}
 
-	resourcePoolID, err := data.GetString(from,
-		graphql.PropertyNode("resourcePoolID").MapProperty())
+	resourcePoolId, err := data.GetString(from,
+		graphql.PropertyNode("resourcePoolId").MapProperty())
 	if err != nil {
 		return
 	}
@@ -390,7 +390,7 @@ func (r *ResourceHandler) mapNodeItem(ctx context.Context, // nolint: unparam
 		return
 	}
 
-	resourceTypeID, err := r.resourceFetcher.GetResourceTypeID(from)
+	resourceTypeId, err := r.resourceFetcher.GetResourceTypeID(from)
 	if err != nil {
 		return
 	}
@@ -412,12 +412,12 @@ func (r *ResourceHandler) mapNodeItem(ctx context.Context, // nolint: unparam
 	}
 
 	to = data.Object{
-		"resourceID":     resourceID,
-		"resourceTypeID": resourceTypeID,
+		"resourceId":     resourceID,
+		"resourceTypeId": resourceTypeId,
 		"description":    description,
 		"extensions":     extensionsMap,
-		"resourcePoolID": resourcePoolID,
-		"globalAssetID":  globalAssetID,
+		"resourcePoolId": resourcePoolId,
+		"globalAssetId":  globalAssetID,
 	}
 	return
 }

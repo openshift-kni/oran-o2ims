@@ -219,18 +219,18 @@ var _ = Describe("Resource handler", func() {
 				Expect(items).To(HaveLen(2))
 
 				// Verify first result:
-				Expect(items[0]).To(MatchJQ(`.resourceID`, "node-0-system-uuid"))
+				Expect(items[0]).To(MatchJQ(`.resourceId`, "node-0-system-uuid"))
 				Expect(items[0]).To(MatchJQ(`.description`, "my-node-0"))
-				Expect(items[0]).To(MatchJQ(`.globalAssetID`, "node-0-global-uuid"))
+				Expect(items[0]).To(MatchJQ(`.globalAssetId`, "node-0-global-uuid"))
 				Expect(items[0]).To(MatchJQ(`.description`, "my-node-0"))
-				Expect(items[0]).To(MatchJQ(`.resourcePoolID`, "0"))
+				Expect(items[0]).To(MatchJQ(`.resourcePoolId`, "0"))
 
 				// Verify second result:
-				Expect(items[1]).To(MatchJQ(`.resourceID`, "node-1-system-uuid"))
+				Expect(items[1]).To(MatchJQ(`.resourceId`, "node-1-system-uuid"))
 				Expect(items[1]).To(MatchJQ(`.description`, "my-node-1"))
-				Expect(items[1]).To(MatchJQ(`.globalAssetID`, "node-1-global-uuid"))
+				Expect(items[1]).To(MatchJQ(`.globalAssetId`, "node-1-global-uuid"))
 				Expect(items[1]).To(MatchJQ(`.description`, "my-node-1"))
-				Expect(items[1]).To(MatchJQ(`.resourcePoolID`, "1"))
+				Expect(items[1]).To(MatchJQ(`.resourcePoolId`, "1"))
 			})
 
 			It("Accepts a filter", func() {
@@ -248,7 +248,7 @@ var _ = Describe("Resource handler", func() {
 						Terms: []*search.Term{{
 							Operator: search.Eq,
 							Path: []string{
-								"resourcePoolID",
+								"resourcePoolId",
 							},
 							Values: []any{
 								"spoke0",
@@ -285,7 +285,7 @@ var _ = Describe("Resource handler", func() {
 							{
 								Operator: search.Eq,
 								Path: []string{
-									"resourcePoolID",
+									"resourcePoolId",
 								},
 								Values: []any{
 									"spoke0",
@@ -336,7 +336,7 @@ var _ = Describe("Resource handler", func() {
 							{
 								Operator: search.Cont,
 								Path: []string{
-									"resourcePoolID",
+									"resourcePoolId",
 								},
 								Values: []any{
 									"spoke0",
@@ -472,10 +472,10 @@ var _ = Describe("Resource handler", func() {
 				Expect(response).ToNot(BeNil())
 
 				// Verify the result:
-				Expect(response.Object).To(MatchJQ(`.resourceID`, "node-0-system-uuid"))
+				Expect(response.Object).To(MatchJQ(`.resourceId`, "node-0-system-uuid"))
 				Expect(response.Object).To(MatchJQ(`.description`, "my-node-0"))
-				Expect(response.Object).To(MatchJQ(`.resourcePoolID`, "0"))
-				Expect(response.Object).To(MatchJQ(`.globalAssetID`, "node-0-uuid"))
+				Expect(response.Object).To(MatchJQ(`.resourcePoolId`, "0"))
+				Expect(response.Object).To(MatchJQ(`.globalAssetId`, "node-0-uuid"))
 			})
 		})
 	})
