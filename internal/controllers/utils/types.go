@@ -1,5 +1,9 @@
 package utils
 
+import (
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+)
+
 // InventoryConditionType defines conditions of an Inventory deployment.
 type InventoryConditionType string
 
@@ -68,4 +72,11 @@ type AvailableNotification struct {
 	GlobalCloudId string `json:"globalCloudId"`
 	OCloudId      string `json:"oCloudId"`
 	ImsEndpoint   string `json:"IMS_EP"`
+}
+
+type NodeInfo struct {
+	BmcAddress     string
+	BmcCredentials string
+	NodeName       string
+	Interfaces     []*hwv1alpha1.Interface
 }
