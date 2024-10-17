@@ -121,6 +121,8 @@ var (
 		{"nodes", "*", "bmcCredentialsName"},
 		{"nodes", "*", "bootMACAddress"},
 		{"nodes", "*", "nodeNetwork", "interfaces", "*", "macAddress"},
+		// modified for upgrade
+		{"suppressedManifests"},
 	}
 )
 
@@ -185,3 +187,8 @@ const (
 
 // ClusterVersionName is the name given to the default ClusterVersion object
 const ClusterVersionName = "version"
+
+// Upgrade constants
+const (
+	UpgradeDefaultsConfigmapKey = "ibgu"
+)

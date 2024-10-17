@@ -18,6 +18,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	sprig "github.com/go-task/slim-sprig/v3"
+	diff "github.com/r3labs/diff/v3"
+	"github.com/xeipuuv/gojsonschema"
+	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+
+	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
 
@@ -738,4 +745,50 @@ func GetClusterId(ctx context.Context, c client.Client, name string) (string, er
 	} else {
 		return string(object.Spec.ClusterID), nil
 	}
+}
+
+func GetIBGUFromUpgradeDefaultsConfigmap(
+	ctx context.Context,
+	c client.Client,
+	cmName string,
+	cmNamespace string,
+	cmKey string,
+	clusterName string,
+	ibguNamespace string,
+) (*ibguv1alpha1.ImageBasedGroupUpgrade, error) {
+
+	existingConfigmap, err := GetConfigmap(ctx, c, cmName, cmNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ConfigmapReference: %w", err)
+	}
+	defaults, err := GetConfigMapField(existingConfigmap, "ibgu")
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Configmap Field: %w", err)
+	}
+	out, err := k8syaml.ToJSON([]byte(defaults))
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert confimap data to JSON: %w", err)
+	}
+
+	ibguSpec := &ibguv1alpha1.ImageBasedGroupUpgradeSpec{}
+	err = json.Unmarshal(out, &ibguSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert confimap data to IBGU spec: %w", err)
+	}
+	ibguSpec.ClusterLabelSelectors = []metav1.LabelSelector{
+		{
+			MatchLabels: map[string]string{
+				"name": clusterName,
+			},
+		},
+	}
+
+	return &ibguv1alpha1.ImageBasedGroupUpgrade{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: ibguNamespace,
+		},
+		Spec: *ibguSpec,
+	}, nil
 }
