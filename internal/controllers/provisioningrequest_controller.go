@@ -191,12 +191,22 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	}
 
 	// Render and validate ClusterInstance
-	renderedClusterInstance, err := t.handleRenderClusterInstance(ctx)
+	renderedClusterInstance, shouldUpgrade, err := t.handleRenderClusterInstance(ctx)
 	if err != nil {
 		if utils.IsInputError(err) {
 			return t.checkClusterDeployConfigState(ctx)
 		}
 		return requeueWithError(err)
+	}
+
+	if shouldUpgrade {
+		result, err := t.reconcileUpgrade(ctx, renderedClusterInstance)
+		if err != nil {
+			return requeueWithError(err)
+		}
+		if result != doNotRequeue() {
+			return result, nil
+		}
 	}
 
 	// Handle the creation of resources required for cluster deployment
@@ -713,9 +723,9 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to handle ClusterInstance rendering and validation: %w", err)
+		return nil, false, fmt.Errorf("failed to handle ClusterInstance rendering and validation: %w", err)
 	}
-	return renderedClusterInstance, nil
+	return renderedClusterInstance, shouldUpgrade, nil
 }
 
 func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
@@ -725,6 +735,8 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		"Rendering the ClusterInstance template for ProvisioningRequest",
 		slog.String("name", t.object.Name),
 	)
+
+	shouldUpgrade := false
 
 	// Wrap the merged ClusterInstance data in a map with key "Cluster"
 	// This data object will be consumed by the clusterInstance template
@@ -747,7 +759,7 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		ciName := renderedClusterInstanceUnstructure.GetName()
 		err = t.createClusterInstanceNamespace(ctx, ciName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create cluster namespace %s: %w", ciName, err)
+			return nil, shouldUpgrade, fmt.Errorf("failed to create cluster namespace %s: %w", ciName, err)
 		}
 
 		// Check for updates to immutable fields in the ClusterInstance, if it exists.
@@ -764,30 +776,38 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 				ctx, t.client, ciName, ciName, existingClusterInstance,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get ClusterInstance (%s): %w",
+				return nil, shouldUpgrade, fmt.Errorf("failed to get ClusterInstance (%s): %w",
 					ciName, err)
 			}
 			if ciExists {
 				updatedFields, scalingNodes, err := utils.FindClusterInstanceImmutableFieldUpdates(
 					existingClusterInstance, renderedClusterInstanceUnstructure)
 				if err != nil {
-					return nil, fmt.Errorf(
+					return nil, shouldUpgrade, fmt.Errorf(
 						"failed to find immutable field updates for ClusterInstance (%s): %w", ciName, err)
 				}
-
-				var disallowedChanges []string
-				if len(updatedFields) != 0 {
-					disallowedChanges = append(disallowedChanges, updatedFields...)
-				}
-				if len(scalingNodes) != 0 &&
-					crProvisionedCond.Reason != string(utils.CRconditionReasons.Completed) {
-					// In-progress || Failed
-					disallowedChanges = append(disallowedChanges, scalingNodes...)
+				for _, field := range updatedFields {
+					if field == "clusterImageSetNameRef" {
+						// TODO: check for deployment status
+						shouldUpgrade = true
+					}
 				}
 
-				if len(disallowedChanges) != 0 {
-					return nil, utils.NewInputError(fmt.Sprintf(
-						"detected changes in immutable fields: %s", strings.Join(disallowedChanges, ", ")))
+				if !shouldUpgrade {
+					var disallowedChanges []string
+					if len(updatedFields) != 0 {
+						disallowedChanges = append(disallowedChanges, updatedFields...)
+					}
+					if len(scalingNodes) != 0 &&
+						crProvisionedCond.Reason != string(utils.CRconditionReasons.Completed) {
+						// In-progress || Failed
+						disallowedChanges = append(disallowedChanges, scalingNodes...)
+					}
+
+					if len(disallowedChanges) != 0 {
+						return nil, shouldUpgrade, utils.NewInputError(fmt.Sprintf(
+							"detected changes in immutable fields: %s", strings.Join(disallowedChanges, ", ")))
+					}
 				}
 			}
 		}
@@ -796,18 +816,18 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		isDryRun := true
 		err = t.applyClusterInstance(ctx, renderedClusterInstanceUnstructure, isDryRun)
 		if err != nil {
-			return nil, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
+			return nil, shouldUpgrade, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
 		}
 
 		// Convert unstructured to siteconfig.ClusterInstance type
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(
 			renderedClusterInstanceUnstructure.Object, renderedClusterInstance); err != nil {
 			// Unlikely to happen since dry-run validation has passed
-			return nil, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
+			return nil, shouldUpgrade, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
 		}
 	}
 
-	return renderedClusterInstance, nil
+	return renderedClusterInstance, shouldUpgrade, nil
 }
 
 func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
