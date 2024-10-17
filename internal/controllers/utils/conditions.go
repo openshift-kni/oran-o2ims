@@ -27,6 +27,7 @@ var PRconditionTypes = struct {
 	ClusterInstanceProcessed ConditionType
 	ClusterProvisioned       ConditionType
 	ConfigurationApplied     ConditionType
+	UpgradeCompleted         ConditionType
 }{
 	Validated:                "ProvisioningRequestValidated",
 	HardwareTemplateRendered: "HardwareTemplateRendered",
@@ -36,6 +37,7 @@ var PRconditionTypes = struct {
 	ClusterInstanceProcessed: "ClusterInstanceProcessed",
 	ClusterProvisioned:       "ClusterProvisioned",
 	ConfigurationApplied:     "ConfigurationApplied",
+	UpgradeCompleted:         "UpgradeCompleted",
 }
 
 // ConditionReason is a string representing the condition's reason
@@ -135,4 +137,15 @@ func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
 	condition := meta.FindStatusCondition(cr.Status.DeploymentsStatus.Conditions,
 		string(InventoryConditionTypes.SmoRegistrationCompleted))
 	return condition != nil && condition.Status == metav1.ConditionTrue
+}
+
+// IsClusterUpgradeInProgress checks if the cluster upgrade condition status is in progress
+func IsClusterUpgradeInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.UpgradeCompleted)))
+	if condition != nil {
+		if condition.Status == metav1.ConditionFalse && condition.Reason == string(CRconditionReasons.InProgress) {
+			return true
+		}
+	}
+	return false
 }

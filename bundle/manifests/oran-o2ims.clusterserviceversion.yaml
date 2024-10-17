@@ -718,6 +718,11 @@ spec:
         path: name
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Release defines the openshift release version of the template
+        displayName: Release
+        path: release
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: TemplateId defines a Identifier for the O-Cloud Template. This
           identifier is allocated by the O-Cloud.
         displayName: TemplateId

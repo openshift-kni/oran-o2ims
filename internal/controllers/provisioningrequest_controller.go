@@ -284,6 +284,24 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
 			return requeueWithLongInterval(), nil
 		}
+
+		shouldUpgrade, err := t.IsUpgradeRequested(ctx, renderedClusterInstance.GetName())
+		if err != nil {
+			return requeueWithError(err)
+		}
+		if utils.IsClusterUpgradeInProgress(t.object) ||
+			utils.IsClusterProvisionCompleted(t.object) && shouldUpgrade {
+			t.logger.InfoContext(
+				ctx,
+				"Upgrade requested. Start handling upgrade.",
+			)
+			requeue, err := t.handleUpgrade(ctx, renderedClusterInstance)
+			if err != nil {
+				return requeueWithError(err)
+			}
+			return requeue, nil
+		}
+
 	}
 
 	return doNotRequeue(), nil
@@ -732,6 +750,8 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		"Cluster": t.clusterInput.clusterInstanceData,
 	}
 
+	suppressedManifests := []string{}
+
 	renderedClusterInstance := &siteconfig.ClusterInstance{}
 	renderedClusterInstanceUnstructure, err := utils.RenderTemplateForK8sCR(
 		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
@@ -776,8 +796,16 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 				}
 
 				var disallowedChanges []string
-				if len(updatedFields) != 0 {
-					disallowedChanges = append(disallowedChanges, updatedFields...)
+
+				for _, updatedField := range updatedFields {
+					// Add "AgentClusterInstall" to ClusterInstance.SuppressedManifests in order to
+					// prevent unnecessary updates to ACI.
+					if updatedField == "clusterImageSetNameRef" &&
+						crProvisionedCond.Reason == string(utils.CRconditionReasons.Completed) {
+						suppressedManifests = append(suppressedManifests, "AgentClusterInstall")
+					} else {
+						disallowedChanges = append(disallowedChanges, updatedField)
+					}
 				}
 				if len(scalingNodes) != 0 &&
 					crProvisionedCond.Reason != string(utils.CRconditionReasons.Completed) {
@@ -805,6 +833,7 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 			// Unlikely to happen since dry-run validation has passed
 			return nil, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
 		}
+		renderedClusterInstance.Spec.SuppressedManifests = append(renderedClusterInstance.Spec.SuppressedManifests, suppressedManifests...)
 	}
 
 	return renderedClusterInstance, nil
