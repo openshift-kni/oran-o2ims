@@ -87,6 +87,24 @@ func SetStatusCondition(existingConditions *[]metav1.Condition, conditionType Co
 	)
 }
 
+// SetProvisioningStateInProgress updates the provisioning state to progressing with detailed message
+func SetProvisioningStateInProgress(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
+	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateProgressing
+	cr.Status.ProvisioningStatus.ProvisioningDetails = message
+}
+
+// SetProvisioningStateFailed updates the provisioning state to failed with detailed message
+func SetProvisioningStateFailed(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
+	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateFailed
+	cr.Status.ProvisioningStatus.ProvisioningDetails = message
+}
+
+// SetProvisioningStateFulfilled updates the provisioning state to fulfilled with detailed message
+func SetProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) {
+	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateFulfilled
+	cr.Status.ProvisioningStatus.ProvisioningDetails = "Cluster has installed and configured successfully"
+}
+
 // IsClusterProvisionPresent checks if the cluster provision condition is present
 func IsClusterProvisionPresent(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.ClusterProvisioned)))
@@ -96,12 +114,7 @@ func IsClusterProvisionPresent(cr *provisioningv1alpha1.ProvisioningRequest) boo
 // IsClusterProvisionCompleted checks if the cluster provision condition status is completed
 func IsClusterProvisionCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.ClusterProvisioned)))
-	if condition != nil {
-		if condition.Status == metav1.ConditionTrue && condition.Reason == string(CRconditionReasons.Completed) {
-			return true
-		}
-	}
-	return false
+	return condition != nil && condition.Status == metav1.ConditionTrue
 }
 
 // IsClusterProvisionTimedOutOrFailed checks if the cluster provision condition status is timedout or failed
@@ -117,17 +130,10 @@ func IsClusterProvisionTimedOutOrFailed(cr *provisioningv1alpha1.ProvisioningReq
 	return false
 }
 
-// IsClusterProvisionCompletedOrFailed checks if the cluster provision condition status is completed or failed
-func IsClusterProvisionCompletedOrFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+// IsClusterProvisionFailed checks if the cluster provision condition status is failed
+func IsClusterProvisionFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.ClusterProvisioned)))
-	if condition != nil {
-		if condition.Status == metav1.ConditionTrue ||
-			(condition.Status == metav1.ConditionFalse &&
-				condition.Reason == string(CRconditionReasons.Failed)) {
-			return true
-		}
-	}
-	return false
+	return condition != nil && condition.Reason == string(CRconditionReasons.Failed)
 }
 
 // IsSmoRegistrationCompleted checks if registration with SMO has been completed

@@ -20,14 +20,11 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.conditions[?(@.type=='HardwareProvisioned')].reason
-      name: HW Provisioning
+    - jsonPath: .status.provisioningStatus.provisioningState
+      name: ProvisionState
       type: string
-    - jsonPath: .status.conditions[?(@.type=='ClusterProvisioned')].reason
-      name: Installation
-      type: string
-    - jsonPath: .status.conditions[?(@.type=='ConfigurationApplied')].reason
-      name: Configuration
+    - jsonPath: .status.provisioningStatus.provisioningDetails
+      name: ProvisionDetails
       type: string
     name: v1alpha1
     schema:
@@ -218,6 +215,29 @@ spec:
                       type: string
                   type: object
                 type: array
+              provisioningStatus:
+                properties:
+                  provisionedResources:
+                    description: The resources that have been successfully provisioned
+                      as part of the provisioning process.
+                    properties:
+                      oCloudNodeClusterId:
+                        description: The identifier of the provisioned oCloud Node
+                          Cluster.
+                        type: string
+                    type: object
+                  provisioningDetails:
+                    description: The details about the current state of the provisioning
+                      process.
+                    type: string
+                  provisioningState:
+                    description: The current state of the provisioning process.
+                    enum:
+                    - progressing
+                    - fulfilled
+                    - failed
+                    type: string
+                type: object
             type: object
         type: object
     served: true
