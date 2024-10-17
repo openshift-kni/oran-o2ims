@@ -6,3 +6,6 @@
 
 # Folders
 .idea/
+
+# macOS auto generated
+.DS_Store
