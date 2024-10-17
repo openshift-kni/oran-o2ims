@@ -64,7 +64,8 @@ type Properties struct {
 
 // GenerationStatus represents the observed generation for an operator.
 type GenerationStatus struct {
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	ObservedGeneration int64  `json:"observedGeneration,omitempty"`
+	SpecHash           string `json:"specHash,omitempty"`
 }
 
 // NodePoolStatus describes the observed state of a request to allocate and prepare

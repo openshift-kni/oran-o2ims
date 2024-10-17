@@ -224,7 +224,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	}
 
 	// Create/Update the NodePool
-	err = t.createNodePoolResources(ctx, renderedNodePool)
+	err = t.createOrUpdateNodePool(ctx, renderedNodePool)
 	if err != nil {
 		return requeueWithError(err)
 	}
@@ -1794,7 +1794,46 @@ func (t *provisioningRequestReconcilerTask) hwMgrPluginNamespaceExists(
 	return exists, nil
 }
 
-func (t *provisioningRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
+func (t *provisioningRequestReconcilerTask) createOrUpdateNodePool(ctx context.Context, nodePool *hwv1alpha1.NodePool) error {
+
+	existingNodePool := &hwv1alpha1.NodePool{}
+	exist, err := utils.DoesK8SResourceExist(ctx, t.client, nodePool.Name, nodePool.Namespace, existingNodePool)
+	if err != nil {
+		return fmt.Errorf("failed to get NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
+	}
+	// Save the spec hash from the renderred node pool
+	newSpecHash, err := utils.GenerateSpecHash(nodePool.Spec)
+	if err != nil {
+		return fmt.Errorf("failed to generate spec hash for NodePool %s in namespace %s: %w",
+			nodePool.GetName(), nodePool.GetNamespace(), err)
+	}
+	if !exist {
+		return t.createNodePoolResources(ctx, nodePool, newSpecHash)
+	}
+
+	// Compare specs and update if needed
+	if existingNodePool.Status.CloudManager.SpecHash != newSpecHash {
+		// Create the patch based on the original NodePool object before modifying
+		patch := client.MergeFrom(existingNodePool.DeepCopy())
+		// Update the spec field with the new data
+		existingNodePool.Spec = nodePool.Spec
+		// Apply the patch to update the NodePool with the new spec
+		err = t.client.Patch(ctx, existingNodePool, patch)
+		if err != nil {
+			return fmt.Errorf("failed to patch NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
+		}
+		// After successful patch, update ObservedGeneration in the status
+		existingNodePool.Status.CloudManager.ObservedGeneration = existingNodePool.ObjectMeta.Generation
+		existingNodePool.Status.CloudManager.SpecHash = newSpecHash
+		err = utils.UpdateK8sCRStatus(ctx, t.client, existingNodePool)
+		if err != nil {
+			return fmt.Errorf("failed to update status for NodePool %s %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
+		}
+	}
+	return nil
+}
+
+func (t *provisioningRequestReconcilerTask) createNodePoolResources(ctx context.Context, nodePool *hwv1alpha1.NodePool, specHash string) error {
 	// Create the hardware plugin namespace.
 	pluginNameSpace := nodePool.ObjectMeta.Namespace
 	if exists, err := t.hwMgrPluginNamespaceExists(ctx, pluginNameSpace); err != nil {
@@ -1847,7 +1886,7 @@ func (t *provisioningRequestReconcilerTask) createNodePoolResources(ctx context.
 		),
 	)
 	// Set the CloudManager's ObservedGeneration on the node pool resource status field
-	err = utils.SetCloudManagerGenerationStatus(ctx, t.client, nodePool)
+	err = utils.SetCloudManagerInitialObservedGeneration(ctx, t.client, nodePool, specHash)
 	if err != nil {
 		return fmt.Errorf("failed to set CloudManager's ObservedGeneration: %w", err)
 	}
