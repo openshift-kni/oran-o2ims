@@ -1251,61 +1251,22 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 
 // hasPolicyConfigurationTimedOut determines if the policy configuration for the
 // ProvisioningRequest has timed out.
-func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx context.Context) bool {
-	policyTimedOut := false
-	// Get the ConfigurationApplied condition.
-	configurationAppliedCondition := meta.FindStatusCondition(
-		t.object.Status.Conditions,
-		string(utils.PRconditionTypes.ConfigurationApplied))
+func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx context.Context) (bool, error) {
 
-	// If the condition does not exist, set the non compliant timestamp since we
-	// get here just for policies that have a status different from Compliant.
-	if configurationAppliedCondition == nil {
-		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
-		return policyTimedOut
+	// Get all the child policies in the namespace of the managed cluster created through
+	// the ProvisioningRequest.
+	policies := &policiesv1.PolicyList{}
+	listOpts := []client.ListOption{
+		client.HasLabels{utils.ChildPolicyRootPolicyLabel},
+		client.InNamespace(t.object.Status.ClusterDetails.Name),
 	}
 
-	// If the current status of the Condition is false.
-	if configurationAppliedCondition.Status == metav1.ConditionFalse {
-		switch configurationAppliedCondition.Reason {
-		case string(utils.CRconditionReasons.InProgress):
-			// Check if the configuration application has timed out.
-			if t.object.Status.ClusterDetails.NonCompliantAt.IsZero() {
-				t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
-			} else {
-				// If NonCompliantAt has been previously set, check for timeout.
-				policyTimedOut = utils.TimeoutExceeded(
-					t.object.Status.ClusterDetails.NonCompliantAt.Time,
-					t.timeouts.clusterConfiguration)
-			}
-		case string(utils.CRconditionReasons.TimedOut):
-			policyTimedOut = true
-		case string(utils.CRconditionReasons.Missing):
-			t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
-		case string(utils.CRconditionReasons.OutOfDate):
-			t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
-		case string(utils.CRconditionReasons.ClusterNotReady):
-			// The cluster might not be ready because its being initially provisioned or
-			// there are problems after provisionion, so it might be that NonCompliantAt
-			// has been previously set.
-			if !t.object.Status.ClusterDetails.NonCompliantAt.IsZero() {
-				// If NonCompliantAt has been previously set, check for timeout.
-				policyTimedOut = utils.TimeoutExceeded(
-					t.object.Status.ClusterDetails.NonCompliantAt.Time,
-					t.timeouts.clusterConfiguration)
-			}
-		default:
-			t.logger.InfoContext(ctx,
-				fmt.Sprintf("Unexpected Reason for condition type %s",
-					utils.PRconditionTypes.ConfigurationApplied,
-				),
-			)
-		}
-	} else if configurationAppliedCondition.Reason == string(utils.CRconditionReasons.Completed) {
-		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Now()
+	err := t.client.List(ctx, policies, listOpts...)
+	if err != nil {
+		return false, fmt.Errorf("failed to list Policies: %w", err)
 	}
-
-	return policyTimedOut
+	eventsHistory := BuildPoliciesEventHistory(policies)
+	return eventsHistory.IsTimedOut(time.Now(), t.timeouts.clusterConfiguration), nil
 }
 
 // updateConfigurationAppliedStatus updates the ProvisioningRequest ConfigurationApplied condition
@@ -1326,7 +1287,6 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	}()
 
 	if len(targetPolicies) == 0 {
-		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.PRconditionTypes.ConfigurationApplied,
 			utils.CRconditionReasons.Missing,
@@ -1338,7 +1298,6 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 	// Update the ConfigurationApplied condition.
 	if allPoliciesCompliant {
-		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.PRconditionTypes.ConfigurationApplied,
 			utils.CRconditionReasons.Completed,
@@ -1380,7 +1339,11 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	}
 
 	if nonCompliantPolicyInEnforce {
-		policyTimedOut := t.hasPolicyConfigurationTimedOut(ctx)
+		policyTimedOut, err := t.hasPolicyConfigurationTimedOut(ctx)
+		if err != nil {
+			return fmt.Errorf(
+				"error determining if configuration has timed out: %w", err)
+		}
 
 		message := "The configuration is still being applied"
 		reason := utils.CRconditionReasons.InProgress
@@ -1400,7 +1363,6 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		)
 	} else {
 		// No timeout is reported if all policies are in inform, just out of date.
-		t.object.Status.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.PRconditionTypes.ConfigurationApplied,
 			utils.CRconditionReasons.OutOfDate,
@@ -2449,4 +2411,40 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				DeleteFunc:  func(de event.DeleteEvent) bool { return false },
 			})).
 		Complete(r)
+}
+
+// BuildPoliciesEventHistory creates an EventHistory object from a policyList
+func BuildPoliciesEventHistory(policies *policiesv1.PolicyList) (h utils.EventHistory) {
+	for _, policy := range policies.Items {
+		for _, detailsPerTemplate := range policy.Status.Details {
+			templateFullName := policy.Name + "." + detailsPerTemplate.TemplateMeta.Name
+			for _, complianceHistory := range detailsPerTemplate.History {
+				if strings.HasPrefix(complianceHistory.Message, string(policiesv1.Compliant)) {
+					item := utils.Event{
+						ObjectID:  templateFullName,
+						Timestamp: complianceHistory.LastTimestamp.Time,
+						State:     utils.Completed,
+					}
+					h.History = append(h.History, &item)
+				}
+				if strings.HasPrefix(complianceHistory.Message, string(policiesv1.Pending)) {
+					item := utils.Event{
+						ObjectID:  templateFullName,
+						Timestamp: complianceHistory.LastTimestamp.Time,
+						State:     utils.InProgress,
+					}
+					h.History = append(h.History, &item)
+				}
+				if strings.HasPrefix(complianceHistory.Message, string(policiesv1.NonCompliant)) {
+					item := utils.Event{
+						ObjectID:  templateFullName,
+						Timestamp: complianceHistory.LastTimestamp.Time,
+						State:     utils.InProgress,
+					}
+					h.History = append(h.History, &item)
+				}
+			}
+		}
+	}
+	return h
 }
