@@ -94,10 +94,10 @@ spec:
 Once the update is made, the `<cluster-name>-pg` ConfigMap in the `ztp-<cluster-template-namespace>` namespace gets updated with the new value. This ConfigMap is used by the ACM policies in their hub templates.
 ```yaml
 $  oc get clustertemplate -A
-NAMESPACE                 NAME                   AGE
-sno-ran-du-v4-16   sno-ran-du.v1   3d23h
+NAMESPACE                 NAME                     AGE
+sno-ran-du-v4-Y-Z         sno-ran-du.v4-Y-Z-1      3d23h
 
-$  oc get cm -n ztp-sno-ran-du-v4-16 sno-ran-du-1-pg -oyaml
+$  oc get cm -n ztp-sno-ran-du-v4-Y-Z <cluster name>-pg -oyaml
 apiVersion: v1
 data:
   cpu-isolated: 0-1,64-65
@@ -111,7 +111,7 @@ data:
 kind: ConfigMap
 metadata:
   name: sno-ran-du-1-pg
-  namespace: ztp-sno-ran-du-v4-16
+  namespace: ztp-sno-ran-du-v4-Y-Z
 ```
 
 Once a policy matched with a ManagedCluster deployed through a ProvisioningRequest becomes `NonCompliant`, it's reflected in the ProvisioningRequest `status.policies` and the time when it becomes `NonCompliant` is also recorded. The `ConfigurationApplied` condition reflects that the configuration is being applied.
@@ -131,20 +131,20 @@ status:
   policies:
   - compliant: Compliant
     policyName: v1-perf-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-16
+    policyNamespace: ztp-sno-ran-du-v4-Y-Z
     remediationAction: enforce
   - compliant: NonCompliant <<< Policy is NonCompliant
     policyName: v1-sriov-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-16
+    policyNamespace: ztp-sno-ran-du-v4-Y-Z
     remediationAction: enforce
   - compliant: Compliant
     policyName: v1-subscriptions-policy
-    policyNamespace: ztp-sno-ran-du-v4-16
+    policyNamespace: ztp-sno-ran-du-v4-Y-Z
     remediationAction: enforce
 ```
 
 **Notes**:
-* The format of the way the `nonCompliantAt` timestamps might move to another structure in the status, but it will still be recorded.
+* The format of the `nonCompliantAt` timestamps might move to another structure in the status, but it will still be recorded.
 * Some changes happen so fast that the Policy doesn't even switch to `NonCompliant`, so the IMS operator cannot record the event. In this case, IMS still holds a correct recording since all the policies are/remain Compliant.
 * Once an enforce `NonCompliant` Policy becomes `Compliant` again, the `status.policies` is updated, the `status.clusterDetails.nonCompliantAt` value removed and the `ConfigurationApplied` condition updated to show that the configuration is up to date:
 * When refactored, the start and end times of the configuration being NonCompliant will be recorded.
@@ -166,46 +166,72 @@ status:
   policies:
   - compliant: Compliant
     policyName: v1-perf-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-16
+    policyNamespace: ztp-sno-ran-du-v4-Y-Z
     remediationAction: enforce
   - compliant: Compliant
     policyName: v1-sriov-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-16
+    policyNamespace: ztp-sno-ran-du-v4-Y-Z
     remediationAction: enforce
   - compliant: Compliant
     policyName: v1-subscriptions-policy
-    policyNamespace: ztp-sno-ran-du-v4-16
+    policyNamespace: ztp-sno-ran-du-v4-Y-Z
     remediationAction: enforce
 ```
+### Updates to the ClusterInstance defaults ConfigMap
+We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR.
 
-### Updates to an existing ACM PolicyGenerator manifest
-
-For updating a manifest in an existing ACM PolicyGenerator, the following steps need to be taken (we'll take [sno-ran-du-pg-v4-16-v1](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v1.yaml) for examples):
-1. Upversion the cluster template content:
-    * Create a new version of the ACM PG - [sno-ran-du-pg-v4-16-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v2.yaml):
-        * The name is updated to `sno-ran-du-pg-v4-16-v2` (the `ztp-sno-ran-du-v4-16` namespace is kept).
-        * `policyDefaults.placement.labelSelector.sno-ran-du-policy` is updated from `v1` to `v2` such that the policy binding is updated.
-        * All policy names are updated from `v1` to `v2` (example: `v1-subscriptions-policy` -> `v2-subscriptions-policy`).
-        * The desired manifest section is updated. In the current samples [sno-ran-du-pg-v4-16-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v2.yaml) adds a `sysctl` section to the `TunedPerformancePatch` section under the `v2-tuned-configuration-policy` policy.
-    * Create a new version of the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) - [clusterinstance-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml):
-        * Update the name to `clusterinstance-defaults-v2` (the namespace stays `sno-ran-du-v4-16`).
-        * Update the `sno-ran-du-policy` ManagedCluster extraLabel from `v1` to `v2`.
+In this example we are adding a new route to the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` holding default values for the corresponding `ClusterInstance`.
+The following steps need to be taken:
+1. Upversion the cluster template:
+    * Create a new version of the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` - [clusterinstance-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml):
+        * Update the name to `clusterinstance-defaults-v2` (the namespace stays `sno-ran-du-v4-Y-Z`).
+        * Update `data.clusterinstance-defaults.nodes[0].nodeNetwork.config.routes.config` with the desired new route.
     * Create a new version of the [sno-ran-du.v4-Y-Z-1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-1` to `sno-ran-du.v4-Y-Z-2`
         * Update `spec.version` from `v4-Y-Z-1` to `v4-Y-Z-2`
         * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v2`
 2. ArgoCD sync to the hub cluster:
     * Add the newly created files to their corresponding kustomization.yaml.
-    * All the resources created from above are created on the hub cluster, including the `v2` policies and the new ClusterTemplate is validated.
-    * The new policies are not yet applied to the cluster because the `ManagedCluster` still has the old `sno-ran-du-policy: "v1"` label
-3. The SMO selects the new ClusterTemplate CR for the ProvisioningRequest:
+    * All the resources from above are created on the hub cluster.
+3. The SMO selects the new `ClusterTemplate` CR for the `ProvisioningRequest`:
     * `spec.templateName` remains `sno-ran-du`, `spec.templateVersion` is updated from `v4-Y-Z-1` to `v4-Y-Z-2`
-4. The IMS operator detects the change
-    * It updates the ClusterInstance with the updated `sno-ran-du-policy: "v2"` ManagedCluster label
-    * the siteconfig operator applies the new label to the ManagedCluster
+    * **Note:** Depending on the changes in the default `ConfigMap`, updates to the `spec.templateParameters.clusterInstanceParameters` of the `ProvisioningRequest` might be needed.
+4. The IMS operator detects the change:
+    * It updates the `ClusterInstance` with the new route.
+5. The siteconfig operator detects the change to the `ClusterInstance` CR:
+    * It updates the `NMStateConfig` installation manifest to contain the new route.
+    * **Note:** Some installation manifests cannot be updated after provisioning as the underlying operators have webhooks to prevent such updates.
+6. The change is rolled out to the `ManagedCluster`.
+    * Any issues are reported in the `PrivisioningRequest`, under `status.conditions`.
+
+### Updates to an existing ACM PolicyGenerator manifest
+
+For updating a manifest in an existing ACM PolicyGenerator, the following steps need to be taken (we'll take [sno-ran-du-pg-v4-Y-Z-v1](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml) as an example):
+1. Upversion the cluster template content:
+    * Create a new version of the ACM PG - [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml):
+        * The name is updated to `sno-ran-du-pg-v4-Y-Z-v2` (the `ztp-sno-ran-du-v4-Y-Z` namespace is kept).
+        * `policyDefaults.placement.labelSelector.sno-ran-du-policy` is updated from `v1` to `v2` such that the policy binding is updated.
+        * All policy names are updated from `v1` to `v2` (example: `v1-subscriptions-policy` -> `v2-subscriptions-policy`).
+        * The desired manifest section is updated. The current [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) sample adds a `sysctl` section to the `TunedPerformancePatch` section under the `v2-tuned-configuration-policy` policy.
+    * Create a new version of the [clusterinstance-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml) `ConfigMap` - [clusterinstance-defaults-v3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v3.yaml):
+        * Update the name to `clusterinstance-defaults-v3` (the namespace stays `sno-ran-du-v4-Y-Z`).
+        * Update the `sno-ran-du-policy` ManagedCluster `extraLabel` from `v1` to `v2`.
+    * Create a new version of the [sno-ran-du.v4-Y-Z-2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml)
+        * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-2` to `sno-ran-du.v4-Y-Z-3`.
+        * Update `spec.version` from `v4-Y-Z-2` to `v4-Y-Z-3`.
+        * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v3`.
+2. ArgoCD sync to the hub cluster:
+    * Add the newly created files to their corresponding kustomization.yaml.
+    * All the resources created from above are created on the hub cluster, including the `v2` policies and the new ClusterTemplate is validated.
+    * The new policies are not yet applied to the cluster because the `ManagedCluster` still has the old `sno-ran-du-policy: "v1"` label.
+3. The SMO selects the new ClusterTemplate CR for the ProvisioningRequest:
+    * `spec.templateName` remains `sno-ran-du`, `spec.templateVersion` is updated from `v4-Y-Z-2` to `v4-Y-Z-3`
+4. The IMS operator detects the change:
+    * It updates the ClusterInstance with the new `sno-ran-du-policy: "v2"` ManagedCluster label.
+    * The siteconfig operator applies the new label to the ManagedCluster.
 5. The ACM Policy Propagator detects the new binding:
-    * The old policies created through the [sno-ran-du-pg-v4-16-v1](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v1.yaml) Policy Generator are no longer matched to the ManagedCluster.
-    * The new policies created through the [sno-ran-du-pg-v4-16-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v2.yaml) Policy Generator are matched to the ManagedCluster.
+    * The old policies created through the [sno-ran-du-pg-v4-Y-Z-v1](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml) Policy Generator are no longer matched to the ManagedCluster.
+    * The new policies created through the [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) Policy Generator are matched to the ManagedCluster.
     * The `ConfigurationApplied` condition is updated in the ProvisioningRequest to show that the configuration has changed and is being applied (the policies depend on each other, so some are in a `Pending` state until ACM confirms their compliance):
     ```yaml
     - lastTransitionTime: "2024-10-11T19:48:06Z"
@@ -216,19 +242,19 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
     policies:
     - compliant: Pending
       policyName: v2-perf-configuration-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     - compliant: Pending
       policyName: v2-sriov-configuration-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     - compliant: Compliant
       policyName: v2-subscriptions-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     - compliant: Pending
       policyName: v2-tuned-configuration-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     ```
     * The affected CRs are updated on the ManagedCluster, not deleted and recreated.
@@ -242,19 +268,19 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
     policies:
     - compliant: Compliant
       policyName: v2-tuned-configuration-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     - compliant: Compliant
       policyName: v2-perf-configuration-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     - compliant: Compliant
       policyName: v2-sriov-configuration-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     - compliant: Compliant
       policyName: v2-subscriptions-policy
-      policyNamespace: ztp-clustertemplate-a-v4-16
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
       remediationAction: enforce
     ```
 

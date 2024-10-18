@@ -1,9 +1,9 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
-  name: sno-ran-du-pg-v4-16-v2
+  name: sno-ran-du-pg-v4-Y-Z-v2
 policyDefaults:
-  namespace: ztp-sno-ran-du-v4-16
+  namespace: ztp-sno-ran-du-v4-Y-Z
   # Use an existing placement rule so that placement bindings can be consolidated
   placement:
     # These labels must match the labels set for the ManagedCluster either through the ProvisioningRequest

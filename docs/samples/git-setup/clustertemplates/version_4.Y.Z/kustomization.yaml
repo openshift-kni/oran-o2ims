@@ -3,7 +3,7 @@ configMapGenerator:
   - extra-manifest/....
   - extra-manifest/....
   name: sno-ran-du-extra-manifest-1
-  namespace: sno-ran-du-v4-16
+  namespace: sno-ran-du-v4-Y-Z
 generatorOptions:
   disableNameSuffixHash: true
 
@@ -12,8 +12,11 @@ resources:
 - sno-ran-du/pull-secret.yaml
 - sno-ran-du/policytemplates-defaults-v1.yaml
 # sno-ran-du.v4-Y-Z-1 ClusterTemplate:
-- sno-ran-du/sno-ran-du-v1.yaml
+- sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml
 - sno-ran-du/clusterinstance-defaults-v1.yaml
 # sno-ran-du.v4-Y-Z-2 ClusterTemplate:
-- sno-ran-du/sno-ran-du-v1.yaml
+- sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml
 - sno-ran-du/clusterinstance-defaults-v2.yaml
+# sno-ran-du.v4-Y-Z-3 ClusterTemplate:
+- sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml
+- sno-ran-du/clusterinstance-defaults-v3.yaml
