@@ -204,19 +204,19 @@ var _ = Describe("Resource pool handler", func() {
 
 				// Verify first result:
 				Expect(items[0]).To(MatchJQ(`.description`, "0"))
-				Expect(items[0]).To(MatchJQ(`.globalLocationID`, ""))
+				Expect(items[0]).To(MatchJQ(`.globalLocationId`, ""))
 				Expect(items[0]).To(MatchJQ(`.location`, "US"))
 				Expect(items[0]).To(MatchJQ(`.name`, "my-cluster-0"))
-				Expect(items[0]).To(MatchJQ(`.oCloudID`, "123"))
-				Expect(items[0]).To(MatchJQ(`.resourcePoolID`, "0"))
+				Expect(items[0]).To(MatchJQ(`.oCloudId`, "123"))
+				Expect(items[0]).To(MatchJQ(`.resourcePoolId`, "0"))
 
 				// Verify second result:
 				Expect(items[1]).To(MatchJQ(`.description`, "1"))
-				Expect(items[1]).To(MatchJQ(`.globalLocationID`, ""))
+				Expect(items[1]).To(MatchJQ(`.globalLocationId`, ""))
 				Expect(items[1]).To(MatchJQ(`.location`, "EU"))
 				Expect(items[1]).To(MatchJQ(`.name`, "my-cluster-1"))
-				Expect(items[1]).To(MatchJQ(`.oCloudID`, "123"))
-				Expect(items[1]).To(MatchJQ(`.resourcePoolID`, "1"))
+				Expect(items[1]).To(MatchJQ(`.oCloudId`, "123"))
+				Expect(items[1]).To(MatchJQ(`.resourcePoolId`, "1"))
 			})
 
 			It("Accepts a filter", func() {
@@ -231,7 +231,7 @@ var _ = Describe("Resource pool handler", func() {
 						Terms: []*search.Term{{
 							Operator: search.Eq,
 							Path: []string{
-								"resourcePoolID",
+								"resourcePoolId",
 							},
 							Values: []any{
 								"spoke0",
@@ -265,7 +265,7 @@ var _ = Describe("Resource pool handler", func() {
 							{
 								Operator: search.Eq,
 								Path: []string{
-									"resourcePoolID",
+									"resourcePoolId",
 								},
 								Values: []any{
 									"spoke0",
@@ -313,7 +313,7 @@ var _ = Describe("Resource pool handler", func() {
 							{
 								Operator: search.Cont,
 								Path: []string{
-									"resourcePoolID",
+									"resourcePoolId",
 								},
 								Values: []any{
 									"spoke0",
@@ -440,11 +440,11 @@ var _ = Describe("Resource pool handler", func() {
 
 				// Verify the result:
 				Expect(response.Object).To(MatchJQ(`.description`, "0"))
-				Expect(response.Object).To(MatchJQ(`.globalLocationID`, ""))
+				Expect(response.Object).To(MatchJQ(`.globalLocationId`, ""))
 				Expect(response.Object).To(MatchJQ(`.location`, "US"))
 				Expect(response.Object).To(MatchJQ(`.name`, "my-cluster-0"))
-				Expect(response.Object).To(MatchJQ(`.oCloudID`, "123"))
-				Expect(response.Object).To(MatchJQ(`.resourcePoolID`, "0"))
+				Expect(response.Object).To(MatchJQ(`.oCloudId`, "123"))
+				Expect(response.Object).To(MatchJQ(`.resourcePoolId`, "0"))
 			})
 		})
 	})

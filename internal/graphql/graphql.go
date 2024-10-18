@@ -32,10 +32,10 @@ const (
 
 	pCluster        = "cluster"
 	pDescription    = "description"
-	pGlobalAssetID  = "globalAssetID"
+	pGlobalAssetID  = "globalAssetId"
 	pName           = "name"
 	pResourceID     = "resourceID"
-	pResourcePoolID = "resourcePoolID"
+	pResourcePoolID = "resourcePoolId"
 	pSystemUUID     = "_systemUUID"
 	pUid            = "_uid"
 )

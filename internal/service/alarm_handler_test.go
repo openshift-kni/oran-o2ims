@@ -226,7 +226,7 @@ var _ = Describe("Alarm handler", func() {
 					RespondWithList(
 						data.Object{
 							"name":           "spoke0",
-							"resourcePoolID": "spoke0",
+							"resourcePoolId": "spoke0",
 						},
 					),
 				)
@@ -429,7 +429,7 @@ var _ = Describe("Alarm handler", func() {
 						RespondWithList(
 							data.Object{
 								"name":           "spoke0",
-								"resourcePoolID": "spoke0",
+								"resourcePoolId": "spoke0",
 							},
 						),
 					),
@@ -509,7 +509,7 @@ var _ = Describe("Alarm handler", func() {
 						RespondWithList(
 							data.Object{
 								"name":           "spoke0",
-								"resourcePoolID": "spoke0",
+								"resourcePoolId": "spoke0",
 							},
 						),
 					),

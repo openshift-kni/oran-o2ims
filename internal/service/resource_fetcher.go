@@ -160,7 +160,7 @@ func (b *ResourceFetcherBuilder) Build() (
 }
 
 // GetResourceTypeID generates a typeID from a search API object.
-func (h *ResourceFetcher) GetResourceTypeID(from data.Object) (resourceTypeID string, err error) {
+func (h *ResourceFetcher) GetResourceTypeID(from data.Object) (resourceTypeId string, err error) {
 	kind, err := data.GetString(from, "kind")
 	if err != nil {
 		return
@@ -177,7 +177,7 @@ func (h *ResourceFetcher) GetResourceTypeID(from data.Object) (resourceTypeID st
 		if err != nil {
 			return
 		}
-		resourceTypeID = fmt.Sprintf("node_%s_cores_%s", cpu, architecture)
+		resourceTypeId = fmt.Sprintf("node_%s_cores_%s", cpu, architecture)
 	}
 
 	return

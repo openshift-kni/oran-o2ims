@@ -282,8 +282,8 @@ func (r *ResourcePoolFetcher) getSearchResponse(ctx context.Context) (result io.
 // Map Cluster to an O2 ResourcePool object.
 func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
-	resourcePoolID, err := data.GetString(from,
-		graphql.PropertyCluster("resourcePoolID").MapProperty())
+	resourcePoolId, err := data.GetString(from,
+		graphql.PropertyCluster("resourcePoolId").MapProperty())
 	if err != nil {
 		return
 	}
@@ -330,14 +330,14 @@ func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
 	}
 
 	to = data.Object{
-		"resourcePoolID": resourcePoolID,
+		"resourcePoolId": resourcePoolId,
 		"name":           name,
-		"oCloudID":       r.cloudID,
+		"oCloudId":       r.cloudID,
 		"extensions":     extensionsMap,
 		"location":       location,
 		"description":    description,
 		// TODO: no direct mapping to a property in Cluster object
-		"globalLocationID": "",
+		"globalLocationId": "",
 	}
 
 	return

@@ -578,7 +578,7 @@ components:
         Information about a resource type.
       type: object
       properties:
-        resourceTypeID:
+        resourceTypeId:
           type: string
           example: "node_8_cores_amd64"
         name:
@@ -652,13 +652,13 @@ components:
         description:
           type: string
           example: "my-node"
-        resourceTypeID:
+        resourceTypeId:
           type: string
           example: "node_8_cores_amd64"
         resourceID:
           type: string
           example: "7c757ebe-559f-450a-9c87-32fc45af7a38"
-        globalAssetID:
+        globalAssetId:
           type: string
           example: "b6f67c72-8915-474b-b369-6198ea1f7b6f"
 
@@ -680,7 +680,7 @@ components:
         resourceID:
           type: string
           example: "my-node"
-        resourceTypeID:
+        resourceTypeId:
           type: string
           example: "node_8_cores_amd64"
         alarmRaisedTime:
