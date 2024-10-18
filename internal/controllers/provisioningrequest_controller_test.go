@@ -2413,6 +2413,177 @@ var _ = Describe("renderHardwareTemplate", func() {
 	})
 })
 
+var _ = Describe("createOrUpdateNodePool", func() {
+	var (
+		ctx             context.Context
+		c               client.Client
+		reconciler      *ProvisioningRequestReconciler
+		task            *provisioningRequestReconcilerTask
+		clusterInstance *siteconfig.ClusterInstance
+		ct              *provisioningv1alpha1.ClusterTemplate
+		cr              *provisioningv1alpha1.ProvisioningRequest
+		nodePool        *hwv1alpha1.NodePool
+		tName           = "clustertemplate-a"
+		tVersion        = "v1.0.0"
+		ctNamespace     = "clustertemplate-a-v4-16"
+		hwTemplateCm    = "hwTemplate-v1"
+		crName          = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Define the cluster instance.
+		clusterInstance = &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				Nodes: []siteconfig.NodeSpec{
+					{
+						Role: "master",
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno12399"},
+							},
+						},
+					},
+					{
+						Role: "worker",
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno1"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Define the cluster request.
+		cr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
+			},
+		}
+
+		// Define the cluster template.
+		ct = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
+				Templates: provisioningv1alpha1.Templates{
+					HwTemplate: hwTemplateCm,
+				},
+			},
+			Status: provisioningv1alpha1.ClusterTemplateStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(utils.CTconditionTypes.Validated),
+						Reason: string(utils.CTconditionReasons.Completed),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		reconciler = &ProvisioningRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &provisioningRequestReconcilerTask{
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
+		}
+	})
+
+	Context("When NodePool has been created", func() {
+		BeforeEach(func() {
+			// Define the hardware template config map
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCm,
+					Namespace: utils.InventoryNamespace,
+				},
+				Data: map[string]string{
+					"hwMgrId":                      utils.UnitTestHwmgrID,
+					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+					utils.HwTemplateNodePool: `
+- name: master
+  hwProfile: profile-spr-single-processor-64G
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+			Expect(c.Create(ctx, ct)).To(Succeed())
+			createdNodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+			err = task.createOrUpdateNodePool(ctx, createdNodePool)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Verify NodePool GenerationStatus after NodePool is created", func() {
+			nodePool = &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			specHash, err := utils.GenerateSpecHash(nodePool.Spec)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(nodePool.Status.CloudManager.ObservedGeneration).To(Equal(nodePool.ObjectMeta.Generation))
+			Expect(nodePool.Status.CloudManager.SpecHash).To(Equal(specHash))
+
+		})
+
+		It("Verify NodePool GenerationStatus when the hardware template is updated", func() {
+			// Update the nodePool's spec to reflect the updated hardware template
+			nodePool.Spec.NodeGroup[0].HwProfile = "profile-spr-single-processor-64G-v2"
+			nodePool.Spec.NodeGroup[1].HwProfile = "profile-spr-dual-processor-128G-v2"
+			newSpecHash, err := utils.GenerateSpecHash(nodePool.Spec)
+			Expect(err).ToNot(HaveOccurred())
+			err = task.createOrUpdateNodePool(ctx, nodePool)
+			Expect(err).ToNot(HaveOccurred())
+			// Get the updated nodePool
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			// Verify the GenerationStatus
+			Expect(nodePool.Status.CloudManager.ObservedGeneration).To(Equal(nodePool.ObjectMeta.Generation))
+			Expect(nodePool.Status.CloudManager.SpecHash).To(Equal(newSpecHash))
+		})
+
+		It("Verify NodePool GenerationStatus when the spec is updated externally", func() {
+			// Save the nodePool current GenerationStatus
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			currentSpecHash := nodePool.Status.CloudManager.SpecHash
+			currentGeneration := nodePool.Status.CloudManager.ObservedGeneration
+
+			// Simulate the nodePool's spec update by the plugin
+			nodePool.Spec.HwMgrId += "instance01,datax=blah"
+			Expect(c.Update(ctx, nodePool)).To(Succeed())
+
+			// Get the updated nodePool
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			// Verify the GenerationStatus are not changed
+			Expect(nodePool.Status.CloudManager.ObservedGeneration).To(Equal(currentGeneration))
+			Expect(nodePool.Status.CloudManager.SpecHash).To(Equal(currentSpecHash))
+
+		})
+	})
+})
+
 var _ = Describe("waitForNodePoolProvision", func() {
 	var (
 		ctx         context.Context
