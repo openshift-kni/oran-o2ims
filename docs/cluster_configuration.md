@@ -257,3 +257,63 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
       policyNamespace: ztp-clustertemplate-a-v4-16
       remediationAction: enforce
     ```
+
+### Adding a new manifest to an existing ACM PolicyGenerator
+
+This usecase is identical to the [previous one](#updates-to-an-existing-acm-policygenerator-manifest), with the following distinctions:
+* If the new manifest does not have a corresponding `source-cr` file, the CSP should add a new yaml file to the `custom-crs` directory.
+
+**Directory structure example:**
+```
+policytemplates
+|
+└──version_4.Y.Z
+|  | sno-ran-du
+|  | source-crs
+|  | custom-crs
+|  | kustomization.yaml
+|
+└─── kustomization.yaml
+```
+* Depending on the dependencies, the new policy can be added to an existing policy as a new manifest or as a new policy.
+
+**Adding manifests to an existing policy - adding the LCA operator:**
+```yaml
+policies:
+- name: v1-subscriptions-policy
+  manifests:
+    - path: source-crs/DefaultCatsrc.yaml
+      patches:
+      - metadata:
+          name: redhat-operators
+        spec:
+          displayName: redhat-operators
+          image: registry.redhat.io/redhat/redhat-operator-index:v4.16
+    # Everything below would be added for installing the LCA operator:
+    - path: source-crs/LcaSubscriptionNS.yaml
+    - path: source-crs/LcaSubscriptionOperGroup.yaml
+    - path: source-crs/LcaSubscription.yaml
+      patches:
+      - spec:
+          source: redhat-operators
+          installPlanApproval:
+            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
+    - path: source-crs/LcaSubscriptionOperGroup.yaml
+```
+
+**Adding manifests to a new policy - adding the LCA operator:**
+```yaml
+policies:
+# Everything below would be added for installing the LCA operator:
+- name: v1-lca-operator-policy
+  manifests:
+    - path: source-crs/LcaSubscriptionNS.yaml
+    - path: source-crs/LcaSubscriptionOperGroup.yaml
+    - path: source-crs/LcaSubscription.yaml
+      patches:
+      - spec:
+          source: redhat-operators
+          installPlanApproval:
+            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
+    - path: source-crs/LcaSubscriptionOperGroup.yaml
+```
