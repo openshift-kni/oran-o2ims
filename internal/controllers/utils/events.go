@@ -41,7 +41,7 @@ type EventHistory struct {
 	History []*Event
 }
 
-// IsTimedOut proceses a process history an determines the overall state implied
+// IsTimedOut looks at the history an determines the overall timedout state implied
 // by the events.
 // returns true if for any ObjectID:
 // - the overall state was InProgress from the initial time for more than timeout
@@ -50,21 +50,22 @@ type EventHistory struct {
 // - the last transition is Completed
 // - no events to process
 func (h EventHistory) IsTimedOut(now time.Time, timeout time.Duration) bool {
+	// If no Events are present, we can't timeout
+	if len(h.History) == 0 {
+		return false
+	}
 	// Sort events chronologically from old to new
 	sort.Slice(h.History, func(i, j int) bool {
 		return h.History[i].Timestamp.Before(h.History[j].Timestamp)
 	})
-
 	// currentState stores the running value of the State (InProgress or Completed) for each ObjectID
 	currentState := map[string]string{}
-	// Initialize the current state to NonCompliant
+	// Initialize the current state to InProgress
 	for _, event := range h.History {
 		currentState[event.ObjectID] = InProgress
 	}
-	// initialTime records the initial Event for all ObjectIDs
-	initialTime := time.Time{}
-	// resetTime is a recording a zero time
-	resetTime := time.Time{}
+	// initialTime records the timestamp for the first Event among all events
+	initialTime := h.History[0].Timestamp
 	// lastCompleted records the last time the overall state for all event transitioned to Completed
 	lastCompleted := time.Time{}
 	// lastInProgress records the last time the overall state for all event transitioned to InProgress
@@ -72,10 +73,6 @@ func (h EventHistory) IsTimedOut(now time.Time, timeout time.Duration) bool {
 	// Process each event chronologically one by one and recalculate the
 	// current state (InProgress or Completed)
 	for _, event := range h.History {
-		// If this is the first event for this ObjectID, record the initial time
-		if initialTime == resetTime {
-			initialTime = event.Timestamp
-		}
 		// If the state has not changed for this ObjectID, continue to the next event
 		if currentState[event.ObjectID] == event.State {
 			continue
@@ -90,24 +87,24 @@ func (h EventHistory) IsTimedOut(now time.Time, timeout time.Duration) bool {
 				break
 			}
 		}
-		// Record the lastCompleted overall state
+		// Record last Completed overall state
 		if overallState == Completed {
 			lastCompleted = event.Timestamp
 		}
-		// Record the lastCompleted overall state
+		// Record last InProgress overall state
 		if overallState == InProgress {
 			lastInProgress = event.Timestamp
 		}
 	}
-	if lastInProgress.After(lastCompleted) && lastCompleted != resetTime {
+	if lastInProgress.After(lastCompleted) && !lastCompleted.IsZero() {
 		// Overall state is not Completed start timing out after the lastInProgress
 		return now.Sub(lastCompleted) > timeout
 	}
-	if lastCompleted.After(lastInProgress) && lastCompleted != resetTime {
+	if lastCompleted.After(lastInProgress) && !lastCompleted.IsZero() {
 		// Overall state is Completed
 		return false
 	}
-	if lastCompleted == resetTime && initialTime != resetTime {
+	if lastCompleted.IsZero() && !initialTime.IsZero() {
 		// Overall state is in progress from the beginning
 		return now.Sub(initialTime) > timeout
 	}
