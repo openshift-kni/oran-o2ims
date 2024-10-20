@@ -1,0 +1,801 @@
+openapi: 3.0.3
+info:
+  title: O2IMS Infrastructure Monitoring Alarms API
+  version: 1.0.0
+  description: API for O2IMS Infrastructure Monitoring Alarms
+  contact:
+    name: Red Hat
+    url: https://www.redhat.com
+
+externalDocs:
+  description: O-RAN apis from O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)
+  url: https://specifications.o-ran.org/download?id=674
+
+servers:
+  - url: http://localhost:8080
+    description: O-RAN Alarms Server
+
+tags:
+  - name: alarms
+    description: Alarm management
+  - name: subscriptions
+    description: Alarm subscription management
+  - name: probableCauses
+    description: Probable cause information
+  - name: internal
+    description: |
+      Internal endpoints. This is tag is also useful generating client code.
+
+paths:
+  /O2ims_infrastructureMonitoring/v1/alarms:
+    get:
+      operationId: GetAlarms
+      summary: Retrieve the list of alarms
+      tags:
+        - alarms
+      parameters:
+        - in: query
+          name: filter
+          schema:
+            type: string
+          allowReserved: true
+          description: Optional filter parameter. Only the attributes in AlarmEventRecord are filterable.
+          example: (eq,perceivedSeverity,0)
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlarmEventRecord'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}:
+    get:
+      operationId: GetAlarm
+      summary: Retrieve exactly one alarm
+      tags:
+        - alarms
+      parameters:
+        - in: path
+          name: alarmEventRecordId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 78081d85-5736-4215-afab-772461544e60
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmEventRecord'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified AlarmEventRecord was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    patch:
+      operationId: AckAlarm
+      summary: Modify exactly one alarm to acknowledge
+      tags:
+        - alarms
+      parameters:
+        - in: path
+          name: alarmEventRecordId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 78081d85-5736-4215-afab-772461544e60
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmEventRecordModifications'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmEventRecordModifications'
+        '400':
+          description: Bad request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions:
+    get:
+      operationId: GetSubscriptions
+      summary: Retrieve the list of alarm subscriptions
+      tags:
+        - subscriptions
+      parameters:
+        - in: query
+          name: filter
+          schema:
+            type: string
+          allowReserved: true
+          description: Optional filter parameter. Only the attributes in AlarmSubscriptionInfo are filterable.
+          example: (eq,callback,http://my.callback.com)
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlarmSubscriptionInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    post:
+      operationId: CreateSubscription
+      summary: Create a new alarm subscription
+      tags:
+        - subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmSubscriptionInfo'
+      responses:
+        '201':
+          description: Successful creation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmSubscriptionInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      callbacks:
+        onAlarmEvent:
+          '{$request.body#/subscriber.callbackUrl}':
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/AlarmEventNotification'
+              responses:
+                '200':
+                  description: Callback processed successfully
+                '400':
+                  description: Bad request
+                '500':
+                  description: Internal server error
+
+  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}:
+    get:
+      operationId: GetSubscription
+      summary: Retrieve exactly one subscription
+      tags:
+        - subscriptions
+      parameters:
+        - in: path
+          name: alarmSubscriptionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 78081d85-5736-4215-afab-772461544e60
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmSubscriptionInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    delete:
+      operationId: DeleteSubscription
+      summary: Delete exactly one subscription
+      tags:
+        - subscriptions
+      parameters:
+        - in: path
+          name: alarmSubscriptionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Successful deletion
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /O2ims_infrastructureMonitoring/v1/probableCauses:
+    get:
+      operationId: GetProbableCauses
+      summary: Retrieve all probable causes
+      tags:
+        - probableCauses
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProbableCause'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /O2ims_infrastructureMonitoring/v1/probableCauses/{probableCauseId}:
+    get:
+      operationId: GetProbableCause
+      summary: Retrieve exactly one probable cause
+      tags:
+        - probableCauses
+      parameters:
+        - in: path
+          name: probableCauseId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 78081d85-5736-4215-afab-772461544e60
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbableCause'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /internal/v1/caas-alerts/alertmanager:
+    post:
+      operationId: AmNotification
+      summary: Receive Alertmanager notifications
+      description: Receives alerts from Alertmanager and optionally notifies subscribers if available.
+      tags:
+        - internal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertmanagerNotification'
+      responses:
+        '200':
+          description: Notification received successfully
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+
+  /internal/v1/hardware-alerts/{hwVendorName}:
+    post:
+      operationId: HwNotification
+      summary: Receive hardware alerts
+      tags:
+        - internal
+      parameters:
+        - in: path
+          name: hwVendorName
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HardwareAlert'
+      responses:
+        '200':
+          description: Hardware alert received successfully
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    AlarmEventRecord:
+      type: object
+      properties:
+        alarmEventRecordId:
+          type: string
+          format: uuid
+          description: | 
+            Identifier of an entry in the AlarmEventRecord. 
+            Locally unique within the scope of an O-Cloud instance.
+          example: 752c4e22-057d-4162-997b-ca3e2fd4ff53
+        alarmDefinitionId:
+          type: string
+          format: uuid
+          description: |
+            A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
+          example: 5369fe06-adeb-4966-b8ff-47a6f4d4cec5
+        probableCauseId:
+          type: string
+          format: uuid
+          description: A reference to the ProbableCause of the Alarm.
+          example: b45f64fe-6ed8-448d-8ff7-f5840090a075
+        alarmRaisedTime:
+          type: string
+          format: date-time
+          description: This field is populated with a Date/Time stamp value when the AlarmEventRecord is created.
+          example: 2042-07-21T17:32:28Z
+        alarmChangedTime:
+          type: string
+          format: date-time
+          description: | 
+            This field is populated with a Date/Time stamp value when any value 
+            of the AlarmEventRecord is modified.
+          example: 2042-07-21T19:32:28Z
+        alarmClearedTime:
+          type: string
+          format: date-time
+          description: | 
+            This field is populated with a Date/Time stamp value when the alarm condition is cleared.
+          example: 2042-07-21T20:32:28Z
+        alarmAcknowledgedTime:
+          type: string
+          format: date-time
+          description: This field is populated with a Date/Time stamp value when the alarm condition is acknowledged.
+          example: 2042-07-21T18:32:28Z
+        alarmAcknowledged:
+          type: boolean
+          description: | 
+            When a system acknowledges an alarm, it is then set to TRUE.
+          example: true
+        resourceTypeID:
+          type: string
+          format: uuid
+          description: A reference to the type of resource which caused the alarm.
+          example: 91d5d140-ef52-4167-b6dc-975ad1897f23
+        perceivedSeverity:
+          $ref: '#/components/schemas/PerceivedSeverity'
+        extensions:
+          type: object
+          additionalProperties:
+            type: string
+          description: | 
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or 
+            operator to extend the information provided about the O-Cloud Alarm.
+      required:
+        - alarmEventRecordId
+        - alarmDefinitionId
+        - probableCauseId
+        - alarmRaisedTime
+        - alarmAcknowledged
+        - perceivedSeverity
+        - extensions
+        - resourceTypeID
+
+
+    AlarmEventRecordModifications:
+      type: object
+      properties:
+        alarmAcknowledged:
+          type: boolean
+          description: Acknowledge an alarm.
+          example: false
+      required:
+        - alarmAcknowledged
+
+    AlarmSubscriptionInfo:
+      type: object
+      properties:
+        subscriptionID:
+          type: string
+          format: uuid
+          description: Identifier for the Alarm Subscription. This identifier is allocated by the O-Cloud.
+          example: 16d5fc54-cee0-4532-9826-2369f8240e1b
+        consumerSubscriptionId:
+          type: string
+          format: uuid
+          description: Identifier for the consumer of events sent due to the Subscription.
+          example: 16d5fc54-cee0-4532-9826-2369f8240e1b
+        filter:
+          type: string
+          description: |
+            Criteria for events which do not need to be reported or will be filtered by the subscription 
+            notification service. Therefore, if a filter is not provided then all events are reported.
+            Only the attributes in AlarmEventRecord are filterable.
+          example: (eq,perceivedSeverity,0)
+        callback:
+          type: string
+          format: uri
+          description: The fully qualified URI to a consumer procedure which can process a Post of the AlarmEventNotification.
+      required:
+        - callback
+
+    ProbableCause:
+      type: object
+      properties:
+        probableCauseId:
+          type: string
+          format: uuid
+          description: Identifier of the ProbableCause.
+          example: b45f64fe-6ed8-448d-8ff7-f5840090a075
+        name:
+          type: string
+          description: Human readable text of the probable cause derived from corresponding AlarmDefinition.
+          example: NodeClockNotSynchronising
+        description:
+          type: string
+          description: Any additional information beyond the name to describe the probableCause derived from corresponding AlarmDefinition.
+          example: Clock not synchronising.
+      required:
+        - probableCauseId
+        - name
+        - description
+
+    PerceivedSeverity:
+      type: integer
+      description: This is an enumerated set of values which identify the perceived severity of the alarm.
+      enum: [0, 1, 2, 3, 4, 5]
+      x-enum-varnames:
+        - CRITICAL
+        - MAJOR
+        - MINOR
+        - WARNING
+        - INDETERMINATE
+        - CLEARED
+      example: 1
+
+    AlertmanagerNotificationStatus:
+      type: string
+      enum: [resolved, firing]
+      description: Alertmanager notification status
+
+    AlertmanagerNotification:
+      type: object
+      description: |
+        Alertmanager notification payload as described here https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
+      properties:
+        version:
+          type: string
+        groupKey:
+          type: string
+          description: Key identifying the group of alerts (e.g. to deduplicate)
+        truncatedAlerts:
+          type: integer
+          description: How many alerts have been truncated due to "max_alerts"
+        status:
+          $ref: '#/components/schemas/AlertmanagerNotificationStatus'
+        receiver:
+          type: string
+        groupLabels:
+          type: object
+          additionalProperties:
+            type: string
+        commonLabels:
+          type: object
+          additionalProperties:
+            type: string
+        commonAnnotations:
+          type: object
+          additionalProperties:
+            type: string
+        externalURL:
+          type: string
+          format: uri
+          description: Backlink to the Alertmanager
+        alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                $ref: '#/components/schemas/AlertmanagerNotificationStatus'
+              labels:
+                type: object
+                additionalProperties:
+                  type: string
+              annotations:
+                type: object
+                additionalProperties:
+                  type: string
+              startsAt:
+                type: string
+                format: date-time
+              endsAt:
+                type: string
+                format: date-time
+              generatorURL:
+                type: string
+                format: uri
+                description: Identifies the entity that caused the alert
+              fingerprint:
+                type: string
+                description: Fingerprint to identify the alert
+        subscriber:
+          type: object
+          description: Optional subscriber information, if a subscriber is found
+          properties:
+            callbackUrl:
+              type: string
+              format: uri
+              description: URL to call for notifying the subscriber
+      required:
+        - version
+        - groupKey
+        - status
+        - receiver
+        - alerts
+
+    AlarmEventNotification:
+      type: object
+      description: Alarm Event Notification sent to subscribers
+      properties:
+        globalCloudID:
+          type: string
+          format: uuid
+          description: The global cloud identifier assigned by the SMO.e
+          example: da4698ba-c8a7-429d-ae16-484f15f282c5
+        consumerSubscriptionId:
+          type: string
+          format: uuid
+          description: The value provided by the consumer in the subscription.
+          example: 3ddc1128-a14d-46de-80da-6414b192ce9f
+        notificationEventType:
+          type: integer
+          enum: [0, 1, 2, 3]
+          x-enum-varnames:
+            - NEW
+            - CHANGE
+            - CLEAR
+            - ACKNOWLEDGE
+          description: Notification event type values
+          example: 0
+        objectRef:
+          type: string
+          description: The URL to the AlarmEventRecord object.
+          example: hostname.com/O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+        alarmEventRecordId:
+          type: string
+          format: uuid
+          description: The URL to the AlarmEventRecord object.
+          example: 5f768e89-2ae1-477d-9978-173056154d5d
+        resourceTypeID:
+          type: string
+          format: uuid
+          description: A reference to the type of resource which caused the alarm.
+          example: 91d5d140-ef52-4167-b6dc-975ad1897f23
+        resourceID:
+          type: string
+          format: uuid
+          description: A reference to the resource instance which caused the alarm.
+          example: 3bff173d-a9d5-4157-858f-f934f6fdec45
+        alarmDefinitionID:
+          type: string
+          format: uuid
+          description: A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced ResourceType.
+          example: a3a505c7-84dc-4cff-baf8-36f33b3e70fc
+        probableCauseID:
+          type: string
+          format: uuid
+          description: A reference to the ProbableCause of the Alarm.
+          example: b3cd1cc7-8e5c-42fe-aaf5-59fd94e33a8a
+        alarmRaisedTime:
+          type: string
+          format: date-time
+          description: Date/Time stamp value when the AlarmEventRecord has been created.
+          example: 2042-07-21T20:32:28Z
+        alarmChangedTime:
+          type: string
+          format: date-time
+          description: Date/Time stamp value when any value of the AlarmEventRecord has been modified.
+          example: 2042-07-21T21:32:28Z
+        alarmAcknowledgeTime:
+          type: string
+          format: date-time
+          description: Date/Time stamp value when any value of the AlarmEventRecord has been modified.
+          example: 2042-07-21T22:32:28Z
+        alarmAcknowledged:
+          type: boolean
+          description: Boolean value indicating of a management system has acknowledged the alarm.
+          example: true
+        perceivedSeverity:
+          $ref: '#/components/schemas/PerceivedSeverity'
+        extensions:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or 
+            operator to extend the information provided about the O-Cloud Alarm.
+      required:
+        - globalCloudID
+        - notificationEventType
+        - alarmEventRecordId
+        - resourceTypeID
+        - resourceID
+        - alarmDefinitionID
+        - probableCauseID
+        - alarmRaisedTime
+        - alarmChangedTime
+        - alarmAcknowledged
+        - perceivedSeverity
+        - extensions
+
+    HardwareAlert:
+      type: object
+      description: Placeholder for hardware alert schema
+      # Add properties based on upcoming hardware alert structure
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+          description: | 
+            A URI reference according to IETF RFC 3986 [3] that identifies the problem type. It is encouraged that the URI provides
+            human-readable documentation for the problem (e.g. usingHTML) when dereferenced. When this member is not present,
+            its value is assumed to be "about:blank".
+          example: 'https://problem.description.com'
+        title:
+          type: string
+          description: | 
+            A short, human-readable summary of the problem type. It should not change from occurrence to occurrence of the problem,
+            except for purposes of localization. If type is given and other than "about:blank", this attribute shall also be provided.
+        status:
+          type: integer
+          format: int
+          description: The HTTP status code for this occurrence of the problem.
+        detail:
+          type: string
+          description:  A human-readable explanation specific to this occurrence of the problem.
+          example: Connection to database timed out
+        instance:
+          type: string
+          format: uri
+          description: |
+            A URI reference that identifies the specific occurrence of the problem. 
+            It may yield further information if dereferenced.
+        additionalAttributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Any number of additional attributes, as defined in a specification or by an implementation.
+      required:
+        - status
+        - detail
