@@ -386,10 +386,11 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 		"resourceClass":   resourceClass,
 		"alarmDictionary": alarmDictionary,
 		// TODO: no direct mapping
-		"extensions": "",
-		"vendor":     "",
-		"model":      "",
-		"version":    "",
+		"description": "",
+		"extensions":  "",
+		"vendor":      "",
+		"model":       "",
+		"version":     "",
 	}
 	return
 }
