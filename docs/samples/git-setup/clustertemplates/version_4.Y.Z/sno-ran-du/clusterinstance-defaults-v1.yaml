@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: clusterinstance-defaults-v1
-  namespace: sno-ran-du-v4-16
+  namespace: sno-ran-du-v4-Y-Z
 data:
   # clusterProvisioningTimeout is optional.
   # The value should be a duration string

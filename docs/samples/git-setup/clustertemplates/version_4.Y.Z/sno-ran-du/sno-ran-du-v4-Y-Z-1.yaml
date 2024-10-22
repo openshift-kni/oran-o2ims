@@ -2,7 +2,7 @@ apiVersion: o2ims.provisioning.oran.org/v1alpha1
 kind: ClusterTemplate
 metadata:
   name: sno-ran-du.v4-Y-Z-1
-  namespace: sno-ran-du-v4-16
+  namespace: sno-ran-du-v4-Y-Z
 spec:
   name: sno-ran-du
   version: v4-Y-Z-1

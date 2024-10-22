@@ -1,7 +1,7 @@
 generators:
-- sno-ran-du/sno-ran-du-pg-v1.yaml
+- sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml
 # This ACM PG is needed when the previous one has to be updated.
-- sno-ran-du/sno-ran-du-pg-v2.yaml
+- sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml
 
 
 resources:

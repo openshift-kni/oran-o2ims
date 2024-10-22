@@ -3,6 +3,6 @@ apiVersion: cluster.open-cluster-management.io/v1beta2
 kind: ManagedClusterSetBinding
 metadata:
   name: global
-  namespace: ztp-sno-ran-du-v4-16
+  namespace: ztp-sno-ran-du-v4-Y-Z
 spec:
   clusterSet: global
