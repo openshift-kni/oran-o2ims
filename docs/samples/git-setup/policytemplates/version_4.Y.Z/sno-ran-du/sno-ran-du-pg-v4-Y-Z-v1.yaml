@@ -21,7 +21,6 @@ policyDefaults:
   evaluationInterval:
     compliant: 5m
     noncompliant: 10s
-  consolidateManifests: false
   orderPolicies: true
 policies:
 - name: v1-subscriptions-policy
@@ -99,7 +98,7 @@ policies:
         spec:
           resourceName: du_fh
           vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-1" | toInt hub}}'
-    - path: source-crs/SriovNetwork.yaml # wave 100
+    - path: source-crs/SriovNetwork.yaml
       patches:
       - metadata:
           name: sriov-nw-du-mh
@@ -126,3 +125,12 @@ policies:
                 [service]
                 service.stalld=start,enable
                 service.chronyd=stop,disable
+- name: v1-du-validator-policy
+  remediationAction: inform
+  # This policy is not re-evaluated after it becomes
+  # compliant to reduce resource usage.
+  evaluationInterval:
+    compliant: never
+    noncompliant: 10s
+  manifests:
+    - path: source-crs/validatorCRs/informDuValidatorMaster.yaml
