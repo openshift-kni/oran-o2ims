@@ -4,7 +4,7 @@ kind: Kustomization
 resources:
 - manager.yaml
 - env-config.yaml
-
+- inventory.yaml
 generatorOptions:
   disableNameSuffixHash: true
 

@@ -1,0 +1,23 @@
+apiVersion: o2ims.oran.openshift.io/v1alpha1
+kind: Inventory
+metadata:
+  annotations:
+  labels:
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/instance: o2ims
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: orano2ims
+    app.kubernetes.io/part-of: oran-o2ims
+  name: inventory
+  namespace: oran-o2ims
+spec:
+  alarmSubscriptionServerConfig:
+    enabled: false
+  deploymentManagerServerConfig:
+    enabled: true
+  cloudId: 1122-3444-5555  # your clouldID / globalCloudId
+  ingressHost:   #your ingress Host URL
+  metadataServerConfig:
+    enabled: true
+  resourceServerConfig:
+    enabled: true
