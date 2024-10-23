@@ -65,7 +65,7 @@ The `status.conditions` records the success/failure of the update.
 
 The cluster configuration goes to the `ManagedCluster` CR and the nodes configuration to the corresponding `BMH`s, as expected.
 
-**Note**: ManagedCluster and node extra labels&annotations are the only fields that can be edited post installation. All the other fields are immutable and are rejected by the IMS operator. These changes would be rejected anyway by webhooks put in place by other operators for cluster installation resources (ex: `ClusterDeployment`)
+**Note**: ManagedCluster and node extra labels&annotations are the only fields that can be edited post installation. All the other fields are immutable and are rejected by the O-Cloud Manager. These changes would be rejected anyway by webhooks put in place by other operators for cluster installation resources (ex: `ClusterDeployment`)
 
 ### Updates to the policyTemplateParameters field under ProvisioningRequest spec.templateParameters
 
@@ -87,12 +87,12 @@ spec:
     oCloudSiteId: local-west-12345
     policyTemplateParameters:
       sriov-network-vlan-1: "111"
-      sriov-network-vlan-2: "222"
+      sriov-network-pfNames-1: '["ens4f1"]'
 ```
 **Note:** Only policy configuration values exposed in the `policyTemplateParameters` property within the `spec.templateParameterSchema` field of the associated `ClusterTemplate` can be updated through the `ProvisioningRequest`.
 
 Once the update is made, the `<cluster-name>-pg` ConfigMap in the `ztp-<cluster-template-namespace>` namespace gets updated with the new value. This ConfigMap is used by the ACM policies in their hub templates.
-```yaml
+```console
 $  oc get clustertemplate -A
 NAMESPACE                 NAME                     AGE
 sno-ran-du-v4-Y-Z         sno-ran-du.v4-Y-Z-1      3d23h
@@ -107,7 +107,7 @@ data:
   hugepages-size: 1G
   install-plan-approval: Automatic
   sriov-network-vlan-1: "111"
-  sriov-network-vlan-2: "222"
+  sriov-network-pfNames-1: '["ens4f1"]'
 kind: ConfigMap
 metadata:
   name: sno-ran-du-1-pg
@@ -145,7 +145,7 @@ status:
 
 **Notes**:
 * The format of the `nonCompliantAt` timestamps might move to another structure in the status, but it will still be recorded.
-* Some changes happen so fast that the Policy doesn't even switch to `NonCompliant`, so the IMS operator cannot record the event. In this case, IMS still holds a correct recording since all the policies are/remain Compliant.
+* Some changes happen so fast that the Policy doesn't even switch to `NonCompliant`, so the O-Cloud Manager cannot record the event. In this case, the O-Cloud Manager still holds a correct recording since all the policies are/remain Compliant.
 * Once an enforce `NonCompliant` Policy becomes `Compliant` again, the `status.policies` is updated, the `status.clusterDetails.nonCompliantAt` value removed and the `ConfigurationApplied` condition updated to show that the configuration is up to date:
 * When refactored, the start and end times of the configuration being NonCompliant will be recorded.
 
@@ -196,7 +196,7 @@ The following steps need to be taken:
 3. The SMO selects the new `ClusterTemplate` CR for the `ProvisioningRequest`:
     * `spec.templateName` remains `sno-ran-du`, `spec.templateVersion` is updated from `v4-Y-Z-1` to `v4-Y-Z-2`
     * **Note:** Depending on the changes in the default `ConfigMap`, updates to the `spec.templateParameters.clusterInstanceParameters` of the `ProvisioningRequest` might be needed.
-4. The IMS operator detects the change:
+4. The O-Cloud Manager detects the change:
     * It updates the `ClusterInstance` with the new route.
 5. The siteconfig operator detects the change to the `ClusterInstance` CR:
     * It updates the `NMStateConfig` installation manifest to contain the new route.
@@ -226,7 +226,7 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
     * The new policies are not yet applied to the cluster because the `ManagedCluster` still has the old `sno-ran-du-policy: "v1"` label.
 3. The SMO selects the new ClusterTemplate CR for the ProvisioningRequest:
     * `spec.templateName` remains `sno-ran-du`, `spec.templateVersion` is updated from `v4-Y-Z-2` to `v4-Y-Z-3`
-4. The IMS operator detects the change:
+4. The O-Cloud Manager detects the change:
     * It updates the ClusterInstance with the new `sno-ran-du-policy: "v2"` ManagedCluster label.
     * The siteconfig operator applies the new label to the ManagedCluster.
 5. The ACM Policy Propagator detects the new binding:
@@ -258,7 +258,7 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
       remediationAction: enforce
     ```
     * The affected CRs are updated on the ManagedCluster, not deleted and recreated.
-6. The IMS operator updates the ProvisioningRequest once all the policies are `Compliant`
+6. The O-Cloud Manager updates the ProvisioningRequest once all the policies are `Compliant`
     ```yaml
     - lastTransitionTime: "2024-10-11T19:48:36Z"
       message: The configuration is up to date
@@ -343,3 +343,89 @@ policies:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
     - path: source-crs/LcaSubscriptionOperGroup.yaml
 ```
+
+### Updating the ClusterTemplate schemas
+
+We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml) `ClusterTemplate` CR.
+
+In this example we are updating the policy template schema - `spec.templateParameterSchema.policyTemplateParameters`. This update means that the ACM PG requires extra configuration values.
+We assume we are starting from the [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) ACM PG, but want to add configuration for one more SRIOV network, so 2 extra manifests (`SriovNetwork` and `SriovNetworkNodePolicy`) are needed.
+
+The following steps need to be taken:
+1. Upversion the cluster template content:
+    * A new ACM PG is created - [sno-ran-du-pg-v4-Y-Z-v3](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v3.yaml):
+        * `metadata.name` is updated from `sno-ran-du-pg-v4-Y-Z-v2` to `sno-ran-du-pg-v4-Y-Z-v3` (the `ztp-sno-ran-du-v4-Y-Z` namespace is kept).
+        * `policyDefaults.placement.labelSelector.sno-ran-du-policy` is updated from `v2` to `v3` such that the policy binding is updated.
+        * All policy names are updated from `v2` to `v3` (example: `v2-subscriptions-policy` -> `v3-subscriptions-policy`).
+        * The following manifests are added under the `v3-subscriptions-policy`:
+        ```yaml
+        - path: source-crs/SriovNetwork.yaml
+          patches:
+          - metadata:
+              name: sriov-nw-du-mh
+            spec:
+              resourceName: du_mh
+              vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-2" | toInt hub}}'
+        - path: source-crs/SriovNetworkNodePolicy-SetSelector.yaml
+          patches:
+          - metadata:
+              name: sriov-nnp-du-mh
+            spec:
+              deviceType: vfio-pci
+              isRdma: false
+              nicSelector:
+                pfNames: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-pfNames-2" | toLiteral hub}}'
+              nodeSelector:
+                node-role.kubernetes.io/master: ""
+              numVfs: 8
+              priority: 10
+              resourceName: du_mh
+        ```
+
+    * A new version of the [policytemplate-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v1.yaml) ConfigMap is created - [policytemplate-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v2.yaml):
+        * `metadata.name` is updated from `policytemplate-defaults-v1` to `policytemplate-defaults-v2`.
+        * update the defaults to reflect the new schema and thus the needed configuration values, in our case: `sriov-network-vlan-2` and `sriov-network-pfNames-2`.
+    
+    * Create a new version of the [clusterinstance-defaults-v3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v3.yaml) `ConfigMap` - [clusterinstance-defaults-v4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v4.yaml):
+        * Update the name to `clusterinstance-defaults-v4` (the namespace stays `sno-ran-du-v4-Y-Z`).
+        * Update the `sno-ran-du-policy` ManagedCluster `extraLabel` from `v2` to `v3`.
+
+    * Create a new version of the [sno-ran-du.v4-Y-Z-3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
+        * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-3` to `sno-ran-du.v4-Y-Z-4`.
+        * Update `spec.version` from `v4-Y-Z-3` to `v4-Y-Z-4`.
+        * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v4`.
+        * Update `spec.templates.policyTemplateDefaults` to `policytemplate-defaults-v2`.
+        * Update `spec.templateParameterSchema.properties.policyTemplateParameters` to include the newly desired configuration options:
+        ```yaml
+        ...
+        sriov-network-vlan-2:
+          type: string
+        sriov-network-pfNames-2:
+          type: string
+        ...
+        ```
+
+The remaining steps are similar to those from the [Updates to an existing ACM PolicyGenerator manifest](#updates-to-an-existing-acm-policygenerator-manifest) section, starting with step 2.
+
+The only distinction is that for the current usecase, the `<cluster-name>-pg` ConfigMap in the `ztp-<cluster-template-namespace>` will be updated by the O-Cloud Manager to include the new values (`sriov-network-vlan-2` and `sriov-network-pfNames-2`):
+```console
+$  oc get cm -n ztp-sno-ran-du-v4-Y-Z <cluster name>-pg -oyaml
+apiVersion: v1
+data:
+  cpu-isolated: 0-1,64-65
+  cpu-reserved: 2-10
+  hugepages-count: "32"
+  hugepages-default: 1G
+  hugepages-size: 1G
+  install-plan-approval: Automatic
+  sriov-network-pfNames-1: '["ens4f1"]'
+  sriov-network-pfNames-2: '["ens4f2"]'
+  sriov-network-vlan-1: "111"
+  sriov-network-vlan-2: "222"
+kind: ConfigMap
+metadata:
+  name: sno-ran-du-1-pg
+  namespace: ztp-sno-ran-du-v4-Y-Z
+```
+
+**Note:** The steps are similar for updating the `spec.templateParameterSchema.properties.clusterInstanceParameters`. Any change to the `clusterInstanceParameters` must match the `ClusterInstance` CR of the siteconfig operator.
