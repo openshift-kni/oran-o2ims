@@ -13,8 +13,8 @@ spec:
     enabled: false
   deploymentManagerServerConfig:
     enabled: true
-#  cloudId: 1122-3444-5555  # your clouldID / globalCloudId
-  ingressHost: # your ingressHost
+  cloudId: 1122-3444-5555  # your clouldID / globalCloudId
+  ingressHost: # your IngressHost 
   metadataServerConfig:
     enabled: true
   resourceServerConfig:
