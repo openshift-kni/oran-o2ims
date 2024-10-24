@@ -1,11 +1,9 @@
 package utils
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,27 +12,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/template"
-	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apimachinery/pkg/util/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	sprig "github.com/go-task/slim-sprig/v3"
-	diff "github.com/r3labs/diff/v3"
-	"github.com/xeipuuv/gojsonschema"
-
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/files"
 	openshiftv1 "github.com/openshift/api/config/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "open-cluster-management.io/api/cluster/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -84,112 +72,6 @@ func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Objec
 	}
 
 	return nil
-}
-
-// DisallowUnknownFieldsInSchema updates a schema by adding "additionalProperties": false
-// to all objects/arrays that define "properties". This ensures that any unknown fields
-// not defined in the schema will be disallowed during validation.
-func DisallowUnknownFieldsInSchema(schema map[string]any) {
-	// Check if the current schema level has "properties" defined
-	if properties, hasProperties := schema["properties"]; hasProperties {
-		// If "additionalProperties" is not already set, add it with the value false
-		if _, exists := schema["additionalProperties"]; !exists {
-			schema["additionalProperties"] = false
-		}
-
-		// Recurse into each property defined under "properties"
-		if propsMap, ok := properties.(map[string]any); ok {
-			for _, propValue := range propsMap {
-				if propSchema, ok := propValue.(map[string]any); ok {
-					DisallowUnknownFieldsInSchema(propSchema)
-				}
-			}
-		}
-	}
-
-	// Recurse into each property defined under "items"
-	if items, hasItems := schema["items"]; hasItems {
-		if itemSchema, ok := items.(map[string]any); ok {
-			DisallowUnknownFieldsInSchema(itemSchema)
-		}
-	}
-
-	// Ignore other keywords that could have "properties"
-}
-
-func ValidateJsonAgainstJsonSchema(schema, input any) error {
-	schemaLoader := gojsonschema.NewGoLoader(schema)
-	inputLoader := gojsonschema.NewGoLoader(input)
-
-	result, err := gojsonschema.Validate(schemaLoader, inputLoader)
-	if err != nil {
-		oranUtilsLog.Error(err, "Error validating the input against the schema")
-		return fmt.Errorf("failed when validating the input against the schema: %w", err)
-	}
-
-	if result.Valid() {
-		return nil
-	} else {
-		var errs []string
-		for _, description := range result.Errors() {
-			errs = append(errs, description.String())
-		}
-
-		return fmt.Errorf("invalid input: %s", strings.Join(errs, "; "))
-	}
-}
-
-func GetBMCDetailsForClusterInstance(node map[string]interface{}, provisioningRequest string) (
-	string, string, string, error) {
-	// Get the BMC details.
-	bmcCredentialsDetailsInterface, bmcCredentialsDetailsExist := node["bmcCredentialsDetails"]
-
-	if !bmcCredentialsDetailsExist {
-		return "", "", "", NewInputError(
-			`\"bmcCredentialsDetails\" key expected to exist in ClusterTemplateInput 
-			of ProvisioningRequest %s, but it's missing`,
-			provisioningRequest,
-		)
-	}
-
-	bmcCredentialsDetails := bmcCredentialsDetailsInterface.(map[string]interface{})
-
-	// Get the BMC username and password.
-	username, usernameExists := bmcCredentialsDetails["username"].(string)
-	if !usernameExists {
-		return "", "", "", NewInputError(
-			`\"bmcCredentialsDetails.username\" key expected to exist in ClusterTemplateInput 
-			of ProvisioningRequest %s, but it's missing`,
-			provisioningRequest,
-		)
-	}
-
-	password, passwordExists := bmcCredentialsDetails["password"].(string)
-	if !passwordExists {
-		return "", "", "", NewInputError(
-			`\"bmcCredentialsDetails.password\" key expected to exist in ClusterTemplateInput 
-			of ProvisioningRequest %s, but it's missing`,
-			provisioningRequest,
-		)
-	}
-
-	secretName := ""
-	// Get the BMC CredentialsName.
-	bmcCredentialsNameInterface, bmcCredentialsNameExist := node["bmcCredentialsName"]
-	if !bmcCredentialsNameExist {
-		nodeHostnameInterface, nodeHostnameExists := node["hostName"]
-		if !nodeHostnameExists {
-			secretName = provisioningRequest
-		} else {
-			secretName =
-				extractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) +
-					"-bmc-secret"
-		}
-	} else {
-		secretName = bmcCredentialsNameInterface.(map[string]interface{})["name"].(string)
-	}
-
-	return username, password, secretName, nil
 }
 
 // CreateK8sCR creates/updates/patches an object.
@@ -488,90 +370,8 @@ func GetServerArgs(ctx context.Context, c client.Client,
 	return
 }
 
-// RenderTemplateForK8sCR returns a rendered K8s resource with an given template and object data
-func RenderTemplateForK8sCR(templateName, templatePath string, templateDataObj map[string]any) (*unstructured.Unstructured, error) {
-	renderedTemplate := &unstructured.Unstructured{}
-
-	// Load the template from yaml file
-	tmplContent, err := files.Controllers.ReadFile(templatePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read template file: %s, err: %w", templatePath, err)
-	}
-
-	// Create a FuncMap with template functions
-	funcMap := sprig.TxtFuncMap()
-	funcMap["toYaml"] = toYaml
-	funcMap["validateNonEmpty"] = validateNonEmpty
-	funcMap["validateArrayType"] = validateArrayType
-	funcMap["validateMapType"] = validateMapType
-
-	// Parse the template
-	tmpl, err := template.New(templateName).Funcs(funcMap).Parse(string(tmplContent))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse template content from template file: %s, err: %w", templatePath, err)
-	}
-
-	// Execute the template with the data
-	var output bytes.Buffer
-	err = tmpl.Execute(&output, templateDataObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute template %s with data, err: %w", templateName, err)
-	}
-
-	err = yaml.Unmarshal(output.Bytes(), renderedTemplate)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal, err: %w", err)
-	}
-
-	return renderedTemplate, nil
-}
-
-// toYaml converts an interface to a YAML string and trims the trailing newline
-func toYaml(v any) (string, error) {
-	// yaml.Marshal adds a trailing newline to its output
-	yamlData, err := yaml.Marshal(v)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal interface to YAML: %w", err)
-	}
-
-	return strings.TrimRight(string(yamlData), "\n"), nil
-}
-
-// validateNonEmpty validates the input and fails if it is not provided or empty
-func validateNonEmpty(fieldName string, input any) (any, error) {
-	// Check if the input is empty (you can adjust this condition as per your validation logic)
-	if input == nil {
-		return nil, fmt.Errorf("%s must be provided", fieldName)
-	}
-
-	v := reflect.ValueOf(input)
-	if v.Kind() == reflect.String || v.Kind() == reflect.Slice || v.Kind() == reflect.Map {
-		if v.Len() == 0 {
-			return nil, fmt.Errorf("%s cannot be empty", fieldName)
-		}
-	}
-
-	return input, nil
-}
-
-// validateMapType checks if the input is of type map and raises an error if not.
-func validateMapType(fieldName string, input any) (any, error) {
-	if reflect.TypeOf(input).Kind() != reflect.Map {
-		return nil, fmt.Errorf("%s must be of type map", fieldName)
-	}
-	return input, nil
-}
-
-// validateArrayType checks if the input is of type slice (array) and raises an error if not.
-func validateArrayType(fieldName string, input any) (any, error) {
-	if reflect.TypeOf(input).Kind() != reflect.Slice {
-		return nil, fmt.Errorf("%s must be of type array", fieldName)
-	}
-	return input, nil
-}
-
-// extractBeforeDot returns the strubstring before the first dot.
-func extractBeforeDot(s string) string {
+// ExtractBeforeDot returns the strubstring before the first dot.
+func ExtractBeforeDot(s string) string {
 	dotIndex := strings.Index(s, ".")
 	if dotIndex == -1 {
 		return s
@@ -651,21 +451,6 @@ func ExtractTemplateDataFromConfigMap[T any](cm *corev1.ConfigMap, expectedKey s
 		)
 	}
 	return validData, nil
-}
-
-// ExtractTimeoutFromConfigMap extracts the timeout config from the ConfigMap by key if exits.
-// converting it from duration string to time.Duration. Returns an error if the value is not a
-// valid duration string.
-func ExtractTimeoutFromConfigMap(cm *corev1.ConfigMap, key string) (time.Duration, error) {
-	if timeoutStr, err := GetConfigMapField(cm, key); err == nil {
-		timeout, err := time.ParseDuration(timeoutStr)
-		if err != nil {
-			return 0, NewInputError("the value of key %s from ConfigMap %s is not a valid duration string: %v", key, cm.GetName(), err)
-		}
-		return timeout, nil
-	}
-
-	return 0, nil
 }
 
 // DeepMergeMaps performs a deep merge of the src map into the dst map.
@@ -778,73 +563,6 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	return result, nil
 }
 
-// OverrideClusterInstanceLabelsOrAnnotations handles the overrides of ClusterInstance's extraLabels
-// or extraAnnotations. It overrides the values in the ProvisioningRequest with those from the default
-// configmap when the same labels/annotations exist in both. Labels/annotations that are not common
-// between the default configmap and ProvisioningRequest are ignored.
-func OverrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap map[string]any) error {
-	fields := []string{"extraLabels", "extraAnnotations"}
-
-	for _, field := range fields {
-		srcValue, existsSrc := srcConfigmap[field]
-		dstValue, existsDst := dstProvisioningRequestInput[field]
-		// Check only when both configmap and ProvisioningRequestInput contain the field
-		if existsSrc && existsDst {
-			dstMap, okDst := dstValue.(map[string]any)
-			srcMap, okSrc := srcValue.(map[string]any)
-			if !okDst || !okSrc {
-				return fmt.Errorf("type mismatch for field %s: (from ProvisioningRequest: %T, from default Configmap: %T)",
-					field, dstValue, srcValue)
-			}
-
-			// Iterate over the resource types (e.g., ManagedCluster, AgentClusterInstall)
-			// Check labels/annotations only if the resource exists in both
-			for resourceType, srcFields := range srcMap {
-				if dstFields, exists := dstMap[resourceType]; exists {
-					dstFieldsMap, okDstFields := dstFields.(map[string]any)
-					srcFieldsMap, okSrcFields := srcFields.(map[string]any)
-					if !okDstFields || !okSrcFields {
-						return fmt.Errorf("type mismatch for field %s: (from ProvisioningRequest: %T, from default Configmap: %T)",
-							field, dstValue, srcValue)
-					}
-
-					// Override ProvisioningRequestInput's values with defaults if the label/annotation key exists in both
-					for srcFieldKey, srcLabelValue := range srcFieldsMap {
-						if _, exists := dstFieldsMap[srcFieldKey]; exists {
-							oranUtilsLog.Info(fmt.Sprintf("%s.%s.%s found in both default configmap and clusterInstanceInput. "+
-								"Overriding it in ClusterInstanceInput with value %s from the default configmap.",
-								field, resourceType, srcFieldKey, srcLabelValue))
-							dstFieldsMap[srcFieldKey] = srcLabelValue
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Process label/annotation overrides for nodes
-	dstNodes, dstExists := dstProvisioningRequestInput["nodes"]
-	srcNodes, srcExists := srcConfigmap["nodes"]
-	if dstExists && srcExists {
-		// Determine the minimum length to merge
-		minLen := len(dstNodes.([]any))
-		if len(srcNodes.([]any)) < minLen {
-			minLen = len(srcNodes.([]any))
-		}
-
-		for i := 0; i < minLen; i++ {
-			if err := OverrideClusterInstanceLabelsOrAnnotations(
-				dstNodes.([]any)[i].(map[string]any),
-				srcNodes.([]any)[i].(map[string]any),
-			); err != nil {
-				return fmt.Errorf("type mismatch for nodes: %w", err)
-			}
-		}
-	}
-
-	return nil
-}
-
 func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNamespace, targetNamespace string) error {
 	// Get the secret from the source namespace
 	secret := &corev1.Secret{}
@@ -870,127 +588,6 @@ func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNames
 		return fmt.Errorf("failed to create secret %s in namespace %s: %w", secret.GetName(), secret.GetNamespace(), err)
 	}
 	return nil
-}
-
-// CheckClusterLabelsForPolicies checks if the cluster_version
-// label exist for a certain ClusterInstance and returns it.
-func CheckClusterLabelsForPolicies(
-	clusterName string, clusterLabels map[string]string) error {
-
-	if len(clusterLabels) == 0 {
-		return NewInputError(
-			"No cluster labels configured by the ClusterInstance %s(%s). "+
-				"Labels are needed for cluster configuration",
-			clusterName, clusterName,
-		)
-	}
-
-	// Make sure the cluster-version label exists.
-	_, clusterVersionLabelExists := clusterLabels[ClusterVersionLabelKey]
-	if !clusterVersionLabelExists {
-		return NewInputError(
-			"Managed cluster %s is missing the %s label. This label is needed for correctly "+
-				"generating and populating configuration data",
-			clusterName, ClusterVersionLabelKey,
-		)
-	}
-	return nil
-}
-
-// matchesPattern checks if the path matches the pattern
-func matchesPattern(path, pattern []string) bool {
-	if len(path) < len(pattern) {
-		return false
-	}
-
-	for i, p := range pattern {
-		if p == "*" {
-			// Wildcard matches any single element
-			continue
-		}
-		if path[i] != p {
-			return false
-		}
-	}
-
-	return true
-}
-
-// matchesAnyPattern checks if the given path matches any pattern in the provided list.
-func matchesAnyPattern(path []string, patterns [][]string) bool {
-	for _, pattern := range patterns {
-		if matchesPattern(path, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
-// FindClusterInstanceImmutableFieldUpdates identifies updates made to immutable fields
-// in the ClusterInstance spec. It returns two lists of paths: a list of updated fields
-// that are considered immutable and should not be modified and a list of fields related
-// to node scaling, indicating nodes that were added or removed.
-func FindClusterInstanceImmutableFieldUpdates(
-	oldClusterInstance, newClusterInstance *unstructured.Unstructured) ([]string, []string, error) {
-
-	oldClusterInstanceSpec := oldClusterInstance.Object["spec"].(map[string]any)
-	newClusterInstanceSpec := newClusterInstance.Object["spec"].(map[string]any)
-
-	diffs, err := diff.Diff(oldClusterInstanceSpec, newClusterInstanceSpec)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error comparing differences between existing "+
-			"and newly rendered ClusterInstance: %w", err)
-	}
-
-	var updatedFields []string
-	var scalingNodes []string
-	for _, diff := range diffs {
-		/* Examples of diff result in json format
-
-		Label added at the cluster-level
-		  {"type": "create", "path": ["extraLabels", "ManagedCluster", "newLabelKey"], "from": null, "to": "newLabelValue"}
-
-		Field updated at the cluster-level
-		  {"type": "update", "path": ["baseDomain"], "from": "domain.example.com", "to": "newdomain.example.com"}
-
-		New node added
-		  {"type": "create", "path": ["nodes", "1"], "from": null, "to": {"hostName": "worker2"}}
-
-		Existing node removed
-		  {"type": "delete", "path": ["nodes", "1"], "from": {"hostName": "worker2"}, "to": null}
-
-		Field updated at the node-level
-		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
-		*/
-
-		oranUtilsLog.Info(
-			fmt.Sprintf(
-				"Detected field change in the newly rendered ClusterInstance(%s) type: %s, path: %s, from: %+v, to: %+v",
-				oldClusterInstance.GetName(), diff.Type, strings.Join(diff.Path, "."), diff.From, diff.To,
-			),
-		)
-
-		// Check if the path matches any allowed fields
-		if matchesAnyPattern(diff.Path, AllowedClusterInstanceFields) {
-			// Allowed field; skip
-			continue
-		}
-		// Check if the path matches any ignored fields
-		if matchesAnyPattern(diff.Path, IgnoredClusterInstanceFields) {
-			// Ignored field; skip
-			continue
-		}
-
-		// Check if the change is adding or removing a node.
-		// Path like ["nodes", "1"], indicating node addition or removal.
-		if diff.Path[0] == "nodes" && len(diff.Path) == 2 {
-			scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
-			continue
-		}
-		updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
-	}
-
-	return updatedFields, scalingNodes, nil
 }
 
 // GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting
@@ -1067,54 +664,6 @@ func GetDefaultBackendTransport() (http.RoundTripper, error) {
 	return net.SetTransportDefaults(&http.Transport{TLSClientConfig: tlsConfig}), nil
 }
 
-// ClusterIsReadyForPolicyConfig checks if a cluster is ready for policy configuration
-// by looking at its availability, joined status and hub acceptance.
-func ClusterIsReadyForPolicyConfig(
-	ctx context.Context, c client.Client, clusterInstanceName string) (bool, error) {
-	// Check if the managed cluster is available. If not, return.
-	managedCluster := &clusterv1.ManagedCluster{}
-	managedClusterExists, err := DoesK8SResourceExist(
-		ctx, c, clusterInstanceName, "", managedCluster)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if managed cluster exists: %w", err)
-	}
-	if !managedClusterExists {
-		return false, nil
-	}
-
-	available := false
-	hubAccepted := false
-	joined := false
-
-	availableCondition := meta.FindStatusCondition(
-		managedCluster.Status.Conditions,
-		clusterv1.ManagedClusterConditionAvailable)
-	if availableCondition != nil && availableCondition.Status == metav1.ConditionTrue {
-		available = true
-	}
-
-	acceptedCondition := meta.FindStatusCondition(
-		managedCluster.Status.Conditions,
-		clusterv1.ManagedClusterConditionHubAccepted)
-	if acceptedCondition != nil && acceptedCondition.Status == metav1.ConditionTrue {
-		hubAccepted = true
-	}
-
-	joinedCondition := meta.FindStatusCondition(
-		managedCluster.Status.Conditions,
-		clusterv1.ManagedClusterConditionJoined)
-	if joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue {
-		joined = true
-	}
-
-	return available && hubAccepted && joined, nil
-}
-
-// TimeoutExceeded returns true if it's been more time than the timeout configuration.
-func TimeoutExceeded(startTime time.Time, timeout time.Duration) bool {
-	return time.Since(startTime) > timeout
-}
-
 // GetEnvOrDefault returns the value of the named environment variable or the supplied default value if the environment
 // variable is not set.
 func GetEnvOrDefault(name, defaultValue string) string {
@@ -1123,72 +672,6 @@ func GetEnvOrDefault(name, defaultValue string) string {
 		return defaultValue
 	}
 	return value
-}
-
-// ExtractSubSchema extracts a Sub schema indexed by subSchemaKey from a Main schema
-func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema map[string]any, err error) {
-	jsonObject := make(map[string]any)
-	if len(mainSchema) == 0 {
-		return subSchema, nil
-	}
-	err = json.Unmarshal(mainSchema, &jsonObject)
-	if err != nil {
-		return subSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
-	}
-	if _, ok := jsonObject[PropertiesString]; !ok {
-		return subSchema, fmt.Errorf("non compliant Main Schema, missing 'properties' section: %w", err)
-	}
-	properties, ok := jsonObject[PropertiesString].(map[string]any)
-	if !ok {
-		return subSchema, fmt.Errorf("could not cast 'properties' section of schema as map[string]any: %w", err)
-	}
-
-	subSchemaValue, ok := properties[subSchemaKey]
-	if !ok {
-		return subSchema, fmt.Errorf("subSchema '%s' does not exist: %w", subSchemaKey, err)
-	}
-
-	subSchema, ok = subSchemaValue.(map[string]any)
-	if !ok {
-		return subSchema, fmt.Errorf("subSchema '%s' is not a valid map: %w", subSchemaKey, err)
-	}
-	return subSchema, nil
-}
-
-// ExtractMatchingInput extracts the portion of the input data that corresponds to a given subSchema key.
-func ExtractMatchingInput(parentSchema []byte, subSchemaKey string) (any, error) {
-	inputData := make(map[string]any)
-	err := json.Unmarshal(parentSchema, &inputData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal parent schema: %w", err)
-	}
-
-	// Check if the input contains the subSchema key
-	matchingInput, ok := inputData[subSchemaKey]
-	if !ok {
-		return nil, fmt.Errorf("parent schema does not contain key '%s': %w", subSchemaKey, err)
-	}
-	return matchingInput, nil
-}
-
-// ExtractSchemaRequired extracts the required field of a subschema
-func ExtractSchemaRequired(mainSchema []byte) (required []string, err error) {
-	requireListAny, err := ExtractMatchingInput(mainSchema, requiredString)
-	if err != nil {
-		return required, fmt.Errorf("could not extract the 'required' section of schema: %w", err)
-	}
-	requiredAny, ok := requireListAny.([]any)
-	if !ok {
-		return required, fmt.Errorf("could not cast 'required' section as []any")
-	}
-	for _, item := range requiredAny {
-		itemString, ok := item.(string)
-		if !ok {
-			return required, fmt.Errorf(`could not cast 'required' section item as a string`)
-		}
-		required = append(required, itemString)
-	}
-	return required, nil
 }
 
 // MapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
