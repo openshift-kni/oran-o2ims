@@ -81,7 +81,6 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 
 	// Get the name and namespace of the object:
 	key := client.ObjectKeyFromObject(newObject)
-	oranUtilsLog.Info("[CreateK8sCR] Resource", "name", key.Name, "namespace", key.Namespace, "kind", newObject.GetObjectKind().GroupVersionKind().Kind)
 
 	// We can set the owner reference only for objects that live in the same namespace, as cross
 	// namespace owners are forbidden. This also applies to non-namespaced objects like cluster
@@ -126,17 +125,11 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	} else {
 		newObject.SetResourceVersion(oldObject.GetResourceVersion())
 		if operation == PATCH {
-			oranUtilsLog.Info("[CreateK8sCR] CR already present, PATCH it",
-				"name", newObject.GetName(),
-				"namespace", newObject.GetNamespace())
 			if err := c.Patch(ctx, newObject, client.MergeFrom(oldObject)); err != nil {
 				return fmt.Errorf("failed to patch object %s/%s: %w", newObject.GetNamespace(), newObject.GetName(), err)
 			}
 			return nil
 		} else if operation == UPDATE {
-			oranUtilsLog.Info("[CreateK8sCR] CR already present, UPDATE it",
-				"name", newObject.GetName(),
-				"namespace", newObject.GetNamespace())
 			if err := c.Update(ctx, newObject); err != nil {
 				return fmt.Errorf("failed to update object %s/%s: %w", newObject.GetNamespace(), newObject.GetName(), err)
 			}
@@ -152,15 +145,11 @@ func DoesK8SResourceExist(ctx context.Context, c client.Client, name, namespace 
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			oranUtilsLog.Info("[doesK8SResourceExist] Resource not found, create it. ",
-				"name", name, "namespace", namespace)
 			return false, nil
 		} else {
 			return false, fmt.Errorf("failed to check existence of resource '%s' in namespace '%s': %w", name, namespace, err)
 		}
 	} else {
-		oranUtilsLog.Info("[doesK8SResourceExist] Resource already present, return. ",
-			"name", name, "namespace", namespace)
 		return true, nil
 	}
 }

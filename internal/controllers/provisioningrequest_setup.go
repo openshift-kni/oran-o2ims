@@ -38,13 +38,17 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
 			&provisioningv1alpha1.ClusterTemplate{},
-			handler.Funcs{UpdateFunc: r.findClusterTemplateForProvisioningRequest},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForClusterTemplate),
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Watch on status changes only.
 					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
 				},
-				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				CreateFunc: func(ce event.CreateEvent) bool {
+					// Only process a CreateEvent if the ClusterTemplate already has a status.
+					ct := ce.Object.(*provisioningv1alpha1.ClusterTemplate)
+					return ct.Status.Conditions != nil
+				},
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
@@ -87,10 +91,7 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 			})).
 		Watches(
 			&policiesv1.Policy{},
-			handler.Funcs{
-				UpdateFunc: r.handlePolicyEventUpdate,
-				DeleteFunc: r.handlePolicyEventDelete,
-			},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForPolicy),
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Filter out updates to parent policies.
@@ -210,41 +211,37 @@ func (r *ProvisioningRequestReconciler) findNodePoolForProvisioningRequest(
 	}
 }
 
-// findClusterTemplateForProvisioningRequest maps the ClusterTemplates used by ProvisioningRequests
+// enqueueProvisioningRequestForClusterTemplate maps the ClusterTemplates used by ProvisioningRequests
 // to reconciling requests for those ProvisioningRequests.
-func (r *ProvisioningRequestReconciler) findClusterTemplateForProvisioningRequest(
-	ctx context.Context, event event.UpdateEvent,
-	queue workqueue.RateLimitingInterface) {
+func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForClusterTemplate(
+	ctx context.Context, obj client.Object) []reconcile.Request {
+	var requests []reconcile.Request
 
-	// For this case, we can use either new or old object.
-	newClusterTemplate := event.ObjectNew.(*provisioningv1alpha1.ClusterTemplate)
-
-	// Get all the provisioningRequests.
+	// Get all the ProvisioningRequests.
 	provisioningRequests := &provisioningv1alpha1.ProvisioningRequestList{}
-	err := r.Client.List(ctx, provisioningRequests, client.InNamespace(newClusterTemplate.GetNamespace()))
+	err := r.Client.List(ctx, provisioningRequests)
 	if err != nil {
-		r.Logger.Error("[findProvisioningRequestsForClusterTemplate] Error listing ProvisioningRequests. ", "Error: ", err)
-		return
+		return nil
 	}
 
 	// Create reconciling requests only for the ProvisioningRequests that are using the
-	// current clusterTemplate.
+	// current ClusterTemplate.
 	for _, provisioningRequest := range provisioningRequests.Items {
 		clusterTemplateRefName := getClusterTemplateRefName(
 			provisioningRequest.Spec.TemplateName, provisioningRequest.Spec.TemplateVersion)
-		if clusterTemplateRefName == newClusterTemplate.GetName() {
+		if clusterTemplateRefName == obj.GetName() {
 			r.Logger.Info(
-				"[findProvisioningRequestsForClusterTemplate] Add new reconcile request for ProvisioningRequest",
+				"[enqueueProvisioningRequestForClusterTemplate] Add new reconcile request for ProvisioningRequest ",
 				"name", provisioningRequest.Name)
-			queue.Add(
-				reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Name: provisioningRequest.Name,
-					},
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name: provisioningRequest.Name,
 				},
-			)
+			})
 		}
 	}
+
+	return requests
 }
 
 // findManagedClusterForProvisioningRequest maps the ManagedClusters created
@@ -286,54 +283,37 @@ func (r *ProvisioningRequestReconciler) findManagedClusterForProvisioningRequest
 	}
 }
 
-// findPoliciesForProvisioningRequests creates reconciliation requests for the ProvisioningRequests
+// enqueueProvisioningRequestForPolicy creates reconciliation requests for the ProvisioningRequests
 // whose associated ManagedClusters have matched policies Updated or Deleted.
-func findPoliciesForProvisioningRequests[T deleteOrUpdateEvent](
-	ctx context.Context, c client.Client, e T, q workqueue.RateLimitingInterface) {
-
-	policy := &policiesv1.Policy{}
-	switch evt := any(e).(type) {
-	case event.UpdateEvent:
-		policy = evt.ObjectOld.(*policiesv1.Policy)
-	case event.DeleteEvent:
-		policy = evt.Object.(*policiesv1.Policy)
-	default:
-		// Only Update and Delete events are supported
-		return
-	}
-
-	// Get the ClusterInstance.
+func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
+	ctx context.Context, obj client.Object) []reconcile.Request {
+	var requests []reconcile.Request
+	// Get the ClusterInstance. The obj parameter is a child policy, so its namespace is the same
+	// as the name of the ClusterInstance.
 	clusterInstance := &siteconfig.ClusterInstance{}
-	err := c.Get(ctx, types.NamespacedName{
-		Namespace: policy.Namespace,
-		Name:      policy.Namespace,
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetNamespace(),
 	}, clusterInstance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Return as the ManagedCluster for this Namespace is not deployed/managed by ClusterInstance.
-			return
+			// Return, as the ManagedCluster for this Namespace is not deployed/managed by ClusterInstance.
+			return nil
 		}
-		return
+		return nil
 	}
 
-	ProvisioningRequest, okCR := clusterInstance.GetLabels()[provisioningRequestNameLabel]
+	// Requeue for the ProvisioningRequest which created the ClusterInstance and thus the
+	// ManagedCluster to which the policy is matched.
+	provisioningRequest, okCR := clusterInstance.GetLabels()[provisioningRequestNameLabel]
 	if okCR {
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Name: ProvisioningRequest}})
+		r.Logger.Info(
+			"[enqueueProvisioningRequestForPolicy] Add new reconcile request for ProvisioningRequest ",
+			"name", provisioningRequest)
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: provisioningRequest},
+		})
 	}
-}
 
-// handlePolicyEvent handled Updates and Deleted events.
-func (r *ProvisioningRequestReconciler) handlePolicyEventDelete(
-	ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
-
-	// Call the generic function for determining the corresponding ProvisioningRequest.
-	findPoliciesForProvisioningRequests(ctx, r.Client, e, q)
-}
-
-// handlePolicyEvent handled Updates and Deleted events.
-func (r *ProvisioningRequestReconciler) handlePolicyEventUpdate(
-	ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-
-	// Call the generic function.
-	findPoliciesForProvisioningRequests(ctx, r.Client, e, q)
+	return requests
 }

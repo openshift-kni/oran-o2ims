@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
@@ -66,10 +65,6 @@ type timeouts struct {
 	hardwareProvisioning time.Duration
 	clusterProvisioning  time.Duration
 	clusterConfiguration time.Duration
-}
-
-type deleteOrUpdateEvent interface {
-	event.UpdateEvent | event.DeleteEvent
 }
 
 const (
