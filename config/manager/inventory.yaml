@@ -1,7 +1,6 @@
 apiVersion: o2ims.oran.openshift.io/v1alpha1
 kind: Inventory
 metadata:
-  annotations:
   labels:
     app.kubernetes.io/created-by: oran-o2ims
     app.kubernetes.io/instance: o2ims

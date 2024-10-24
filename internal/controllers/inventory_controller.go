@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+//+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
@@ -428,7 +429,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 }
 
 // registerWithSmo sends a message to the SMO to register our identifiers and URL
-func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
+func (t *reconcilerTask) registerWithSmo(ctx context.Context, ingressHost string) error {
 	// Retrieve the local cluster id value.  It appears to always be identified as "version" in its metadata
 	clusterId, err := utils.GetClusterId(ctx, t.client, utils.ClusterVersionName)
 	if err != nil {
@@ -443,7 +444,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 	data := utils.AvailableNotification{
 		GlobalCloudId: t.object.Spec.CloudId,
 		OCloudId:      clusterId,
-		ImsEndpoint:   fmt.Sprintf("https://%s/o2ims-infrastructureInventory/v1", t.object.Spec.IngressHost),
+		ImsEndpoint:   fmt.Sprintf("https://%s/o2ims-infrastructureInventory/v1", ingressHost),
 	}
 
 	body, err := json.Marshal(data)
@@ -466,7 +467,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 }
 
 // setupSmo executes the high-level action set register with the SMO and set up the related conditions accordingly
-func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
+func (t *reconcilerTask) setupSmo(ctx context.Context, ingressHost string) (err error) {
 	if t.object.Spec.SmoConfig == nil {
 		meta.SetStatusCondition(
 			&t.object.Status.DeploymentsStatus.Conditions,
@@ -481,7 +482,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 	}
 
 	if !utils.IsSmoRegistrationCompleted(t.object) {
-		err = t.registerWithSmo(ctx)
+		err = t.registerWithSmo(ctx, ingressHost)
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx, "Failed to register with SMO.",
@@ -526,8 +527,22 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
+	// Determine our ingress domain
+	ingressHost := t.object.Spec.IngressHost
+	if ingressHost == "" {
+		ingressHost, err = utils.GetIngressDomain(ctx, t.client)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to get ingress domain.",
+				slog.String("error", err.Error()))
+			return
+		}
+		ingressHost = "o2ims." + ingressHost
+	}
+
 	// Register with SMO (if necessary)
-	err = t.setupSmo(ctx)
+	err = t.setupSmo(ctx, ingressHost)
 	if err != nil {
 		return
 	}
@@ -535,7 +550,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	// Create the needed Ingress if at least one server is required by the Spec.
 	if t.object.Spec.MetadataServerConfig.Enabled || t.object.Spec.DeploymentManagerServerConfig.Enabled ||
 		t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmSubscriptionServerConfig.Enabled {
-		err = t.createIngress(ctx)
+		err = t.createIngress(ctx, ingressHost)
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx,
@@ -874,7 +889,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		},
 	}
 
-	deploymentContainerArgs, err := utils.GetServerArgs(ctx, t.client, t.object, serverName)
+	deploymentContainerArgs, err := utils.GetServerArgs(t.object, serverName)
 	if err != nil {
 		err2 := t.updateORANO2ISMUsedConfigStatus(
 			ctx, serverName, deploymentContainerArgs,
@@ -1060,7 +1075,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string)
 	return nil
 }
 
-func (t *reconcilerTask) createIngress(ctx context.Context) error {
+func (t *reconcilerTask) createIngress(ctx context.Context, ingressHost string) error {
 	t.logger.InfoContext(ctx, "[createIngress]")
 	// Build the Ingress object.
 	ingressMeta := metav1.ObjectMeta{
@@ -1074,7 +1089,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	ingressSpec := networkingv1.IngressSpec{
 		Rules: []networkingv1.IngressRule{
 			{
-				Host: t.object.Spec.IngressHost,
+				Host: ingressHost,
 				IngressRuleValue: networkingv1.IngressRuleValue{
 					HTTP: &networkingv1.HTTPIngressRuleValue{
 						Paths: []networkingv1.HTTPIngressPath{

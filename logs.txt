@@ -1,0 +1,440 @@
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Command","args":["/usr/bin/oran-o2ims","start","controller-manager","--leader-elect","--health-probe-bind-address=:8081","--metrics-bind-address=127.0.0.1:8080"]}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Build","go":"go1.22.8","os":"linux","arch":"amd64"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting manager","image":"quay.io/openshift-kni/oran-o2ims-operator:4.16.0"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting metrics server","logger":"controller-runtime/metrics"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"starting server","name":"health probe","addr":"[::]:8081"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Serving metrics server","logger":"controller-runtime/metrics","bindAddress":"127.0.0.1:8080","secure":false}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"attempting to acquire leader lease oran-o2ims/a73bc4d2.openshift.io..."}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"successfully acquired lease oran-o2ims/a73bc4d2.openshift.io"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","source":"kind source: *v1alpha1.Inventory"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","source":"kind source: *v1.Deployment"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting Controller","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest","source":"kind source: *v1alpha1.ProvisioningRequest"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest","source":"kind source: *v1alpha1.ClusterTemplate"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest","source":"kind source: *v1alpha1.ClusterInstance"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest","source":"kind source: *v1alpha1.NodePool"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest","source":"kind source: *v1.Policy"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest","source":"kind source: *v1.ManagedCluster"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting Controller","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-template","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ClusterTemplate","source":"kind source: *v1alpha1.ClusterTemplate"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting EventSource","controller":"o2ims-cluster-template","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ClusterTemplate","source":"kind source: *v1.ConfigMap"}
+{"time":"2024-10-23T15:12:38Z","level":"INFO","msg":"Starting Controller","controller":"o2ims-cluster-template","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ClusterTemplate"}
+{"time":"2024-10-23T15:12:39Z","level":"INFO","msg":"Starting workers","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","worker count":1}
+2024/10/23 15:12:39 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:39 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:39Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:39Z","level":"INFO","msg":"Starting workers","controller":"o2ims-cluster-request","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ProvisioningRequest","worker count":1}
+{"time":"2024-10-23T15:12:39Z","level":"INFO","msg":"Starting workers","controller":"o2ims-cluster-template","controllerGroup":"o2ims.provisioning.oran.org","controllerKind":"ClusterTemplate","worker count":1}
+{"time":"2024-10-23T15:12:39Z","level":"INFO","msg":"[CreateK8sCR] CR not found, CREATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:39Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR not found, CREATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR not found, CREATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:40 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:40 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:40 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"fd66ab13-3058-48bd-bf94-c25d5a4c4464"}
+{"time":"2024-10-23T15:12:40Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"fd66ab13-3058-48bd-bf94-c25d5a4c4464","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:40 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:40 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:40 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:40 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"4b23818a-6aae-41f6-9c76-60576d2ff56b"}
+{"time":"2024-10-23T15:12:40Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"4b23818a-6aae-41f6-9c76-60576d2ff56b","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:40 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:40 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:40 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:40 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"51ac976d-da3c-4d76-8636-c6b0c38d10b3"}
+{"time":"2024-10-23T15:12:40Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"51ac976d-da3c-4d76-8636-c6b0c38d10b3","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:40 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:40 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:40 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:40 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"f5984e35-668d-4efe-93b6-353f2b062615"}
+{"time":"2024-10-23T15:12:40Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"f5984e35-668d-4efe-93b6-353f2b062615","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:40 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:40 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:40 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:40 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:40 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"9787e483-e72c-4874-929f-536da54222d3"}
+{"time":"2024-10-23T15:12:40Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"9787e483-e72c-4874-929f-536da54222d3","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:40 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:40 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:40Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:41 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:41 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:41 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:41 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:41 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"06cf88c0-3a40-4012-ab74-cbf2c215117a"}
+{"time":"2024-10-23T15:12:41Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"06cf88c0-3a40-4012-ab74-cbf2c215117a","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:41 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:41 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:41 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:41 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:41 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:41 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"32cf18cf-91b3-4506-b675-14c68e4e05bd"}
+{"time":"2024-10-23T15:12:41Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"32cf18cf-91b3-4506-b675-14c68e4e05bd","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:41 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:41 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:41 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:41 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:41 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:41 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:41 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:41Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"dbc7b5cf-b568-4189-aa8a-6422993fa3e4"}
+{"time":"2024-10-23T15:12:41Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"dbc7b5cf-b568-4189-aa8a-6422993fa3e4","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:42 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:42 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:42 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:42 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:42 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:42 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:42 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:42 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:42 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:42Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"1dfe1b59-b5ed-4c78-920f-dc0d2acf3cc5"}
+{"time":"2024-10-23T15:12:42Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"1dfe1b59-b5ed-4c78-920f-dc0d2acf3cc5","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:43 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:43 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:43 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:43 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:43 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:43 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:43 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:43 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:43 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:43Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"7798c5bc-e28f-4a3e-893a-ec26408bd363"}
+{"time":"2024-10-23T15:12:43Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"7798c5bc-e28f-4a3e-893a-ec26408bd363","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:46 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:46 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:46 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:46 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:46 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:46 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:46 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:46 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:46 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:46Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"155377e8-46b9-4a0f-9a29-c218fe78f4bb"}
+{"time":"2024-10-23T15:12:46Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"155377e8-46b9-4a0f-9a29-c218fe78f4bb","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:12:51 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:12:51 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:51 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:12:51 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:12:51 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:12:51 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:12:51 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:12:51 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:12:51 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:12:51Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"5411ed83-dd03-4918-b89c-19c0393b114e"}
+{"time":"2024-10-23T15:12:51Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"5411ed83-dd03-4918-b89c-19c0393b114e","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:13:01 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:13:01 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:13:01 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:13:01 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:01Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:13:02Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:02Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:13:02 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:13:02 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:13:02Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:13:02Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:13:02 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:13:02Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:13:02 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:13:02 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:13:02Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"a68aee53-aa61-4ab6-a086-2e447d4b8145"}
+{"time":"2024-10-23T15:13:02Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"a68aee53-aa61-4ab6-a086-2e447d4b8145","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:13:22 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:13:22 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:13:22 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:13:22 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:13:22 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:13:22 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:13:22 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:13:22 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:13:22 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:13:22Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"ddb8274f-0372-4bf4-8cfc-96f02191bfe0"}
+{"time":"2024-10-23T15:13:22Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"ddb8274f-0372-4bf4-8cfc-96f02191bfe0","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:14:03 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:14:03 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:14:03 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:14:03 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:14:03 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:14:03 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:14:03 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:14:03 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:14:03 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:14:03Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"22d32297-8e4f-4e14-8cea-bca7699b62ff"}
+{"time":"2024-10-23T15:14:03Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"22d32297-8e4f-4e14-8cea-bca7699b62ff","err":"failed to get server arguments: multiclusterengine object not found"}
+2024/10/23 15:15:25 INFO [createIngress] controller=ORAN-O2IMS
+2024/10/23 15:15:25 INFO [createIngress] Create/Update/Patch Ingress:  controller=ORAN-O2IMS name=api
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"api","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-kube-rbac-proxy","namespace":""}
+2024/10/23 15:15:25 INFO [createServiceAccount] controller=ORAN-O2IMS
+2024/10/23 15:15:25 INFO [createServiceAccount] Create/Update/Patch ServiceAccount:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":"","kind":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server","namespace":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":"","kind":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"oran-o2ims-resource-server-kube-rbac-proxy","namespace":""}
+2024/10/23 15:15:25 INFO [createService] controller=ORAN-O2IMS
+2024/10/23 15:15:25 INFO [createService] Create/Update/Patch Service:  controller=ORAN-O2IMS name=resource-server
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] Resource","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims","kind":""}
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[CreateK8sCR] CR already present, UPDATE it","logger":"oranUtilsLog","name":"resource-server","namespace":"oran-o2ims"}
+2024/10/23 15:15:25 INFO [deploy server] controller=ORAN-O2IMS Name=resource-server
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"[getACMNamespace] multiclusterengine object not found","logger":"oranUtilsLog"}
+2024/10/23 15:15:25 INFO [updateORANO2ISMUsedConfigStatus] controller=ORAN-O2IMS
+2024/10/23 15:15:25 ERROR Failed to deploy the Resource server. controller=ORAN-O2IMS error="failed to get server arguments: multiclusterengine object not found"
+{"time":"2024-10-23T15:15:25Z","level":"INFO","msg":"Warning: Reconciler returned both a non-zero result and a non-nil error. The result will always be ignored if the error is non-nil and the non-nil error causes reqeueuing with exponential backoff. For more details, see: https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/reconcile#Reconciler","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"181b5abb-262d-4e47-81ad-2a875f15036d"}
+{"time":"2024-10-23T15:15:25Z","level":"ERROR","msg":"Reconciler error","controller":"o2ims-inventory","controllerGroup":"o2ims.oran.openshift.io","controllerKind":"Inventory","Inventory":{"name":"oran-o2ims-inventory","namespace":"oran-o2ims"},"namespace":"oran-o2ims","name":"oran-o2ims-inventory","reconcileID":"181b5abb-262d-4e47-81ad-2a875f15036d","err":"failed to get server arguments: multiclusterengine object not found"}

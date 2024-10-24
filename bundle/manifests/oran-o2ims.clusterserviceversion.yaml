@@ -1293,6 +1293,14 @@ spec:
           - patch
           - update
         - apiGroups:
+          - operator.openshift.io
+          resources:
+          - ingresscontrollers
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - policy.open-cluster-management.io
           resources:
           - policies
@@ -1404,12 +1412,12 @@ spec:
                 - --metrics-bind-address=127.0.0.1:8080
                 env:
                 - name: IMAGE
-                  value: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
+                  value: quay.io/alegacy/oran-o2ims:4.16.0
                 - name: KUBE_RBAC_PROXY_IMAGE
                   value: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
                 - name: HWMGR_PLUGIN_NAMESPACE
                   value: oran-hwmgr-plugin
-                image: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
+                image: quay.io/alegacy/oran-o2ims:4.16.0
                 livenessProbe:
                   httpGet:
                     path: /healthz

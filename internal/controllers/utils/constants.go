@@ -64,7 +64,8 @@ var (
 
 // Default values for backend URL and token:
 const (
-	defaultBackendURL       = "https://kubernetes.default.svc"
+	defaultApiServerURL     = "https://kubernetes.default.svc"
+	defaultSearchApiURL     = "https://search-search-api.open-cluster-management.svc.cluster.local:4010"
 	defaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
 	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
 	defaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
