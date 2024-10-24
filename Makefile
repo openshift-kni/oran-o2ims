@@ -194,6 +194,7 @@ deploy: manifests kustomize kubectl ## Deploy controller to the K8s cluster spec
 	sed -n -e 's/ingressHost:.*/ingressHost:o2ims.$(Ingress_Domain)/' config/manager/inventory.yaml 
 	cp config/manager/inventory.tmp config/manager/inventory.yaml
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) apply -f -
+	rm -f config/manager/inventory.tmp
 
 .PHONY: undeploy
 undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
