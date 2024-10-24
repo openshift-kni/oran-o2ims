@@ -14,27 +14,18 @@ License.
 
 package v1alpha1
 
-const (
-	// FulfilledCondition is the condition that indicates that an request has been completely
-	// and successfully completed.
-	FulfilledCondition = "Fulfilled"
-
-	// FailedConditions is a condition that indicates that an order cound't be completely
-	// fulfilled.
-	FailedCondition = "Failed"
-)
-
 type ConditionType string
 
 // The following constants define the different types of conditions that will be set
 const (
 	Provisioned ConditionType = "Provisioned"
-	Unknown     ConditionType = "Unknown" // indicates the condition has not been evaluated
+	Configured  ConditionType = "Configured"
+	Unknown     ConditionType = "Unknown" // Indicates the condition has not been evaluated
 )
 
+// ConditionReason describes the reasons for a condition's status.
 type ConditionReason string
 
-// The following constants define the different reasons that conditions will be set for
 const (
 	InProgress     ConditionReason = "InProgress"
 	Completed      ConditionReason = "Completed"
@@ -42,4 +33,14 @@ const (
 	Failed         ConditionReason = "Failed"
 	NotInitialized ConditionReason = "NotInitialized"
 	TimedOut       ConditionReason = "TimedOut"
+	ConfigUpdate   ConditionReason = "ConfigurationUpdateRequested"
+	ConfigApplied  ConditionReason = "ConfigurationApplied"
+)
+
+// ConditionMessage provides detailed messages associated with condition status updates.
+type ConditionMessage string
+
+const (
+	AwaitConfig   ConditionMessage = "Spec updated; awaiting configuration application by the hardware plugin"
+	ConfigSuccess ConditionMessage = "Configuration has been applied successfully"
 )

@@ -2,8 +2,11 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
+	"time"
+
 	"sync"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -12,6 +15,7 @@ import (
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -21,6 +25,19 @@ var (
 	hwMgrPluginNameSpace string
 	once                 sync.Once
 )
+
+type ConditionDoesNotExistsErr struct {
+	ConditionName string
+}
+
+func (e *ConditionDoesNotExistsErr) Error() string {
+	return fmt.Sprintf("Condition does not exist: %s", e.ConditionName)
+}
+
+func IsConditionDoesNotExistsErr(err error) bool {
+	var customErr *ConditionDoesNotExistsErr
+	return errors.As(err, &customErr)
+}
 
 // FindNodeGroupByRole finds the matching NodeGroup by role
 func FindNodeGroupByRole(role string, nodeGroups []hwv1alpha1.NodeGroup) (*hwv1alpha1.NodeGroup, error) {
@@ -66,26 +83,35 @@ func ProcessClusterNodeGroups(clusterInstance *siteconfig.ClusterInstance, nodeG
 	return nil
 }
 
-// GetBootMacAddress selects the boot interface based on label and return the interface MAC address
-func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, nodePool *hwv1alpha1.NodePool) (string, error) {
-	// Get the boot interface label from annotation
+// getBootInterfaceLabel extracts the boot interface label from the NodePool annotations
+func getBootInterfaceLabel(nodePool *hwv1alpha1.NodePool) (string, error) {
+	// Get the annotations from the NodePool
 	annotation := nodePool.GetAnnotations()
 	if annotation == nil {
 		return "", fmt.Errorf("annotations are missing from nodePool %s in namespace %s", nodePool.Name, nodePool.Namespace)
 	}
+
 	// Ensure the boot interface label annotation exists and is not empty
 	bootIfaceLabel, exists := annotation[HwTemplateBootIfaceLabel]
 	if !exists || bootIfaceLabel == "" {
 		return "", fmt.Errorf("%s annotation is missing or empty from nodePool %s in namespace %s",
 			HwTemplateBootIfaceLabel, nodePool.Name, nodePool.Namespace)
 	}
+	return bootIfaceLabel, nil
+}
 
-	for _, iface := range interfaces {
-		if iface.Label == bootIfaceLabel {
-			return iface.MACAddress, nil
+// GetBootMacAddress selects the boot interface based on label and return the interface MAC address
+func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, nodePool *hwv1alpha1.NodePool) (string, error) {
+	// Get the boot interface label from annotation
+	bootIfaceLabel, err := getBootInterfaceLabel(nodePool)
+	if err == nil {
+		for _, iface := range interfaces {
+			if iface.Label == bootIfaceLabel {
+				return iface.MACAddress, nil
+			}
 		}
 	}
-	return "", fmt.Errorf("no boot interface found")
+	return "", fmt.Errorf("no boot interface found: %w", err)
 }
 
 // CollectNodeDetails collects BMC and node interfaces details
@@ -225,9 +251,9 @@ func GetHwMgrPluginNS() string {
 	return hwMgrPluginNameSpace
 }
 
-// SetCloudManagerGenerationStatus sets the CloudManager's ObservedGeneration on the node pool resource status field
-func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodePool *hwv1alpha1.NodePool) error {
-	// Get the generated NodePool and its metadata.generation
+// SetCloudManagerInitialObservedGeneration sets the CloudManager's ObservedGeneration
+func SetCloudManagerInitialObservedGeneration(ctx context.Context, c client.Client, nodePool *hwv1alpha1.NodePool) error {
+	// Get the generated NodePool
 	exists, err := DoesK8SResourceExist(ctx, c, nodePool.GetName(),
 		nodePool.GetNamespace(), nodePool)
 	if err != nil {
@@ -235,12 +261,6 @@ func SetCloudManagerGenerationStatus(ctx context.Context, c client.Client, nodeP
 	}
 	if !exists {
 		return fmt.Errorf("nodePool %s does not exist in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
-	}
-	// We only set ObservedGeneration when the NodePool is first created because we do not update the spec after creation.
-	// Once ObservedGeneration is set, no need to update it again.
-	if nodePool.Status.CloudManager.ObservedGeneration != 0 {
-		// ObservedGeneration is already set, so we do nothing.
-		return nil
 	}
 	// Set ObservedGeneration to the current generation of the resource
 	nodePool.Status.CloudManager.ObservedGeneration = nodePool.ObjectMeta.Generation
@@ -323,4 +343,107 @@ OuterLoop:
 		}
 	}
 	return nil
+}
+
+// HandleHardwareTimeout checks for provisioning or configuration timeout
+func HandleHardwareTimeout(
+	condition hwv1alpha1.ConditionType,
+	provisioningStartTime metav1.Time,
+	configurationStartTime metav1.Time,
+	timeout time.Duration,
+	currentReason string,
+	currentMessage string) (bool, string, string) {
+
+	reason := currentReason
+	message := currentMessage
+	timedOutOrFailed := false
+
+	// Handle timeout for Provisioned condition
+	if condition == hwv1alpha1.Provisioned && TimeoutExceeded(provisioningStartTime.Time, timeout) {
+		reason = string(hwv1alpha1.TimedOut)
+		message = "Hardware provisioning timed out"
+		timedOutOrFailed = true
+		return timedOutOrFailed, reason, message
+	}
+
+	// Handle timeout for Configured condition
+	if condition == hwv1alpha1.Configured && TimeoutExceeded(configurationStartTime.Time, timeout) {
+		reason = string(hwv1alpha1.TimedOut)
+		message = "Hardware configuration timed out"
+		timedOutOrFailed = true
+		return timedOutOrFailed, reason, message
+	}
+
+	// Return the current reason and message when no timeout occurred
+	return timedOutOrFailed, reason, message
+}
+
+// ValidateConfigMap validates the field in the ConfigMap data against the existing NodePool spec
+func ValidateConfigMap(configMap map[string]string, nodePool *hwv1alpha1.NodePool, nodeGroup []hwv1alpha1.NodeGroup) error {
+	// Check hwMgrId
+	if configMap[HwTemplatePluginMgr] != nodePool.Spec.HwMgrId {
+		return fmt.Errorf("'%s' in the hardware template can not be changed:%s/%s", HwTemplatePluginMgr,
+			configMap[HwTemplatePluginMgr], nodePool.Spec.HwMgrId)
+	}
+
+	// Check bootInterfaceLabel
+	bootIfaceLabel, err := getBootInterfaceLabel(nodePool)
+	if err != nil {
+		return err
+	}
+	if configMap[HwTemplateBootIfaceLabel] != bootIfaceLabel {
+		return fmt.Errorf("'%s' in the hardware template can not be changed:%s/%s", HwTemplateBootIfaceLabel,
+			configMap[HwTemplateBootIfaceLabel], bootIfaceLabel)
+	}
+
+	// Check each group in NodePool spec exists in the config map (parsed node-pools-data)
+	for _, specNodeGroup := range nodePool.Spec.NodeGroup {
+		var found bool
+		for _, configNodeGroup := range nodeGroup {
+			if specNodeGroup.Name == configNodeGroup.Name {
+				found = true
+				break
+			}
+		}
+		// If the NodeGroup spec entry isn't found in the ConfigMap, reject it
+		if !found {
+			return fmt.Errorf("node group %s found in spec but not in ConfigMap, rejecting", specNodeGroup.Name)
+		}
+	}
+	return nil
+}
+
+func UdateNodePoolStatus(ctx context.Context, client client.Client, nodePool *hwv1alpha1.NodePool,
+	conditionType hwv1alpha1.ConditionType, status metav1.ConditionStatus,
+	reason hwv1alpha1.ConditionReason, message hwv1alpha1.ConditionMessage) error {
+
+	meta.SetStatusCondition(
+		&nodePool.Status.Conditions,
+		metav1.Condition{
+			Type:               string(conditionType),
+			Status:             status,
+			Reason:             string(reason),
+			Message:            string(message),
+			LastTransitionTime: metav1.Now(),
+		},
+	)
+
+	// Update the Kubernetes Custom Resource status and handle any errors
+	if err := UpdateK8sCRStatus(ctx, client, nodePool); err != nil {
+		return fmt.Errorf("failed to update status for NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
+	}
+	return nil
+}
+
+// IsNodePoolProvisioned checks if the cluster provision condition status is completed
+func IsNodePoolProvisioned(nodePool hwv1alpha1.NodePool) bool {
+	condition := meta.FindStatusCondition(nodePool.Status.Conditions, (string(hwv1alpha1.Provisioned)))
+	return condition != nil && condition.Status == metav1.ConditionTrue
+}
+
+func GetStatusMessage(condition hwv1alpha1.ConditionType) string {
+	if condition == hwv1alpha1.Configured {
+		return "configuring"
+	}
+	return "provisioning"
 }

@@ -573,7 +573,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 				Data: map[string]string{
 					utils.HardwareProvisioningTimeoutConfigKey: "1m",
-					"hwMgrId": "hwmgr",
+					utils.HwTemplateBootIfaceLabel:             "bootable-interface",
+					utils.HwTemplatePluginMgr:                  "hwmgr",
 					utils.HwTemplateNodePool: `
     - name: master
       hwProfile: profile-spr-single-processor-64G
@@ -818,11 +819,18 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		BeforeEach(func() {
 			// Create NodePool resource
 			nodePool = &hwv1alpha1.NodePool{}
+
 			nodePool.SetName(crName)
 			nodePool.SetNamespace("hwmgr")
+			nodePool.Spec.HwMgrId = "hwmgr"
+			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
+				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
+			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
 			}
+			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 		})
 
@@ -920,7 +928,6 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
-
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[4], metav1.Condition{
@@ -943,7 +950,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the start timestamp has been set for NodePool
 			Expect(cr.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 
-			// Patch HardwareProvisioningCheckStart timestamp to mock timeout
+			// Patch HardwareStatusCheckStart timestamp to mock timeout
 			cr.Status.NodePoolRef.HardwareProvisioningCheckStart.Time = metav1.Now().Add(-2 * time.Minute)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
@@ -1081,9 +1088,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool = &hwv1alpha1.NodePool{}
 			nodePool.SetName(crName)
 			nodePool.SetNamespace("hwmgr")
+			nodePool.Spec.HwMgrId = "hwmgr"
+			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
+				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
+			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
+			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			// Create ClusterInstance resource
 			clusterInstance = &siteconfig.ClusterInstance{}
@@ -2239,10 +2252,12 @@ var _ = Describe("renderHardwareTemplate", func() {
 		task            *provisioningRequestReconcilerTask
 		clusterInstance *siteconfig.ClusterInstance
 		ct              *provisioningv1alpha1.ClusterTemplate
+		cr              *provisioningv1alpha1.ProvisioningRequest
 		tName           = "clustertemplate-a"
 		tVersion        = "v1.0.0"
 		ctNamespace     = "clustertemplate-a-v4-16"
 		hwTemplateCm    = "hwTemplate-v1"
+		hwTemplateCmv2  = "hwTemplate-v2"
 		crName          = "cluster-1"
 	)
 
@@ -2288,7 +2303,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		}
 
 		// Define the provisioning request.
-		cr := &provisioningv1alpha1.ProvisioningRequest{
+		cr = &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
 				Namespace: ctNamespace,
@@ -2349,7 +2364,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: utils.InventoryNamespace,
 			},
 			Data: map[string]string{
-				"hwMgrId":                      utils.UnitTestHwmgrID,
+				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 				utils.HwTemplateBootIfaceLabel: "bootable-interface",
 				utils.HwTemplateNodePool: `
 - name: master
@@ -2410,6 +2425,458 @@ var _ = Describe("renderHardwareTemplate", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(nodePool).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("failed to get the ClusterTemplate"))
+	})
+
+	It("returns an error if the hardware template has invalid node group", func() {
+		// Ensure the ClusterTemplate is created
+		Expect(c.Create(ctx, ct)).To(Succeed())
+
+		// Define the hardware template config map
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwTemplateCm,
+				Namespace: utils.InventoryNamespace,
+			},
+			Data: map[string]string{
+				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+				utils.HwTemplateBootIfaceLabel: "bootable-interface",
+				utils.HwTemplateNodePool: `
+- name: master
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		_, err := task.renderHardwareTemplate(ctx, clusterInstance)
+		Expect(err).To(HaveOccurred())
+		cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(utils.CRconditionReasons.Failed),
+			Message: "missing 'hwProfile' in node-pools-data element at index",
+		})
+	})
+
+	It("returns an error if the hardware template has an empty node group", func() {
+		// Ensure the ClusterTemplate is created
+		Expect(c.Create(ctx, ct)).To(Succeed())
+
+		// Define the hardware template config map
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwTemplateCm,
+				Namespace: utils.InventoryNamespace,
+			},
+			Data: map[string]string{
+				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+				utils.HwTemplateBootIfaceLabel: "bootable-interface",
+				utils.HwTemplateNodePool:       ``,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		_, err := task.renderHardwareTemplate(ctx, clusterInstance)
+		Expect(err).To(HaveOccurred())
+		cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(utils.CRconditionReasons.Failed),
+			Message: "required field 'node-pools-data' is empty",
+		})
+	})
+
+	It("returns an error if the hardware template lacks a node group", func() {
+		// Ensure the ClusterTemplate is created
+		Expect(c.Create(ctx, ct)).To(Succeed())
+
+		// Define the hardware template config map
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwTemplateCm,
+				Namespace: utils.InventoryNamespace,
+			},
+			Data: map[string]string{
+				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+				utils.HwTemplateBootIfaceLabel: "bootable-interface",
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		_, err := task.renderHardwareTemplate(ctx, clusterInstance)
+		Expect(err).To(HaveOccurred())
+		cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(utils.CRconditionReasons.Failed),
+			Message: "failed to get the Hardware template from ConfigMap",
+		})
+	})
+
+	Context("When NodePool has been created", func() {
+		var nodePool *hwv1alpha1.NodePool
+
+		BeforeEach(func() {
+			// Create NodePool resource
+			nodePool = &hwv1alpha1.NodePool{}
+
+			nodePool.SetName(crName)
+			nodePool.SetNamespace("hwmgr")
+			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
+			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
+			}
+			nodePool.Status.Conditions = []metav1.Condition{
+				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
+			}
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
+		})
+		It("returns an error when the hardware template contains a change in hwMgrId", func() {
+			ct.Spec.Templates.HwTemplate = hwTemplateCmv2
+			// Ensure the ClusterTemplate is created
+			Expect(c.Create(ctx, ct)).To(Succeed())
+
+			// Define the new version of hardware template config map
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCmv2,
+					Namespace: utils.InventoryNamespace,
+				},
+				Data: map[string]string{
+					utils.HwTemplatePluginMgr:      "new id",
+					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+					utils.HwTemplateNodePool: `
+	- name: master
+ 	 hwProfile: profile-spr-single-processor-64G`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+
+			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
+			Expect(err).To(HaveOccurred())
+			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+			Expect(cond).ToNot(BeNil())
+			verifyStatusCondition(*cond, metav1.Condition{
+				Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "Failed to render the Hardware template",
+			})
+		})
+
+		It("returns an error when the hardware template contains a change in bootIntefaceLabel", func() {
+			ct.Spec.Templates.HwTemplate = hwTemplateCmv2
+			// Ensure the ClusterTemplate is created
+			Expect(c.Create(ctx, ct)).To(Succeed())
+
+			// Define the new version of hardware template config map
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCmv2,
+					Namespace: utils.InventoryNamespace,
+				},
+				Data: map[string]string{
+					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+					utils.HwTemplateBootIfaceLabel: "new-label",
+					utils.HwTemplateNodePool: `
+	- name: master
+  	hwProfile: profile-spr-single-processor-64G`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+
+			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
+			Expect(err).To(HaveOccurred())
+			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+			Expect(cond).ToNot(BeNil())
+			verifyStatusCondition(*cond, metav1.Condition{
+				Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "Failed to render the Hardware template",
+			})
+		})
+
+		It("returns an error when the hardware template contains a change in groups", func() {
+			ct.Spec.Templates.HwTemplate = hwTemplateCmv2
+			// Ensure the ClusterTemplate is created
+			Expect(c.Create(ctx, ct)).To(Succeed())
+
+			// Define the new version of hardware template config map
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCmv2,
+					Namespace: utils.InventoryNamespace,
+				},
+				Data: map[string]string{
+					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+					utils.HwTemplateNodePool: `
+	- name: master
+  	hwProfile: profile-spr-single-processor-64G
+	- name: worker
+  	hwProfile: profile-spr-single-processor-64G`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+
+			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
+			Expect(err).To(HaveOccurred())
+			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+			Expect(cond).ToNot(BeNil())
+			verifyStatusCondition(*cond, metav1.Condition{
+				Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "Failed to render the Hardware template",
+			})
+		})
+	})
+})
+
+var _ = Describe("createOrUpdateNodePool", func() {
+	var (
+		ctx             context.Context
+		c               client.Client
+		reconciler      *ProvisioningRequestReconciler
+		task            *provisioningRequestReconcilerTask
+		clusterInstance *siteconfig.ClusterInstance
+		ct              *provisioningv1alpha1.ClusterTemplate
+		cr              *provisioningv1alpha1.ProvisioningRequest
+		nodePool        *hwv1alpha1.NodePool
+		tName           = "clustertemplate-a"
+		tVersion        = "v1.0.0"
+		ctNamespace     = "clustertemplate-a-v4-16"
+		hwTemplateCm    = "hwTemplate-v1"
+		crName          = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Define the cluster instance.
+		clusterInstance = &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				Nodes: []siteconfig.NodeSpec{
+					{
+						Role: "master",
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno12399"},
+							},
+						},
+					},
+					{
+						Role: "worker",
+						NodeNetwork: &v1beta1.NMStateConfigSpec{
+							Interfaces: []*v1beta1.Interface{
+								{Name: "eno1"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Define the cluster request.
+		cr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testFullTemplateParameters),
+				},
+			},
+		}
+
+		// Define the cluster template.
+		ct = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
+				Templates: provisioningv1alpha1.Templates{
+					HwTemplate: hwTemplateCm,
+				},
+			},
+			Status: provisioningv1alpha1.ClusterTemplateStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(utils.CTconditionTypes.Validated),
+						Reason: string(utils.CTconditionReasons.Completed),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		reconciler = &ProvisioningRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &provisioningRequestReconcilerTask{
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
+			timeouts: &timeouts{
+				hardwareProvisioning: 1 * time.Minute,
+			},
+		}
+	})
+
+	Context("When NodePool has been created", func() {
+		BeforeEach(func() {
+			// Define the hardware template config map
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateCm,
+					Namespace: utils.InventoryNamespace,
+				},
+				Data: map[string]string{
+					utils.HardwareProvisioningTimeoutConfigKey: "1m",
+					utils.HwTemplatePluginMgr:                  utils.UnitTestHwmgrID,
+					utils.HwTemplateBootIfaceLabel:             "bootable-interface",
+					utils.HwTemplateNodePool: `
+- name: master
+  hwProfile: profile-spr-single-processor-64G
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+			Expect(c.Create(ctx, ct)).To(Succeed())
+			createdNodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+			requeue, err := task.createOrUpdateNodePool(ctx, createdNodePool)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(requeue).To(Equal(false))
+		})
+
+		It("Verify NodePool GenerationStatus after NodePool is created", func() {
+			nodePool = &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			Expect(nodePool.Status.CloudManager.ObservedGeneration).To(Equal(nodePool.ObjectMeta.Generation))
+		})
+
+		It("Verify NodePool status when the hardware template is updated and the cluster is provisioned", func() {
+			// The cluster is provisioned
+			ClusterProvisioned := metav1.Condition{
+				Type:   "ClusterProvisioned",
+				Status: metav1.ConditionTrue,
+				Reason: "Completed",
+			}
+			cr.Status.Conditions = append(cr.Status.Conditions, ClusterProvisioned)
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			nodePool = &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil())
+
+			// Update the nodePool's spec to reflect the updated hardware template
+			nodePool.Spec.NodeGroup[0].HwProfile = "profile-spr-single-processor-64G-v2"
+			nodePool.Spec.NodeGroup[1].HwProfile = "profile-spr-dual-processor-128G-v2"
+			requeue, err := task.createOrUpdateNodePool(ctx, nodePool)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(requeue).To(Equal(false))
+			// Get the updated nodePool
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			// Verify the node pool status
+			Expect(nodePool.Status.CloudManager.ObservedGeneration).To(Equal(nodePool.ObjectMeta.Generation))
+			status, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Configured)
+			Expect(status).ToNot(BeNil())
+			Expect(status).To(Equal(false))
+			Expect(timedOutOrFailed).To(Equal(false))
+			Expect(err).ToNot(HaveOccurred())
+			condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareConfigured))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(string(hwv1alpha1.ConfigUpdate)))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningState).To(Equal(provisioningv1alpha1.StateProgressing))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningDetails).To(Equal("Hardware configuring is in progress"))
+			Expect(cr.Status.NodePoolRef.HardwareConfiguringCheckStart).ToNot(BeZero())
+		})
+
+		It("Verify NodePool status when the hardware template is updated and the cluster is in provisioning", func() {
+			// cluster is in provisioning
+			ClusterProvisioned := metav1.Condition{
+				Type:   "ClusterProvisioned",
+				Status: metav1.ConditionFalse,
+				Reason: string(utils.CRconditionReasons.InProgress),
+			}
+			cr.Status.Conditions = append(cr.Status.Conditions, ClusterProvisioned)
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			nodePool = &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil())
+			// Update the nodePool's spec to reflect the updated hardware template
+			nodePool.Spec.NodeGroup[0].HwProfile = "profile-spr-single-processor-64G-v2"
+			nodePool.Spec.NodeGroup[1].HwProfile = "profile-spr-dual-processor-128G-v2"
+			requeue, err := task.createOrUpdateNodePool(ctx, nodePool)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(requeue).To(Equal(true))
+			// Get the updated nodePool
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			// Verify the node pool status
+			Expect(nodePool.Status.CloudManager.ObservedGeneration).To(Equal(nodePool.ObjectMeta.Generation))
+			status, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Configured)
+			Expect(status).To(Equal(false))
+			Expect(timedOutOrFailed).To(Equal(false))
+			Expect(utils.IsConditionDoesNotExistsErr(err)).To(Equal(true))
+			condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareConfigured))
+			Expect(condition).To(BeNil())
+			Expect(cr.Status.NodePoolRef.HardwareConfiguringCheckStart).ToNot(BeZero())
+		})
+
+		It("Verify NodePool is configured and status is updated", func() {
+			nodePool = &hwv1alpha1.NodePool{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: crName, Namespace: utils.UnitTestHwmgrID}, nodePool)).To(Succeed())
+			Expect(nodePool).ToNot(BeNil()) // Ensure nodePool is not nil
+			// The node pool is configured
+			configuredCondition := metav1.Condition{
+				Type:   "Configured",
+				Status: metav1.ConditionTrue,
+				Reason: string(hwv1alpha1.ConfigApplied),
+			}
+			nodePool.Status.Conditions = append(nodePool.Status.Conditions, configuredCondition)
+			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+
+			status, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Configured)
+			Expect(status).ToNot(BeNil())
+			Expect(status).To(Equal(true))
+			Expect(timedOutOrFailed).To(Equal(false))
+			Expect(err).ToNot(HaveOccurred())
+			condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareConfigured))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(condition.Reason).To(Equal(string(hwv1alpha1.ConfigApplied)))
+			condition = meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareConfigured))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningState).To(Equal(provisioningv1alpha1.StateFulfilled))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningDetails).To(Equal("Cluster has configured successfully"))
+		})
 	})
 })
 
@@ -2476,7 +2943,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 	})
 
 	It("returns error when error fetching NodePool", func() {
-		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).To(HaveOccurred())
@@ -2490,7 +2957,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		}
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
-		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // It should be failed
 		Expect(err).ToNot(HaveOccurred())
@@ -2508,8 +2975,8 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
 
-		// First call to checkNodePoolProvisionStatus (before timeout)
-		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		// First call to checkNodePoolStatus (before timeout)
+		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -2518,8 +2985,9 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		adjustedTime := cr.Status.NodePoolRef.HardwareProvisioningCheckStart.Time.Add(-1 * time.Minute)
 		cr.Status.NodePoolRef.HardwareProvisioningCheckStart = metav1.NewTime(adjustedTime)
 
-		// Call checkNodePoolProvisionStatus again (after timeout)
-		provisioned, timedOutOrFailed, err = task.checkNodePoolProvisionStatus(ctx, np)
+		// Call checkNodePoolStatus again (after timeout)
+		time.Sleep(2 * time.Minute)
+		provisioned, timedOutOrFailed, err = task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
 		Expect(err).ToNot(HaveOccurred())
@@ -2538,7 +3006,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
 
-		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -2554,13 +3022,50 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		}
 		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, np)).To(Succeed())
-		provisioned, timedOutOrFailed, err := task.checkNodePoolProvisionStatus(ctx, np)
+		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(true))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
 		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+	})
+
+	It("returns timeout when NodePool configuring timed out", func() {
+		provisionedCondition := metav1.Condition{
+			Type:   "Provisioned",
+			Status: metav1.ConditionTrue,
+		}
+		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, np)).To(Succeed())
+
+		configuredCondition := metav1.Condition{
+			Type:   "Configured",
+			Status: metav1.ConditionFalse,
+		}
+		np.Status.Conditions = append(np.Status.Conditions, configuredCondition)
+		Expect(c.Status().Update(ctx, np)).To(Succeed())
+
+		// First call to checkNodePoolStatus (before timeout)
+		status, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Configured)
+		Expect(status).To(Equal(false))
+		Expect(timedOutOrFailed).To(Equal(false))
+		Expect(err).ToNot(HaveOccurred())
+
+		// Simulate a timeout by moving the start time back
+		adjustedTime := cr.Status.NodePoolRef.HardwareConfiguringCheckStart.Time.Add(-1 * time.Minute)
+		cr.Status.NodePoolRef.HardwareConfiguringCheckStart = metav1.NewTime(adjustedTime)
+
+		// Call checkNodePoolStatus again (after timeout)
+		status, timedOutOrFailed, err = task.checkNodePoolStatus(ctx, np, hwv1alpha1.Configured)
+		Expect(status).To(Equal(false))
+		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
+		Expect(err).ToNot(HaveOccurred())
+
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareConfigured))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal(string(hwv1alpha1.TimedOut)))
 	})
 })
 
@@ -2945,7 +3450,7 @@ defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
-					"hwMgrId":                      utils.UnitTestHwmgrID,
+					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
 - name: master

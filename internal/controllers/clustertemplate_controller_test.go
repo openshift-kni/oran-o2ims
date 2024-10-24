@@ -88,6 +88,8 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
+					utils.HwTemplatePluginMgr:      "hwMgr",
+					utils.HwTemplateBootIfaceLabel: "label",
 					utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
