@@ -12,9 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -37,7 +35,6 @@ var _ = Describe("policyManagement", func() {
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
 		hwTemplateCm = "hwTemplate-v1"
-		updateEvent  *event.UpdateEvent
 	)
 
 	BeforeEach(func() {
@@ -1137,74 +1134,55 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check updated policies for matched clusters result in reconciliation request.
-		updateEvent = &event.UpdateEvent{
-			ObjectOld: &policiesv1.Policy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-16.policy",
-					Namespace: "cluster-1",
-				},
-				Spec: policiesv1.PolicySpec{
-					RemediationAction: "inform",
-				},
-				Status: policiesv1.PolicyStatus{
-					ComplianceState: "Compliant",
-				},
+		policy := &policiesv1.Policy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "ztp-clustertemplate-a-v4-16.policy",
+				Namespace: "cluster-1",
 			},
-			ObjectNew: &policiesv1.Policy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-16.policy",
-					Namespace: "cluster-1",
-				},
-				Spec: policiesv1.PolicySpec{
-					RemediationAction: "enforce",
-				},
-				Status: policiesv1.PolicyStatus{
-					ComplianceState: "Compliant",
-				},
+			Spec: policiesv1.PolicySpec{
+				RemediationAction: "enforce",
+			},
+			Status: policiesv1.PolicyStatus{
+				ComplianceState: "Compliant",
 			},
 		}
-		queue := workqueue.NewRateLimitingQueueWithConfig(
-			workqueue.DefaultControllerRateLimiter(),
-			workqueue.RateLimitingQueueConfig{
-				Name: "ProvisioningRequestsQueue",
-			})
-		CRReconciler.handlePolicyEventUpdate(ctx, *updateEvent, queue)
-		Expect(queue.Len()).To(Equal(1))
+
+		res := CRReconciler.enqueueProvisioningRequestForPolicy(ctx, policy)
+		Expect(len(res)).To(Equal(1))
 
 		// Get the first request from the queue.
-		item, shutdown := queue.Get()
-		Expect(shutdown).To(BeFalse())
+		Expect(res[0]).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}))
+	})
 
-		Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}))
+	It("It handles changes to the ClusterTemplate", func() {
+		// Get the existing ClusterTemplate since it has a status.
+		clusterTemplate := &provisioningv1alpha1.ClusterTemplate{}
+		err := CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name: getClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
+			clusterTemplate,
+		)
+		Expect(err).ToNot(HaveOccurred())
 
-		// Check that deleted policies for matched clusters result in reconciliation requests.
-		deleteEvent := &event.DeleteEvent{
-			Object: &policiesv1.Policy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-16.policy",
-					Namespace: "cluster-1",
-				},
-				Spec: policiesv1.PolicySpec{
-					RemediationAction: "inform",
-				},
-				Status: policiesv1.PolicyStatus{
-					ComplianceState: "Compliant",
-				},
+		res := CRReconciler.enqueueProvisioningRequestForClusterTemplate(ctx, clusterTemplate)
+		Expect(len(res)).To(Equal(1))
+		// Get the first request from the queue.
+		Expect(res[0]).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}))
+
+		// Call enqueueProvisioningRequestForClusterTemplate for a different ClusterTemplate.
+		clusterTemplate = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "random-name",
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
 			},
 		}
-		queue = workqueue.NewRateLimitingQueueWithConfig(
-			workqueue.DefaultControllerRateLimiter(),
-			workqueue.RateLimitingQueueConfig{
-				Name: "ProvisioningRequestsQueue",
-			})
-		CRReconciler.handlePolicyEventDelete(ctx, *deleteEvent, queue)
-		Expect(queue.Len()).To(Equal(1))
-
-		// Get the first request from the queue.
-		item, shutdown = queue.Get()
-		Expect(shutdown).To(BeFalse())
-
-		Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}))
+		res = CRReconciler.enqueueProvisioningRequestForClusterTemplate(ctx, clusterTemplate)
+		Expect(len(res)).To(Equal(0))
 	})
 
 	It("Updates ProvisioningRequest ConfigurationApplied condition to OutOfDate when the cluster is "+
