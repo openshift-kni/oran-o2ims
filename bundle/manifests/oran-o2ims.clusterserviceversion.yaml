@@ -117,6 +117,36 @@ metadata:
           "metadata": {
             "labels": {
               "app.kubernetes.io/created-by": "oran-o2ims",
+              "app.kubernetes.io/instance": "o2ims",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/part-of": "oran-o2ims"
+            },
+            "name": "oran-o2ims-inventory",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "alarmSubscriptionServerConfig": {
+              "enabled": false
+            },
+            "cloudId": "1122-3444-5555",
+            "deploymentManagerServerConfig": {
+              "enabled": false
+            },
+            "ingressHost": null,
+            "metadataServerConfig": {
+              "enabled": true
+            },
+            "resourceServerConfig": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "apiVersion": "o2ims.oran.openshift.io/v1alpha1",
+          "kind": "Inventory",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "oran-o2ims",
               "app.kubernetes.io/instance": "inventory-sample",
               "app.kubernetes.io/managed-by": "kustomize",
               "app.kubernetes.io/name": "inventory",
@@ -1412,12 +1442,12 @@ spec:
                 - --metrics-bind-address=127.0.0.1:8080
                 env:
                 - name: IMAGE
-                  value: quay.io/alegacy/oran-o2ims:4.16.0
+                  value: quay.io/mmorency0/oran-o2ims:4.16.0
                 - name: KUBE_RBAC_PROXY_IMAGE
                   value: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
                 - name: HWMGR_PLUGIN_NAMESPACE
                   value: oran-hwmgr-plugin
-                image: quay.io/alegacy/oran-o2ims:4.16.0
+                image: quay.io/mmorency0/oran-o2ims:4.16.0
                 livenessProbe:
                   httpGet:
                     path: /healthz

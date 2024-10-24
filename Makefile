@@ -175,7 +175,7 @@ CLOUD_ID := $(shell oc get clusterversion -o jsonpath='{.items[].spec.clusterID}
 Ingress_Domain := $(shell oc get ingresscontrollers.operator.openshift.io -n openshift-ingress-operator default -o jsonpath='{.status.domain}{"\n"}')
 
 ifndef ignore-not-found
-  ignore-not-found = false
+  ignore-not-found = true
 endif
 
 .PHONY: install
@@ -190,11 +190,10 @@ uninstall: manifests kustomize kubectl ## Uninstall CRDs from the K8s cluster sp
 deploy: manifests kustomize kubectl ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	@$(KUBECTL) create configmap env-config --from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) --dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	cp config/manager/inventory.yaml config/manager/inventory.back
-	sed -n -e 's/ingressHost:.*/ingressHost: o2ims.$(Ingress_Domain)/' config/manager/inventory.yaml 
+	cp config/manager/inventory.yaml config/manager/inventory.tmp
+	sed -n -e 's/ingressHost:.*/ingressHost:o2ims.$(Ingress_Domain)/' config/manager/inventory.yaml 
+	cp config/manager/inventory.tmp config/manager/inventory.yaml
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) apply -f -
-	cp config/manager/inventory.back config/manager/inventory.yaml
-	rm config/manager/inventory.back	
 
 .PHONY: undeploy
 undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

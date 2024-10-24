@@ -251,13 +251,13 @@ rules:
   - patch
   - update
 - apiGroups:
-    - operator.openshift.io
+  - operator.openshift.io
   resources:
-    - ingresscontrollers
+  - ingresscontrollers
   verbs:
-    - get
-    - list
-    - watch
+  - get
+  - list
+  - watch
 - apiGroups:
   - policy.open-cluster-management.io
   resources:
