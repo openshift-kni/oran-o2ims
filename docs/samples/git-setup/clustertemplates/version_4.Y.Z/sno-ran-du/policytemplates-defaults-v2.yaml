@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: policytemplate-defaults-v1
+  name: policytemplate-defaults-v2
   namespace: sno-ran-du-v4-Y-Z
 data:
   # clusterConfigurationTimeout is optional.
@@ -10,7 +10,9 @@ data:
   clusterConfigurationTimeout: "40m"
   policytemplate-defaults: |
     sriov-network-vlan-1: "140"
+    sriov-network-vlan-2: "150"
     sriov-network-pfNames-1: '["ens4f1"]'
+    sriov-network-pfNames-2: '["ens4f2"]'
     cpu-isolated: "0-1,64-65"
     cpu-reserved: "2-10"
     hugepages-default: "1G"

@@ -98,13 +98,20 @@ policies:
         spec:
           resourceName: du_fh
           vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-1" | toInt hub}}'
-    - path: source-crs/SriovNetwork.yaml
+    - path: source-crs/SriovNetworkNodePolicy-SetSelector.yaml
       patches:
       - metadata:
-          name: sriov-nw-du-mh
+          name: sriov-nnp-du-fh
         spec:
-          resourceName: du_mh
-          vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-2" | toInt hub}}'
+          deviceType: netdevice
+          isRdma: false
+          nicSelector:
+            pfNames: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-pfNames-1" | toLiteral hub}}'
+          nodeSelector:
+            node-role.kubernetes.io/master: ""
+          numVfs: 8
+          priority: 10
+          resourceName: du_fh
 - name: v2-tuned-configuration-policy
   manifests:
     - path: source-crs/TunedPerformancePatch.yaml    

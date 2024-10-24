@@ -1,15 +1,15 @@
 apiVersion: o2ims.provisioning.oran.org/v1alpha1
 kind: ClusterTemplate
 metadata:
-  name: sno-ran-du.v4-Y-Z-2
+  name: sno-ran-du.v4-Y-Z-4
   namespace: sno-ran-du-v4-Y-Z
 spec:
   name: sno-ran-du
-  version: v4-Y-Z-2
+  version: v4-Y-Z-4
   templates:
     hwTemplate: placeholder-du-template-configmap-v1
-    clusterInstanceDefaults: clusterinstance-defaults-v2
-    policyTemplateDefaults: policytemplate-defaults-v1
+    clusterInstanceDefaults: clusterinstance-defaults-v4
+    policyTemplateDefaults: policytemplate-defaults-v2
   templateParameterSchema:
     properties:
       nodeClusterName:
@@ -21,7 +21,11 @@ spec:
         properties:
           sriov-network-vlan-1:
             type: string
+          sriov-network-vlan-2:
+            type: string
           sriov-network-pfNames-1:
+            type: string
+          sriov-network-pfNames-2:
             type: string
           cpu-isolated:
             type: string
@@ -37,7 +41,7 @@ spec:
             type: string
         type: object
       clusterInstanceParameters:
-        description: clusterInstanceParameters defines the available parameters for cluster installation
+        description: clusterInstanceParameters defines the available parameters for cluster provisioning
         properties:
           additionalNTPSources:
             description: AdditionalNTPSources is a list of NTP sources (hostname

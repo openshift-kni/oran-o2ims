@@ -21,11 +21,7 @@ spec:
         properties:
           sriov-network-vlan-1:
             type: string
-          sriov-network-vlan-2:
-            type: string
           sriov-network-pfNames-1:
-            type: string
-          sriov-network-pfNames-2:
             type: string
           cpu-isolated:
             type: string

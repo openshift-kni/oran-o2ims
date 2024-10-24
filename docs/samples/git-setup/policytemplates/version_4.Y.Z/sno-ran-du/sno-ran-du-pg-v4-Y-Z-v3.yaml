@@ -1,7 +1,7 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
-  name: sno-ran-du-pg-v4-Y-Z-v1
+  name: sno-ran-du-pg-v4-Y-Z-v3
 policyDefaults:
   namespace: ztp-sno-ran-du-v4-Y-Z
   # Use an existing placement rule so that placement bindings can be consolidated
@@ -10,7 +10,7 @@ policyDefaults:
     # or the ClusterInstance ConfigMap.
     labelSelector:
       cluster-version: "v4-Y-Z"
-      sno-ran-du-policy: "v1"
+      sno-ran-du-policy: "v3"
   remediationAction: enforce
   severity: low
   namespaceSelector:
@@ -23,7 +23,7 @@ policyDefaults:
     noncompliant: 10s
   orderPolicies: true
 policies:
-- name: v1-subscriptions-policy
+- name: v3-subscriptions-policy
   manifests:
     - path: source-crs/DefaultCatsrc.yaml
       patches:
@@ -62,7 +62,7 @@ policies:
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
     - path: source-crs/SriovOperatorStatus.yaml
-- name: v1-perf-configuration-policy
+- name: v3-perf-configuration-policy
   manifests:
     - path: source-crs/PerformanceProfile-SetSelector.yaml
       patches:
@@ -89,7 +89,7 @@ policies:
             pools.operator.machineconfiguration.openshift.io/master: ""
           nodeSelector:
             node-role.kubernetes.io/master: ''
-- name: v1-sriov-configuration-policy
+- name: v3-sriov-configuration-policy
   manifests:
     - path: source-crs/SriovNetwork.yaml
       patches:
@@ -112,7 +112,28 @@ policies:
           numVfs: 8
           priority: 10
           resourceName: du_fh
-- name: v1-tuned-configuration-policy
+    - path: source-crs/SriovNetwork.yaml
+      patches:
+      - metadata:
+          name: sriov-nw-du-mh
+        spec:
+          resourceName: du_mh
+          vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-2" | toInt hub}}'
+    - path: source-crs/SriovNetworkNodePolicy-SetSelector.yaml
+      patches:
+      - metadata:
+          name: sriov-nnp-du-mh
+        spec:
+          deviceType: vfio-pci
+          isRdma: false
+          nicSelector:
+            pfNames: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-pfNames-2" | toLiteral hub}}'
+          nodeSelector:
+            node-role.kubernetes.io/master: ""
+          numVfs: 8
+          priority: 10
+          resourceName: du_mh
+- name: v3-tuned-configuration-policy
   manifests:
     - path: source-crs/TunedPerformancePatch.yaml    
       patches:
@@ -126,13 +147,18 @@ policies:
                 [bootloader]
                 cmdline_crash=-tsc=nowatchdog
                 cmdline_crash1=tsc=reliable
+                [sysctl]
+                kernel.timer_migration=1
+                kernel.sysrq=1
+                kernel.panic_on_rcu_stall=1
+                kernel.hung_task_panic=1
                 [scheduler]
                 group.ice-ptp=0:f:10:*:ice-ptp.*
                 group.ice-gnss=0:f:10:*:ice-gnss.*
                 [service]
                 service.stalld=start,enable
                 service.chronyd=stop,disable
-- name: v1-du-validator-policy
+- name: v3-du-validator-policy
   remediationAction: inform
   # This policy is not re-evaluated after it becomes
   # compliant to reduce resource usage.
