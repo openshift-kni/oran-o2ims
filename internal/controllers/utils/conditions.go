@@ -161,3 +161,20 @@ func IsClusterUpgradeInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bo
 	}
 	return false
 }
+
+// IsClusterUpgradeCompleted checks if the cluster upgrade is completed
+func IsClusterUpgradeCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.UpgradeCompleted)))
+	if condition != nil {
+		if condition.Status == metav1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+// IsClusterUpgradeInitiated checks if the cluster upgrade is initiated
+func IsClusterUpgradeInitiated(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.UpgradeCompleted)))
+	return condition != nil
+}

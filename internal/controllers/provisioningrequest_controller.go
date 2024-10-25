@@ -212,7 +212,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	if err != nil {
 		return requeueWithError(err)
 	}
-	if timedOutOrFailed {
+	if timedOutOrFailed && renderedNodePool.ObjectMeta.Namespace != utils.TempDellPluginNamespace {
 		// Timeout occurred or failed, stop requeuing
 		return doNotRequeue(), nil
 	}
@@ -267,7 +267,8 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		if err != nil {
 			return requeueWithError(err)
 		}
-		if utils.IsClusterUpgradeInProgress(t.object) ||
+
+		if utils.IsClusterUpgradeInitiated(t.object) && !utils.IsClusterUpgradeCompleted(t.object) ||
 			utils.IsClusterProvisionCompleted(t.object) && shouldUpgrade {
 			t.logger.InfoContext(
 				ctx,
@@ -456,8 +457,6 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 	}
 	return renderedClusterInstance, nil
 }
-
-
 
 func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 	err := t.createOrUpdateClusterResources(ctx, clusterInstance)

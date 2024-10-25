@@ -36,7 +36,7 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 		return false, fmt.Errorf("failed to get ManagedCluster: %w", err)
 	}
 
-	templateVersion, err := semver.NewVersion(template.Spec.Release)
+	templateReleaseVersion, err := semver.NewVersion(template.Spec.Release)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse template version: %w", err)
 	}
@@ -44,12 +44,12 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	if err != nil {
 		return false, fmt.Errorf("failed to parse ManagedCluster version: %w", err)
 	}
-	cmp := templateVersion.Compare(*managedClusterVersion)
+	cmp := templateReleaseVersion.Compare(*managedClusterVersion)
 	if cmp == 1 {
 		return true, nil
 	} else if cmp == -1 {
-		return false, fmt.Errorf("template version (%v) is lower then ManagedCluster version (%v)",
-			templateVersion, managedClusterVersion)
+		return false, fmt.Errorf("template version (%v) is lower then ManagedCluster version (%v), no upgrade requested",
+			templateReleaseVersion, managedClusterVersion)
 	}
 	return false, nil
 }
@@ -64,15 +64,17 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 	if err != nil {
 		return requeueWithError(fmt.Errorf("failed to get clusterTemplate: %w", err))
 	}
-	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(
-		ctx, t.client, clusterTemplate.Spec.Templates.UpgradeDefaults,
-		clusterTemplate.Namespace, utils.UpgradeDefaultsConfigmapKey,
-		renderedClusterInstance.Spec.ClusterName, renderedClusterInstance.Namespace)
-	if err != nil {
-		return requeueWithError(fmt.Errorf("failed to generate IBGU for cluster: %w", err))
-	}
-	err = t.client.Get(ctx, types.NamespacedName{Name: ibgu.Name, Namespace: ibgu.Namespace}, ibgu)
+
+	ibgu := &ibgu.ImageBasedGroupUpgrade{}
+	err = t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: renderedClusterInstance.Namespace}, ibgu)
 	if err != nil && errors.IsNotFound(err) {
+		ibgu, err = utils.GetIBGUFromUpgradeDefaultsConfigmap(
+			ctx, t.client, clusterTemplate.Spec.Templates.UpgradeDefaults,
+			clusterTemplate.Namespace, utils.UpgradeDefaultsConfigmapKey,
+			renderedClusterInstance.Spec.ClusterName, t.object.Name, renderedClusterInstance.Namespace)
+		if err != nil {
+			return requeueWithError(fmt.Errorf("failed to generate IBGU for cluster: %w", err))
+		}
 		if err := utils.CreateK8sCR(ctx, t.client, ibgu, t.object, utils.UPDATE); err != nil {
 			return requeueWithError(fmt.Errorf("failed to create IBGU: %w", err))
 		}
@@ -95,11 +97,12 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 			return requeueWithError(fmt.Errorf("failed to update ClusterRequest CR status: %w", err))
 		}
-		return requeueWithMediumInterval(), nil
+
 	} else if err != nil {
 		return requeueWithError(fmt.Errorf("error getting IBGU: %w", err))
 	}
-	if IsIBGUProgressing(ibgu) {
+
+	if isIBGUProgressing(ibgu) {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.PRconditionTypes.UpgradeCompleted,
 			utils.CRconditionReasons.InProgress,
@@ -114,30 +117,46 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 			return requeueWithError(fmt.Errorf("failed to update ClusterRequest CR status: %w", err))
 		}
 		return requeueWithMediumInterval(), nil
-	}
-
-	if failed, message := isIBGUFailed(ibgu); failed {
-		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.UpgradeCompleted,
-			utils.CRconditionReasons.Failed,
-			metav1.ConditionFalse,
-			message,
-		)
 	} else {
-		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.UpgradeCompleted,
-			utils.CRconditionReasons.Completed,
-			metav1.ConditionTrue,
-			"Upgrade is completed",
-		)
-		err := t.client.Delete(ctx, ibgu)
-		if err != nil {
-			return requeueWithError(fmt.Errorf("failed to cleanup IBGU: %w", err))
+		// IBGU completed or failed. Collect results if it matches the current template ocp version
+		if clusterTemplate.Spec.Release == ibgu.Spec.IBUSpec.SeedImageRef.Version {
+			if failed, message := isIBGUFailed(ibgu); failed {
+				utils.SetStatusCondition(&t.object.Status.Conditions,
+					utils.PRconditionTypes.UpgradeCompleted,
+					utils.CRconditionReasons.Failed,
+					metav1.ConditionFalse,
+					message,
+				)
+			} else {
+				utils.SetStatusCondition(&t.object.Status.Conditions,
+					utils.PRconditionTypes.UpgradeCompleted,
+					utils.CRconditionReasons.Completed,
+					metav1.ConditionTrue,
+					"Upgrade is completed",
+				)
+				err := t.client.Delete(ctx, ibgu)
+				if err != nil {
+					return requeueWithError(fmt.Errorf("failed to cleanup IBGU: %w", err))
+				}
+			}
+			if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				return requeueWithError(fmt.Errorf("failed to update ClusterRequest CR status: %w", err))
+			}
+
+		} else {
+			// Clean up IBGU and the condition if it doesn't match the current template ocp release version,
+			// i.e. the failed and revert case
+			err := t.client.Delete(ctx, ibgu)
+			if err != nil {
+				return requeueWithError(fmt.Errorf("failed to cleanup IBGU: %w", err))
+			}
+			meta.RemoveStatusCondition(&t.object.Status.Conditions, string(utils.PRconditionTypes.UpgradeCompleted))
+			if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				return requeueWithError(fmt.Errorf("failed to update ClusterRequest CR status: %w", err))
+			}
 		}
 	}
-	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-		return requeueWithError(fmt.Errorf("failed to update ClusterRequest CR status: %w", err))
-	}
+
 	return doNotRequeue(), nil
 }
 
@@ -155,10 +174,10 @@ func isIBGUFailed(cr *ibgu.ImageBasedGroupUpgrade) (bool, string) {
 	return false, ""
 }
 
-func IsIBGUProgressing(cr *ibgu.ImageBasedGroupUpgrade) bool {
+func isIBGUProgressing(cr *ibgu.ImageBasedGroupUpgrade) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions, "Progressing")
 	if condition != nil {
 		return condition.Status == metav1.ConditionTrue
 	}
-	return false
+	return true
 }

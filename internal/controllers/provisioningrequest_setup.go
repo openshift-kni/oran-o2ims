@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -36,6 +37,17 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 			&provisioningv1alpha1.ProvisioningRequest{},
 			// Watch for create and update event for ProvisioningRequest.
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(
+			&ibgu.ImageBasedGroupUpgrade{},
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Watch on status changes only.
+					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
+				},
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
 		Watches(
 			&provisioningv1alpha1.ClusterTemplate{},
 			handler.Funcs{UpdateFunc: r.findClusterTemplateForProvisioningRequest},

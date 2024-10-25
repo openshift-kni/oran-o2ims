@@ -263,7 +263,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 func validateUpgradeDefaultsConfigmap(
 	ctx context.Context, c client.Client, name, namespace, key string,
 ) error {
-	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, key, "name", namespace)
+	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, key, "name", "name", namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
 	}
