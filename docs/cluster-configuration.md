@@ -180,12 +180,12 @@ status:
 ### Updates to the ClusterInstance defaults ConfigMap
 We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR.
 
-In this example we are adding a new route to the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` holding default values for the corresponding `ClusterInstance`.
+In this example we are adding a new annotation to the `ManagedCluster` through the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` holding default values for the corresponding `ClusterInstance`.
 The following steps need to be taken:
 1. Upversion the cluster template:
     * Create a new version of the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` - [clusterinstance-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml):
         * Update the name to `clusterinstance-defaults-v2` (the namespace stays `sno-ran-du-v4-Y-Z`).
-        * Update `data.clusterinstance-defaults.nodes[0].nodeNetwork.config.routes.config` with the desired new route.
+        * Update `data.clusterinstance-defaults.extraAnnotations` with the desired new annotation.
     * Create a new version of the [sno-ran-du.v4-Y-Z-1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-1` to `sno-ran-du.v4-Y-Z-2`
         * Update `spec.version` from `v4-Y-Z-1` to `v4-Y-Z-2`
@@ -195,14 +195,12 @@ The following steps need to be taken:
     * All the resources from above are created on the hub cluster.
 3. The SMO selects the new `ClusterTemplate` CR for the `ProvisioningRequest`:
     * `spec.templateName` remains `sno-ran-du`, `spec.templateVersion` is updated from `v4-Y-Z-1` to `v4-Y-Z-2`
-    * **Note:** Depending on the changes in the default `ConfigMap`, updates to the `spec.templateParameters.clusterInstanceParameters` of the `ProvisioningRequest` might be needed.
 4. The O-Cloud Manager detects the change:
-    * It updates the `ClusterInstance` with the new route.
+    * It updates the `ClusterInstance` with the new annotation.
 5. The siteconfig operator detects the change to the `ClusterInstance` CR:
-    * It updates the `NMStateConfig` installation manifest to contain the new route.
+    * The new annotation is added to the `ManagedCluster`.
+    * Any issues are reported in the `ProvisioningRequest`, under `status.conditions`.
     * **Note:** Some installation manifests cannot be updated after provisioning as the underlying operators have webhooks to prevent such updates.
-6. The change is rolled out to the `ManagedCluster`.
-    * Any issues are reported in the `PrivisioningRequest`, under `status.conditions`.
 
 ### Updates to an existing ACM PolicyGenerator manifest
 
