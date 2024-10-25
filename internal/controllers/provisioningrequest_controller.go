@@ -253,7 +253,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		}
 
 		// Requeue if cluster provisioning is not completed (in-progress or unknown)
-		// or there are enforce policies that are not Compliant
+		// or there are enforce policies that are not Compliant.
 		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
 			return requeueWithLongInterval(), nil
 		}

@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -78,6 +79,8 @@ var _ = BeforeSuite(func() {
 	adapter := logr.FromSlogHandler(logger.Handler())
 	ctrl.SetLogger(adapter)
 	klog.SetLogger(adapter)
+
+	os.Setenv("HWMGR_PLUGIN_NAMESPACE", "hwmgr")
 
 	// Add all the required types to the scheme used by the tests:
 	scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.Inventory{})

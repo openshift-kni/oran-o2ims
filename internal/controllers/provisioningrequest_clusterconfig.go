@@ -58,7 +58,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 		}
 		targetPolicies = append(targetPolicies, *targetPolicy)
 	}
-	err = t.updateConfigurationAppliedStatus(
+	policyConfigTimedOut, err := t.updateConfigurationAppliedStatus(
 		ctx, targetPolicies, allPoliciesCompliant, nonCompliantPolicyInEnforce)
 	if err != nil {
 		return false, err
@@ -72,17 +72,18 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 		return false, err
 	}
 
-	// If there are policies that are not Compliant, we need to requeue and see if they
-	// time out or complete.
-	return nonCompliantPolicyInEnforce, nil
+	// If there are policies that are not Compliant and the configuration has not timed out,
+	// we need to requeue and see if the timeout is reached.
+	return nonCompliantPolicyInEnforce && !policyConfigTimedOut, nil
 }
 
 // updateConfigurationAppliedStatus updates the ProvisioningRequest ConfigurationApplied condition
 // based on the state of the policies matched with the managed cluster.
 func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	ctx context.Context, targetPolicies []provisioningv1alpha1.PolicyDetails, allPoliciesCompliant bool,
-	nonCompliantPolicyInEnforce bool) (err error) {
+	nonCompliantPolicyInEnforce bool) (policyConfigTimedOut bool, err error) {
 	err = nil
+	policyConfigTimedOut = false
 
 	defer func() {
 		t.object.Status.Policies = targetPolicies
@@ -121,7 +122,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		ctx, t.client, t.object.Status.ClusterDetails.Name,
 	)
 	if err != nil {
-		return fmt.Errorf(
+		return policyConfigTimedOut, fmt.Errorf(
 			"error determining if the cluster is ready for policy configuration: %w", err)
 	}
 
@@ -149,13 +150,13 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	}
 
 	if nonCompliantPolicyInEnforce {
-		policyTimedOut := t.hasPolicyConfigurationTimedOut(ctx)
+		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
 
 		message := "The configuration is still being applied"
 		reason := utils.CRconditionReasons.InProgress
 		utils.SetProvisioningStateInProgress(t.object,
 			"Cluster configuration is being applied")
-		if policyTimedOut {
+		if policyConfigTimedOut {
 			message += ", but it timed out"
 			reason = utils.CRconditionReasons.TimedOut
 			utils.SetProvisioningStateFailed(t.object,
