@@ -369,7 +369,7 @@ func generateTemplateID(ctx context.Context, c client.Client, object *provisioni
 	newTemplate := object.DeepCopy()
 	newTemplate.Spec.TemplateID = newID.String()
 
-	err := utils.CreateK8sCR(ctx, c, newTemplate, object, utils.PATCH)
+	err := utils.CreateK8sCR(ctx, c, newTemplate, nil, utils.PATCH)
 	if err != nil {
 		return fmt.Errorf("failed to patch templateID in ClusterTemplate %s: %w", object.Name, err)
 	}

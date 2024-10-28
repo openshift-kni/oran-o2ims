@@ -22,7 +22,6 @@ import (
 	"log/slog"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +33,6 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // ProvisioningRequestReconciler reconciles a ProvisioningRequest object
@@ -68,7 +66,6 @@ type timeouts struct {
 }
 
 const (
-	provisioningRequestFinalizer = "provisioningrequest.o2ims.provisioning.oran.org/finalizer"
 	provisioningRequestNameLabel = "provisioningrequest.o2ims.provisioning.oran.org/name"
 )
 
@@ -128,16 +125,6 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 	r.Logger.InfoContext(ctx, "[Reconcile ProvisioningRequest]",
 		"name", object.Name, "namespace", object.Namespace)
-
-	if res, stop, err := r.handleFinalizer(ctx, object); !res.IsZero() || stop || err != nil {
-		if err != nil {
-			r.Logger.ErrorContext(
-				ctx,
-				"Encountered error while handling the ProvisioningRequest finalizer",
-				slog.String("err", err.Error()))
-		}
-		return res, err
-	}
 
 	// Create and run the task:
 	task := &provisioningRequestReconcilerTask{
@@ -559,94 +546,4 @@ func (t *provisioningRequestReconcilerTask) getCrClusterTemplateRef(ctx context.
 		fmt.Sprintf(
 			"a valid (%s) ClusterTemplate does not exist in any namespace",
 			clusterTemplateRefName))
-}
-
-func (r *ProvisioningRequestReconciler) finalizeProvisioningRequest(
-	ctx context.Context, provisioningRequest *provisioningv1alpha1.ProvisioningRequest) error {
-
-	var labels = map[string]string{
-		provisioningRequestNameLabel: provisioningRequest.Name,
-	}
-	listOpts := []client.ListOption{
-		client.MatchingLabels(labels),
-	}
-
-	// Query the NodePool created by this ProvisioningRequest. Delete it if exists.
-	nodePoolList := &hwv1alpha1.NodePoolList{}
-	if err := r.Client.List(ctx, nodePoolList, listOpts...); err != nil {
-		return fmt.Errorf("failed to list node pools: %w", err)
-	}
-	for _, nodePool := range nodePoolList.Items {
-		copiedNodePool := nodePool
-		if err := r.Client.Delete(ctx, &copiedNodePool); client.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("failed to delete node pool: %w", err)
-		}
-	}
-
-	// If the ClusterInstance has been created by this ProvisioningRequest, delete it.
-	// The SiteConfig operator will also delete the namespace.
-	clusterInstanceList := &siteconfig.ClusterInstanceList{}
-	if err := r.Client.List(ctx, clusterInstanceList, listOpts...); err != nil {
-		return fmt.Errorf("failed to list cluster instances: %w", err)
-	}
-	for _, clusterInstance := range clusterInstanceList.Items {
-		copiedClusterInstance := clusterInstance
-		if err := r.Client.Delete(ctx, &copiedClusterInstance); client.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("failed to delete cluster instance: %w", err)
-		}
-	}
-
-	if len(clusterInstanceList.Items) == 0 {
-		// If the ClusterInstance has not been created. Query the namespace created by
-		// this ProvisioningRequest. Delete it if exists.
-		namespaceList := &corev1.NamespaceList{}
-		if err := r.Client.List(ctx, namespaceList, listOpts...); err != nil {
-			return fmt.Errorf("failed to list namespaces: %w", err)
-		}
-		for _, ns := range namespaceList.Items {
-			copiedNamespace := ns
-			if err := r.Client.Delete(ctx, &copiedNamespace); client.IgnoreNotFound(err) != nil {
-				return fmt.Errorf("failed to delete namespace: %w", err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (r *ProvisioningRequestReconciler) handleFinalizer(
-	ctx context.Context, provisioningRequest *provisioningv1alpha1.ProvisioningRequest) (ctrl.Result, bool, error) {
-
-	// Check if the ProvisioningRequest is marked to be deleted, which is
-	// indicated by the deletion timestamp being set.
-	if provisioningRequest.DeletionTimestamp.IsZero() {
-		// Check and add finalizer for this CR.
-		if !controllerutil.ContainsFinalizer(provisioningRequest, provisioningRequestFinalizer) {
-			controllerutil.AddFinalizer(provisioningRequest, provisioningRequestFinalizer)
-			// Update and requeue since the finalizer has been added.
-			if err := r.Update(ctx, provisioningRequest); err != nil {
-				return ctrl.Result{}, true, fmt.Errorf("failed to update ProvisioningRequest with finalizer: %w", err)
-			}
-			return ctrl.Result{Requeue: true}, true, nil
-		}
-		return ctrl.Result{}, false, nil
-	} else if controllerutil.ContainsFinalizer(provisioningRequest, provisioningRequestFinalizer) {
-		// Run finalization logic for provisioningRequestFinalizer. If the finalization logic
-		// fails, don't remove the finalizer so that we can retry during the next reconciliation.
-		if err := r.finalizeProvisioningRequest(ctx, provisioningRequest); err != nil {
-			return ctrl.Result{}, true, err
-		}
-
-		// Remove provisioningRequestFinalizer. Once all finalizers have been
-		// removed, the object will be deleted.
-		r.Logger.Info("Removing provisioningRequest finalizer", "name", provisioningRequest.Name)
-		patch := client.MergeFrom(provisioningRequest.DeepCopy())
-		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningRequestFinalizer) {
-			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {
-				return ctrl.Result{}, true, fmt.Errorf("failed to patch ProvisioningRequest: %w", err)
-			}
-			return ctrl.Result{}, true, nil
-		}
-	}
-	return ctrl.Result{}, false, nil
 }
