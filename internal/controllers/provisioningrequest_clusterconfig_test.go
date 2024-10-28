@@ -546,7 +546,9 @@ defaultHugepagesSize: "1G"`,
 
 		// Call the handleClusterPolicyConfiguration function.
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		// There are NonCompliant policies in enforce and the configuration has not timed out,
+		// so we need to requeue to re-evaluate the timeout.
+		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
@@ -583,7 +585,9 @@ defaultHugepagesSize: "1G"`,
 
 		// Call the handleClusterPolicyConfiguration function.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		// There are NonCompliant policies in enforce, but the configuration has timed out,
+		// so we do not need to requeue.
+		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check the status conditions.
@@ -994,7 +998,9 @@ defaultHugepagesSize: "1G"`,
 
 		// Call the handleClusterPolicyConfiguration function.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		// There are NonCompliant policies in enforce and the configuration has not timed out,
+		// so we need to requeue to re-evaluate the timeout.
+		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
@@ -1031,7 +1037,9 @@ defaultHugepagesSize: "1G"`,
 
 		// Call the handleClusterPolicyConfiguration function.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		// There are NonCompliant policies in enforce, but the configuration has timed out,
+		// so we do not need to requeue.
+		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check the status conditions.
@@ -1048,7 +1056,9 @@ defaultHugepagesSize: "1G"`,
 		// Check that another handleClusterPolicyConfiguration call doesn't change the status if
 		// the policies are the same.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeTrue()) // there are NonCompliant policies in enforce
+		// There are NonCompliant policies in enforce, but the configuration has timed out,
+		// so we do not need to requeue.
+		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check the status conditions.
