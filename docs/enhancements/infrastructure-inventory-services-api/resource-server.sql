@@ -95,7 +95,6 @@ CREATE TABLE IF NOT EXISTS event (
 );
 
 -- Table: subscription
-DROP TABLE IF EXISTS subscription CASCADE;
 CREATE TABLE subscription (
     subscription_id          UUID PRIMARY KEY,
     consumer_subscription_id UUID,
@@ -105,3 +104,36 @@ CREATE TABLE subscription (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Table: alarm_dictionary_cache
+CREATE TABLE alarm_dictionary_cache
+(
+    alarm_dictionary_id             UUID PRIMARY KEY,
+    resource_type_id                UUID         NOT NULL,
+    alarm_dictionary_version        VARCHAR(50)  NOT NULL,
+    alarm_dictionary_schema_version VARCHAR(50)  NOT NULL,
+    entity_type                     VARCHAR(255) NOT NULL,
+    vendor                          VARCHAR(255) NOT NULL,
+    management_interface_id         VARCHAR(32) DEFAULT 'O2IMS',
+    pk_notification_field           TEXT[]      DEFAULT ARRAY ['alarm_dictionary_id']::TEXT[],
+    created_at                      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: alarm_definitions_cache
+CREATE TABLE alarm_definitions_cache
+(
+    alarm_definition_id      UUID PRIMARY KEY,
+    alarm_dictionary_id      UUID         NOT NULL,
+    alarm_name               VARCHAR(255) NOT NULL,
+    alarm_last_change        VARCHAR(50)  NOT NULL,
+    alarm_description        TEXT         NOT NULL,
+    proposed_repair_actions  TEXT         NOT NULL,
+    alarm_dictionary_version VARCHAR(50)  NOT NULL, -- Links alarm_dictionary and alarm_definitions
+    alarm_additional_fields  JSONB,
+    alarm_change_type        INTEGER      NOT NULL,
+    clearing_type            INTEGER      NOT NULL,
+    management_interface_id  VARCHAR(32) DEFAULT 'O2IMS',
+    pk_notification_field    TEXT[]      DEFAULT ARRAY ['alarm_definition_id']::TEXT[],
+    created_at               TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (alarm_dictionary_id) REFERENCES alarm_dictionary_cache (resource_type_id),
+    CONSTRAINT unique_alarm_name_last_change UNIQUE (alarm_name, alarm_last_change)
+);

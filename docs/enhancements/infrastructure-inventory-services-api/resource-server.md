@@ -25,31 +25,41 @@ superseded-by:
 
 # Table of Contents
 
-* [Resource Server Scalability Enhancements](#resource-server-scalability-enhancement)
+<!-- TOC -->
+
+* [Resource Server Scalability Enhancement](#resource-server-scalability-enhancement)
 * [Table of Contents](#table-of-contents)
-    * [Summary](#summary)
-    * [Goals](#goals)
+  * [Summary](#summary)
+  * [Goals](#goals)
   * [Database](#database)
-        * [Schema](#schema)
-        * [Initialization](#initialization)
-        * [Data Synchronization](#data-synchronization)
-        * [Generating event notifications](#generating-event-notifications)
-        * [Postgres](#postgres)
-    * [Consolidation of microservices](#consolidation-of-microservices)
-        * [API Handler](#api-handler)
-        * [Subscription Processor](#subscription-processor)
-        * [Synchronization Processor](#synchronization-processor)
-    * [Tooling and general dev guidelines](#tooling-and-general-dev-guidelines)
-    * [Future Updates](#future-updates)
+    * [Schema](#schema)
+    * [Extension Fields](#extension-fields)
+      * [Resource Pool](#resource-pool)
+      * [Resource](#resource)
+      * [Deployment Manager](#deployment-manager)
+    * [Initialization](#initialization)
+    * [Data Synchronization](#data-synchronization)
+    * [Generating event notifications](#generating-event-notifications)
+    * [Postgres](#postgres)
+  * [Consolidation of microservices](#consolidation-of-microservices)
+    * [API Handler](#api-handler)
+    * [Subscription Processor](#subscription-processor)
+    * [Synchronization Processor](#synchronization-processor)
+  * [Tooling and general dev guidelines](#tooling-and-general-dev-guidelines)
+  * [Interactions with other services](#interactions-with-other-services)
+    * [Alarm Server](#alarm-server)
+  * [Future Updates](#future-updates)
 
 ## Summary
 
 `O-RAN` requires `InfrastructureInventory Service API` which is a collection of APIs that can be queried by a client to
-discover the inventory topology of the `o-cloud` infrastructure. This enhancement describes the changes required to
-the resource server and related components to improve its scalability and to better support importing data from multiple
-sources (i.e., multiple hardware managers in addition to the hub-cluster). The resource server is currently implemented
-as a simple pass-through to the ACM observability APIs. This approach does not lend itself well to aggregating data
-from multiple sources in an efficient way. Specifically, it exposes the following challenges.
+discover the inventory topology of the `o-cloud` infrastructure
+([O-RAN.WG6.O2IMS-INTERFACE-R004-v07.00](https://specifications.o-ran.org/download?id=749).
+This enhancement describes the changes required to the resource server and related components to improve its scalability
+and to better support importing data from multiple sources (i.e., multiple hardware managers in addition to the
+hub-cluster). The resource server is currently implemented as a simple pass-through to the ACM observability APIs. This
+approach does not lend itself well to aggregating data from multiple sources in an efficient way. Specifically, it
+exposes the following challenges.
 
 - Need to invoke API endpoints on multiple downstream data sources for each client request
 - Difficult to implement pagination when data is distributed across multiple data sources
@@ -93,7 +103,7 @@ major upgrades.
 As discussed above, the database schema parallels the public facing API data model. Since the API data model is in
 very early stages of development the set of attributes contained within each object is limited to the minimum required
 set of attributes. It is expected that each vendor will need to publish more detailed attributes by leveraging the
-extension attribute, and over time as commonality if found across multiple O-Cloud vendors that these extension
+extension attribute, and over time as commonality is found across multiple O-Cloud vendors that these extension
 attributes will be normalized into the formal model definition. The following subsection lists the extensions currently
 stored within the extensions attribute and passed directly onto the public facing API.
 
@@ -148,6 +158,16 @@ For spokes:
 }
 ```
 
+For nodes from hardware managers:
+
+```json
+{
+  ...
+  TBD
+  ...
+}
+
+```
 #### Resource
 
 For nodes from ACM:
@@ -177,7 +197,8 @@ For nodes from hardware managers:
   "sockets": "TBD",
   "cores": "TBD",
   "bios": "TBD",
-  "memory": "TBD"
+  "memory": "TBD",
+  "cpu-model": "Intel(R) Xeon(R) Gold 5318Y CPU @ 2.10GHz"
 }
 
 ```
@@ -275,26 +296,27 @@ The following diagram illustrates the components internal to the resource server
 
 ### Subscription Processor
 
-- Receives events from the synchronization processor about new events to be processed.
-- Scans the subscription list to match events to subscribers
-- Publishes events to each matching subscriber using the pre-defined callback endpoints.
-- Updates the `event_cursor` on the subscription tuple to record the last processed event for the subscription.
-- Sends an event back to the synchronization processor when an event has been published to all matching subscribers.
-- On startup scans the outbox table looking for events that have already been processed by all subscriptions and sends
-  an event back to the synchronization processor to have it deleted. Note: this is to mitigate any events sent to the
-  synchronization processor but didn't get delivered due to a process restart.
+- Receives signal events from the synchronization processor about new change events to be processed.
+- Scans the subscription list to match change events to subscribers
+- Publishes change events to each matching subscriber using the pre-defined callback endpoints.
+- Updates the `event_cursor` on the subscription tuple to record the last processed change event for the subscription.
+- Sends an signal event back to the synchronization processor when a change event has been published to all matching
+  subscribers.
+- On startup scans the outbox table looking for change events that have already been processed by all subscriptions and
+  sends a signal event back to the synchronization processor to have it deleted. Note: this is to mitigate any signal
+  events sent to the synchronization processor that didn't get delivered due to a process restart.
 
 ### Synchronization Processor
 
 - Queries data sources to obtain a new snapshot of its data
 - Updates entries in the main tables for any new or updated tuples
 - Updates the `generation_id` of the data source being synchronized
-- Deletes events in the main tables that have a `generation_id` less than that of the data source's `generation_id`
-- Adds an event to the outbox table for any inserted, updated, or deleted tuples in the main tables
-- Sends an event to the subscription processor for each new tuple in the outbox table
-- Receives events back from the subscription processor when outbox tuples have been consumed and then deletes the outbox
-  tuples
-- Listens for asynchronous events from data sources (if supported) and updates the main tables (and outbox table)
+- Deletes entries in the main tables that have a `generation_id` less than that of the data source's `generation_id`
+- Adds a change event to the outbox table for any inserted, updated, or deleted tuples in the main tables
+- Sends a signal event to the subscription processor for each new tuple in the outbox table
+- Receives signal events back from the subscription processor when outbox tuples have been consumed and then deletes the
+  outbox tuples
+- Listens for asynchronous notifications from data sources (if supported) and updates the main tables (and outbox table)
 
 ## Tooling and general dev guidelines
 
@@ -315,6 +337,21 @@ The following diagram illustrates the components internal to the resource server
   ```shell
   oran-o2ims resource-server db-migration -h
   ```
+
+## Interactions with other services
+
+### Alarm Server
+
+The system is divided into multiple microservices each with their own area of responsibility. Each microservice
+maintains its data in a logical database instances hosted in a shared database service. In some cases there is a need
+for one microservice to access another microservice's data. Rather than directly couple those services by sharing
+access to each other's logical database schema this implementation will add API endpoints between microservices to
+push changes and to query data via API endpoints. Specifically,
+
+- The resource server will push any changes to the resource type table to the alarm server
+- The resource server will pull the latest alarm dictionary data on startup
+- The alarm server will push any changes to the alarm dictionary table to the resource server
+- The alarm server will pull the latest resource type data on startup.
 
 ## Future Updates
 
