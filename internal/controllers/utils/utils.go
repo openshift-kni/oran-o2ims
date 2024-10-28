@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,11 +19,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+
+	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -86,7 +92,7 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	// namespace owners are forbidden. This also applies to non-namespaced objects like cluster
 	// roles or cluster role bindings; those have empty namespaces, so the equals comparison
 	// should also work.
-	if ownerObject != nil && ownerObject.GetNamespace() == key.Namespace {
+	if ownerObject != nil && (ownerObject.GetNamespace() == key.Namespace || ownerObject.GetNamespace() == "") {
 		err = controllerutil.SetControllerReference(ownerObject, newObject, c.Scheme())
 		if err != nil {
 			return fmt.Errorf("failed to set controller reference: %w", err)
@@ -727,4 +733,51 @@ func GetClusterId(ctx context.Context, c client.Client, name string) (string, er
 	} else {
 		return string(object.Spec.ClusterID), nil
 	}
+}
+
+func GetIBGUFromUpgradeDefaultsConfigmap(
+	ctx context.Context,
+	c client.Client,
+	cmName string,
+	cmNamespace string,
+	cmKey string,
+	clusterName string,
+	ibguName string,
+	ibguNamespace string,
+) (*ibguv1alpha1.ImageBasedGroupUpgrade, error) {
+
+	existingConfigmap, err := GetConfigmap(ctx, c, cmName, cmNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ConfigmapReference: %w", err)
+	}
+	defaults, err := GetConfigMapField(existingConfigmap, UpgradeDefaultsConfigmapKey)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Configmap Field: %w", err)
+	}
+	out, err := k8syaml.ToJSON([]byte(defaults))
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert confimap data to JSON: %w", err)
+	}
+
+	ibguSpec := &ibguv1alpha1.ImageBasedGroupUpgradeSpec{}
+	err = json.Unmarshal(out, &ibguSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert confimap data to IBGU spec: %w", err)
+	}
+	ibguSpec.ClusterLabelSelectors = []metav1.LabelSelector{
+		{
+			MatchLabels: map[string]string{
+				"name": clusterName,
+			},
+		},
+	}
+
+	return &ibguv1alpha1.ImageBasedGroupUpgrade{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ibguName,
+			Namespace: ibguNamespace,
+		},
+		Spec: *ibguSpec,
+	}, nil
 }

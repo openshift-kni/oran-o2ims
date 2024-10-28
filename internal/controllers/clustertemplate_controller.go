@@ -229,6 +229,21 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		validationErrs = append(validationErrs, err.Error())
 	}
 
+	// Validation for upgrade defaults confimap
+	if t.object.Spec.Templates.UpgradeDefaults != "" {
+		err = validateUpgradeDefaultsConfigmap(
+			ctx, t.client, t.object.Spec.Templates.UpgradeDefaults,
+			t.object.Namespace, utils.UpgradeDefaultsConfigmapKey,
+		)
+		if err != nil {
+			if !utils.IsInputError(err) {
+				return false, fmt.Errorf("failed to validate the ConfigMap %s for upgrade defaults: %w",
+					t.object.Spec.Templates.UpgradeDefaults, err)
+			}
+			validationErrs = append(validationErrs, err.Error())
+		}
+	}
+
 	validationErrsMsg := strings.Join(validationErrs, ";")
 	if validationErrsMsg != "" {
 		t.logger.ErrorContext(ctx, fmt.Sprintf(
@@ -243,6 +258,25 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		return false, err
 	}
 	return validationErrsMsg == "", nil
+}
+
+func validateUpgradeDefaultsConfigmap(
+	ctx context.Context, c client.Client, name, namespace, key string,
+) error {
+	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, key, "name", "name", namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
+	}
+	opts := []client.CreateOption{}
+	opts = append(opts, client.DryRunAll)
+	err = c.Create(ctx, ibgu, opts...)
+	if err != nil {
+		if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
+			return fmt.Errorf("failed to create IBGU: %w", err)
+		}
+		return utils.NewInputError(err.Error())
+	}
+	return nil
 }
 
 // validateConfigmapReference validates a given configmap reference within the ClusterTemplate
