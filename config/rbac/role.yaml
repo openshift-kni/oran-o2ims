@@ -282,6 +282,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - search.open-cluster-management.io
+  resources:
+  - searches
+  verbs:
+  - get
+- apiGroups:
+  - search.open-cluster-management.io
+  resources:
+  - searches/allManagedData
+  verbs:
+  - get
+- apiGroups:
   - siteconfig.open-cluster-management.io
   resources:
   - clusterinstances
