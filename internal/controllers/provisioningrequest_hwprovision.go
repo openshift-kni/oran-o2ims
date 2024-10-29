@@ -19,7 +19,7 @@ func (t *provisioningRequestReconcilerTask) createNodePoolResources(ctx context.
 	pluginNameSpace := nodePool.ObjectMeta.Namespace
 	if exists, err := utils.HwMgrPluginNamespaceExists(ctx, t.client, pluginNameSpace); err != nil {
 		return fmt.Errorf("failed check if hardware manager plugin namespace exists %s, err: %w", pluginNameSpace, err)
-	} else if !exists && (pluginNameSpace == utils.TempDellPluginNamespace || pluginNameSpace == utils.UnitTestHwmgrNamespace) {
+	} else if !exists && pluginNameSpace == utils.UnitTestHwmgrNamespace {
 		// TODO: For test purposes only. Code to be removed once hwmgr plugin(s) are fully utilized
 		createErr := utils.CreateHwMgrPluginNamespace(ctx, t.client, pluginNameSpace)
 		if createErr != nil {

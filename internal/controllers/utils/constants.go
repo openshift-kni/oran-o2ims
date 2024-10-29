@@ -166,10 +166,9 @@ const (
 
 // Hardware Manager plugin constants
 const (
-	UnitTestHwmgrID         = "hwmgr"
-	UnitTestHwmgrNamespace  = "hwmgr"
-	TempDellPluginNamespace = "dell-hwmgr"
-	DefaultPluginNamespace  = "oran-hwmgr-plugin"
+	UnitTestHwmgrID        = "hwmgr"
+	UnitTestHwmgrNamespace = "hwmgr"
+	DefaultPluginNamespace = "oran-hwmgr-plugin"
 )
 
 // POD Container Names

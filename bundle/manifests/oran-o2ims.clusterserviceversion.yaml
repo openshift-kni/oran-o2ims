@@ -452,7 +452,7 @@ metadata:
             },
             "templates": {
               "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
-              "hwTemplate": "dell-intel-cu-template-configmap-v1",
+              "hwTemplate": "sample-hwtemplate-configmap-v1",
               "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults"
             },
             "version": "v1.0.0"
