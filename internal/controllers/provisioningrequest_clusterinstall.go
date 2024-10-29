@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
@@ -190,6 +191,11 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 		if isDryRun {
 			opts = append(opts, client.DryRunAll)
 			operationType = utils.OperationTypeDryRun
+		}
+
+		err = ctrl.SetControllerReference(t.object, clusterInstance, t.client.Scheme())
+		if err != nil {
+			return fmt.Errorf("failed to set controller reference: %w", err)
 		}
 
 		// Create the ClusterInstance

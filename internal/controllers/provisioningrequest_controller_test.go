@@ -615,8 +615,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		// Define the provisioning request.
 		cr = &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:       crName,
-				Finalizers: []string{provisioningRequestFinalizer},
+				Name: crName,
 			},
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateName:    tName,
@@ -1876,8 +1875,7 @@ var _ = Describe("getCrClusterTemplateRef", func() {
 		// Define the provisioning request.
 		cr := &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      crName,
-				Namespace: ctNamespace,
+				Name: crName,
 			},
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateName:    tName,

@@ -45,25 +45,8 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
-		Watches(
-			&provisioningv1alpha1.ClusterTemplate{},
-			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForClusterTemplate),
-			builder.WithPredicates(predicate.Funcs{
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Watch on status changes only.
-					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
-				},
-				CreateFunc: func(ce event.CreateEvent) bool {
-					// Only process a CreateEvent if the ClusterTemplate already has a status.
-					ct := ce.Object.(*provisioningv1alpha1.ClusterTemplate)
-					return ct.Status.Conditions != nil
-				},
-				GenericFunc: func(ge event.GenericEvent) bool { return false },
-				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
-			})).
-		Watches(
+		Owns(
 			&siteconfig.ClusterInstance{},
-			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForClusterInstance),
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Watch on ClusterInstance status conditions changes only
@@ -81,9 +64,8 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
-		Watches(
+		Owns(
 			&hwv1alpha1.NodePool{},
-			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForNodePool),
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Watch on status changes.
@@ -91,6 +73,22 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
 				},
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
+		Watches(
+			&provisioningv1alpha1.ClusterTemplate{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForClusterTemplate),
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Watch on status changes only.
+					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
+				},
+				CreateFunc: func(ce event.CreateEvent) bool {
+					// Only process a CreateEvent if the ClusterTemplate already has a status.
+					ct := ce.Object.(*provisioningv1alpha1.ClusterTemplate)
+					return ct.Status.Conditions != nil
+				},
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
@@ -147,55 +145,6 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				DeleteFunc:  func(de event.DeleteEvent) bool { return false },
 			})).
 		Complete(r)
-}
-
-// enqueueProvisioningRequestForClusterInstance maps the ClusterInstance created by a
-// ProvisioningRequest to a reconciliation request.
-func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForClusterInstance(
-	ctx context.Context, obj client.Object) []reconcile.Request {
-	var requests []reconcile.Request
-
-	newClusterInstance := obj.(*siteconfig.ClusterInstance)
-	crName, nameExists := newClusterInstance.GetLabels()[provisioningRequestNameLabel]
-	if nameExists {
-		// Create reconciling requests only for the ProvisioningRequest that has generated
-		// the current ClusterInstance.
-		r.Logger.Info(
-			"[enqueueProvisioningRequestForClusterInstance] Add new reconcile request for ProvisioningRequest",
-			"name", crName)
-		requests = append(requests, reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name: crName,
-			},
-		})
-	}
-
-	return requests
-}
-
-// enqueueProvisioningRequestForNodePool maps the NodePool created by a
-// ProvisioningRequest to a reconciliation request.
-func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForNodePool(
-	ctx context.Context, obj client.Object) []reconcile.Request {
-	var requests []reconcile.Request
-
-	newNodePool := obj.(*hwv1alpha1.NodePool)
-
-	crName, nameExists := newNodePool.GetLabels()[provisioningRequestNameLabel]
-	if nameExists {
-		// Create reconciling requests only for the ProvisioningRequest that has generated
-		// the current NodePool.
-		r.Logger.Info(
-			"[enqueueProvisioningRequestForNodePool] Add new reconcile request for ProvisioningRequest",
-			"name", crName)
-		requests = append(requests, reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name: crName,
-			},
-		})
-	}
-
-	return requests
 }
 
 // enqueueProvisioningRequestForClusterTemplate maps the ClusterTemplates used by ProvisioningRequests

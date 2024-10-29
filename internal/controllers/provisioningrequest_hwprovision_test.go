@@ -81,8 +81,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		// Define the provisioning request.
 		cr := &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      crName,
-				Namespace: ctNamespace,
+				Name: crName,
 			},
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateName:    tName,

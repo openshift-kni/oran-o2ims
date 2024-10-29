@@ -195,7 +195,7 @@ func (t *provisioningRequestReconcilerTask) createPullSecret(
 		Type: corev1.SecretTypeDockerConfigJson,
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, newClusterInstancePullSecret, nil, utils.UPDATE); err != nil {
+	if err := utils.CreateK8sCR(ctx, t.client, newClusterInstancePullSecret, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Kubernetes CR for ClusterInstancePullSecret: %w", err)
 	}
 
@@ -254,7 +254,7 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 	labels[provisioningRequestNameLabel] = t.object.Name
 	namespace.SetLabels(labels)
 
-	err := utils.CreateK8sCR(ctx, t.client, namespace, nil, "")
+	err := utils.CreateK8sCR(ctx, t.client, namespace, t.object, "")
 	if err != nil {
 		return fmt.Errorf("failed to create or update namespace %s: %w", clusterName, err)
 	}
