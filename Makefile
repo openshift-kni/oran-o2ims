@@ -172,7 +172,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 ##@ Deployment
 
 CLOUD_ID := $(shell oc get clusterversion -o jsonpath='{.items[].spec.clusterID}{"\n"}')
-Ingress_Host := o2ims.$(shell oc get ingresscontrollers.operator.openshift.io -n openshift-ingress-operator default -o jsonpath='{.status.domain}{"\n"}')
+INGRESS_HOST := o2ims.$(shell oc get ingresscontrollers.operator.openshift.io -n openshift-ingress-operator default -o jsonpath='{.status.domain}{"\n"}')
 
 ifndef ignore-not-found
   ignore-not-found = true
@@ -191,7 +191,7 @@ deploy: manifests kustomize kubectl ## Deploy controller to the K8s cluster spec
 	@$(KUBECTL) create configmap env-config --from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) --dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	cp config/manager/inventory.yaml config/manager/inventory.back
-	sed -i 's/ingressHost:.*/ingressHost: o2ims.$(Ingress_Domain)/' config/manager/inventory.yaml
+	sed -i 's/ingressHost:.*/ingressHost: $(INGRESS_HOST)/' config/manager/inventory.yaml
 	cat config/manager/inventory.yaml
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) apply -f -
 	cp config/manager/inventory.back  config/manager/inventory.yaml

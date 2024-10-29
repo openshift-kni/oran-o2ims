@@ -10,8 +10,8 @@ generatorOptions:
 
 images:
 - name: controller
-  newName: quay.io/openshift-kni/oran-o2ims-operator
-  newTag: 4.16.0
+  newName: quay.io/mmorency0/oran-o2ims
+  newTag: latest
 
 
 # This replacement copies the controller image into the `IMAGE` environment variable of the pod,
