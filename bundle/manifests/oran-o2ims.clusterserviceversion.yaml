@@ -1168,6 +1168,24 @@ spec:
           - list
           - watch
         - apiGroups:
+          - lcm.openshift.io
+          resources:
+          - imagebasedgroupupgrades
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - lcm.openshift.io
+          resources:
+          - imagebasedgroupupgrades/status
+          verbs:
+          - get
+        - apiGroups:
           - networking.k8s.io
           resources:
           - ingresses
