@@ -530,7 +530,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterProvisioningTimeoutConfigKey: "60s",
+					utils.ClusterInstallationTimeoutConfigKey: "60s",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
     clusterImageSetNameRef: "4.15"
     pullSecretRef:

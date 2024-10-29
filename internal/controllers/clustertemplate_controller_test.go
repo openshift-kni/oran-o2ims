@@ -295,7 +295,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterProvisioningTimeoutConfigKey: "80m",
+					utils.ClusterInstallationTimeoutConfigKey: "80m",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
 				},
@@ -373,7 +373,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 	})
 
 	It("should return false and set status condition to false if timeouts in ConfigMaps are invalid", func() {
-		cms[0].Data[utils.ClusterProvisioningTimeoutConfigKey] = "invalidCiTimeout"
+		cms[0].Data[utils.ClusterInstallationTimeoutConfigKey] = "invalidCiTimeout"
 		cms[1].Data[utils.ClusterConfigurationTimeoutConfigKey] = "invalidPtTimeout"
 		cms[2].Data[utils.HardwareProvisioningTimeoutConfigKey] = "40"
 		for _, cm := range cms {
@@ -395,7 +395,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterProvisioningTimeoutConfigKey, ciDefaultsCm)))
+			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterInstallationTimeoutConfigKey, ciDefaultsCm)))
 	})
 })
 
@@ -420,7 +420,7 @@ var _ = Describe("validateConfigmapReference", func() {
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterProvisioningTimeoutConfigKey: "40m",
+				utils.ClusterInstallationTimeoutConfigKey: "40m",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
 			},
@@ -429,7 +429,7 @@ key: value`,
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
 			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterProvisioningTimeoutConfigKey)
+			utils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -438,7 +438,7 @@ key: value`,
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
 			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterProvisioningTimeoutConfigKey)
+			utils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
@@ -461,7 +461,7 @@ key: value`,
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
 			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterProvisioningTimeoutConfigKey)
+			utils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
@@ -484,7 +484,7 @@ key: value`,
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
 			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterProvisioningTimeoutConfigKey)
+			utils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("the value of key"))
@@ -498,7 +498,7 @@ key: value`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterProvisioningTimeoutConfigKey: "invalid-timeout",
+				utils.ClusterInstallationTimeoutConfigKey: "invalid-timeout",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 key: value`,
 			},
@@ -508,7 +508,7 @@ key: value`,
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
 			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterProvisioningTimeoutConfigKey)
+			utils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("is not a valid duration string"))
@@ -533,7 +533,7 @@ key: value`,
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
 			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterProvisioningTimeoutConfigKey)
+			utils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
@@ -557,7 +557,7 @@ key: value`,
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
 			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterProvisioningTimeoutConfigKey)
+			utils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that the configmap is patched to be immutable

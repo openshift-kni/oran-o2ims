@@ -4,10 +4,10 @@ metadata:
   name: clusterinstance-defaults-v1
   namespace: sno-ran-du-v4-Y-Z
 data:
-  # clusterProvisioningTimeout is optional.
+  # clusterInstallationTimeout is optional.
   # The value should be a duration string
   # (e.g., "80m" for 80 minutes)
-  clusterProvisioningTimeout: "80m"
+  # clusterInstallationTimeout: "80m"
   clusterinstance-defaults: |
     baseDomain: example.com
     extraLabels:
