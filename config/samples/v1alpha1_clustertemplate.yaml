@@ -12,7 +12,7 @@ spec:
   metadata:
     apple: "23"
   templates:
-    hwTemplate: dell-intel-cu-template-configmap-v1
+    hwTemplate: sample-hwtemplate-configmap-v1
     clusterInstanceDefaults: clustertemplate-sample.v1.0.0-clusterinstance-defaults
     policyTemplateDefaults: clustertemplate-sample.v1.0.0-policytemplate-defaults
   templateParameterSchema:

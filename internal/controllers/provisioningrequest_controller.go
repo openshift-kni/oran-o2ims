@@ -209,7 +209,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	if err != nil {
 		return requeueWithError(err)
 	}
-	if timedOutOrFailed && renderedNodePool.ObjectMeta.Namespace != utils.TempDellPluginNamespace {
+	if timedOutOrFailed {
 		// Timeout occurred or failed, stop requeuing
 		return doNotRequeue(), nil
 	}
@@ -223,7 +223,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 			),
 		)
 		// TODO: Remove this check once hwmgr plugin(s) are fully utilized
-		if renderedNodePool.ObjectMeta.Namespace != utils.TempDellPluginNamespace && renderedNodePool.ObjectMeta.Namespace != utils.UnitTestHwmgrNamespace {
+		if renderedNodePool.ObjectMeta.Namespace != utils.UnitTestHwmgrNamespace {
 			return requeueWithMediumInterval(), nil
 		}
 	}
@@ -311,7 +311,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		return doNotRequeue(), nil
 	}
 	// TODO: remove the namespace check once the hwmgr plugin are fully utilized
-	if !provisioned && nodePool.Namespace != utils.TempDellPluginNamespace && nodePool.Namespace != utils.UnitTestHwmgrNamespace {
+	if !provisioned && nodePool.Namespace != utils.UnitTestHwmgrNamespace {
 		return requeueWithMediumInterval(), nil
 	}
 
