@@ -419,6 +419,16 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 		config.Scopes = oAuthConfig.Scopes
 	}
 
+	if t.object.Spec.SmoConfig.Tls != nil && t.object.Spec.SmoConfig.Tls.ClientCertificateName != nil {
+		secretName := *t.object.Spec.SmoConfig.Tls.ClientCertificateName
+		cert, err := utils.GetCertFromSecret(ctx, t.client, secretName, t.object.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client certificate from secret: %w", err)
+		}
+
+		config.ClientCert = cert
+	}
+
 	httpClient, err := utils.SetupOAuthClient(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)

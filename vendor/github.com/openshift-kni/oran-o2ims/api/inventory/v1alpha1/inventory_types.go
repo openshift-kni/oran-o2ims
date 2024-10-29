@@ -44,6 +44,18 @@ type OAuthConfig struct {
 	Scopes []string `json:"scopes"`
 }
 
+// TlsConfig defines the TLS specific attributes specific to the SMO and OAuth servers
+type TlsConfig struct {
+	// ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
+	// certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
+	// expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
+	// then it is expected that the full chain is to be appended to the certificate file with the device certificate
+	// being first and the root CA being last.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS client certificate"
+	ClientCertificateName *string `json:"clientCertificateName"`
+}
+
 // SmoConfig defines the configurable attributes to represent the SMO instance
 type SmoConfig struct {
 	// Url represents the base URL of the SMO instance
@@ -56,6 +68,10 @@ type SmoConfig struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO OAuth Configuration"
 	OAuthConfig *OAuthConfig `json:"oauth,omitempty"`
+	// TlsConfig defines the TLS attributes specific to the SMO and OAuth servers
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS Configuration"
+	Tls *TlsConfig `json:"tls"`
 }
 
 type ServerConfig struct {

@@ -54,6 +54,8 @@ type OAuthClientConfig struct {
 	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
 	// the token.
 	Scopes []string
+	// The client certificate to be used when initiating connection to the server.
+	ClientCert *tls.Certificate
 }
 
 const (
@@ -685,6 +687,11 @@ func MapKeysToSlice(inputMap map[string]bool) []string {
 func SetupOAuthClient(ctx context.Context, config OAuthClientConfig) (*http.Client, error) {
 	tlsConfig, _ := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
 
+	if config.ClientCert != nil {
+		// Enable mTLS if a client certificate was provided.  The client CA is expected to be recognized by the server.
+		tlsConfig.Certificates = []tls.Certificate{*config.ClientCert}
+	}
+
 	if len(config.CaBundle) != 0 {
 		// If the user has provided a CA bundle then we must use it to build our client so that we can verify the
 		// identity of remote servers.
@@ -780,4 +787,29 @@ func GetIBGUFromUpgradeDefaultsConfigmap(
 		},
 		Spec: *ibguSpec,
 	}, nil
+}
+
+// GetCertFromSecret retrieves an X.509 certificate from a Secret
+func GetCertFromSecret(ctx context.Context, c client.Client, name, namespace string) (*tls.Certificate, error) {
+	secret, err := GetSecret(ctx, c, name, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve secret '%s': %w", name, err)
+	}
+
+	certBytes, ok := secret.Data["tls.crt"]
+	if !ok {
+		return nil, NewInputError("secret '%s' does not contain key 'tls.crt'", name)
+	}
+
+	keyBytes, ok := secret.Data["tls.key"]
+	if !ok {
+		return nil, NewInputError("secret '%s' does not contain key 'tls.key'", name)
+	}
+
+	cert, err := tls.X509KeyPair(certBytes, keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load certificate from secret '%s': %w", name, err)
+	}
+
+	return &cert, nil
 }
