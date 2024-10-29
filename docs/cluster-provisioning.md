@@ -81,6 +81,7 @@ The status of the provisioning process is tracked via the following `status.cond
 - ClusterResourcesCreated: The necessary cluster resources have been created.
 - HardwareTemplateRendered: The hardware template has been successfully rendered.
 - HardwareProvisioned: Hardware provisioning is complete.
+- HardwareNodeConfigApplied: Hardware node configuration is applied.
 - ClusterProvisioned: Cluster installation is complete.
 - ConfigurationApplied: Configuration has been successfully applied via ACM enforce policies.
 
@@ -171,6 +172,11 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         reason: Completed
         status: "True"
         type: HardwareProvisioned
+      - lastTransitionTime: "2024-10-19T00:27:30Z"
+        message: Node configuration has been applied to the rendered ClusterInstance
+        reason: Completed
+        status: "True"
+        type: HardwareNodeConfigApplied
       - lastTransitionTime: "2024-10-19T00:27:31Z"
         message: Applied and processed ClusterInstance (sno1) successfully
         reason: Completed
@@ -207,6 +213,11 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         reason: Completed
         status: "True"
         type: HardwareProvisioned
+      - lastTransitionTime: "2024-10-19T00:27:30Z"
+        message: Node configuration has been applied to the rendered ClusterInstance
+        reason: Completed
+        status: "True"
+        type: HardwareNodeConfigApplied
       - lastTransitionTime: "2024-10-19T00:27:31Z"
         message: Applied and processed ClusterInstance (sno1) successfully
         reason: Completed
@@ -243,6 +254,11 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         reason: Completed
         status: "True"
         type: HardwareProvisioned
+      - lastTransitionTime: "2024-10-19T00:27:30Z"
+        message: Node configuration has been applied to the rendered ClusterInstance
+        reason: Completed
+        status: "True"
+        type: HardwareNodeConfigApplied
       - lastTransitionTime: "2024-10-19T00:27:31Z"
         message: Applied and processed ClusterInstance (sno1) successfully
         reason: Completed
@@ -262,6 +278,23 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         provisioningDetails: Provisioning request has completed successfully
         provisioningState: fulfilled
     ```
+
+## Interface Label ##
+Each node interface listed in the `clusterInstanceDefaults` ConfigMap must have an assigned label. This label is essential for retrieving the interface MAC address from the hardware manager.
+
+The hardware manager associates a label with each interface on the server. The label-to-port mappings are established during the hardware onboarding process. The template author must be familiar with these label-to-port mappings on the server.
+
+An example is provided below:
+``` yaml
+nodes:
+  - role: master
+    nodeNetwork:
+      interfaces:
+        - name: eno1
+          label: bootable-interface
+        - name: eno2
+          label: data-interface
+```
 
 ## Immutable ClusterInstance ##
 Once cluster installation has started (indicated by the `ClusterProvisioned` condition being InProgress), only the `extraLabels` and `extraAnnotations` fields can be modified in the ProvisioningRequest. Any changes to other immutable fields will cause the `ClusterInstanceRendered` condition to fail.

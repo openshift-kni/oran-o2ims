@@ -330,3 +330,33 @@ func ClusterIsReadyForPolicyConfig(
 
 	return available && hubAccepted && joined, nil
 }
+
+// ValidateDefaultInterfaces verifies that each interface has a specified label field,
+// as labels are not part of the ClusterInstance structure by default.
+func ValidateDefaultInterfaces[T any](data T) error {
+	// clusterinstance-default data
+	dataMap, _ := any(data).(map[string]any)
+	nodes, ok := dataMap["nodes"].([]any)
+	if ok {
+		for _, node := range nodes {
+			nodeMap, ok := node.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("unexpected: invalid node data structure")
+			}
+			interfaces := getInterfaces(nodeMap)
+			if interfaces == nil {
+				return fmt.Errorf("failed to extract the interfaces from the node map")
+			}
+			for _, intf := range interfaces {
+				value, exists := intf["label"]
+				if !exists {
+					return fmt.Errorf("'label' is missing for interface: %s", intf["name"])
+				}
+				if value == "" {
+					return fmt.Errorf("'label' is empty for interface: %s", intf["name"])
+				}
+			}
+		}
+	}
+	return nil
+}

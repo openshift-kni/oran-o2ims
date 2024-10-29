@@ -278,7 +278,13 @@ func SetCloudManagerInitialObservedGeneration(ctx context.Context, c client.Clie
 // getInterfaces extracts the interfaces from the node map.
 func getInterfaces(nodeMap map[string]interface{}) []map[string]interface{} {
 	if nodeNetwork, ok := nodeMap["nodeNetwork"].(map[string]interface{}); ok {
+		if !ok {
+			return nil
+		}
 		if interfaces, ok := nodeNetwork["interfaces"].([]any); ok {
+			if !ok {
+				return nil
+			}
 			var result []map[string]interface{}
 			for _, iface := range interfaces {
 				if eth, ok := iface.(map[string]interface{}); ok {
@@ -320,7 +326,7 @@ OuterLoop:
 			// Extraction of interfaces from the node map in the cluster input
 			interfaces := getInterfaces(nodeMapInput)
 			if interfaces == nil {
-				return fmt.Errorf("failed to extrace the interfaces from the node map")
+				return fmt.Errorf("failed to extract the interfaces from the node map")
 			}
 			// Iterate over extracted interfaces and hardware interfaces to find matches.
 			// If an interface in the input data has a label that matches a hardware interface’s label,

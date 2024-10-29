@@ -307,7 +307,7 @@ func validateConfigmapReference[T any](
 	}
 
 	// Extract and validate the template from the configmap
-	_, err = utils.ExtractTemplateDataFromConfigMap[T](existingConfigmap, templateDataKey)
+	data, err := utils.ExtractTemplateDataFromConfigMap[T](existingConfigmap, templateDataKey)
 	if err != nil {
 		return err
 	}
@@ -315,6 +315,12 @@ func validateConfigmapReference[T any](
 	if templateDataKey == utils.HwTemplateNodePool {
 		if err = utils.ValidateConfigMapFields(existingConfigmap); err != nil {
 			return utils.NewInputError("failed to validate the hardware template ConfigMap %s: %w", existingConfigmap.Name, err)
+		}
+	}
+
+	if templateDataKey == utils.ClusterInstanceTemplateDefaultsConfigmapKey {
+		if err = utils.ValidateDefaultInterfaces(data); err != nil {
+			return utils.NewInputError("failed to validate the default ConfigMap: %w", err)
 		}
 	}
 
