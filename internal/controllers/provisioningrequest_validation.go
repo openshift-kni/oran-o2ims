@@ -55,7 +55,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
 	// Initialize with default timeouts
-	t.timeouts.clusterProvisioning = utils.DefaultClusterProvisioningTimeout
+	t.timeouts.clusterProvisioning = utils.DefaultClusterInstallationTimeout
 	t.timeouts.hardwareProvisioning = utils.DefaultHardwareProvisioningTimeout
 	t.timeouts.clusterConfiguration = utils.DefaultClusterConfigurationTimeout
 
@@ -83,7 +83,7 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 		return fmt.Errorf("failed to get ConfigMap %s: %w", ciCmName, err)
 	}
 	ciTimeout, err := utils.ExtractTimeoutFromConfigMap(
-		ciCm, utils.ClusterProvisioningTimeoutConfigKey)
+		ciCm, utils.ClusterInstallationTimeoutConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get timeout config for cluster provisioning: %w", err)
 	}

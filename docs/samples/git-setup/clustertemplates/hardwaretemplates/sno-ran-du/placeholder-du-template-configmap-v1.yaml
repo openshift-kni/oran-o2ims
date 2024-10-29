@@ -7,7 +7,7 @@ data:
   # hardwareProvisioningTimeout is optional.
   # The value should be a duration string
   # (e.g., "30m" for 30 minutes)
-  hardwareProvisioningTimeout: "30m"
+  # hardwareProvisioningTimeout: "30m"
   hwMgrId: oran-hwmgr-plugin-test
   bootInterfaceLabel: bootable-interface
   node-pools-data: |

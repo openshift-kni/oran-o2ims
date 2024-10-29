@@ -245,7 +245,7 @@ defaultHugepagesSize: "1G"`,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -319,7 +319,7 @@ defaultHugepagesSize: "1G"`,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -347,7 +347,7 @@ defaultHugepagesSize: "1G"`,
 			clusterInput: &clusterInput{},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -387,7 +387,7 @@ defaultHugepagesSize: "1G"`,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -498,7 +498,7 @@ defaultHugepagesSize: "1G"`,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: 60 * time.Second,
 			},
 		}
@@ -651,7 +651,7 @@ defaultHugepagesSize: "1G"`,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -803,7 +803,7 @@ defaultHugepagesSize: "1G"`,
 			object: provisioningRequest, // cluster-1 request
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -896,7 +896,7 @@ defaultHugepagesSize: "1G"`,
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: 1 * time.Minute,
 			},
 		}
@@ -1099,7 +1099,7 @@ defaultHugepagesSize: "1G"`,
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -1263,7 +1263,7 @@ defaultHugepagesSize: "1G"`,
 			ctNamespace:  ctNamespace,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -1368,7 +1368,7 @@ defaultHugepagesSize: "1G"`,
 			ctNamespace:  ctNamespace,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -1472,7 +1472,7 @@ defaultHugepagesSize: "1G"`,
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -1576,7 +1576,7 @@ defaultHugepagesSize: "1G"`,
 			ctNamespace: ctNamespace,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
 		}
@@ -1682,7 +1682,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			object: crs[1].(*provisioningv1alpha1.ProvisioningRequest), // cluster-1 request
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: 1 * time.Minute,
 			},
 		}

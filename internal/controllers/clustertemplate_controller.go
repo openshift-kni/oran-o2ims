@@ -205,7 +205,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		t.object.Spec.Templates.ClusterInstanceDefaults,
 		t.object.Namespace,
 		utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-		utils.ClusterProvisioningTimeoutConfigKey)
+		utils.ClusterInstallationTimeoutConfigKey)
 	if err != nil {
 		if !utils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for ClusterInstance defaults: %w",

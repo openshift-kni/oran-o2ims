@@ -266,6 +266,34 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
 ## Immutable ClusterInstance ##
 Once cluster installation has started (indicated by the `ClusterProvisioned` condition being InProgress), only the `extraLabels` and `extraAnnotations` fields can be modified in the ProvisioningRequest. Any changes to other immutable fields will cause the `ClusterInstanceRendered` condition to fail.
 
+## Timeout configuration ##
+Each stage of the cluster provisioning process has a default timeout. If an operation does not complete within the allowed time, the provisioning process is considered failed, and the relevant status conditions and overall provisioning status will be updated to reflect the timeout.
+
+Default timeouts:
+- Hardware provisioning: 90m
+- Cluster installation: 90m
+- Cluster configuration 30m
+
+These timeouts can be configured in their respective ConfigMaps. The timeout value should be a duration string. For example:
+
+For hardware provisioning, set in the `spec.templates.hwTemplate` ConfigMap:
+``` yaml
+data:
+  hardwareProvisioningTimeout: "100m"
+```
+
+For cluster installation, set in the `spec.templates.clusterInstanceDefaults` ConfigMap:
+``` yaml
+data:
+  clusterInstallationTimeout: "100m"
+```
+
+For cluster configuration, set in the `spec.templates.policyTemplateDefaults` ConfigMap:
+``` yaml
+data:
+  clusterConfigurationTimeout: "40m"
+```
+
 ## Monitoring Process
 To watch the O-Cloud Manager controller logs:
 ```console

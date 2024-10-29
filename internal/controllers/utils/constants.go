@@ -73,7 +73,7 @@ const (
 // Default timeout values
 const (
 	DefaultHardwareProvisioningTimeout = 90 * time.Minute
-	DefaultClusterProvisioningTimeout  = 90 * time.Minute
+	DefaultClusterInstallationTimeout  = 90 * time.Minute
 	DefaultClusterConfigurationTimeout = 30 * time.Minute
 )
 
@@ -82,7 +82,7 @@ const (
 // If not specified, the default timeout values will be applied.
 const (
 	HardwareProvisioningTimeoutConfigKey = "hardwareProvisioningTimeout"
-	ClusterProvisioningTimeoutConfigKey  = "clusterProvisioningTimeout"
+	ClusterInstallationTimeoutConfigKey  = "clusterInstallationTimeout"
 	ClusterConfigurationTimeoutConfigKey = "clusterConfigurationTimeout"
 )
 
