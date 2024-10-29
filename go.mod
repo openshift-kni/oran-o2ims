@@ -23,6 +23,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241015193426-dd5c5bc228e8
+	github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512
 	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241001130125-a052f08603f7
 	github.com/openshift-kni/oran-o2ims/api/inventory v0.0.0-00010101000000-000000000000
 	github.com/openshift-kni/oran-o2ims/api/provisioning v0.0.0-00010101000000-000000000000
@@ -94,7 +95,6 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512 // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/openshift/hive/apis v0.0.0-20240306163002-9c5806a63531 // indirect
