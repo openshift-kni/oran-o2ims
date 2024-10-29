@@ -6,10 +6,12 @@ metadata:
 spec:
   name: sno-ran-du
   version: v4-Y-Z-3
+  release: 4.Y.Z
   templates:
     hwTemplate: placeholder-du-template-configmap-v1
     clusterInstanceDefaults: clusterinstance-defaults-v3
     policyTemplateDefaults: policytemplate-defaults-v1
+    upgradeDefaults: upgrade-defaults-v1    
   templateParameterSchema:
     properties:
       nodeClusterName:

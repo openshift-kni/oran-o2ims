@@ -4,6 +4,13 @@ configMapGenerator:
   - extra-manifest/....
   name: sno-ran-du-extra-manifest-1
   namespace: sno-ran-du-v4-Y-Z
+- files:
+  - ibu-manifest/PlatformBackupRestoreWithIBGU.yaml
+# If lvms is used:
+#  - ibu-manifest/PlatformBackupRestoreLvms.yaml
+  name: sno-ran-du-ibu-platform-backup-v4-Y-Z-1
+# The namespace needs to be created if OADP is not installed on hub
+  namespace: openshift-adp
 generatorOptions:
   disableNameSuffixHash: true
 
