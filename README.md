@@ -473,7 +473,16 @@ oc create configmap -n oran-o2ims o2ims-custom-ca-certs --from-file=ca-bundle.pe
 oc create secret generic -n oran-o2ims oauth-client-secrets --from-literal=client-id=o2ims-client --from-literal=client-secret=SFuwTyqfWK5vSwaCPSLuFzW57HyyQPHg
 ```
 
-3. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
+3. Create a Secret that contains a TLS client certificate and key to be used to enable mTLS to the SMO and OAuth2
+   authorization servers. The Secret is expected to have the 'tls.crt' and 'tls.key' attributes. The 'tls.crt'
+   attribute must contain the full certificate chain having the device certificate first and the root certificate being
+   last.
+
+```shell
+oc create secret tls -n oran-o2ims o2ims-client-tls-certificate --cert /some/path/to/tls.crt --key /some/path/to/tls.key
+```
+
+4. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
    on the domain names used in your environment and by the type of OAuth2 server deployed. Check the configuration
    documentation for the actual server being used.
 
@@ -490,6 +499,9 @@ The following block can be added to the `spec` section of the Inventory CR.
           scopes:
              - profile
              - smo-audience
+             - roles
+       tls:
+          clientCertificateName: o2ims-client-tls-certificate
     caBundleName: o2ims-custom-ca-certs
 ```
 
