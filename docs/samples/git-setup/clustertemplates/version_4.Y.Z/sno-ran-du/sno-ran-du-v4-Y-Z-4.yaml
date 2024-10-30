@@ -111,31 +111,6 @@ spec:
             items:
               description: NodeSpec
               properties:
-                bmcAddress:
-                  description: BmcAddress holds the URL for accessing the controller
-                    on the network.
-                  type: string
-                bmcCredentialsName:
-                  description: BmcCredentialsName is the name of the secret containing
-                    the BMC credentials (requires keys "username" and "password").
-                  properties:
-                    name:
-                      type: string
-                  required:
-                  - name
-                  type: object
-                bmcCredentialsDetails:
-                  description: A workaround to provide bmc creds through ClusterRequest
-                  properties:
-                    username:
-                      type: string
-                    password:
-                      type: string
-                bootMACAddress:
-                  description: Which MAC address will PXE boot? This is optional
-                    for some types, but required for libvirt VMs driven by vbmc.
-                  pattern: '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}'
-                  type: string
                 extraAnnotations:
                   additionalProperties:
                     additionalProperties:
@@ -178,78 +153,6 @@ spec:
                         nmstate config as plain yaml.
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
-                    interfaces:
-                      description: Interfaces is an array of interface objects
-                        containing the name and MAC address for interfaces that
-                        are referenced in the raw nmstate config YAML. Interfaces
-                        listed here will be automatically renamed in the nmstate
-                        config YAML to match the real device name that is observed
-                        to have the corresponding MAC address. At least one interface
-                        must be listed so that it can be used to identify the
-                        correct host, which is done by matching any MAC address
-                        in this list to any MAC address observed on the host.
-                      items:
-                        properties:
-                          macAddress:
-                            description: mac address present on the host.
-                            pattern: ^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$
-                            type: string
-                          name:
-                            description: 'nic name used in the yaml, which relates
-                              1:1 to the mac address. Name in REST API: logicalNICName'
-                            type: string
-                        required:
-                        - macAddress
-                        type: object
-                      minItems: 1
-                      type: array
-                  type: object
-                rootDeviceHints:
-                  description: 'RootDeviceHints specifies the device for deployment.
-                    Identifiers that are stable across reboots are recommended,
-                    for example, wwn: <disk_wwn> or deviceName: /dev/disk/by-path/<device_path>'
-                  properties:
-                    deviceName:
-                      description: A Linux device name like "/dev/vda", or a by-path
-                        link to it like "/dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0".
-                        The hint must match the actual value exactly.
-                      type: string
-                    hctl:
-                      description: A SCSI bus address like 0:0:0:0. The hint must
-                        match the actual value exactly.
-                      type: string
-                    minSizeGigabytes:
-                      description: The minimum size of the device in Gigabytes.
-                      minimum: 0
-                      type: integer
-                    model:
-                      description: A vendor-specific device identifier. The hint
-                        can be a substring of the actual value.
-                      type: string
-                    rotational:
-                      description: True if the device should use spinning media,
-                        false otherwise.
-                      type: boolean
-                    serialNumber:
-                      description: Device serial number. The hint must match the
-                        actual value exactly.
-                      type: string
-                    vendor:
-                      description: The name of the vendor or manufacturer of the
-                        device. The hint can be a substring of the actual value.
-                      type: string
-                    wwn:
-                      description: Unique storage identifier. The hint must match
-                        the actual value exactly.
-                      type: string
-                    wwnVendorExtension:
-                      description: Unique vendor storage identifier. The hint
-                        must match the actual value exactly.
-                      type: string
-                    wwnWithExtension:
-                      description: Unique storage identifier with the vendor extension
-                        appended. The hint must match the actual value exactly.
-                      type: string
                   type: object
               required:
               - hostName
@@ -278,12 +181,3 @@ spec:
         - clusterName
         - nodes
         type: object
-
-# Notes:
-# clusterInstanceParameters contains only params that are exposed to the ProvisioningRequest.
-#
-# When HW is ready, bmcAddress, bmcCredentialsName, bootMACAddress and nodes.nodeNetwork.macAddress
-# should be removed from the schema as they are supposed to come from HW.
-#
-# Ideally, rootDeviceHints should come from default configmap. Keep it in the schema to make this template
-# be able to used for multiple SNOs with different rootDeviceHints.

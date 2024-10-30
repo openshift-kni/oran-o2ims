@@ -107,38 +107,6 @@ const (
 			"items": {
 			  "description": "NodeSpec",
 			  "properties": {
-				"bmcAddress": {
-				  "description": "(workaround)BmcAddress holds the URL for accessing the controller on the network.",
-				  "type": "string"
-				},
-				"bmcCredentialsName": {
-				  "description": "(workaround)BmcCredentialsName is the name of the secret containing the BMC credentials (requires keys \"username\" and \"password\").",
-				  "properties": {
-					"name": {
-					  "type": "string"
-					}
-				  },
-				  "required": [
-					"name"
-				  ],
-				  "type": "object"
-				},
-				"bmcCredentialsDetails": {
-				  "description": "A workaround to provide bmc creds through ProvisioningRequest",
-				  "properties": {
-					"username": {
-					  "type": "string"
-					},
-					"password": {
-					  "type": "string"
-					}
-				  }
-				},
-				"bootMACAddress": {
-				  "description": "(workaround)Which MAC address will PXE boot? This is optional for some types, but required for libvirt VMs driven by vbmc.",
-				  "pattern": "[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}",
-				  "type": "string"
-				},
 				"extraAnnotations": {
 				  "additionalProperties": {
 					"additionalProperties": {
@@ -177,25 +145,6 @@ const (
 					  "description": "yaml that can be processed by nmstate, using custom marshaling/unmarshaling that will allow to populate nmstate config as plain yaml.",
 					  "type": "object",
 					  "x-kubernetes-preserve-unknown-fields": true
-					},
-					"interfaces": {
-					  "description": "Interfaces is an array of interface objects containing the name and MAC address for interfaces that are referenced in the raw nmstate config YAML. Interfaces listed here will be automatically renamed in the nmstate config YAML to match the real device name that is observed to have the corresponding MAC address. At least one interface must be listed so that it can be used to identify the correct host, which is done by matching any MAC address in this list to any MAC address observed on the host.",
-					  "items": {
-						"properties": {
-						  "macAddress": {
-							"description": "(workaround)mac address present on the host.",
-							"pattern": "^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$",
-							"type": "string"
-						  },
-						  "name": {
-							"description": "nic name used in the yaml, which relates 1:1 to the mac address. Name in REST API: logicalNICName",
-							"type": "string"
-						  }
-						},
-						"type": "object"
-					  },
-					  "minItems": 1,
-					  "type": "array"
 					}
 				  },
 				  "type": "object"
@@ -269,15 +218,6 @@ const (
 		],
 		"nodes": [
 		  {
-			"bmcAddress": "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
-			"bmcCredentialsName": {
-			  "name": "site-sno-du-1-bmc-secret"
-			},
-			"bmcCredentialsDetails": {
-			  "username": "aaaa",
-			  "password": "aaaa"
-			},
-			"bootMACAddress": "00:00:00:01:20:30",
 			"hostName": "node1",
 			"nodeLabels": {
 			  "node-role.kubernetes.io/infra": "",
@@ -368,21 +308,7 @@ const (
 					}
 				  ]
 				}
-			  },
-			  "interfaces": [
-				{
-				  "macAddress": "00:00:00:01:20:30",
-				  "name": "eno1"
-				},
-				{
-				  "macAddress": "02:00:00:80:12:14",
-				  "name": "eth0"
-				},
-				{
-				  "macAddress": "02:00:00:80:12:15",
-				  "name": "eth1"
-				}
-			  ]
+			  }
 			}
 		  }
 		],
@@ -517,6 +443,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		ctx = context.Background()
 
 		crs := []client.Object{
+			// HW plugin test namespace
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: utils.UnitTestHwmgrNamespace,
+				},
+			},
 			// Cluster Template Namespace
 			&corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -540,6 +472,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
       namespace: "siteconfig-operator"
     nodes:
     - hostname: "node1"
+      nodeNetwork:
+        interfaces:
+        - name: eno1
+          label: bootable-interface
+        - name: eth0
+          label: base-interface
+        - name: eth1
+          label: data-interface
       templateRefs:
       - name: "ai-node-templates-v1"
         namespace: "siteconfig-operator"
@@ -568,7 +508,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 				Data: map[string]string{
 					utils.HardwareProvisioningTimeoutConfigKey: "1m",
-					"hwMgrId": "hwmgr",
+					"hwMgrId": utils.UnitTestHwmgrID,
 					utils.HwTemplateNodePool: `
     - name: master
       hwProfile: profile-spr-single-processor-64G
@@ -756,7 +696,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(doNotRequeue()))
+			Expect(result).To(Equal(requeueWithMediumInterval()))
 
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
@@ -765,10 +705,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify NodePool was created
 			nodePool := &hwv1alpha1.NodePool{}
 			Expect(c.Get(ctx, types.NamespacedName{
-				Name: crName, Namespace: "hwmgr"}, nodePool)).To(Succeed())
+				Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, nodePool)).To(Succeed())
 
 			// Verify the ProvisioningRequest's status conditions
-			Expect(len(conditions)).To(Equal(6))
+			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:   string(utils.PRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
@@ -794,16 +734,11 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: metav1.ConditionUnknown,
 				Reason: string(utils.CRconditionReasons.Unknown),
 			})
-			verifyStatusCondition(conditions[5], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterInstanceProcessed),
-				Status: metav1.ConditionUnknown,
-				Reason: string(utils.CRconditionReasons.Unknown),
-			})
 			// Verify the start timestamp has been set for HardwareProvisioning
 			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 			// Verify provisioningState is progressing when nodePool has been created
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for ClusterInstance (cluster-1) to be processed", nil)
+				provisioningv1alpha1.StateProgressing, "Hardware provisioning is in progress", nil)
 		})
 	})
 
@@ -814,7 +749,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Create NodePool resource
 			nodePool = &hwv1alpha1.NodePool{}
 			nodePool.SetName(crName)
-			nodePool.SetNamespace("hwmgr")
+			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
 			}
@@ -826,22 +761,19 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(doNotRequeue()))
+			Expect(result).To(Equal(requeueWithMediumInterval()))
 
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
-			// TODO: turn it on when hw plugin is ready
-			//
 			// Verify no ClusterInstance was created
-			// clusterInstance := &siteconfig.ClusterInstance{}
-			// Expect(c.Get(ctx, types.NamespacedName{
-			// 	Name: crName, Namespace: crName}, clusterInstance)).To(HaveOccurred())
+			clusterInstance := &siteconfig.ClusterInstance{}
+			Expect(c.Get(ctx, types.NamespacedName{
+				Name: crName, Namespace: crName}, clusterInstance)).To(HaveOccurred())
 
 			// Verify the ProvisioningRequest's status conditions
-			// TODO: change the number of conditions to 5 when hw plugin is ready
-			Expect(len(conditions)).To(Equal(6))
+			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[4], metav1.Condition{
 				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionFalse,
@@ -850,10 +782,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the start timestamp has been set for HardwareProvisioning
 			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 			// Verify provisioningState is progressing when nodePool is in-progress
-			// TODO: the message should be changed to "Hardware provisioning is in progress"
-			//       when workaround code for hw plugin is removed
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for ClusterInstance (cluster-1) to be processed", nil)
+				provisioningv1alpha1.StateProgressing, "Hardware provisioning is in progress", nil)
 		})
 
 		It("Verify ClusterInstance should be created when NodePool has provisioned", func() {
@@ -952,9 +882,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
-			// TODO: change the number of conditions to 5 when hw plugin is ready
 			// Verify the ProvisioningRequest's status conditions
-			Expect(len(conditions)).To(Equal(6))
+			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[4], metav1.Condition{
 				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionFalse,
@@ -972,7 +901,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			// Patch NodePool provision status to Completed
 			currentNp := &hwv1alpha1.NodePool{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: "hwmgr"}, currentNp)).To(Succeed())
+			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
 			npProvisionedCond := meta.FindStatusCondition(
 				currentNp.Status.Conditions, string(hwv1alpha1.Provisioned),
 			)
@@ -993,10 +922,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
-			// TODO: change the number of conditions to 5 when hw plugin is ready
 			// Verify that the validated condition fails but hw provisioned condition
 			// has changed to Completed
-			Expect(len(conditions)).To(Equal(6))
+			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[0], metav1.Condition{
 				Type:    string(utils.PRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
@@ -1008,10 +936,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: metav1.ConditionTrue,
 				Reason: string(utils.CRconditionReasons.Completed),
 			})
-			// Verify the provisioningState remains progressing to reflect the on-going provisioning process
-			// even if new changes cause validation to fail
+			// Verify the provisioningState moves to failed
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for ClusterInstance (cluster-1) to be processed", nil)
+				provisioningv1alpha1.StateFailed,
+				"Failed to validate the ProvisioningRequest: failed to validate ClusterInstance input", nil)
 		})
 
 		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodePool becomes provisioned", func() {
@@ -1021,7 +949,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			// Patch NodePool provision status to Completed
 			currentNp := &hwv1alpha1.NodePool{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: "hwmgr"}, currentNp)).To(Succeed())
+			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
 			npProvisionedCond := meta.FindStatusCondition(
 				currentNp.Status.Conditions, string(hwv1alpha1.Provisioned),
 			)
@@ -1042,10 +970,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
-			// TODO: change the number of conditions to 5 when hw plugin is ready
 			// Verify that the ClusterInstanceRendered condition fails but hw provisioned condition
 			// has changed to Completed
-			Expect(len(conditions)).To(Equal(6))
+			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[1], metav1.Condition{
 				Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
@@ -1057,10 +984,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: metav1.ConditionTrue,
 				Reason: string(utils.CRconditionReasons.Completed),
 			})
-			// Verify the provisioningState remains progressing to reflect the on-going provisioning process
-			// even if new changes cause clusterInstance rendering to fail
+			// Verify the provisioningState moves to failed
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for ClusterInstance (cluster-1) to be processed", nil)
+				provisioningv1alpha1.StateFailed, "Failed to render and validate ClusterInstance", nil)
 		})
 	})
 
@@ -1075,7 +1001,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Create NodePool resource that has provisioned
 			nodePool = &hwv1alpha1.NodePool{}
 			nodePool.SetName(crName)
-			nodePool.SetNamespace("hwmgr")
+			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
@@ -1358,7 +1284,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				&provisioningv1alpha1.ProvisionedResources{OCloudNodeClusterId: "76b8cbad-9928-48a0-bcf0-bb16a777b5f7"})
 		})
 
-		It("Verify status when configuration change causes ProvisioningRequest validation to fail but ClusterProvision is still in progress", func() {
+		It("Verify status when configuration change causes ProvisioningRequest validation to fail but ClusterInstall is still in progress", func() {
 			// Patch ClusterInstance provisioned status to InProgress
 			crProvisionedCond := metav1.Condition{
 				Type: string(siteconfig.ClusterProvisioned), Status: metav1.ConditionFalse,
@@ -1770,6 +1696,23 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 			}
 			Expect(c.Create(ctx, managedCluster)).To(Succeed())
+
+			nodePool := &hwv1alpha1.NodePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: utils.UnitTestHwmgrNamespace,
+				},
+				Status: hwv1alpha1.NodePoolStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(hwv1alpha1.Provisioned),
+							Status: metav1.ConditionTrue,
+							Reason: string(hwv1alpha1.Completed),
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
 
 			provisionedCond := metav1.Condition{
 				Type:   string(utils.PRconditionTypes.ClusterProvisioned),

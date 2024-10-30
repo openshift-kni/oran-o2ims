@@ -228,6 +228,12 @@ func FindClusterInstanceImmutableFieldUpdates(
 		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
 		*/
 
+		// Check if the path matches any ignored fields
+		if matchesAnyPattern(diff.Path, IgnoredClusterInstanceFields) {
+			// Ignored field; skip
+			continue
+		}
+
 		oranUtilsLog.Info(
 			fmt.Sprintf(
 				"Detected field change in the newly rendered ClusterInstance(%s) type: %s, path: %s, from: %+v, to: %+v",
@@ -238,11 +244,6 @@ func FindClusterInstanceImmutableFieldUpdates(
 		// Check if the path matches any allowed fields
 		if matchesAnyPattern(diff.Path, AllowedClusterInstanceFields) {
 			// Allowed field; skip
-			continue
-		}
-		// Check if the path matches any ignored fields
-		if matchesAnyPattern(diff.Path, IgnoredClusterInstanceFields) {
-			// Ignored field; skip
 			continue
 		}
 

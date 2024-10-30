@@ -78,6 +78,14 @@ templateRefs:
 nodes:
 - hostname: "node1"
   ironicInspect: ""
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: bootable-interface
+    - name: eth0
+      label: base-interface
+    - name: eth1
+      label: data-interface
   templateRefs:
     - name: "ai-node-templates-v1"
       namespace: "siteconfig-operator"`,
