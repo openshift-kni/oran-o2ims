@@ -259,7 +259,7 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         status: "True"
         type: ConfigurationApplied
       provisioningStatus:
-        provisioningDetails: Cluster has installed and configured successfully
+        provisioningDetails: Provisioning request has completed successfully
         provisioningState: fulfilled
     ```
 

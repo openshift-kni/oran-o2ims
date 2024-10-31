@@ -1353,7 +1353,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the provisioningState sets to fulfilled when the provisioning process is completed
 			// and oCloudNodeClusterId is stored
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateFulfilled, "Cluster has installed and configured successfully",
+				provisioningv1alpha1.StateFulfilled, "Provisioning request has completed successfully",
 				&provisioningv1alpha1.ProvisionedResources{OCloudNodeClusterId: "76b8cbad-9928-48a0-bcf0-bb16a777b5f7"})
 		})
 

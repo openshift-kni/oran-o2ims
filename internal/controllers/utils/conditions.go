@@ -105,7 +105,7 @@ func SetProvisioningStateFailed(cr *provisioningv1alpha1.ProvisioningRequest, me
 // SetProvisioningStateFulfilled updates the provisioning state to fulfilled with detailed message
 func SetProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) {
 	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateFulfilled
-	cr.Status.ProvisioningStatus.ProvisioningDetails = "Cluster has installed and configured successfully"
+	cr.Status.ProvisioningStatus.ProvisioningDetails = "Provisioning request has completed successfully"
 }
 
 // IsClusterProvisionPresent checks if the cluster provision condition is present
