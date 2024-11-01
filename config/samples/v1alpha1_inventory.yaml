@@ -7,13 +7,24 @@ metadata:
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: oran-o2ims
-  name: sample
+  name: default
   namespace: oran-o2ims
 spec:
-  cloudID: f7fd171f-57b5-4a17-b176-9a73bf6064a4
-  ingressHost: o2ims.apps.global-hub.karmalabs.corp
-  resourceServerConfig:
+  alarmSubscriptionServerConfig:
     enabled: false
-status:
-  deploymentStatus: {}
-  usedServerConfig: {}
+  cloudID: b7dcb3ff-583d-42d9-abb5-f484386fc688
+  smo:
+    url: https://smo.example.com
+    registrationEndpoint: /smo/v1/registration
+    oauth:
+      url: https://oauth.example.com:8443/realms/oran
+      clientSecretName: oauth-client-secrets
+      tokenEndpoint: /protocol/openid-connect/token
+      scopes:
+        - openid
+        - profile
+        - roles
+        - smo-audience
+    tls:
+      clientCertificateName: o2ims-client-tls-certificate
+  caBundleName: o2ims-custom-ca-certs
