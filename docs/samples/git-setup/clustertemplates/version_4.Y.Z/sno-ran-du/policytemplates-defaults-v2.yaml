@@ -7,7 +7,7 @@ data:
   # clusterConfigurationTimeout is optional.
   # The value should be a duration string
   # (e.g., "40m" for 40 minutes)
-  clusterConfigurationTimeout: "40m"
+  # clusterConfigurationTimeout: "40m"
   policytemplate-defaults: |
     sriov-network-vlan-1: "140"
     sriov-network-vlan-2: "150"

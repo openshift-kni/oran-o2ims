@@ -11,7 +11,6 @@ spec:
     hwTemplate: placeholder-du-template-configmap-v1
     clusterInstanceDefaults: clusterinstance-defaults-v4
     policyTemplateDefaults: policytemplate-defaults-v2
-    upgradeDefaults: upgrade-defaults-v1    
   templateParameterSchema:
     properties:
       nodeClusterName:

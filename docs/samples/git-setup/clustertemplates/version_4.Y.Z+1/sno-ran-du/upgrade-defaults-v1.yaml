@@ -2,17 +2,17 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: upgrade-defaults-v1
-  namespace: sno-ran-du-v4-Y-Z
+  namespace: sno-ran-du-v4-Y-Z+1
 data:
   # The upgrade step timeout needs to be 30 minutes longer than the auto rollback timeout
   # so that the abort/cleanup can be executed as part of ibgu
   ibgu: |
     ibuSpec:
       seedImageRef:
-        image: "quay.io/seed-repo/seed-image:4.Y.Z"
-        version: "4.Y.Z"
+        image: "quay.io/seed-repo/seed-image:4.Y.Z+1"
+        version: "4.Y.Z+1"
       oadpContent:
-        - name: sno-ran-du-ibu-platform-backup-v4-Y-Z-1
+        - name: sno-ran-du-ibu-platform-backup-v4-Y-Z+1-1
           namespace: openshift-adp
       autoRollbackOnFailure:
         initMonitorTimeoutSeconds: 1800

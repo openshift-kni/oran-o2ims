@@ -4,13 +4,6 @@ configMapGenerator:
   - extra-manifest/....
   name: sno-ran-du-extra-manifest-1
   namespace: sno-ran-du-v4-Y-Z
-- files:
-  - ibu-manifest/PlatformBackupRestoreWithIBGU.yaml
-# If lvms is used:
-#  - ibu-manifest/PlatformBackupRestoreLvms.yaml
-  name: sno-ran-du-ibu-platform-backup-v4-Y-Z-1
-# The namespace needs to be created if OADP is not installed on hub
-  namespace: openshift-adp
 generatorOptions:
   disableNameSuffixHash: true
 
@@ -18,6 +11,7 @@ resources:
 - sno-ran-du/ns.yaml
 - sno-ran-du/pull-secret.yaml
 - sno-ran-du/policytemplates-defaults-v1.yaml
+- sno-ran-du/policytemplates-defaults-v2.yaml
 # sno-ran-du.v4-Y-Z-1 ClusterTemplate:
 - sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml
 - sno-ran-du/clusterinstance-defaults-v1.yaml
@@ -27,3 +21,6 @@ resources:
 # sno-ran-du.v4-Y-Z-3 ClusterTemplate:
 - sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml
 - sno-ran-du/clusterinstance-defaults-v3.yaml
+# sno-ran-du.v4-Y-Z-4 ClusterTemplate:
+- sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml
+- sno-ran-du/clusterinstance-defaults-v4.yaml
