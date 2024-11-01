@@ -39,7 +39,7 @@ var _ = Describe("alarm Notification handler", func() {
 
 		It("Can't be created without a logger", func() {
 			handler, err := NewAlarmNotificationHandler().
-				SetCloudID("123").
+				SetGlobalCloudID("123").
 				SetKubeClient(fakeClient).
 				SetConfigmapName(DefaultAlarmConfigmapName).
 				SetNamespace(DefaultNamespace).
@@ -86,7 +86,7 @@ var _ = Describe("alarm Notification handler", func() {
 					SetKubeClient(fakeClient).
 					SetConfigmapName(DefaultAlarmConfigmapName).
 					SetNamespace(DefaultNamespace).
-					SetCloudID("123").
+					SetGlobalCloudID("123").
 					SetResourceServerToken("testToken").
 					SetResourceServerURL("testURL").
 					Build(ctx)

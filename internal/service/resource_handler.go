@@ -38,7 +38,6 @@ import (
 type ResourceHandlerBuilder struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
-	cloudID          string
 	extensions       []string
 	backendURL       string
 	backendToken     string
@@ -51,7 +50,6 @@ type ResourceHandlerBuilder struct {
 type ResourceHandler struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
-	cloudID          string
 	extensions       []string
 	backendURL       string
 	backendToken     string
@@ -80,13 +78,6 @@ func (b *ResourceHandlerBuilder) SetLogger(
 func (b *ResourceHandlerBuilder) SetTransportWrapper(
 	value func(http.RoundTripper) http.RoundTripper) *ResourceHandlerBuilder {
 	b.transportWrapper = value
-	return b
-}
-
-// SetCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
-func (b *ResourceHandlerBuilder) SetCloudID(
-	value string) *ResourceHandlerBuilder {
-	b.cloudID = value
 	return b
 }
 
@@ -131,10 +122,6 @@ func (b *ResourceHandlerBuilder) Build() (
 	// Check parameters:
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
-		return
-	}
-	if b.cloudID == "" {
-		err = errors.New("cloud identifier is mandatory")
 		return
 	}
 	if b.backendURL == "" {
@@ -188,7 +175,6 @@ func (b *ResourceHandlerBuilder) Build() (
 	result = &ResourceHandler{
 		logger:           b.logger,
 		transportWrapper: b.transportWrapper,
-		cloudID:          b.cloudID,
 		extensions:       slices.Clone(b.extensions),
 		backendURL:       b.backendURL,
 		backendToken:     b.backendToken,
@@ -222,7 +208,6 @@ func (h *ResourceHandler) Get(ctx context.Context,
 	h.resourceFetcher, err = NewResourceFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
-		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).
@@ -250,7 +235,6 @@ func (h *ResourceHandler) fetchItems(
 	h.resourceFetcher, err = NewResourceFetcher().
 		SetLogger(h.logger).
 		SetTransportWrapper(h.transportWrapper).
-		SetCloudID(h.cloudID).
 		SetBackendURL(h.backendURL).
 		SetBackendToken(h.backendToken).
 		SetGraphqlQuery(h.graphqlQuery).

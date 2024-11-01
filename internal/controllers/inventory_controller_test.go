@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	openshiftv1 "github.com/openshift/api/config/v1"
+	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -41,10 +43,8 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-const (
-	ServerTestImage        = "controller-manager:test"
-	KubeRbacProxyTestImage = "kube-rbac-proxy:test"
-)
+var ServerTestImage = "controller-manager:test"
+var KubeRbacProxyTestImage = "kube-rbac-proxy:test"
 
 var _ = DescribeTable(
 	"Reconciler",
@@ -56,8 +56,21 @@ var _ = DescribeTable(
 			},
 		}
 
+		ingress := &openshiftoperatorv1.IngressController{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "default",
+				Namespace: "openshift-ingress-operator"},
+			Spec: openshiftoperatorv1.IngressControllerSpec{
+				Domain: "apps.example.com"}}
+
+		cv := &openshiftv1.ClusterVersion{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "version",
+			},
+		}
+
 		// Update the testcase objects to include the Namespace.
-		objs = append(objs, ns)
+		objs = append(objs, ns, ingress, cv)
 
 		// Get the fake client.
 		fakeClient := getFakeClientFromObjects(objs...)
@@ -84,8 +97,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              ServerTestImage,
-					KubeRbacProxyImage: KubeRbacProxyTestImage,
+					Image:              &ServerTestImage,
+					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
@@ -158,8 +171,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              ServerTestImage,
-					KubeRbacProxyImage: KubeRbacProxyTestImage,
+					Image:              &ServerTestImage,
+					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
@@ -249,8 +262,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              ServerTestImage,
-					KubeRbacProxyImage: KubeRbacProxyTestImage,
+					Image:              &ServerTestImage,
+					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
@@ -306,8 +319,8 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              ServerTestImage,
-					KubeRbacProxyImage: KubeRbacProxyTestImage,
+					Image:              &ServerTestImage,
+					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,

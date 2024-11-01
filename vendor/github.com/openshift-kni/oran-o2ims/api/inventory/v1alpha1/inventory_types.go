@@ -133,14 +133,15 @@ type InventorySpec struct {
 	// the controller manager.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Image",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Image string `json:"image"`
+	Image *string `json:"image,omitempty"`
 
 	// KubeRbacProxyImage is the full reference of the container image that implements the kube-rbac-proxy.
 	//+optional
-	KubeRbacProxyImage string `json:"kubeRbacProxyImage"`
-	// CloudId is used to correlate the SMO inventory record with the deployed cloud instance.
+	KubeRbacProxyImage *string `json:"kubeRbacProxyImage"`
+	// CloudID is the global cloud ID value used to correlate the SMO inventory record with the deployed cloud instance.
+	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud Id",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	CloudId string `json:"cloudId"`
+	CloudID *string `json:"cloudId"`
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Metadata Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	MetadataServerConfig MetadataServerConfig `json:"metadataServerConfig"`
@@ -158,7 +159,7 @@ type InventorySpec struct {
 	// IngressHost defines the FQDN for the IMS endpoints.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ingress Host",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	IngressHost string `json:"ingressHost,omitempty"`
+	IngressHost *string `json:"ingressHost,omitempty"`
 	// SmoConfig defines the configurable attributes to represent the SMO instance
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO Configuration"
@@ -196,6 +197,13 @@ type InventoryStatus struct {
 	DeploymentsStatus DeploymentsStatus `json:"deploymentStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployments Status"
 	UsedServerConfig UsedServerConfig `json:"usedServerConfig,omitempty"`
+	// Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
+	// the default ingress controller.
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Resolved Ingress Host Address"
+	IngressHost string `json:"ingressHost,omitempty"`
+	// Stores the local cluster ID used as the local Cloud ID value.
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Local Cluster ID"
+	ClusterID string `json:"clusterID,omitempty"`
 }
 
 // +kubebuilder:object:root=true

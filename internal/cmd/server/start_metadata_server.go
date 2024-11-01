@@ -51,6 +51,11 @@ func MetadataServer() *cobra.Command {
 		"O-Cloud identifier.",
 	)
 	_ = flags.String(
+		globalCloudIDFlagName,
+		"",
+		"Global O-Cloud identifier.",
+	)
+	_ = flags.String(
 		externalAddressFlagName,
 		"",
 		"External address.",
@@ -115,6 +120,31 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	logger.InfoContext(
 		ctx,
 		"Cloud identifier",
+		"value", cloudID,
+	)
+
+	// Get the cloud identifier:
+	globalCloudID, err := flags.GetString(globalCloudIDFlagName)
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to get global cloud identifier flag",
+			"flag", globalCloudIDFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
+	if globalCloudID == "" {
+		logger.ErrorContext(
+			ctx,
+			"Global cloud identifier is empty",
+			"flag", globalCloudIDFlagName,
+		)
+		return exit.Error(1)
+	}
+	logger.InfoContext(
+		ctx,
+		"Global Cloud identifier",
 		"value", cloudID,
 	)
 
@@ -217,6 +247,7 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	cloudInfoHandler, err := service.NewCloudInfoHandler().
 		SetLogger(logger).
 		SetCloudID(cloudID).
+		SetGlobalCloudID(globalCloudID).
 		SetExternalAddress(externalAddress).
 		Build()
 	if err != nil {

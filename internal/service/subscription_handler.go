@@ -25,19 +25,20 @@ import (
 
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/persiststorage"
 )
 
-// AlarmSubscriptionHandlerBuilder contains the data and logic needed to create a new
+// SubscriptionHandlerBuilder contains the data and logic needed to create a new
 // alarm subscription handler. Don't create instance of this type directly, use the
 // NewAlarmSubscriptionHandler function instead.
 type SubscriptionHandlerBuilder struct {
 	logger                     *slog.Logger
 	loggingWrapper             func(http.RoundTripper) http.RoundTripper
-	cloudID                    string
+	globalCloudID              string
 	extensions                 []string
 	kubeClient                 *k8s.Client
 	o2imsNamespace             string
@@ -45,13 +46,13 @@ type SubscriptionHandlerBuilder struct {
 	subscriptionIdString       string
 }
 
-// alarmSubscriptionHander knows how to respond to requests to list alarm subscriptions.
+// SubscriptionHandler knows how to respond to requests to list alarm subscriptions.
 // Don't create instances of this type directly, use the NewAlarmSubscriptionHandler function
 // instead.
 type SubscriptionHandler struct {
 	logger               *slog.Logger
 	loggingWrapper       func(http.RoundTripper) http.RoundTripper
-	cloudID              string
+	globalCloudID        string
 	extensions           []string
 	kubeClient           *k8s.Client
 	jsonAPI              jsoniter.API
@@ -83,10 +84,10 @@ func (b *SubscriptionHandlerBuilder) SetLoggingWrapper(
 	return b
 }
 
-// SetCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
-func (b *SubscriptionHandlerBuilder) SetCloudID(
+// SetGlobalCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
+func (b *SubscriptionHandlerBuilder) SetGlobalCloudID(
 	value string) *SubscriptionHandlerBuilder {
-	b.cloudID = value
+	b.globalCloudID = value
 	return b
 }
 
@@ -134,8 +135,8 @@ func (b *SubscriptionHandlerBuilder) Build(ctx context.Context) (
 		err = errors.New("logger is mandatory")
 		return
 	}
-	if b.cloudID == "" {
-		err = errors.New("cloud identifier is mandatory")
+	if b.globalCloudID == "" {
+		err = errors.New("global cloud identifier is mandatory")
 		return
 	}
 
@@ -193,7 +194,7 @@ func (b *SubscriptionHandlerBuilder) Build(ctx context.Context) (
 	handler := &SubscriptionHandler{
 		logger:               b.logger,
 		loggingWrapper:       b.loggingWrapper,
-		cloudID:              b.cloudID,
+		globalCloudID:        b.globalCloudID,
 		kubeClient:           b.kubeClient,
 		extensions:           slices.Clone(b.extensions),
 		jsonAPI:              jsonAPI,
@@ -206,7 +207,7 @@ func (b *SubscriptionHandlerBuilder) Build(ctx context.Context) (
 
 	b.logger.Debug(
 		"SubscriptionHandler build:",
-		"CloudID", b.cloudID,
+		"CloudID", b.globalCloudID,
 	)
 
 	err = handler.getFromPersistentStorage(ctx)
@@ -283,6 +284,12 @@ func (h *SubscriptionHandler) Get(ctx context.Context,
 // Add is the implementation of the object handler ADD interface.
 func (h *SubscriptionHandler) Add(ctx context.Context,
 	request *AddRequest) (response *AddResponse, err error) {
+
+	if h.globalCloudID == utils.DefaultOCloudID {
+		h.logger.Error("SubscriptionHandler Add: Cannot add a subscription until the SMO is configured")
+		err = ErrNotFound
+		return
+	}
 
 	h.logger.DebugContext(
 		ctx,

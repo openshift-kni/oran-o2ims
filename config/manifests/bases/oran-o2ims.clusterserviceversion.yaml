@@ -119,8 +119,8 @@ spec:
         path: caBundleName
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: CloudId is used to correlate the SMO inventory record with the
-          deployed cloud instance.
+      - description: CloudID is the global cloud ID value used to correlate the SMO
+          inventory record with the deployed cloud instance.
         displayName: Cloud Id
         path: cloudId
         x-descriptors:
@@ -226,6 +226,9 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
+      - description: Stores the local cluster ID used as the local Cloud ID value.
+        displayName: Local Cluster ID
+        path: clusterID
       - description: |-
           INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
           Important: Run "make" to regenerate code after modifying this file
@@ -239,6 +242,11 @@ spec:
         path: deploymentStatus.metadataServerStatus
       - displayName: Resource Server Status
         path: deploymentStatus.resourceServerStatus
+      - description: |-
+          Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
+          the default ingress controller.
+        displayName: Resolved Ingress Host Address
+        path: ingressHost
       - displayName: Deployments Status
         path: usedServerConfig
       version: v1alpha1

@@ -59,8 +59,8 @@ spec:
                   a non-public CA certificate.
                 type: string
               cloudId:
-                description: CloudId is used to correlate the SMO inventory record
-                  with the deployed cloud instance.
+                description: CloudID is the global cloud ID value used to correlate
+                  the SMO inventory record with the deployed cloud instance.
                 type: string
               deploymentManagerServerConfig:
                 default:
@@ -200,12 +200,14 @@ spec:
                 - registrationEndpoint
                 - url
                 type: object
-            required:
-            - cloudId
             type: object
           status:
             description: InventoryStatus defines the observed state of Inventory
             properties:
+              clusterID:
+                description: Stores the local cluster ID used as the local Cloud ID
+                  value.
+                type: string
               deploymentStatus:
                 description: |-
                   INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -289,6 +291,11 @@ spec:
                   resourceServerStatus:
                     type: string
                 type: object
+              ingressHost:
+                description: |-
+                  Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
+                  the default ingress controller.
+                type: string
               usedServerConfig:
                 properties:
                   deploymentManagerServerUsedConfig:
