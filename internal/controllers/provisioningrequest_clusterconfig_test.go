@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -89,6 +90,14 @@ templateRefs:
   namespace: "siteconfig-operator"
 nodes:
 - hostname: "node1"
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: bootable-interface
+    - name: eth0
+      label: base-interface
+    - name: eth1
+      label: data-interface
   templateRefs:
   - name: "ai-node-templates-v1"
     namespace: "siteconfig-operator"
@@ -190,6 +199,27 @@ defaultHugepagesSize: "1G"`,
 			Client: c,
 			Logger: logger,
 		}
+
+		// Create the provisioned NodePool
+		hwPluginNs := &corev1.Namespace{}
+		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+		Expect(c.Create(ctx, hwPluginNs)).To(Succeed())
+		nodePool := &hwv1alpha1.NodePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cluster-1",
+				Namespace: utils.UnitTestHwmgrNamespace,
+			},
+			Status: hwv1alpha1.NodePoolStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(hwv1alpha1.Provisioned),
+						Status: metav1.ConditionTrue,
+						Reason: string(hwv1alpha1.Completed),
+					},
+				},
+			},
+		}
+		Expect(c.Create(ctx, nodePool)).To(Succeed())
 
 		// Update the managedCluster cluster-1 to be available, joined and accepted.
 		managedCluster1 := &clusterv1.ManagedCluster{}

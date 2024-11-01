@@ -209,25 +209,13 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 				renderedNodePool.GetNamespace(),
 			),
 		)
-		// TODO: Remove this check once hwmgr plugin(s) are fully utilized
-		if renderedNodePool.ObjectMeta.Namespace != utils.UnitTestHwmgrNamespace {
-			return requeueWithMediumInterval(), nil
-		}
+		return requeueWithMediumInterval(), nil
 	}
 
-	hwProvisionedCond := meta.FindStatusCondition(
-		t.object.Status.Conditions,
-		string(utils.PRconditionTypes.HardwareProvisioned))
-
-	if hwProvisionedCond != nil {
-		// TODO: check hwProvisionedCond.Status == metav1.ConditionTrue
-		// after hw plugin is ready
-
-		// Handle the cluster install with ClusterInstance
-		err := t.handleClusterInstallation(ctx, renderedClusterInstance)
-		if err != nil {
-			return requeueWithError(err)
-		}
+	// Handle the cluster install with ClusterInstance
+	err = t.handleClusterInstallation(ctx, renderedClusterInstance)
+	if err != nil {
+		return requeueWithError(err)
 	}
 
 	// Handle policy configuration only after the cluster provisioning
@@ -275,61 +263,57 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 // and policy configuration when applicable, and update the corresponding ProvisioningRequest
 // status conditions
 func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx context.Context) (result ctrl.Result, err error) {
-	defer func() {
-		// Check resources validation and preparation failures at the end
-		if updateErr := t.checkResourcePreparationStatus(ctx); updateErr != nil {
-			err = updateErr
-		}
-	}()
-
 	// Check the NodePool status if exists
 	if t.object.Status.NodePoolRef == nil {
+		if err = t.checkResourcePreparationStatus(ctx); err != nil {
+			return requeueWithError(err)
+		}
 		return doNotRequeue(), nil
 	}
 	nodePool := &hwv1alpha1.NodePool{}
 	nodePool.SetName(t.object.Status.NodePoolRef.Name)
 	nodePool.SetNamespace(t.object.Status.NodePoolRef.Namespace)
-	provisioned, timedOutOrFailed, err := t.checkNodePoolProvisionStatus(ctx, nodePool)
+	hwProvisioned, timedOutOrFailed, err := t.checkNodePoolProvisionStatus(ctx, nodePool)
 	if err != nil {
 		return requeueWithError(err)
 	}
 	if timedOutOrFailed {
+		if err = t.checkResourcePreparationStatus(ctx); err != nil {
+			return requeueWithError(err)
+		}
 		// Timeout occurred or failed, stop requeuing
 		return doNotRequeue(), nil
 	}
-	// TODO: remove the namespace check once the hwmgr plugin are fully utilized
-	if !provisioned && nodePool.Namespace != utils.UnitTestHwmgrNamespace {
+	if !hwProvisioned {
 		return requeueWithMediumInterval(), nil
 	}
 
-	hwProvisionedCond := meta.FindStatusCondition(
-		t.object.Status.Conditions,
-		string(utils.PRconditionTypes.HardwareProvisioned))
-	if hwProvisionedCond != nil {
-		// Check the ClusterInstance status if exists
-		if t.object.Status.ClusterDetails == nil {
-			return doNotRequeue(), nil
-		}
-		err := t.checkClusterProvisionStatus(
+	// Check the ClusterInstance status if exists
+	if t.object.Status.ClusterDetails != nil {
+		err = t.checkClusterProvisionStatus(
 			ctx, t.object.Status.ClusterDetails.Name)
 		if err != nil {
 			return requeueWithError(err)
 		}
+
+		// Check the policy configuration status only after the cluster provisioning
+		// has started, and not failed or timedout
+		if utils.IsClusterProvisionPresent(t.object) &&
+			!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+			requeue, err := t.handleClusterPolicyConfiguration(ctx)
+			if err != nil {
+				return requeueWithError(err)
+			}
+			// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
+			// or there are enforce policies that are not Compliant
+			if !utils.IsClusterProvisionCompleted(t.object) || requeue {
+				return requeueWithLongInterval(), nil
+			}
+		}
 	}
 
-	// Check the policy configuration status only after the cluster provisioning
-	// has started, and not failed or timedout
-	if utils.IsClusterProvisionPresent(t.object) &&
-		!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
-		requeue, err := t.handleClusterPolicyConfiguration(ctx)
-		if err != nil {
-			return requeueWithError(err)
-		}
-		// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
-		// or there are enforce policies that are not Compliant
-		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
-			return requeueWithLongInterval(), nil
-		}
+	if err = t.checkResourcePreparationStatus(ctx); err != nil {
+		return requeueWithError(err)
 	}
 	return doNotRequeue(), nil
 }
@@ -337,11 +321,6 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 // checkResourcePreparationStatus checks for validation and preparation failures, setting the
 // provisioningState to failed if no provisioning is currently in progress and issues are found.
 func (t *provisioningRequestReconcilerTask) checkResourcePreparationStatus(ctx context.Context) error {
-	if t.object.Status.ProvisioningStatus.ProvisioningState == provisioningv1alpha1.StateProgressing {
-		// On-going provisioning is in progress, skip checking resource validation/preparation
-		return nil
-	}
-
 	conditionTypes := []utils.ConditionType{
 		utils.PRconditionTypes.Validated,
 		utils.PRconditionTypes.ClusterInstanceRendered,

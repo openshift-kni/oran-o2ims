@@ -2,9 +2,7 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,15 +17,9 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateClusterResources(
 
 	clusterName := clusterInstance.GetName()
 
-	// TODO: remove the BMC secrets creation when hw plugin is ready
-	err := t.createClusterInstanceBMCSecrets(ctx, clusterName)
-	if err != nil {
-		return err
-	}
-
 	// Copy the pull secret from the cluster template namespace to the
 	// clusterInstance namespace.
-	err = t.createPullSecret(ctx, clusterInstance)
+	err := t.createPullSecret(ctx, clusterInstance)
 	if err != nil {
 		return fmt.Errorf("failed to create pull Secret for cluster %s: %w", clusterName, err)
 	}
@@ -46,117 +38,6 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateClusterResources(
 	}
 
 	return nil
-}
-
-// createClusterInstanceBMCSecrets creates all the BMC secrets needed by the nodes included
-// in the ProvisioningRequest.
-// Todo: Remove this function after hw plugin is fully utilized.
-func (t *provisioningRequestReconcilerTask) createClusterInstanceBMCSecrets( // nolint: unused
-	ctx context.Context, clusterName string) error {
-
-	// The BMC credential details are for now obtained from the ProvisioningRequest.
-	clusterTemplateInputParams := make(map[string]any)
-	err := json.Unmarshal(t.object.Spec.TemplateParameters.Raw, &clusterTemplateInputParams)
-	if err != nil {
-		// Unlikely to happen since it has been validated by API server
-		return fmt.Errorf("error unmarshaling templateParameters: %w", err)
-	}
-
-	// If we got to this point, we can assume that all the keys up to the BMC details
-	// exists since ClusterInstance has nodes mandatory.
-	nodesInterface, nodesExist := clusterTemplateInputParams[utils.TemplateParamClusterInstance].(map[string]any)["nodes"]
-	if !nodesExist {
-		// Unlikely to happen
-		return utils.NewInputError(
-			"\"spec.nodes\" expected to exist in the rendered ClusterInstance for ProvisioningRequest %s, but it is missing",
-			t.object.Name,
-		)
-	}
-
-	nodes := nodesInterface.([]interface{})
-	// Go through all the nodes.
-	for _, nodeInterface := range nodes {
-		node := nodeInterface.(map[string]interface{})
-
-		username, password, secretName, err :=
-			getBMCDetailsForClusterInstance(node, t.object.Name)
-		if err != nil {
-			// If a hwmgr plugin is being used, BMC details will not be in the provisioning request
-			t.logger.InfoContext(ctx, "BMC details not present in provisioning request", "name", t.object.Name)
-			continue
-		}
-
-		// Create the node's BMC secret.
-		bmcSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: clusterName,
-			},
-			Data: map[string][]byte{
-				"username": []byte(username),
-				"password": []byte(password),
-			},
-		}
-
-		if err = utils.CreateK8sCR(ctx, t.client, bmcSecret, nil, utils.UPDATE); err != nil {
-			return fmt.Errorf("failed to create Kubernetes CR: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func getBMCDetailsForClusterInstance(node map[string]interface{}, provisioningRequest string) (
-	string, string, string, error) {
-	// Get the BMC details.
-	bmcCredentialsDetailsInterface, bmcCredentialsDetailsExist := node["bmcCredentialsDetails"]
-
-	if !bmcCredentialsDetailsExist {
-		return "", "", "", utils.NewInputError(
-			`\"bmcCredentialsDetails\" key expected to exist in ClusterTemplateInput 
-			of ProvisioningRequest %s, but it's missing`,
-			provisioningRequest,
-		)
-	}
-
-	bmcCredentialsDetails := bmcCredentialsDetailsInterface.(map[string]interface{})
-
-	// Get the BMC username and password.
-	username, usernameExists := bmcCredentialsDetails["username"].(string)
-	if !usernameExists {
-		return "", "", "", utils.NewInputError(
-			`\"bmcCredentialsDetails.username\" key expected to exist in ClusterTemplateInput 
-			of ProvisioningRequest %s, but it's missing`,
-			provisioningRequest,
-		)
-	}
-
-	password, passwordExists := bmcCredentialsDetails["password"].(string)
-	if !passwordExists {
-		return "", "", "", utils.NewInputError(
-			`\"bmcCredentialsDetails.password\" key expected to exist in ClusterTemplateInput 
-			of ProvisioningRequest %s, but it's missing`,
-			provisioningRequest,
-		)
-	}
-
-	secretName := ""
-	// Get the BMC CredentialsName.
-	bmcCredentialsNameInterface, bmcCredentialsNameExist := node["bmcCredentialsName"]
-	if !bmcCredentialsNameExist {
-		nodeHostnameInterface, nodeHostnameExists := node["hostName"]
-		if !nodeHostnameExists {
-			secretName = provisioningRequest
-		} else {
-			secretName =
-				utils.ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) +
-					"-bmc-secret"
-		}
-	} else {
-		secretName = bmcCredentialsNameInterface.(map[string]interface{})["name"].(string)
-	}
-
-	return username, password, secretName, nil
 }
 
 // createPullSecret copies the pull secret from the cluster template namespace
