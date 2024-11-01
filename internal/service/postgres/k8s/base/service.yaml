@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: o-cloud-db
+spec:
+  type: ClusterIP
+  selector:
+    app: o-cloud-db
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432

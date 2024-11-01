@@ -1,4 +1,4 @@
-package main
+package alarms
 
 import (
 	"context"
@@ -13,15 +13,13 @@ import (
 	"syscall"
 	"time"
 
-	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
-)
 
-func main() {
-	Serve()
-}
+	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
+)
 
 // Alarm server config values
 const (
@@ -32,10 +30,9 @@ const (
 	idleTimeout  = 120 * time.Second
 )
 
-// Serve TODO: Call this func using cobra-cli from inside deployment CR.
-func Serve() {
+// Serve start alarms server
+func Serve() error {
 	slog.Info("Starting Alarm server")
-
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -43,21 +40,28 @@ func Serve() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		<-shutdown
+		sig := <-shutdown
+		slog.Info("Shutdown signal received", "signal", sig)
 		cancel()
+	}()
+
+	// Init DB client
+	pool, err := db.NewPgxPool(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to connected to DB: %w", err)
+	}
+	defer func() {
+		slog.Info("Closing DB connection")
+		pool.Close()
 	}()
 
 	// Get client for hub
 	hubClient, err := k8s_client.NewClientForHub()
 	if err != nil {
-		slog.Error("error creating client for hub", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("error creating client for hub: %w", err)
 	}
-
 	alarmsDict := dictionary.New(hubClient)
 	alarmsDict.Load(ctx)
-
-	// TODO: Init DB client
 
 	// TODO: Audit and Insert data database
 
@@ -65,7 +69,11 @@ func Serve() {
 
 	// Init server
 	// Create the handler
-	alarmServer := internal.AlarmsServer{}
+	alarmServer := internal.AlarmsServer{
+		AlarmsRepository: &internal.AlarmsRepository{
+			Db: pool,
+		},
+	}
 
 	alarmServerStrictHandler := api.NewStrictHandlerWithOptions(&alarmServer, nil,
 		api.StrictHTTPServerOptions{
@@ -113,13 +121,15 @@ func Serve() {
 	// Blocking select
 	select {
 	case err := <-serverErrors:
-		slog.Error(fmt.Sprintf("error starting server: %s", err))
-	case sig := <-ctx.Done():
-		slog.Info(fmt.Sprintf("Shutdown signal received: %v", sig))
+		return fmt.Errorf("error starting server: %w", err)
+	case <-ctx.Done():
+		slog.Info("Shutting down server")
 		if err := gracefulShutdown(srv); err != nil {
-			slog.Error(fmt.Sprintf("graceful shutdown failed: %v", err))
+			return err
 		}
 	}
+
+	return nil
 }
 
 // gracefulShutdown allow graceful shutdown with timeout
@@ -130,9 +140,9 @@ func gracefulShutdown(srv *http.Server) error {
 
 	// Attempt graceful shutdown
 	if err := srv.Shutdown(ctx); err != nil {
-		// TODO: handle this error
 		return fmt.Errorf("failed graceful shutdown: %w", err)
 	}
+
 	slog.Info("Server gracefully stopped")
 	return nil
 }

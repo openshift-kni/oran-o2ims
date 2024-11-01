@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: o-cloud-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: o-cloud-db
+  template:
+    metadata:
+      labels:
+        app: o-cloud-db
+    spec:
+      containers:
+        - name: o-cloud-db
+          image: registry.access.redhat.com/rhel9/postgresql-16:1-29.1726696141
+          env:
+            - name: POSTGRESQL_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: o-cloud-db-db-secret
+                  key: admin-password
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: o-cloud-db-postgresql-cfg
+              mountPath: /opt/app-root/src/postgresql-cfg
+            - name: o-cloud-db-postgresql-start
+              mountPath: /opt/app-root/src/postgresql-start
+      volumes:
+        - name: o-cloud-db-postgresql-cfg
+          configMap:
+            name: o-cloud-db-postgresql-cfg
+        - name: o-cloud-db-postgresql-start
+          configMap:
+            name: o-cloud-db-postgresql-start

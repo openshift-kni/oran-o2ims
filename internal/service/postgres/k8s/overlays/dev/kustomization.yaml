@@ -1,0 +1,5 @@
+commonLabels:
+  pg: dev
+
+resources:
+  - ../../base
