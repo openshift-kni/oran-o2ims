@@ -241,6 +241,7 @@ spec:
                     - progressing
                     - fulfilled
                     - failed
+                    - deleting
                     type: string
                 type: object
             type: object

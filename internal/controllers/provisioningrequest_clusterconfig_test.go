@@ -148,7 +148,8 @@ defaultHugepagesSize: "1G"`,
 			// Provisioning Requests.
 			&provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-1",
+					Name:       "cluster-1",
+					Finalizers: []string{provisioningRequestFinalizer},
 				},
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,
@@ -1686,7 +1687,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			// Provisioning Request.
 			&provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-1",
+					Name:       "cluster-1",
+					Finalizers: []string{provisioningRequestFinalizer},
 				},
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,

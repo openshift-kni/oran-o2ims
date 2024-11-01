@@ -110,6 +110,12 @@ func SetProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest)
 	cr.Status.ProvisioningStatus.ProvisioningDetails = "Provisioning request has completed successfully"
 }
 
+// SetProvisioningStateDeleting updates the provisioning state to deleting with detailed message
+func SetProvisioningStateDeleting(cr *provisioningv1alpha1.ProvisioningRequest) {
+	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateDeleting
+	cr.Status.ProvisioningStatus.ProvisioningDetails = "Deletion is in progress"
+}
+
 // IsProvisioningStateFulfilled checks if the provisioning status is fulfilled
 func IsProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	return cr.Status.ProvisioningStatus.ProvisioningState == provisioningv1alpha1.StateFulfilled

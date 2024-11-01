@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // ProvisioningRequestReconciler reconciles a ProvisioningRequest object
@@ -66,6 +68,7 @@ type timeouts struct {
 }
 
 const (
+	provisioningRequestFinalizer = "provisioningrequest.o2ims.provisioning.oran.org/finalizer"
 	provisioningRequestNameLabel = "provisioningrequest.o2ims.provisioning.oran.org/name"
 )
 
@@ -127,6 +130,16 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 	r.Logger.InfoContext(ctx, "[Reconcile ProvisioningRequest]",
 		"name", object.Name, "namespace", object.Namespace)
+
+	if res, stop, err := r.handleFinalizer(ctx, object); !res.IsZero() || stop || err != nil {
+		if err != nil {
+			r.Logger.ErrorContext(
+				ctx,
+				"Encountered error while handling the ProvisioningRequest finalizer",
+				slog.String("err", err.Error()))
+		}
+		return res, err
+	}
 
 	// Create and run the task:
 	task := &provisioningRequestReconcilerTask{
@@ -561,4 +574,107 @@ func (t *provisioningRequestReconcilerTask) getCrClusterTemplateRef(ctx context.
 		fmt.Sprintf(
 			"a valid (%s) ClusterTemplate does not exist in any namespace",
 			clusterTemplateRefName))
+}
+
+func (r *ProvisioningRequestReconciler) handleFinalizer(
+	ctx context.Context, provisioningRequest *provisioningv1alpha1.ProvisioningRequest) (ctrl.Result, bool, error) {
+
+	// Check if the ProvisioningRequest is marked to be deleted, which is
+	// indicated by the deletion timestamp being set.
+	if provisioningRequest.DeletionTimestamp.IsZero() {
+		// Check and add finalizer for this CR.
+		if !controllerutil.ContainsFinalizer(provisioningRequest, provisioningRequestFinalizer) {
+			controllerutil.AddFinalizer(provisioningRequest, provisioningRequestFinalizer)
+			if err := r.Update(ctx, provisioningRequest); err != nil {
+				return doNotRequeue(), true, fmt.Errorf("failed to update ProvisioningRequest with finalizer: %w", err)
+			}
+			// Requeue since the finalizer has been added.
+			return requeueImmediately(), false, nil
+		}
+	} else if controllerutil.ContainsFinalizer(provisioningRequest, provisioningRequestFinalizer) {
+		r.Logger.Info(fmt.Sprintf("ProvisioningRequest (%s) is being deleted", provisioningRequest.Name))
+		deleteComplete, err := r.handleProvisioningRequestDeletion(ctx, provisioningRequest)
+		if !deleteComplete {
+			// No need to requeue here, deletion of dependents(including their finalizer removal) will
+			// automatically trigger reconciliation.
+			return doNotRequeue(), true, err
+		}
+
+		// Deletion has completed. Remove provisioningRequestFinalizer. Once all finalizers have been
+		// removed, the object will be deleted.
+		r.Logger.Info("Dependents have been deleted. Removing provisioningRequest finalizer", "name", provisioningRequest.Name)
+		patch := client.MergeFrom(provisioningRequest.DeepCopy())
+		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningRequestFinalizer) {
+			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {
+				return doNotRequeue(), true, fmt.Errorf("failed to patch ProvisioningRequest: %w", err)
+			}
+			return doNotRequeue(), true, nil
+		}
+	}
+
+	return doNotRequeue(), false, nil
+}
+
+// handleProvisioningRequestDeletion ensures that specific dependents with potential long-running finalizers
+// are deleted before the ProvisioningRequest itself is finalized. It returns true if all dependents have been
+// deleted; otherwise, it returns false.
+func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
+	ctx context.Context, provisioningRequest *provisioningv1alpha1.ProvisioningRequest) (bool, error) {
+	// Set the provisioningState to deleting
+	if provisioningRequest.Status.ProvisioningStatus.ProvisioningState != provisioningv1alpha1.StateDeleting {
+		utils.SetProvisioningStateDeleting(provisioningRequest)
+		if err := utils.UpdateK8sCRStatus(ctx, r.Client, provisioningRequest); err != nil {
+			return false, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", provisioningRequest.Name, err)
+		}
+	}
+
+	// List resources by label
+	var labels = map[string]string{
+		provisioningRequestNameLabel: provisioningRequest.Name,
+	}
+	listOpts := []client.ListOption{
+		client.MatchingLabels(labels),
+	}
+	// Foreground deletion option
+	deletePolicy := metav1.DeletePropagationForeground
+	deleteOptions := &client.DeleteOptions{PropagationPolicy: &deletePolicy}
+
+	deleteCompleted := true
+	nodePoolList := &hwv1alpha1.NodePoolList{}
+	if err := r.Client.List(ctx, nodePoolList, listOpts...); err != nil {
+		return false, fmt.Errorf("failed to list node pools: %w", err)
+	}
+	for _, nodePool := range nodePoolList.Items {
+		// Delete nodePool if not already.
+		if nodePool.DeletionTimestamp.IsZero() {
+			r.Logger.Info(fmt.Sprintf("Deleting NodePool (%s) in the namespace %s", nodePool.Name, nodePool.Namespace))
+			copiedNodePool := nodePool
+			// With foreground deletion, ensure nodePool's dependents are fully deleted before nodePool itself is deleted.
+			if err := r.Client.Delete(ctx, &copiedNodePool, deleteOptions); client.IgnoreNotFound(err) != nil {
+				return false, fmt.Errorf("failed to delete node pool: %w", err)
+			}
+		}
+		r.Logger.Info(fmt.Sprintf("Waiting for NodePool (%s) to be deleted", nodePool.Name))
+		deleteCompleted = false
+	}
+
+	namespaceList := &corev1.NamespaceList{}
+	if err := r.Client.List(ctx, namespaceList, listOpts...); err != nil {
+		return false, fmt.Errorf("failed to list namespaces: %w", err)
+	}
+	for _, ns := range namespaceList.Items {
+		// Delete cluster namespace if not already.
+		// Deleting cluster namespace will delete all resources within it, including
+		// ClusterInstance and ImageBasedGroupUpgrade.
+		if ns.DeletionTimestamp.IsZero() {
+			r.Logger.Info(fmt.Sprintf("Deleting Cluster Namespace (%s)", ns.Name))
+			copiedNamespace := ns
+			if err := r.Client.Delete(ctx, &copiedNamespace); client.IgnoreNotFound(err) != nil {
+				return false, fmt.Errorf("failed to delete namespace: %w", err)
+			}
+		}
+		r.Logger.Info(fmt.Sprintf("Waiting for Cluster Namespace (%s) to be deleted", ns.Name))
+		deleteCompleted = false
+	}
+	return deleteCompleted, nil
 }
