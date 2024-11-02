@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -81,14 +82,24 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 						"failed to find immutable field updates for ClusterInstance (%s): %w", ciName, err)
 				}
 
-				var disallowedChanges []string
+				// copy the existing suppressedManifests
+				existingCI := &siteconfig.ClusterInstance{}
+				err = runtime.DefaultUnstructuredConverter.FromUnstructured(existingClusterInstance.Object, existingCI)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get current suppressedManifests values: %w", err)
+				}
+				suppressedManifests = existingCI.Spec.SuppressedManifests
 
+				var disallowedChanges []string
 				for _, updatedField := range updatedFields {
-					// Add "AgentClusterInstall" to ClusterInstance.SuppressedManifests in order to
-					// prevent unnecessary updates to ACI.
+					// Suppress install manifests to prevent unnecessary updates
 					if updatedField == "clusterImageSetNameRef" &&
 						crProvisionedCond.Reason == string(utils.CRconditionReasons.Completed) {
-						suppressedManifests = append(suppressedManifests, "AgentClusterInstall")
+						for _, crd := range utils.CRDsToBeSuppressedForUpgrade {
+							if !slices.Contains(suppressedManifests, crd) {
+								suppressedManifests = append(suppressedManifests, crd)
+							}
+						}
 					} else {
 						disallowedChanges = append(disallowedChanges, updatedField)
 					}

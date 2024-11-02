@@ -202,3 +202,10 @@ const ClusterVersionName = "version"
 const (
 	UpgradeDefaultsConfigmapKey = "ibgu"
 )
+
+// CRDs needed to be suppressed in ClusterInstance for upgrade
+var (
+	CRDsToBeSuppressedForUpgrade = []string{
+		"AgentClusterInstall",
+	}
+)
