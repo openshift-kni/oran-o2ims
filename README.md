@@ -430,7 +430,7 @@ alarm-notification-server` [configuration](.vscode/launch.json).
 1. Apply the test client service account CR instances.
 
 ```shell
-$ oc apply -f config/samples/testing/client-service-account-rbac.yaml
+$ oc apply -f config/testing/client-service-account-rbac.yaml
 ```
 
 2. Generate a token to access the API endpoint

@@ -48,9 +48,9 @@ func AlarmNotificationServer() *cobra.Command {
 	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
 	_ = flags.String(
-		cloudIDFlagName,
+		globalCloudIDFlagName,
 		"",
-		"O-Cloud identifier.",
+		"Global O-Cloud identifier.",
 	)
 	_ = flags.String(
 		namespaceFlagName,
@@ -110,25 +110,25 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 		return exit.Error(1)
 	}
 	// Get the cloud identifier:
-	cloudID, err := flags.GetString(cloudIDFlagName)
+	globalCloudID, err := flags.GetString(globalCloudIDFlagName)
 	if err != nil {
 		logger.Error(
-			"Failed to get cloud identifier flag",
-			"flag", cloudIDFlagName,
+			"Failed to get global cloud identifier flag",
+			"flag", globalCloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
 	}
-	if cloudID == "" {
+	if globalCloudID == "" {
 		logger.Error(
-			"Cloud identifier is empty",
-			"flag", cloudIDFlagName,
+			"Global cloud identifier is empty",
+			"flag", globalCloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
 	logger.Info(
-		"Cloud identifier",
-		"value", cloudID,
+		"Global cloud identifier",
+		"value", globalCloudID,
 	)
 
 	// Create the logging wrapper:
@@ -243,7 +243,7 @@ func (c *AlarmNotificationServerCommand) run(cmd *cobra.Command, argv []string) 
 	handler, err := service.NewAlarmNotificationHandler().
 		SetLogger(logger).
 		SetLoggingWrapper(loggingWrapper).
-		SetCloudID(cloudID).
+		SetGlobalCloudID(globalCloudID).
 		SetKubeClient(kubeClient).
 		SetNamespace(namespace).
 		SetConfigmapName(subscriptionsConfigmapName).

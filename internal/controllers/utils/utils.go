@@ -221,85 +221,49 @@ func GetBackendTokenArg(backendToken string) string {
 	return fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile)
 }
 
-// getACMNamespace will determine the ACM namespace from the multiclusterengine object.
-//
-// multiclusterengine object sample:
-//
-//	apiVersion: multicluster.openshift.io/v1
-//	kind: MultiClusterEngine
-//	metadata:
-//	  labels:
-//	    installer.name: multiclusterhub
-//	    installer.namespace: open-cluster-management
-func getACMNamespace(ctx context.Context, c client.Client) (string, error) {
-	// Get the multiclusterengine object.
-	multiClusterEngine := &unstructured.Unstructured{}
-	multiClusterEngine.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "multicluster.openshift.io",
-		Kind:    "MultiClusterEngine",
+// GetIngressDomain will determine the network domain of the default ingress controller
+func GetIngressDomain(ctx context.Context, c client.Client) (string, error) {
+	ingressController := &unstructured.Unstructured{}
+	ingressController.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operator.openshift.io",
+		Kind:    "IngressController",
 		Version: "v1",
 	})
+
 	err := c.Get(ctx, client.ObjectKey{
-		Name: "multiclusterengine",
-	}, multiClusterEngine)
+		Name:      "default",
+		Namespace: "openshift-ingress-operator",
+	}, ingressController)
 
 	if err != nil {
-		oranUtilsLog.Info("[getACMNamespace] multiclusterengine object not found")
-		return "", fmt.Errorf("multiclusterengine object not found")
+		oranUtilsLog.Info(fmt.Sprintf("[getIngressDomain] default ingress controller object not found, error: %s", err))
+		return "", fmt.Errorf("default ingress controller object not found: %w", err)
 	}
 
-	// Get the ACM namespace by looking at the installer.namespace label.
-	multiClusterEngineMetadata := multiClusterEngine.Object["metadata"].(map[string]interface{})
-	multiClusterEngineLabels, labelsOk := multiClusterEngineMetadata["labels"]
+	spec := ingressController.Object["spec"].(map[string]interface{})
+	domain, ok := spec["domain"]
 
-	if labelsOk {
-		acmNamespace, acmNamespaceOk := multiClusterEngineLabels.(map[string]interface{})["installer.namespace"]
-
-		if !acmNamespaceOk {
-			return "", fmt.Errorf("multiclusterengine labels do not contain the installer.namespace key")
-		}
-		return acmNamespace.(string), nil
+	if ok {
+		return domain.(string), nil
 	}
 
-	return "", fmt.Errorf("multiclusterengine object does not have expected labels")
+	return "", fmt.Errorf("default ingress controller does not have expected 'spec.domain' attribute")
 }
 
-// getSearchAPI will dynamically obtain the search API.
-func getSearchAPI(ctx context.Context, c client.Client, inventory *inventoryv1alpha1.Inventory) (string, error) {
-	// Find the ACM namespace.
-	acmNamespace, err := getACMNamespace(ctx, c)
-	if err != nil {
-		return "", err
+func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
+	cloudId := DefaultOCloudID
+	if inventory.Spec.CloudID != nil {
+		cloudId = *inventory.Spec.CloudID
 	}
 
-	// Split the Ingress to obtain the domain for the Search API.
-	// searchAPIBackendURL example: https://search-api-open-cluster-management.apps.lab.karmalabs.corp
-	// IngressHost example:         o2ims.apps.lab.karmalabs.corp
-	// Note: The domain could also be obtained from the spec.host of the search-api route in the
-	// ACM namespace.
-	ingressSplit := strings.Split(inventory.Spec.IngressHost, ".apps")
-	if len(ingressSplit) != 2 {
-		return "", fmt.Errorf("the searchAPIBackendURL could not be obtained from the IngressHost. " +
-			"Directly specify the searchAPIBackendURL in the Inventory CR or update the IngressHost")
-	}
-	domain := ".apps" + ingressSplit[len(ingressSplit)-1]
-
-	// The searchAPI is obtained from the "search-api" string and the ACM namespace.
-	searchAPI := "https://" + "search-api-" + acmNamespace + domain
-
-	return searchAPI, nil
-}
-
-func GetServerArgs(ctx context.Context, c client.Client,
-	inventory *inventoryv1alpha1.Inventory,
-	serverName string) (result []string, err error) {
 	// MetadataServer
 	if serverName == InventoryMetadataServerName {
 		result = slices.Clone(MetadataServerArgs)
 		result = append(
 			result,
-			fmt.Sprintf("--cloud-id=%s", inventory.Spec.CloudId),
-			fmt.Sprintf("--external-address=https://%s", inventory.Spec.IngressHost))
+			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
+			fmt.Sprintf("--global-cloud-id=%s", cloudId),
+			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
 
 		return
 	}
@@ -308,10 +272,7 @@ func GetServerArgs(ctx context.Context, c client.Client,
 	if serverName == InventoryResourceServerName {
 		searchAPI := inventory.Spec.ResourceServerConfig.BackendURL
 		if searchAPI == "" {
-			searchAPI, err = getSearchAPI(ctx, c, inventory)
-			if err != nil {
-				return nil, err
-			}
+			searchAPI = defaultSearchApiURL
 		}
 
 		result = slices.Clone(ResourceServerArgs)
@@ -319,7 +280,7 @@ func GetServerArgs(ctx context.Context, c client.Client,
 		// Add the cloud-id, backend-url, and token args:
 		result = append(
 			result,
-			fmt.Sprintf("--cloud-id=%s", inventory.Spec.CloudId),
+			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
 			fmt.Sprintf("--backend-url=%s", searchAPI),
 			GetBackendTokenArg(inventory.Spec.ResourceServerConfig.BackendToken))
 
@@ -333,7 +294,7 @@ func GetServerArgs(ctx context.Context, c client.Client,
 		// Set the cloud identifier:
 		result = append(
 			result,
-			fmt.Sprintf("--cloud-id=%s", inventory.Spec.CloudId),
+			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
 		)
 
 		// Set the backend type:
@@ -348,7 +309,7 @@ func GetServerArgs(ctx context.Context, c client.Client,
 		// API server of the cluster:
 		backendURL := inventory.Spec.DeploymentManagerServerConfig.BackendURL
 		if backendURL == "" {
-			backendURL = defaultBackendURL
+			backendURL = defaultApiServerURL
 		}
 
 		// Add the backend and token args:
@@ -730,8 +691,8 @@ func SetupOAuthClient(ctx context.Context, config OAuthClientConfig) (*http.Clie
 	return c, nil
 }
 
-// GetClusterId retrieves the UUID value for the cluster specified by name
-func GetClusterId(ctx context.Context, c client.Client, name string) (string, error) {
+// GetClusterID retrieves the UUID value for the cluster specified by name
+func GetClusterID(ctx context.Context, c client.Client, name string) (string, error) {
 	object := &openshiftv1.ClusterVersion{}
 
 	err := c.Get(ctx, types.NamespacedName{Name: name}, object)
@@ -812,4 +773,53 @@ func GetCertFromSecret(ctx context.Context, c client.Client, name, namespace str
 	}
 
 	return &cert, nil
+}
+
+// ReadDefaultNamespace reads the current namespace from the service account namespace file.
+func ReadDefaultNamespace() (string, error) {
+	namespaceBytes, err := os.ReadFile(defaultNamespaceFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read default namespace from file '%s': %w", defaultNamespaceFile, err)
+	}
+	return string(namespaceBytes), nil
+}
+
+// CreateDefaultInventoryCR creates the default Inventory CR so that the system has running servers
+func CreateDefaultInventoryCR(ctx context.Context, c client.Client, namespace string) error {
+	inventory := inventoryv1alpha1.Inventory{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DefaultInventoryCR,
+			Namespace: namespace,
+		},
+		Spec: inventoryv1alpha1.InventorySpec{
+			AlarmSubscriptionServerConfig: inventoryv1alpha1.AlarmSubscriptionServerConfig{
+				ServerConfig: inventoryv1alpha1.ServerConfig{
+					Enabled: false},
+			},
+			DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+				ServerConfig: inventoryv1alpha1.ServerConfig{
+					Enabled: true,
+				},
+			},
+			MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+				ServerConfig: inventoryv1alpha1.ServerConfig{
+					Enabled: true,
+				},
+			},
+			ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
+				ServerConfig: inventoryv1alpha1.ServerConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	err := c.Create(ctx, &inventory)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to create default inventory CR: %w", err)
+		}
+	}
+
+	return nil
 }

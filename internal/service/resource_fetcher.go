@@ -36,7 +36,6 @@ const (
 
 type ResourceFetcher struct {
 	logger        *slog.Logger
-	cloudID       string
 	backendURL    string
 	backendToken  string
 	backendClient *http.Client
@@ -48,7 +47,6 @@ type ResourceFetcher struct {
 type ResourceFetcherBuilder struct {
 	logger           *slog.Logger
 	transportWrapper func(http.RoundTripper) http.RoundTripper
-	cloudID          string
 	backendURL       string
 	backendToken     string
 	graphqlQuery     string
@@ -73,13 +71,6 @@ func (b *ResourceFetcherBuilder) SetLogger(
 func (b *ResourceFetcherBuilder) SetTransportWrapper(
 	value func(http.RoundTripper) http.RoundTripper) *ResourceFetcherBuilder {
 	b.transportWrapper = value
-	return b
-}
-
-// SetCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
-func (b *ResourceFetcherBuilder) SetCloudID(
-	value string) *ResourceFetcherBuilder {
-	b.cloudID = value
 	return b
 }
 
@@ -120,10 +111,6 @@ func (b *ResourceFetcherBuilder) Build() (
 		err = errors.New("logger is mandatory")
 		return
 	}
-	if b.cloudID == "" {
-		err = errors.New("cloud identifier is mandatory")
-		return
-	}
 	if b.backendURL == "" {
 		err = errors.New("backend URL is mandatory")
 		return
@@ -149,7 +136,6 @@ func (b *ResourceFetcherBuilder) Build() (
 	// Create and populate the object:
 	result = &ResourceFetcher{
 		logger:        b.logger,
-		cloudID:       b.cloudID,
 		backendURL:    b.backendURL,
 		backendToken:  b.backendToken,
 		backendClient: backendClient,

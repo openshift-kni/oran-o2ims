@@ -50,6 +50,7 @@ import (
 
 //+kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searches,verbs=get
 //+kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searches/allManagedData,verbs=get
+//+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 //+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
@@ -441,11 +442,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 
 // registerWithSmo sends a message to the SMO to register our identifiers and URL
 func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
-	// Retrieve the local cluster id value.  It appears to always be identified as "version" in its metadata
-	clusterId, err := utils.GetClusterId(ctx, t.client, utils.ClusterVersionName)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster id: %w", err)
-	}
+	smo := t.object.Spec.SmoConfig
 
 	httpClient, err := t.setupOAuthClient(ctx)
 	if err != nil {
@@ -453,9 +450,9 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 	}
 
 	data := utils.AvailableNotification{
-		GlobalCloudId: t.object.Spec.CloudId,
-		OCloudId:      clusterId,
-		ImsEndpoint:   fmt.Sprintf("https://%s/o2ims-infrastructureInventory/v1", t.object.Spec.IngressHost),
+		GlobalCloudId: *t.object.Spec.CloudID,
+		OCloudId:      t.object.Status.ClusterID,
+		ImsEndpoint:   fmt.Sprintf("https://%s/o2ims-infrastructureInventory/v1", t.object.Status.IngressHost),
 	}
 
 	body, err := json.Marshal(data)
@@ -463,7 +460,6 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal AvailableNotification: %s", err.Error())
 	}
 
-	smo := t.object.Spec.SmoConfig
 	url := fmt.Sprintf("%s%s", smo.Url, smo.RegistrationEndpoint)
 	result, err := httpClient.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -479,7 +475,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 
 // setupSmo executes the high-level action set register with the SMO and set up the related conditions accordingly
 func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
-	if t.object.Spec.SmoConfig == nil {
+	if t.object.Spec.SmoConfig == nil || t.object.Spec.CloudID == nil {
 		meta.SetStatusCondition(
 			&t.object.Status.DeploymentsStatus.Conditions,
 			metav1.Condition{
@@ -534,9 +530,62 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 	return nil
 }
 
+// storeIngressDomain stores the ingress domain to be used onto the object status for later retrieval.
+func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
+	// Determine our ingress domain
+	var ingressHost string
+	if t.object.Spec.IngressHost == nil {
+		var err error
+		ingressHost, err = utils.GetIngressDomain(ctx, t.client)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to get ingress domain.",
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to get ingress domain: %s", err.Error())
+		}
+		ingressHost = utils.DefaultAppName + "." + ingressHost
+	} else {
+		ingressHost = *t.object.Spec.IngressHost
+	}
+
+	t.object.Status.IngressHost = ingressHost
+
+	return nil
+}
+
+// storeClusterID stores the local cluster id onto the object status for later retrieval.
+func (t *reconcilerTask) storeClusterID(ctx context.Context) error {
+	clusterID, err := utils.GetClusterID(ctx, t.client, utils.ClusterVersionName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to get cluster id.",
+			slog.String("error", err.Error()))
+		return fmt.Errorf("failed to get cluster id: %s", err.Error())
+	}
+
+	t.object.Status.ClusterID = clusterID
+	return nil
+}
+
 func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
+
+	if t.object.Status.IngressHost == "" {
+		err = t.storeIngressDomain(ctx)
+		if err != nil {
+			return
+		}
+	}
+
+	if t.object.Status.ClusterID == "" {
+		err = t.storeClusterID(ctx)
+		if err != nil {
+			return
+		}
+	}
 
 	// Register with SMO (if necessary)
 	err = t.setupSmo(ctx)
@@ -898,7 +947,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		},
 	}
 
-	deploymentContainerArgs, err := utils.GetServerArgs(ctx, t.client, t.object, serverName)
+	deploymentContainerArgs, err := utils.GetServerArgs(t.object, serverName)
 	if err != nil {
 		err2 := t.updateORANO2ISMUsedConfigStatus(
 			ctx, serverName, deploymentContainerArgs,
@@ -914,17 +963,17 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	// Select the container image to use:
-	image := t.object.Spec.Image
-	if image == "" {
-		image = t.image
+	image := t.image
+	if t.object.Spec.Image != nil {
+		image = *t.object.Spec.Image
 	}
 
-	rbacProxyImage := t.object.Spec.KubeRbacProxyImage
+	rbacProxyImage := os.Getenv(utils.KubeRbacProxyImageName)
+	if t.object.Spec.KubeRbacProxyImage != nil {
+		rbacProxyImage = *t.object.Spec.KubeRbacProxyImage
+	}
 	if rbacProxyImage == "" {
-		rbacProxyImage = os.Getenv(utils.KubeRbacProxyImageName)
-		if rbacProxyImage == "" {
-			return "", fmt.Errorf("missing %s environment variable value", utils.KubeRbacProxyImageName)
-		}
+		return "", fmt.Errorf("missing %s environment variable value", utils.KubeRbacProxyImageName)
 	}
 
 	// Disable privilege escalation for the RBAC proxy
@@ -1098,7 +1147,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	ingressSpec := networkingv1.IngressSpec{
 		Rules: []networkingv1.IngressRule{
 			{
-				Host: t.object.Spec.IngressHost,
+				Host: t.object.Status.IngressHost,
 				IngressRuleValue: networkingv1.IngressRuleValue{
 					HTTP: &networkingv1.HTTPIngressRuleValue{
 						Paths: []networkingv1.HTTPIngressPath{

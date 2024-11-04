@@ -23,11 +23,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	openshiftv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,7 +43,14 @@ func TestInventoryControllerUtils(t *testing.T) {
 
 //nolint:unparam
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	return fake.NewClientBuilder().WithScheme(suitescheme).WithObjects(objs...).WithStatusSubresource(&inventoryv1alpha1.Inventory{}).Build()
+	suitescheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.IngressController{})
+
+	return fake.NewClientBuilder().
+		WithScheme(suitescheme).
+		WithObjects(objs...).
+		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
+		WithStatusSubresource(&openshiftv1.IngressController{}).
+		Build()
 }
 
 var _ = Describe("ExtensionUtils", func() {
@@ -79,15 +85,13 @@ var _ = Describe("ExtensionUtils", func() {
 				},
 			},
 		}
-		objs := []client.Object{Inventory}
-		fakeClient := getFakeClientFromObjects(objs...)
 
-		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
+		actualArgs, err := GetServerArgs(Inventory, InventoryDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
-			fmt.Sprintf("--cloud-id=%s", Inventory.Spec.CloudId),
-			fmt.Sprintf("--backend-url=%s", defaultBackendURL),
+			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
+			fmt.Sprintf("--backend-url=%s", defaultApiServerURL),
 			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
 		)
 		expectedArgs = append(expectedArgs,
@@ -107,15 +111,12 @@ var _ = Describe("ExtensionUtils", func() {
 			},
 		}
 
-		objs := []client.Object{Inventory}
-		fakeClient := getFakeClientFromObjects(objs...)
-
-		actualArgs, err := GetServerArgs(context.TODO(), fakeClient, Inventory, InventoryDeploymentManagerServerName)
+		actualArgs, err := GetServerArgs(Inventory, InventoryDeploymentManagerServerName)
 		Expect(err).ToNot(HaveOccurred())
 		expectedArgs := DeploymentManagerServerArgs
 		expectedArgs = append(expectedArgs,
-			fmt.Sprintf("--cloud-id=%s", Inventory.Spec.CloudId),
-			fmt.Sprintf("--backend-url=%s", defaultBackendURL),
+			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
+			fmt.Sprintf("--backend-url=%s", defaultApiServerURL),
 			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
 		)
 		Expect(actualArgs).To(Equal(expectedArgs))
@@ -266,193 +267,30 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	})
 })
 
-var _ = Describe("getACMNamespace", func() {
+var _ = Describe("GetIngressDomain", func() {
 
-	It("If multiclusterengine does not exist, return error", func() {
+	It("If ingress controller does not exist, return error", func() {
 		objs := []client.Object{}
 		fakeClient := getFakeClientFromObjects(objs...)
-		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
+		domain, err := GetIngressDomain(context.TODO(), fakeClient)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("multiclusterengine object not found"))
-		Expect(acmNamespace).To(Equal(""))
+		Expect(err.Error()).To(ContainSubstring("ingress controller object not found"))
+		Expect(domain).To(Equal(""))
 	})
 
-	It("If multiclusterengine exists without the expected labels, return error", func() {
-		u := &unstructured.Unstructured{}
-		u.Object = map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"name": "multiclusterengine",
-				"labels": map[string]interface{}{
-					"installer.name": "multiclusterhub",
-				},
-			},
-			"spec": map[string]interface{}{
-				"targetNamespace": "multicluster-engine",
-			},
-		}
+	It("If ingress controller with proper name", func() {
+		ingress := &openshiftv1.IngressController{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "default",
+				Namespace: "openshift-ingress-operator"},
+			Spec: openshiftv1.IngressControllerSpec{
+				Domain: "apps.example.com"}}
 
-		u.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "multicluster.openshift.io",
-			Kind:    "MultiClusterEngine",
-			Version: "v1",
-		})
-
-		objs := []client.Object{u}
+		objs := []client.Object{ingress}
 		fakeClient := getFakeClientFromObjects(objs...)
-		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
-		Expect(acmNamespace).To(Equal(""))
-	})
-
-	It("If multiclusterengine exists with the expected labels, return the ACM namespace", func() {
-		mce := &unstructured.Unstructured{}
-		mce.Object = map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"name": "multiclusterengine",
-				"labels": map[string]interface{}{
-					"installer.name":      "multiclusterhub",
-					"installer.namespace": "open-cluster-management",
-				},
-			},
-			"spec": map[string]interface{}{
-				"targetNamespace": "multicluster-engine",
-			},
-		}
-
-		mce.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "multicluster.openshift.io",
-			Kind:    "MultiClusterEngine",
-			Version: "v1",
-		})
-
-		objs := []client.Object{mce}
-		fakeClient := getFakeClientFromObjects(objs...)
-		acmNamespace, err := getACMNamespace(context.TODO(), fakeClient)
+		domain, err := GetIngressDomain(context.TODO(), fakeClient)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(acmNamespace).To(Equal("open-cluster-management"))
-	})
-})
-
-var _ = Describe("searchAPI", func() {
-	It("If there is an error in getACMNamespace, that error is returned", func() {
-		mce := &unstructured.Unstructured{}
-		mce.Object = map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"name": "multiclusterengine",
-				"labels": map[string]interface{}{
-					"installer.name": "multiclusterhub",
-				},
-			},
-			"spec": map[string]interface{}{
-				"targetNamespace": "multicluster-engine",
-			},
-		}
-
-		mce.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "multicluster.openshift.io",
-			Kind:    "MultiClusterEngine",
-			Version: "v1",
-		})
-
-		Inventory := &inventoryv1alpha1.Inventory{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "oran-o2ims-sample-1",
-				Namespace: InventoryNamespace,
-			},
-			Spec: inventoryv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
-				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
-			},
-		}
-
-		objs := []client.Object{mce, Inventory}
-		fakeClient := getFakeClientFromObjects(objs...)
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("multiclusterengine labels do not contain the installer.namespace key"))
-		Expect(searchAPI).To(Equal(""))
-	})
-
-	It("If the ingress host does not have the expected format (containing .apps), error is returned", func() {
-		mce := &unstructured.Unstructured{}
-		mce.Object = map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"name": "multiclusterengine",
-				"labels": map[string]interface{}{
-					"installer.name":      "multiclusterhub",
-					"installer.namespace": "open-cluster-management",
-				},
-			},
-			"spec": map[string]interface{}{
-				"targetNamespace": "multicluster-engine",
-			},
-		}
-
-		mce.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "multicluster.openshift.io",
-			Kind:    "MultiClusterEngine",
-			Version: "v1",
-		})
-
-		Inventory := &inventoryv1alpha1.Inventory{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "oran-o2ims-sample-1",
-				Namespace: InventoryNamespace,
-			},
-			Spec: inventoryv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
-				IngressHost:                   "o2ims.app.lab.karmalabs.corp",
-			},
-		}
-
-		objs := []client.Object{mce, Inventory}
-		fakeClient := getFakeClientFromObjects(objs...)
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
-		Expect(searchAPI).To(BeEmpty())
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(
-			"the searchAPIBackendURL could not be obtained from the IngressHost. " +
-				"Directly specify the searchAPIBackendURL in the Inventory CR or update the IngressHost"))
-	})
-
-	It("The ingress host has the expected format (containing .apps) and the searchAPI is returned", func() {
-		mce := &unstructured.Unstructured{}
-		mce.Object = map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"name": "multiclusterengine",
-				"labels": map[string]interface{}{
-					"installer.name":      "multiclusterhub",
-					"installer.namespace": "open-cluster-management",
-				},
-			},
-			"spec": map[string]interface{}{
-				"targetNamespace": "multicluster-engine",
-			},
-		}
-
-		mce.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "multicluster.openshift.io",
-			Kind:    "MultiClusterEngine",
-			Version: "v1",
-		})
-
-		Inventory := &inventoryv1alpha1.Inventory{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "oran-o2ims-sample-1",
-				Namespace: InventoryNamespace,
-			},
-			Spec: inventoryv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
-				IngressHost:                   "o2ims.apps.lab.karmalabs.corp",
-			},
-		}
-
-		objs := []client.Object{mce, Inventory}
-		fakeClient := getFakeClientFromObjects(objs...)
-		searchAPI, err := getSearchAPI(context.TODO(), fakeClient, Inventory)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(searchAPI).To(Equal("https://search-api-open-cluster-management.apps.lab.karmalabs.corp"))
+		Expect(domain).To(Equal("apps.example.com"))
 	})
 })
 

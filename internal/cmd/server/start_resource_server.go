@@ -235,15 +235,14 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	if err := c.createResourceHandler(
 		ctx,
 		transportWrapper, router,
-		cloudID, backendURL, backendToken, extensions); err != nil {
+		backendURL, backendToken, extensions); err != nil {
 		return err
 	}
 
 	// Create the handlers for resource types:
-	if err := c.createResourceTypeHandler(
-		ctx,
+	if err := c.createResourceTypeHandler(ctx,
 		transportWrapper, router,
-		cloudID, backendURL, backendToken); err != nil {
+		backendURL, backendToken); err != nil {
 		return err
 	}
 
@@ -387,13 +386,12 @@ func (c *ResourceServerCommand) createResourceHandler(
 	ctx context.Context,
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
-	cloudID, backendURL, backendToken string, extensions []string) error {
+	backendURL, backendToken string, extensions []string) error {
 
 	// Create the handler:
 	handler, err := service.NewResourceHandler().
 		SetLogger(c.logger).
 		SetTransportWrapper(transportWrapper).
-		SetCloudID(cloudID).
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
 		SetExtensions(extensions...).
@@ -439,13 +437,12 @@ func (c *ResourceServerCommand) createResourceTypeHandler(
 	ctx context.Context,
 	transportWrapper func(http.RoundTripper) http.RoundTripper,
 	router *mux.Router,
-	cloudID, backendURL, backendToken string) error {
+	backendURL, backendToken string) error {
 
 	// Create the handler:
 	handler, err := service.NewResourceTypeHandler().
 		SetLogger(c.logger).
 		SetTransportWrapper(transportWrapper).
-		SetCloudID(cloudID).
 		SetBackendURL(backendURL).
 		SetBackendToken(backendToken).
 		SetGraphqlQuery(c.getGraphqlQuery()).

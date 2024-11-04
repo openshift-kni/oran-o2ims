@@ -2,6 +2,7 @@
 # used to generate the 'manifests/' directory in a bundle.
 resources:
 - bases/oran-o2ims.clusterserviceversion.yaml
+- ../crd
 - ../default
 - ../samples
 - ../scorecard

@@ -62,12 +62,23 @@ var (
 	}
 )
 
+// DefaultOCloudID defines the default Global O-Cloud ID to be used until the end user configures this value.
+const DefaultOCloudID = "undefined"
+
+// DefaultAppName defines the name prepended to the ingress host to form our FQDN hostname.
+const DefaultAppName = "o2ims"
+
+// DefaultInventoryCR defines the name used for the default Inventory CR instance.
+const DefaultInventoryCR = "default"
+
 // Default values for backend URL and token:
 const (
-	defaultBackendURL       = "https://kubernetes.default.svc"
+	defaultApiServerURL     = "https://kubernetes.default.svc"
+	defaultSearchApiURL     = "https://search-search-api.open-cluster-management.svc.cluster.local:4010"
 	defaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
 	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
 	defaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
+	defaultNamespaceFile    = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
 // Default timeout values

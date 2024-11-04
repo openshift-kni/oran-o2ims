@@ -27,14 +27,16 @@ import (
 type CloudInfoHandlerBuilder struct {
 	logger          *slog.Logger
 	cloudID         string
+	globalCloudID   string
 	externalAddress string
 }
 
-// RootHander knows how to respond to requests for the application root. Don't create instances of
+// CloudInfoHandler knows how to respond to requests for the application endpoints. Don't create instances of
 // this type directly, use the NewCloudInfoHandler function instead.
 type CloudInfoHandler struct {
 	logger          *slog.Logger
 	cloudID         string
+	globalCloudID   string
 	externalAddress string
 }
 
@@ -56,6 +58,12 @@ func (b *CloudInfoHandlerBuilder) SetCloudID(value string) *CloudInfoHandlerBuil
 	return b
 }
 
+// SetGlobalCloudID sets the global identifier of the O-Cloud of this handler. This is mandatory.
+func (b *CloudInfoHandlerBuilder) SetGlobalCloudID(value string) *CloudInfoHandlerBuilder {
+	b.globalCloudID = value
+	return b
+}
+
 // SetExternalAddress set the URL of the service as seen by external users.
 func (b *CloudInfoHandlerBuilder) SetExternalAddress(value string) *CloudInfoHandlerBuilder {
 	b.externalAddress = value
@@ -73,11 +81,16 @@ func (b *CloudInfoHandlerBuilder) Build() (result *CloudInfoHandler, err error) 
 		err = errors.New("cloud identifier is mandatory")
 		return
 	}
+	if b.globalCloudID == "" {
+		err = errors.New("global cloud identifier is mandatory")
+		return
+	}
 
 	// Create and populate the object:
 	result = &CloudInfoHandler{
 		logger:          b.logger,
 		cloudID:         b.cloudID,
+		globalCloudID:   b.globalCloudID,
 		externalAddress: b.externalAddress,
 	}
 	return
@@ -89,7 +102,7 @@ func (h *CloudInfoHandler) Get(ctx context.Context, request *GetRequest) (respon
 	response = &GetResponse{
 		Object: data.Object{
 			"oCloudId":      h.cloudID,
-			"globalCloudId": h.cloudID,
+			"globalCloudId": h.globalCloudID,
 			"name":          "OpenShift O-Cloud",
 			"description":   "OpenShift O-Cloud",
 			"serviceUri":    h.externalAddress,

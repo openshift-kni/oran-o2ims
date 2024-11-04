@@ -36,7 +36,7 @@ import (
 type AlarmNotificationHandlerBuilder struct {
 	logger                     *slog.Logger
 	loggingWrapper             func(http.RoundTripper) http.RoundTripper
-	cloudID                    string
+	globalCloudID              string
 	kubeClient                 *k8s.Client
 	o2imsNamespace             string
 	subscriptionsConfigmapName string
@@ -54,7 +54,7 @@ type alarmSubIdSet map[string]struct{}
 type AlarmNotificationHandler struct {
 	logger            *slog.Logger
 	loggingWrapper    func(http.RoundTripper) http.RoundTripper
-	cloudID           string
+	globalCloudID     string
 	jsonAPI           jsoniter.API
 	selectorEvaluator *search.SelectorEvaluator
 	jqTool            *jq.Tool
@@ -89,10 +89,10 @@ func (b *AlarmNotificationHandlerBuilder) SetLoggingWrapper(
 	return b
 }
 
-// SetCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
-func (b *AlarmNotificationHandlerBuilder) SetCloudID(
+// SetGlobalCloudID sets the identifier of the O-Cloud of this handler. This is mandatory.
+func (b *AlarmNotificationHandlerBuilder) SetGlobalCloudID(
 	value string) *AlarmNotificationHandlerBuilder {
-	b.cloudID = value
+	b.globalCloudID = value
 	return b
 }
 
@@ -141,8 +141,8 @@ func (b *AlarmNotificationHandlerBuilder) Build(ctx context.Context) (
 		err = errors.New("logger is mandatory")
 		return
 	}
-	if b.cloudID == "" {
-		err = errors.New("cloud identifier is mandatory")
+	if b.globalCloudID == "" {
+		err = errors.New("global cloud identifier is mandatory")
 		return
 	}
 
@@ -226,7 +226,7 @@ func (b *AlarmNotificationHandlerBuilder) Build(ctx context.Context) (
 	handler := &AlarmNotificationHandler{
 		logger:                    b.logger,
 		loggingWrapper:            b.loggingWrapper,
-		cloudID:                   b.cloudID,
+		globalCloudID:             b.globalCloudID,
 		selectorEvaluator:         selectorEvaluator,
 		jsonAPI:                   jsonAPI,
 		jqTool:                    jqTool,
@@ -240,7 +240,7 @@ func (b *AlarmNotificationHandlerBuilder) Build(ctx context.Context) (
 
 	b.logger.Debug(
 		"AlarmNotificationHandler build:",
-		"CloudID", b.cloudID,
+		"CloudID", b.globalCloudID,
 	)
 
 	b.logger.Debug(

@@ -51,7 +51,7 @@ var _ = Describe("Subscription handler", func() {
 		It("Needs a subscription type", func() {
 			handler, err := NewSubscriptionHandler().
 				SetLogger(logger).
-				SetCloudID("123").
+				SetGlobalCloudID("123").
 				SetKubeClient(fakeClient).
 				SetConfigmapName(DefaultInfraInventoryConfigmapName).
 				SetNamespace(DefaultNamespace).
@@ -70,7 +70,7 @@ var _ = Describe("Subscription handler", func() {
 
 		It("Can't be created without a logger", func() {
 			handler, err := NewSubscriptionHandler().
-				SetCloudID("123").
+				SetGlobalCloudID("123").
 				SetKubeClient(fakeClient).
 				SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
 				Build(ctx)
@@ -151,7 +151,7 @@ var _ = Describe("Subscription handler", func() {
 				// Create the handler:
 				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
-					SetCloudID("123").
+					SetGlobalCloudID("123").
 					SetKubeClient(fakeClient).
 					SetSubscriptionIdString(SubscriptionIdAlarm).
 					SetConfigmapName(DefaultAlarmConfigmapName).
@@ -173,7 +173,7 @@ var _ = Describe("Subscription handler", func() {
 				// Create the handler:
 				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
-					SetCloudID("123").
+					SetGlobalCloudID("123").
 					SetKubeClient(fakeClient).
 					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
 					SetConfigmapName(DefaultInfraInventoryConfigmapName).
@@ -242,7 +242,7 @@ var _ = Describe("Subscription handler", func() {
 				// Create the handler:
 				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
-					SetCloudID("123").
+					SetGlobalCloudID("123").
 					SetKubeClient(fakeClient).
 					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
 					SetConfigmapName(DefaultInfraInventoryConfigmapName).
@@ -267,7 +267,7 @@ var _ = Describe("Subscription handler", func() {
 				// Create the handler:
 				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
-					SetCloudID("123").
+					SetGlobalCloudID("123").
 					SetKubeClient(fakeClient).
 					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
 					SetConfigmapName(DefaultInfraInventoryConfigmapName).
@@ -309,7 +309,7 @@ var _ = Describe("Subscription handler", func() {
 				// Create the handler:
 				handler, err := NewSubscriptionHandler().
 					SetLogger(logger).
-					SetCloudID("123").
+					SetGlobalCloudID("123").
 					SetKubeClient(fakeClient).
 					SetSubscriptionIdString(SubscriptionIdInfrastructureInventory).
 					SetConfigmapName(DefaultInfraInventoryConfigmapName).

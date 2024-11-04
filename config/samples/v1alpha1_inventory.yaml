@@ -10,7 +10,7 @@ metadata:
   name: sample
   namespace: oran-o2ims
 spec:
-  cloudId: f7fd171f-57b5-4a17-b176-9a73bf6064a4
+  cloudID: f7fd171f-57b5-4a17-b176-9a73bf6064a4
   ingressHost: o2ims.apps.global-hub.karmalabs.corp
   resourceServerConfig:
     enabled: false

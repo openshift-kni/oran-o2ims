@@ -19,6 +19,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	openshiftv1 "github.com/openshift/api/config/v1"
+	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -114,6 +115,7 @@ func init() {
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	utilruntime.Must(openshiftv1.AddToScheme(scheme))
+	utilruntime.Must(openshiftoperatorv1.AddToScheme(scheme))
 	utilruntime.Must(ibguv1alpha1.AddToScheme(scheme))
 }
 
@@ -181,6 +183,27 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
+	}
+
+	// Determine our current namespace
+	namespace, err := utils.ReadDefaultNamespace()
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to read current namespace",
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Create the default inventory CR
+	err = utils.CreateDefaultInventoryCR(ctx, mgr.GetClient(), namespace)
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to create default inventory CR",
+			slog.String("error", err.Error()),
+		)
 	}
 
 	// Start the O2IMS controller.

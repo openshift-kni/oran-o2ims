@@ -34,7 +34,6 @@ var _ = Describe("Resource handler", func() {
 	Describe("Creation", func() {
 		It("Can't be created without a logger", func() {
 			handler, err := NewResourceHandler().
-				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
 				SetBackendToken("my-token").
 				Build()
@@ -45,23 +44,9 @@ var _ = Describe("Resource handler", func() {
 			Expect(msg).To(ContainSubstring("mandatory"))
 		})
 
-		It("Can't be created without a cloud identifier", func() {
-			handler, err := NewResourceHandler().
-				SetLogger(logger).
-				SetBackendURL("https://my-backend:6443").
-				SetBackendToken("my-token").
-				Build()
-			Expect(err).To(HaveOccurred())
-			Expect(handler).To(BeNil())
-			msg := err.Error()
-			Expect(msg).To(ContainSubstring("cloud identifier"))
-			Expect(msg).To(ContainSubstring("mandatory"))
-		})
-
 		It("Can't be created without a backend URL", func() {
 			handler, err := NewResourceHandler().
 				SetLogger(logger).
-				SetCloudID("123").
 				SetBackendToken("my-token").
 				Build()
 			Expect(err).To(HaveOccurred())
@@ -74,7 +59,6 @@ var _ = Describe("Resource handler", func() {
 		It("Can't be created without a backend token", func() {
 			handler, err := NewResourceHandler().
 				SetLogger(logger).
-				SetCloudID("123").
 				SetBackendURL("https://my-backend:6443").
 				Build()
 			Expect(err).To(HaveOccurred())
@@ -104,7 +88,6 @@ var _ = Describe("Resource handler", func() {
 			// Create the handler:
 			handler, err = NewResourceHandler().
 				SetLogger(logger).
-				SetCloudID("123").
 				SetBackendURL(backend.URL()).
 				SetBackendToken("my-token").
 				SetGraphqlQuery(text.Dedent(`
@@ -384,7 +367,6 @@ var _ = Describe("Resource handler", func() {
 				// Create the handler:
 				handler, err := NewResourceHandler().
 					SetLogger(logger).
-					SetCloudID("123").
 					SetBackendURL(backend.URL()).
 					SetBackendToken("my-token").
 					SetGraphqlQuery(text.Dedent(`
