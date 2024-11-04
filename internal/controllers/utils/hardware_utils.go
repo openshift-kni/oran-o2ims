@@ -108,14 +108,15 @@ func getBootInterfaceLabel(nodePool *hwv1alpha1.NodePool) (string, error) {
 func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, nodePool *hwv1alpha1.NodePool) (string, error) {
 	// Get the boot interface label from annotation
 	bootIfaceLabel, err := getBootInterfaceLabel(nodePool)
-	if err == nil {
-		for _, iface := range interfaces {
-			if iface.Label == bootIfaceLabel {
-				return iface.MACAddress, nil
-			}
+	if err != nil {
+		return "", fmt.Errorf("error getting boot interface label: %w", err)
+	}
+	for _, iface := range interfaces {
+		if iface.Label == bootIfaceLabel {
+			return iface.MACAddress, nil
 		}
 	}
-	return "", fmt.Errorf("no boot interface found: %w", err)
+	return "", fmt.Errorf("no boot interface found; missing interface with label %q", bootIfaceLabel)
 }
 
 // CollectNodeDetails collects BMC and node interfaces details
