@@ -141,10 +141,30 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 		return fmt.Errorf("failed to copy BMC secret: %w", err)
 	}
 
-	if err := t.applyNodeConfiguration(ctx, hwNodes, nodePool, clusterInstance); err != nil {
-		return fmt.Errorf("failed to apply node config to the cluster instance: %w", err)
+	configErr := t.applyNodeConfiguration(ctx, hwNodes, nodePool, clusterInstance)
+	if configErr != nil {
+		msg := "Failed to apply node configuration to the rendered ClusterInstance: " + configErr.Error()
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.PRconditionTypes.HardwareNodeConfigApplied,
+			utils.CRconditionReasons.NotApplied,
+			metav1.ConditionFalse,
+			msg)
+		utils.SetProvisioningStateFailed(t.object, msg)
+	} else {
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.PRconditionTypes.HardwareNodeConfigApplied,
+			utils.CRconditionReasons.Completed,
+			metav1.ConditionTrue,
+			"Node configuration has been applied to the rendered ClusterInstance")
 	}
 
+	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
+	}
+
+	if configErr != nil {
+		return fmt.Errorf("failed to apply node configuration for NodePool %s: %w", nodePool.GetName(), err)
+	}
 	return nil
 }
 

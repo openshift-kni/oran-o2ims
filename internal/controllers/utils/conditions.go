@@ -20,27 +20,29 @@ var CTconditionTypes = struct {
 
 // The following constants define the different types of conditions that will be set for ProvisioningRequest
 var PRconditionTypes = struct {
-	Validated                ConditionType
-	HardwareTemplateRendered ConditionType
-	HardwareProvisioned      ConditionType
-	HardwareConfigured       ConditionType
-	ClusterInstanceRendered  ConditionType
-	ClusterResourcesCreated  ConditionType
-	ClusterInstanceProcessed ConditionType
-	ClusterProvisioned       ConditionType
-	ConfigurationApplied     ConditionType
-	UpgradeCompleted         ConditionType
+	Validated                 ConditionType
+	HardwareTemplateRendered  ConditionType
+	HardwareProvisioned       ConditionType
+	HardwareNodeConfigApplied ConditionType
+	HardwareConfigured        ConditionType
+	ClusterInstanceRendered   ConditionType
+	ClusterResourcesCreated   ConditionType
+	ClusterInstanceProcessed  ConditionType
+	ClusterProvisioned        ConditionType
+	ConfigurationApplied      ConditionType
+	UpgradeCompleted          ConditionType
 }{
-	Validated:                "ProvisioningRequestValidated",
-	HardwareTemplateRendered: "HardwareTemplateRendered",
-	HardwareProvisioned:      "HardwareProvisioned",
-	HardwareConfigured:       "HardwareConfigured",
-	ClusterInstanceRendered:  "ClusterInstanceRendered",
-	ClusterResourcesCreated:  "ClusterResourcesCreated",
-	ClusterInstanceProcessed: "ClusterInstanceProcessed",
-	ClusterProvisioned:       "ClusterProvisioned",
-	ConfigurationApplied:     "ConfigurationApplied",
-	UpgradeCompleted:         "UpgradeCompleted",
+	Validated:                 "ProvisioningRequestValidated",
+	HardwareTemplateRendered:  "HardwareTemplateRendered",
+	HardwareProvisioned:       "HardwareProvisioned",
+	HardwareNodeConfigApplied: "HardwareNodeConfigApplied",
+	HardwareConfigured:        "HardwareConfigured",
+	ClusterInstanceRendered:   "ClusterInstanceRendered",
+	ClusterResourcesCreated:   "ClusterResourcesCreated",
+	ClusterInstanceProcessed:  "ClusterInstanceProcessed",
+	ClusterProvisioned:        "ClusterProvisioned",
+	ConfigurationApplied:      "ConfigurationApplied",
+	UpgradeCompleted:          "UpgradeCompleted",
 }
 
 // ConditionReason is a string representing the condition's reason

@@ -495,6 +495,63 @@ key: value`,
 		Expect(err.Error()).To(ContainSubstring("the value of key"))
 	})
 
+	It("should return validation error message for missing interface label in configmap template data", func() {
+		// Create a ConfigMap with invalid data YAML
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+nodes:
+- hostname: "node1"
+  nodeNetwork:
+    interfaces:
+    - name: "eno1"
+`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := validateConfigmapReference[map[string]any](
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterInstallationTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("'label' is missing for interface"))
+	})
+
+	It("should return validation error message for an empty interface label in configmap template data", func() {
+		// Create a ConfigMap with invalid data YAML
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+nodes:
+- hostname: "node1"
+  nodeNetwork:
+    interfaces:
+    - name: "eno1"
+      label: ""
+`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := validateConfigmapReference[map[string]any](
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterInstallationTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("'label' is empty for interface"))
+	})
+
 	It("should return validation error message for invalid timeout value in configmap", func() {
 		// Create a ConfigMap with non-integer string
 		cm := &corev1.ConfigMap{
