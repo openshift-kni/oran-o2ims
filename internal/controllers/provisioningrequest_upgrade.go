@@ -94,6 +94,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 			metav1.ConditionFalse,
 			"Upgrade is initiated",
 		)
+		utils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is initiated")
 		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 			return requeueWithError(fmt.Errorf("failed to update ClusterRequest CR status: %w", err))
 		}
@@ -103,6 +104,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 	}
 
 	if isIBGUProgressing(ibgu) {
+		utils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is in progress")
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			utils.PRconditionTypes.UpgradeCompleted,
 			utils.CRconditionReasons.InProgress,
@@ -121,6 +123,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 		// IBGU completed or failed. Collect results if it matches the current template ocp version
 		if clusterTemplate.Spec.Release == ibgu.Spec.IBUSpec.SeedImageRef.Version {
 			if failed, message := isIBGUFailed(ibgu); failed {
+				utils.SetProvisioningStateFailed(t.object, "Cluster upgrade is failed")
 				utils.SetStatusCondition(&t.object.Status.Conditions,
 					utils.PRconditionTypes.UpgradeCompleted,
 					utils.CRconditionReasons.Failed,
@@ -128,6 +131,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 					message,
 				)
 			} else {
+				utils.SetProvisioningStateFulfilled(t.object)
 				utils.SetStatusCondition(&t.object.Status.Conditions,
 					utils.PRconditionTypes.UpgradeCompleted,
 					utils.CRconditionReasons.Completed,

@@ -263,6 +263,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 func validateUpgradeDefaultsConfigmap(
 	ctx context.Context, c client.Client, name, namespace, key string,
 ) error {
+
 	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, key, "name", "name", namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
@@ -275,6 +276,23 @@ func validateUpgradeDefaultsConfigmap(
 			return fmt.Errorf("failed to create IBGU: %w", err)
 		}
 		return utils.NewInputError(err.Error())
+	}
+	existingConfigmap, err := utils.GetConfigmap(ctx, c, name, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigmapReference: %w", err)
+	}
+	// Check if the configmap is set to mutable
+	if existingConfigmap.Immutable != nil && !*existingConfigmap.Immutable {
+		return utils.NewInputError("It is not allowed to set Immutable to false in the ConfigMap %s", name)
+	} else if existingConfigmap.Immutable == nil {
+		// Patch the validated ConfigMap to make it immutable if not already set
+		immutable := true
+		newConfigmap := existingConfigmap.DeepCopy()
+		newConfigmap.Immutable = &immutable
+
+		if err := utils.CreateK8sCR(ctx, c, newConfigmap, nil, utils.PATCH); err != nil {
+			return fmt.Errorf("failed to patch ConfigMap as immutable: %w", err)
+		}
 	}
 	return nil
 }
