@@ -58,7 +58,7 @@ spec:
                   with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
                   a non-public CA certificate.
                 type: string
-              cloudId:
+              cloudID:
                 description: CloudID is the global cloud ID value used to correlate
                   the SMO inventory record with the deployed cloud instance.
                 type: string

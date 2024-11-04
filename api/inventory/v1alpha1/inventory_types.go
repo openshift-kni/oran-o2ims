@@ -140,8 +140,8 @@ type InventorySpec struct {
 	KubeRbacProxyImage *string `json:"kubeRbacProxyImage"`
 	// CloudID is the global cloud ID value used to correlate the SMO inventory record with the deployed cloud instance.
 	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud Id",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	CloudID *string `json:"cloudId"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	CloudID *string `json:"cloudID"`
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Metadata Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	MetadataServerConfig MetadataServerConfig `json:"metadataServerConfig"`

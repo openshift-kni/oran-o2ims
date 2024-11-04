@@ -121,8 +121,8 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: CloudID is the global cloud ID value used to correlate the SMO
           inventory record with the deployed cloud instance.
-        displayName: Cloud Id
-        path: cloudId
+        displayName: Cloud ID
+        path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Deployment Manager Server Configuration
