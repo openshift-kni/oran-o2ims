@@ -129,7 +129,7 @@ defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
-					"hwMgrId":                      utils.UnitTestHwmgrID,
+					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
 - name: master
@@ -208,6 +208,25 @@ defaultHugepagesSize: "1G"`,
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
 				Namespace: utils.UnitTestHwmgrNamespace,
+				Annotations: map[string]string{
+					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+				},
+			},
+			Spec: hwv1alpha1.NodePoolSpec{
+				HwMgrId: utils.UnitTestHwmgrID,
+				NodeGroup: []hwv1alpha1.NodeGroup{
+					{
+						Name:       "master",
+						HwProfile:  "profile-spr-single-processor-64G",
+						Size:       1,
+						Interfaces: []string{"eno1", "eth0", "eth1"},
+					},
+					{
+						Name:      "worker",
+						HwProfile: "profile-spr-dual-processor-128G",
+						Size:      0,
+					},
+				},
 			},
 			Status: hwv1alpha1.NodePoolStatus{
 				Conditions: []metav1.Condition{

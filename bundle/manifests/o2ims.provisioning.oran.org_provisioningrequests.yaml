@@ -181,6 +181,11 @@ spec:
               nodePoolRef:
                 description: NodePoolRef references to the NodePool.
                 properties:
+                  hardwareConfiguringCheckStart:
+                    description: Represents the timestamp of the first status check
+                      for hardware configuring
+                    format: date-time
+                    type: string
                   hardwareProvisioningCheckStart:
                     description: Represents the timestamp of the first status check
                       for hardware provisioning

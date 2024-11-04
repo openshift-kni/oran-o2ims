@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -88,6 +89,8 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
+					utils.HwTemplatePluginMgr:      "hwMgr",
+					utils.HwTemplateBootIfaceLabel: "label",
 					utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
@@ -319,6 +322,8 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Data: map[string]string{
+					utils.HwTemplatePluginMgr:      "hwMgr",
+					utils.HwTemplateBootIfaceLabel: "label",
 					utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
@@ -565,6 +570,81 @@ key: value`,
 		Expect(c.Get(ctx, client.ObjectKey{Name: configmapName, Namespace: namespace}, updatedCM)).To(Succeed())
 		Expect(updatedCM.Immutable).ToNot(BeNil())
 		Expect(*updatedCM.Immutable).To(BeTrue())
+	})
+
+	It("should return validation error message if the hardware template has invalid node group", func() {
+		// Define the hardware template config map
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+				utils.HwTemplateBootIfaceLabel: "bootable-interface",
+				utils.HwTemplateNodePool: `
+- name: master
+- name: worker
+  hwProfile: profile-spr-dual-processor-128G`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
+			ctx, c, configmapName, namespace,
+			utils.HwTemplateNodePool,
+			utils.HardwareProvisioningTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("missing 'hwProfile' in node-pools-data element at index"))
+	})
+
+	It("should return validation error message if the hardware template has an empty node group", func() {
+		// Define the hardware template config map
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+				utils.HwTemplateBootIfaceLabel: "bootable-interface",
+				utils.HwTemplateNodePool:       ``,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
+			ctx, c, configmapName, namespace,
+			utils.HwTemplateNodePool,
+			utils.HardwareProvisioningTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("required field 'node-pools-data' is empty"))
+	})
+
+	It("should return validation error message if the hardware template does not contain node pool data", func() {
+		// Define the hardware template config map
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
+				utils.HwTemplateBootIfaceLabel: "bootable-interface",
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
+			ctx, c, configmapName, namespace,
+			utils.HwTemplateNodePool,
+			utils.HardwareProvisioningTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(Equal(fmt.Sprintf(
+			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, utils.HwTemplateNodePool)))
 	})
 })
 

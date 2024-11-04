@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Interface describes an interface of a hardware server
 type Interface struct {
 	Name  string `json:"name"`  // The name of the network interface (e.g., eth0, ens33)
 	Label string `json:"label"` // The label of the interface
@@ -38,6 +39,7 @@ type NodeSpec struct {
 	HwProfile string `json:"hwProfile"`
 }
 
+// BMC describes BMC details of a hardware server
 type BMC struct {
 	// The Address contains the URL for accessing the BMC over the network.
 	Address string `json:"address,omitempty"`
@@ -58,6 +60,9 @@ type NodeStatus struct {
 
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Hostname string `json:"hostname,omitempty"`
+
+	//+operator-sdk:csv:customresourcedefinitions:type=status
+	HwProfile string `json:"hwProfile,omitempty"`
 
 	// Conditions represent the observations of the NodeStatus's current state.
 	// Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.

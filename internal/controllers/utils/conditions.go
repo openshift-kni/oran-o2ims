@@ -23,6 +23,7 @@ var PRconditionTypes = struct {
 	Validated                ConditionType
 	HardwareTemplateRendered ConditionType
 	HardwareProvisioned      ConditionType
+	HardwareConfigured       ConditionType
 	ClusterInstanceRendered  ConditionType
 	ClusterResourcesCreated  ConditionType
 	ClusterInstanceProcessed ConditionType
@@ -33,6 +34,7 @@ var PRconditionTypes = struct {
 	Validated:                "ProvisioningRequestValidated",
 	HardwareTemplateRendered: "HardwareTemplateRendered",
 	HardwareProvisioned:      "HardwareProvisioned",
+	HardwareConfigured:       "HardwareConfigured",
 	ClusterInstanceRendered:  "ClusterInstanceRendered",
 	ClusterResourcesCreated:  "ClusterResourcesCreated",
 	ClusterInstanceProcessed: "ClusterInstanceProcessed",
@@ -106,6 +108,11 @@ func SetProvisioningStateFailed(cr *provisioningv1alpha1.ProvisioningRequest, me
 func SetProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) {
 	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateFulfilled
 	cr.Status.ProvisioningStatus.ProvisioningDetails = "Provisioning request has completed successfully"
+}
+
+// IsProvisioningStateFulfilled checks if the provisioning status is fulfilled
+func IsProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	return cr.Status.ProvisioningStatus.ProvisioningState == provisioningv1alpha1.StateFulfilled
 }
 
 // IsClusterProvisionPresent checks if the cluster provision condition is present
