@@ -418,6 +418,8 @@ func (r *ResourceHandler) mapNodeItem(ctx context.Context, // nolint: unparam
 		"extensions":     extensionsMap,
 		"resourcePoolId": resourcePoolId,
 		"globalAssetId":  globalAssetId,
+		// TODO: no direct mapping
+		"elements": []string{},
 	}
 	return
 }
