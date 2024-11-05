@@ -8,8 +8,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
+	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	lcav1 "github.com/openshift-kni/lifecycle-agent/api/imagebasedupgrade/v1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -1832,6 +1835,509 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason:  string(utils.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
+		})
+	})
+
+	Context("When handling upgrade", func() {
+		var (
+			managedCluster    *clusterv1.ManagedCluster
+			clusterInstance   *siteconfig.ClusterInstance
+			newReleaseVersion string
+		)
+
+		BeforeEach(func() {
+			newReleaseVersion = "4.16.3"
+			managedCluster = &clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"openshiftVersion": "4.16.0",
+					},
+				},
+				Spec: clusterv1.ManagedClusterSpec{
+					HubAcceptsClient: true,
+				},
+				Status: clusterv1.ManagedClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   clusterv1.ManagedClusterConditionAvailable,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   clusterv1.ManagedClusterConditionHubAccepted,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   clusterv1.ManagedClusterConditionJoined,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, managedCluster)).To(Succeed())
+			networkConfig := &v1beta1.NMStateConfigSpec{
+				NetConfig: v1beta1.NetConfig{
+					Raw: []byte(
+						`
+      dns-resolver:
+        config:
+          server:
+          - 192.0.2.22
+      interfaces:
+      - ipv4:
+          address:
+          - ip: 192.0.2.10
+            prefix-length: 24
+          - ip: 192.0.2.11
+            prefix-length: 24
+          - ip: 192.0.2.12
+            prefix-length: 24
+          dhcp: false
+          enabled: true
+        ipv6:
+          address:
+          - ip: 2001:db8:0:1::42
+            prefix-length: 32
+          - ip: 2001:db8:0:1::43
+            prefix-length: 32
+          - ip: 2001:db8:0:1::44
+            prefix-length: 32
+          dhcp: false
+          enabled: true
+        name: eno1
+        type: ethernet
+      - ipv6:
+          address:
+          - ip: 2001:db8:abcd:1234::1
+          enabled: true
+          link-aggregation:
+            mode: balance-rr
+            options:
+              miimon: '140'
+            slaves:
+            - eth0
+            - eth1
+          prefix-length: 64
+        name: bond99
+        state: up
+        type: bond
+      routes:
+        config:
+        - destination: 0.0.0.0/0
+          next-hop-address: 192.0.2.254
+          next-hop-interface: eno1
+          table-id: 254
+                    `,
+					),
+				},
+				Interfaces: []*v1beta1.Interface{
+					{Name: "eno1", MacAddress: "00:00:00:01:20:30"},
+					{Name: "eth0", MacAddress: "02:00:00:80:12:14"},
+					{Name: "eth1", MacAddress: "02:00:00:80:12:15"},
+				},
+			}
+			clusterInstance = &siteconfig.ClusterInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: "cluster-1",
+				},
+				Spec: siteconfig.ClusterInstanceSpec{
+					ClusterName:            "cluster-1",
+					ClusterImageSetNameRef: "4.16.0",
+					PullSecretRef: corev1.LocalObjectReference{
+						Name: "pull-secret",
+					},
+					BaseDomain: "example.com",
+					TemplateRefs: []siteconfig.TemplateRef{
+						{
+							Name:      "ai-cluster-templates-v1",
+							Namespace: "siteconfig-operator",
+						},
+					},
+					IngressVIPs: []string{
+						"192.0.2.4",
+					},
+					ApiVIPs: []string{
+						"192.0.2.2",
+					},
+					Nodes: []siteconfig.NodeSpec{
+						{
+							HostName: "node1",
+							TemplateRefs: []siteconfig.TemplateRef{{
+								Name: "ai-node-templates-v1", Namespace: "siteconfig-operator",
+							}},
+							BootMACAddress: "00:00:00:01:20:30",
+							BmcCredentialsName: siteconfig.BmcCredentialsName{
+								Name: "site-sno-du-1-bmc-secret",
+							},
+							IronicInspect:         "false",
+							Role:                  "master",
+							AutomatedCleaningMode: "disabled",
+							BootMode:              "UEFI",
+							NodeLabels:            map[string]string{"node-role.kubernetes.io/infra": "", "node-role.kubernetes.io/master": ""},
+							NodeNetwork:           networkConfig,
+							BmcAddress:            "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
+						},
+					},
+					ExtraAnnotations: map[string]map[string]string{
+						"AgentClusterInstall": {
+							"extra-annotation-key": "extra-annotation-value",
+						},
+					},
+					CPUPartitioning: siteconfig.CPUPartitioningNone,
+					MachineNetwork: []siteconfig.MachineNetworkEntry{
+						{
+							CIDR: "192.0.2.0/24",
+						},
+					},
+					AdditionalNTPSources: []string{
+						"NTP.server1",
+					},
+					NetworkType:  "OVNKubernetes",
+					SSHPublicKey: "ssh-rsa ",
+					ServiceNetwork: []siteconfig.ServiceNetworkEntry{
+						{
+							CIDR: "233.252.0.0/24",
+						},
+					},
+					ExtraLabels: map[string]map[string]string{
+						"AgentClusterInstall": {
+							"extra-label-key": "extra-label-value",
+						},
+						"ManagedCluster": {
+							"cluster-version": "v4.17",
+						},
+					},
+					HoldInstallation: true,
+				},
+			}
+			Expect(c.Create(ctx, clusterInstance)).To(Succeed())
+
+			upgradeDefaults := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "upgrade-defaults",
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.UpgradeDefaultsConfigmapKey: `
+    ibuSpec:
+      seedImageRef:
+        image: "image"
+        version: "4.16.3"
+      oadpContent:
+        - name: platform-backup-cm
+          namespace: openshift-adp
+    plan:
+      - actions: ["Prep"]
+        rolloutStrategy:
+          maxConcurrency: 1
+          timeout: 10
+      - actions: ["AbortOnFailure"]
+        rolloutStrategy:
+          maxConcurrency: 1
+          timeout: 5
+      - actions: ["Upgrade"]
+        rolloutStrategy:
+          maxConcurrency: 1
+          timeout: 30
+      - actions: ["AbortOnFailure"]
+        rolloutStrategy:
+          maxConcurrency: 1
+          timeout: 5
+      - actions: ["FinalizeUpgrade"]
+        rolloutStrategy:
+          maxConcurrency: 1
+          timeout: 5
+    `,
+				},
+			}
+			Expect(c.Create(ctx, upgradeDefaults)).To(Succeed())
+			clusterInstanceDefaultsV2 := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-instance-defaults-v2",
+					Namespace: ctNamespace,
+				},
+				Data: map[string]string{
+					utils.ClusterInstallationTimeoutConfigKey: "60s",
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+    clusterImageSetNameRef: "4.16.3"
+    pullSecretRef:
+      name: "pull-secret"
+    templateRefs:
+    - name: "ai-cluster-templates-v1"
+      namespace: "siteconfig-operator"
+    holdInstallation: true
+    nodes:
+    - hostname: "node1"
+      ironicInspect: "false"
+      templateRefs:
+      - name: "ai-node-templates-v1"
+        namespace: "siteconfig-operator"
+      nodeNetwork:
+        interfaces:
+        - name: eno1
+          label: bootable-interface
+        - name: eth0
+          label: base-interface
+        - name: eth1
+          label: data-interface
+    `,
+				},
+			}
+			Expect(c.Create(ctx, clusterInstanceDefaultsV2)).To(Succeed())
+
+			nodePool := &hwv1alpha1.NodePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: utils.UnitTestHwmgrNamespace,
+					Annotations: map[string]string{
+						utils.HwTemplateBootIfaceLabel: "label",
+					},
+				},
+				Spec: hwv1alpha1.NodePoolSpec{
+					HwMgrId: utils.UnitTestHwmgrID,
+					NodeGroup: []hwv1alpha1.NodeGroup{
+						{
+							Name:       "master",
+							HwProfile:  "profile-spr-single-processor-64G",
+							Size:       1,
+							Interfaces: []string{"eno1", "eth0", "eth1"},
+						},
+						{
+							Name:      "worker",
+							HwProfile: "profile-spr-dual-processor-128G",
+							Size:      0,
+						},
+					},
+				},
+				Status: hwv1alpha1.NodePoolStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(hwv1alpha1.Provisioned),
+							Status: metav1.ConditionTrue,
+							Reason: string(hwv1alpha1.Completed),
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
+
+			provisionedCond := metav1.Condition{
+				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(utils.CRconditionReasons.Completed),
+			}
+			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
+			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
+			cr.Status.ClusterDetails.Name = crName
+			cr.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			object := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, object)).To(Succeed())
+			object.Spec.TemplateVersion = "v3.0.0"
+			Expect(c.Update(ctx, object)).To(Succeed())
+
+			ctNew := &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      getClusterTemplateRefName(tName, object.Spec.TemplateVersion),
+					Namespace: ctNamespace,
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:       tName,
+					Version:    object.Spec.TemplateVersion,
+					Release:    newReleaseVersion,
+					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+					Templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: "cluster-instance-defaults-v2",
+						PolicyTemplateDefaults:  ptDefaultsCm,
+						HwTemplate:              hwTemplateCm,
+						UpgradeDefaults:         "upgrade-defaults",
+					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(utils.CTconditionTypes.Validated),
+							Reason: string(utils.CTconditionReasons.Completed),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, ctNew)).To(Succeed())
+		})
+
+		It("Creates ImageBasedUpgrade", func() {
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(requeueWithMediumInterval()))
+
+			// check ProvisioningRequest conditions
+			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
+				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.InProgress),
+				Message: "Upgrade is in progress",
+			})
+
+			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
+				provisioningv1alpha1.StateProgressing, "Cluster upgrade is in progress",
+				nil)
+
+			// check ClusterInstance fields
+			ci := &siteconfig.ClusterInstance{}
+			Expect(c.Get(ctx, types.NamespacedName{Namespace: "cluster-1", Name: "cluster-1"}, ci)).To(Succeed())
+
+			Expect(ci.Spec.ClusterImageSetNameRef).To(Equal(newReleaseVersion))
+			Expect(ci.Spec.SuppressedManifests).To(Equal(utils.CRDsToBeSuppressedForUpgrade))
+
+			// check IBGU fields
+			ibgu := &ibguv1alpha1.ImageBasedGroupUpgrade{}
+			Expect(c.Get(ctx, types.NamespacedName{Namespace: "cluster-1", Name: "cluster-1"}, ibgu)).To(Succeed())
+			Expect(ibgu.Spec.IBUSpec.SeedImageRef.Image).To(Equal("image"))
+			Expect(ibgu.Spec.IBUSpec.SeedImageRef.Version).To(Equal(newReleaseVersion))
+			Expect(len(ibgu.Spec.IBUSpec.OADPContent)).To(Equal(1))
+			Expect(len(ibgu.Spec.Plan)).To(Equal(5))
+		})
+
+		It("Checks IBGU is in progress", func() {
+
+			ibgu := &ibguv1alpha1.ImageBasedGroupUpgrade{ObjectMeta: metav1.ObjectMeta{
+				Name: "cluster-1", Namespace: "cluster-1",
+			}}
+			Expect(c.Create(ctx, ibgu)).To(Succeed())
+
+			clusterInstance.Spec.ClusterImageSetNameRef = newReleaseVersion
+			clusterInstance.Spec.SuppressedManifests = utils.CRDsToBeSuppressedForUpgrade
+			Expect(c.Update(ctx, clusterInstance)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(requeueWithMediumInterval()))
+
+			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
+				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.InProgress),
+				Message: "Upgrade is in progress",
+			})
+
+			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
+				provisioningv1alpha1.StateProgressing, "Cluster upgrade is in progress",
+				nil)
+
+			// checks SuppressedManifests are not wiped
+			ci := &siteconfig.ClusterInstance{}
+			Expect(c.Get(ctx, types.NamespacedName{Namespace: "cluster-1", Name: "cluster-1"}, ci)).To(Succeed())
+			Expect(ci.Spec.SuppressedManifests).To(Equal(utils.CRDsToBeSuppressedForUpgrade))
+		})
+
+		It("Checks IBGU is completed", func() {
+
+			ibgu := &ibguv1alpha1.ImageBasedGroupUpgrade{ObjectMeta: metav1.ObjectMeta{
+				Name: "cluster-1", Namespace: "cluster-1",
+			},
+				Spec: ibguv1alpha1.ImageBasedGroupUpgradeSpec{
+					IBUSpec: lcav1.ImageBasedUpgradeSpec{
+						SeedImageRef: lcav1.SeedImageRef{
+							Version: newReleaseVersion,
+						},
+					},
+				},
+				Status: ibguv1alpha1.ImageBasedGroupUpgradeStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   "Progressing",
+							Status: "False",
+						},
+					},
+				}}
+			Expect(c.Create(ctx, ibgu)).To(Succeed())
+
+			clusterInstance.Spec.ClusterImageSetNameRef = newReleaseVersion
+			clusterInstance.Spec.SuppressedManifests = utils.CRDsToBeSuppressedForUpgrade
+			Expect(c.Update(ctx, clusterInstance)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
+				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(utils.CRconditionReasons.Completed),
+				Message: "Upgrade is completed",
+			})
+
+			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
+				provisioningv1alpha1.StateFulfilled, "Provisioning request has completed successfully",
+				nil)
+			Expect(c.Get(ctx, types.NamespacedName{Namespace: "cluster-1", Name: "cluster-1"}, ibgu)).To(Not(Succeed()))
+		})
+		It("Checks IBGU is failed", func() {
+
+			ibgu := &ibguv1alpha1.ImageBasedGroupUpgrade{ObjectMeta: metav1.ObjectMeta{
+				Name: "cluster-1", Namespace: "cluster-1",
+			},
+				Spec: ibguv1alpha1.ImageBasedGroupUpgradeSpec{
+					IBUSpec: lcav1.ImageBasedUpgradeSpec{
+						SeedImageRef: lcav1.SeedImageRef{
+							Version: newReleaseVersion,
+						},
+					},
+				},
+				Status: ibguv1alpha1.ImageBasedGroupUpgradeStatus{
+					Clusters: []ibguv1alpha1.ClusterState{
+						{
+							Name: "cluster-1",
+							FailedActions: []ibguv1alpha1.ActionMessage{
+								{
+									Action:  "Prep",
+									Message: "pre-cache failed",
+								},
+							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   "Progressing",
+							Status: "False",
+						},
+					},
+				}}
+			Expect(c.Create(ctx, ibgu)).To(Succeed())
+
+			clusterInstance.Spec.ClusterImageSetNameRef = newReleaseVersion
+			clusterInstance.Spec.SuppressedManifests = utils.CRDsToBeSuppressedForUpgrade
+			Expect(c.Update(ctx, clusterInstance)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
+				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(utils.CRconditionReasons.Failed),
+				Message: "Upgrade Failed: Action Prep failed: pre-cache failed",
+			})
+
+			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
+				provisioningv1alpha1.StateFailed, "Cluster upgrade is failed",
+				nil)
 		})
 	})
 })

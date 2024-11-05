@@ -150,6 +150,10 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 		} else {
 			// Clean up IBGU and the condition if it doesn't match the current template ocp release version,
 			// i.e. the failed and revert case
+			t.logger.InfoContext(
+				ctx,
+				"IBGU is not progressing and cluster is not upgraded. Delete IBGU and UpgradeCompleted condition",
+			)
 			err := t.client.Delete(ctx, ibgu)
 			if err != nil {
 				return requeueWithError(fmt.Errorf("failed to cleanup IBGU: %w", err))
