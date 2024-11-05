@@ -1,0 +1,190 @@
+apiVersion: o2ims.provisioning.oran.org/v1alpha1
+kind: ClusterTemplate
+metadata:
+  name: sno-ran-du.v4-Y-Z-5
+  namespace: sno-ran-du-v4-Y-Z
+spec:
+  name: sno-ran-du
+  version: v4-Y-Z-5
+  release: 4.Y.Z
+  templates:
+    hwTemplate: placeholder-du-template-configmap-v2
+    clusterInstanceDefaults: clusterinstance-defaults-v4
+    policyTemplateDefaults: policytemplate-defaults-v2
+  templateParameterSchema:
+    properties:
+      nodeClusterName:
+        type: string
+      oCloudSiteId:
+        type: string
+      policyTemplateParameters:
+        description: policyTemplateSchema defines the available parameters for cluster configuration
+        properties:
+          sriov-network-vlan-1:
+            type: string
+          sriov-network-vlan-2:
+            type: string
+          sriov-network-pfNames-1:
+            type: string
+          sriov-network-pfNames-2:
+            type: string
+          cpu-isolated:
+            type: string
+          cpu-reserved:
+            type: string
+          hugepages-default:
+            type: string
+          hugepages-size:
+            type: string
+          hugepages-count:
+            type: string
+          install-plan-approval:
+            type: string
+        type: object
+      clusterInstanceParameters:
+        description: clusterInstanceParameters defines the available parameters for cluster provisioning
+        properties:
+          additionalNTPSources:
+            description: AdditionalNTPSources is a list of NTP sources (hostname
+              or IP) to be added to all cluster hosts. They are added to any NTP
+              sources that were configured through other means.
+            items:
+              type: string
+            type: array
+          apiVIPs:
+            description: APIVIPs are the virtual IPs used to reach the OpenShift
+              cluster's API. Enter one IP address for single-stack clusters, or
+              up to two for dual-stack clusters (at most one IP address per IP
+              stack used). The order of stacks should be the same as order of
+              subnets in Cluster Networks, Service Networks, and Machine Networks.
+            items:
+              type: string
+            maxItems: 2
+            type: array
+          baseDomain:
+            description: BaseDomain is the base domain to use for the deployed
+              cluster.
+            type: string
+          clusterName:
+            description: ClusterName is the name of the cluster.
+            type: string
+          extraAnnotations:
+            additionalProperties:
+              additionalProperties:
+                type: string
+              type: object
+            description: Additional cluster-wide annotations to be applied to
+              the rendered templates
+            type: object
+          extraLabels:
+            additionalProperties:
+              additionalProperties:
+                type: string
+              type: object
+            description: Additional cluster-wide labels to be applied to the rendered
+              templates
+            type: object
+          ingressVIPs:
+            description: IngressVIPs are the virtual IPs used for cluster ingress
+              traffic. Enter one IP address for single-stack clusters, or up to
+              two for dual-stack clusters (at most one IP address per IP stack
+              used). The order of stacks should be the same as order of subnets
+              in Cluster Networks, Service Networks, and Machine Networks.
+            items:
+              type: string
+            maxItems: 2
+            type: array
+          machineNetwork:
+            description: MachineNetwork is the list of IP address pools for machines.
+            items:
+              description: MachineNetworkEntry is a single IP address block for
+                node IP blocks.
+              properties:
+                cidr:
+                  description: CIDR is the IP block address pool for machines
+                    within the cluster.
+                  type: string
+              required:
+              - cidr
+              type: object
+            type: array
+          nodes:
+            items:
+              description: NodeSpec
+              properties:
+                extraAnnotations:
+                  additionalProperties:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  description: Additional node-level annotations to be applied
+                    to the rendered templates
+                  type: object
+                extraLabels:
+                  additionalProperties:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  description: Additional node-level labels to be applied to the
+                    rendered templates
+                  type: object
+                hostName:
+                  description: Hostname is the desired hostname for the host
+                  type: string
+                nodeLabels:
+                  additionalProperties:
+                    type: string
+                  description: NodeLabels allows the specification of custom roles
+                    for your nodes in your managed clusters. These are additional
+                    roles are not used by any OpenShift Container Platform components,
+                    only by the user. When you add a custom role, it can be associated
+                    with a custom machine config pool that references a specific
+                    configuration for that role. Adding custom labels or roles
+                    during installation makes the deployment process more effective
+                    and prevents the need for additional reboots after the installation
+                    is complete.
+                  type: object
+                nodeNetwork:
+                  description: NodeNetwork is a set of configurations pertaining
+                    to the network settings for the node.
+                  properties:
+                    config:
+                      description: yaml that can be processed by nmstate, using
+                        custom marshaling/unmarshaling that will allow to populate
+                        nmstate config as plain yaml.
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                  type: object
+              required:
+              - hostName
+              type: object
+            type: array
+          serviceNetwork:
+            description: ServiceNetwork is the list of IP address pools for services.
+            items:
+              description: ServiceNetworkEntry is a single IP address block for
+                node IP blocks.
+              properties:
+                cidr:
+                  description: CIDR is the IP block address pool for machines
+                    within the cluster.
+                  type: string
+              required:
+              - cidr
+              type: object
+            type: array
+          sshPublicKey:
+            description: SSHPublicKey is the public Secure Shell (SSH) key to
+              provide access to instances. This key will be added to the host
+              to allow ssh access
+            type: string
+        required:
+        - clusterName
+        - nodes
+        type: object
+    required:
+      - nodeClusterName
+      - oCloudSiteId
+      - policyTemplateParameters
+      - clusterInstanceParameters
+    type: object
