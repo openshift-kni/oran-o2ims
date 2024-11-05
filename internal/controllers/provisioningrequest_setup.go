@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,6 +35,14 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 			&provisioningv1alpha1.ProvisioningRequest{},
 			// Watch for create and update event for ProvisioningRequest.
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(
+			&corev1.Namespace{},
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc:  func(e event.UpdateEvent) bool { return false },
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
+			})).
 		Owns(
 			&ibgu.ImageBasedGroupUpgrade{},
 			builder.WithPredicates(predicate.Funcs{

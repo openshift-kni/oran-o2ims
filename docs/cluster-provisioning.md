@@ -327,6 +327,14 @@ data:
   clusterConfigurationTimeout: "40m"
 ```
 
+## Delete Provisioned Cluster
+Deleting the ProvisioningRequest CR initiates the deletion of a provisioned cluster. O-Cloud manager sets the ProvisioningState to `deleting`, ensuring that all dependent resources are fully cleaned up before completing the deletion.
+```console
+oc get oranpr sno1
+NAME      AGE   PROVISIONSTATE   PROVISIONDETAILS
+sno1      71m   deleting         Deletion is in progress
+```
+
 ## Monitoring Process
 To watch the O-Cloud Manager controller logs:
 ```console

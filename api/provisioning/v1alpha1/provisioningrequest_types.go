@@ -109,6 +109,12 @@ const (
 	// StateFailed means the provisioning process has failed at any stage, including resource validation
 	// and preparation prior to provisioning, hardware provisioning, cluster installation, or cluster configuration.
 	StateFailed ProvisioningState = "failed"
+
+	// StateDeleting indicates that the provisioning resources are in the process of being deleted.
+	// This state is set when the deletion process for the ProvisioningRequest and its resources
+	// has started, ensuring that all dependent resources are removed before finalizing the
+	// ProvisioningRequest deletion.
+	StateDeleting ProvisioningState = "deleting"
 )
 
 // ProvisionedResources contains the resources that were provisioned as part of the provisioning process.
@@ -119,7 +125,7 @@ type ProvisionedResources struct {
 
 type ProvisioningStatus struct {
 	// The current state of the provisioning process.
-	// +kubebuilder:validation:Enum=progressing;fulfilled;failed
+	// +kubebuilder:validation:Enum=progressing;fulfilled;failed;deleting
 	ProvisioningState ProvisioningState `json:"provisioningState,omitempty"`
 
 	// The details about the current state of the provisioning process.
