@@ -181,3 +181,9 @@ spec:
         - clusterName
         - nodes
         type: object
+    required:
+      - nodeClusterName
+      - oCloudSiteId
+      - policyTemplateParameters
+      - clusterInstanceParameters
+    type: object
