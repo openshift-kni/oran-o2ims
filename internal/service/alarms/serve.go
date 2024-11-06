@@ -15,6 +15,8 @@ import (
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 )
 
 func main() {
@@ -32,7 +34,28 @@ const (
 
 // Serve TODO: Call this func using cobra-cli from inside deployment CR.
 func Serve() {
-	// TODO: Init client-go
+	slog.Info("Starting Alarm server")
+
+	// Channel for shutdown signals
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		<-shutdown
+		cancel()
+	}()
+
+	// Get client for hub
+	hubClient, err := k8s_client.NewClientForHub()
+	if err != nil {
+		slog.Error("error creating client for hub", "error", err)
+		os.Exit(1)
+	}
+
+	alarmsDict := dictionary.New(hubClient)
+	alarmsDict.Load(ctx)
 
 	// TODO: Init DB client
 
@@ -78,9 +101,6 @@ func Serve() {
 
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)
-	// Channel for shutdown signals
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	// Start server
 	go func() {
@@ -94,7 +114,7 @@ func Serve() {
 	select {
 	case err := <-serverErrors:
 		slog.Error(fmt.Sprintf("error starting server: %s", err))
-	case sig := <-shutdown:
+	case sig := <-ctx.Done():
 		slog.Info(fmt.Sprintf("Shutdown signal received: %v", sig))
 		if err := gracefulShutdown(srv); err != nil {
 			slog.Error(fmt.Sprintf("graceful shutdown failed: %v", err))
