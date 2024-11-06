@@ -198,6 +198,10 @@ func (h *AlarmDefinitionHandler) mapItem(ctx context.Context,
 		"managementInterfaceId": "O2IMS",
 		"pkNotificationField":   "alarmDefinitionID",
 		"alarmAdditionalFields": alarmAdditionalFields,
+		// TODO: no direct mapping
+		"alarmLastChange": "",
+		"alarmChangeType": "",
+		"clearingType":    "",
 	}
 
 	return
