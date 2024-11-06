@@ -91,9 +91,6 @@ metadata:
             "site": "ottawa"
           },
           "status": {
-            "cloudManager": {
-              "observedGeneration": 1
-            },
             "conditions": [
               {
                 "lastTransitionTime": "2024-10-09T15:36:41Z",
@@ -867,8 +864,6 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
-      - displayName: Cloud Manager
-        path: cloudManager
       - description: |-
           Conditions represent the observations of the NodePool's current state.
           Possible values of the condition type are `Provisioned` and `Unknown`.

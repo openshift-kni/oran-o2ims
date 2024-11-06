@@ -257,7 +257,6 @@ func (in *NodePoolStatus) DeepCopyInto(out *NodePoolStatus) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	out.CloudManager = in.CloudManager
 	out.HwMgrPlugin = in.HwMgrPlugin
 }
 
