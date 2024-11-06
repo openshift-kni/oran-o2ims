@@ -775,21 +775,12 @@ func GetCertFromSecret(ctx context.Context, c client.Client, name, namespace str
 	return &cert, nil
 }
 
-// ReadDefaultNamespace reads the current namespace from the service account namespace file.
-func ReadDefaultNamespace() (string, error) {
-	namespaceBytes, err := os.ReadFile(defaultNamespaceFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to read default namespace from file '%s': %w", defaultNamespaceFile, err)
-	}
-	return string(namespaceBytes), nil
-}
-
 // CreateDefaultInventoryCR creates the default Inventory CR so that the system has running servers
-func CreateDefaultInventoryCR(ctx context.Context, c client.Client, namespace string) error {
+func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 	inventory := inventoryv1alpha1.Inventory{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DefaultInventoryCR,
-			Namespace: namespace,
+			Namespace: GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace),
 		},
 		Spec: inventoryv1alpha1.InventorySpec{
 			AlarmSubscriptionServerConfig: inventoryv1alpha1.AlarmSubscriptionServerConfig{

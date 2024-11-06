@@ -68,8 +68,12 @@ const DefaultOCloudID = "undefined"
 // DefaultAppName defines the name prepended to the ingress host to form our FQDN hostname.
 const DefaultAppName = "o2ims"
 
-// DefaultInventoryCR defines the name used for the default Inventory CR instance.
-const DefaultInventoryCR = "default"
+// Defines information related to the operator instance in a namespace
+const (
+	DefaultInventoryCR      = "default"
+	DefaultNamespace        = "oran-o2ims"
+	DefaultNamespaceEnvName = "OCLOUD_MANAGER_NAMESPACE"
+)
 
 // Default values for backend URL and token:
 const (
@@ -78,7 +82,6 @@ const (
 	defaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
 	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
 	defaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
-	defaultNamespaceFile    = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
 // Default timeout values
