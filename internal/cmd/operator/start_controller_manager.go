@@ -185,25 +185,15 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	// Determine our current namespace
-	namespace, err := utils.ReadDefaultNamespace()
-	if err != nil {
-		logger.ErrorContext(
-			ctx,
-			"Failed to read current namespace",
-			slog.String("error", err.Error()),
-		)
-		return exit.Error(1)
-	}
-
 	// Create the default inventory CR
-	err = utils.CreateDefaultInventoryCR(ctx, mgr.GetClient(), namespace)
+	err = utils.CreateDefaultInventoryCR(ctx, mgr.GetClient())
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to create default inventory CR",
 			slog.String("error", err.Error()),
 		)
+		return exit.Error(1)
 	}
 
 	// Start the O2IMS controller.
