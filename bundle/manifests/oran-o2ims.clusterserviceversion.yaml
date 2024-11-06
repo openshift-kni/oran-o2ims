@@ -156,7 +156,7 @@ metadata:
           "kind": "ClusterTemplate",
           "metadata": {
             "name": "clustertemplate-sample.v1.0.0",
-            "namespace": "clustertemplate-a-v4-16"
+            "namespace": "clustertemplate-a-v4-16-3"
           },
           "spec": {
             "characteristics": {
@@ -167,6 +167,7 @@ metadata:
               "apple": "23"
             },
             "name": "clustertemplate-a",
+            "release": "4.16.3",
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {
@@ -376,7 +377,8 @@ metadata:
             "templates": {
               "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
               "hwTemplate": "sample-hwtemplate-configmap-v1",
-              "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults"
+              "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults",
+              "upgradeDefaults": "upgrade-defaults-v1"
             },
             "version": "v1.0.0"
           },

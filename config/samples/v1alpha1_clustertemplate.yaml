@@ -2,11 +2,12 @@ apiVersion: o2ims.provisioning.oran.org/v1alpha1
 kind: ClusterTemplate
 metadata:
   name: clustertemplate-sample.v1.0.0
-  namespace: clustertemplate-a-v4-16
+  namespace: clustertemplate-a-v4-16-3
 spec:
   name: clustertemplate-a 
   description:   nice description
   version: v1.0.0
+  release: 4.16.3
   characteristics:
     age: "31"
   metadata:
@@ -15,6 +16,7 @@ spec:
     hwTemplate: sample-hwtemplate-configmap-v1
     clusterInstanceDefaults: clustertemplate-sample.v1.0.0-clusterinstance-defaults
     policyTemplateDefaults: clustertemplate-sample.v1.0.0-policytemplate-defaults
+    upgradeDefaults: upgrade-defaults-v1
   templateParameterSchema:
     properties:
       nodeClusterName:

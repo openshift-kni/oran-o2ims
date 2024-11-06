@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: policytemplate-defaults-v1
-  namespace: sno-ran-du-v4-Y-Z
+  namespace: sno-ran-du-v4-Y-Z+1
 data:
   # clusterConfigurationTimeout is optional.
   # The value should be a duration string

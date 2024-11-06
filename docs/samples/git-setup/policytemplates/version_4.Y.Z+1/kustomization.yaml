@@ -1,0 +1,6 @@
+generators:
+- sno-ran-du/sno-ran-du-pg-v4-Y-Z+1-v1.yaml
+
+resources:
+- sno-ran-du/ns.yaml
+- sno-ran-du/msc-binding.yaml

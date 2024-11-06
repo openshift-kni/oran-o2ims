@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clusterinstance-defaults-v1
+  namespace: sno-ran-du-v4-Y-Z+1
+data:
+  # clusterInstallationTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "80m" for 80 minutes)
+  # clusterInstallationTimeout: "80m"
+  clusterinstance-defaults: |
+    baseDomain: example.com
+    extraLabels:
+      ManagedCluster:
+        cluster-version: "v4-Y-Z+1"
+        sno-ran-du-policy: "v1"
+    clusterType: SNO
+    clusterImageSetNameRef: "4.Y.Z+1"
+    pullSecretRef:
+      name: pull-secret
+    networkType: OVNKubernetes
+    sshPublicKey: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTca4Qyu5AYBmZbSl74cNTKuNINJ7d+ceBRzKUrhHcQpMbl8UnAYhjh/ffTyVCsgwzm1RjTAm6/tPj9euEa+YX4U78Sx+ioLHmjDvACYsti4DekIR+opFwfIw+JTDXoyVv06lOPaTOa/vtgpe+gDEL364j47f3p9H/tGhsLmpjeG3DVAhbqSh3s0IHpd4OzF/r6g6mbPyHadvedkBZp/qeUX054Gc2QqJeg/s/eddPlQDJbmL8yRVkZu+SsFTOEOAtrdA3czeaEaA8s+aWP9PN3X539Ddw3qahyOSCXpCE2eJXPh8DJCBWVEcFFYgmIFVvCQ+o9cjEmIYg6drGGvRV
+    installConfigOverrides: '{"capabilities": {"baselineCapabilitySet": "None", "additionalEnabledCapabilities": ["NodeTuning", "OperatorLifecycleManager", "Ingress"]}}'
+    ignitionConfigOverride: '{"ignition": {"version": "3.2.0"}, "storage": {"files": [{"overwrite": true, "path": "/etc/containers/policy.json", "contents": {"source":"data:text/plain;base64,ewogICAgImRlZmF1bHQiOiBbCiAgICAgICAgewogICAgICAgICAgICAidHlwZSI6ICJpbnNlY3VyZUFjY2VwdEFueXRoaW5nIgogICAgICAgIH0KICAgIF0sCiAgICAidHJhbnNwb3J0cyI6CiAgICAgICAgewogICAgICAgICAgICAiZG9ja2VyLWRhZW1vbiI6CiAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgIiI6IFt7InR5cGUiOiJpbnNlY3VyZUFjY2VwdEFueXRoaW5nIn1dCiAgICAgICAgICAgICAgICB9CiAgICAgICAgfQp9Cgo="}}]}}'
+    clusterNetwork:
+      - cidr: 203.0.113.0/24
+        hostPrefix: 23
+    machineNetwork:
+      - cidr: 192.0.2.0/24
+    serviceNetwork:
+      - cidr: 233.252.0.0/24
+    additionalNTPSources:
+      - 1.pool.ntp.org
+    templateRefs:
+      - name: ai-cluster-templates-v1
+        namespace: siteconfig-operator
+    cpuPartitioningMode: AllNodes
+    extraManifestsRefs:
+      - name: clustertemplate-sample.v1.0.0-extramanifests
+    nodes:
+      - role: master
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: bootable-interface
+            - name: eth0
+              label: base-interface
+            - name: eth1
+              label: data-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: false
+                name: bond99
+                state: up
+                type: bond
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: siteconfig-operator

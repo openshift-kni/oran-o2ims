@@ -1,16 +1,17 @@
 apiVersion: o2ims.provisioning.oran.org/v1alpha1
 kind: ClusterTemplate
 metadata:
-  name: sno-ran-du.v4-Y-Z-1
-  namespace: sno-ran-du-v4-Y-Z
+  name: sno-ran-du.v4-Y-Z+1-2
+  namespace: sno-ran-du-v4-Y-Z+1
 spec:
   name: sno-ran-du
-  version: v4-Y-Z-1
-  release: 4.Y.Z
+  version: v4-Y-Z+1-2
+  release: 4.Y.Z+1
   templates:
     hwTemplate: placeholder-du-template-configmap-v1
     clusterInstanceDefaults: clusterinstance-defaults-v1
     policyTemplateDefaults: policytemplate-defaults-v1
+    upgradeDefaults: upgrade-defaults-v1
   templateParameterSchema:
     properties:
       nodeClusterName:
