@@ -78,6 +78,9 @@ var _ = Describe("Alarm definition handler", func() {
 					Expect(item).To(HaveKey("managementInterfaceId"))
 					Expect(item).To(HaveKey("pkNotificationField"))
 					Expect(item).To(HaveKey("alarmAdditionalFields"))
+					Expect(item).To(HaveKey("alarmLastChange"))
+					Expect(item).To(HaveKey("alarmChangeType"))
+					Expect(item).To(HaveKey("clearingType"))
 				}
 			})
 
