@@ -1,0 +1,30 @@
+---
+global:
+  resolve_timeout: 5m
+route:
+  group_wait: 30s
+  group_interval: 1m
+  repeat_interval: 4h
+  # Default receiver - Alerts without cluster identifier label will still be sent to this receiver
+  receiver: oran_alarm_receiver
+  routes:
+  # Route to skip alerts
+  - receiver: "null"
+    matchers:
+      # Always firing alert to verify alertmanager is working
+      - Watchdog
+  - receiver: oran_alarm_receiver
+    group_by:
+      # This label is guaranteed to be present in all alerts
+      - managed_cluster
+    matchers:
+      # Match alerts with a non-empty managed_cluster label
+      - managed_cluster=~".+"
+receivers:
+  - name: oran_alarm_receiver
+    webhook_configs:
+    - send_resolved: true
+      # Hardcoded 8080 port (same as http server)
+      # TODO: delete port from url once we have a proper k8s service
+      url: http://alarm-server.oran-o2ims.svc.cluster.local:8080/internal/v1/caas-alerts/alertmanager
+  - name: "null"

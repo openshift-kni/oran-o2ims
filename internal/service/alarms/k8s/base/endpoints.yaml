@@ -1,0 +1,9 @@
+---
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: alarm-server
+subsets:
+  - addresses:
+      # Change me
+      - ip: 0.0.0.0

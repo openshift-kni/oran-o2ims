@@ -1,0 +1,4 @@
+namespace: oran-o2ims
+resources:
+  - service.yaml
+  - endpoints.yaml
