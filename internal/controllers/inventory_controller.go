@@ -48,8 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-//+kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searches,verbs=get
-//+kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searches/allManagedData,verbs=get
+//+kubebuilder:rbac:groups=view.open-cluster-management.io,resources=managedclusterviews,verbs=create
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
@@ -818,14 +817,13 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"search.open-cluster-management.io",
+					"view.open-cluster-management.io",
 				},
 				Resources: []string{
-					"searches",
-					"searches/allManagedData",
+					"managedclusterviews",
 				},
 				Verbs: []string{
-					"get",
+					"create",
 				},
 			},
 			{
