@@ -40,13 +40,6 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodePool(ctx context.C
 			return fmt.Errorf("failed to patch NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
 		}
 
-		// After successful patch, update the status
-		existingNodePool.Status.CloudManager.ObservedGeneration = existingNodePool.ObjectMeta.Generation
-		err := utils.UpdateNodePoolStatus(ctx, t.client, existingNodePool, hwv1alpha1.Configured, metav1.ConditionFalse,
-			hwv1alpha1.ConfigUpdate, hwv1alpha1.AwaitConfig)
-		if err != nil {
-			return fmt.Errorf("failed to update status of NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
-		}
 		t.logger.InfoContext(
 			ctx,
 			fmt.Sprintf(
@@ -104,11 +97,7 @@ func (t *provisioningRequestReconcilerTask) createNodePoolResources(ctx context.
 			nodePool.GetNamespace(),
 		),
 	)
-	// Set the CloudManager's ObservedGeneration on the node pool resource status field
-	err = utils.SetCloudManagerInitialObservedGeneration(ctx, t.client, nodePool)
-	if err != nil {
-		return fmt.Errorf("failed to set CloudManager's ObservedGeneration: %w", err)
-	}
+
 	return nil
 }
 

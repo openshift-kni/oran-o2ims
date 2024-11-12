@@ -80,9 +80,6 @@ type NodePoolStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=status
-	CloudManager GenerationStatus `json:"cloudManager,omitempty"`
-
-	//+operator-sdk:csv:customresourcedefinitions:type=status
 	HwMgrPlugin GenerationStatus `json:"hwMgrPlugin,omitempty"`
 }
 

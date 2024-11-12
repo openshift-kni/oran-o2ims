@@ -26,8 +26,6 @@ spec:
     size: 0
   site: ottawa
 status:
-  cloudManager:
-    observedGeneration: 1
   conditions:
   - lastTransitionTime: "2024-10-09T15:36:41Z"
     message: Created

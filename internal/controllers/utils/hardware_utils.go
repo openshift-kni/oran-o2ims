@@ -15,7 +15,6 @@ import (
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -256,26 +255,6 @@ func GetHwMgrPluginNS() string {
 	return hwMgrPluginNameSpace
 }
 
-// SetCloudManagerInitialObservedGeneration sets the CloudManager's ObservedGeneration
-func SetCloudManagerInitialObservedGeneration(ctx context.Context, c client.Client, nodePool *hwv1alpha1.NodePool) error {
-	// Get the generated NodePool
-	exists, err := DoesK8SResourceExist(ctx, c, nodePool.GetName(),
-		nodePool.GetNamespace(), nodePool)
-	if err != nil {
-		return fmt.Errorf("failed to get NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
-	}
-	if !exists {
-		return fmt.Errorf("nodePool %s does not exist in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
-	}
-	// Set ObservedGeneration to the current generation of the resource
-	nodePool.Status.CloudManager.ObservedGeneration = nodePool.ObjectMeta.Generation
-	err = UpdateK8sCRStatus(ctx, c, nodePool)
-	if err != nil {
-		return fmt.Errorf("failed to update status for NodePool %s %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
-	}
-	return nil
-}
-
 // getInterfaces extracts the interfaces from the node map.
 func getInterfaces(nodeMap map[string]interface{}) []map[string]interface{} {
 	if nodeNetwork, ok := nodeMap["nodeNetwork"].(map[string]interface{}); ok {
@@ -462,29 +441,6 @@ func CompareConfigMapWithNodePool(configMap *corev1.ConfigMap, nodePool *hwv1alp
 		}
 	}
 	return changesDetected, nil
-}
-
-// UpdateNodePoolStatus updates the NodePool status fields
-func UpdateNodePoolStatus(ctx context.Context, client client.Client, nodePool *hwv1alpha1.NodePool,
-	conditionType hwv1alpha1.ConditionType, status metav1.ConditionStatus,
-	reason hwv1alpha1.ConditionReason, message hwv1alpha1.ConditionMessage) error {
-
-	meta.SetStatusCondition(
-		&nodePool.Status.Conditions,
-		metav1.Condition{
-			Type:               string(conditionType),
-			Status:             status,
-			Reason:             string(reason),
-			Message:            string(message),
-			LastTransitionTime: metav1.Now(),
-		},
-	)
-
-	// Update the Kubernetes Custom Resource status and handle any errors
-	if err := UpdateK8sCRStatus(ctx, client, nodePool); err != nil {
-		return fmt.Errorf("failed to update status for NodePool %s in namespace %s: %w", nodePool.GetName(), nodePool.GetNamespace(), err)
-	}
-	return nil
 }
 
 // GetStatusMessage returns a status message based on the given condition typ

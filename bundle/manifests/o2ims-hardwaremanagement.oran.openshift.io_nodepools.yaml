@@ -94,14 +94,6 @@ spec:
               NodePoolStatus describes the observed state of a request to allocate and prepare
               a node that will eventually be part of a deployment manager.
             properties:
-              cloudManager:
-                description: GenerationStatus represents the observed generation for
-                  an operator.
-                properties:
-                  observedGeneration:
-                    format: int64
-                    type: integer
-                type: object
               conditions:
                 description: |-
                   Conditions represent the observations of the NodePool's current state.
