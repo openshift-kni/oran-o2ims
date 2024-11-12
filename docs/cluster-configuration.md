@@ -427,3 +427,94 @@ metadata:
 ```
 
 **Note:** The steps are similar for updating the `spec.templateParameterSchema.properties.clusterInstanceParameters`. Any change to the `clusterInstanceParameters` must match the `ClusterInstance` CR of the siteconfig operator.
+
+
+### Switching to a new hardware profile
+
+We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` CR.
+
+In this example we are updating the `hwProfile` under `data.node-pools-data.hwProfile` in the [placeholder-du-template-configmap-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-configmap-v1.yaml) hardware template ConfigMap.
+
+The following steps are required:
+
+1. Upversion the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) ClusterTemplate:
+    * Create a new version of the [placeholder-du-template-configmap-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-configmap-v1.yaml) hardware template ConfigMap - [placeholder-du-template-configmap-v2](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-configmap-v2.yaml)
+        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `data.node-pools-data.hwProfile` from `profile-proliant-gen11-dual-processor-256G-v1` to `profile-proliant-gen11-dual-processor-256G-v2`.
+    * Create a new version of the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` - [sno-ran-du.v4-Y-Z-5](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-5.yaml).
+        * update the name from `sno-ran-du.v4-Y-Z-4` to `sno-ran-du.v4-Y-Z-5` (the namespace remains `sno-ran-du-v4-Y-Z`).
+        * update `spec.version` from `v4-Y-Z-4` to `v4-Y-Z-5`.
+        * update `spec.templates.hwTemplate` from `placeholder-du-template-configmap-v1` to `placeholder-du-template-configmap-v2`.
+2. Update the kustomization files to include the new resources. ArgoCD will automatically sync them to the hub cluster.
+    * The O-Cloud manager validates the new `ClusterTemplate`, but no other action is taken since the `ProvisioningRequest` has not been updated.
+3. The SMO selects the new `ClusterTemplate` version in the `ProvisioningRequest`.
+    * `spec.templateVersion` is updated from `v4-Y-Z-4` to `v4-Y-Z-5`, the one pointing to the new `hwProfile`.
+4. The O-Cloud manager:
+    * Updates the status of the `ProvisioningRequest`:
+    ```yaml
+        - lastTransitionTime: "2024-11-06T16:55:30Z"
+          message: Hardware configuring is in progress
+          reason: ConfigurationUpdateRequested
+          status: "False"
+          type: HardwareConfigured
+        ...
+        provisioningStatus:
+          provisionedResources:
+            oCloudNodeClusterId: 95f4a2cf-04dc-42d5-9d1e-f6cbc693d8ea
+          provisioningDetails: Hardware configuring is in progress
+          provisioningState: progressing
+    ```
+    * Updates the desired hardware profile in the `nodePools` CR for that cluster and the status condition to reflect the configuration change.
+    ```yaml
+    spec:
+      ...
+        - hwProfile: profile-proliant-gen11-dual-processor-256G-v2
+          interfaces:
+      ...
+    status:
+      conditions:
+      - lastTransitionTime: "2024-10-20T01:22:19Z"
+        message: Created
+        reason: Completed
+        status: "True"
+        type: Provisioned
+      - lastTransitionTime: "2024-11-06T16:55:30Z"
+        message: Spec updated; awaiting configuration application by the hardware plugin
+        reason: ConfigurationUpdateRequested
+        status: "False"
+        type: Configured
+    ```
+    * Obtains the list of nodes from the `NodePool` CR for the master MCP.
+    * For the SNO case that we are considering, there is only one node that cannot be cordoned and drained.
+    * Updates `spec.hwProfile` in the `Node` (`node.o2ims-hardwaremanagement.oran.openshift.io/v1alpha1`) CR.
+
+5. The hardware plugin requests the hardware manager to apply the new hardware profile from the `Node` `spec`.
+6. The hardware manager updates the profile.
+7. The hardware plugin waits for the result from the hardware manager.
+    * Success scenario:
+        * The hardware plugin updates the status of the `Node` CR.
+    * Failure scenario:
+        * The operation is aborted.
+        * The status of the `Node` CR is updated with the failure reason.
+        * The O-Cloud manager does not initiate a rollback of any nodes already updates. This is left to the user to remediate.
+8. Once all nodes have been updated, the hardware plugin will update the status of the `NodePool` CR `Configured` condition to reflect the result of the operation:
+```yaml
+    - lastTransitionTime: "2024-10-20T01:22:19Z"
+      message: Configuration has been applied successfully
+      reason: ConfigApplied
+      status: "True"
+      type: Configured
+```
+9. The O-Cloud manager will update the `ProvisioningRequest` status to reflect the result of the operation, based on the status update of the `NodePool` CR:
+```yaml
+    - lastTransitionTime: "2024-11-06T17:57:31Z"
+      message: Configuration has been applied successfully
+      reason: ConfigApplied
+      status: "True"
+      type: HardwareConfigured
+    ...
+    provisioningStatus:
+      provisionedResources:
+        oCloudNodeClusterId: 95f4a2cf-04dc-42d5-9d1e-f6cbc693d8ea
+      provisioningDetails: Provisioning request has completed successfully
+      provisioningState: fulfilled
+```

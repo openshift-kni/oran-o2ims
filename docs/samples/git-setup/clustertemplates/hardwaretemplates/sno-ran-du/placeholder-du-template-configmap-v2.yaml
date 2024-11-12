@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: placeholder-du-template-configmap-v1
+  name: placeholder-du-template-configmap-v2
   namespace: oran-o2ims
 data:
   # hardwareProvisioningTimeout is optional.
@@ -12,4 +12,4 @@ data:
   bootInterfaceLabel: bootable-interface
   node-pools-data: |
     - name: master
-      hwProfile: profile-proliant-gen11-dual-processor-256G-v1
+      hwProfile: profile-proliant-gen11-dual-processor-256G-v2
