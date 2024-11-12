@@ -283,7 +283,7 @@ var _ = Describe("GetIngressDomain", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "default",
 				Namespace: "openshift-ingress-operator"},
-			Spec: openshiftv1.IngressControllerSpec{
+			Status: openshiftv1.IngressControllerStatus{
 				Domain: "apps.example.com"}}
 
 		objs := []client.Object{ingress}
