@@ -423,7 +423,7 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 			client:       nil,
 			object:       nil,
 			clusterInput: &clusterInput{},
-			ctNamespace:  "",
+			ctDetails:    &clusterTemplateDetails{},
 		}
 	})
 

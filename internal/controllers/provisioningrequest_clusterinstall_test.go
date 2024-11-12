@@ -101,7 +101,9 @@ nodes:
 			client:       reconciler.Client,
 			object:       cr,
 			clusterInput: &clusterInput{},
-			ctNamespace:  ctNamespace,
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
 		}
 
 		clusterInstanceInputParams, err := utils.ExtractMatchingInput(

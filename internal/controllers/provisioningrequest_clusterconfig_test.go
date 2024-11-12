@@ -939,10 +939,12 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger:      CRReconciler.Logger,
-			client:      CRReconciler.Client,
-			object:      provisioningRequest, // cluster-1 request
-			ctNamespace: ctNamespace,
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -1142,10 +1144,12 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger:      CRReconciler.Logger,
-			client:      CRReconciler.Client,
-			object:      provisioningRequest, // cluster-1 request
-			ctNamespace: ctNamespace,
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -1309,7 +1313,9 @@ defaultHugepagesSize: "1G"`,
 			client:       CRReconciler.Client,
 			object:       provisioningRequest, // cluster-1 request
 			clusterInput: &clusterInput{},
-			ctNamespace:  ctNamespace,
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -1414,7 +1420,9 @@ defaultHugepagesSize: "1G"`,
 			client:       CRReconciler.Client,
 			object:       provisioningRequest, // cluster-1 request
 			clusterInput: &clusterInput{},
-			ctNamespace:  ctNamespace,
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -1515,10 +1523,12 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger:      CRReconciler.Logger,
-			client:      CRReconciler.Client,
-			object:      provisioningRequest, // cluster-1 request
-			ctNamespace: ctNamespace,
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -1619,10 +1629,12 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger:      CRReconciler.Logger,
-			client:      CRReconciler.Client,
-			object:      provisioningRequest, // cluster-1 request
-			ctNamespace: ctNamespace,
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,

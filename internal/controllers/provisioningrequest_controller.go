@@ -48,7 +48,7 @@ type provisioningRequestReconcilerTask struct {
 	client       client.Client
 	object       *provisioningv1alpha1.ProvisioningRequest
 	clusterInput *clusterInput
-	ctNamespace  string
+	ctDetails    *clusterTemplateDetails
 	timeouts     *timeouts
 }
 
@@ -56,6 +56,13 @@ type provisioningRequestReconcilerTask struct {
 type clusterInput struct {
 	clusterInstanceData map[string]any
 	policyTemplateData  map[string]any
+}
+
+// clusterTemplateDetails holds the details for the referenced ClusterTemplate
+type clusterTemplateDetails struct {
+	namespace string
+	release   string
+	templates provisioningv1alpha1.Templates
 }
 
 // timeouts holds the timeout values, in minutes,
@@ -147,7 +154,7 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 		client:       r.Client,
 		object:       object,
 		clusterInput: &clusterInput{},
-		ctNamespace:  "",
+		ctDetails:    &clusterTemplateDetails{},
 		timeouts:     &timeouts{},
 	}
 	result, err = task.run(ctx)
@@ -190,9 +197,11 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	}
 
 	// Handle hardware template and NodePool provisioning/configuring
-	res, proceed, err := t.handleNodePoolProvisioning(ctx, renderedClusterInstance)
-	if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
-		return res, err
+	if !t.isHardwareProvisionSkipped() {
+		res, proceed, err := t.handleNodePoolProvisioning(ctx, renderedClusterInstance)
+		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
+			return res, err
+		}
 	}
 
 	// Handle the cluster install with ClusterInstance
@@ -310,29 +319,31 @@ func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx conte
 // and policy configuration when applicable, and update the corresponding ProvisioningRequest
 // status conditions
 func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx context.Context) (result ctrl.Result, err error) {
-	// Check the NodePool status if exists
-	if t.object.Status.NodePoolRef == nil {
-		if err = t.checkResourcePreparationStatus(ctx); err != nil {
+	if !t.isHardwareProvisionSkipped() {
+		// Check the NodePool status if exists
+		if t.object.Status.NodePoolRef == nil {
+			if err = t.checkResourcePreparationStatus(ctx); err != nil {
+				return requeueWithError(err)
+			}
+			return doNotRequeue(), nil
+		}
+		nodePool := &hwv1alpha1.NodePool{}
+		nodePool.SetName(t.object.Status.NodePoolRef.Name)
+		nodePool.SetNamespace(t.object.Status.NodePoolRef.Namespace)
+		hwProvisioned, timedOutOrFailed, err := t.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Provisioned)
+		if err != nil {
 			return requeueWithError(err)
 		}
-		return doNotRequeue(), nil
-	}
-	nodePool := &hwv1alpha1.NodePool{}
-	nodePool.SetName(t.object.Status.NodePoolRef.Name)
-	nodePool.SetNamespace(t.object.Status.NodePoolRef.Namespace)
-	hwProvisioned, timedOutOrFailed, err := t.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Provisioned)
-	if err != nil {
-		return requeueWithError(err)
-	}
-	if timedOutOrFailed {
-		if err = t.checkResourcePreparationStatus(ctx); err != nil {
-			return requeueWithError(err)
+		if timedOutOrFailed {
+			if err = t.checkResourcePreparationStatus(ctx); err != nil {
+				return requeueWithError(err)
+			}
+			// Timeout occurred or failed, stop requeuing
+			return doNotRequeue(), nil
 		}
-		// Timeout occurred or failed, stop requeuing
-		return doNotRequeue(), nil
-	}
-	if !hwProvisioned {
-		return requeueWithMediumInterval(), nil
+		if !hwProvisioned {
+			return requeueWithMediumInterval(), nil
+		}
 	}
 
 	// Check the ClusterInstance status if exists
@@ -563,7 +574,11 @@ func (t *provisioningRequestReconcilerTask) getCrClusterTemplateRef(ctx context.
 				ct.Status.Conditions,
 				string(utils.CTconditionTypes.Validated))
 			if validatedCond != nil && validatedCond.Status == metav1.ConditionTrue {
-				t.ctNamespace = ct.Namespace
+				t.ctDetails = &clusterTemplateDetails{
+					namespace: ct.Namespace,
+					release:   ct.Spec.Release,
+					templates: ct.Spec.Templates,
+				}
 				return &ct, nil
 			}
 		}
@@ -677,4 +692,8 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		deleteCompleted = false
 	}
 	return deleteCompleted, nil
+}
+
+func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
+	return t.ctDetails.templates.HwTemplate == ""
 }

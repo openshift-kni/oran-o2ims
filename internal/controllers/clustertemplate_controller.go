@@ -184,19 +184,21 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		validationErrs = append(validationErrs, err.Error())
 	}
 
-	// Validate the HW template configmap
-	err = validateConfigmapReference[[]hwv1alpha1.NodeGroup](
-		ctx, t.client,
-		t.object.Spec.Templates.HwTemplate,
-		utils.InventoryNamespace,
-		utils.HwTemplateNodePool,
-		utils.HardwareProvisioningTimeoutConfigKey)
-	if err != nil {
-		if !utils.IsInputError(err) {
-			return false, fmt.Errorf("failed to validate the ConfigMap %s for hw template: %w",
-				t.object.Spec.Templates.HwTemplate, err)
+	// Validate the HW template configmap if it's provided
+	if t.object.Spec.Templates.HwTemplate != "" {
+		err = validateConfigmapReference[[]hwv1alpha1.NodeGroup](
+			ctx, t.client,
+			t.object.Spec.Templates.HwTemplate,
+			utils.InventoryNamespace,
+			utils.HwTemplateNodePool,
+			utils.HardwareProvisioningTimeoutConfigKey)
+		if err != nil {
+			if !utils.IsInputError(err) {
+				return false, fmt.Errorf("failed to validate the ConfigMap %s for hw template: %w",
+					t.object.Spec.Templates.HwTemplate, err)
+			}
+			validationErrs = append(validationErrs, err.Error())
 		}
-		validationErrs = append(validationErrs, err.Error())
 	}
 
 	// Validate the ClusterInstance defaults configmap

@@ -438,11 +438,6 @@ metadata:
                 ],
                 "nodes": [
                   {
-                    "bmcAddress": "idrac-virtualmedia+https://10.16.231.87/redfish/v1/Systems/System.Embedded.1",
-                    "bmcCredentialsName": {
-                      "name": "node1-bmc-secret"
-                    },
-                    "bootMACAddress": "00:00:00:01:20:30",
                     "bootMode": "UEFI",
                     "extraAnnotations": {
                       "BareMetalHost": {
@@ -544,21 +539,7 @@ metadata:
                             }
                           ]
                         }
-                      },
-                      "interfaces": [
-                        {
-                          "macAddress": "00:00:00:01:20:30",
-                          "name": "eno1"
-                        },
-                        {
-                          "macAddress": "02:00:00:80:12:14",
-                          "name": "eth0"
-                        },
-                        {
-                          "macAddress": "02:00:00:80:12:15",
-                          "name": "eth1"
-                        }
-                      ]
+                      }
                     }
                   }
                 ],

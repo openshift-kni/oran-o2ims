@@ -96,7 +96,7 @@ spec:
                     type: string
                   hwTemplate:
                     description: HwTemplate defines a reference to a hardware template
-                      config map
+                      configmap
                     type: string
                   policyTemplateDefaults:
                     description: |-
@@ -110,7 +110,6 @@ spec:
                     type: string
                 required:
                 - clusterInstanceDefaults
-                - hwTemplate
                 - policyTemplateDefaults
                 type: object
               version:
