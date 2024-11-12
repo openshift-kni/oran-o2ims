@@ -240,14 +240,14 @@ func GetIngressDomain(ctx context.Context, c client.Client) (string, error) {
 		return "", fmt.Errorf("default ingress controller object not found: %w", err)
 	}
 
-	spec := ingressController.Object["spec"].(map[string]interface{})
-	domain, ok := spec["domain"]
+	status := ingressController.Object["status"].(map[string]interface{})
+	domain, ok := status["domain"]
 
 	if ok {
 		return domain.(string), nil
 	}
 
-	return "", fmt.Errorf("default ingress controller does not have expected 'spec.domain' attribute")
+	return "", fmt.Errorf("default ingress controller does not have expected 'status.domain' attribute")
 }
 
 func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
