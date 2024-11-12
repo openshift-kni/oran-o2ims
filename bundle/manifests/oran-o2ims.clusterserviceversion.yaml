@@ -1302,18 +1302,6 @@ spec:
           - update
           - watch
         - apiGroups:
-          - search.open-cluster-management.io
-          resources:
-          - searches
-          verbs:
-          - get
-        - apiGroups:
-          - search.open-cluster-management.io
-          resources:
-          - searches/allManagedData
-          verbs:
-          - get
-        - apiGroups:
           - siteconfig.open-cluster-management.io
           resources:
           - clusterinstances
@@ -1325,6 +1313,12 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - view.open-cluster-management.io
+          resources:
+          - managedclusterviews
+          verbs:
+          - create
         - apiGroups:
           - authentication.k8s.io
           resources:
