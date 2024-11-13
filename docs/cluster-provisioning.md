@@ -31,7 +31,7 @@ The [CRD](../config/crd/bases/o2ims.provisioning.oran.org_clustertemplates.yaml)
 - version: Defines the version of the ClusterTemplate.
 - description: A description of the ClusterTemplate.
 - templates:
-    - hwTemplate: References the ConfigMap containing the hardware template used for node allocation.
+    - hwTemplate: (Optional) References the ConfigMap containing the hardware template used for node allocation. See note below.
     - clusterInstanceDefaults: References the ConfigMap containing default values for ClusterInstance.
     - policyTemplateDefaults: References the ConfigMap containing default values for ACM policy templates.
 - templateParameterSchema: Specifies the OpenAPI v3 schema that defines the accepted and required parameters for provisioning a cluster. This schema is used to validate the parameters passed in the ProvisioningRequest.
@@ -62,6 +62,10 @@ status:
     status: "True"
     type: ClusterTemplateValidated
 ```
+
+> [!NOTE]
+>  `spec.templates.hwTemplate` is optional. In scenarios where the hwTemplate ConfigMap is not provided, hardware provisioning will not be performed, and hardware-related parameters for each node
+> (e.g, bmcAddress, bmcCredentialsDetails, bootMACAddress, nodeNetwork.interfaces[*].macAddress) should be specified in the ProvisioningRequest. See this [example](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml) of a ClusterTemplate without `hwTemplate`.
 
 ## ProvisioningRequest CR
 

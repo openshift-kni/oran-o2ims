@@ -104,11 +104,14 @@ spec:
 {{ .Cluster.suppressedManifests | toYaml | indent 4 }}
 {{- end }}
   nodes:
-  # The fields bmcAddress, bmcCredentialsName, bootMACAddress, and nodeNetwork.interfaces[*].macAddress
-  # are expected to be populated from the NodePool. However, we run the ClusterInstance dry-run validation
-  # before HW provisioning to catch any input errors early. Since these fields are required, we must provide
-  # placeholder values to pass the dry-run validation. These placeholders will be replaced with the actual
-  # data returned from the HW plugin before the ClusterInstance is created.
+  # If hwTemplate configmap is provided, the fields bmcAddress, bmcCredentialsName, bootMACAddress, and
+  # nodeNetwork.interfaces[*].macAddress are expected to be populated from the NodePool. However, we run
+  # the ClusterInstance dry-run validation before HW provisioning to catch any input errors early.
+  # Since these fields are required, we must provide placeholder values to pass the dry-run validation.
+  # These placeholders will be replaced with the actual data returned from the HW plugin before the
+  # ClusterInstance is created.
+  # If the hwTemplate ConfigMap is not provided, these fields must be specified in the ProvisioningRequest
+  # and are validated in the early stage.
   {{- $_ := .Cluster.nodes | validateNonEmpty "spec.nodes" }}
   {{- $_ := .Cluster.nodes | validateArrayType "spec.nodes"}}
   {{- range $n_index, $n_ref := .Cluster.nodes }}

@@ -300,6 +300,30 @@ spec:
 		}
 	})
 
+	It("Renders the cluster instance template with default bmcCredentialsName", func() {
+		// Remove the bmcCredentialsName
+		node1 := clusterInstanceObj["Cluster"].(map[string]any)["nodes"].([]any)[0]
+		delete(node1.(map[string]any), "bmcCredentialsName")
+
+		expectedRenderedClusterInstance := &unstructured.Unstructured{}
+		err := yaml.Unmarshal([]byte(expectedRenderedYaml), expectedRenderedClusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+
+		renderedClusterInstance, err := RenderTemplateForK8sCR(
+			ClusterInstanceTemplateName, ClusterInstanceTemplatePath, clusterInstanceObj)
+		Expect(err).ToNot(HaveOccurred())
+
+		yamlString, err := yaml.Marshal(renderedClusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		fmt.Println(string(yamlString))
+
+		if !reflect.DeepEqual(renderedClusterInstance, expectedRenderedClusterInstance) {
+			err = fmt.Errorf("renderedClusterInstance not equal, expected = %v, got = %v",
+				renderedClusterInstance, expectedRenderedClusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+		}
+	})
+
 	It("Return error if a required string field is empty", func() {
 		// Update the required field baseDomain to empty string
 		clusterInstanceObj["Cluster"].(map[string]any)["baseDomain"] = ""

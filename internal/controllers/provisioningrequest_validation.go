@@ -60,19 +60,21 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	t.timeouts.clusterConfiguration = utils.DefaultClusterConfigurationTimeout
 
 	// Load hardware provisioning timeout if exists.
-	hwCmName := clusterTemplate.Spec.Templates.HwTemplate
-	hwCm, err := utils.GetConfigmap(
-		ctx, t.client, hwCmName, utils.InventoryNamespace)
-	if err != nil {
-		return fmt.Errorf("failed to get ConfigMap %s: %w", hwCmName, err)
-	}
-	hwTimeout, err := utils.ExtractTimeoutFromConfigMap(
-		hwCm, utils.HardwareProvisioningTimeoutConfigKey)
-	if err != nil {
-		return fmt.Errorf("failed to get timeout config for hardware provisioning: %w", err)
-	}
-	if hwTimeout != 0 {
-		t.timeouts.hardwareProvisioning = hwTimeout
+	if !t.isHardwareProvisionSkipped() {
+		hwCmName := clusterTemplate.Spec.Templates.HwTemplate
+		hwCm, err := utils.GetConfigmap(
+			ctx, t.client, hwCmName, utils.InventoryNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to get ConfigMap %s: %w", hwCmName, err)
+		}
+		hwTimeout, err := utils.ExtractTimeoutFromConfigMap(
+			hwCm, utils.HardwareProvisioningTimeoutConfigKey)
+		if err != nil {
+			return fmt.Errorf("failed to get timeout config for hardware provisioning: %w", err)
+		}
+		if hwTimeout != 0 {
+			t.timeouts.hardwareProvisioning = hwTimeout
+		}
 	}
 
 	// Load cluster provisioning timeout if exists.
@@ -299,7 +301,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 	}
 
 	// Retrieve the configmap that holds the default data.
-	templateCm, err := utils.GetConfigmap(ctx, t.client, templateDefaultsCm, t.ctNamespace)
+	templateCm, err := utils.GetConfigmap(ctx, t.client, templateDefaultsCm, t.ctDetails.namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", templateDefaultsCm, err)
 	}

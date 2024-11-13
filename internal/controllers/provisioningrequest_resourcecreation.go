@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +18,14 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateClusterResources(
 	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 
 	clusterName := clusterInstance.GetName()
+
+	// Create BMC secret if no hardware provisioning
+	if t.isHardwareProvisionSkipped() {
+		err := t.createClusterInstanceBMCSecrets(ctx, clusterName)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Copy the pull secret from the cluster template namespace to the
 	// clusterInstance namespace.
@@ -45,26 +55,21 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateClusterResources(
 func (t *provisioningRequestReconcilerTask) createPullSecret(
 	ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 
-	clusterTemplateRefName := getClusterTemplateRefName(
-		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
-	// If we got to this point, we can assume that all the keys exist, including
-	// clusterName
-
-	// Check the pull secret already exists in the clusterTemplate namespace.
+	// Check the pull secret exists in the clusterTemplate namespace.
 	pullSecret := &corev1.Secret{}
 	pullSecretName := clusterInstance.Spec.PullSecretRef.Name
 	pullSecretExistsInTemplateNamespace, err := utils.DoesK8SResourceExist(
-		ctx, t.client, pullSecretName, t.ctNamespace, pullSecret)
+		ctx, t.client, pullSecretName, t.ctDetails.namespace, pullSecret)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to check if pull secret %s exists in namespace %s: %w",
-			pullSecretName, clusterTemplateRefName, err,
+			pullSecretName, t.ctDetails.namespace, err,
 		)
 	}
 	if !pullSecretExistsInTemplateNamespace {
 		return utils.NewInputError(
 			"pull secret %s expected to exist in the %s namespace, but it is missing",
-			pullSecretName, clusterTemplateRefName)
+			pullSecretName, t.ctDetails.namespace)
 	}
 
 	newClusterInstancePullSecret := &corev1.Secret{
@@ -92,14 +97,14 @@ func (t *provisioningRequestReconcilerTask) createExtraManifestsConfigMap(
 		configMap := &corev1.ConfigMap{}
 		extraManifestCmName := extraManifestsRef.Name
 		configMapExists, err := utils.DoesK8SResourceExist(
-			ctx, t.client, extraManifestCmName, t.ctNamespace, configMap)
+			ctx, t.client, extraManifestCmName, t.ctDetails.namespace, configMap)
 		if err != nil {
 			return fmt.Errorf("failed to check if ConfigMap exists: %w", err)
 		}
 		if !configMapExists {
 			return utils.NewInputError(
 				"extra-manifests configmap %s expected to exist in the %s namespace, but it is missing",
-				extraManifestCmName, t.ctNamespace)
+				extraManifestCmName, t.ctDetails.namespace)
 		}
 
 		// Create the extra-manifests ConfigMap in the clusterInstance namespace
@@ -185,7 +190,7 @@ func (t *provisioningRequestReconcilerTask) createPolicyTemplateConfigMap(
 	policyTemplateConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-pg", clusterName),
-			Namespace: fmt.Sprintf("ztp-%s", t.ctNamespace),
+			Namespace: fmt.Sprintf("ztp-%s", t.ctDetails.namespace),
 		},
 		Data: finalPolicyTemplateData,
 	}
@@ -220,4 +225,123 @@ func checkClusterLabelsForPolicies(
 		)
 	}
 	return nil
+}
+
+// createClusterInstanceBMCSecrets creates all the BMC secrets needed by the nodes included
+// in the ProvisioningRequest.
+func (t *provisioningRequestReconcilerTask) createClusterInstanceBMCSecrets(
+	ctx context.Context, clusterName string) error {
+
+	// The BMC credential details are obtained from the ProvisioningRequest.
+	clusterInstanceMatchingInput, err := utils.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+	if err != nil {
+		return utils.NewInputError(
+			"failed to extract matching input for subSchema %s: %w", utils.TemplateParamClusterInstance, err)
+	}
+	clusterInstanceMatchingInputMap := clusterInstanceMatchingInput.(map[string]any)
+
+	nodes, nodesExists := clusterInstanceMatchingInputMap["nodes"]
+	if !nodesExists {
+		return utils.NewInputError(
+			`\"nodes\" key expected to exist in spec.templateParameters.clusterInstanceParameters `+
+				`of ProvisioningRequest %s, but it is missing`,
+			t.object.Name,
+		)
+	}
+	// Go through all the nodes.
+	for _, nodeInterface := range nodes.([]any) {
+		node := nodeInterface.(map[string]any)
+		username, password, secretName, err :=
+			getBMCDetailsForClusterInstance(node, t.object.Name)
+		if err != nil {
+			return err
+		}
+
+		// Create the node's BMC secret.
+		bmcSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: clusterName,
+			},
+			Data: map[string][]byte{
+				"username": username,
+				"password": password,
+			},
+		}
+
+		if err = utils.CreateK8sCR(ctx, t.client, bmcSecret, nil, utils.UPDATE); err != nil {
+			return fmt.Errorf("failed to create BMC secret: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func getBMCDetailsForClusterInstance(node map[string]any, provisioningRequest string) (
+	[]byte, []byte, string, error) {
+	// Get the BMC details.
+	bmcCredentialsDetailsInterface, bmcCredentialsDetailsExist := node["bmcCredentialsDetails"]
+	if !bmcCredentialsDetailsExist {
+		return nil, nil, "", utils.NewInputError(
+			`\"bmcCredentialsDetails\" key expected to exist in `+
+				`spec.templateParameters.clusterInstanceParameters `+
+				`of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
+		)
+	}
+	bmcCredentialsDetails := bmcCredentialsDetailsInterface.(map[string]any)
+
+	// Get the BMC username and password.
+	usernameBase64, usernameExists := bmcCredentialsDetails["username"].(string)
+	if !usernameExists {
+		return nil, nil, "", utils.NewInputError(
+			`\"bmcCredentialsDetails.username\" key expected to exist in `+
+				`spec.templateParameters.clusterInstanceParameters `+
+				`of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
+		)
+	}
+	username, err := base64.StdEncoding.DecodeString(usernameBase64)
+	if err != nil {
+		return nil, nil, "", utils.NewInputError(
+			"failed to decode usernameBase64 string (%s): %w", username, err)
+	}
+
+	passwordBase64, passwordExists := bmcCredentialsDetails["password"].(string)
+	if !passwordExists {
+		return nil, nil, "", utils.NewInputError(
+			`\"bmcCredentialsDetails.password\" key expected to exist in `+
+				`spec.templateParameters.clusterInstanceParameters `+
+				`of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
+		)
+	}
+	password, err := base64.StdEncoding.DecodeString(passwordBase64)
+	if err != nil {
+		return nil, nil, "", utils.NewInputError(
+			"failed to decode passwordBase64 string (%s): %w", passwordBase64, err)
+	}
+
+	secretName := ""
+	// Get the BMC CredentialsName.
+	bmcCredentialsNameInterface, bmcCredentialsNameExist := node["bmcCredentialsName"]
+	if !bmcCredentialsNameExist {
+		nodeHostnameInterface, nodeHostnameExists := node["hostName"]
+		if !nodeHostnameExists {
+			return nil, nil, "", utils.NewInputError(
+				`\"hostname\" key expected to exist in `+
+					`spec.templateParameters.clusterInstanceParameters `+
+					`of ProvisioningRequest %s, but it's missing`,
+				provisioningRequest,
+			)
+		}
+		secretName =
+			utils.ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) +
+				"-bmc-secret"
+	} else {
+		secretName = bmcCredentialsNameInterface.(map[string]any)["name"].(string)
+	}
+
+	return username, password, secretName, nil
 }
