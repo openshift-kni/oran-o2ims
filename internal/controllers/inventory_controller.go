@@ -841,6 +841,23 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"configmaps",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"create",
+					"update",
+					"patch",
+					"delete",
+				},
+			},
+			{
+				APIGroups: []string{
 					"internal.open-cluster-management.io",
 				},
 				Resources: []string{
@@ -1166,6 +1183,21 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 							},
 							{
 								Path: "/o2ims-infrastructureInventory/v1/resourceTypes",
+								PathType: func() *networkingv1.PathType {
+									pathType := networkingv1.PathTypePrefix
+									return &pathType
+								}(),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "resource-server",
+										Port: networkingv1.ServiceBackendPort{
+											Name: utils.InventoryIngressName,
+										},
+									},
+								},
+							},
+							{
+								Path: "/o2ims-infrastructureInventory/v1/subscriptions",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType

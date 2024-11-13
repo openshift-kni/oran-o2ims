@@ -1,10 +1,12 @@
 package service
 
+import "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+
 const (
 	// default namespace should be changed to official namespace when it is available
-	DefaultNamespace                   = "orantest"
+	DefaultNamespace                   = utils.DefaultNamespace // TODO: consolidate
 	DefaultAlarmConfigmapName          = "oran-o2ims-alarm-subscriptions"
-	DefaultInfraInventoryConfigmapName = "oran-infra-inventory-sub"
+	DefaultInfraInventoryConfigmapName = "oran-o2ims-inventory-subscriptions"
 	FieldOwner                         = "oran-o2ims"
 )
 
