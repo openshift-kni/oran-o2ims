@@ -94,6 +94,19 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 			},
 		))
 	})
+
+	It("it returns an error for a type different than string", func() {
+		// Declare the merged policy template data.
+		task.clusterInput.policyTemplateData = map[string]any{
+			"cpu-isolated":    "0-1,64-65",
+			"hugepages-count": 32,
+		}
+
+		// Create the configMap.
+		err := task.createPolicyTemplateConfigMap(ctx, crName)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError("policyTemplateParameters/policyTemplateSchema for the hugepages-count key (32) is not a string"))
+	})
 })
 
 var _ = Describe("GetLabelsForPolicies", func() {

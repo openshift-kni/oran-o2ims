@@ -444,6 +444,13 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 			if aType != expectedType {
 				badType = append(badType, fmt.Sprintf("%s (expected = %s actual= %s)", expectedName, expectedType, aType))
 			}
+			if expectedName == utils.TemplateParamPolicyConfig {
+				err := validatePolicyTemplateParamsSchema(aSubschema)
+				if err != nil {
+					return utils.NewInputError(
+						fmt.Sprintf("Error validating the policyTemplateParameters schema: %s", err.Error()))
+				}
+			}
 		} else {
 			badType = append(badType, fmt.Sprintf("%s (expected = %s actual= none)", expectedName, expectedType))
 		}
@@ -473,6 +480,54 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 			strings.Join(missingRequired, ","))
 		return utils.NewInputError(validationFailureReason)
 	}
+	return nil
+}
+
+// validatePolicyTemplateParamsSchema ensure the policyTemplateParameters schema has the right format,
+// where only one level properties with a string type are present.
+// Example:
+// policyTemplateParameters:
+//
+//	description: policyTemplateSchema defines the available parameters for cluster configuration
+//	properties:
+//	  cluster-log-fwd-filters:
+//	    type: string
+//	  cluster-log-fwd-outputs:
+//	    type: string
+//	  cluster-log-fwd-pipelines:
+//	    type: string
+func validatePolicyTemplateParamsSchema(schema map[string]any) error {
+	propertiesInterface, hasProperties := schema["properties"]
+	if !hasProperties {
+		return fmt.Errorf("unexpected %s structure, no properties present", utils.TemplateParamPolicyConfig)
+	}
+
+	properties, isMap := propertiesInterface.(map[string]any)
+	if !isMap {
+		return fmt.Errorf("unexpected %s properties structure", utils.TemplateParamPolicyConfig)
+	}
+
+	for propertyKey, propertyValue := range properties {
+		propertyValueMap, ok := propertyValue.(map[string]any)
+		if !ok {
+			return fmt.Errorf("unexpected %s structure for the %s property", utils.TemplateParamPolicyConfig, propertyKey)
+		}
+
+		valueTypeInterface, ok := propertyValueMap["type"]
+		if !ok {
+			return fmt.Errorf("unexpected %s structure: expected subproperty \"type\" missing", utils.TemplateParamPolicyConfig)
+		}
+
+		valueType, ok := valueTypeInterface.(string)
+		if !ok {
+			return fmt.Errorf("unexpected %s structure: expected the subproperty \"type\" to be string", utils.TemplateParamPolicyConfig)
+		}
+
+		if valueType != "string" {
+			return fmt.Errorf("expected type string for the %s property", propertyKey)
+		}
+	}
+
 	return nil
 }
 
