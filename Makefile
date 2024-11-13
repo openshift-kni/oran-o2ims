@@ -139,7 +139,7 @@ build: manifests generate fmt vet ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet binary ## Run a controller from your host.
-	IMAGE=$(IMAGE_TAG_BASE):$(VERSION) ./oran-o2ims start controller-manager
+	IMAGE=$(IMAGE_TAG_BASE):$(VERSION) $(LOCALBIN)/$(BINARY_NAME) start controller-manager
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -194,6 +194,9 @@ undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specifie
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
+
+## oran-binary
+BINARY_NAME := oran-o2ims
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
@@ -334,12 +337,20 @@ catalog-push: ## Push a catalog image.
 
 ##@ Binary
 .PHONY: binary
-binary:
-	go build -mod=vendor
+binary: $(LOCALBIN)
+	go build -o $(LOCALBIN)/$(BINARY_NAME) -mod=vendor
+
 
 .PHONY: generate
 go-generate:
 	go generate ./...
+	@for file in *.gen*; do \
+		if ! git diff --exit-code -- $$file; then \
+			echo "Error: $$file is stale. Please commit the updated file."; \
+			exit 1; \
+		fi \
+	done
+	@echo "All generated files are up-to-date."
 
 .PHONY: test tests
 test tests:
@@ -377,13 +388,11 @@ deps-update:
 	hack/install_test_deps.sh
 
 .PHONY: ci-job
-ci-job: deps-update generate fmt vet lint shellcheck bashate fmt test bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test bundle-check
 
 .PHONY: clean
 clean:
-	rm -rf \
-	oran-o2ims \
-	$(NULL)
+	-rm $(LOCALBIN)/$(BINARY_NAME)
 
 .PHONY: scorecard-test
 scorecard-test: operator-sdk
@@ -398,6 +407,29 @@ sync-submodules:
 
 ##@ O-RAN Alarms Server
 
+.PHNOY: alarms
+alarms: clean-postgres run-postgres run-alarms-migrate run-alarms ##Run full alarms stack
+
 .PHONY: run-alarms
-run-alarms: go-generate ##Run alarms server locally
-	go run internal/service/alarms/serve.go
+run-alarms: go-generate binary ##Run alarms server locally
+	$(LOCALBIN)/$(BINARY_NAME) alarms-server serve
+
+run-alarms-migrate: binary ##Migrate all the way up
+	$(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
+
+##@ O-RAN Postgres DB
+
+.PHONY: run-postgres
+run-postgres: ##Run O-RAN postgres
+	oc apply -k ./internal/service/postgres/k8s/overlays/dev
+	oc wait --for=condition=Ready pod -l pg=dev -n oran-o2ims --timeout=30s
+	@echo "Starting port-forward in background on port 5432:5432 to o-cloud-db in namespace oran-o2ims"
+	nohup oc port-forward svc/o-cloud-db 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &
+
+
+clean-postgres: ##Run O-RAN postgres
+	-oc delete -k ./internal/service/postgres/k8s/overlays/dev --wait=true
+	-oc wait --for=delete pod -l pg=dev -n oran-o2ims --timeout=30s
+	@echo "Stopping all oc port-forward processes"
+	-@pkill -f "oc port-forward" && echo "All oc port-forward processes stopped."
+	-rm pgproxy.log

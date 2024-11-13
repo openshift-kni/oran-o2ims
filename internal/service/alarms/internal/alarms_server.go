@@ -10,7 +10,7 @@ import (
 )
 
 type AlarmsServer struct {
-	//TODO: Add anything that's needed during request e.g DB conn
+	AlarmsRepository *AlarmsRepository
 }
 
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check

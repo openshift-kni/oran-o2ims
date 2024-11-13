@@ -178,14 +178,10 @@ func (t *Tool) Run(ctx context.Context) error {
 	t.cmd.SetArgs(t.args[1:])
 	err = t.cmd.ExecuteContext(ctx)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to run command",
-			"args", t.args,
-			"error", err,
-		)
+		return fmt.Errorf("failed to run command with args %v: %w, ", t.args, err)
 	}
-	return fmt.Errorf("failed to run command: %w", err)
+
+	return nil
 }
 
 func (t *Tool) run(cmd *cobra.Command, args []string) error {

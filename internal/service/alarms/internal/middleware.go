@@ -32,8 +32,8 @@ func AlarmsOapiValidation() Middleware {
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
 	if err != nil {
-		// TODO: handle this error
-		slog.Error(fmt.Sprintf("failed to get swagger: %s", err))
+		// Panic will allow for defer statements to execute
+		panic(fmt.Sprintf("failed to get swagger: %s", err))
 	}
 
 	// Clear out the servers array in the swagger spec, that skips validating
