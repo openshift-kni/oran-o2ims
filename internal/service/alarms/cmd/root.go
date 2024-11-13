@@ -12,6 +12,9 @@ import (
 var AlarmRootCmd = &cobra.Command{
 	Use:   "alarms-server",
 	Short: "All things needed for alarms server",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		configureAlarmLogger()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Nothing to do. Use sub-commands instead.")
 	},
@@ -19,10 +22,6 @@ var AlarmRootCmd = &cobra.Command{
 
 func GetAlarmRootCmd() *cobra.Command {
 	return AlarmRootCmd
-}
-
-func init() {
-	configureAlarmLogger()
 }
 
 func configureAlarmLogger() {
