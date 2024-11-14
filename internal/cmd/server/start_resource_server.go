@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 
@@ -60,10 +61,25 @@ func ResourceServer() *cobra.Command {
 		"",
 		"URL of the backend server.",
 	)
+	_ = flags.String(
+		globalCloudIDFlagName,
+		"",
+		"Global O-Cloud identifier.",
+	)
 	_ = flags.StringArray(
 		extensionsFlagName,
 		[]string{},
 		"Extension to add to resources and resource pools.",
+	)
+	_ = flags.String(
+		namespaceFlagName,
+		"",
+		"The namespace the server is running",
+	)
+	_ = flags.String(
+		subscriptionConfigmapNameFlagName,
+		"",
+		"The configmap name used by subscriptions.",
 	)
 	return result
 }
@@ -173,6 +189,31 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		slog.Any("extensions", extensions),
 	)
 
+	// Get the cloud identifier:
+	globalCloudID, err := flags.GetString(globalCloudIDFlagName)
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to get global cloud identifier flag",
+			"flag", globalCloudIDFlagName,
+			"error", err.Error(),
+		)
+		return exit.Error(1)
+	}
+	if globalCloudID == "" {
+		c.logger.ErrorContext(
+			ctx,
+			"Global cloud identifier is empty",
+			"flag", globalCloudIDFlagName,
+		)
+		return exit.Error(1)
+	}
+	c.logger.InfoContext(
+		ctx,
+		"Global cloud identifier",
+		"value", globalCloudID,
+	)
+
 	// Create the transport wrapper:
 	transportWrapper, err := logging.NewTransportWrapper().
 		SetLogger(c.logger).
@@ -191,6 +232,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		AddPaths(
 			"/o2ims-infrastructureInventory/-/resourceTypes/-",
 			"/o2ims-infrastructureInventory/-/resourcePools/-/resources/-",
+			"/o2ims-infrastructureInventory/-/subscriptions/-",
 		).
 		SetSubsystem("inbound").
 		Build()
@@ -213,6 +255,17 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	})
 	router.Use(metricsWrapper)
 
+	// Get the K8S client (from the environment first):
+	kubeClient, err := k8s.NewClient().SetLogger(c.logger).SetLoggingWrapper(transportWrapper).Build()
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to create kubeClient",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+
 	// Generate the search API URL according the backend URL
 	backendURL, err = c.generateSearchApiUrl(backendURL)
 	if err != nil {
@@ -221,6 +274,36 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 			"Failed to generate search API URL",
 			"error", err.Error(),
 		)
+	}
+
+	// Get the namespace:
+	namespace, err := flags.GetString(namespaceFlagName)
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to get o2ims namespace flag",
+			slog.String("flag", namespaceFlagName),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	if namespace == "" {
+		namespace = service.DefaultNamespace
+	}
+
+	// Get the configmapName:
+	subscriptionsConfigmapName, err := flags.GetString(subscriptionConfigmapNameFlagName)
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to get alarm subscription configmap name flag",
+			slog.String("flag", subscriptionConfigmapNameFlagName),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+	if subscriptionsConfigmapName == "" {
+		subscriptionsConfigmapName = service.DefaultInfraInventoryConfigmapName
 	}
 
 	// Create the handler for resource pools:
@@ -243,6 +326,14 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	if err := c.createResourceTypeHandler(ctx,
 		transportWrapper, router,
 		backendURL, backendToken); err != nil {
+		return err
+	}
+
+	// Create the handler for the inventory subscriptions:
+	if err := c.createSubscriptionHandler(ctx,
+		transportWrapper, router,
+		kubeClient, namespace,
+		globalCloudID, subscriptionsConfigmapName, extensions); err != nil {
 		return err
 	}
 
@@ -327,6 +418,58 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	if err := exitHandler.Wait(ctx); err != nil {
 		return fmt.Errorf("failed to wait for exit signals: %w", err)
 	}
+	return nil
+}
+
+func (c *ResourceServerCommand) createSubscriptionHandler(ctx context.Context,
+	transportWrapper func(http.RoundTripper) http.RoundTripper,
+	router *mux.Router,
+	kubeClient *k8s.Client,
+	namespace, globalCloudID, subscriptionsConfigmapName string, extensions []string) error {
+	// Create the handler:
+	handler, err := service.NewSubscriptionHandler().
+		SetLogger(c.logger).
+		SetLoggingWrapper(transportWrapper).
+		SetGlobalCloudID(globalCloudID).
+		SetExtensions(extensions...).
+		SetKubeClient(kubeClient).
+		SetSubscriptionIdString(service.SubscriptionIdInfrastructureInventory).
+		SetNamespace(namespace).
+		SetConfigmapName(subscriptionsConfigmapName).
+		Build(ctx)
+
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to create handler",
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Create the routes:
+	adapter, err := service.NewAdapter().
+		SetLogger(c.logger).
+		SetPathVariables("subscriptionId").
+		SetHandler(handler).
+		Build()
+	if err != nil {
+		c.logger.ErrorContext(
+			ctx,
+			"Failed to create adapter",
+			"error", err,
+		)
+		return exit.Error(1)
+	}
+	router.Handle(
+		"/o2ims-infrastructureInventory/{version}/subscriptions",
+		adapter,
+	).Methods(http.MethodGet, http.MethodPost)
+	router.Handle(
+		"/o2ims-infrastructureInventory/{version}/subscriptions/{subscriptionId}",
+		adapter,
+	).Methods(http.MethodGet, http.MethodDelete)
+
 	return nil
 }
 

@@ -282,6 +282,8 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
 			fmt.Sprintf("--backend-url=%s", searchAPI),
+			fmt.Sprintf("--global-cloud-id=%s", cloudId),
+			fmt.Sprintf("--namespace=%s", inventory.Namespace),
 			GetBackendTokenArg(inventory.Spec.ResourceServerConfig.BackendToken))
 
 		return result, nil
