@@ -9,3 +9,6 @@
 
 # macOS auto generated
 .DS_Store
+
+# ginkgo generated binary
+*.test

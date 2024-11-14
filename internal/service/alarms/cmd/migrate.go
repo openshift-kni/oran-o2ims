@@ -15,7 +15,7 @@ var alarmsMigrate = &cobra.Command{
 	Short: "Run migrations all the way up",
 	Long:  `This is will run from k8s job before the server starts.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := db.StartMigration(); err != nil {
+		if err := db.StartMigration(db.GetPgConfig()); err != nil {
 			slog.Error("failed to do migration", "err", err)
 			os.Exit(1)
 		}

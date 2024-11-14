@@ -18,6 +18,9 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+// MigrationsTable table created by migration lib to track state of migration
+const MigrationsTable = "schema_migrations"
+
 // MigrationConfig PG config for migration
 type MigrationConfig struct {
 	Host            string
@@ -28,20 +31,10 @@ type MigrationConfig struct {
 	MigrationsTable string
 }
 
-// StartMigration starts migration for alarms server.
-func StartMigration() error {
+// StartMigration starts migration for alarms server from a k8s job.
+func StartMigration(pgc PgConfig) error {
 	// Init
-	pgc := GetPgConfig()
-	cfg := MigrationConfig{
-		Host:            pgc.Host,
-		Port:            pgc.Port,
-		User:            pgc.User,
-		Password:        pgc.Password,
-		Database:        pgc.Database,
-		MigrationsTable: "schema_migrations",
-	}
-
-	h, err := newHandler(cfg)
+	h, err := NewHandler(PGtoMigrateConfig(pgc))
 	if err != nil {
 		return fmt.Errorf("failed to create migrations handler: %w", err)
 	}
@@ -53,7 +46,7 @@ func StartMigration() error {
 	go func() {
 		<-c
 		slog.Info("Received shutdown signal, stopping migration gracefully")
-		h.migrate.GracefulStop <- true
+		h.Migrate.GracefulStop <- true
 	}()
 
 	// Run migrations
@@ -65,13 +58,25 @@ func StartMigration() error {
 	return nil
 }
 
+// PGtoMigrateConfig convert postgres conn config to migration conn config
+func PGtoMigrateConfig(pgc PgConfig) MigrationConfig {
+	return MigrationConfig{
+		Host:            pgc.Host,
+		Port:            pgc.Port,
+		User:            pgc.User,
+		Password:        pgc.Password,
+		Database:        pgc.Database,
+		MigrationsTable: MigrationsTable,
+	}
+}
+
 type MigrationHandler struct {
-	migrate *migrate.Migrate
+	Migrate *migrate.Migrate
 }
 
 // Printf is the implementation of migrate lib's logger interface
 func (h *MigrationHandler) Printf(format string, v ...interface{}) {
-	slog.Info(fmt.Sprintf(format, v...))
+	slog.Debug(fmt.Sprintf(format, v...))
 }
 
 // Verbose is the implementation of migrate lib's logger interface
@@ -79,8 +84,8 @@ func (h *MigrationHandler) Verbose() bool {
 	return true
 }
 
-// newHandler configure the migration data
-func newHandler(cfg MigrationConfig) (*MigrationHandler, error) {
+// NewHandler configure the migration data
+func NewHandler(cfg MigrationConfig) (*MigrationHandler, error) {
 	d, err := iofs.New(migrations, "migrations")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create migrations source: %w", err)
@@ -99,7 +104,7 @@ func newHandler(cfg MigrationConfig) (*MigrationHandler, error) {
 	}
 
 	h := &MigrationHandler{
-		migrate: m,
+		Migrate: m,
 	}
 	m.Log = h
 
@@ -109,14 +114,14 @@ func newHandler(cfg MigrationConfig) (*MigrationHandler, error) {
 func timer(name string) func() {
 	start := time.Now()
 	return func() {
-		slog.Info(fmt.Sprintf("%s took %s", name, time.Since(start)))
+		slog.Debug(fmt.Sprintf("%s took %s", name, time.Since(start)))
 	}
 }
 
 func (h *MigrationHandler) runMigrationUp() error {
 	defer timer("Up")()
 
-	if err := h.migrate.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err := h.Migrate.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed up: %w", err)
 	}
 	return nil
