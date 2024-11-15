@@ -1052,10 +1052,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Create Non-compliant enforce policy
 			policy = &policiesv1.Policy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-15.v1-sriov-configuration-policy",
+					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-15.v1-sriov-configuration-policy",
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 						utils.ChildPolicyClusterNameLabel:      "cluster-1",
 						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},

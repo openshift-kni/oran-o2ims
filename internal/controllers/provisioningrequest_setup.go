@@ -251,12 +251,42 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 	// ManagedCluster to which the policy is matched.
 	provisioningRequest, okCR := clusterInstance.GetLabels()[provisioningRequestNameLabel]
 	if okCR {
-		r.Logger.Info(
-			"[enqueueProvisioningRequestForPolicy] Add new reconcile request for ProvisioningRequest ",
-			"name", provisioningRequest)
-		requests = append(requests, reconcile.Request{
-			NamespacedName: types.NamespacedName{Name: provisioningRequest},
-		})
+		provReq := &provisioningv1alpha1.ProvisioningRequest{}
+		if err := r.Get(ctx, types.NamespacedName{Name: provisioningRequest}, provReq); err != nil {
+			if errors.IsNotFound(err) {
+				// The provisioning request could have been deleted
+				return nil
+			}
+			r.Logger.Error("[enqueueProvisioningRequestForPolicy] Error getting ProvisioningRequest. ", "Error: ", err)
+			return nil
+		}
+
+		clusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
+		if err := r.List(ctx, clusterTemplates); err != nil {
+			r.Logger.Error("[enqueueProvisioningRequestForPolicy] Error listing ClusterTemplates. ", "Error: ", err)
+			return nil
+		}
+
+		ctRefName := getClusterTemplateRefName(
+			provReq.Spec.TemplateName, provReq.Spec.TemplateVersion)
+		ctRefNamespace := ""
+		for _, ct := range clusterTemplates.Items {
+			if ctRefName == ct.Name {
+				// Break if found, as the metadata name of ClusterTemplate is unique across all namespaces.
+				ctRefNamespace = ct.Namespace
+				break
+			}
+		}
+
+		_, parentPolicyNs := utils.GetParentPolicyNameAndNamespace(obj.GetName())
+		if utils.IsParentPolicyInZtpClusterTemplateNs(parentPolicyNs, ctRefNamespace) {
+			r.Logger.Info(
+				"[enqueueProvisioningRequestForPolicy] Add new reconcile request for ProvisioningRequest ",
+				"name", provisioningRequest, "policyName", obj.GetName())
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: provisioningRequest},
+			})
+		}
 	}
 
 	return requests
