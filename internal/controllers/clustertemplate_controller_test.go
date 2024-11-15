@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -255,6 +256,146 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 		// Verify the result
 		Expect(reqs).To(HaveLen(0))
 	})
+})
+
+var _ = Describe("validatePolicyTemplateParamsSchema", func() {
+
+	It("Returns error for missing properties", func() {
+		var policyTemplateSchema map[string]any
+		jsonString := `{
+			"type": "object"
+		}`
+
+		err := json.Unmarshal([]byte(jsonString), &policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+		err = validatePolicyTemplateParamsSchema(policyTemplateSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(
+			"unexpected policyTemplateParameters structure, no properties present"))
+	})
+
+	It("Returns nil for properties not being a map", func() {
+		var policyTemplateSchema map[string]any
+		jsonString := `{
+			"type": "object",
+			"properties": "string"
+		}`
+
+		err := json.Unmarshal([]byte(jsonString), &policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+		err = validatePolicyTemplateParamsSchema(policyTemplateSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(
+			"unexpected policyTemplateParameters properties structure"))
+	})
+
+	It("Returns error for property not being a map", func() {
+		var policyTemplateSchema map[string]any
+		jsonString := `{
+			"type": "object",
+			"properties": {
+			  "cpu-isolated": "string",
+			  "sriov-network-vlan-1": {
+				"type": "string"
+			  }
+			}
+		}`
+		err := json.Unmarshal([]byte(jsonString), &policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+		err = validatePolicyTemplateParamsSchema(policyTemplateSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(
+			"unexpected policyTemplateParameters structure for the cpu-isolated property"))
+	})
+
+	It("Returns error for key different from \"type\"", func() {
+		var policyTemplateSchema map[string]any
+		jsonString := `{
+			"type": "object",
+			"properties": {
+			  "cpu-isolated": {
+				"type": "string"
+			  },
+			  "sriov-network-vlan-1": {
+				"var-type": "integer"
+			  }
+			}
+		}`
+
+		err := json.Unmarshal([]byte(jsonString), &policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+		err = validatePolicyTemplateParamsSchema(policyTemplateSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(
+			"unexpected policyTemplateParameters structure: expected subproperty \"type\" missing"))
+	})
+
+	It("Returns error for type property being an object", func() {
+		var policyTemplateSchema map[string]any
+		jsonString := `{
+			"type": "object",
+			"properties": {
+			  "cpu-isolated": {
+				"type": {
+					"key": "value"
+				}
+			  },
+			  "sriov-network-vlan-1": {
+				"type": "string"
+			  }
+			}
+		}`
+
+		err := json.Unmarshal([]byte(jsonString), &policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+		err = validatePolicyTemplateParamsSchema(policyTemplateSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(
+			"unexpected policyTemplateParameters structure: expected the subproperty \"type\" to be string"))
+	})
+
+	It("Returns error for non string type", func() {
+		var policyTemplateSchema map[string]any
+		jsonString := `{
+			"type": "object",
+			"properties": {
+			  "cpu-isolated": {
+				"type": "string"
+			  },
+			  "sriov-network-vlan-1": {
+				"type": "integer"
+			  }
+			}
+		}`
+
+		err := json.Unmarshal([]byte(jsonString), &policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+		err = validatePolicyTemplateParamsSchema(policyTemplateSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(
+			"expected type string for the sriov-network-vlan-1 property"))
+	})
+
+	It("Returns nil for expected structure", func() {
+		var policyTemplateSchema map[string]any
+		jsonString := `{
+			"type": "object",
+			"properties": {
+			  "cpu-isolated": {
+				"type": "string"
+			  },
+			  "sriov-network-vlan-1": {
+				"type": "string"
+			  }
+			}
+		}`
+
+		err := json.Unmarshal([]byte(jsonString), &policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+		err = validatePolicyTemplateParamsSchema(policyTemplateSchema)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
 })
 
 var _ = Describe("validateClusterTemplateCR", func() {
@@ -933,7 +1074,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			"nodeClusterName": {"type": "string"},
 			"oCloudSiteId": {"type": "string"},
 			"clusterInstanceParameters": {"type": "object"},
-			"policyTemplateParameters": {"type": "object"}
+			"policyTemplateParameters": {"type": "object", "properties": {}}
 		},
 		"type": "object",
 		"required": [
@@ -950,6 +1091,35 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			errText: "",
 		},
 		{
+			name: "bad schema",
+			args: args{
+				object: &provisioningv1alpha1.ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: getClusterTemplateRefName(tName, tVersion),
+					},
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"nodeClusterName": {"type": "string"},
+			"oCloudSiteId": {"type": "string"},
+			"clusterInstanceParameters": {"type": "object"},
+			"policyTemplateParameters": {"type": "object", "properties": {"a": {}}}
+		},
+		"type": "object",
+		"required": [
+	"nodeClusterName",
+	"oCloudSiteId",
+	"policyTemplateParameters",
+	"clusterInstanceParameters"
+	]
+	}`)},
+					},
+				},
+			},
+			wantErr: true,
+			errText: "Error validating the policyTemplateParameters schema: unexpected policyTemplateParameters structure: expected subproperty \"type\" missing",
+		},
+		{
 			name: "bad type",
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
@@ -962,7 +1132,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			"nodeClusterName": {"type": "string"},
 			"oCloudSiteId": {"type": "string"},
 			"clusterInstanceParameters": {"type": "string"},
-			"policyTemplateParameters": {"type": "object"}
+			"policyTemplateParameters": {"type": "object", "properties": {"a": {"type": "string"}}}
 		},
 		"type": "object",
 		"required": [
@@ -990,7 +1160,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 		"properties": {
 			"oCloudSiteId": {"type": "string"},
 			"clusterInstanceParameters": {"type": "string"},
-			"policyTemplateParameters": {"type": "object"}
+			"policyTemplateParameters": {"type": "object", "properties": {"a": {"type": "string"}}}
 		},
 		"type": "object",
 		"required": [
@@ -1018,7 +1188,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 		"properties": {
 			"oCloudSiteId": {"type": "string"},
 			"clusterInstanceParameters": {"type": "string"},
-			"policyTemplateParameters": {"type": "object"}
+			"policyTemplateParameters": {"type": "object", "properties": {"a": {"type": "string"}}}
 		},
 		"type": "object",
 		"required": [

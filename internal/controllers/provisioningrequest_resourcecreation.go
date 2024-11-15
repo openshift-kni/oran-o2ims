@@ -181,7 +181,13 @@ func (t *provisioningRequestReconcilerTask) createPolicyTemplateConfigMap(
 	// Update the keys to match the ClusterTemplate name and the version.
 	finalPolicyTemplateData := make(map[string]string)
 	for key, value := range t.clusterInput.policyTemplateData {
-		finalPolicyTemplateData[key] = value.(string)
+		data, ok := value.(string)
+		if !ok {
+			return utils.NewInputError(
+				"policyTemplateParameters/policyTemplateSchema for the %s key (%v) is not a string",
+				key, value)
+		}
+		finalPolicyTemplateData[key] = data
 	}
 
 	// Put all the data from the mergedPolicyTemplateData in a configMap in the same
