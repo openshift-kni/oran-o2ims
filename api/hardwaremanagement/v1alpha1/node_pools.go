@@ -47,7 +47,8 @@ type NodePoolSpec struct {
 	HwMgrId string `json:"hwMgrId,omitempty"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	NodeGroup []NodeGroup `json:"nodeGroup"`
+	NodeGroup  []NodeGroup       `json:"nodeGroup"`
+	Extensions map[string]string `json:"extensions"`
 }
 
 type NodeGroup struct {
@@ -55,7 +56,9 @@ type NodeGroup struct {
 	HwProfile string `json:"hwProfile"`
 	Size      int    `json:"size" yaml:"size"`
 	// +kubebuilder:validation:MinItems=1
-	Interfaces []string `json:"interfaces,omitempty"`
+	Interfaces     []string `json:"interfaces,omitempty"`
+	ResourcePoolId string   `json:"resourcePoolId"`
+	Role           string   `json:"role"`
 }
 
 type Properties struct {
