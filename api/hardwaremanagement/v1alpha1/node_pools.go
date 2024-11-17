@@ -48,7 +48,7 @@ type NodePoolSpec struct {
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeGroup  []NodeGroup       `json:"nodeGroup"`
-	Extensions map[string]string `json:"extensions"`
+	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
 type NodeGroup struct {
