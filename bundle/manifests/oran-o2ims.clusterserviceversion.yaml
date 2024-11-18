@@ -81,11 +81,13 @@ metadata:
                   "eno1"
                 ],
                 "name": "master",
+                "role": "master",
                 "size": 1
               },
               {
                 "hwProfile": "sample-worker-profile",
                 "name": "worker",
+                "role": "worker",
                 "size": 0
               }
             ],

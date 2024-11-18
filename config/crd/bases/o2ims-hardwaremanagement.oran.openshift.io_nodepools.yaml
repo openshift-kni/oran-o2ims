@@ -86,6 +86,7 @@ spec:
                   required:
                   - hwProfile
                   - name
+                  - role
                   - size
                   type: object
                 type: array

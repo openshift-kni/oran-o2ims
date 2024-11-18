@@ -59,7 +59,7 @@ type NodeGroup struct {
 	// +kubebuilder:validation:MinItems=1
 	Interfaces     []string `json:"interfaces,omitempty"`
 	ResourcePoolId string   `json:"resourcePoolId,omitempty"`
-	Role           string   `json:"role,omitempty"`
+	Role           string   `json:"role"`
 }
 
 type Properties struct {

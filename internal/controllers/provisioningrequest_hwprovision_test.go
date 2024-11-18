@@ -146,8 +146,10 @@ var _ = Describe("renderHardwareTemplate", func() {
 				utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
+  role: master
 - name: worker
-  hwProfile: profile-spr-dual-processor-128G`,
+  hwProfile: profile-spr-dual-processor-128G
+  role: worker`,
 				utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 			},
 		}
@@ -238,8 +240,9 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplatePluginMgr:      "new id",
 					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
-	- name: master
-      hwProfile: profile-spr-single-processor-64G`,
+	- name: worker
+      hwProfile: profile-spr-single-processor-64G
+      role: worker`,
 					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
@@ -273,7 +276,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplateBootIfaceLabel: "new-label",
 					utils.HwTemplateNodePool: `
 	- name: master
-      hwProfile: profile-spr-single-processor-64G`,
+      hwProfile: profile-spr-single-processor-64G
+      role: master`,
 					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
@@ -308,8 +312,10 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplateNodePool: `
 	- name: master
       hwProfile: profile-spr-single-processor-64G
+      role: master
 	- name: worker
-      hwProfile: profile-spr-single-processor-64G`,
+      hwProfile: profile-spr-single-processor-64G
+      role: worker`,
 					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}

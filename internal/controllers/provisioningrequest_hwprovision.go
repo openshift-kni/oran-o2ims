@@ -411,7 +411,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	}
 
 	for i, group := range nodeGroup {
-		if count, ok := roleCounts[group.Name]; ok {
+		if count, ok := roleCounts[group.Role]; ok {
 			nodeGroup[i].Size = count
 		}
 	}

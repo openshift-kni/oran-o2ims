@@ -95,8 +95,10 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 					utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
+  role: master
 - name: worker
-  hwProfile: profile-spr-dual-processor-128G`,
+  hwProfile: profile-spr-dual-processor-128G
+  role: worker`,
 				},
 			},
 		}
@@ -468,8 +470,10 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 					utils.HwTemplateNodePool: `
 - name: master
   hwProfile: profile-spr-single-processor-64G
+  role: master
 - name: worker
-  hwProfile: profile-spr-dual-processor-128G`,
+  hwProfile: profile-spr-dual-processor-128G
+  role: worker`,
 				},
 			},
 		}

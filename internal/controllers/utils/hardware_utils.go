@@ -45,7 +45,7 @@ func IsConditionDoesNotExistsErr(err error) bool {
 // FindNodeGroupByRole finds the matching NodeGroup by role
 func FindNodeGroupByRole(role string, nodeGroups []hwv1alpha1.NodeGroup) (*hwv1alpha1.NodeGroup, error) {
 	for i, group := range nodeGroups {
-		if group.Name == role {
+		if group.Role == role {
 			return &nodeGroups[i], nil
 		}
 	}
@@ -398,6 +398,9 @@ func ValidateConfigMapFields(configMap *corev1.ConfigMap) error {
 		}
 		if ng.HwProfile == "" {
 			return fmt.Errorf("missing 'hwProfile' in node-pools-data element at index %d", i)
+		}
+		if ng.Role == "" {
+			return fmt.Errorf("missing 'role' in node-pools-data element at index %d", i)
 		}
 	}
 	return nil
