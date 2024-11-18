@@ -165,10 +165,11 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
 
     ```console
     status:
-      clusterDetails:
-        clusterProvisionStartedAt: "2024-10-19T00:27:31Z"
-        name: sno1
-        ztpStatus: ZTP Not Done
+      extensions:
+        clusterDetails:
+          clusterProvisionStartedAt: "2024-10-19T00:27:31Z"
+          name: sno1
+          ztpStatus: ZTP Not Done
       conditions:
       ...
       - lastTransitionTime: "2024-10-19T00:27:30Z"
@@ -206,10 +207,11 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
 
     ```console
     status:
-      clusterDetails:
-        clusterProvisionStartedAt: "2024-10-19T00:27:31Z"
-        name: sno1
-        ztpStatus: ZTP Not Done
+      extensions:
+        clusterDetails:
+          clusterProvisionStartedAt: "2024-10-19T00:27:31Z"
+          name: sno1
+          ztpStatus: ZTP Not Done
       conditions:
       ...
       - lastTransitionTime: "2024-10-19T00:27:30Z"
@@ -241,16 +243,17 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         provisioningDetails: Cluster configuration is being applied
         provisioningState: progressing
     ```
-9. After all policies are compliant, set `provisioningStatus.provisioningState` to fulfilled and `clusterDetails.ztpStatus` to ZTP Done, indicating successful provisioning.
+9. After all policies are compliant, set `provisioningStatus.provisioningState` to fulfilled and `extensions.clusterDetails.ztpStatus` to ZTP Done, indicating successful provisioning.
 
    Example status:
 
     ```console
     status:
-      clusterDetails:
-        clusterProvisionStartedAt: "2024-10-19T00:27:31Z"
-        name: sno1
-        ztpStatus: ZTP Done
+      extensions:
+        clusterDetails:
+          clusterProvisionStartedAt: "2024-10-19T00:27:31Z"
+          name: sno1
+          ztpStatus: ZTP Done
       conditions:
       ...
       - lastTransitionTime: "2024-10-19T00:27:30Z"

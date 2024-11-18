@@ -387,18 +387,8 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
-      - description: ClusterDetails references to the ClusterInstance.
-        displayName: Cluster Details
-        path: clusterDetails
       - displayName: Conditions
         path: conditions
-      - description: NodePoolRef references to the NodePool.
-        displayName: Node Pool Ref
-        path: nodePoolRef
-      - description: Holds policies that are matched with the ManagedCluster created
-          by the ProvisioningRequest.
-        displayName: Policies
-        path: policies
       version: v1alpha1
   description: |
     # O-RAN O2IMS operator

@@ -82,6 +82,17 @@ type ClusterDetails struct {
 	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
 }
 
+type Extensions struct {
+	// ClusterDetails references to the ClusterInstance.
+	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
+
+	// NodePoolRef references to the NodePool.
+	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
+
+	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
+	Policies []PolicyDetails `json:"policies,omitempty"`
+}
+
 // PolicyDetails holds information about an ACM policy.
 type PolicyDetails struct {
 	// The compliance of the ManagedCluster created through a ProvisioningRequest with the current
@@ -143,17 +154,9 @@ type ProvisioningRequestStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// ClusterDetails references to the ClusterInstance.
-	//+operator-sdk:csv:customresourcedefinitions:type=status
-	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
-
-	// NodePoolRef references to the NodePool.
-	//+operator-sdk:csv:customresourcedefinitions:type=status
-	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
-
-	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
-	//+operator-sdk:csv:customresourcedefinitions:type=status
-	Policies []PolicyDetails `json:"policies,omitempty"`
+	// Extensions contain extra details about the resources and the configuration used for/by
+	// the ProvisioningRequest.
+	Extensions Extensions `json:"extensions,omitempty"`
 
 	ProvisioningStatus ProvisioningStatus `json:"provisioningStatus,omitempty"`
 }

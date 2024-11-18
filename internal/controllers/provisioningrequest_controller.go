@@ -321,15 +321,15 @@ func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx conte
 func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx context.Context) (result ctrl.Result, err error) {
 	if !t.isHardwareProvisionSkipped() {
 		// Check the NodePool status if exists
-		if t.object.Status.NodePoolRef == nil {
+		if t.object.Status.Extensions.NodePoolRef == nil {
 			if err = t.checkResourcePreparationStatus(ctx); err != nil {
 				return requeueWithError(err)
 			}
 			return doNotRequeue(), nil
 		}
 		nodePool := &hwv1alpha1.NodePool{}
-		nodePool.SetName(t.object.Status.NodePoolRef.Name)
-		nodePool.SetNamespace(t.object.Status.NodePoolRef.Namespace)
+		nodePool.SetName(t.object.Status.Extensions.NodePoolRef.Name)
+		nodePool.SetNamespace(t.object.Status.Extensions.NodePoolRef.Namespace)
 		hwProvisioned, timedOutOrFailed, err := t.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Provisioned)
 		if err != nil {
 			return requeueWithError(err)
@@ -347,9 +347,9 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	}
 
 	// Check the ClusterInstance status if exists
-	if t.object.Status.ClusterDetails != nil {
+	if t.object.Status.Extensions.ClusterDetails != nil {
 		err = t.checkClusterProvisionStatus(
-			ctx, t.object.Status.ClusterDetails.Name)
+			ctx, t.object.Status.Extensions.ClusterDetails.Name)
 		if err != nil {
 			return requeueWithError(err)
 		}

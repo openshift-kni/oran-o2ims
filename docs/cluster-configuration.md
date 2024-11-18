@@ -114,68 +114,70 @@ metadata:
   namespace: ztp-sno-ran-du-v4-Y-Z
 ```
 
-Once a policy matched with a ManagedCluster deployed through a ProvisioningRequest becomes `NonCompliant`, it's reflected in the ProvisioningRequest `status.policies` and the time when it becomes `NonCompliant` is also recorded. The `ConfigurationApplied` condition reflects that the configuration is being applied.
+Once a policy matched with a ManagedCluster deployed through a ProvisioningRequest becomes `NonCompliant`, it's reflected in the ProvisioningRequest `status.extensions.policies` and the time when it becomes `NonCompliant` is also recorded. The `ConfigurationApplied` condition reflects that the configuration is being applied.
 ```yaml
 status:
-  clusterDetails:
-    clusterProvisionStartedAt: "2024-10-07T17:59:23Z"
-    name: sno-ran-du-1
-    nonCompliantAt: "2024-10-07T21:53:29Z"  <<< non compliance timestamp recorded here
-    ztpStatus: ZTP Done
+  extensions:
+    clusterDetails:
+      clusterProvisionStartedAt: "2024-10-07T17:59:23Z"
+      name: sno-ran-du-1
+      nonCompliantAt: "2024-10-07T21:53:29Z"  <<< non compliance timestamp recorded here
+      ztpStatus: ZTP Done
+    policies:
+    - compliant: Compliant
+      policyName: v1-perf-configuration-policy
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
+      remediationAction: enforce
+    - compliant: NonCompliant <<< Policy is NonCompliant
+      policyName: v1-sriov-configuration-policy
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
+      remediationAction: enforce
+    - compliant: Compliant
+      policyName: v1-subscriptions-policy
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
+      remediationAction: enforce
   conditions:
   - lastTransitionTime: "2024-10-07T21:53:29Z"
     message: The configuration is still being applied
     reason: InProgress
     status: "False"
     type: ConfigurationApplied
-  policies:
-  - compliant: Compliant
-    policyName: v1-perf-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-Y-Z
-    remediationAction: enforce
-  - compliant: NonCompliant <<< Policy is NonCompliant
-    policyName: v1-sriov-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-Y-Z
-    remediationAction: enforce
-  - compliant: Compliant
-    policyName: v1-subscriptions-policy
-    policyNamespace: ztp-sno-ran-du-v4-Y-Z
-    remediationAction: enforce
 ```
 
 **Notes**:
 * The format of the `nonCompliantAt` timestamps might move to another structure in the status, but it will still be recorded.
 * Some changes happen so fast that the Policy doesn't even switch to `NonCompliant`, so the O-Cloud Manager cannot record the event. In this case, the O-Cloud Manager still holds a correct recording since all the policies are/remain Compliant.
-* Once an enforce `NonCompliant` Policy becomes `Compliant` again, the `status.policies` is updated, the `status.clusterDetails.nonCompliantAt` value removed and the `ConfigurationApplied` condition updated to show that the configuration is up to date:
+* Once an enforce `NonCompliant` Policy becomes `Compliant` again, the `status.extensions.policies` is updated, the `status.extensions.clusterDetails.nonCompliantAt` value removed and the `ConfigurationApplied` condition updated to show that the configuration is up to date:
 * When refactored, the start and end times of the configuration being NonCompliant will be recorded.
 
 Once all the policies become `Compliant`, the status is updated as follows:
 ```yaml
 status:
-  clusterDetails:
-    clusterProvisionStartedAt: "2024-10-07T17:59:23Z"
-    name: sno-ran-du-1
-    ztpStatus: ZTP Done
-    >>> no nonCompliantAt <<<
+  extensions:
+    clusterDetails:
+      clusterProvisionStartedAt: "2024-10-07T17:59:23Z"
+      name: sno-ran-du-1
+      ztpStatus: ZTP Done
+      >>> no nonCompliantAt <<<
+    policies:
+    - compliant: Compliant
+      policyName: v1-perf-configuration-policy
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
+      remediationAction: enforce
+    - compliant: Compliant
+      policyName: v1-sriov-configuration-policy
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
+      remediationAction: enforce
+    - compliant: Compliant
+      policyName: v1-subscriptions-policy
+      policyNamespace: ztp-sno-ran-du-v4-Y-Z
+      remediationAction: enforce
   conditions:
   - lastTransitionTime: "2024-10-07T22:15:32Z"
     message: The configuration is up to date
     reason: Completed
     status: "True"
     type: ConfigurationApplied
-  policies:
-  - compliant: Compliant
-    policyName: v1-perf-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-Y-Z
-    remediationAction: enforce
-  - compliant: Compliant
-    policyName: v1-sriov-configuration-policy
-    policyNamespace: ztp-sno-ran-du-v4-Y-Z
-    remediationAction: enforce
-  - compliant: Compliant
-    policyName: v1-subscriptions-policy
-    policyNamespace: ztp-sno-ran-du-v4-Y-Z
-    remediationAction: enforce
 ```
 ### Updates to the ClusterInstance defaults ConfigMap
 We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR.
@@ -232,54 +234,64 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
     * The new policies created through the [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) Policy Generator are matched to the ManagedCluster.
     * The `ConfigurationApplied` condition is updated in the ProvisioningRequest to show that the configuration has changed and is being applied (the policies depend on each other, so some are in a `Pending` state until ACM confirms their compliance):
     ```yaml
-    - lastTransitionTime: "2024-10-11T19:48:06Z"
-      message: The configuration is still being applied
-      reason: InProgress
-      status: "False"
-      type: ConfigurationApplied
-    policies:
-    - compliant: Pending
-      policyName: v2-perf-configuration-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
-    - compliant: Pending
-      policyName: v2-sriov-configuration-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
-    - compliant: Compliant
-      policyName: v2-subscriptions-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
-    - compliant: Pending
-      policyName: v2-tuned-configuration-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
+    status:
+      extensions:
+        ...
+        policies:
+        - compliant: Pending
+          policyName: v2-perf-configuration-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+        - compliant: Pending
+          policyName: v2-sriov-configuration-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+        - compliant: Compliant
+          policyName: v2-subscriptions-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+        - compliant: Pending
+          policyName: v2-tuned-configuration-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+      conditions:
+        ...
+        - lastTransitionTime: "2024-10-11T19:48:06Z"
+          message: The configuration is still being applied
+          reason: InProgress
+          status: "False"
+          type: ConfigurationApplied
     ```
     * The affected CRs are updated on the ManagedCluster, not deleted and recreated.
 6. The O-Cloud Manager updates the ProvisioningRequest once all the policies are `Compliant`
     ```yaml
-    - lastTransitionTime: "2024-10-11T19:48:36Z"
-      message: The configuration is up to date
-      reason: Completed
-      status: "True"
-      type: ConfigurationApplied
-    policies:
-    - compliant: Compliant
-      policyName: v2-tuned-configuration-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
-    - compliant: Compliant
-      policyName: v2-perf-configuration-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
-    - compliant: Compliant
-      policyName: v2-sriov-configuration-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
-    - compliant: Compliant
-      policyName: v2-subscriptions-policy
-      policyNamespace: ztp-sno-ran-du-v4-Y-Z
-      remediationAction: enforce
+    status:
+      extensions:
+        ...
+        policies:
+        - compliant: Compliant
+          policyName: v2-tuned-configuration-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+        - compliant: Compliant
+          policyName: v2-perf-configuration-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+        - compliant: Compliant
+          policyName: v2-sriov-configuration-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+        - compliant: Compliant
+          policyName: v2-subscriptions-policy
+          policyNamespace: ztp-sno-ran-du-v4-Y-Z
+          remediationAction: enforce
+      conditions:
+      ...
+      - lastTransitionTime: "2024-10-11T19:48:36Z"
+        message: The configuration is up to date
+        reason: Completed
+        status: "True"
+        type: ConfigurationApplied
     ```
 
 ### Adding a new manifest to an existing ACM PolicyGenerator

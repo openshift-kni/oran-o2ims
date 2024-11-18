@@ -345,8 +345,8 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		// Expect to not requeue on valid provisioning request.
 		Expect(result.Requeue).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
-		Expect(CRTask.object.Status.Policies).To(BeEmpty())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(BeEmpty())
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
@@ -379,7 +379,7 @@ defaultHugepagesSize: "1G"`,
 			metav1.ConditionFalse,
 			"",
 		)
-		CRTask.object.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+		CRTask.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
 
 		// Call the Reconciliation function.
@@ -405,8 +405,8 @@ defaultHugepagesSize: "1G"`,
 		// Expect to not requeue on valid provisioning request.
 		Expect(result.Requeue).To(BeFalse())
 		Expect(result.RequeueAfter).To(Equal(5 * time.Minute)) // Long interval
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
-		Expect(CRTask.object.Status.Policies).ToNot(BeEmpty())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).ToNot(BeEmpty())
 	})
 
 	It("Moves from TimedOut to Completed if all the policies are compliant", func() {
@@ -496,8 +496,8 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse()) // there are no NonCompliant policies
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
@@ -601,8 +601,8 @@ defaultHugepagesSize: "1G"`,
 		// so we need to requeue to re-evaluate the timeout.
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
@@ -630,8 +630,8 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
-		CRTask.object.Status.ClusterDetails.NonCompliantAt.Time =
-			CRTask.object.Status.ClusterDetails.NonCompliantAt.Add(-2 * time.Minute)
+		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time =
+			CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Add(-2 * time.Minute)
 		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -665,7 +665,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeFalse()) // all policies are in inform
 		Expect(err).ToNot(HaveOccurred())
 		// Check that the NonCompliantAt is zero.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
@@ -753,8 +753,8 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeTrue()) // we have non compliant enforce policies
 		Expect(err).ToNot(HaveOccurred())
 		// Only policies created in the namespace for the clustertemplate should be added.
-		Expect(len(CRTask.object.Status.Policies)).To(Equal(1))
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(len(CRTask.object.Status.Extensions.Policies)).To(Equal(1))
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
@@ -764,8 +764,8 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 		))
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
-		initialNonCompliantAt := CRTask.object.Status.ClusterDetails.NonCompliantAt
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		initialNonCompliantAt := CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
@@ -793,7 +793,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
@@ -803,8 +803,8 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 		))
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(Equal(initialNonCompliantAt))
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(Equal(initialNonCompliantAt))
 
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
@@ -828,7 +828,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
@@ -838,8 +838,8 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 		))
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(Equal(initialNonCompliantAt))
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(Equal(initialNonCompliantAt))
 
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
@@ -920,7 +920,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "",
@@ -930,7 +930,7 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 		))
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
@@ -979,8 +979,8 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(BeEmpty())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(BeEmpty())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 
 		// Create inform policies, one Compliant and one NonCompliant.
 		newPolicies := []client.Object{
@@ -1028,8 +1028,8 @@ defaultHugepagesSize: "1G"`,
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
 		// NonCompliantAt should still be zero since we don't consider inform policies in the timeout.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
@@ -1076,8 +1076,8 @@ defaultHugepagesSize: "1G"`,
 		// so we need to requeue to re-evaluate the timeout.
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
@@ -1105,8 +1105,8 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
-		CRTask.object.Status.ClusterDetails.NonCompliantAt.Time =
-			CRTask.object.Status.ClusterDetails.NonCompliantAt.Add(-2 * time.Minute)
+		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time =
+			CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Add(-2 * time.Minute)
 		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -1184,8 +1184,8 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(BeEmpty())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(BeEmpty())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
@@ -1391,7 +1391,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
@@ -1498,7 +1498,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Compliant",
@@ -1604,7 +1604,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "NonCompliant",
@@ -1710,7 +1710,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Policies).To(ConsistOf(
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
 					Compliant:         "Pending",
@@ -1774,7 +1774,9 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 					},
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
-					ClusterDetails: &provisioningv1alpha1.ClusterDetails{},
+					Extensions: provisioningv1alpha1.Extensions{
+						ClusterDetails: &provisioningv1alpha1.ClusterDetails{},
+					},
 				},
 			},
 		}
@@ -1822,11 +1824,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
 	})
 
 	It("Returns false if the status is Completed and sets NonCompliantAt", func() {
@@ -1838,11 +1840,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
 	})
 
 	It("Returns false if the status is OutOfDate and sets NonCompliantAt", func() {
@@ -1854,11 +1856,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
 	})
 
 	It("Returns false if the status is Missing and sets NonCompliantAt", func() {
@@ -1870,11 +1872,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
 	})
 
 	It("Returns true if the status is InProgress and the timeout has passed", func() {
@@ -1887,16 +1889,16 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		)
 		// Set NonCompliantAt.
 		nonCompliantAt := metav1.Now().Add(-2 * time.Minute)
-		CRTask.object.Status.ClusterDetails.NonCompliantAt.Time = nonCompliantAt
+		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time = nonCompliantAt
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt wasn't changed and that the return is true.
 		Expect(policyTimedOut).To(BeTrue())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt.Time).To(Equal(nonCompliantAt))
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(Equal(nonCompliantAt))
 	})
 
 	It("Sets NonCompliantAt if there is no ConfigurationApplied condition", func() {
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 })

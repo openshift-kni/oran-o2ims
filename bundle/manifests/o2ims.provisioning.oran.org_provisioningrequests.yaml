@@ -89,26 +89,6 @@ spec:
           status:
             description: ProvisioningRequestStatus defines the observed state of ProvisioningRequest
             properties:
-              clusterDetails:
-                description: ClusterDetails references to the ClusterInstance.
-                properties:
-                  clusterProvisionStartedAt:
-                    description: A timestamp indicating the cluster provisoning has
-                      started
-                    format: date-time
-                    type: string
-                  name:
-                    description: Contains the name of the created ClusterInstance.
-                    type: string
-                  nonCompliantAt:
-                    description: Holds the first timestamp when the configuration
-                      was found NonCompliant for the cluster.
-                    format: date-time
-                    type: string
-                  ztpStatus:
-                    description: Says if ZTP has complete or not.
-                    type: string
-                type: object
               conditions:
                 items:
                   description: "Condition contains details for one aspect of the current
@@ -178,48 +158,74 @@ spec:
                   - type
                   type: object
                 type: array
-              nodePoolRef:
-                description: NodePoolRef references to the NodePool.
+              extensions:
+                description: |-
+                  Extensions contain extra details about the resources and the configuration used for/by
+                  the ProvisioningRequest.
                 properties:
-                  hardwareConfiguringCheckStart:
-                    description: Represents the timestamp of the first status check
-                      for hardware configuring
-                    format: date-time
-                    type: string
-                  hardwareProvisioningCheckStart:
-                    description: Represents the timestamp of the first status check
-                      for hardware provisioning
-                    format: date-time
-                    type: string
-                  name:
-                    description: Contains the name of the created NodePool.
-                    type: string
-                  namespace:
-                    description: Contains the namespace of the created NodePool.
-                    type: string
+                  clusterDetails:
+                    description: ClusterDetails references to the ClusterInstance.
+                    properties:
+                      clusterProvisionStartedAt:
+                        description: A timestamp indicating the cluster provisoning
+                          has started
+                        format: date-time
+                        type: string
+                      name:
+                        description: Contains the name of the created ClusterInstance.
+                        type: string
+                      nonCompliantAt:
+                        description: Holds the first timestamp when the configuration
+                          was found NonCompliant for the cluster.
+                        format: date-time
+                        type: string
+                      ztpStatus:
+                        description: Says if ZTP has complete or not.
+                        type: string
+                    type: object
+                  nodePoolRef:
+                    description: NodePoolRef references to the NodePool.
+                    properties:
+                      hardwareConfiguringCheckStart:
+                        description: Represents the timestamp of the first status
+                          check for hardware configuring
+                        format: date-time
+                        type: string
+                      hardwareProvisioningCheckStart:
+                        description: Represents the timestamp of the first status
+                          check for hardware provisioning
+                        format: date-time
+                        type: string
+                      name:
+                        description: Contains the name of the created NodePool.
+                        type: string
+                      namespace:
+                        description: Contains the namespace of the created NodePool.
+                        type: string
+                    type: object
+                  policies:
+                    description: Holds policies that are matched with the ManagedCluster
+                      created by the ProvisioningRequest.
+                    items:
+                      description: PolicyDetails holds information about an ACM policy.
+                      properties:
+                        compliant:
+                          description: |-
+                            The compliance of the ManagedCluster created through a ProvisioningRequest with the current
+                            policy.
+                          type: string
+                        policyName:
+                          description: The policy's name.
+                          type: string
+                        policyNamespace:
+                          description: The policy's namespace.
+                          type: string
+                        remediationAction:
+                          description: The policy's remediation action.
+                          type: string
+                      type: object
+                    type: array
                 type: object
-              policies:
-                description: Holds policies that are matched with the ManagedCluster
-                  created by the ProvisioningRequest.
-                items:
-                  description: PolicyDetails holds information about an ACM policy.
-                  properties:
-                    compliant:
-                      description: |-
-                        The compliance of the ManagedCluster created through a ProvisioningRequest with the current
-                        policy.
-                      type: string
-                    policyName:
-                      description: The policy's name.
-                      type: string
-                    policyNamespace:
-                      description: The policy's namespace.
-                      type: string
-                    remediationAction:
-                      description: The policy's remediation action.
-                      type: string
-                  type: object
-                type: array
               provisioningStatus:
                 properties:
                   provisionedResources:
