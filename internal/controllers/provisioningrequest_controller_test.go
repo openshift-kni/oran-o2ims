@@ -514,7 +514,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					utils.HwTemplateBootIfaceLabel:             "label",
 					utils.HwTemplatePluginMgr:                  "hwmgr",
 					utils.HwTemplateNodePool: `
-    - name: master
+    - name: controller
       hwProfile: profile-spr-single-processor-64G
       role: master
       resourcePoolId: xyz
@@ -761,7 +761,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodePool.Spec.HwMgrId = "hwmgr"
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
+				{Name: "controller", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
 				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
@@ -1025,7 +1025,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodePool.Spec.HwMgrId = "hwmgr"
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
+				{Name: "controller", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
 				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
@@ -1736,7 +1736,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					HwMgrId: utils.UnitTestHwmgrID,
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
-							Name:       "master",
+							Name:       "controller",
 							HwProfile:  "profile-spr-single-processor-64G",
 							Size:       1,
 							Interfaces: []string{"eno1", "eth0", "eth1"},
@@ -2104,7 +2104,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					HwMgrId: utils.UnitTestHwmgrID,
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
-							Name:       "master",
+							Name:       "controller",
 							HwProfile:  "profile-spr-single-processor-64G",
 							Size:       1,
 							Interfaces: []string{"eno1", "eth0", "eth1"},

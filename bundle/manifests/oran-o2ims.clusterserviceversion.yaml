@@ -81,12 +81,14 @@ metadata:
                   "eno1"
                 ],
                 "name": "master",
+                "resourcePoolId": "xyz",
                 "role": "master",
                 "size": 1
               },
               {
                 "hwProfile": "sample-worker-profile",
                 "name": "worker",
+                "resourcePoolId": "xyz",
                 "role": "worker",
                 "size": 0
               }

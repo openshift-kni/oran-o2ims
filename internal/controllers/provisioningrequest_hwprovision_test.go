@@ -144,7 +144,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 				utils.HwTemplateBootIfaceLabel: "bootable-interface",
 				utils.HwTemplateNodePool: `
-- name: master
+- name: controller
   hwProfile: profile-spr-single-processor-64G
   role: master
   resourcePoolId: xyz
@@ -181,8 +181,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 			size       int
 			interfaces []string
 		}{
-			"master": {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
-			"worker": {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
+			"controller": {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
+			"worker":     {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
 		}
 
 		for _, group := range nodePool.Spec.NodeGroup {
@@ -220,7 +220,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 			nodePool.SetNamespace("hwmgr")
 			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
+				{Name: "controller", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
@@ -277,7 +277,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 					utils.HwTemplateBootIfaceLabel: "new-label",
 					utils.HwTemplateNodePool: `
-	- name: master
+	- name: controller
       hwProfile: profile-spr-single-processor-64G
       role: master
       resourcePoolId: xyz`,
@@ -313,7 +313,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
-	- name: master
+	- name: controller
       hwProfile: profile-spr-single-processor-64G
       role: master
       resourcePoolId: xyz
