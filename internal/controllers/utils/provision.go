@@ -360,3 +360,18 @@ func ValidateDefaultInterfaces[T any](data T) error {
 	}
 	return nil
 }
+
+// GetParentPolicyNameAndNamespace extracts the parent policy name and namespace
+// from the child policy name. The child policy name follows the format:
+// "<parent_policy_namespace>.<parent_policy_name>". Since the namespace is disallowed
+// to contain ".", splitting the string with "." into two substrings is safe.
+func GetParentPolicyNameAndNamespace(childPolicyName string) (policyName, policyNamespace string) {
+	res := strings.SplitN(childPolicyName, ".", 2)
+	return res[1], res[0]
+}
+
+// IsParentPolicyInZtpClusterTemplateNs checks whether the parent policy resides
+// in the namespace "ztp-<clustertemplate-ns>".
+func IsParentPolicyInZtpClusterTemplateNs(policyNamespace, ctNamespace string) bool {
+	return policyNamespace == fmt.Sprintf("ztp-%s", ctNamespace)
+}

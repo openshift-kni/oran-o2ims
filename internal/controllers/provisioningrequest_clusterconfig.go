@@ -42,21 +42,25 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 	// Go through all the policies and get those that are matched with the managed cluster created
 	// by the current provisioning request.
 	for _, policy := range policies.Items {
+		targetPolicyName, targetPolicyNamespace := utils.GetParentPolicyNameAndNamespace(policy.Name)
+		if !utils.IsParentPolicyInZtpClusterTemplateNs(targetPolicyNamespace, t.ctDetails.namespace) {
+			continue
+		}
+
+		targetPolicy := &provisioningv1alpha1.PolicyDetails{
+			Compliant:         string(policy.Status.ComplianceState),
+			PolicyName:        targetPolicyName,
+			PolicyNamespace:   targetPolicyNamespace,
+			RemediationAction: string(policy.Spec.RemediationAction),
+		}
+		targetPolicies = append(targetPolicies, *targetPolicy)
+
 		if policy.Status.ComplianceState != policiesv1.Compliant {
 			allPoliciesCompliant = false
 			if strings.EqualFold(string(policy.Spec.RemediationAction), string(policiesv1.Enforce)) {
 				nonCompliantPolicyInEnforce = true
 			}
 		}
-		// Child policy name = parent_policy_namespace.parent_policy_name
-		policyNameArr := strings.Split(policy.Name, ".")
-		targetPolicy := &provisioningv1alpha1.PolicyDetails{
-			Compliant:         string(policy.Status.ComplianceState),
-			PolicyName:        policyNameArr[1],
-			PolicyNamespace:   policyNameArr[0],
-			RemediationAction: string(policy.Spec.RemediationAction),
-		}
-		targetPolicies = append(targetPolicies, *targetPolicy)
 	}
 	policyConfigTimedOut, err := t.updateConfigurationAppliedStatus(
 		ctx, targetPolicies, allPoliciesCompliant, nonCompliantPolicyInEnforce)

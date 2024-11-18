@@ -431,9 +431,10 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: provisioningRequest, // cluster-1 request
+			logger:    CRReconciler.Logger,
+			client:    CRReconciler.Client,
+			object:    provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -542,9 +543,10 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: provisioningRequest, // cluster-1 request
+			logger:    CRReconciler.Logger,
+			client:    CRReconciler.Client,
+			object:    provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -695,9 +697,10 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: provisioningRequest, // cluster-1 request
+			logger:    CRReconciler.Logger,
+			client:    CRReconciler.Client,
+			object:    provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -723,6 +726,23 @@ defaultHugepagesSize: "1G"`,
 					ComplianceState: "NonCompliant",
 				},
 			},
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-ns.test-policy", // policy that is outside the namespace for clustertemplate
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "test-ns.test-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "NonCompliant",
+				},
+			},
 		}
 		for _, newPolicy := range newPolicies {
 			Expect(c.Create(ctx, newPolicy)).To(Succeed())
@@ -732,6 +752,8 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeTrue()) // we have non compliant enforce policies
 		Expect(err).ToNot(HaveOccurred())
+		// Only policies created in the namespace for the clustertemplate should be added.
+		Expect(len(CRTask.object.Status.Policies)).To(Equal(1))
 		Expect(CRTask.object.Status.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
@@ -847,9 +869,10 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRTask = &provisioningRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: provisioningRequest, // cluster-1 request
+			logger:    CRReconciler.Logger,
+			client:    CRReconciler.Client,
+			object:    provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -1215,6 +1238,47 @@ defaultHugepagesSize: "1G"`,
 
 		// Get the first request from the queue.
 		Expect(res[0]).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}))
+	})
+
+	It("It does not requeue ProvisioningRequest matched by policies outside the ztp-<clustertemplate-ns> namespace", func() {
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}
+
+		result, err := CRReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		// Expect to not requeue on valid provisioning request.
+		Expect(result.Requeue).To(BeFalse())
+		// Expect the ClusterInstance and its namespace to have been created.
+		clusterInstanceNs := &corev1.Namespace{}
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			client.ObjectKey{Name: "cluster-1"},
+			clusterInstanceNs,
+		)
+		Expect(err).ToNot(HaveOccurred())
+		clusterInstance := &siteconfig.ClusterInstance{}
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{Name: "cluster-1", Namespace: "cluster-1"},
+			clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+
+		// The parent policy of updated child policy is not from ztp-<clustertemplate-ns> ns.
+		policy := &policiesv1.Policy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "ztp-common.policy",
+				Namespace: "cluster-1",
+			},
+			Spec: policiesv1.PolicySpec{
+				RemediationAction: "enforce",
+			},
+			Status: policiesv1.PolicyStatus{
+				ComplianceState: "Compliant",
+			},
+		}
+
+		// Verify that no request is sent.
+		res := CRReconciler.enqueueProvisioningRequestForPolicy(ctx, policy)
+		Expect(len(res)).To(Equal(0))
 	})
 
 	It("It handles changes to the ClusterTemplate", func() {
