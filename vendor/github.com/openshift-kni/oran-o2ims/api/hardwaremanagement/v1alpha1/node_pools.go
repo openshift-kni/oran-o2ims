@@ -47,7 +47,8 @@ type NodePoolSpec struct {
 	HwMgrId string `json:"hwMgrId,omitempty"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	NodeGroup  []NodeGroup       `json:"nodeGroup"`
+	NodeGroup []NodeGroup `json:"nodeGroup"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
