@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: o-cloud-db
-          image: registry.access.redhat.com/rhel9/postgresql-16:1-29.1726696141
+          image: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873 # NOTE: to run locally you would need to login to registry as noted here https://catalog.redhat.com/software/containers/rhel9/postgresql-16/657b03866783e1b1fb87e142?container-tabs=gti&gti-tabs=registry-tokens
           env:
             - name: POSTGRESQL_ADMIN_PASSWORD
               valueFrom:
