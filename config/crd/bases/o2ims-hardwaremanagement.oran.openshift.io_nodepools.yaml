@@ -86,6 +86,7 @@ spec:
                   required:
                   - hwProfile
                   - name
+                  - resourcePoolId
                   - role
                   - size
                   type: object

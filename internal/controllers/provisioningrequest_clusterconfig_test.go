@@ -135,9 +135,11 @@ defaultHugepagesSize: "1G"`,
 - name: master
   hwProfile: profile-spr-single-processor-64G
   role: master
+  resourcePoolId: xyz
 - name: worker
   hwProfile: profile-spr-dual-processor-128G
-  role: worker`,
+  role: worker
+  resourcePoolId: xyz`,
 					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			},

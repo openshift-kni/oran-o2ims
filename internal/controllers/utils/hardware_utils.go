@@ -402,6 +402,9 @@ func ValidateConfigMapFields(configMap *corev1.ConfigMap) error {
 		if ng.Role == "" {
 			return fmt.Errorf("missing 'role' in node-pools-data element at index %d", i)
 		}
+		if ng.ResourcePoolId == "" {
+			return fmt.Errorf("missing 'resourcePoolId' in node-pools-data element at index %d", i)
+		}
 	}
 	return nil
 }

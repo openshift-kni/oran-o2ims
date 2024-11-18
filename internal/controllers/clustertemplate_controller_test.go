@@ -96,9 +96,11 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 - name: master
   hwProfile: profile-spr-single-processor-64G
   role: master
+  resourcePoolId: xyz
 - name: worker
   hwProfile: profile-spr-dual-processor-128G
-  role: worker`,
+  role: worker
+  resourcePoolId: xyz`,
 				},
 			},
 		}
@@ -471,9 +473,11 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 - name: master
   hwProfile: profile-spr-single-processor-64G
   role: master
+  resourcePoolId: xyz
 - name: worker
   hwProfile: profile-spr-dual-processor-128G
-  role: worker`,
+  role: worker
+  resourcePoolId: xyz`,
 				},
 			},
 		}

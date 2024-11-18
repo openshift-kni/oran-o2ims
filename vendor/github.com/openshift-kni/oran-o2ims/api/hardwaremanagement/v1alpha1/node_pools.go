@@ -58,7 +58,7 @@ type NodeGroup struct {
 	Size      int    `json:"size" yaml:"size"`
 	// +kubebuilder:validation:MinItems=1
 	Interfaces     []string `json:"interfaces,omitempty"`
-	ResourcePoolId string   `json:"resourcePoolId,omitempty"`
+	ResourcePoolId string   `json:"resourcePoolId"`
 	Role           string   `json:"role"`
 }
 
