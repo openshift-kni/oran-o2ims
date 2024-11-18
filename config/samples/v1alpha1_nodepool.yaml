@@ -25,6 +25,7 @@ spec:
     name: worker
     size: 0
   site: ottawa
+  extensions: []
 status:
   conditions:
   - lastTransitionTime: "2024-10-09T15:36:41Z"
