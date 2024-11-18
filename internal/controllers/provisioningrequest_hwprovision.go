@@ -430,7 +430,6 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
 
 	// Extract extensions if it exists from HWtemplate
-
 	extensions, err := utils.ExtractMatchingInput(t.object.Spec.TemplateParameters.Raw, utils.HwTemplateExtensions)
 	if err == nil {
 		nodePool.Spec.Extensions = extensions.(map[string]string)
