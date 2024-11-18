@@ -429,6 +429,12 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	nodePool.ObjectMeta.Name = clusterInstance.GetName()
 	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
 
+	// Add extensions from HWtemplate
+	extensions, err := utils.ExtractMatchingInput(t.object.Spec.TemplateParameters.Raw, utils.HwTemplateExtensions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.HwTemplateExtensions, err)
+	}
+	nodePool.Spec.Extensions = extensions.(map[string]string)
 	// Add boot interface label to the generated nodePool
 	annotation := make(map[string]string)
 	annotation[utils.HwTemplateBootIfaceLabel] = hwTemplateCm.Data[utils.HwTemplateBootIfaceLabel]
