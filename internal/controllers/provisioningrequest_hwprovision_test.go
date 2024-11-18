@@ -148,7 +148,7 @@ var _ = Describe("renderHardwareTemplate", func() {
   hwProfile: profile-spr-single-processor-64G
 - name: worker
   hwProfile: profile-spr-dual-processor-128G`,
-				utils.HwTemplateExtensions: `resourceTypeId: "ResourceGroup~2.1.1"`,
+				utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -240,7 +240,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplateNodePool: `
 	- name: master
       hwProfile: profile-spr-single-processor-64G`,
-					utils.HwTemplateExtensions: `resourceTypeId: "ResourceGroup~2.1.1"`,
+					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
 			Expect(c.Create(ctx, cm)).To(Succeed())
@@ -274,7 +274,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplateNodePool: `
 	- name: master
       hwProfile: profile-spr-single-processor-64G`,
-					utils.HwTemplateExtensions: `resourceTypeId: "ResourceGroup~2.1.1"`,
+					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
 			Expect(c.Create(ctx, cm)).To(Succeed())
@@ -310,7 +310,7 @@ var _ = Describe("renderHardwareTemplate", func() {
       hwProfile: profile-spr-single-processor-64G
 	- name: worker
       hwProfile: profile-spr-single-processor-64G`,
-					utils.HwTemplateExtensions: `resourceTypeId: "ResourceGroup~2.1.1"`,
+					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
 			Expect(c.Create(ctx, cm)).To(Succeed())
