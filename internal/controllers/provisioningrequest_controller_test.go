@@ -438,7 +438,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		ctNamespace  = "clustertemplate-a-v4-16"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
-		hwTemplateCm = "hwTemplate-v1"
+		hwTemplate   = "hwTemplate-v1"
 		crName       = "cluster-1"
 	)
 
@@ -503,26 +503,33 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
     defaultHugepagesSize: "1G"`,
 				},
 			},
-			// Configmap for hardware template
-			&corev1.ConfigMap{
+			// hardware template
+			&hwv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplateCm,
+					Name:      hwTemplate,
 					Namespace: utils.InventoryNamespace,
 				},
-				Data: map[string]string{
-					utils.HardwareProvisioningTimeoutConfigKey: "1m",
-					utils.HwTemplateBootIfaceLabel:             "label",
-					utils.HwTemplatePluginMgr:                  "hwmgr",
-					utils.HwTemplateNodePool: `
-    - name: controller
-      hwProfile: profile-spr-single-processor-64G
-      role: master
-      resourcePoolId: xyz
-    - name: worker
-      hwProfile: profile-spr-dual-processor-128G
-      role: worker
-      resourcePoolId: xyz`,
-					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
+				Spec: hwv1alpha1.HardwareTemplateSpec{
+					HwMgrId:                     utils.UnitTestHwmgrID,
+					BootInterfaceLabel:          "label",
+					HardwareProvisioningTimeout: "1m",
+					NodePoolData: []hwv1alpha1.NodePoolData{
+						{
+							Name:           "controller",
+							Role:           "master",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-single-processor-64G",
+						},
+						{
+							Name:           "worker",
+							Role:           "worker",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-dual-processor-128G",
+						},
+					},
+					Extensions: map[string]string{
+						"resourceTypeId": "ResourceGroup~2.1.1",
+					},
 				},
 			},
 			// Pull secret for ClusterInstance
@@ -546,7 +553,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
@@ -761,8 +768,11 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodePool.Spec.HwMgrId = "hwmgr"
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: "controller", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
-				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
+				{NodePoolData: hwv1alpha1.NodePoolData{
+					Name: "controller", HwProfile: "profile-spr-single-processor-64G"},
+					Size: 1},
+				{NodePoolData: hwv1alpha1.NodePoolData{
+					Name: "worker", HwProfile: "profile-spr-dual-processor-128G"}, Size: 0},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
@@ -1025,8 +1035,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodePool.Spec.HwMgrId = "hwmgr"
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: "controller", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1", "eth0", "eth1"}},
-				{Name: "worker", HwProfile: "profile-spr-dual-processor-128G", Size: 0},
+				{NodePoolData: hwv1alpha1.NodePoolData{
+					Name: "controller", HwProfile: "profile-spr-single-processor-64G"},
+					Size: 1},
+				{NodePoolData: hwv1alpha1.NodePoolData{
+					Name: "worker", HwProfile: "profile-spr-dual-processor-128G"},
+					Size: 0},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
@@ -1736,15 +1750,18 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					HwMgrId: utils.UnitTestHwmgrID,
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
-							Name:       "controller",
-							HwProfile:  "profile-spr-single-processor-64G",
-							Size:       1,
-							Interfaces: []string{"eno1", "eth0", "eth1"},
+							NodePoolData: hwv1alpha1.NodePoolData{
+								Name:      "controller",
+								HwProfile: "profile-spr-single-processor-64G",
+							},
+							Size: 1,
 						},
 						{
-							Name:      "worker",
-							HwProfile: "profile-spr-dual-processor-128G",
-							Size:      0,
+							NodePoolData: hwv1alpha1.NodePoolData{
+								Name:      "worker",
+								HwProfile: "profile-spr-dual-processor-128G",
+							},
+							Size: 0,
 						},
 					},
 				},
@@ -2104,15 +2121,18 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					HwMgrId: utils.UnitTestHwmgrID,
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
-							Name:       "controller",
-							HwProfile:  "profile-spr-single-processor-64G",
-							Size:       1,
-							Interfaces: []string{"eno1", "eth0", "eth1"},
+							NodePoolData: hwv1alpha1.NodePoolData{
+								Name:      "controller",
+								HwProfile: "profile-spr-single-processor-64G",
+							},
+							Size: 1,
 						},
 						{
-							Name:      "worker",
-							HwProfile: "profile-spr-dual-processor-128G",
-							Size:      0,
+							NodePoolData: hwv1alpha1.NodePoolData{
+								Name:      "worker",
+								HwProfile: "profile-spr-dual-processor-128G",
+							},
+							Size: 0,
 						},
 					},
 				},
@@ -2156,7 +2176,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: "cluster-instance-defaults-v2",
 						PolicyTemplateDefaults:  ptDefaultsCm,
-						HwTemplate:              hwTemplateCm,
+						HwTemplate:              hwTemplate,
 						UpgradeDefaults:         "upgrade-defaults",
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},

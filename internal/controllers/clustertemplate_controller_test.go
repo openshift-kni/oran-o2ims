@@ -29,7 +29,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
-		hwTemplateCm = "hwTemplate-v1"
+		hwTemplate   = "hwTemplate-v1"
 	)
 
 	BeforeEach(func() {
@@ -46,7 +46,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
@@ -84,29 +84,35 @@ clustertemplate-a-policy-v1-cpu-reserved: "0-1"
 clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				},
 			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplateCm,
-					Namespace: utils.InventoryNamespace,
-				},
-				Data: map[string]string{
-					utils.HwTemplatePluginMgr:      "hwMgr",
-					utils.HwTemplateBootIfaceLabel: "label",
-					utils.HwTemplateNodePool: `
-- name: master
-  hwProfile: profile-spr-single-processor-64G
-  role: master
-  resourcePoolId: xyz
-- name: worker
-  hwProfile: profile-spr-dual-processor-128G
-  role: worker
-  resourcePoolId: xyz`,
-				},
-			},
 		}
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
+		hwtmpl := &hwv1alpha1.HardwareTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwTemplate,
+				Namespace: utils.InventoryNamespace,
+			},
+			Spec: hwv1alpha1.HardwareTemplateSpec{
+				HwMgrId:            "hwMgr",
+				BootInterfaceLabel: "label",
+				NodePoolData: []hwv1alpha1.NodePoolData{
+					{
+						Name:           "master",
+						Role:           "mmaster",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-single-processor-64G",
+					},
+					{
+						Name:           "worker",
+						Role:           "worker",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-single-processor-128G",
+					},
+				},
+			},
+		}
+		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
@@ -412,7 +418,8 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-ci-defaults"
 		ptDefaultsCm = "policytemplate-ci-defaults"
-		hwTemplateCm = "hwTemplate-v1"
+		hwTemplate   = "hwTemplate-v1"
+		hwtmpl       *hwv1alpha1.HardwareTemplate
 		t            *clusterTemplateReconcilerTask
 	)
 
@@ -429,7 +436,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 			},
@@ -461,23 +468,29 @@ clustertemplate-a-policy-v1-cpu-reserved: "0-1"
 clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				},
 			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplateCm,
-					Namespace: utils.InventoryNamespace,
-				},
-				Data: map[string]string{
-					utils.HwTemplatePluginMgr:      "hwMgr",
-					utils.HwTemplateBootIfaceLabel: "label",
-					utils.HwTemplateNodePool: `
-- name: master
-  hwProfile: profile-spr-single-processor-64G
-  role: master
-  resourcePoolId: xyz
-- name: worker
-  hwProfile: profile-spr-dual-processor-128G
-  role: worker
-  resourcePoolId: xyz`,
+		}
+
+		hwtmpl = &hwv1alpha1.HardwareTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwTemplate,
+				Namespace: utils.InventoryNamespace,
+			},
+			Spec: hwv1alpha1.HardwareTemplateSpec{
+				HwMgrId:            "hwMgr",
+				BootInterfaceLabel: "label",
+				NodePoolData: []hwv1alpha1.NodePoolData{
+					{
+						Name:           "master",
+						Role:           "master",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-single-processor-64G",
+					},
+					{
+						Name:           "worker",
+						Role:           "wprker",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-single-processor-128G",
+					},
 				},
 			},
 		}
@@ -494,6 +507,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
+		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
 
 		valid, err := t.validateClusterTemplateCR(ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -529,7 +543,6 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 	It("should return false and set status condition to false if timeouts in ConfigMaps are invalid", func() {
 		cms[0].Data[utils.ClusterInstallationTimeoutConfigKey] = "invalidCiTimeout"
 		cms[1].Data[utils.ClusterConfigurationTimeoutConfigKey] = "invalidPtTimeout"
-		cms[2].Data[utils.HardwareProvisioningTimeoutConfigKey] = "40"
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
@@ -545,11 +558,35 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the value of key %s from ConfigMap %s is not a valid duration string", utils.HardwareProvisioningTimeoutConfigKey, hwTemplateCm)))
-		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterInstallationTimeoutConfigKey, ciDefaultsCm)))
+	})
+
+	It("should return validation error message if the hardware template has invalid timeout string", func() {
+
+		hwtmpl.Spec.HardwareProvisioningTimeout = "60"
+		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
+		valid, err := t.validateClusterTemplateCR(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(valid).To(BeFalse())
+
+		// Check the status condition
+		conditions := t.object.Status.Conditions
+		Expect(conditions).To(HaveLen(1))
+		errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string", hwtmpl.Name)
+		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Message).To(ContainSubstring(errMessage))
+
+		// Check the HardwareTemplate status condition
+		VerifyHardwareTemplateStatus(ctx, c, hwtmpl.Name, metav1.Condition{
+			Type:    string(hwv1alpha1.Validation),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(hwv1alpha1.Failed),
+			Message: errMessage,
+		})
 	})
 })
 
@@ -777,81 +814,6 @@ key: value`,
 		Expect(updatedCM.Immutable).ToNot(BeNil())
 		Expect(*updatedCM.Immutable).To(BeTrue())
 	})
-
-	It("should return validation error message if the hardware template has invalid node group", func() {
-		// Define the hardware template config map
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
-				utils.HwTemplateBootIfaceLabel: "bootable-interface",
-				utils.HwTemplateNodePool: `
-- name: master
-- name: worker
-  hwProfile: profile-spr-dual-processor-128G`,
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
-			ctx, c, configmapName, namespace,
-			utils.HwTemplateNodePool,
-			utils.HardwareProvisioningTimeoutConfigKey)
-		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("missing 'hwProfile' in node-pools-data element at index"))
-	})
-
-	It("should return validation error message if the hardware template has an empty node group", func() {
-		// Define the hardware template config map
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
-				utils.HwTemplateBootIfaceLabel: "bootable-interface",
-				utils.HwTemplateNodePool:       ``,
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
-			ctx, c, configmapName, namespace,
-			utils.HwTemplateNodePool,
-			utils.HardwareProvisioningTimeoutConfigKey)
-		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("required field 'node-pools-data' is empty"))
-	})
-
-	It("should return validation error message if the hardware template does not contain node pool data", func() {
-		// Define the hardware template config map
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
-				utils.HwTemplateBootIfaceLabel: "bootable-interface",
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := validateConfigmapReference[[]hwv1alpha1.NodeGroup](
-			ctx, c, configmapName, namespace,
-			utils.HwTemplateNodePool,
-			utils.HardwareProvisioningTimeoutConfigKey)
-		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(Equal(fmt.Sprintf(
-			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, utils.HwTemplateNodePool)))
-	})
 })
 
 var _ = Describe("Validate Cluster Instance Name", func() {
@@ -863,7 +825,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-ci-defaults"
 		ptDefaultsCm = "policytemplate-ci-defaults"
-		hwTemplateCm = "hwTemplate-v1"
+		hwTemplate   = "hwTemplate-v1"
 	)
 
 	BeforeEach(func() {
@@ -884,7 +846,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 			},
 		}
@@ -907,7 +869,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 			},
 		}
@@ -922,7 +884,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 			},
 		}
@@ -953,7 +915,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 			},
 		}
@@ -974,7 +936,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		ctNamespace  = "cluster-template-a"
 		ciDefaultsCm = "clusterinstance-ci-defaults"
 		ptDefaultsCm = "policytemplate-ci-defaults"
-		hwTemplateCm = "hwTemplate-v1"
+		hwTemplate   = "hwTemplate-v1"
 	)
 
 	BeforeEach(func() {
@@ -996,7 +958,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 			},
 		}
@@ -1022,7 +984,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 			},
 		}
@@ -1044,7 +1006,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplateCm,
+					HwTemplate:              hwTemplate,
 				},
 			},
 		}

@@ -6,7 +6,7 @@ This directory highlights the recommended GIT layout and goes over the Gitops se
 
 The content is as follows:
 * `clustertemplates`
-    * the hardware provisioning ConfigMap
+    * the hardware provisioning resource
     * the default ConfigMaps for installation and configuration
     * the ClusterTemplate and its namespace
     * the pull secret

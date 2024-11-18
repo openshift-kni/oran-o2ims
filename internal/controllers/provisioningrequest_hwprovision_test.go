@@ -39,8 +39,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 		tName           = "clustertemplate-a"
 		tVersion        = "v1.0.0"
 		ctNamespace     = "clustertemplate-a-v4-16"
-		hwTemplateCm    = "hwTemplate-v1"
-		hwTemplateCmv2  = "hwTemplate-v2"
+		hwTemplate      = "hwTemplate-v1"
+		hwTemplatev2    = "hwTemplate-v2"
 		crName          = "cluster-1"
 	)
 
@@ -109,7 +109,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Name:    tName,
 				Version: tVersion,
 				Templates: provisioningv1alpha1.Templates{
-					HwTemplate: hwTemplateCm,
+					HwTemplate: hwTemplate,
 				},
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -139,62 +139,74 @@ var _ = Describe("renderHardwareTemplate", func() {
 		// Ensure the ClusterTemplate is created
 		Expect(c.Create(ctx, ct)).To(Succeed())
 
-		// Define the hardware template config map
-		cm := &corev1.ConfigMap{
+		// Define the hardware template resource
+		hwTemplate := &hwv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      hwTemplateCm,
+				Name:      hwTemplate,
 				Namespace: utils.InventoryNamespace,
 			},
-			Data: map[string]string{
-				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
-				utils.HwTemplateBootIfaceLabel: "bootable-interface",
-				utils.HwTemplateNodePool: `
-- name: controller
-  hwProfile: profile-spr-single-processor-64G
-  role: master
-  resourcePoolId: xyz
-- name: worker
-  hwProfile: profile-spr-dual-processor-128G
-  role: worker
-  resourcePoolId: xyz`,
-				utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
+			Spec: hwv1alpha1.HardwareTemplateSpec{
+				HwMgrId:            utils.UnitTestHwmgrID,
+				BootInterfaceLabel: "bootable-interface",
+				NodePoolData: []hwv1alpha1.NodePoolData{
+					{
+						Name:           "controller",
+						Role:           "master",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-single-processor-64G",
+					},
+					{
+						Name:           "worker",
+						Role:           "worker",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-dual-processor-128G",
+					},
+				},
+				Extensions: map[string]string{
+					"resourceTypeId": "ResourceGroup~2.1.1",
+				},
 			},
 		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		Expect(c.Create(ctx, hwTemplate)).To(Succeed())
 
 		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
+
+		VerifyHardwareTemplateStatus(ctx, c, hwTemplate.Name, metav1.Condition{
+			Type:    string(hwv1alpha1.Validation),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(hwv1alpha1.Completed),
+			Message: "Validated",
+		})
+
 		Expect(nodePool).ToNot(BeNil())
 		Expect(nodePool.ObjectMeta.Name).To(Equal(clusterInstance.GetName()))
 		Expect(nodePool.ObjectMeta.Namespace).To(Equal(utils.UnitTestHwmgrNamespace))
-		Expect(nodePool.Annotations[utils.HwTemplateBootIfaceLabel]).To(Equal(cm.Data[utils.HwTemplateBootIfaceLabel]))
+		Expect(nodePool.Annotations[utils.HwTemplateBootIfaceLabel]).To(Equal(hwTemplate.Spec.BootInterfaceLabel))
 
 		Expect(nodePool.Spec.CloudID).To(Equal(clusterInstance.GetName()))
-		Expect(nodePool.Spec.HwMgrId).To(Equal(cm.Data[utils.HwTemplatePluginMgr]))
+		Expect(nodePool.Spec.HwMgrId).To(Equal(hwTemplate.Spec.HwMgrId))
+		Expect(nodePool.Spec.Extensions).To(Equal(hwTemplate.Spec.Extensions))
 		Expect(nodePool.Labels[provisioningRequestNameLabel]).To(Equal(task.object.Name))
 
 		roleCounts := make(map[string]int)
-		err = utils.ProcessClusterNodeGroups(clusterInstance, nodePool.Spec.NodeGroup, roleCounts)
-		Expect(err).ToNot(HaveOccurred())
-		masterNodeGroup, err := utils.FindNodeGroupByRole("master", nodePool.Spec.NodeGroup)
-		Expect(err).ToNot(HaveOccurred())
-		workerNodeGroup, err := utils.FindNodeGroupByRole("worker", nodePool.Spec.NodeGroup)
-		Expect(err).ToNot(HaveOccurred())
-
+		for _, node := range clusterInstance.Spec.Nodes {
+			// Count the nodes per group
+			roleCounts[node.Role]++
+		}
 		Expect(nodePool.Spec.NodeGroup).To(HaveLen(2))
 		expectedNodeGroups := map[string]struct {
-			size       int
-			interfaces []string
+			size int
 		}{
-			groupNameController: {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
-			groupNameWorker:     {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
+			groupNameController: {size: roleCounts["master"]},
+			groupNameWorker:     {size: roleCounts["worker"]},
 		}
 
 		for _, group := range nodePool.Spec.NodeGroup {
-			expected, found := expectedNodeGroups[group.Name]
+			expected, found := expectedNodeGroups[group.NodePoolData.Name]
 			Expect(found).To(BeTrue())
 			Expect(group.Size).To(Equal(expected.size))
-			Expect(group.Interfaces).To(ConsistOf(expected.interfaces))
 		}
 	})
 
@@ -204,7 +216,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
 		Expect(err).To(HaveOccurred())
 		Expect(nodePool).To(BeNil())
-		Expect(err.Error()).To(ContainSubstring("failed to get the %s configmap for Hardware Template", hwTemplateCm))
+		Expect(err.Error()).To(ContainSubstring("failed to get the HardwareTemplate %s resource", hwTemplate))
 	})
 
 	It("returns an error when the ClusterTemplate is not found", func() {
@@ -224,8 +236,13 @@ var _ = Describe("renderHardwareTemplate", func() {
 			nodePool.SetName(crName)
 			nodePool.SetNamespace("hwmgr")
 			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
+			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: groupNameController, HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
+				{
+					NodePoolData: hwv1alpha1.NodePoolData{
+						Name: groupNameController, HwProfile: "profile-spr-single-processor-64G",
+					}, Size: 1,
+				},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
@@ -233,30 +250,42 @@ var _ = Describe("renderHardwareTemplate", func() {
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 		})
 		It("returns an error when the hardware template contains a change in hwMgrId", func() {
-			ct.Spec.Templates.HwTemplate = hwTemplateCmv2
+			ct.Spec.Templates.HwTemplate = hwTemplatev2
 			// Ensure the ClusterTemplate is created
 			Expect(c.Create(ctx, ct)).To(Succeed())
-
-			// Define the new version of hardware template config map
-			cm := &corev1.ConfigMap{
+			// Define the new version of hardware template resource
+			hwTemplate2 := &hwv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplateCmv2,
+					Name:      hwTemplatev2,
 					Namespace: utils.InventoryNamespace,
 				},
-				Data: map[string]string{
-					utils.HwTemplatePluginMgr:      "new id",
-					utils.HwTemplateBootIfaceLabel: "bootable-interface",
-					utils.HwTemplateNodePool: `
-	- name: worker
-      hwProfile: profile-spr-single-processor-64G
-      role: worker`,
-					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
+				Spec: hwv1alpha1.HardwareTemplateSpec{
+					HwMgrId:            "new id",
+					BootInterfaceLabel: "bootable-interface",
+					NodePoolData: []hwv1alpha1.NodePoolData{
+						{
+							Name:      "worker",
+							Role:      "worker",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+					},
+					Extensions: map[string]string{
+						"esourceTypeId": "ResourceGroup~2.1.1",
+					},
 				},
 			}
-			Expect(c.Create(ctx, cm)).To(Succeed())
+			Expect(c.Create(ctx, hwTemplate2)).To(Succeed())
 
 			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
 			Expect(err).To(HaveOccurred())
+
+			VerifyHardwareTemplateStatus(ctx, c, hwTemplate2.Name, metav1.Condition{
+				Type:    string(hwv1alpha1.Validation),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(hwv1alpha1.Failed),
+				Message: "unallowed change detected",
+			})
+
 			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
 			verifyStatusCondition(*cond, metav1.Condition{
@@ -268,31 +297,44 @@ var _ = Describe("renderHardwareTemplate", func() {
 		})
 
 		It("returns an error when the hardware template contains a change in bootIntefaceLabel", func() {
-			ct.Spec.Templates.HwTemplate = hwTemplateCmv2
+			ct.Spec.Templates.HwTemplate = hwTemplatev2
 			// Ensure the ClusterTemplate is created
 			Expect(c.Create(ctx, ct)).To(Succeed())
 
-			// Define the new version of hardware template config map
-			cm := &corev1.ConfigMap{
+			// Define the new version of hardware template resource
+			hwTemplate2 := &hwv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplateCmv2,
+					Name:      hwTemplatev2,
 					Namespace: utils.InventoryNamespace,
 				},
-				Data: map[string]string{
-					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
-					utils.HwTemplateBootIfaceLabel: "new-label",
-					utils.HwTemplateNodePool: `
-	- name: controller
-      hwProfile: profile-spr-single-processor-64G
-      role: master
-      resourcePoolId: xyz`,
-					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
+				Spec: hwv1alpha1.HardwareTemplateSpec{
+					HwMgrId:            utils.UnitTestHwmgrID,
+					BootInterfaceLabel: "new-label",
+					NodePoolData: []hwv1alpha1.NodePoolData{
+						{
+							Name:           "contoller",
+							Role:           "master",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-single-processor-64G",
+						},
+					},
+					Extensions: map[string]string{
+						"resourceTypeId": "ResourceGroup~2.1.1",
+					},
 				},
 			}
-			Expect(c.Create(ctx, cm)).To(Succeed())
+			Expect(c.Create(ctx, hwTemplate2)).To(Succeed())
 
 			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
 			Expect(err).To(HaveOccurred())
+
+			VerifyHardwareTemplateStatus(ctx, c, hwTemplate2.Name, metav1.Condition{
+				Type:    string(hwv1alpha1.Validation),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(hwv1alpha1.Failed),
+				Message: "unallowed change detected",
+			})
+
 			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
 			verifyStatusCondition(*cond, metav1.Condition{
@@ -304,35 +346,50 @@ var _ = Describe("renderHardwareTemplate", func() {
 		})
 
 		It("returns an error when the hardware template contains a change in groups", func() {
-			ct.Spec.Templates.HwTemplate = hwTemplateCmv2
+			ct.Spec.Templates.HwTemplate = hwTemplatev2
 			// Ensure the ClusterTemplate is created
 			Expect(c.Create(ctx, ct)).To(Succeed())
 
-			// Define the new version of hardware template config map
-			cm := &corev1.ConfigMap{
+			// Define the new version of hardware template resource
+			hwTemplate2 := &hwv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplateCmv2,
+					Name:      hwTemplatev2,
 					Namespace: utils.InventoryNamespace,
 				},
-				Data: map[string]string{
-					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
-					utils.HwTemplateBootIfaceLabel: "bootable-interface",
-					utils.HwTemplateNodePool: `
-	- name: controller
-      hwProfile: profile-spr-single-processor-64G
-      role: master
-      resourcePoolId: xyz
-	- name: worker
-      hwProfile: profile-spr-single-processor-64G
-      role: worker
-      resourcePoolId: xyz`,
-					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
+				Spec: hwv1alpha1.HardwareTemplateSpec{
+					HwMgrId:            utils.UnitTestHwmgrID,
+					BootInterfaceLabel: "bootable-interface",
+					NodePoolData: []hwv1alpha1.NodePoolData{
+						{
+							Name:           "master",
+							Role:           "master",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-single-processor-64G",
+						},
+						{
+							Name:           "worker",
+							Role:           "worker",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-single-processor-64G",
+						},
+					},
+					Extensions: map[string]string{
+						"esourceTypeId": "ResourceGroup~2.1.1",
+					},
 				},
 			}
-			Expect(c.Create(ctx, cm)).To(Succeed())
-
+			Expect(c.Create(ctx, hwTemplate2)).To(Succeed())
 			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
 			Expect(err).To(HaveOccurred())
+
+			errMessage := fmt.Sprintf("node group %s found in NodePool spec but not in Hardware Template", groupNameController)
+			VerifyHardwareTemplateStatus(ctx, c, hwTemplate2.Name, metav1.Condition{
+				Type:    string(hwv1alpha1.Validation),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(hwv1alpha1.Failed),
+				Message: errMessage,
+			})
+
 			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
 			verifyStatusCondition(*cond, metav1.Condition{
@@ -640,11 +697,16 @@ var _ = Describe("updateClusterInstance", func() {
 			Spec: hwv1alpha1.NodePoolSpec{
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
-						Name: groupNameController,
-						Role: "master",
-					}, {
-						Name: groupNameWorker,
-						Role: "worker",
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name: groupNameController,
+							Role: "master",
+						},
+					},
+					{
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name: groupNameWorker,
+							Role: "worker",
+						},
 					},
 				},
 			},
@@ -824,4 +886,17 @@ func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.
 			Fail(fmt.Sprintf("Unexpected GroupName: %s", updatedNode.Spec.GroupName))
 		}
 	}
+}
+
+func VerifyHardwareTemplateStatus(ctx context.Context, c client.Client, templateName string, expectedCon metav1.Condition) {
+	updatedHwTempl := &hwv1alpha1.HardwareTemplate{}
+	Expect(c.Get(ctx, client.ObjectKey{Name: templateName, Namespace: utils.InventoryNamespace}, updatedHwTempl)).To(Succeed())
+	hwTemplCond := meta.FindStatusCondition(updatedHwTempl.Status.Conditions, expectedCon.Type)
+	Expect(hwTemplCond).ToNot(BeNil())
+	verifyStatusCondition(*hwTemplCond, metav1.Condition{
+		Type:    expectedCon.Type,
+		Status:  expectedCon.Status,
+		Reason:  expectedCon.Reason,
+		Message: expectedCon.Message,
+	})
 }

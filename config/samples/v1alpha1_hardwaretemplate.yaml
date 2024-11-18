@@ -1,17 +1,25 @@
-apiVersion: v1
-kind: ConfigMap
+apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+kind: HardwareTemplate
 metadata:
-  name: sample-hwtemplate-configmap-v1
+  name: sample-hwtemplate-v1
   namespace: oran-o2ims
-data:
+spec:
   # hardwareProvisioningTimeout is optional.
   # The value should be a duration string
   # (e.g., "60m" for 60 minutes)
   hardwareProvisioningTimeout: "60m"
   hwMgrId: hwmgr-1
   bootInterfaceLabel: bootable-interface
-  node-pools-data: |
-    - name: master
+  nodePoolData:
+    - name: controller
+      role: master
       hwProfile: profile-spr-single-processor-64G
+      resourcePoolID: master-pool
     - name: worker
+      role: worker
       hwProfile: profile-spr-dual-processor-128G
+      resourcePoolID: worker-pool
+  extensions:
+    resourceTypeId: ResourceGroup~2.1.1
+status:
+  conditions: []

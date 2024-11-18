@@ -48,18 +48,14 @@ type NodePoolSpec struct {
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeGroup []NodeGroup `json:"nodeGroup"`
+
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
 type NodeGroup struct {
-	Name      string `json:"name" yaml:"name"`
-	HwProfile string `json:"hwProfile"`
-	Size      int    `json:"size" yaml:"size"`
-	// +kubebuilder:validation:MinItems=1
-	Interfaces     []string `json:"interfaces,omitempty"`
-	ResourcePoolId string   `json:"resourcePoolId"`
-	Role           string   `json:"role"`
+	NodePoolData NodePoolData `json:"nodePoolData"` // Explicitly include as a named field
+	Size         int          `json:"size" yaml:"size"`
 }
 
 type Properties struct {
@@ -78,8 +74,10 @@ type NodePoolStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Properties Properties `json:"properties,omitempty"`
 
-	// Conditions represent the observations of the NodePool's current state.
-	// Possible values of the condition type are `Provisioned` and `Unknown`.
+	// Conditions represent the latest available observations of an NodePool's state.
+	// +optional
+	// +kubebuilder:validation:Type=array
+	// +kubebuilder:validation:Items=Type=object
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 

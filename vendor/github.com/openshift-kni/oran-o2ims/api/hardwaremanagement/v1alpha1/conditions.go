@@ -20,6 +20,7 @@ type ConditionType string
 const (
 	Provisioned ConditionType = "Provisioned"
 	Configured  ConditionType = "Configured"
+	Validation  ConditionType = "Validation"
 	Unknown     ConditionType = "Unknown" // Indicates the condition has not been evaluated
 )
 

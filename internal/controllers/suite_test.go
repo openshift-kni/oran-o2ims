@@ -56,6 +56,7 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
+		WithStatusSubresource(&hwv1alpha1.HardwareTemplate{}).
 		WithStatusSubresource(&hwv1alpha1.NodePool{}).
 		WithStatusSubresource(&hwv1alpha1.Node{}).
 		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
@@ -104,6 +105,7 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
+	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.HardwareTemplate{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.NodePool{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.Node{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
