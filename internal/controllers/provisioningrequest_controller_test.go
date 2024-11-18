@@ -518,6 +518,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
       hwProfile: profile-spr-single-processor-64G
     - name: worker
       hwProfile: profile-spr-dual-processor-128G`,
+					utils.HwTemplateExtensions: `resourceTypeId: "ResourceGroup~2.1.1"`,
 				},
 			},
 			// Pull secret for ClusterInstance

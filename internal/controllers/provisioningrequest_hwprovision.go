@@ -425,8 +425,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	// Extract extensions from HW Template
 	extensions, err := utils.ExtractTemplateDataFromConfigMap[map[string]string](
 		hwTemplateCm, utils.HwTemplateExtensions)
-	if err == nil {
-		nodePool.Spec.Extensions = extensions
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.HwTemplateExtensions, err)
 	}
 
 	nodePool.Spec.CloudID = clusterInstance.GetName()
@@ -435,7 +435,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	nodePool.Spec.NodeGroup = nodeGroup
 	nodePool.ObjectMeta.Name = clusterInstance.GetName()
 	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
-
+	nodePool.Spec.Extensions = extensions
 	// Add boot interface label to the generated nodePool
 	annotation := make(map[string]string)
 	annotation[utils.HwTemplateBootIfaceLabel] = hwTemplateCm.Data[utils.HwTemplateBootIfaceLabel]
