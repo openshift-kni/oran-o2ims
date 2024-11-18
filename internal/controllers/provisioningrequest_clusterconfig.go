@@ -37,7 +37,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 	}
 
 	allPoliciesCompliant := true
-	nonCompliantPolicyInEnforce := false
+	allPoliciesInInform := true
 	var targetPolicies []provisioningv1alpha1.PolicyDetails
 	// Go through all the policies and get those that are matched with the managed cluster created
 	// by the current provisioning request.
@@ -57,13 +57,13 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 
 		if policy.Status.ComplianceState != policiesv1.Compliant {
 			allPoliciesCompliant = false
-			if strings.EqualFold(string(policy.Spec.RemediationAction), string(policiesv1.Enforce)) {
-				nonCompliantPolicyInEnforce = true
-			}
+		}
+		if !strings.EqualFold(string(policy.Spec.RemediationAction), string(policiesv1.Inform)) {
+			allPoliciesInInform = false
 		}
 	}
 	policyConfigTimedOut, err := t.updateConfigurationAppliedStatus(
-		ctx, targetPolicies, allPoliciesCompliant, nonCompliantPolicyInEnforce)
+		ctx, targetPolicies, allPoliciesCompliant, allPoliciesInInform)
 	if err != nil {
 		return false, err
 	}
@@ -78,14 +78,14 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 
 	// If there are policies that are not Compliant and the configuration has not timed out,
 	// we need to requeue and see if the timeout is reached.
-	return nonCompliantPolicyInEnforce && !policyConfigTimedOut, nil
+	return (!allPoliciesCompliant && !allPoliciesInInform) && !policyConfigTimedOut, nil
 }
 
 // updateConfigurationAppliedStatus updates the ProvisioningRequest ConfigurationApplied condition
 // based on the state of the policies matched with the managed cluster.
 func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	ctx context.Context, targetPolicies []provisioningv1alpha1.PolicyDetails, allPoliciesCompliant bool,
-	nonCompliantPolicyInEnforce bool) (policyConfigTimedOut bool, err error) {
+	allPoliciesInInform bool) (policyConfigTimedOut bool, err error) {
 	err = nil
 	policyConfigTimedOut = false
 
@@ -146,14 +146,23 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 			"The Cluster is not yet ready",
 		)
 		if utils.IsClusterProvisionCompleted(t.object) &&
-			nonCompliantPolicyInEnforce {
+			!allPoliciesInInform {
 			utils.SetProvisioningStateInProgress(t.object,
 				"Waiting for cluster to be ready for policy configuration")
 		}
 		return
 	}
 
-	if nonCompliantPolicyInEnforce {
+	if allPoliciesInInform {
+		// No timeout is computed if all policies are in inform, just out of date.
+		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
+		utils.SetStatusCondition(&t.object.Status.Conditions,
+			utils.PRconditionTypes.ConfigurationApplied,
+			utils.CRconditionReasons.OutOfDate,
+			metav1.ConditionFalse,
+			"The configuration is out of date",
+		)
+	} else {
 		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
 
 		message := "The configuration is still being applied"
@@ -171,15 +180,6 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 			reason,
 			metav1.ConditionFalse,
 			message,
-		)
-	} else {
-		// No timeout is reported if all policies are in inform, just out of date.
-		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
-		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.OutOfDate,
-			metav1.ConditionFalse,
-			"The configuration is out of date",
 		)
 	}
 
