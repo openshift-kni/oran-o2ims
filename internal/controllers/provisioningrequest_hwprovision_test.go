@@ -24,19 +24,21 @@ import (
 
 var _ = Describe("renderHardwareTemplate", func() {
 	var (
-		ctx             context.Context
-		c               client.Client
-		reconciler      *ProvisioningRequestReconciler
-		task            *provisioningRequestReconcilerTask
-		clusterInstance *siteconfig.ClusterInstance
-		ct              *provisioningv1alpha1.ClusterTemplate
-		cr              *provisioningv1alpha1.ProvisioningRequest
-		tName           = "clustertemplate-a"
-		tVersion        = "v1.0.0"
-		ctNamespace     = "clustertemplate-a-v4-16"
-		hwTemplateCm    = "hwTemplate-v1"
-		hwTemplateCmv2  = "hwTemplate-v2"
-		crName          = "cluster-1"
+		ctx                 context.Context
+		c                   client.Client
+		reconciler          *ProvisioningRequestReconciler
+		task                *provisioningRequestReconcilerTask
+		clusterInstance     *siteconfig.ClusterInstance
+		ct                  *provisioningv1alpha1.ClusterTemplate
+		cr                  *provisioningv1alpha1.ProvisioningRequest
+		tName               = "clustertemplate-a"
+		tVersion            = "v1.0.0"
+		ctNamespace         = "clustertemplate-a-v4-16"
+		hwTemplateCm        = "hwTemplate-v1"
+		hwTemplateCmv2      = "hwTemplate-v2"
+		crName              = "cluster-1"
+		groupNameController = "controller"
+		groupNameWorker     = "worker"
 	)
 
 	BeforeEach(func() {
@@ -181,8 +183,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 			size       int
 			interfaces []string
 		}{
-			"controller": {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
-			"worker":     {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
+			groupNameController: {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
+			groupNameWorker:     {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
 		}
 
 		for _, group := range nodePool.Spec.NodeGroup {
@@ -220,7 +222,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 			nodePool.SetNamespace("hwmgr")
 			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: "controller", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
+				{Name: groupNameController, HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
@@ -530,21 +532,23 @@ var _ = Describe("waitForNodePoolProvision", func() {
 
 var _ = Describe("updateClusterInstance", func() {
 	var (
-		ctx         context.Context
-		c           client.Client
-		reconciler  *ProvisioningRequestReconciler
-		task        *provisioningRequestReconcilerTask
-		cr          *provisioningv1alpha1.ProvisioningRequest
-		ci          *siteconfig.ClusterInstance
-		np          *hwv1alpha1.NodePool
-		crName      = "cluster-1"
-		crNamespace = "clustertemplate-a-v4-16"
-		mn          = "master-node"
-		wn          = "worker-node"
-		mhost       = "node1.test.com"
-		whost       = "node2.test.com"
-		poolns      = utils.UnitTestHwmgrNamespace
-		mIfaces     = []*hwv1alpha1.Interface{
+		ctx                 context.Context
+		c                   client.Client
+		reconciler          *ProvisioningRequestReconciler
+		task                *provisioningRequestReconcilerTask
+		cr                  *provisioningv1alpha1.ProvisioningRequest
+		ci                  *siteconfig.ClusterInstance
+		np                  *hwv1alpha1.NodePool
+		crName              = "cluster-1"
+		crNamespace         = "clustertemplate-a-v4-16"
+		mn                  = "master-node"
+		wn                  = "worker-node"
+		mhost               = "node1.test.com"
+		whost               = "node2.test.com"
+		groupNameController = "controller"
+		groupNameWorker     = "worker"
+		poolns              = utils.UnitTestHwmgrNamespace
+		mIfaces             = []*hwv1alpha1.Interface{
 			{
 				Name:       "eth0",
 				Label:      "test",
@@ -569,9 +573,9 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 		}
 		masterNode = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-			"site-1-master-bmc-secret", "controller", poolns, crName, mIfaces)
+			"site-1-master-bmc-secret", groupNameController, poolns, crName, mIfaces)
 		workerNode = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1",
-			"site-1-worker-bmc-secret", "worker", poolns, crName, wIfaces)
+			"site-1-worker-bmc-secret", groupNameWorker, poolns, crName, wIfaces)
 	)
 
 	BeforeEach(func() {
@@ -635,10 +639,10 @@ var _ = Describe("updateClusterInstance", func() {
 			Spec: hwv1alpha1.NodePoolSpec{
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
-						Name: "controller",
+						Name: groupNameController,
 						Role: "master",
 					}, {
-						Name: "worker",
+						Name: groupNameWorker,
 						Role: "worker",
 					},
 				},
