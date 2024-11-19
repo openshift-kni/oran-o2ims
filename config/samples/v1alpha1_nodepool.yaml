@@ -20,11 +20,16 @@ spec:
     interfaces:
     - eno1
     name: master
+    role: master
     size: 1
+    resourcePoolId: xyz
   - hwProfile: sample-worker-profile
     name: worker
+    role: worker
+    resourcePoolId: xyz
     size: 0
   site: ottawa
+  extensions: []
 status:
   conditions:
   - lastTransitionTime: "2024-10-09T15:36:41Z"

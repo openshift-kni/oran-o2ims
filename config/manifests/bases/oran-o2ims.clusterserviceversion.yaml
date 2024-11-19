@@ -267,6 +267,8 @@ spec:
         path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Extensions
+        path: extensions
       - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
         displayName: Hardware Manager ID
         path: hwMgrId

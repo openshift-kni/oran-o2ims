@@ -157,6 +157,7 @@ const (
 	HwTemplatePluginMgr      = "hwMgrId"
 	HwTemplateNodePool       = "node-pools-data"
 	HwTemplateBootIfaceLabel = "bootInterfaceLabel"
+	HwTemplateExtensions     = "extensions"
 )
 
 const (

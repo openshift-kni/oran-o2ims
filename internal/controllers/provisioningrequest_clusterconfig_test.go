@@ -132,10 +132,15 @@ defaultHugepagesSize: "1G"`,
 					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
-- name: master
+- name: controller
   hwProfile: profile-spr-single-processor-64G
+  role: master
+  resourcePoolId: xyz
 - name: worker
-  hwProfile: profile-spr-dual-processor-128G`,
+  hwProfile: profile-spr-dual-processor-128G
+  role: worker
+  resourcePoolId: xyz`,
+					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			},
 			// Pull secret.
@@ -217,7 +222,7 @@ defaultHugepagesSize: "1G"`,
 				HwMgrId: utils.UnitTestHwmgrID,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
-						Name:       "master",
+						Name:       "controller",
 						HwProfile:  "profile-spr-single-processor-64G",
 						Size:       1,
 						Interfaces: []string{"eno1", "eth0", "eth1"},

@@ -22,6 +22,11 @@ import (
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
 
+const (
+	groupNameController = "controller"
+	groupNameWorker     = "worker"
+)
+
 var _ = Describe("renderHardwareTemplate", func() {
 	var (
 		ctx             context.Context
@@ -144,10 +149,15 @@ var _ = Describe("renderHardwareTemplate", func() {
 				utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 				utils.HwTemplateBootIfaceLabel: "bootable-interface",
 				utils.HwTemplateNodePool: `
-- name: master
+- name: controller
   hwProfile: profile-spr-single-processor-64G
+  role: master
+  resourcePoolId: xyz
 - name: worker
-  hwProfile: profile-spr-dual-processor-128G`,
+  hwProfile: profile-spr-dual-processor-128G
+  role: worker
+  resourcePoolId: xyz`,
+				utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -176,8 +186,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 			size       int
 			interfaces []string
 		}{
-			"master": {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
-			"worker": {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
+			groupNameController: {size: roleCounts["master"], interfaces: masterNodeGroup.Interfaces},
+			groupNameWorker:     {size: roleCounts["worker"], interfaces: workerNodeGroup.Interfaces},
 		}
 
 		for _, group := range nodePool.Spec.NodeGroup {
@@ -215,7 +225,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 			nodePool.SetNamespace("hwmgr")
 			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{Name: "master", HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
+				{Name: groupNameController, HwProfile: "profile-spr-single-processor-64G", Size: 1, Interfaces: []string{"eno1"}},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
@@ -237,8 +247,10 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplatePluginMgr:      "new id",
 					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
-	- name: master
-      hwProfile: profile-spr-single-processor-64G`,
+	- name: worker
+      hwProfile: profile-spr-single-processor-64G
+      role: worker`,
+					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
 			Expect(c.Create(ctx, cm)).To(Succeed())
@@ -270,8 +282,11 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 					utils.HwTemplateBootIfaceLabel: "new-label",
 					utils.HwTemplateNodePool: `
-	- name: master
-      hwProfile: profile-spr-single-processor-64G`,
+	- name: controller
+      hwProfile: profile-spr-single-processor-64G
+      role: master
+      resourcePoolId: xyz`,
+					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
 			Expect(c.Create(ctx, cm)).To(Succeed())
@@ -303,10 +318,15 @@ var _ = Describe("renderHardwareTemplate", func() {
 					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
 					utils.HwTemplateBootIfaceLabel: "bootable-interface",
 					utils.HwTemplateNodePool: `
-	- name: master
+	- name: controller
       hwProfile: profile-spr-single-processor-64G
+      role: master
+      resourcePoolId: xyz
 	- name: worker
-      hwProfile: profile-spr-single-processor-64G`,
+      hwProfile: profile-spr-single-processor-64G
+      role: worker
+      resourcePoolId: xyz`,
+					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
 				},
 			}
 			Expect(c.Create(ctx, cm)).To(Succeed())
@@ -554,9 +574,9 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 		}
 		masterNode = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-			"site-1-master-bmc-secret", "master", poolns, crName, mIfaces)
+			"site-1-master-bmc-secret", groupNameController, poolns, crName, mIfaces)
 		workerNode = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1",
-			"site-1-worker-bmc-secret", "worker", poolns, crName, wIfaces)
+			"site-1-worker-bmc-secret", groupNameWorker, poolns, crName, wIfaces)
 	)
 
 	BeforeEach(func() {
@@ -615,6 +635,17 @@ var _ = Describe("updateClusterInstance", func() {
 				},
 				Properties: hwv1alpha1.Properties{
 					NodeNames: []string{mn, wn},
+				},
+			},
+			Spec: hwv1alpha1.NodePoolSpec{
+				NodeGroup: []hwv1alpha1.NodeGroup{
+					{
+						Name: groupNameController,
+						Role: "master",
+					}, {
+						Name: groupNameWorker,
+						Role: "worker",
+					},
 				},
 			},
 		}
@@ -785,9 +816,9 @@ func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.
 		updatedNode := &hwv1alpha1.Node{}
 		Expect(c.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: node.Namespace}, updatedNode)).To(Succeed())
 		switch updatedNode.Spec.GroupName {
-		case "master":
+		case groupNameController:
 			Expect(updatedNode.Status.Hostname).To(Equal(mhost))
-		case "worker":
+		case groupNameWorker:
 			Expect(updatedNode.Status.Hostname).To(Equal(whost))
 		default:
 			Fail(fmt.Sprintf("Unexpected GroupName: %s", updatedNode.Spec.GroupName))

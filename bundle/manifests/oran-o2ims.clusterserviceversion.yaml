@@ -72,6 +72,7 @@ metadata:
           },
           "spec": {
             "cloudID": "sample",
+            "extensions": [],
             "hwMgrId": "loopback-1",
             "nodeGroup": [
               {
@@ -80,11 +81,15 @@ metadata:
                   "eno1"
                 ],
                 "name": "master",
+                "resourcePoolId": "xyz",
+                "role": "master",
                 "size": 1
               },
               {
                 "hwProfile": "sample-worker-profile",
                 "name": "worker",
+                "resourcePoolId": "xyz",
+                "role": "worker",
                 "size": 0
               }
             ],
@@ -827,6 +832,8 @@ spec:
         path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Extensions
+        path: extensions
       - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
         displayName: Hardware Manager ID
         path: hwMgrId

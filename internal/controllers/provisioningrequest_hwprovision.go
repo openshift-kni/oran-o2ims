@@ -227,9 +227,10 @@ func (t *provisioningRequestReconcilerTask) checkNodePoolConfigStatus(ctx contex
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(ctx context.Context, hwNodes map[string][]utils.NodeInfo,
 	nodePool *hwv1alpha1.NodePool, clusterInstance *siteconfig.ClusterInstance) error {
 
+	roleToNodeGroupName := utils.GetRoleToGroupNameMap(nodePool)
 	for i, node := range clusterInstance.Spec.Nodes {
-		// Check if the node's role matches any key in hwNodes
-		nodeInfos, exists := hwNodes[node.Role]
+		// Check if the node's role has a match in NodeGroupName
+		nodeInfos, exists := hwNodes[roleToNodeGroupName[node.Role]]
 		if !exists || len(nodeInfos) == 0 {
 			continue
 		}
@@ -411,7 +412,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	}
 
 	for i, group := range nodeGroup {
-		if count, ok := roleCounts[group.Name]; ok {
+		if count, ok := roleCounts[group.Role]; ok {
 			nodeGroup[i].Size = count
 		}
 	}
@@ -422,13 +423,20 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamOCloudSiteId, err)
 	}
 
+	// Extract extensions from HW Template
+	extensions, err := utils.ExtractTemplateDataFromConfigMap[map[string]string](
+		hwTemplateCm, utils.HwTemplateExtensions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.HwTemplateExtensions, err)
+	}
+
 	nodePool.Spec.CloudID = clusterInstance.GetName()
 	nodePool.Spec.Site = siteID.(string)
 	nodePool.Spec.HwMgrId = hwTemplateCm.Data[utils.HwTemplatePluginMgr]
 	nodePool.Spec.NodeGroup = nodeGroup
 	nodePool.ObjectMeta.Name = clusterInstance.GetName()
 	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
-
+	nodePool.Spec.Extensions = extensions
 	// Add boot interface label to the generated nodePool
 	annotation := make(map[string]string)
 	annotation[utils.HwTemplateBootIfaceLabel] = hwTemplateCm.Data[utils.HwTemplateBootIfaceLabel]
