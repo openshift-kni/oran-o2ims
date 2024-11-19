@@ -152,7 +152,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 	}
 
 	if configErr != nil {
-		return fmt.Errorf("failed to apply node configuration for NodePool %s: %w", nodePool.GetName(), err)
+		return fmt.Errorf("failed to apply node configuration for NodePool %s: %w", nodePool.GetName(), configErr)
 	}
 	return nil
 }
