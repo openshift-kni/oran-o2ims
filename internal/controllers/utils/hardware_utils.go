@@ -456,3 +456,15 @@ func GetStatusMessage(condition hwv1alpha1.ConditionType) string {
 	}
 	return "provisioning"
 }
+
+// GetRoleToGroupNameMap creates a mapping of Role to Group Name from NodePool
+func GetRoleToGroupNameMap(nodePool *hwv1alpha1.NodePool) map[string]string {
+	roleToNodeGroupName := make(map[string]string)
+	for _, nodeGroup := range nodePool.Spec.NodeGroup {
+
+		if _, exists := roleToNodeGroupName[nodeGroup.Role]; !exists {
+			roleToNodeGroupName[nodeGroup.Role] = nodeGroup.Name
+		}
+	}
+	return roleToNodeGroupName
+}

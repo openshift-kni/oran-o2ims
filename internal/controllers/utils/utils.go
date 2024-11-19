@@ -23,7 +23,6 @@ import (
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
 
@@ -816,16 +815,4 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 	}
 
 	return nil
-}
-
-// GetRoleToGroupNameMap creates a mapping of Role to Group Name from NodePool
-func GetRoleToGroupNameMap(nodePool *hwv1alpha1.NodePool) map[string]string {
-	roleToNodeGroupName := make(map[string]string)
-	for _, nodeGroup := range nodePool.Spec.NodeGroup {
-
-		if _, exists := roleToNodeGroupName[nodeGroup.Role]; !exists {
-			roleToNodeGroupName[nodeGroup.Role] = nodeGroup.Name
-		}
-	}
-	return roleToNodeGroupName
 }
