@@ -22,6 +22,7 @@ import (
 	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	externalRef0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
 // Defines values for AlarmEventNotificationNotificationEventType.
@@ -252,14 +253,172 @@ type ProblemDetails struct {
 
 // GetSubscriptionsParams defines parameters for GetSubscriptions.
 type GetSubscriptionsParams struct {
-	// Filter Optional filter parameter. Only the attributes in AlarmSubscriptionInfo are filterable.
-	Filter *string `form:"filter,omitempty" json:"filter,omitempty"`
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
 // GetAlarmsParams defines parameters for GetAlarms.
 type GetAlarmsParams struct {
-	// Filter Optional filter parameter. Only the attributes in AlarmEventRecord are filterable.
-	Filter *string `form:"filter,omitempty" json:"filter,omitempty"`
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
 // CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
@@ -327,6 +486,22 @@ func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *ht
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetSubscriptionsParams
+
+	// ------------- Optional query parameter "exclude_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "filter" -------------
 
@@ -418,6 +593,22 @@ func (siw *ServerInterfaceWrapper) GetAlarms(w http.ResponseWriter, r *http.Requ
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetAlarmsParams
+
+	// ------------- Optional query parameter "exclude_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "filter" -------------
 
@@ -1520,75 +1711,89 @@ func (sh *strictHandler) HwNotification(w http.ResponseWriter, r *http.Request, 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+x8a2/buLb2XyE0+0OL17JlW74FeHGQSdPWe9o0cNJT4EyKAUUu2dyVSJekknoX/u8H",
-	"JGVZsuTYyfSS2Wc+tZF4WVzXZy0u+atHRLoUHLhW3slXT5EFpNj+9zTBMj2/Ba4vhGYxI1gzwc0bCopI",
-	"tnR/unHIDkTlkUiZJ1oglUVmfARSeS1vKcUSpGZgN8Fm8in5xMVdAnQO1yyF+hYvsIaOeYWUxukS3eIk",
-	"A3S3AI4wX+V/ihjpBaAt2TMgQlK0wApFABylgrKYAW17LQ++4HSZgHfi9YKw5wcjv9e97vVO+r2T3vh/",
-	"vJYXC5li7Z14FGvwtSGr5enV0kxRWjI+99atGvm0TvuvQiSAeU4k49Syh88NvRilmOM5pIZTaqU0pJZc",
-	"XFrRHsruU6FbywwKgiK3R0HR2QLzOdCfy8zuo5j5AmLGmSF1+qJB15CEGCRwAkazChLRdhqSjlLGy68Z",
-	"Me+wXCGslCAMa6DojumFHVQsStEMlMgkgevVEqpnw308CAZk5I9DSvyQxLEf4Xjs94dxvx/1YRTEpHzW",
-	"LGN07zFLPJ02KM31AtD72ZvKGctiENG/gOgqfYN4NBzDeOL3MHT9cDSi/mQyGvvdUT8YDLuDkA7o0fTN",
-	"MFOPUKD7dYZIMHzfrzLBQ1WGCK6yFOSVczGWwn38dGQupbhlFCiKVpbazQobfVGllaqE9ikl3W5v7ONu",
-	"SP1wSMEfBxT7w7AbRt1Jj8AkPoa/8EUDV0xw5wAptWqLk8uKY6xNqx1IAcISUMbVEoi1RfSMC22EwimW",
-	"lP0b6HO0dbfo2SdYqefobsHIwk7VmCVCbnlxC5wKiYREN9zMwlpIo4KWYueIGHfnM4ZWsBJHItP29Tv/",
-	"LBEZdTrQvuHb8zuNNQeZJyLCiR3XZOJGVG4IInYtRoGbqALS2C6b8y3BV2/ftaEiJIrD4WQcYZ+M8cgP",
-	"exPqY+gO/XAcxt1B3Bv3yOAYIfFSILO6fG1H7BJbiXdgQ6BZyumaiXbAs9Q7+T1odVu9Vv9jidSg2JVx",
-	"DXOQXsv74pvx/i2WHKdGD373Ls4/eC3v7PXpxatz858356czr+Wdnv128e7Dm/MXr869j+tWzt4ZxN/G",
-	"lyyE0oaENhFp512PpeoPxmOJlZYZ0ZmEt4IzLQy3OrfdjnUZqhPF/Xgc98Afxv2RH47HPX8yxNQnQTQh",
-	"EA9jEoRNzF6CJMBugV7BLUimV+YQ/5DmMN4vnS1A6eTopHNZm7C2wCLCUQJnOFNwZPC4LM+pBL0qP6I+",
-	"oV1ifD8MiB/2YvAxjgf+YBLTSQj9Ph7jY9RK5tHlSPI2wxHjxqoJ5MZLDLn7kIHXj+K4O+pTH0/owA+7",
-	"g5E/HoxjP570w3gYUyDh4CHEGtU/kmCr/CLeEn4MvZMuHdBuGPgQD3p+2B2O/GhIiT8ZDTDtjiejuNc/",
-	"TK8l+HPGpAFhv+94mX0G3RiNayevyK0Jp9SVrx5GG6BZE35ssoZKzPjY4FJ3bdrI6n6c3RAjP1gEuIGh",
-	"JQiqEOZObi3ENGLKCNLAe4vur2fvz52nPw6bloloxhfXC6ZQzCChZq+lWGbJFq5hdAB+2E1MWHdx1SxR",
-	"htN7wUd3/Ci8ei/UfvxJtkj8hu/D4kxtUXhVAJVzTR53rgSw/GESIm63e47xcGy4a6b0Z6YTyOYTO8cb",
-	"9IeTGIKhjylEfjgZDv1oHMd+OMLDOKQhgePAyjEZxXSLokziyRFwLVeVY5VWaKMb/kYQnCQrlHH22YiP",
-	"6cUGIxPh3DzmBeLbRKjdM44GPRJCr+cHgxE1zr1nspLIJ7gPvZiGcTzof5Os5M/pZJNxHUpXuqOHquT/",
-	"dej/PYAe/bZALxzEwzAGfwh07IfhmPrjOB758WAcBsEkwMHoPx87NWKiujutS2Iv6nkYxKmx7xjM89aG",
-	"Qgfw1KMAUOltgXgq3I5xohqATRP3KjvtJb9StuCxqJNtXHCEyafmtC7OjIP+nOHEOYH3s6nRJrytaiyl",
-	"IEAzudUm7p4phTC6FErXS33lpLZdUR7J/kwRphSCYuNdytUXEbv0WbmqMc0Ks7jaW5DpDukgJoPQJwCB",
-	"Hw76PX8y7g39ngmr414YQDc6xlZjlmiQdXrPJNMgGbbU5tQ5LlKBjLvlYAxToMiE/KWQJtwIie5Ykphn",
-	"bt2tjy2XltAN59VaubxlBNroegESYiGhhViMcL6ICUdmx8LvWgSOk2RDl/HpGxraN/wdT9yeWGvJokyD",
-	"MqG+FuXMNLeDMePd2P0MPrdqptoKnjcxsXy4JofXIHyHpSryRTaKlyo+Br0niSA2lOd8zCPN91CGHVMu",
-	"rK/ZgkFqV7+Xh25ItiNRRexLvEoEpggr5KZEQJHRALTQeqlOOp2lFCnoBWSqzUSHCqI62CzH+LxjAI7S",
-	"HSJ4zOaZtEt2frmDaCHEpz/cYyvSXVcI0t32MA1pk680url1pEfjlBqLgFN1qs3Y4/BRzPgc5FIyrutc",
-	"fLl9aYwuV5Jczc2RmlacA3dg5v3szT1KaVNaA4mZNgtiXQ27bvFDfjDBESR/kmNKY6kfxDOlsc7UISC1",
-	"T1mv3Ox1Ey35AywlXjk/n6aCn34r5XDLvfkGTDPQQXKcNMr4V0w+JYx/2iZ4W04cIdS5FNnyN1jVF/4N",
-	"VoUSMj63i9vRNjOyNoaeQXveNjtToNkyMUyH53u3+Ra8kGDdtWwc/W10pXD2UVPUfLd0hJeufcupQx7W",
-	"yi8VikXGac1Pbbzve5nUt8kr2maMDSjWrRZyKBF4SMSNmi8zbkPOaeEqq7u/FncoxXy1kfMC34K74yqm",
-	"bjDMjZfiL3+4cTeeV6v6r1veLUiVB47749FmYEktC6GWRN/auPiHhK2rQjeODV7Fxvklh0Xtya1F+DGz",
-	"B/jYoOqvsaR3WIJduL7fZYIJLERCc6SwyIc7ViOnpE3J5WVTctlQI2DKlT8M7rSCUmBBsLuzyRFeJboU",
-	"GAipfOkNaN7mCJV7nlbYGpTverrH3fWczabX07PTN17Le3v6z3cz8+/0wv774XR2Mb145bW86cWL8+vz",
-	"2dvpxel1cSN0/sLeAlWy3HpcrzCjJmejzYXbqWT7EaxEXgQwtDp/5uzL8aeSXFOQllexFCkiQkpQS8Gp",
-	"Mc3Tag5ZRXBniSCfLMpVK04WUnCmGJ+3G6/ncFMJ6HWWYo4kYGqoQRq+FNnNhkQX1x9N44WgYOm8EPqq",
-	"TGXjtdahOkW1JlcrU3yPysSOQ6kn8Jaz1ZJTkxcxhCaQvgCNWdIEIQtNOi0ykD9R8zLKybM0yquXWzXd",
-	"5jctB6JjxsFWazHKi2O5txLS5A+YI2YYmgLXRYJbOx21x2qq2iyMivmFisGXZYJ57g7z7RzQYAoJQjLp",
-	"SjwlLUxgp4RzJjgHW0+2hoU1jrACZPAeRSJrhLWbamsTie9n03JxyYBZVsW5BaX7KUQ3fKpRildoZUuq",
-	"cSb1ohrJTSCnsK11u+zxEJ5Se8LM9QLQ6+vryzyqICIo5JniIVYWW5q0oSm+aqaTRlaphZC6tStUlaUp",
-	"lqudnWx9ro2m2szKEmo9FbG3P86NlGjUYj/FrRsOXwgstT3dMpNLoUCZQSbNTdi/nVqiaewqgkyhObu1",
-	"V0IUCSsEvcAc3Xi29noSJZh/uvFajlGFPSC1MNAIJ8rWJzaFg0phdhdGHtIlTIiQ1klqgabn1y/R7OUZ",
-	"6k/GQ/R7/2OjqtWYxxQCTkQmsettw656bDbKaVQ3fEcgVJCsMNiifLBZ2mHszHjh19dv3zx3Rf2KZqIP",
-	"rs7PFEohjcr1FFDAdeuGM602LXoKYaWytKjt7HB6t0pSytStRpZ42CYiPQaAll1ygapyJ1T3vutSyvNC",
-	"kAZjeufPTi8QXhpobVTT/t3+8GrYftebvr3ypxfX57OXp2fn/iwI+v5tMGwHAXr2z4wD6gW90KQomUHd",
-	"xeEqvlS1hS8xbws571BxxxOB6X8x+v+Ho9A5J1fJJIJrTCzEc/HamwFFr7GurX53d9eWQBdYW47V3f/l",
-	"1IrdUo+mlU4UtG1FcbHb8C63eO+4Cej0cuqVYLjXbQftwJAhlsDxknknXr8dtPsmRcF6YTl+bFtMub5l",
-	"J87BssTdsuSlUu8V6OpAs5PEKWiQBht+9XCSiLsZKJAGYed37HtSr7xoWKzQRvcVBHer0LtVwVpNcJOY",
-	"tYz8TjqddNXePDLyM9rDDD2fM5CrDaY42dRZW3mTcVO689GW/peCKwcLekGw0SRwNSG8dGk0E7zzL+WA",
-	"7Ha9oqB1f37bVHqvFTzWNTW8yggBpeIsQRsqzbTwXiJzt/D/6sTee/FVxVcNxPyKKTJ+A5SFLIOfQsSU",
-	"Ozdk69cgEUgppHVpeRC1Rq8lg1uXKiTM3Ti4HgC1o/Iaz20iVH1uMpulULpcE7BCFnxb0DZ/f/1HzpB2",
-	"JOjql862CtAu1RLWFq3m6+UTfhV09SBFO6hf9cb5ddXTGwNeN6v7zjVETvrm3sakoYUiJquSBh6jIMfJ",
-	"b22JrbqoM3sdXrYbr/X9+Fe3z2PY1/0RROx1CrZhwIr6b6dwwCk4ZUIYcbhrcAb3+IJ163Ght/O19mxK",
-	"184kEtBQj8kv7PMdhd+JyjbOGUywDXMN23i7mluOgYcy9npMDOuGXNJCe5ynpIWhI/gHE3EhdF5XftKG",
-	"4JQMwRdMdLJCgsOxhtA6CknWVbbUmzUOxl06HviDUX/oh73uwMcxjvzRqBcOu4MwhGGwwXI/WseDn+rJ",
-	"nxy8+9uGjkGYj7CiB4STe7O3IvX8YWnbPX0cx3ZxPPksrdzT/hdP0MKg/xOIeClkxCgF3n5iJtw+Okss",
-	"J4b5g4eZbY78Kg2N64O2/B0DZ/1zkycbNysG+HfIPEzE9fZ+BWjdUd9hV3i2UfUvY5PluIpz46iZpK2N",
-	"kkXdok7Jp7+YRX3PmlBTt/LxpaEfRcxBM28/CTtvPwFsnNMw+Qk0nAkeJ4zkbOj2fgIJlxK2X3LFmCXw",
-	"5Nzajlez2r6q+zTbOb9t23886qg0VdybNFxWR/4IWF1tEXo8pv4LZIM4SXb6fspQckdKjxNu5+tOB836",
-	"aHF/n2hYb+h5muByRw3/Rpb/2cWYqhkeskKWb2PsjWCsfNfO6j582LRuly7xqkTOXBus2vTm2g6ISher",
-	"7aTJiy7JKm9qBVX+oSrbpXyLWbKpp+xA2rRytfe9MOOeD0wee5NY+bWSvFv4B1wmVrXD7or2dhWXXfRG",
-	"DxrUYtMVvFGNr4u7/7afsF7gFCo3vFXBvb7bEdzh+5zyyvf60x+USlT7px+rC6+rbdU/VxuqPd77VMBM",
-	"tWs5UTW1POX9PFd2WKXN6KTTsf11C6H0yTgYB56RT75N80/abX+bbSfbVN661Tyl8olf0/xq+bm+zGW1",
-	"T7nUbrknxjctUrAeOF0KxrXafFinkMZz91GdEihTYOJr/o0U43NEEgZc2+ZL1+aWb1mIYf1x/b8BAAD/",
-	"/9hD/SEzUAAA",
+	"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",
+	"yUk7o+a2zNVw9+bu/wIAAP//3alLOPRdAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
@@ -1628,6 +1833,12 @@ func PathToRawSpec(pathToFile string) map[string]func() ([]byte, error) {
 		res[pathToFile] = rawSpec
 	}
 
+	for rawPath, rawFunc := range externalRef0.PathToRawSpec(path.Join(path.Dir(pathToFile), "../../common/api/openapi.yaml")) {
+		if _, ok := res[rawPath]; ok {
+			// it is not possible to compare functions in golang, so always overwrite the old value
+		}
+		res[rawPath] = rawFunc
+	}
 	return res
 }
 

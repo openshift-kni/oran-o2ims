@@ -34,13 +34,9 @@ paths:
       tags:
         - alarms
       parameters:
-        - in: query
-          name: filter
-          schema:
-            type: string
-          allowReserved: true
-          description: Optional filter parameter. Only the attributes in AlarmEventRecord are filterable.
-          example: (eq,perceivedSeverity,0)
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
       responses:
         '200':
           description: Successful response
@@ -173,13 +169,9 @@ paths:
       tags:
         - subscriptions
       parameters:
-        - in: query
-          name: filter
-          schema:
-            type: string
-          allowReserved: true
-          description: Optional filter parameter. Only the attributes in AlarmSubscriptionInfo are filterable.
-          example: (eq,callback,http://my.callback.com)
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
       responses:
         '200':
           description: Successful response

@@ -1,0 +1,156 @@
+#
+# Copyright (c) 2023 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+# compliance with the License. You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is
+# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing permissions and limitations under the
+# License.
+#
+
+openapi: "3.0.0"
+
+info:
+  title: O2IMS Common Models and Parameters
+  version: 1.0.0
+  description: |
+    O2IMS Common Models and Parameters
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+
+components:
+  parameters:
+    fields:
+      name: fields
+      description: |
+        Comma separated list of field references to include in the result.
+
+        Each field reference is a field name, or a sequence of field names separated by slashes. For
+        example, to get the `name` field and the `country` subfield of the `extensions` field:
+
+        ```
+        fields=name,extensions/country
+        ```
+
+        When this parameter isn't used all the fields will be returned.
+      in: query
+      required: false
+      schema:
+        type: string
+      example: "name,extensions/country"
+
+    excludeFields:
+      name: exclude_fields
+      description: |
+        Comma separated list of field references to exclude from the result.
+
+        Each field reference is a field name, or a sequence of field names separated by slashes. For
+        example, to exclude the `country` subfield of the `extensions` field:
+
+        ```
+        exclude_fields=extensions/country
+        ```
+
+        When this parameter isn't used no field will be excluded.
+
+        Fields in this list will be excluded even if they are explicitly included using the
+        `fields` parameter.
+      in: query
+      required: false
+      schema:
+        type: string
+      example: "name,extensions/country"
+
+    filter:
+      name: filter
+      description: |
+        Search criteria.
+
+        Contains one or more search criteria, separated by semicolons. Each search criteria is a
+        tuple containing an operator, a field reference and one or more values. The operator can
+        be any of the following strings:
+
+        | Operator | Meaning                                                     |
+        |----------|-------------------------------------------------------------|
+        | `cont`   | Matches if the field contains the value                     |
+        | `eq`     | Matches if the field is equal to the value                  |
+        | `gt`     | Matches if the field is greater than the value              |
+        | `gte`    | Matches if the field is greater than or equal to the value  |
+        | `in`     | Matches if the field is one of the values                   |
+        | `lt`     | Matches if the field is less than the value                 |
+        | `lte`    | Matches if the field is less than or equal to the the value |
+        | `ncont`  | Matches if the field does not contain the value             |
+        | `neq`    | Matches if the field is not equal to the value              |
+        | `nin`    | Matches if the field is not one of the values               |
+
+        The field reference is the name of one of the fields of the object, or a sequence of
+        name of fields separated by slashes. For example, to use the `country` sub-field inside
+        the `extensions` field:
+
+        ```
+        filter=(eq,extensions/country,EQ)
+        ```
+
+        The values are the arguments of the operator. For example, the `eq` operator compares
+        checks if the value of the field is equal to the value.
+
+        The `in` and `nin` operators support multiple values. For example, to check if the `country`
+        sub-field inside the `extensions` field is either `ES` or `US:
+
+        ```
+        filter=(in,extensions/country,ES,US)
+        ```
+
+        When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+        For example, to check if the `name` field is the string `my cluster`:
+
+        ```
+        filter=(eq,name,'my cluster')
+        ```
+
+        When multiple criteria separated by semicolons are used, all of them must match for the
+        complete condition to match. For example, the following will check if the `name` is
+        `my cluster` *and* the `country` extension is `ES`:
+
+        ```
+        filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+        ```
+
+        When this parameter isn't used all the results will be returned.
+      in: query
+      required: false
+      schema:
+        type: string
+      example: "(eq,name,my cluster)"
+
+  schemas:
+
+    APIVersion:
+      description: |
+        Information about a version of the API.
+      type: object
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+
+    APIVersions:
+      description: |
+        Information about a list of versions of the API.
+      type: object
+      properties:
+        uriPrefix:
+          type: string
+          example: "/O2ims-infrastructureInventory/v1"
+        apiVersions:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIVersion"
+          example:
+          - version: "1.0.0"
