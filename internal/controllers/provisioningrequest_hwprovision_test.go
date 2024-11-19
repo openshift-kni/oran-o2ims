@@ -22,23 +22,26 @@ import (
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
 
+const (
+	groupNameController = "controller"
+	groupNameWorker     = "worker"
+)
+
 var _ = Describe("renderHardwareTemplate", func() {
 	var (
-		ctx                 context.Context
-		c                   client.Client
-		reconciler          *ProvisioningRequestReconciler
-		task                *provisioningRequestReconcilerTask
-		clusterInstance     *siteconfig.ClusterInstance
-		ct                  *provisioningv1alpha1.ClusterTemplate
-		cr                  *provisioningv1alpha1.ProvisioningRequest
-		tName               = "clustertemplate-a"
-		tVersion            = "v1.0.0"
-		ctNamespace         = "clustertemplate-a-v4-16"
-		hwTemplateCm        = "hwTemplate-v1"
-		hwTemplateCmv2      = "hwTemplate-v2"
-		crName              = "cluster-1"
-		groupNameController = "controller"
-		groupNameWorker     = "worker"
+		ctx             context.Context
+		c               client.Client
+		reconciler      *ProvisioningRequestReconciler
+		task            *provisioningRequestReconcilerTask
+		clusterInstance *siteconfig.ClusterInstance
+		ct              *provisioningv1alpha1.ClusterTemplate
+		cr              *provisioningv1alpha1.ProvisioningRequest
+		tName           = "clustertemplate-a"
+		tVersion        = "v1.0.0"
+		ctNamespace     = "clustertemplate-a-v4-16"
+		hwTemplateCm    = "hwTemplate-v1"
+		hwTemplateCmv2  = "hwTemplate-v2"
+		crName          = "cluster-1"
 	)
 
 	BeforeEach(func() {
@@ -532,23 +535,21 @@ var _ = Describe("waitForNodePoolProvision", func() {
 
 var _ = Describe("updateClusterInstance", func() {
 	var (
-		ctx                 context.Context
-		c                   client.Client
-		reconciler          *ProvisioningRequestReconciler
-		task                *provisioningRequestReconcilerTask
-		cr                  *provisioningv1alpha1.ProvisioningRequest
-		ci                  *siteconfig.ClusterInstance
-		np                  *hwv1alpha1.NodePool
-		crName              = "cluster-1"
-		crNamespace         = "clustertemplate-a-v4-16"
-		mn                  = "master-node"
-		wn                  = "worker-node"
-		mhost               = "node1.test.com"
-		whost               = "node2.test.com"
-		groupNameController = "controller"
-		groupNameWorker     = "worker"
-		poolns              = utils.UnitTestHwmgrNamespace
-		mIfaces             = []*hwv1alpha1.Interface{
+		ctx         context.Context
+		c           client.Client
+		reconciler  *ProvisioningRequestReconciler
+		task        *provisioningRequestReconcilerTask
+		cr          *provisioningv1alpha1.ProvisioningRequest
+		ci          *siteconfig.ClusterInstance
+		np          *hwv1alpha1.NodePool
+		crName      = "cluster-1"
+		crNamespace = "clustertemplate-a-v4-16"
+		mn          = "master-node"
+		wn          = "worker-node"
+		mhost       = "node1.test.com"
+		whost       = "node2.test.com"
+		poolns      = utils.UnitTestHwmgrNamespace
+		mIfaces     = []*hwv1alpha1.Interface{
 			{
 				Name:       "eth0",
 				Label:      "test",
@@ -815,9 +816,9 @@ func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.
 		updatedNode := &hwv1alpha1.Node{}
 		Expect(c.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: node.Namespace}, updatedNode)).To(Succeed())
 		switch updatedNode.Spec.GroupName {
-		case "controller":
+		case groupNameController:
 			Expect(updatedNode.Status.Hostname).To(Equal(mhost))
-		case "worker":
+		case groupNameWorker:
 			Expect(updatedNode.Status.Hostname).To(Equal(whost))
 		default:
 			Fail(fmt.Sprintf("Unexpected GroupName: %s", updatedNode.Spec.GroupName))

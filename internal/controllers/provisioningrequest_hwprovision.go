@@ -227,10 +227,7 @@ func (t *provisioningRequestReconcilerTask) checkNodePoolConfigStatus(ctx contex
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(ctx context.Context, hwNodes map[string][]utils.NodeInfo,
 	nodePool *hwv1alpha1.NodePool, clusterInstance *siteconfig.ClusterInstance) error {
 
-	roleToNodeGroupName := make(map[string]string)
-	for _, nodeGroup := range nodePool.Spec.NodeGroup {
-		roleToNodeGroupName[nodeGroup.Role] = nodeGroup.Name
-	}
+	roleToNodeGroupName := utils.GetRoleToGroupNameMap(nodePool)
 	for i, node := range clusterInstance.Spec.Nodes {
 		// Check if the node's role has a match in NodeGroupName
 		nodeInfos, exists := hwNodes[roleToNodeGroupName[node.Role]]
