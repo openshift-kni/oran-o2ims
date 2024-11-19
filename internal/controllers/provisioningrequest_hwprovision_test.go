@@ -569,7 +569,7 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 		}
 		masterNode = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-			"site-1-master-bmc-secret", "master", poolns, crName, mIfaces)
+			"site-1-master-bmc-secret", "controller", poolns, crName, mIfaces)
 		workerNode = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1",
 			"site-1-worker-bmc-secret", "worker", poolns, crName, wIfaces)
 	)
@@ -630,6 +630,17 @@ var _ = Describe("updateClusterInstance", func() {
 				},
 				Properties: hwv1alpha1.Properties{
 					NodeNames: []string{mn, wn},
+				},
+			},
+			Spec: hwv1alpha1.NodePoolSpec{
+				NodeGroup: []hwv1alpha1.NodeGroup{
+					{
+						Name: "controller",
+						Role: "master",
+					}, {
+						Name: "worker",
+						Role: "worker",
+					},
 				},
 			},
 		}
@@ -800,7 +811,7 @@ func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.
 		updatedNode := &hwv1alpha1.Node{}
 		Expect(c.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: node.Namespace}, updatedNode)).To(Succeed())
 		switch updatedNode.Spec.GroupName {
-		case "master":
+		case "controller":
 			Expect(updatedNode.Status.Hostname).To(Equal(mhost))
 		case "worker":
 			Expect(updatedNode.Status.Hostname).To(Equal(whost))
