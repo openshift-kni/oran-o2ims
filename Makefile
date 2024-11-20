@@ -425,6 +425,9 @@ run-alarms: go-generate binary ##Run alarms server locally
 run-alarms-migrate: binary ##Migrate all the way up
 	$(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
 
+run-resources-migrate: binary ##Migrate all the way up
+	$(LOCALBIN)/$(BINARY_NAME) resource-server migrate
+
 ##@ O-RAN Postgres DB
 
 .PHONY: run-postgres

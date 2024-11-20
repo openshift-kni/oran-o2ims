@@ -3,7 +3,7 @@
 set -e
 
 # Define an array of service names
-services=("alarms")
+services=("alarms" "resources")
 
 # Everything here is idempotent
 for service_name in "${services[@]}"; do

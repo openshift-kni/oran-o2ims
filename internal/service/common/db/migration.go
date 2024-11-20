@@ -1,7 +1,6 @@
 package db
 
 import (
-	"embed"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,11 +11,8 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/golang-migrate/migrate/v4/source"
 )
-
-//go:embed migrations/*.sql
-var migrations embed.FS
 
 // MigrationsTable table created by migration lib to track state of migration
 const MigrationsTable = "schema_migrations"
@@ -29,12 +25,13 @@ type MigrationConfig struct {
 	Password        string
 	Database        string
 	MigrationsTable string
+	Source          source.Driver
 }
 
 // StartMigration starts migration for alarms server from a k8s job.
-func StartMigration(pgc PgConfig) error {
+func StartMigration(pgc PgConfig, source source.Driver) error {
 	// Init
-	h, err := NewHandler(PGtoMigrateConfig(pgc))
+	h, err := NewHandler(PGtoMigrateConfig(pgc, source))
 	if err != nil {
 		return fmt.Errorf("failed to create migrations handler: %w", err)
 	}
@@ -59,7 +56,7 @@ func StartMigration(pgc PgConfig) error {
 }
 
 // PGtoMigrateConfig convert postgres conn config to migration conn config
-func PGtoMigrateConfig(pgc PgConfig) MigrationConfig {
+func PGtoMigrateConfig(pgc PgConfig, source source.Driver) MigrationConfig {
 	return MigrationConfig{
 		Host:            pgc.Host,
 		Port:            pgc.Port,
@@ -67,6 +64,7 @@ func PGtoMigrateConfig(pgc PgConfig) MigrationConfig {
 		Password:        pgc.Password,
 		Database:        pgc.Database,
 		MigrationsTable: MigrationsTable,
+		Source:          source,
 	}
 }
 
@@ -86,11 +84,6 @@ func (h *MigrationHandler) Verbose() bool {
 
 // NewHandler configure the migration data
 func NewHandler(cfg MigrationConfig) (*MigrationHandler, error) {
-	d, err := iofs.New(migrations, "migrations")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create migrations source: %w", err)
-	}
-
 	// https://github.com/golang-migrate/migrate/tree/c378583d782e026f472dff657bfd088bf2510038/database/pgx/v5
 	connStr := fmt.Sprintf("pgx5://%s:%s@%s:%s/%s?sslmode=disable&connect_timeout=10",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
@@ -98,7 +91,7 @@ func NewHandler(cfg MigrationConfig) (*MigrationHandler, error) {
 		connStr += fmt.Sprintf("&x-migrations-table=%s", cfg.MigrationsTable)
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", d, connStr)
+	m, err := migrate.NewWithSourceInstance("iofs", cfg.Source, connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create migrate instance: %w", err)
 	}
