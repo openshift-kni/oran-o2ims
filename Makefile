@@ -408,7 +408,15 @@ sync-submodules:
 ##@ O-RAN Alarms Server
 
 .PHNOY: alarms
-alarms: clean-postgres run-postgres run-alarms-migrate run-alarms ##Run full alarms stack
+alarms: clean-postgres clean-am-service run-postgres run-alarms-migrate create-am-service run-alarms ##Run full alarms stack
+
+create-am-service: ##Creates alarm manager service and endpoint to expose a DNS entry.
+	oc apply -k ./internal/service/alarms/k8s/base --wait=true
+	@echo "Service and Endpoint for alarm manager created."
+
+clean-am-service: ##Deletes alarm manager service and endpoint.
+	-oc delete -k ./internal/service/alarms/k8s/base --wait=true
+	@echo "Service and Endpoint for alarm manager deleted."
 
 .PHONY: run-alarms
 run-alarms: go-generate binary ##Run alarms server locally

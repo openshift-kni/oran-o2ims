@@ -13,12 +13,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
-
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
@@ -61,6 +61,12 @@ func Serve() error {
 	if err != nil {
 		return fmt.Errorf("error creating client for hub: %w", err)
 	}
+
+	err = alertmanager.Setup(ctx, hubClient)
+	if err != nil {
+		return fmt.Errorf("error configuring alert manager: %w", err)
+	}
+
 	alarmsDict := dictionary.New(hubClient)
 	alarmsDict.Load(ctx)
 

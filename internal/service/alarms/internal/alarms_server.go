@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -82,8 +83,13 @@ func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProb
 }
 
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
-	// TODO implement me
-	panic("implement me")
+	// TODO: Implement the logic to handle the AM notification
+	slog.Debug("Received AM notification", "groupLabels", request.Body.GroupLabels)
+	for _, alert := range request.Body.Alerts {
+		slog.Debug("Alert", "fingerprint", alert.Fingerprint, "startsAt", alert.StartsAt, "status", alert.Status)
+	}
+
+	return api.AmNotification200Response{}, nil
 }
 
 func (a *AlarmsServer) HwNotification(ctx context.Context, request api.HwNotificationRequestObject) (api.HwNotificationResponseObject, error) {
