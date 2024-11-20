@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
+
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
@@ -47,7 +49,7 @@ func Serve() error {
 	}()
 
 	// Init DB client
-	pool, err := db.NewPgxPool(ctx)
+	pool, err := db.NewPgxPool(ctx, db.GetPgConfig())
 	if err != nil {
 		return fmt.Errorf("failed to connected to DB: %w", err)
 	}
@@ -77,7 +79,7 @@ func Serve() error {
 	// Init server
 	// Create the handler
 	alarmServer := internal.AlarmsServer{
-		AlarmsRepository: &internal.AlarmsRepository{
+		AlarmsRepository: &repo.AlarmsRepository{
 			Db: pool,
 		},
 	}

@@ -17,11 +17,9 @@ type PgConfig struct {
 }
 
 // NewPgxPool get a concurrency safe pool of connection
-func NewPgxPool(ctx context.Context) (*pgxpool.Pool, error) {
-	cfg := GetPgConfig()
-
+func NewPgxPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 	// TODO: update config with trace, timeouts etc.
-	poolConfig, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+	poolConfig, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)

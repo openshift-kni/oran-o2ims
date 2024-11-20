@@ -23,7 +23,7 @@ func LogDuration() Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			startTime := time.Now()
 			next.ServeHTTP(w, r)
-			slog.Info(fmt.Sprintf("%s took %s", r.RequestURI, time.Since(startTime)))
+			slog.Debug(fmt.Sprintf("%s took %s", r.RequestURI, time.Since(startTime)))
 		})
 	}
 }

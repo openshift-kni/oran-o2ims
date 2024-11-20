@@ -2,17 +2,23 @@ package internal
 
 import (
 	"context"
-	"log/slog"
-	"net/http"
-	"time"
 
-	"github.com/google/uuid"
+	"log/slog"
+
+	"fmt"
+	"net/http"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
+
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 )
 
 type AlarmsServer struct {
-	AlarmsRepository *AlarmsRepository
+	AlarmsRepository *repo.AlarmsRepository
 }
 
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
@@ -49,22 +55,25 @@ func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsReque
 	return api.GetAlarms400ApplicationProblemPlusJSONResponse(p), nil
 }
 
+// GetAlarm returns an AlarmEventRecord with a given ID
 func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequestObject) (api.GetAlarmResponseObject, error) {
-	// TODO implement me
-	alarm := api.AlarmEventRecord{
-		AlarmAcknowledged:     false,
-		AlarmAcknowledgedTime: nil,
-		AlarmChangedTime:      nil,
-		AlarmClearedTime:      nil,
-		AlarmDefinitionId:     uuid.New(),
-		AlarmEventRecordId:    uuid.New(),
-		AlarmRaisedTime:       time.Now(),
-		PerceivedSeverity:     0,
-		ProbableCauseId:       uuid.New(),
-		ResourceTypeID:        uuid.New(),
+	aerModel, err := a.AlarmsRepository.GetAlarmEventRecordWithUuid(ctx, request.AlarmEventRecordId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AlarmEventRecord due to issues with DB conn: %w", err)
 	}
 
-	return api.GetAlarm200JSONResponse(alarm), nil
+	// Nothing found
+	if len(aerModel) == 0 {
+		return api.GetAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{
+				"UUID": request.AlarmEventRecordId.String(),
+			},
+			Detail: "Could not find AlarmEventRecord for given UUID",
+			Status: http.StatusNotFound,
+		}), nil
+	}
+
+	return api.GetAlarm200JSONResponse(convertAerModelToApi(aerModel[0])), nil
 }
 
 func (a *AlarmsServer) AckAlarm(ctx context.Context, request api.AckAlarmRequestObject) (api.AckAlarmResponseObject, error) {
@@ -95,4 +104,19 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 func (a *AlarmsServer) HwNotification(ctx context.Context, request api.HwNotificationRequestObject) (api.HwNotificationResponseObject, error) {
 	// TODO implement me
 	panic("implement me")
+}
+
+func convertAerModelToApi(aerModel models.AlarmEventRecord) api.AlarmEventRecord {
+	return api.AlarmEventRecord{
+		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
+		AlarmAcknowledgedTime: aerModel.AlarmAcknowledgedTime,
+		AlarmChangedTime:      aerModel.AlarmChangedTime,
+		AlarmClearedTime:      aerModel.AlarmClearedTime,
+		AlarmDefinitionId:     aerModel.AlarmDefinitionID,
+		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
+		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
+		PerceivedSeverity:     api.PerceivedSeverity(aerModel.PerceivedSeverity),
+		ProbableCauseId:       aerModel.ProbableCauseID,
+		ResourceTypeID:        aerModel.ResourceTypeID,
+	}
 }
