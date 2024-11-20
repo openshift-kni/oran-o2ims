@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	cr_client "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 )
@@ -21,15 +21,18 @@ const (
 )
 
 // TODO: create a file with the resource type names once they are defined by the Resource Server
-const resourceTypeCluster = "Cluster"
+const (
+	resourceTypeCluster = "Cluster"
+	resourceTypeHub     = "Hub"
+)
 
 type AlarmDictionary struct {
-	Client client.Client
+	Client cr_client.Client
 
 	RulesMap map[int][]monitoringv1.Rule
 }
 
-func New(client client.Client) *AlarmDictionary {
+func New(client cr_client.Client) *AlarmDictionary {
 	return &AlarmDictionary{
 		Client:   client,
 		RulesMap: make(map[int][]monitoringv1.Rule),
@@ -68,6 +71,9 @@ func (r *AlarmDictionary) Load(ctx context.Context) {
 			switch resource.model {
 			case resourceTypeCluster:
 				rules, err = r.processCluster(ctx, resource.version)
+			case resourceTypeHub:
+				rules, err = r.processHub(ctx)
+				// TODO: Logic to process Hub cluster rules will be added after the ones for the managed cluster are implemented
 			default:
 				err = fmt.Errorf("unsupported resource type: %s", resource.model)
 			}
@@ -93,6 +99,19 @@ func (r *AlarmDictionary) Load(ctx context.Context) {
 	// TODO: Load alarm dictionary into DB
 }
 
+func (r *AlarmDictionary) processHub(ctx context.Context) ([]monitoringv1.Rule, error) {
+	rules, err := r.getRules(ctx, r.Client)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Debug("fetched rules for Hub cluster", "rules count", len(rules))
+	return rules, nil
+}
+
+// Needed for testing
+var getClientForCluster = k8s_client.NewClientForCluster
+
 // processCluster processes a cluster resource type
 func (r *AlarmDictionary) processCluster(ctx context.Context, version string) ([]monitoringv1.Rule, error) {
 	cluster, err := r.getManagedCluster(ctx, version)
@@ -100,17 +119,14 @@ func (r *AlarmDictionary) processCluster(ctx context.Context, version string) ([
 		return nil, err
 	}
 
-	promRules, err := r.getPromRules(ctx, cluster)
+	cl, err := getClientForCluster(ctx, r.Client, cluster.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	// Extract rules from PrometheusRule list
-	var rules []monitoringv1.Rule
-	for _, promRule := range promRules {
-		for _, group := range promRule.Spec.Groups {
-			rules = append(rules, group.Rules...)
-		}
+	rules, err := r.getRules(ctx, cl)
+	if err != nil {
+		return nil, err
 	}
 
 	slog.Debug("fetched rules for managed cluster", "cluster", cluster.Name, "version", version, "rules count", len(rules))
@@ -128,7 +144,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 	defer cancel()
 
 	var managedClusters clusterv1.ManagedClusterList
-	err := r.Client.List(ctxWithTimeout, &managedClusters, &client.ListOptions{
+	err := r.Client.List(ctxWithTimeout, &managedClusters, &cr_client.ListOptions{
 		LabelSelector: selector.Add(*versionSelector).Add(*localClusterRequirement),
 		Limit:         1,
 	})
@@ -143,25 +159,26 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 	return &managedClusters.Items[0], nil
 }
 
-var getClientForCluster = k8s_client.NewClientForCluster
-
-// getPromRules gets Prometheus rules from a managed cluster
-func (r *AlarmDictionary) getPromRules(ctx context.Context, cluster *clusterv1.ManagedCluster) ([]*monitoringv1.PrometheusRule, error) {
-	clusterClient, err := getClientForCluster(ctx, r.Client, cluster.Name)
-	if err != nil {
-		return nil, fmt.Errorf("error creating client for managed cluster %s: %w", cluster.Name, err)
-	}
-
+// getRules gets rules defined within a PrometheusRule resource
+func (r *AlarmDictionary) getRules(ctx context.Context, cl cr_client.Client) ([]monitoringv1.Rule, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, k8s_client.ListRequestTimeout)
 	defer cancel()
 
-	var rules monitoringv1.PrometheusRuleList
-	err = clusterClient.List(ctxWithTimeout, &rules)
+	var promRules monitoringv1.PrometheusRuleList
+	err := cl.List(ctxWithTimeout, &promRules)
 	if err != nil {
-		return nil, fmt.Errorf("error listing rules for managed cluster %s: %w", cluster.Name, err)
+		return nil, fmt.Errorf("error listing prometheus rules: %w", err)
 	}
 
-	return rules.Items, nil
+	// Extract rules from PrometheusRule list
+	var rules []monitoringv1.Rule
+	for _, promRule := range promRules.Items {
+		for _, group := range promRule.Spec.Groups {
+			rules = append(rules, group.Rules...)
+		}
+	}
+
+	return rules, nil
 }
 
 // TODO: Delete once Resource Type is defined by Resource Server
