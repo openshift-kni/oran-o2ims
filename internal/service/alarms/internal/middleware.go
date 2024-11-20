@@ -9,7 +9,8 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3filter"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
 type Middleware = func(http.Handler) http.Handler
@@ -30,7 +31,7 @@ func LogDuration() Middleware {
 // AlarmsOapiValidation to validate all incoming requests as specified in the spec
 func AlarmsOapiValidation() Middleware {
 	// This also validates the spec file
-	swagger, err := generated.GetSwagger()
+	swagger, err := api.GetSwagger()
 	if err != nil {
 		// Panic will allow for defer statements to execute
 		panic(fmt.Sprintf("failed to get swagger: %s", err))
@@ -51,7 +52,7 @@ func AlarmsOapiValidation() Middleware {
 // getOranErrHandler override default validation error to allow for O-RAN specific error
 func getOranErrHandler() func(w http.ResponseWriter, message string, statusCode int) {
 	return func(w http.ResponseWriter, message string, statusCode int) {
-		out, _ := json.Marshal(generated.ProblemDetails{
+		out, _ := json.Marshal(common.ProblemDetails{
 			Detail: message,
 			Status: statusCode,
 		})

@@ -63,11 +63,23 @@ paths:
       responses:
         '200':
           description: |
-            Successfully obtaiend the complete list of versions.
+            Successfully obtained the complete list of versions.
           content:
             application/json:
               schema:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
   /O2ims-infrastructureInventory/v1:
     get:
@@ -88,6 +100,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OCloudInfo"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
   /O2ims-infrastructureInventory/v1/api_versions:
     get:
@@ -108,6 +132,18 @@ paths:
             application/json:
               schema:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
   /O2ims-infrastructureInventory/v1/deploymentManagers:
     get:
@@ -131,6 +167,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DeploymentManager'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
   /O2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}:
     get:
@@ -152,6 +200,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentManager"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
   /O2ims-infrastructureInventory/v1/resourceTypes:
     get:
@@ -175,6 +241,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ResourceType"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
   /O2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}:
     get:
@@ -194,6 +272,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResourceType"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
 
   /O2ims-infrastructureInventory/v1/resourcePools:
     get:
@@ -217,6 +314,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ResourcePool"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
   /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}:
     get:
@@ -236,6 +345,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResourcePool"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
 
   /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources:
     get:
@@ -260,6 +388,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Resource"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
 
   /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}:
     get:
@@ -280,6 +427,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Resource"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
 components:
   parameters:

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
 type AlarmsServer struct {
@@ -40,7 +41,7 @@ func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsReque
 	// TODO implement me
 
 	// Fill out more details
-	p := api.ProblemDetails{
+	p := common.ProblemDetails{
 		Detail: "invalid `filter` parameter syntax",
 		Status: http.StatusBadRequest,
 	}
