@@ -19,6 +19,7 @@ import (
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
 // Alarm server config values
@@ -150,7 +151,7 @@ func gracefulShutdown(srv *http.Server) error {
 // getOranReqErrFunc override default validation errors to allow for O-RAN specific struct
 func getOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		out, _ := json.Marshal(api.ProblemDetails{
+		out, _ := json.Marshal(common.ProblemDetails{
 			Detail: err.Error(),
 			Status: http.StatusBadRequest,
 		})
@@ -161,7 +162,7 @@ func getOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error)
 // getOranRespErrFunc override default internal server error to allow for O-RAN specific struct
 func getOranRespErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		out, _ := json.Marshal(api.ProblemDetails{
+		out, _ := json.Marshal(common.ProblemDetails{
 			Detail: err.Error(),
 			Status: http.StatusInternalServerError,
 		})

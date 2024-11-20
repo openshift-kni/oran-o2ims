@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
 package: generated
-output: ../generated/alarms.generated.go
+output: ../generated/inventory.generated.go
 
 generate:
   std-http-server: true
@@ -11,7 +11,7 @@ generate:
 
 output-options:
   skip-fmt: false
-  skip-prune: false
+  skip-prune: true
   nullable-type: true
   name-normalizer: ToCamelCaseWithDigits
 

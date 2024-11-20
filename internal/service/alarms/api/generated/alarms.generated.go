@@ -22,6 +22,7 @@ import (
 	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	externalRef0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
 // Defines values for AlarmEventNotificationNotificationEventType.
@@ -225,41 +226,174 @@ type ProbableCause struct {
 	ProbableCauseId openapi_types.UUID `json:"probableCauseId"`
 }
 
-// ProblemDetails defines model for ProblemDetails.
-type ProblemDetails struct {
-	// AdditionalAttributes Any number of additional attributes, as defined in a specification or by an implementation.
-	AdditionalAttributes *map[string]string `json:"additionalAttributes,omitempty"`
-
-	// Detail A human-readable explanation specific to this occurrence of the problem.
-	Detail string `json:"detail"`
-
-	// Instance A URI reference that identifies the specific occurrence of the problem.
-	// It may yield further information if dereferenced.
-	Instance *string `json:"instance,omitempty"`
-
-	// Status The HTTP status code for this occurrence of the problem.
-	Status int `json:"status"`
-
-	// Title A short, human-readable summary of the problem type. It should not change from occurrence to occurrence of the problem,
-	// except for purposes of localization. If type is given and other than "about:blank", this attribute shall also be provided.
-	Title *string `json:"title,omitempty"`
-
-	// Type A URI reference according to IETF RFC 3986 [3] that identifies the problem type. It is encouraged that the URI provides
-	// human-readable documentation for the problem (e.g. usingHTML) when dereferenced. When this member is not present,
-	// its value is assumed to be "about:blank".
-	Type *string `json:"type,omitempty"`
-}
-
 // GetSubscriptionsParams defines parameters for GetSubscriptions.
 type GetSubscriptionsParams struct {
-	// Filter Optional filter parameter. Only the attributes in AlarmSubscriptionInfo are filterable.
-	Filter *string `form:"filter,omitempty" json:"filter,omitempty"`
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
 // GetAlarmsParams defines parameters for GetAlarms.
 type GetAlarmsParams struct {
-	// Filter Optional filter parameter. Only the attributes in AlarmEventRecord are filterable.
-	Filter *string `form:"filter,omitempty" json:"filter,omitempty"`
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
 // CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
@@ -327,6 +461,22 @@ func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *ht
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetSubscriptionsParams
+
+	// ------------- Optional query parameter "exclude_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "filter" -------------
 
@@ -418,6 +568,22 @@ func (siw *ServerInterfaceWrapper) GetAlarms(w http.ResponseWriter, r *http.Requ
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetAlarmsParams
+
+	// ------------- Optional query parameter "exclude_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "filter" -------------
 
@@ -718,7 +884,7 @@ func (response GetSubscriptions200JSONResponse) VisitGetSubscriptionsResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetSubscriptions400ApplicationProblemPlusJSONResponse ProblemDetails
+type GetSubscriptions400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetSubscriptions400ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -727,7 +893,7 @@ func (response GetSubscriptions400ApplicationProblemPlusJSONResponse) VisitGetSu
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetSubscriptions500ApplicationProblemPlusJSONResponse ProblemDetails
+type GetSubscriptions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetSubscriptions500ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -753,7 +919,7 @@ func (response CreateSubscription201JSONResponse) VisitCreateSubscriptionRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
-type CreateSubscription400ApplicationProblemPlusJSONResponse ProblemDetails
+type CreateSubscription400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response CreateSubscription400ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -762,7 +928,7 @@ func (response CreateSubscription400ApplicationProblemPlusJSONResponse) VisitCre
 	return json.NewEncoder(w).Encode(response)
 }
 
-type CreateSubscription500ApplicationProblemPlusJSONResponse ProblemDetails
+type CreateSubscription500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response CreateSubscription500ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -787,7 +953,7 @@ func (response DeleteSubscription204Response) VisitDeleteSubscriptionResponse(w 
 	return nil
 }
 
-type DeleteSubscription400ApplicationProblemPlusJSONResponse ProblemDetails
+type DeleteSubscription400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response DeleteSubscription400ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -796,7 +962,7 @@ func (response DeleteSubscription400ApplicationProblemPlusJSONResponse) VisitDel
 	return json.NewEncoder(w).Encode(response)
 }
 
-type DeleteSubscription404ApplicationProblemPlusJSONResponse ProblemDetails
+type DeleteSubscription404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response DeleteSubscription404ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -805,7 +971,7 @@ func (response DeleteSubscription404ApplicationProblemPlusJSONResponse) VisitDel
 	return json.NewEncoder(w).Encode(response)
 }
 
-type DeleteSubscription500ApplicationProblemPlusJSONResponse ProblemDetails
+type DeleteSubscription500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response DeleteSubscription500ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -831,7 +997,7 @@ func (response GetSubscription200JSONResponse) VisitGetSubscriptionResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetSubscription400ApplicationProblemPlusJSONResponse ProblemDetails
+type GetSubscription400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetSubscription400ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -840,7 +1006,7 @@ func (response GetSubscription400ApplicationProblemPlusJSONResponse) VisitGetSub
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetSubscription404ApplicationProblemPlusJSONResponse ProblemDetails
+type GetSubscription404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetSubscription404ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -849,7 +1015,7 @@ func (response GetSubscription404ApplicationProblemPlusJSONResponse) VisitGetSub
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetSubscription500ApplicationProblemPlusJSONResponse ProblemDetails
+type GetSubscription500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetSubscription500ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -875,7 +1041,7 @@ func (response GetAlarms200JSONResponse) VisitGetAlarmsResponse(w http.ResponseW
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetAlarms400ApplicationProblemPlusJSONResponse ProblemDetails
+type GetAlarms400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAlarms400ApplicationProblemPlusJSONResponse) VisitGetAlarmsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -884,7 +1050,7 @@ func (response GetAlarms400ApplicationProblemPlusJSONResponse) VisitGetAlarmsRes
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetAlarms403ApplicationProblemPlusJSONResponse ProblemDetails
+type GetAlarms403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAlarms403ApplicationProblemPlusJSONResponse) VisitGetAlarmsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -893,7 +1059,7 @@ func (response GetAlarms403ApplicationProblemPlusJSONResponse) VisitGetAlarmsRes
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetAlarms500ApplicationProblemPlusJSONResponse ProblemDetails
+type GetAlarms500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAlarms500ApplicationProblemPlusJSONResponse) VisitGetAlarmsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -919,7 +1085,7 @@ func (response GetAlarm200JSONResponse) VisitGetAlarmResponse(w http.ResponseWri
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetAlarm400ApplicationProblemPlusJSONResponse ProblemDetails
+type GetAlarm400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAlarm400ApplicationProblemPlusJSONResponse) VisitGetAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -928,7 +1094,7 @@ func (response GetAlarm400ApplicationProblemPlusJSONResponse) VisitGetAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetAlarm404ApplicationProblemPlusJSONResponse ProblemDetails
+type GetAlarm404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAlarm404ApplicationProblemPlusJSONResponse) VisitGetAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -937,7 +1103,7 @@ func (response GetAlarm404ApplicationProblemPlusJSONResponse) VisitGetAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetAlarm500ApplicationProblemPlusJSONResponse ProblemDetails
+type GetAlarm500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAlarm500ApplicationProblemPlusJSONResponse) VisitGetAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -964,7 +1130,7 @@ func (response AckAlarm200JSONResponse) VisitAckAlarmResponse(w http.ResponseWri
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm400ApplicationProblemPlusJSONResponse ProblemDetails
+type AckAlarm400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response AckAlarm400ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -973,7 +1139,7 @@ func (response AckAlarm400ApplicationProblemPlusJSONResponse) VisitAckAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm404ApplicationProblemPlusJSONResponse ProblemDetails
+type AckAlarm404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response AckAlarm404ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -982,7 +1148,7 @@ func (response AckAlarm404ApplicationProblemPlusJSONResponse) VisitAckAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm409ApplicationProblemPlusJSONResponse ProblemDetails
+type AckAlarm409ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response AckAlarm409ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -991,7 +1157,7 @@ func (response AckAlarm409ApplicationProblemPlusJSONResponse) VisitAckAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm412ApplicationProblemPlusJSONResponse ProblemDetails
+type AckAlarm412ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response AckAlarm412ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -1000,7 +1166,7 @@ func (response AckAlarm412ApplicationProblemPlusJSONResponse) VisitAckAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm500ApplicationProblemPlusJSONResponse ProblemDetails
+type AckAlarm500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response AckAlarm500ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -1025,7 +1191,7 @@ func (response GetProbableCauses200JSONResponse) VisitGetProbableCausesResponse(
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetProbableCauses500ApplicationProblemPlusJSONResponse ProblemDetails
+type GetProbableCauses500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetProbableCauses500ApplicationProblemPlusJSONResponse) VisitGetProbableCausesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -1051,7 +1217,7 @@ func (response GetProbableCause200JSONResponse) VisitGetProbableCauseResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetProbableCause400ApplicationProblemPlusJSONResponse ProblemDetails
+type GetProbableCause400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetProbableCause400ApplicationProblemPlusJSONResponse) VisitGetProbableCauseResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -1060,7 +1226,7 @@ func (response GetProbableCause400ApplicationProblemPlusJSONResponse) VisitGetPr
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetProbableCause404ApplicationProblemPlusJSONResponse ProblemDetails
+type GetProbableCause404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetProbableCause404ApplicationProblemPlusJSONResponse) VisitGetProbableCauseResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -1069,7 +1235,7 @@ func (response GetProbableCause404ApplicationProblemPlusJSONResponse) VisitGetPr
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetProbableCause500ApplicationProblemPlusJSONResponse ProblemDetails
+type GetProbableCause500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetProbableCause500ApplicationProblemPlusJSONResponse) VisitGetProbableCauseResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
@@ -1520,75 +1686,89 @@ func (sh *strictHandler) HwNotification(w http.ResponseWriter, r *http.Request, 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"/9hD/SEzUAAA",
+	"H4sIAAAAAAAC/+xce3PbOJL/KijuVu1kT9STevlq6srjOBPvJI7Pdm6qbpSKIaIpYUMBCgDa0Wb83a/w",
+	"4JuyZMd57SX/OJbARqOfv240/dEL+WrNGTAlvYOP3hoLvAIFwvwW8tWKs7d4Td/yNTD9Ez6EcULgGYWY",
+	"mDUEZCjoWlHOvAPviK9WGEnQdBQQFFOpEI9QpNcjAREIYCFIpDhypFAk+AqpJSABMolVe8Zm7BiHy+pD",
+	"iEqE3YcMr6CFuEB6s/eJ+TrbRn8pC0zMN0jGWC5BttEzLmYMPuDVOoZWkQvNwFXIE6bE5grJZG5p8ch+",
+	"Ax8UMEk5k1d2lwPN5tXVlaZmKLw1H8uf85UdR86tm7Hfl8CQWlKJMjkjKtnfFEokEMS4O8ANjWM0h5Q3",
+	"YkRiRY6oo2AkW12I4BoYoobnDcJCf7OOaUhVvEGUuUWJpGyhl8zYlWX6KmeoPWNey3MS8g48I+n6mbyW",
+	"R7XC3ydgftHLvAOvLAuv5clwCSusDUVt1nqFVIKyhXd722oyr+gR7Mqd00rqK1nVApS1G/2UsxiEGfkE",
+	"M3PmtUUf+9oYjmOzk6WWGZAAlQhmLO0TtP9wrccKRF3rF4BFuEShoAoExUaHR5wpTJlEnIFW1YoLQLK8",
+	"sFVRE6xoyGPOZBsZE6gsNyYwYypZx4BCS197CGaIr0FgxUUrs5HccLQ6i0xc4zjRxnC5hOw5FGI2Y3O9",
+	"eJMqOeJxzG/0BlYq0uj4T/QqfeZP9BKw4eAh//6csT/97F/hvw/4p2lpc2XqSlNGL7EKlyBdhHESCVON",
+	"6I+MELbyha7g/ZX9rZkWlQjeJzjWPnQHOUtroXbRWgjA2gHUErNt9FJacHUPWlw08mlpUbaLL2M2Uf6k",
+	"3CqveOcZY5DyzgMWaO06Y06resCctqXFnFFsoUU4SMS4So1jC2+OljOK7XxpSrvswtFywr+b1i75/6k9",
+	"8jJ7qpQs9EM63mkCBTouoLrf+PyfEKp6Lpmx9FG3fms+QcV0ksgGgOK7IzFJCczY7vyhg+zPP8H7hoDe",
+	"Ov7vJ1kKuczFoiGEJozFIllpkJgd0AWrKq+GifdXhQDIV2ssQM5YuITwXaYPq0G+0/nbKUfGrXTMtTpO",
+	"N5BIJus1FwqtklhRHcLTQFyVomEg3T8T5YxVZbklFRv+qFqCQFfHF1dat1evL+oCpqxRwBet1xdPymna",
+	"CTn1EZ0ZsWylZqA3kGtsUI2GcwyA6GPMAclECJ4w4syGskUM6H3CFcj2jN197iIiceZs8xC6Wm1QGCdS",
+	"gbhqtBuDBv6Wr/pb5TyZBrLMuiUPG7vSeKRlAIm1ghVaJVKhlfZbFHFhEaq2nxiUScyEamCgj2QWNdhe",
+	"nlsNsmk6OZUzVjwp+jtm5O8V98oUqEWktb2nPP5zm3tVVb8boVncuhuiZYzkfDzZis8MzroLn92mXxoQ",
+	"fhhjsTq+BqZOuaIRDbFFZlWgZtYhsxAVVyKpP1Fchyu9fq4Ly5a3Ftp7FQWzCdYPH4bvGL+JgSzgkmpm",
+	"q1s8xQo6+iskFV6tXfy40bLU2KoUTnK2zyHkgqAllmgO2kI5oREF0i6JsN8N+n537Pd7l/3+waB/0J/8",
+	"r9fyIi5WWHkHHsEKfKXZalUF1qqxT+q8/8J5DNj5O6KMGPGwheYXoxVmeAE6uiK5kQpWhl1coGhDsN6n",
+	"xLcSCWQMze0eGUdHS8wWQL6uMHsPEuZTiCgzrn7ytMHWCunYJQprfvljSFhOHe5wX9NQf4fFBmEpeUhN",
+	"WLqhaunczREl6BwkT0QIl5s1lM+GB3jYHYZjfxKQ0A/CKPLnOJr4g1E0GMwHMO5GYfGsSULJ1mMWZHrS",
+	"YDQ6570+f1E6Y1ENFmKU+RtG49EEJlO/j6HnB+Mx8afT8cTvjQfd4ag3DMiQ7M3fOabyAQZ0t82EBkXf",
+	"YTLd+5pMyJlMViAubIgxHG6Tp2VzLfg1dblTc5tSSO1FFiiVGR0QEvZ6/YmPewHxgxEBf9Il2B8FvWDe",
+	"m/ZDmEb7yDfPECYAEpvYcHxWCoy1x2oHkmAzKZNrCI0vop80vpUKM4IFof8C8gTl4Rb99A428gm6WdJw",
+	"acEdpjEXuSyugREuNPSYsQzDmTaZAte+oMyeTztaJko854ltebzyj2KeEGsDNlm5g1iL1QdZxHyOY7Ou",
+	"ycW1quwSFBpalADTWQWE9l26YDnDFy9ftaGkJIKD0XQyx344wWM/6E+Jj6E38oNJEPWGUX/SD4f7KIkV",
+	"Epmx5UuzospsKd+BSYGalAN3mjOWrLyDP7qtXqvfGrwpsNrNdqVMwcKk5g++Xu9fY2EaTt7BH97p8e9e",
+	"yzt6fnj667H+z4vjw3Ov5R0e/Xb66vcXx09/Pfbe3LaceM8hepxYsuRSaRbaIV91XvXpSr6lLBJYKpGE",
+	"KhHwkjOquJZW57rXMSFDdubRIJpEffBH0WDsB5NJ35+OMPHD7nwaQjSKwm7QJOw1iBDoNZALuAZB1UYf",
+	"4q9CH8b7SydvUnccOumc1R64NcBijucxHOFEwp7J46z4TCnpleUxH4SkF+rYD8PQD/oR+BhHQ384jcg0",
+	"gMEAT/A+ZiVcdtmTvXS5rk0U1l9Y5w2xQYvNyMAbzKOoNx4QH0/J0A96w7E/GU4iP5oOgmgUEQiD4X2Y",
+	"1aa/J8PG+HmUM74Pv9MeGZJe0PUhGvb9oDca+/MRCf3peIhJbzIdR/3Bbn4Nw+8TKjQI+6MSZbY5dGM2",
+	"rp28pLcmnFI3vnoabYBmTfixyRtKOeNNQ0it+rS5zbkTZzfkSFOa4BSGFiCoRJhZvbUQVa5u1PDeoPvL",
+	"89fHlbLkTmxaZKIZX1zq8iirUdd8ncQ5XMNoB/wwmxQKRlqG01vBR2/yILx6J9R++ElyJD5j27A4lTkK",
+	"r9SFxXNNH3auGLD4YhoK7W53HOP+2LDqpuRrlhPI1BOV4w0Ho2kE3ZGPCcz9YDoa+fNJFPnBGI+igAQh",
+	"7AdW9qkoTnIUpQtPhoApsSkdq0ChjWbsBQ9xHG9Qwuh7rT6qlilGDrkN85hliC/NUNUzjof9MIB+3+8O",
+	"x0QH976uSuZ+iAfQj0gQRcPBo1Qln2aTTc61q1zpje9rkv/fof/nAHrkcYFeMIxGQQT+CMjED4IJ8SdR",
+	"NPaj4STodqdd3B3/+2OnRkxUD6d1TWxFPfeDODXx7YN5XppUaAGefBAAKnybIZ6StCMcywZg0yS90k5b",
+	"2S+1LVjE62zrEDzH4bvmsi5KdIB+n+DYBoHX5yfamnDe1VgLHgJJRG5NzH4mJcLojNtJinIELBa17ZLx",
+	"CPopTZhCCnId/pxPHtnyWdquMUkyt7jY2pDpjcgwCoeBHwJ0/WA46PvTSX/k93VanfSDLvTm+/jqtgmE",
+	"o/QiQ3PruLNSJNzcJBYuZQSsudDphousaW/p5jG22FpCM8bKvXJxTUMwAwQCIi6ghWhkBg9ie0dgdszi",
+	"rkHgOI5TvnRMT3loz9grFts9sVKCzhMFZnioluX0Y3YH7cZNtws1V211nzQJsXi4poDXoHyLpUr6RSaL",
+	"Fzo+Gr3HMQ/Ta6RCpvkcxlBx5cz7mj0YhLL9e7HrhiRfiUpqX+NNzDFBWCL7yBwI0haAlkqt5UGnsxZ8",
+	"BWoJiWxT3iE8lB2syVG26GiAI1Un5Cyii0QYkp2/3MB8yfm7t/Zjo9JqKARhJ/6oglVTrNS2mQfSvXFK",
+	"TUTAiDxUeu1++CiibAFiLShTdSk+y780k17WSJyZ6yM1UVwAs2Dm9fmLO4zSXoXqX5QmiFU57Vriu+Jg",
+	"jOcQf6LEpMJC3UtmUmGVyF1AapuxXtinb5t4cR9gIfDGy4a3Dh/LOCy5F48gNA0dBMNxo45/weG7mLJ3",
+	"eYGXS2IPpS4ET9a/waZO+DfYZEboZiqRWW0qI+Nj6CdoL9p6ZwIkWcda6PBk6zaPIQsBJlyLxtWPYytZ",
+	"sJ83Zc1Xa8t44dq3WDq4tFb8UqKIJ4zU4lQafV+LuL6N62jrNSahmLCa6aHA4C4VN1q+SJhJOYdZqCzv",
+	"/pzfoBVmm1TPS3wN9o4rezTFMDNvhT+8tetmnlfr+t+2vGsQ0iWOu/NRurBglplSC6pvpSH+PmnrIrON",
+	"fZNXtrG75DCoPb42CD+i5gBvGkz9ORbkBgswhOv7ncU4hCWPiUMKS7fcihq56YWGg501FZcNPQIqbftD",
+	"406jKAkGBLuBHIvwStklw0BIOtIpaM5rhNI9TytoDYt3Pb397nqOzk8uT44OX3gt7+XhP16d658np+bn",
+	"74fnpyenv3ot7+T06fHl8fnLk9PDy+xG6PipuQUqVbn1vF4SRk3P2pqzsFOq9uew4a4JYCbYTDyz/mXl",
+	"UyquCQgjKzPaH3IhQK45I9o1D8s1ZBnBHcU8fGdQrtywcCk4o5KyRbvxeg43tYCeJyvMkABMNDdIwYes",
+	"uklZtHn9wTyecgKGz1OuLopcNl5r7epTlHtytTbF5+hMVAJKvYA3ki23nN5sTd6lQW7Newyrp6AwjZtQ",
+	"ZWZch1lR8gltMG2vLFnNXUMzt9y85GlZXB1RBqaBi5Hrl7kAxoUuKTBDVMt4BUxlNW/twMQcq6mRs9RW",
+	"52dWBx/WMWYuQrrtLPagEvEwTIRI3y1IDTOGSlfniDMGYTrvRrDCcywBaQhIEE8akW7agG1i8fX5SbHf",
+	"pPEtLUPfjNPtHKIZO1FohTdoY7qsUSLMPGQxUtBIu1bW/rYF5S6IJbdknssloOeXl2cu0aCQE3DF4y5R",
+	"ZlvqSqIp5Sqq4kZRySUXqlVVqkxWKyw2lZ1My66NTpR+KomJHXo2F0I2shR4VHw7xy3zHhGslTndOhFr",
+	"LsFM2+rKN6b/smaJTiLbJKQSLei1uSUiiBslmLntmWfasQfzGLN3M69lBZX5A5JLjZZwLE3LIu0llHq1",
+	"VWS5y5ZwGHJh4qbi6OT48hk6f3aEBtPJCP0xeNNoajXhUYmAhTwR2I67YdtQ1hs5HuWMVRRCeJhkDpt1",
+	"FFLSFnabV52eX7588cT2+UuWifJJzBWs5sUWC0hgqjVjVMl0ak8iLGWyyto9FUlXGyeF4t1YZEGG7ZCv",
+	"9sGkxSidAS0XhOoB+bZQBT3lYYMzvfLPD08RXmu0rU3T/N7+/ddR+1X/5OWFf3J6eXz+7PDo2D/vdgf+",
+	"dXfU7nbRT/9IGKB+tx/oqiXRQDw7XCmWyjb3BWZtLhYdwm9YzDH5L0p+Ho0DG5xsc9NMO4cG9bmx1HMg",
+	"6DlWNeo3NzdtAWSJlZFYPfyfnRi1G+7RSWk4BeXTKTada9k5j/f2ewAdnp14BWTu9drddlez4dKdd+AN",
+	"2t32QFctWC2NxPedlCm2vMyDCzAisRcvrnvq/QqqvLBVekPzj+YiLl/S2fkG523rITSiT3vY9Fpv35ge",
+	"/5ozaZN9v9tN7QNs8wevbb1MOev8U1rEmo8uZ52ruwvZph57rbNxWzOuiyQMQcooiVHKpX4suJNJ5+z/",
+	"UWf2Lh53A6kG/n7BBOkAAdJgk+G3wtcJsyHItLNBIBCCCxPOXAI1Dq8EhWtbOaSvctqRAFkxd4UXpi4q",
+	"f64LnTWXqtgiMKbAWd7f1r9//KuTUXvOyeYvnbwp0C60Fm4NUnX03AO/cLK5lznutML6HP1tOcorkcBt",
+	"s1NUbiUc6+k1jq5KM3ONNwU73cdm9tPfrWG2HJ6OzO140bu81ueTX92L9xFf70swsTV0mPkBo+ofoeNR",
+	"Qoc1OYQRg5uGkHFHxLhtPSw5dz7WPjsht9ZxYlBQz9pPzecVt6jkbfN6jkYN+ds5Ddt4Vfsuvrqzq8yv",
+	"59eg4RXr3FbNcb5xWw3sGb4+X6dcuZb19+ZB1joRfMChijfmFdY9Pai1F0it23phEmzSnfTIZOgPx4OR",
+	"H/R7Qx9HeO6Px/1g1BsGAYy66btrX9o5ul81UXwPGPOH8z0e8n2A+90jgd1ZUWbl8I9S8v6lZHHC/t+v",
+	"igy6g2+Dr2dczCkhwNrfvou3965uiwWt++B+bu2waGku83anr3/GjFx/a+abTcglz/2Rix+Lr8v85ghI",
+	"fbrwBtuWuknX37MzFxM2dl5V82XTCA6XdVc8DN99Z674OZtgTdPa+/fCvhQzO+ND+1sNEO1vE607tqbf",
+	"BltHnEUxDZ2wev1vg6szAflbcRGmMXwPUbMSNI0zbeoh07yYkL8V8XA0VJpZubPYOSuv/BJ1QnkC6+FF",
+	"wvdZ2OI4rkxaFVFvRXEP03fnY2Vm6XZvC/g8+bc+QvVt4uCKZf4AwT8aUo34tuy/u9yXum20o4YYS99O",
+	"Htt3VNIp+8IFa5nJczuxLNMxajOZUho4NhNObqI83rj5Y5DFvylmBsqvMY3NK0xe9Z7ycFW6dv1c8HbL",
+	"u0APveUt/WEZN9j9BS56y9ZhdkVbB8CLsT21gwazSAe4U9P4uLz5H/O28SleQen2vay45zcVxe2+RStS",
+	"vjMQf6Gqpzzq/lBbeF6egP+61lAex99mAvpRQ8uqqmkUzc1ZXZhlpfGvg07HzD0uuVQHk+6ka3q8bpvm",
+	"vz6Y/xm9SmFsm8tNj5Texmx6vtyCr5M5K4+UF8Zgt4CDJiKZ6IGRNadMyfQdSIkUXtj3H6X5I7A6MbvX",
+	"2ShboDCmwJQZirXjh27LTA23b27/LwAA///J4/Ki4l8AAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
@@ -1628,6 +1808,12 @@ func PathToRawSpec(pathToFile string) map[string]func() ([]byte, error) {
 		res[pathToFile] = rawSpec
 	}
 
+	for rawPath, rawFunc := range externalRef0.PathToRawSpec(path.Join(path.Dir(pathToFile), "../../common/api/openapi.yaml")) {
+		if _, ok := res[rawPath]; ok {
+			// it is not possible to compare functions in golang, so always overwrite the old value
+		}
+		res[rawPath] = rawFunc
+	}
 	return res
 }
 

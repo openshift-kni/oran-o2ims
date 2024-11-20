@@ -1,0 +1,862 @@
+#
+# Copyright (c) 2024 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+# compliance with the License. You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is
+# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing permissions and limitations under the
+# License.
+#
+
+openapi: "3.0.0"
+
+info:
+  title: O2IMS Infrastructure Inventory API
+  version: 1.0.0
+  description: |
+    API for O2IMS Infrastructure Inventory
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+externalDocs:
+  description: O-RAN O2ims Interface Specification 7.0 (October 2024)
+  url: https://specifications.o-ran.org/download?id=749
+
+servers:
+- url: http://localhost:8000
+
+tags:
+- name: deploymentManagers
+  description: |
+    Information about deployment managers.
+- name: metadata
+  description: |
+    Service metadata, including versions and O-Cloud information.
+- name: resourceTypes
+  description: |
+    Information about resource types.
+- name: resourcePools
+  description: |
+    Information about resource pools.
+- name: resources
+  description: |
+    Information about resources.
+
+paths:
+
+  /O2ims-infrastructureInventory/api_versions:
+    get:
+      operationId: getAllVersions
+      summary: Get API versions
+      description: |
+        Returns the complete list of API versions implemented by the service.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      tags:
+      - metadata
+      responses:
+        '200':
+          description: |
+            Successfully obtained the complete list of versions.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims-infrastructureInventory/v1:
+    get:
+      operationId: getCloudInfo
+      summary: Get O-Cloud info
+      description: |
+        Returns the details of the O-Cloud instance.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      tags:
+      - metadata
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the O-Cloud instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OCloudInfo"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims-infrastructureInventory/v1/api_versions:
+    get:
+      operationId: getMinorVersions
+      summary: Get minor API versions
+      description: |
+        Returns the list of minor API versions implemented for this major version of the API.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      tags:
+      - metadata
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims-infrastructureInventory/v1/deploymentManagers:
+    get:
+      operationId: getDeploymentManagers
+      summary: Get deployment managers
+      description: |
+        Returns the list of deployment managers.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - deploymentManagers
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of deployment managers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeploymentManager'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}:
+    get:
+      operationId: getDeploymentManager
+      summary: Get deployment manager
+      description: |
+        Returns the details of a deployment manager.
+      parameters:
+      - $ref: "#/components/parameters/deploymentManagerId"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      tags:
+      - deploymentManagers
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the deployment manager.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentManager"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims-infrastructureInventory/v1/resourceTypes:
+    get:
+      operationId: getResourceTypes
+      summary: Get resource types
+      description: |
+        Returns the list of resource types.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - resourceTypes
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of resource types.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResourceType"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}:
+    get:
+      operationId: getResourceType
+      summary: Get a resource type
+      description: |
+        Returns the details of a resource type.
+      parameters:
+      - $ref: "#/components/parameters/resourceTypeId"
+      tags:
+      - resourceTypes
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the resource type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceType"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+
+  /O2ims-infrastructureInventory/v1/resourcePools:
+    get:
+      operationId: getResourcePools
+      summary: Get resource pools
+      description: |
+        Returns the list of resource pools.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - resourcePools
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of resource pools.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResourcePool"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}:
+    get:
+      operationId: getResourcePool
+      summary: Get a resource pool
+      description: |
+        Returns the details of a resource pool.
+      parameters:
+      - $ref: "#/components/parameters/resourcePoolId"
+      tags:
+      - resourcePools
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the resource pool.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourcePool"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+
+  /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources:
+    get:
+      operationId: getResources
+      summary: Get resources in a resource pool
+      description: |
+        Returns the details of resources in a resource pool.
+      parameters:
+      - $ref: "#/components/parameters/resourcePoolId"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - resources
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of resources.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resource"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+
+  /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}:
+    get:
+      operationId: getResource
+      summary: Get a resource in a resource pool
+      description: |
+        Returns the details of a resource in a resource pool.
+      parameters:
+      - $ref: "#/components/parameters/resourcePoolId"
+      - $ref: "#/components/parameters/resourceId"
+      tags:
+      - resources
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resource"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+components:
+  parameters:
+    deploymentManagerId:
+      name: deploymentManagerId
+      description: |
+        Unique identifier of a deployment manager.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: 65221564-8b05-416a-bfc3-c250bc64e1aa
+
+    resourcePoolId:
+      name: resourcePoolId
+      description: |
+        Unique identifier of a resource pool.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
+
+    resourceId:
+      name: resourceId
+      description: |
+        Unique identifier of a resource.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
+
+    resourceTypeId:
+      name: resourceTypeId
+      description: |
+        Unique identifier of a resource type.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: node_8_cores_amd64
+
+  schemas:
+    DeploymentManager:
+      description: |
+        Information about a deployment manager.
+      type: object
+      properties:
+        deploymentManagerId:
+          type: string
+          format: uuid
+          description: Identifier for the Deployment Manager. This identifier is allocated by the O-Cloud.
+          example: "65221564-8b05-416a-bfc3-c250bc64e1aa"
+        name:
+          type: string
+          description: Human readable description of the deployment manager
+        description:
+          type: string
+          description: Human readable description of the deployment manager
+          example: "My cluster"
+        oCloudId:
+          type: string
+          format: uuid
+          description: Identifier for the containing O-Cloud.
+          example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
+        serviceUri:
+          type: string
+          description: |
+            The fully qualified URI to a Deployment Management server for O2dms services. Since the O2dms provides 
+            multiple services, this entry is for the {apiRoot} only.
+          example: "https://my.cluster:6443"
+        supportedLocations:
+          type: array
+          description: |
+            List of globalLocationIDs that were assigned to the OCloud Site(s) which this Deployment Manager supports.
+          items:
+            type: string
+        capabilities:
+          type: object
+          description: |
+            Information about the capabilities supported by the Deployment Manager and its set of deployment management
+            services based on the resources allocated to the Deployment Manager.
+        capacity:
+          type: object
+          description: |
+            Information about the available, allocated and reserved capacity of O-Cloud Resources allocated to the
+            Deployment Manager.
+        extensions:
+          type: object
+          description: |
+            List of metadata key-value pairs used to associate meaningful metadata to the related Deployment Manager.
+
+    OCloudInfo:
+      type: object
+      properties:
+        oCloudId:
+          type: string
+          format: uuid
+          description: Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
+          example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
+        globalCloudId:
+          type: string
+          format: uuid
+          description: Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud IMS Inventory.
+          example: "8c1c151d-2899-4c96-b76f-4fe92064b57b"
+        name:
+          type: string
+          description: Human readable name of the O-Cloud as identified by the SMO at cloud genesis.
+          example: "my-cloud"
+        description:
+          type: string
+          description: Human readable description of the O-Cloud as provided by the SMO at cloud genesis.
+          example: "My cloud"
+        serviceUri:
+          type: string
+          description: The URI root to all services provided by the O2ims interface. Inventory is one of these services.
+          example: "http://localhost:8000"
+        extensions:
+          type: object
+          example:
+            hub: "hub0"
+            country: "ES"
+
+    ResourceType:
+      description: |
+        Information about a resource type.
+      type: object
+      properties:
+        resourceTypeId:
+          type: string
+          format: uuid
+          description: Identifier for the Resource Type. This identifier is allocated by the O-Cloud.
+          example: "dac5c740-3470-4a6f-ac89-a2770199f682"
+        name:
+          type: string
+          description: Human readable name of the resource type.
+          example: "medium"
+        description:
+          type: string
+          description: Human readable description of the resource type.
+        vendor:
+          type: string
+          description: Provider of the Resource.
+          example: "Some Corporation, Inc."
+        version:
+          type: string
+          description: Version or generation of the resource as defined by its provider.
+          example: "v2024.11"
+        resourceKind:
+          type: string
+          enum:
+          - UNDEFINED
+          - PHYSICAL
+          - LOGICAL
+          description: Value describing “physicality” of the resource type.
+          example: "PHYSICAL"
+        resourceClass:
+          type: string
+          enum:
+          - UNDEFINED
+          - COMPUTE
+          - NETWORKING
+          - STORAGE
+          description: Functional role of the resource type within the cloud.
+          example: "COMPUTE"
+        extensions:
+          type: object
+          description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
+        alarmDictionary:
+          # TODO: should define this as a model
+          type: object
+          example:
+            alarmDictionaryVersion: "v1"
+            managementInterfaceId: "O2IMS"
+            alarmDefinition: [
+              {
+                "alarmName": "Host is running out of memory.",
+                "alarmDescription": "Memory is filling up, has been above memory high utilization threshold for the last 15 minutes",
+                "proposedRepairActions": "",
+                "managementInterfaceId": "O2IMS",
+                "pkNotificationField": "alarmDefinitionID",
+                "alarmAdditionalFields": {
+                  "resourceClass": "COMPUTE"
+                },
+                "alarmDefinitionId": "NodeMemoryHighUtilization"
+              }
+            ]
+      required:
+      - resourceTypeId
+      - name
+      - description
+      - vendor
+      - model
+      - version
+      - alarmDictionary
+      - resourceKind
+      - resourceClass
+      - extensions
+
+    ResourcePool:
+      description: |
+        Information about a resource pool.
+      type: object
+      properties:
+        resourcePoolId:
+          type: string
+          format: uuid
+          description: Identifier for the Resource Pool in the O-Cloud instance. This identifier is allocated by the O-Cloud.
+          example: "d3b27e14-4589-4d93-ae76-ddca559193ea"
+        name:
+          type: string
+          description: Human readable name of the resource pool.
+          example: "my-cluster"
+        description:
+          type: string
+          description: Human readable description of the resource pool.
+        oCloudId:
+          type: string
+          format: uuid
+          description: Identifier for the containing O-Cloud.
+          example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
+        globalLocationId:
+          type: string
+          format: uuid
+          description: This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
+        location:
+          type: string
+          description: Information about the geographical location of the resource pool as detected by the O-Cloud.
+          example: "EU"
+        extensions:
+          type: object
+          description: List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
+      required:
+      - resourcePoolId
+      - oCloudId
+      - globalLocationId
+      - name
+      - description
+
+    Resource:
+      description: |
+        Information about a resource.
+      type: object
+      properties:
+        resourceId:
+          type: string
+          format: uuid
+          description: Identifier for the Resource. This identifier is allocated by the O-Cloud.
+        resourcePoolId:
+          type: string
+          format: uuid
+          example: "39c85e74-2e98-4e3d-8fec-e5a849d967c6"
+        description:
+          type: string
+          description: Human readable description of the resource.
+          example: "my-node"
+        resourceTypeId:
+          type: string
+          format: uuid
+          description: Identifier for the Resource Type of this resource.
+          example: "56337d0e-8bee-47d3-afcb-3c621cffa2b7"
+        globalAssetId:
+          type: string
+          description: |
+            Identifier or serial number of the resource, if available. It is required only if the resource has been 
+            identified during its addition to the cloud as a reportable asset in the SMO inventory.
+          example: "b6f67c72-8915-474b-b369-6198ea1f7b6f"
+        elements:
+          type: array
+          description: The resource might be composed of smaller resources or other resource instances of a different type
+          items:
+            $ref: '#/components/schemas/Resource'
+        tags:
+          type: array
+          description: Keywords describing or classifying the resource instance
+          items:
+            type: string
+        groups:
+          type: array
+          description: Keywords denoting groups a resource belongs to.
+          items:
+            type: string
+        extensions:
+          type: object
+          description: List of metadata key-value pairs used to associate meaningful metadata to the related resource.
+      required:
+      - resourceId
+      - resourcePoolId
+      - resourceTypeId
+      - globalAssetId
+      - description
+      - elements
+      - tags
+      - groups
+      - extensions
+
+    AlarmDictionary:
+      description: Information about an alarm dictionary.
+      type: object
+      properties:
+        alarmDictionaryVersion:
+          type: string
+          description: |
+            Version of the Alarm Dictionary. Version is vendor defined such that the version of the dictionary can be
+            associated with a specific version of the software delivery of this product.
+        alarmDictionarySchema:
+          type: string
+          description: |
+            Version of the Alarm Dictionary Schema to which this alarm dictionary conforms.
+        entityType:
+          type: string
+          description: |
+            O-RAN entity type emitting the alarm: This shall be unique per vendor ResourceType.model and
+            ResourceType.version
+        vendor:
+          type: string
+          description: |
+            Vendor of the Entity Type to whom this Alarm Dictionary applies. This should be the same value as in the 
+            ResourceType.vendor attribute
+        managementInterfaceId:
+          type: array
+          description: |
+            List of management interface over which alarms are transmitted for this Entity Type.  
+            RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
+          items:
+            type: string
+            enum: [ O2IMS ]
+        pkNotificationField:
+          type: array
+          description: |
+            Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
+            Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
+          items:
+            type: string
+        alarmDefinition:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlarmDefinition"
+      required:
+      - alarmDictionaryVersion
+      - alarmDictionarySchema
+      - entityType
+      - vendor
+      - managementInterfaceId
+      - pkNotificationField
+      - alarmDefinition
+
+    AlarmDefinition:
+      description: Information about an alarm definition.
+      type: object
+      properties:
+        alarmDefinitionId:
+          type: string
+          format: uuid
+          description: |
+            Provides a unique identifier of the alarm being raised. This is the Primary Key into the Alarm Dictionary
+        alarmName:
+          type: string
+          description: |
+            Provides short name for the alarm
+        alarmLastChange:
+          type: string
+          description: |
+            Indicates the Alarm Dictionary Version in which this alarm last changed.
+        alarmChangeType:
+          type: string
+          enum: [ ADDED, DELETED, MODIFIED ]
+          description: |
+            Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
+        alarmDescription:
+          type: string
+          description: |
+            Provides a longer descriptive meaning of the alarm condition and a description of the consequences of the
+            alarm condition. This is intended to be read by an operator to give an idea of what happened and a sense of
+            the effects, consequences, and other impacted areas of the system.
+        proposedRepairActions:
+          type: string
+          description: |
+            Provides guidance for proposed repair actions.
+        clearingType:
+          type: string
+          enum: [ AUTOMATIC, MANUAL ]
+          description: |
+            Identifies whether alarm is cleared automatically or manually.
+        managementInterfaceId:
+          type: array
+          items:
+            type: string
+            enum: [ O2IMS ]
+          description: |
+            List of management interface over which alarms are transmitted for this Entity Type.
+            RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
+        pkNotificationField:
+          type: array
+          items:
+            type: string
+          description: |
+            Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
+            Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
+        alarmAdditionalFields:
+          type: object
+          description: |
+            List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
+      required:
+      - alarmDefinitionId
+      - alarmName
+      - alarmLastChange
+      - alarmChangeType
+      - alarmDescription
+      - proposedRepairActions
+      - clearingType
+      - managementInterfaceId
+      - pkNotificationField
+      - alarmAdditionalFields
