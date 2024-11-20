@@ -18,10 +18,10 @@ import (
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
 // Alarm server config values
@@ -31,6 +31,10 @@ const (
 	readTimeout  = 5 * time.Second
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second
+
+	username = "alarms"
+	password = "alarms"
+	database = "alarms"
 )
 
 // Serve start alarms server
@@ -49,7 +53,7 @@ func Serve() error {
 	}()
 
 	// Init DB client
-	pool, err := db.NewPgxPool(ctx, db.GetPgConfig())
+	pool, err := db.NewPgxPool(ctx, db.GetPgConfig(username, password, database))
 	if err != nil {
 		return fmt.Errorf("failed to connected to DB: %w", err)
 	}

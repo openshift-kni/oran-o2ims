@@ -41,12 +41,12 @@ func NewPgxPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 
 // GetPgConfig common postgres config for alarms server
 // TODO: convert to env
-func GetPgConfig() PgConfig {
+func GetPgConfig(username, password, database string) PgConfig {
 	return PgConfig{
 		Host:     "localhost",
 		Port:     "5432",
-		User:     "alarms",
-		Password: "alarms",
-		Database: "alarms",
+		User:     username,
+		Password: password,
+		Database: database,
 	}
 }
