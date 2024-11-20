@@ -145,10 +145,10 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 
 	} else {
 		// Set ClusterDetails
-		if t.object.Status.ClusterDetails == nil {
-			t.object.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
+		if t.object.Status.Extensions.ClusterDetails == nil {
+			t.object.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 		}
-		t.object.Status.ClusterDetails.Name = clusterInstance.GetName()
+		t.object.Status.Extensions.ClusterDetails.Name = clusterInstance.GetName()
 	}
 
 	// Continue checking the existing ClusterInstance provision status
@@ -340,8 +340,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 
 	if utils.IsClusterProvisionPresent(t.object) {
 		// Set the start timestamp if it's not already set
-		if t.object.Status.ClusterDetails.ClusterProvisionStartedAt.IsZero() {
-			t.object.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+		if t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.IsZero() {
+			t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 		}
 
 		if utils.IsClusterProvisionFailed(t.object) {
@@ -349,7 +349,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		} else if !utils.IsClusterProvisionCompleted(t.object) {
 			// If it's not failed or completed, check if it has timed out
 			if utils.TimeoutExceeded(
-				t.object.Status.ClusterDetails.ClusterProvisionStartedAt.Time,
+				t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time,
 				t.timeouts.clusterProvisioning) {
 				// timed out
 				message := "Cluster installation timed out"

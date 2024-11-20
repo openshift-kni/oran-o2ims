@@ -744,7 +744,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason: string(utils.CRconditionReasons.Unknown),
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
-			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 			// Verify provisioningState is progressing when nodePool has been created
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Hardware provisioning is in progress", nil)
@@ -795,7 +795,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason: string(utils.CRconditionReasons.InProgress),
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
-			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 			// Verify provisioningState is progressing when nodePool is in-progress
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Hardware provisioning is in progress", nil)
@@ -886,10 +886,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
 			// Verify the start timestamp has been set for NodePool
-			Expect(cr.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			Expect(cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 
 			// Patch HardwareProvisioningCheckStart timestamp to mock timeout
-			cr.Status.NodePoolRef.HardwareProvisioningCheckStart.Time = metav1.Now().Add(-2 * time.Minute)
+			cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart.Time = metav1.Now().Add(-2 * time.Minute)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
 			// Start reconciliation again
@@ -1115,10 +1115,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 
 			// Verify the start timestamp has been set for ClusterInstance
-			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Verify the nonCompliantAt timestamp is not set, even though Non-compliant enforce policy exists
 			// but Cluster is not ready
-			Expect(reconciledCR.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 			// Verify the provisioningState remains progressing when cluster provisioning is in-progress
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Cluster installation is in progress", nil)
@@ -1132,14 +1132,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
 			// Verify the start timestamp has been set for ClusterInstance
-			Expect(cr.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			Expect(cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Verify the nonCompliantAt timestamp is not set, even though Non-compliant enforce policy exists
 			// but Cluster is not ready
-			Expect(cr.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+			Expect(cr.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 
 			// Patch ClusterProvisionStartedAt timestamp to mock timeout
-			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
-			cr.Status.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
+			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
 			// Start reconciliation again
@@ -1166,7 +1166,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Message: "The Cluster is not yet ready",
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
-			Expect(reconciledCR.Status.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 			// Verify the provisioningState moves to failed when cluster provisioning times out
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateFailed, "Cluster installation timed out", nil)
@@ -1245,7 +1245,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 
 			// Verify the start timestamp has been set for ClusterInstance
-			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Verify the oCloudNodeClusterId is not stored when cluster configuration is still in-progress
 			Expect(reconciledCR.Status.ProvisioningStatus.ProvisionedResources).To(BeNil())
 			// Verify the provisioningState remains progressing when cluster configuration is in-progress
@@ -1299,11 +1299,11 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 
 			// Verify the start timestamp is not cleared even Cluster provision has completed
-			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Verify the nonCompliantAt timestamp is not set since enforce policy is compliant
-			Expect(reconciledCR.Status.ClusterDetails.NonCompliantAt).To(BeZero())
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 			// Verify the ztpStatus is set to ZTP done
-			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the provisioningState sets to fulfilled when the provisioning process is completed
 			// and oCloudNodeClusterId is stored
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
@@ -1422,7 +1422,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 
 			// Verify the start timestamp is not cleared even Cluster provision has completed
-			Expect(reconciledCR.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Verify the provisioningState remains progressing to reflect to the on-going provisioning process
 			// even if new changes cause validation to fail.
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
@@ -1437,10 +1437,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
 			// Verify the start timestamp has been set for ClusterInstance.
-			Expect(cr.Status.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
+			Expect(cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Patch ClusterProvisionStartedAt timestamp to mock timeout
-			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
-			cr.Status.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
+			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
 			// Remove required field hostname to fail ProvisioningRequest validation.
@@ -1543,7 +1543,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 
 			// Verify the ztpStatus is set to ZTP done
-			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the oCloudNodeClusterId is stored and the provisioningState has changed to failed,
 			// as on-going provisioning process has reached to a final state completed and new changes
 			// cause rendering to fail.
@@ -1604,7 +1604,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 
 			// Verify the ztpStatus is still set to ZTP done
-			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the oCloudNodeClusterId is still stored
 			Expect(reconciledCR.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId).To(Equal("76b8cbad-9928-48a0-bcf0-bb16a777b5f7"))
 			// Verify the oCloudNodeClusterId is stored and the provisioningState has changed to failed,
@@ -1664,7 +1664,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 
 			// Verify the ztpStatus is still set to ZTP done
-			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the oCloudNodeClusterId is still stored and the provisioningState becomes to progressing since configuration is in-progress
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Cluster configuration is being applied",
@@ -1765,9 +1765,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: metav1.ConditionFalse,
 			}
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
-			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
-			cr.Status.ClusterDetails.Name = crName
-			cr.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
+			cr.Status.Extensions.ClusterDetails.Name = crName
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 		})
 
@@ -1781,7 +1781,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
-			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpNotDone))
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpNotDone))
 			conditions := reconciledCR.Status.Conditions
 			// Verify the ProvisioningRequest's status conditions
 			verifyStatusCondition(conditions[8], metav1.Condition{
@@ -1807,7 +1807,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(result).To(Equal(doNotRequeue()))
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
-			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the ProvisioningRequest's status conditions
 			conditions := reconciledCR.Status.Conditions
 			verifyStatusCondition(conditions[8], metav1.Condition{
@@ -1819,7 +1819,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		})
 
 		It("Keeps the ZTP status as ZTP Done if a policy becomes NonCompliant", func() {
-			cr.Status.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
+			cr.Status.Extensions.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 			policy.Status.ComplianceState = policiesv1.NonCompliant
 			Expect(c.Status().Update(ctx, policy)).To(Succeed())
@@ -1832,7 +1832,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
-			Expect(reconciledCR.Status.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
+			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			conditions := reconciledCR.Status.Conditions
 			// Verify the ProvisioningRequest's status conditions
 			verifyStatusCondition(conditions[8], metav1.Condition{
@@ -2134,9 +2134,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason: string(utils.CRconditionReasons.Completed),
 			}
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
-			cr.Status.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
-			cr.Status.ClusterDetails.Name = crName
-			cr.Status.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
+			cr.Status.Extensions.ClusterDetails.Name = crName
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 			object := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, object)).To(Succeed())

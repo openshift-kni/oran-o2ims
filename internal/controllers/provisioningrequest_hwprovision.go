@@ -83,11 +83,11 @@ func (t *provisioningRequestReconcilerTask) createNodePoolResources(ctx context.
 	}
 
 	// Set NodePoolRef
-	if t.object.Status.NodePoolRef == nil {
-		t.object.Status.NodePoolRef = &provisioningv1alpha1.NodePoolRef{}
+	if t.object.Status.Extensions.NodePoolRef == nil {
+		t.object.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{}
 	}
-	t.object.Status.NodePoolRef.Name = nodePool.GetName()
-	t.object.Status.NodePoolRef.Namespace = nodePool.GetNamespace()
+	t.object.Status.Extensions.NodePoolRef.Name = nodePool.GetName()
+	t.object.Status.Extensions.NodePoolRef.Namespace = nodePool.GetNamespace()
 
 	t.logger.InfoContext(
 		ctx,
@@ -268,16 +268,16 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	var err error
 	timedOutOrFailed := false // Default to false unless explicitly needed
 
-	if t.object.Status.NodePoolRef == nil {
-		t.object.Status.NodePoolRef = &provisioningv1alpha1.NodePoolRef{}
+	if t.object.Status.Extensions.NodePoolRef == nil {
+		t.object.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{}
 	}
 
-	t.object.Status.NodePoolRef.Name = nodePool.GetName()
-	t.object.Status.NodePoolRef.Namespace = nodePool.GetNamespace()
+	t.object.Status.Extensions.NodePoolRef.Name = nodePool.GetName()
+	t.object.Status.Extensions.NodePoolRef.Namespace = nodePool.GetNamespace()
 
 	if condition == hwv1alpha1.Provisioned {
-		if t.object.Status.NodePoolRef.HardwareProvisioningCheckStart.IsZero() {
-			t.object.Status.NodePoolRef.HardwareProvisioningCheckStart = metav1.Now()
+		if t.object.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart.IsZero() {
+			t.object.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart = metav1.Now()
 		}
 	}
 
@@ -290,14 +290,14 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		message = hwCondition.Message
 
 		if condition == hwv1alpha1.Configured {
-			if t.object.Status.NodePoolRef.HardwareConfiguringCheckStart.IsZero() {
-				t.object.Status.NodePoolRef.HardwareConfiguringCheckStart = metav1.Now()
+			if t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart.IsZero() {
+				t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = metav1.Now()
 			}
 		}
 
 		// Reset the status check start time for the next configuration changes
 		if hwCondition.Type == string(hwv1alpha1.Configured) && hwCondition.Status == metav1.ConditionTrue {
-			t.object.Status.NodePoolRef.HardwareConfiguringCheckStart = metav1.Time{}
+			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = metav1.Time{}
 		}
 
 		if hwCondition.Status == metav1.ConditionFalse && reason == string(hwv1alpha1.Failed) {
@@ -329,8 +329,8 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		// Handle timeout logic
 		timedOutOrFailed, reason, message = utils.HandleHardwareTimeout(
 			condition,
-			t.object.Status.NodePoolRef.HardwareProvisioningCheckStart,
-			t.object.Status.NodePoolRef.HardwareConfiguringCheckStart,
+			t.object.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart,
+			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart,
 			t.timeouts.hardwareProvisioning,
 			reason,
 			message,
