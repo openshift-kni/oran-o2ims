@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apimachinery/pkg/util/net"
@@ -174,7 +175,8 @@ func extensionsToExtensionArgs(extensions []string) []string {
 
 // HasApiEndpoints determines whether a server exposes a set of API endpoints
 func HasApiEndpoints(serverName string) bool {
-	return serverName == InventoryMetadataServerName ||
+	return serverName == InventoryDatabaseServerName ||
+		serverName == InventoryMetadataServerName ||
 		serverName == InventoryResourceServerName ||
 		serverName == InventoryDeploymentManagerServerName ||
 		serverName == InventoryAlarmSubscriptionServerName
@@ -182,12 +184,14 @@ func HasApiEndpoints(serverName string) bool {
 
 func GetDeploymentVolumes(serverName string) []corev1.Volume {
 	if HasApiEndpoints(serverName) {
+		tlsDefaultMode := int32(os.FileMode(0o400))
 		return []corev1.Volume{
 			{
 				Name: "tls",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: fmt.Sprintf("%s-tls", serverName),
+						DefaultMode: &tlsDefaultMode,
+						SecretName:  fmt.Sprintf("%s-tls", serverName),
 					},
 				},
 			},
@@ -339,58 +343,6 @@ func ExtractBeforeDot(s string) string {
 	return s[:dotIndex]
 }
 
-// GetSecret attempts to retrieve a Secret object for the given name
-func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*corev1.Secret, error) {
-	secret := &corev1.Secret{}
-	exists, err := DoesK8SResourceExist(ctx, c, name, namespace, secret)
-	if err != nil {
-		return nil, err
-	}
-
-	if !exists {
-		return nil, NewInputError(
-			"the Secret '%s' is not found in the namespace '%s'", name, namespace)
-	}
-	return secret, nil
-}
-
-// GetSecretField attempts to retrieve the value of the field using the provided field name
-func GetSecretField(secret *corev1.Secret, fieldName string) (string, error) {
-	encoded, ok := secret.Data[fieldName]
-	if !ok {
-		return "", NewInputError("the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName)
-	}
-
-	return string(encoded), nil
-}
-
-// GetConfigmap attempts to retrieve a ConfigMap object for the given name
-func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) (*corev1.ConfigMap, error) {
-	existingConfigmap := &corev1.ConfigMap{}
-	cmExists, err := DoesK8SResourceExist(
-		ctx, c, name, namespace, existingConfigmap)
-	if err != nil {
-		return nil, err
-	}
-
-	if !cmExists {
-		// Check if the configmap is missing
-		return nil, NewInputError(
-			"the ConfigMap '%s' is not found in the namespace '%s'", name, namespace)
-	}
-	return existingConfigmap, nil
-}
-
-// GetConfigMapField attempts to retrieve the value of the field using the provided field name
-func GetConfigMapField(cm *corev1.ConfigMap, fieldName string) (string, error) {
-	data, ok := cm.Data[fieldName]
-	if !ok {
-		return data, NewInputError("the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName)
-	}
-
-	return data, nil
-}
-
 // ExtractTemplateDataFromConfigMap extracts the template data associated with the specified key
 // from the provided ConfigMap. The data is expected to be in YAML format.
 func ExtractTemplateDataFromConfigMap[T any](cm *corev1.ConfigMap, expectedKey string) (T, error) {
@@ -521,33 +473,6 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	}
 
 	return result, nil
-}
-
-func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNamespace, targetNamespace string) error {
-	// Get the secret from the source namespace
-	secret := &corev1.Secret{}
-	exists, err := DoesK8SResourceExist(
-		ctx, c, secretName, sourceNamespace, secret)
-
-	// If there was an error in trying to get the secret from the source namespace, return it.
-	if err != nil {
-		return fmt.Errorf("error obtaining the secret %s from namespace: %s: %w", secretName, sourceNamespace, err)
-	}
-
-	if !exists {
-		return fmt.Errorf("secret %s does not exist in namespace: %s", secretName, sourceNamespace)
-	}
-
-	// Modify the secret metadata to set the target namespace and remove resourceVersion
-	secret.ObjectMeta.Namespace = targetNamespace
-	secret.ObjectMeta.ResourceVersion = ""
-
-	// Create the secret in the target namespace
-	err = CreateK8sCR(ctx, c, secret, nil, UPDATE)
-	if err != nil {
-		return fmt.Errorf("failed to create secret %s in namespace %s: %w", secret.GetName(), secret.GetNamespace(), err)
-	}
-	return nil
 }
 
 // GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting
@@ -752,31 +677,6 @@ func GetIBGUFromUpgradeDefaultsConfigmap(
 	}, nil
 }
 
-// GetCertFromSecret retrieves an X.509 certificate from a Secret
-func GetCertFromSecret(ctx context.Context, c client.Client, name, namespace string) (*tls.Certificate, error) {
-	secret, err := GetSecret(ctx, c, name, namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve secret '%s': %w", name, err)
-	}
-
-	certBytes, ok := secret.Data["tls.crt"]
-	if !ok {
-		return nil, NewInputError("secret '%s' does not contain key 'tls.crt'", name)
-	}
-
-	keyBytes, ok := secret.Data["tls.key"]
-	if !ok {
-		return nil, NewInputError("secret '%s' does not contain key 'tls.key'", name)
-	}
-
-	cert, err := tls.X509KeyPair(certBytes, keyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load certificate from secret '%s': %w", name, err)
-	}
-
-	return &cert, nil
-}
-
 // CreateDefaultInventoryCR creates the default Inventory CR so that the system has running servers
 func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 	inventory := inventoryv1alpha1.Inventory{
@@ -815,4 +715,20 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 	}
 
 	return nil
+}
+
+// GetDatabaseHostname returns the URL used to access the database service
+func GetDatabaseHostname() string {
+	hostname, exists := os.LookupEnv(DatabaseHostnameEnvVar)
+	if !exists {
+		return fmt.Sprintf("%s.%s.svc.cluster.local",
+			InventoryDatabaseServerName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace))
+	}
+	return hostname
+}
+
+// GetPasswordOrRandom attempts to query a password from the environment and generates a random password if none was
+// found matching the supplied environment variable name.
+func GetPasswordOrRandom(envName string) string {
+	return GetEnvOrDefault(envName, uuid.Must(uuid.NewRandom()).String())
 }

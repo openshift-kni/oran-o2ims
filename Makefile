@@ -22,6 +22,11 @@ ginkgo_flags:=
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 4.16.0
 
+# Development/Debug passwords for database.  This requires that the operator be deployed in DEBUG=yes mode or for the
+# developer to override these values with the current passwords
+ORAN_O2IMS_ALARMS_PASSWORD ?= debug
+ORAN_O2IMS_RESOURCES_PASSWORD ?= debug
+
 ifeq (${DEBUG}, yes)
 	DOCKER_TARGET = debug
 	GOBUILD_GCFLAGS = all=-N -l
@@ -423,24 +428,16 @@ run-alarms: go-generate binary ##Run alarms server locally
 	$(LOCALBIN)/$(BINARY_NAME) alarms-server serve
 
 run-alarms-migrate: binary ##Migrate all the way up
-	$(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
+	@echo "password='${ORAN_O2IMS_ALARMS_PASSWORD}'"
+	ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
 
 run-resources-migrate: binary ##Migrate all the way up
-	$(LOCALBIN)/$(BINARY_NAME) resource-server migrate
+	ORAN_O2IMS_RESOURCES_PASSWORD=$(ORAN_O2IMS_RESOURCES_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) resource-server migrate
 
 ##@ O-RAN Postgres DB
 
-.PHONY: run-postgres
-run-postgres: ##Run O-RAN postgres
-	oc apply -k ./internal/service/postgres/k8s/overlays/dev
-	oc wait --for=condition=Ready pod -l pg=dev -n oran-o2ims --timeout=30s
-	@echo "Starting port-forward in background on port 5432:5432 to o-cloud-db in namespace oran-o2ims"
-	nohup oc port-forward svc/o-cloud-db 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &
-
-
-clean-postgres: ##Run O-RAN postgres
-	-oc delete -k ./internal/service/postgres/k8s/overlays/dev --wait=true
-	-oc wait --for=delete pod -l pg=dev -n oran-o2ims --timeout=30s
-	@echo "Stopping all oc port-forward processes"
-	-@pkill -f "oc port-forward" && echo "All oc port-forward processes stopped."
-	-rm pgproxy.log
+.PHONY: connect-postgres
+connect-postgres: ##Connect to O-RAN postgres
+	oc wait --for=condition=Ready pod -l app=postgres-server -n oran-o2ims --timeout=30s
+	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace oran-o2ims"
+	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &

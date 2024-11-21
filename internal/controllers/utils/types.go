@@ -19,6 +19,7 @@ var InventoryConditionTypes = struct {
 	DeploymentServerError     InventoryConditionType
 	ResourceServerError       InventoryConditionType
 	SmoRegistrationCompleted  InventoryConditionType
+	DatabaseServerAvailable   InventoryConditionType
 }{
 	Ready:                     "InventoryReady",
 	NotReady:                  "InventoryConditionType",
@@ -31,6 +32,7 @@ var InventoryConditionTypes = struct {
 	DeploymentServerError:     "DeploymentServerError",
 	ResourceServerError:       "ResourceServerError",
 	SmoRegistrationCompleted:  "SmoRegistrationCompleted",
+	DatabaseServerAvailable:   "DatabaseServerAvailable",
 }
 
 type InventoryConditionReason string
@@ -54,6 +56,7 @@ var InventoryConditionReasons = struct {
 }
 
 var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{
+	InventoryDatabaseServerName:          InventoryConditionTypes.DatabaseServerAvailable,
 	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerAvailable,
 	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerAvailable,
 	InventoryResourceServerName:          InventoryConditionTypes.ResourceServerAvailable,

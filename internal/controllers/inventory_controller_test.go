@@ -45,6 +45,7 @@ import (
 
 var ServerTestImage = "controller-manager:test"
 var KubeRbacProxyTestImage = "kube-rbac-proxy:test"
+var PostgresTestImage = "postgres:test"
 
 var _ = DescribeTable(
 	"Reconciler",
@@ -98,6 +99,7 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              &ServerTestImage,
+					PostgresImage:      &PostgresTestImage,
 					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
@@ -172,6 +174,7 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              &ServerTestImage,
+					PostgresImage:      &PostgresTestImage,
 					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
@@ -263,6 +266,7 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              &ServerTestImage,
+					PostgresImage:      &PostgresTestImage,
 					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
@@ -320,6 +324,7 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image:              &ServerTestImage,
+					PostgresImage:      &PostgresTestImage,
 					KubeRbacProxyImage: &KubeRbacProxyTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{

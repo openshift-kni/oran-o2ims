@@ -9,6 +9,7 @@ const (
 
 // Base resource names
 const (
+	InventoryDatabase          = "postgres"
 	InventoryMetadata          = "metadata"
 	InventoryDeploymentManager = "deployment-manager"
 	InventoryResource          = "resource"
@@ -21,6 +22,7 @@ const serverSuffix = "-server"
 
 // Deployment names
 const (
+	InventoryDatabaseServerName          = InventoryDatabase + serverSuffix
 	InventoryMetadataServerName          = InventoryMetadata + serverSuffix
 	InventoryDeploymentManagerServerName = InventoryDeploymentManager + serverSuffix
 	InventoryResourceServerName          = InventoryResource + serverSuffix
@@ -192,10 +194,20 @@ const (
 	RbacContainerName   = "rbac"
 )
 
+// POD Port Values
+const (
+	DefaultServicePort = 8000
+	DefaultTargetPort  = "https"
+
+	DatabaseServicePort = 5432
+	DatabaseTargetPort  = "database"
+)
+
 // Environment values
 const (
 	ServerImageName        = "IMAGE"
 	KubeRbacProxyImageName = "KUBE_RBAC_PROXY_IMAGE"
+	PostgresImageName      = "POSTGRES_IMAGE"
 	HwMgrPluginNameSpace   = "HWMGR_PLUGIN_NAMESPACE"
 )
 
@@ -212,4 +224,13 @@ var (
 	CRDsToBeSuppressedForUpgrade = []string{
 		"AgentClusterInstall",
 	}
+)
+
+// Postgres values
+const (
+	AdminPasswordEnvName     = "POSTGRESQL_ADMIN_PASSWORD"     // nolint: gosec
+	AlarmsPasswordEnvName    = "ORAN_O2IMS_ALARMS_PASSWORD"    // nolint: gosec
+	ResourcesPasswordEnvName = "ORAN_O2IMS_RESOURCES_PASSWORD" // nolint: gosec
+
+	DatabaseHostnameEnvVar = "POSTGRES_HOSTNAME"
 )

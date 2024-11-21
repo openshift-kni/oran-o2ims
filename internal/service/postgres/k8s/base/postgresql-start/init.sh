@@ -2,16 +2,26 @@
 
 set -e
 
-# Define an array of service names
-services=("alarms" "resources")
+# Define an associative array of service names based on matching variables fitting this pattern:
+#   ORAN_O2IMS_SERVICE_PASSWORD
+declare -A services
+# Capture all of the ORAN O2IMS service database credentials
+for var in "${!ORAN_O2IMS@}"; do
+    if [[ $var =~ ^ORAN_O2IMS_(.*)_PASSWORD ]]; then
+        service_name="${BASH_REMATCH[1]}"
+        password="${!var}"
+        services[${service_name,,}]=$password
+    fi
+done
 
 # Everything here is idempotent
-for service_name in "${services[@]}"; do
-    echo "Processing database setup for service: ${service_name}"
+for service_name in "${!services[@]}"; do
+    password=${services[${service_name}]}
 
-    # TODO: for prod generate password during deployment for each service
+    echo "Processing database setup for service: ${service_name} with password '${password}'"
+
     # Create the user
-    psql -U postgres -c "CREATE USER ${service_name} WITH PASSWORD '${service_name}';" || true
+    psql -U postgres -c "CREATE USER ${service_name} WITH PASSWORD '${password}';" || true
 
     # Create the database
     psql -U postgres -c "CREATE DATABASE ${service_name} OWNER ${service_name};" || true

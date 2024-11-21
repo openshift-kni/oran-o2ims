@@ -117,6 +117,10 @@ spec:
                 required:
                 - enabled
                 type: object
+              postgresImage:
+                description: PostgresImage is the full reference of the container
+                  image that implements the Postgres database.
+                type: string
               resourceServerConfig:
                 default:
                   enabled: true

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 type PgConfig struct {
@@ -40,11 +41,13 @@ func NewPgxPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 }
 
 // GetPgConfig common postgres config for alarms server
-// TODO: convert to env
 func GetPgConfig(username, password, database string) PgConfig {
+	hostname := utils.GetDatabaseHostname()
+	port := fmt.Sprintf("%d", utils.DatabaseServicePort)
+
 	return PgConfig{
-		Host:     "localhost",
-		Port:     "5432",
+		Host:     hostname,
+		Port:     port,
 		User:     username,
 		Password: password,
 		Database: database,
