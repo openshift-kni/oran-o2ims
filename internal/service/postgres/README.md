@@ -8,15 +8,6 @@ This directory contains everything needed to deploy an Postgres for o-cloud.
 - Catalog: https://catalog.redhat.com/software/containers/rhel9/postgresql-16/657b03866783e1b1fb87e142
   - Here you may also find additional ENV variables that maybe useful for production overlay.
 
-## Deploy Dev Postgres service
-
-```shell
-make run-postgres
-```
-- This deploys a dev ephemeral postgres instance using [kustomize](./k8s/base/deployment.yaml)
-- [Tunes](./k8s/base/postgresql-cfg) and [provisions](./k8s/base/postgresql-start) DB
-- Adds dev [labels](./k8s/overlays/dev/kustomization.yaml)
-
 ## Note for when setting up the prod env
 - Add PVC to deployment 
 - Generate password for each service 

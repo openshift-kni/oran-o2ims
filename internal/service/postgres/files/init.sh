@@ -18,7 +18,7 @@ done
 for service_name in "${!services[@]}"; do
     password=${services[${service_name}]}
 
-    echo "Processing database setup for service: ${service_name} with password '${password}'"
+    echo "Processing database setup for service: ${service_name}"
 
     # Create the user
     psql -U postgres -c "CREATE USER ${service_name} WITH PASSWORD '${password}';" || true

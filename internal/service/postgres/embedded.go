@@ -2,12 +2,12 @@ package postgres
 
 import "embed"
 
-//go:embed k8s/base/postgresql*
+//go:embed files/*
 var Artifacts embed.FS
 
 const (
-	ConfigFilePath  = "k8s/base/postgresql-cfg/postgresql.conf"
-	StartupFilePath = "k8s/base/postgresql-start/init.sh"
+	ConfigFilePath  = "files/postgresql.conf"
+	StartupFilePath = "files/init.sh"
 
 	ConfigFileName  = "postgresql.conf"
 	StartupFileName = "init.sh"
