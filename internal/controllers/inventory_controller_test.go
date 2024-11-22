@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -44,8 +45,6 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var ServerTestImage = "controller-manager:test"
-var KubeRbacProxyTestImage = "kube-rbac-proxy:test"
-var PostgresTestImage = "postgres:test"
 
 var _ = DescribeTable(
 	"Reconciler",
@@ -69,6 +68,12 @@ var _ = DescribeTable(
 				Name: "version",
 			},
 		}
+
+		// Set up necessary env variables
+		err := os.Setenv(utils.KubeRbacProxyImageName, "kube-rbac-proxy:test")
+		Expect(err).NotTo(HaveOccurred())
+		err = os.Setenv(utils.PostgresImageName, "postgres:test")
+		Expect(err).NotTo(HaveOccurred())
 
 		// Update the testcase objects to include the Namespace.
 		objs = append(objs, ns, ingress, cv)
@@ -98,9 +103,7 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              &ServerTestImage,
-					PostgresImage:      &PostgresTestImage,
-					KubeRbacProxyImage: &KubeRbacProxyTestImage,
+					Image: &ServerTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
@@ -173,9 +176,7 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              &ServerTestImage,
-					PostgresImage:      &PostgresTestImage,
-					KubeRbacProxyImage: &KubeRbacProxyTestImage,
+					Image: &ServerTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
@@ -265,9 +266,7 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              &ServerTestImage,
-					PostgresImage:      &PostgresTestImage,
-					KubeRbacProxyImage: &KubeRbacProxyTestImage,
+					Image: &ServerTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
@@ -323,9 +322,7 @@ var _ = DescribeTable(
 					CreationTimestamp: metav1.Now(),
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
-					Image:              &ServerTestImage,
-					PostgresImage:      &PostgresTestImage,
-					KubeRbacProxyImage: &KubeRbacProxyTestImage,
+					Image: &ServerTestImage,
 					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,

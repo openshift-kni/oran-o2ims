@@ -134,15 +134,6 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Image",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Image *string `json:"image,omitempty"`
-
-	// KubeRbacProxyImage is the full reference of the container image that implements the kube-rbac-proxy.
-	//+optional
-	KubeRbacProxyImage *string `json:"kubeRbacProxyImage"`
-
-	// PostgresImage is the full reference of the container image that implements the Postgres database.
-	//+optional
-	PostgresImage *string `json:"postgresImage"`
-
 	// CloudID is the global cloud ID value used to correlate the SMO inventory record with the deployed cloud instance.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}

@@ -27,7 +27,7 @@ import (
 )
 
 // CreateSecretFromLiterals takes a map of key value pairs and produces a Secret.
-func CreateSecretFromLiterals(namespace, name string, literals map[string][]byte) *corev1.Secret {
+func CreateSecretFromLiterals(ctx context.Context, c client.Client, ownerObject client.Object, namespace, name string, literals map[string][]byte) error {
 	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -40,7 +40,12 @@ func CreateSecretFromLiterals(namespace, name string, literals map[string][]byte
 		Data: literals,
 	}
 
-	return secret
+	err := CreateK8sCR(ctx, c, secret, ownerObject, UPDATE)
+	if err != nil {
+		return fmt.Errorf("failed to create secret %s/%s: %w", namespace, name, err)
+	}
+
+	return nil
 }
 
 // GetSecret attempts to retrieve a Secret object for the given name

@@ -12,10 +12,10 @@ import (
 
 // CreateConfigMapFromEmbeddedFile extracts a file from an embedded file system and builds a ConfigMap.  If the file
 // does not exist or is not accessible then an error is returned.
-func CreateConfigMapFromEmbeddedFile(fs embed.FS, path, namespace, name, key string) (*corev1.ConfigMap, error) {
+func CreateConfigMapFromEmbeddedFile(ctx context.Context, c client.Client, ownerObject client.Object, fs embed.FS, path, namespace, name, key string) error {
 	data, err := fs.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read embedded file %s: %w", path, err)
+		return fmt.Errorf("failed to read embedded file %s: %w", path, err)
 	}
 
 	configmap := &corev1.ConfigMap{
@@ -32,7 +32,12 @@ func CreateConfigMapFromEmbeddedFile(fs embed.FS, path, namespace, name, key str
 		},
 	}
 
-	return configmap, nil
+	err = CreateK8sCR(ctx, c, configmap, ownerObject, UPDATE)
+	if err != nil {
+		return fmt.Errorf("failed to create configmap '%s/%s': %w", namespace, name, err)
+	}
+
+	return nil
 }
 
 // GetConfigmap attempts to retrieve a ConfigMap object for the given name

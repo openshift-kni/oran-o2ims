@@ -151,16 +151,6 @@ func (in *InventorySpec) DeepCopyInto(out *InventorySpec) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.KubeRbacProxyImage != nil {
-		in, out := &in.KubeRbacProxyImage, &out.KubeRbacProxyImage
-		*out = new(string)
-		**out = **in
-	}
-	if in.PostgresImage != nil {
-		in, out := &in.PostgresImage, &out.PostgresImage
-		*out = new(string)
-		**out = **in
-	}
 	if in.CloudID != nil {
 		in, out := &in.CloudID, &out.CloudID
 		*out = new(string)

@@ -100,10 +100,6 @@ spec:
               ingressHost:
                 description: IngressHost defines the FQDN for the IMS endpoints.
                 type: string
-              kubeRbacProxyImage:
-                description: KubeRbacProxyImage is the full reference of the container
-                  image that implements the kube-rbac-proxy.
-                type: string
               metadataServerConfig:
                 default:
                   enabled: true
@@ -117,10 +113,6 @@ spec:
                 required:
                 - enabled
                 type: object
-              postgresImage:
-                description: PostgresImage is the full reference of the container
-                  image that implements the Postgres database.
-                type: string
               resourceServerConfig:
                 default:
                   enabled: true

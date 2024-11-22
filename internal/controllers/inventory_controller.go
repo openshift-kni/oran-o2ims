@@ -593,7 +593,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 
 	// Create the database
-	nextReconcile, err = t.createDatabase(ctx, nextReconcile)
+	err = t.createDatabase(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -995,9 +995,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	rbacProxyImage := os.Getenv(utils.KubeRbacProxyImageName)
-	if t.object.Spec.KubeRbacProxyImage != nil {
-		rbacProxyImage = *t.object.Spec.KubeRbacProxyImage
-	}
 	if rbacProxyImage == "" {
 		return "", fmt.Errorf("missing %s environment variable value", utils.KubeRbacProxyImageName)
 	}
