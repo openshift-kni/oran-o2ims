@@ -1086,6 +1086,26 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		},
 	}
 
+	if utils.HasDatabase(serverName) {
+		deploymentSpec.Template.Spec.InitContainers = []corev1.Container{
+			{
+				Name:            utils.MigrationContainerName,
+				Image:           image,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         []string{"/usr/bin/oran-o2ims"},
+				Args:            []string{serverName, "migrate"},
+				EnvFrom: []corev1.EnvFromSource{
+					{
+						SecretRef: &corev1.SecretEnvSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: fmt.Sprintf("%s-passwords", utils.InventoryDatabaseServerName)},
+						},
+					},
+				},
+			},
+		}
+	}
+
 	// Build the deployment.
 	newDeployment := &appsv1.Deployment{
 		ObjectMeta: deploymentMeta,
