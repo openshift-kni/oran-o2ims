@@ -7,3 +7,5 @@ subsets:
   - addresses:
       # Change me
       - ip: 0.0.0.0
+      # Once applied, reverse with `ssh -R :8080:127.0.0.1:8080 user@<Change Me Ip> -N`
+      # Note: you may also need to update `cat /etc/ssh/sshd_config | grep -i GatewayPorts` to yes

@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log/slog"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,5 +39,6 @@ func Setup(ctx context.Context, cl client.Client) error {
 		return fmt.Errorf("failed to update secret %s/%s: %w", namespace, secretName, err)
 	}
 
+	slog.Info("Successfully configured alertmanager")
 	return nil
 }

@@ -68,11 +68,6 @@ func Serve() error {
 		return fmt.Errorf("error creating client for hub: %w", err)
 	}
 
-	err = alertmanager.Setup(ctx, hubClient)
-	if err != nil {
-		return fmt.Errorf("error configuring alert manager: %w", err)
-	}
-
 	alarmsDict := dictionary.New(hubClient)
 	alarmsDict.Load(ctx)
 
@@ -92,7 +87,8 @@ func Serve() error {
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  getOranReqErrFunc(),
 			ResponseErrorHandlerFunc: getOranRespErrFunc(),
-		})
+		},
+	)
 
 	r := http.NewServeMux()
 
@@ -122,6 +118,11 @@ func Serve() error {
 
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)
+
+	// Configure AM right before the server starts listening
+	if err := alertmanager.Setup(ctx, hubClient); err != nil {
+		return fmt.Errorf("error configuring alert manager: %w", err)
+	}
 
 	// Start server
 	go func() {
