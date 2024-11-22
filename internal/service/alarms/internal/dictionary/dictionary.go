@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
-	cr_client "sigs.k8s.io/controller-runtime/pkg/client"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 )
@@ -27,12 +27,12 @@ const (
 )
 
 type AlarmDictionary struct {
-	Client cr_client.Client
+	Client crclient.Client
 
 	RulesMap map[int][]monitoringv1.Rule
 }
 
-func New(client cr_client.Client) *AlarmDictionary {
+func New(client crclient.Client) *AlarmDictionary {
 	return &AlarmDictionary{
 		Client:   client,
 		RulesMap: make(map[int][]monitoringv1.Rule),
@@ -144,7 +144,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 	defer cancel()
 
 	var managedClusters clusterv1.ManagedClusterList
-	err := r.Client.List(ctxWithTimeout, &managedClusters, &cr_client.ListOptions{
+	err := r.Client.List(ctxWithTimeout, &managedClusters, &crclient.ListOptions{
 		LabelSelector: selector.Add(*versionSelector).Add(*localClusterRequirement),
 		Limit:         1,
 	})
@@ -160,7 +160,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 }
 
 // getRules gets rules defined within a PrometheusRule resource
-func (r *AlarmDictionary) getRules(ctx context.Context, cl cr_client.Client) ([]monitoringv1.Rule, error) {
+func (r *AlarmDictionary) getRules(ctx context.Context, cl crclient.Client) ([]monitoringv1.Rule, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, k8s_client.ListRequestTimeout)
 	defer cancel()
 
