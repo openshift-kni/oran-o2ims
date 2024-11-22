@@ -595,6 +595,11 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	// Create the database
 	err = t.createDatabase(ctx)
 	if err != nil {
+		err2 := t.updateORANO2ISMUsedConfigStatus(ctx, utils.InventoryDatabaseServerName,
+			nil, utils.InventoryConditionReasons.DatabaseDeploymentFailed, err)
+		if err2 != nil {
+			t.logger.ErrorContext(ctx, "Failed report database status", slog.String("error", err2.Error()))
+		}
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to create database.",

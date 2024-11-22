@@ -15,6 +15,7 @@ var InventoryConditionTypes = struct {
 	MetadataServerAvailable   InventoryConditionType
 	DeploymentServerAvailable InventoryConditionType
 	ResourceServerAvailable   InventoryConditionType
+	DatabaseServerError       InventoryConditionType
 	MetadataServerError       InventoryConditionType
 	DeploymentServerError     InventoryConditionType
 	ResourceServerError       InventoryConditionType
@@ -28,6 +29,7 @@ var InventoryConditionTypes = struct {
 	MetadataServerAvailable:   "MetadataServerAvailable",
 	DeploymentServerAvailable: "DeploymentServerAvailable",
 	ResourceServerAvailable:   "ResourceServerAvailable",
+	DatabaseServerError:       "DatabaseServerError",
 	MetadataServerError:       "MetadataServerError",
 	DeploymentServerError:     "DeploymentServerError",
 	ResourceServerError:       "ResourceServerError",
@@ -40,12 +42,14 @@ type InventoryConditionReason string
 var InventoryConditionReasons = struct {
 	DeploymentsReady                  InventoryConditionReason
 	ErrorGettingDeploymentInformation InventoryConditionReason
+	DatabaseDeploymentFailed          InventoryConditionReason
 	DeploymentNotFound                InventoryConditionReason
 	ServerArgumentsError              InventoryConditionReason
 	SmoRegistrationSuccessful         InventoryConditionReason
 	SmoRegistrationFailed             InventoryConditionReason
 	SmoNotConfigured                  InventoryConditionReason
 }{
+	DatabaseDeploymentFailed:          "DatabaseDeploymentFailed",
 	DeploymentsReady:                  "AllDeploymentsReady",
 	ErrorGettingDeploymentInformation: "ErrorGettingDeploymentInformation",
 	DeploymentNotFound:                "DeploymentNotFound",
@@ -66,6 +70,7 @@ var MapErrorDeploymentNameConditionType = map[string]InventoryConditionType{
 	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerError,
 	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerError,
 	InventoryResourceServerName:          InventoryConditionTypes.ResourceServerError,
+	InventoryDatabaseServerName:          InventoryConditionTypes.DatabaseServerError,
 }
 
 // AvailableNotification represents the data sent to the SMO once the O2IMS is ready to accept API calls.   This is
