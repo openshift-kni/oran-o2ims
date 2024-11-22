@@ -22,6 +22,11 @@ ginkgo_flags:=
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 4.16.0
 
+# Development/Debug passwords for database.  This requires that the operator be deployed in DEBUG=yes mode or for the
+# developer to override these values with the current passwords
+ORAN_O2IMS_ALARMS_PASSWORD ?= debug
+ORAN_O2IMS_RESOURCES_PASSWORD ?= debug
+
 ifeq (${DEBUG}, yes)
 	DOCKER_TARGET = debug
 	GOBUILD_GCFLAGS = all=-N -l
@@ -184,7 +189,7 @@ uninstall: manifests kustomize kubectl ## Uninstall CRDs from the K8s cluster sp
 	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: deploy
-deploy: manifests kustomize kubectl ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+deploy: install manifests kustomize kubectl ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	@$(KUBECTL) create configmap env-config --from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) --dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) apply -f -
@@ -408,14 +413,14 @@ sync-submodules:
 ##@ O-RAN Alarms Server
 
 .PHNOY: alarms
-alarms: clean-postgres clean-am-service run-postgres run-alarms-migrate create-am-service run-alarms ##Run full alarms stack
+alarms: undeploy uninstall deploy clean-am-service connect-postgres run-alarms-migrate create-am-service run-alarms ##Run full alarms stack
 
 create-am-service: ##Creates alarm manager service and endpoint to expose a DNS entry.
 	oc apply -k ./internal/service/alarms/k8s/base --wait=true
 	@echo "Service and Endpoint for alarm manager created."
 
 clean-am-service: ##Deletes alarm manager service and endpoint.
-	-oc delete -k ./internal/service/alarms/k8s/base --wait=true
+	-oc delete -k ./internal/service/alarms/k8s/base --wait=true --ignore-not-found=true
 	@echo "Service and Endpoint for alarm manager deleted."
 
 .PHONY: run-alarms
@@ -423,24 +428,15 @@ run-alarms: go-generate binary ##Run alarms server locally
 	$(LOCALBIN)/$(BINARY_NAME) alarms-server serve
 
 run-alarms-migrate: binary ##Migrate all the way up
-	$(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
+	ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
 
 run-resources-migrate: binary ##Migrate all the way up
-	$(LOCALBIN)/$(BINARY_NAME) resource-server migrate
+	ORAN_O2IMS_RESOURCES_PASSWORD=$(ORAN_O2IMS_RESOURCES_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) resource-server migrate
 
 ##@ O-RAN Postgres DB
 
-.PHONY: run-postgres
-run-postgres: ##Run O-RAN postgres
-	oc apply -k ./internal/service/postgres/k8s/overlays/dev
-	oc wait --for=condition=Ready pod -l pg=dev -n oran-o2ims --timeout=30s
-	@echo "Starting port-forward in background on port 5432:5432 to o-cloud-db in namespace oran-o2ims"
-	nohup oc port-forward svc/o-cloud-db 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &
-
-
-clean-postgres: ##Run O-RAN postgres
-	-oc delete -k ./internal/service/postgres/k8s/overlays/dev --wait=true
-	-oc wait --for=delete pod -l pg=dev -n oran-o2ims --timeout=30s
-	@echo "Stopping all oc port-forward processes"
-	-@pkill -f "oc port-forward" && echo "All oc port-forward processes stopped."
-	-rm pgproxy.log
+.PHONY: connect-postgres
+connect-postgres: ##Connect to O-RAN postgres
+	oc wait --for=condition=Ready pod -l app=postgres-server -n oran-o2ims --timeout=30s
+	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace oran-o2ims"
+	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &

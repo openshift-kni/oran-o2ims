@@ -168,7 +168,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the Service needed for the Resource server.
-	err = t.createService(ctx, utils.InventoryResourceServerName)
+	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -222,7 +222,7 @@ func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the Service needed for the Metadata server.
-	err = t.createService(ctx, utils.InventoryMetadataServerName)
+	err = t.createService(ctx, utils.InventoryMetadataServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -294,7 +294,7 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 	}
 
 	// Create the Service needed for the Deployment Manager server.
-	err = t.createService(ctx, utils.InventoryDeploymentManagerServerName)
+	err = t.createService(ctx, utils.InventoryDeploymentManagerServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -349,7 +349,7 @@ func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context,
 	}
 
 	// Create the Service needed for the alarm subscription server.
-	err = t.createService(ctx, utils.InventoryAlarmSubscriptionServerName)
+	err = t.createService(ctx, utils.InventoryAlarmSubscriptionServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -589,6 +589,23 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	// Register with SMO (if necessary)
 	err = t.setupSmo(ctx)
 	if err != nil {
+		return
+	}
+
+	// Create the database
+	err = t.createDatabase(ctx)
+	if updateError := t.updateORANO2ISMUsedConfigStatus(ctx, utils.InventoryDatabaseServerName,
+		nil, utils.InventoryConditionReasons.DatabaseDeploymentFailed, err); updateError != nil {
+		t.logger.ErrorContext(ctx, "Failed to report database status", slog.String("error", updateError.Error()))
+		return nextReconcile, updateError
+	}
+
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create database.",
+			slog.String("error", err.Error()),
+		)
 		return
 	}
 
@@ -984,9 +1001,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	rbacProxyImage := os.Getenv(utils.KubeRbacProxyImageName)
-	if t.object.Spec.KubeRbacProxyImage != nil {
-		rbacProxyImage = *t.object.Spec.KubeRbacProxyImage
-	}
 	if rbacProxyImage == "" {
 		return "", fmt.Errorf("missing %s environment variable value", utils.KubeRbacProxyImageName)
 	}
@@ -1055,7 +1069,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 					{
 						Name:            utils.ServerContainerName,
 						Image:           image,
-						ImagePullPolicy: corev1.PullAlways,
+						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts:    deploymentVolumeMounts,
 						Command:         []string{"/usr/bin/oran-o2ims"},
 						Args:            deploymentContainerArgs,
@@ -1108,7 +1122,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 	return nil
 }
 
-func (t *reconcilerTask) createService(ctx context.Context, resourceName string) error {
+func (t *reconcilerTask) createService(ctx context.Context, resourceName string, port int32, targetPort string) error {
 	t.logger.InfoContext(ctx, "[createService]")
 	// Build the Service object.
 	serviceMeta := metav1.ObjectMeta{
@@ -1129,8 +1143,8 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string)
 		Ports: []corev1.ServicePort{
 			{
 				Name:       "api",
-				Port:       8000,
-				TargetPort: intstr.FromString("https"),
+				Port:       port,
+				TargetPort: intstr.FromString(targetPort),
 			},
 		},
 	}
@@ -1387,6 +1401,8 @@ func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) er
 	if t.object.Spec.ResourceServerConfig.Enabled {
 		t.updateORANO2ISMStatusConditions(ctx, utils.InventoryResourceServerName)
 	}
+
+	t.updateORANO2ISMStatusConditions(ctx, utils.InventoryDatabaseServerName)
 
 	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update ORANO2ISMDeployment CR status: %w", err)

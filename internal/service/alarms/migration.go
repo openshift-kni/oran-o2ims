@@ -3,8 +3,10 @@ package alarms
 import (
 	"embed"
 	"fmt"
+	"os"
 
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
@@ -15,6 +17,11 @@ func StartAlarmsMigration() error {
 	driver, err := iofs.New(migrations, "internal/db/migrations")
 	if err != nil {
 		return fmt.Errorf("failed to create migrations source: %w", err)
+	}
+
+	password, exists := os.LookupEnv(utils.AlarmsPasswordEnvName)
+	if !exists {
+		return fmt.Errorf("missing %s environment variable", utils.AlarmsPasswordEnvName)
 	}
 
 	err = db.StartMigration(db.GetPgConfig(username, password, database), driver)

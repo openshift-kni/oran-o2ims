@@ -1,0 +1,6 @@
+- path: /spec/template/spec/volumes
+  op: add
+  value:
+  - name: postgres-debug-passwords
+    secret:
+      secretName: postgres-debug-passwords

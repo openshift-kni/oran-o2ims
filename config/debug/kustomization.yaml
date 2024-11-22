@@ -5,13 +5,33 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-    - ../default
+- ../default
 patches:
-    -   target:
-            kind: Deployment
-            name: controller-manager
-        path: disable-health-probes.yaml
-    -   target:
-            kind: Deployment
-            name: controller-manager
-        path: disable-leader-election.yaml
+- target:
+    kind: Deployment
+    name: controller-manager
+  path: disable-health-probes.yaml
+- target:
+    kind: Deployment
+    name: controller-manager
+  path: disable-leader-election.yaml
+- target:
+    kind: Deployment
+    name: controller-manager
+  path: add-debug-passwords.yaml
+- target:
+    kind: Deployment
+    name: controller-manager
+  path: manager_config_patch.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+# Set up some static passwords for debug purposes
+secretGenerator:
+- name: postgres-debug-passwords
+  namespace: oran-o2ims
+  literals:
+  - POSTGRESQL_ADMIN_PASSWORD=debug
+  - ORAN_O2IMS_ALARMS_PASSWORD=debug
+  - ORAN_O2IMS_RESOURCES_PASSWORD=debug
