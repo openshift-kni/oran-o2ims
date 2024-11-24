@@ -1032,7 +1032,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
-		// NonCompliantAt should still be zero since we don't consider inform policies in the timeout.
+		// NonCompliantAt should still be zero since we don't consider inform policies in the timeout if all policies are inform.
 		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
@@ -1136,6 +1136,159 @@ defaultHugepagesSize: "1G"`,
 		// the policies are the same.
 		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
 		// There are NonCompliant policies in enforce, but the configuration has timed out,
+		// so we do not need to requeue.
+		Expect(requeue).To(BeFalse())
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check the status conditions.
+		conditions = CRTask.object.Status.Conditions
+		configAppliedCond = meta.FindStatusCondition(
+			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+		Expect(configAppliedCond).ToNot(BeNil())
+		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Message).To(
+			Equal("The configuration is still being applied, but it timed out"))
+	})
+
+	It("Updates ProvisioningRequest ConfigurationApplied condition to InProgress when the enforce policy is "+
+		"Compliant but the inform policy is still NonCompliant and times out", func() {
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}
+
+		result, err := CRReconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		// Expect to not requeue on valid provisioning request.
+		Expect(result.Requeue).To(BeFalse())
+
+		// Create policies, one Compliant enforce policy and one NonCompliant inform policy.
+		newPolicies := []client.Object{
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-validator-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-validator-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "inform",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "NonCompliant",
+				},
+			},
+			&policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: "Compliant",
+				},
+			},
+		}
+		for _, newPolicy := range newPolicies {
+			Expect(c.Create(ctx, newPolicy)).To(Succeed())
+		}
+
+		provisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
+
+		// Create the ProvisioningRequest reconciliation task.
+		err = CRReconciler.Client.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name: "cluster-1",
+			},
+			provisioningRequest)
+		Expect(err).ToNot(HaveOccurred())
+
+		CRTask = &provisioningRequestReconcilerTask{
+			logger: CRReconciler.Logger,
+			client: CRReconciler.Client,
+			object: provisioningRequest, // cluster-1 request
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: 1 * time.Minute,
+			},
+		}
+
+		// Call the handleClusterPolicyConfiguration function.
+		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
+		// There are NonCompliant policies in inform and the configuration has not timed out,
+		// so we need to requeue to re-evaluate the timeout.
+		Expect(requeue).To(BeTrue())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
+			[]provisioningv1alpha1.PolicyDetails{
+				{
+					Compliant:         "Compliant",
+					PolicyName:        "v1-sriov-configuration-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "enforce",
+				},
+				{
+					Compliant:         "NonCompliant",
+					PolicyName:        "v1-validator-policy",
+					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
+					RemediationAction: "inform",
+				},
+			},
+		))
+
+		// Verify that the ConfigurationApplied condition is set to InProgress.
+		conditions := CRTask.object.Status.Conditions
+		configAppliedCond := meta.FindStatusCondition(
+			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+		Expect(configAppliedCond).ToNot(BeNil())
+		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
+
+		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
+		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time =
+			CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Add(-2 * time.Minute)
+		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
+
+		// Call the handleClusterPolicyConfiguration function.
+		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
+		// There are NonCompliant policies in inform, but the configuration has timed out,
+		// so we do not need to requeue.
+		Expect(requeue).To(BeFalse())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+
+		// Verify that the ConfigurationApplied condition is set to TimedOut.
+		conditions = CRTask.object.Status.Conditions
+		configAppliedCond = meta.FindStatusCondition(
+			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+		Expect(configAppliedCond).ToNot(BeNil())
+		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Message).To(
+			Equal("The configuration is still being applied, but it timed out"))
+
+		// Check that another handleClusterPolicyConfiguration call doesn't change the status if
+		// the policies are the same.
+		requeue, err = CRTask.handleClusterPolicyConfiguration(context.Background())
+		// There are NonCompliant policies in inform, but the configuration has timed out,
 		// so we do not need to requeue.
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
@@ -1317,113 +1470,6 @@ defaultHugepagesSize: "1G"`,
 		Expect(len(res)).To(Equal(0))
 	})
 
-	It("Updates ProvisioningRequest ConfigurationApplied condition to OutOfDate when the cluster is "+
-		"NonCompliant with at least one matched policies and the policy is not in enforce", func() {
-		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}
-
-		result, err := CRReconciler.Reconcile(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-		// Expect to not requeue on valid provisioning request.
-		Expect(result.Requeue).To(BeFalse())
-
-		newPolicies := []client.Object{
-			&policiesv1.Policy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-					Namespace: "cluster-1",
-					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
-					},
-				},
-				Spec: policiesv1.PolicySpec{
-					RemediationAction: "inform",
-				},
-				Status: policiesv1.PolicyStatus{
-					ComplianceState: "NonCompliant",
-				},
-			},
-			&policiesv1.Policy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-					Namespace: "cluster-1",
-					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
-					},
-				},
-				Spec: policiesv1.PolicySpec{
-					RemediationAction: "enforce",
-				},
-				Status: policiesv1.PolicyStatus{
-					ComplianceState: "Compliant",
-				},
-			},
-		}
-		// Create all the ACM policies.
-		for _, newPolicy := range newPolicies {
-			Expect(c.Create(ctx, newPolicy)).To(Succeed())
-		}
-		provisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
-
-		// Create the ProvisioningRequest reconciliation task.
-		err = CRReconciler.Client.Get(
-			context.TODO(),
-			types.NamespacedName{
-				Name: "cluster-1",
-			},
-			provisioningRequest)
-		Expect(err).ToNot(HaveOccurred())
-
-		CRTask = &provisioningRequestReconcilerTask{
-			logger:       CRReconciler.Logger,
-			client:       CRReconciler.Client,
-			object:       provisioningRequest, // cluster-1 request
-			clusterInput: &clusterInput{},
-			ctDetails: &clusterTemplateDetails{
-				namespace: ctNamespace,
-			},
-			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
-			},
-		}
-
-		// Call the handleClusterPolicyConfiguration function.
-		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
-		Expect(requeue).To(BeFalse())
-		Expect(err).ToNot(HaveOccurred())
-		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
-			[]provisioningv1alpha1.PolicyDetails{
-				{
-					Compliant:         "Compliant",
-					PolicyName:        "v1-sriov-configuration-policy",
-					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
-					RemediationAction: "enforce",
-				},
-				{
-					Compliant:         "NonCompliant",
-					PolicyName:        "v1-subscriptions-policy",
-					PolicyNamespace:   "ztp-clustertemplate-a-v4-16",
-					RemediationAction: "inform",
-				},
-			},
-		))
-
-		// Check the status conditions.
-		conditions := CRTask.object.Status.Conditions
-		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
-		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
-		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
-		Expect(configAppliedCond.Message).To(Equal("The configuration is out of date"))
-	})
-
 	It("Updates ProvisioningRequest ConfigurationApplied condition to Completed when the cluster is "+
 		"Compliant with all the matched policies", func() {
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: "cluster-1"}}
@@ -1503,6 +1549,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeFalse())
 		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
@@ -1609,6 +1656,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
@@ -1715,6 +1763,7 @@ defaultHugepagesSize: "1G"`,
 		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
 		Expect(requeue).To(BeTrue())
 		Expect(err).ToNot(HaveOccurred())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
 			[]provisioningv1alpha1.PolicyDetails{
 				{
