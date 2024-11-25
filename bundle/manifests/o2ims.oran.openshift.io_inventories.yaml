@@ -292,6 +292,11 @@ spec:
                   Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
                   the default ingress controller.
                 type: string
+              searchURL:
+                description: |-
+                  Stores the Search API URL resolved at runtime; either from a user override or automatically computed from the
+                  Search API service.
+                type: string
               usedServerConfig:
                 properties:
                   deploymentManagerServerUsedConfig:

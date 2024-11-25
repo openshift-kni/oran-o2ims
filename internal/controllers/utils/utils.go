@@ -17,6 +17,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -259,6 +261,43 @@ func GetIngressDomain(ctx context.Context, c client.Client) (string, error) {
 	return "", fmt.Errorf("default ingress controller does not have expected 'status.domain' attribute")
 }
 
+// GetSearchAPI attempts to find the search-api service using its label selector
+func GetSearchAPI(ctx context.Context, c client.Client) (*corev1.Service, error) {
+	// Build the search criteria
+	selector := labels.NewSelector()
+	monitorSelector, err := labels.NewRequirement(SearchApiLabelKey, selection.Equals, []string{SearchApiLabelValue})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create search-api monitor selector: %w", err)
+	}
+
+	// Do the search
+	services := &corev1.ServiceList{}
+	err = c.List(ctx, services, &client.ListOptions{
+		LabelSelector: selector.Add(*monitorSelector),
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list services: %w", err)
+	}
+
+	if len(services.Items) == 0 {
+		return nil, fmt.Errorf("failed to list services: no services found")
+	}
+
+	// Should only be 1 result therefore return the first item
+	return &services.Items[0], nil
+}
+
+// GetSearchURL attempts to build the Search API service URL by dynamically looking up the service.
+func GetSearchURL(ctx context.Context, c client.Client) (string, error) {
+	service, err := GetSearchAPI(ctx, c)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", service.Name, service.Namespace, service.Spec.Ports[0].Port), nil
+}
+
 func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
 	cloudId := DefaultOCloudID
 	if inventory.Spec.CloudID != nil {
@@ -279,18 +318,13 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 
 	// ResourceServer
 	if serverName == InventoryResourceServerName {
-		searchAPI := inventory.Spec.ResourceServerConfig.BackendURL
-		if searchAPI == "" {
-			searchAPI = defaultSearchApiURL
-		}
-
 		result = slices.Clone(ResourceServerArgs)
 
 		// Add the cloud-id, backend-url, and token args:
 		result = append(
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
-			fmt.Sprintf("--backend-url=%s", searchAPI),
+			fmt.Sprintf("--backend-url=%s", inventory.Status.SearchURL),
 			fmt.Sprintf("--global-cloud-id=%s", cloudId),
 			fmt.Sprintf("--namespace=%s", inventory.Namespace),
 			GetBackendTokenArg(inventory.Spec.ResourceServerConfig.BackendToken))

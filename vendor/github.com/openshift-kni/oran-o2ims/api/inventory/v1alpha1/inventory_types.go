@@ -200,6 +200,9 @@ type InventoryStatus struct {
 	// Stores the local cluster ID used as the local Cloud ID value.
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Local Cluster ID"
 	ClusterID string `json:"clusterID,omitempty"`
+	// Stores the Search API URL resolved at runtime; either from a user override or automatically computed from the
+	// Search API service.
+	SearchURL string `json:"searchURL,omitempty"`
 }
 
 // +kubebuilder:object:root=true

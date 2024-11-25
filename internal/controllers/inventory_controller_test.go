@@ -63,6 +63,23 @@ var _ = DescribeTable(
 			Spec: openshiftoperatorv1.IngressControllerSpec{
 				Domain: "apps.example.com"}}
 
+		search := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "search-search-api",
+				Namespace: "open-cluster-management",
+				Labels:    map[string]string{utils.SearchApiLabelKey: utils.SearchApiLabelValue},
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeClusterIP,
+				Ports: []corev1.ServicePort{
+					{
+						Port: 4010,
+						Name: "search-api",
+					},
+				},
+			},
+		}
+
 		cv := &openshiftv1.ClusterVersion{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "version",
@@ -76,7 +93,7 @@ var _ = DescribeTable(
 		Expect(err).NotTo(HaveOccurred())
 
 		// Update the testcase objects to include the Namespace.
-		objs = append(objs, ns, ingress, cv)
+		objs = append(objs, ns, ingress, search, cv)
 
 		// Get the fake client.
 		fakeClient := getFakeClientFromObjects(objs...)

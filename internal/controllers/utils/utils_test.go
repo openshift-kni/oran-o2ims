@@ -294,6 +294,43 @@ var _ = Describe("GetIngressDomain", func() {
 	})
 })
 
+var _ = Describe("GetSearchURL", func() {
+
+	It("If search-api service does not exist, return error", func() {
+		objs := []client.Object{}
+		fakeClient := getFakeClientFromObjects(objs...)
+		searchURL, err := GetSearchURL(context.TODO(), fakeClient)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("no services found"))
+		Expect(searchURL).To(Equal(""))
+	})
+
+	It("If search-api service with proper labels", func() {
+		service := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "bar",
+				Labels:    map[string]string{SearchApiLabelKey: SearchApiLabelValue},
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeClusterIP,
+				Ports: []corev1.ServicePort{
+					{
+						Port: 9999,
+						Name: "test",
+					},
+				},
+			},
+		}
+
+		objs := []client.Object{service}
+		fakeClient := getFakeClientFromObjects(objs...)
+		searchURL, err := GetSearchURL(context.TODO(), fakeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(searchURL).To(Equal("https://foo.bar.svc.cluster.local:9999"))
+	})
+})
+
 var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 	var (
 		dst map[string]interface{}
