@@ -232,10 +232,10 @@ spec:
       - description: |-
           INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
           Important: Run "make" to regenerate code after modifying this file
-        displayName: Deployments Status
+        displayName: Conditions
+        path: conditions
+      - displayName: Deployments Status
         path: deploymentStatus
-      - displayName: Conditions
-        path: deploymentStatus.conditions
       - displayName: Deployment Server Status
         path: deploymentStatus.deploymentServerStatus
       - displayName: Metadata Server Status

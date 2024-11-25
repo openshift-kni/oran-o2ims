@@ -161,7 +161,7 @@ func IsClusterProvisionFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool
 
 // IsSmoRegistrationCompleted checks if registration with SMO has been completed
 func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
-	condition := meta.FindStatusCondition(cr.Status.DeploymentsStatus.Conditions,
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
 		string(InventoryConditionTypes.SmoRegistrationCompleted))
 	return condition != nil && condition.Status == metav1.ConditionTrue
 }
