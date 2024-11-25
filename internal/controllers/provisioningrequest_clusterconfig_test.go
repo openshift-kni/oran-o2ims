@@ -251,9 +251,13 @@ defaultHugepagesSize: "1G"`,
 						Reason: string(hwv1alpha1.Completed),
 					},
 				},
+				Properties: hwv1alpha1.Properties{
+					NodeNames: []string{masterNodeName},
+				},
 			},
 		}
 		Expect(c.Create(ctx, nodePool)).To(Succeed())
+		createNodeResources(ctx, c, nodePool.Name)
 
 		// Update the managedCluster cluster-1 to be available, joined and accepted.
 		managedCluster1 := &clusterv1.ManagedCluster{}

@@ -227,11 +227,15 @@ func (t *provisioningRequestReconcilerTask) checkNodePoolConfigStatus(ctx contex
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(ctx context.Context, hwNodes map[string][]utils.NodeInfo,
 	nodePool *hwv1alpha1.NodePool, clusterInstance *siteconfig.ClusterInstance) error {
 
+	// Create a map to track unmatched nodes
+	unmatchedNodes := make(map[int]string)
+
 	roleToNodeGroupName := utils.GetRoleToGroupNameMap(nodePool)
 	for i, node := range clusterInstance.Spec.Nodes {
 		// Check if the node's role has a match in NodeGroupName
 		nodeInfos, exists := hwNodes[roleToNodeGroupName[node.Role]]
 		if !exists || len(nodeInfos) == 0 {
+			unmatchedNodes[i] = node.HostName
 			continue
 		}
 
@@ -254,7 +258,15 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(ctx context.C
 			nodePool.Namespace); err != nil {
 			return fmt.Errorf("failed to update the node status: %w", err)
 		}
-		hwNodes[node.Role] = nodeInfos[1:]
+		hwNodes[roleToNodeGroupName[node.Role]] = nodeInfos[1:]
+	}
+	// Check if there are unmatched nodes
+	if len(unmatchedNodes) > 0 {
+		unmatchedNodeDetails := []string{}
+		for idx, name := range unmatchedNodes {
+			unmatchedNodeDetails = append(unmatchedNodeDetails, fmt.Sprintf("Index: %d, Host Name: %s", idx, name))
+		}
+		return fmt.Errorf("failed to find matches for the following nodes: %s", unmatchedNodeDetails)
 	}
 	return nil
 }
