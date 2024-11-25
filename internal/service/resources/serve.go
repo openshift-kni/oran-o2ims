@@ -1,4 +1,4 @@
-package alarms
+package resources
 
 import (
 	"context"
@@ -13,18 +13,15 @@ import (
 	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
-// Alarm server config values
+// Resource server config values
 const (
 	host         = "127.0.0.1"
 	port         = "8080"
@@ -32,13 +29,13 @@ const (
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second
 
-	username = "alarms"
-	database = "alarms"
+	username = "resources"
+	database = "resources"
 )
 
 // Serve start alarms server
 func Serve() error {
-	slog.Info("Starting Alarm server")
+	slog.Info("Starting resource server")
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -51,9 +48,9 @@ func Serve() error {
 		cancel()
 	}()
 
-	password, exists := os.LookupEnv(utils.AlarmsPasswordEnvName)
+	password, exists := os.LookupEnv(utils.ResourcesPasswordEnvName)
 	if !exists {
-		return fmt.Errorf("missing %s environment variable", utils.AlarmsPasswordEnvName)
+		return fmt.Errorf("missing %s environment variable", utils.ResourcesPasswordEnvName)
 	}
 
 	// Init DB client
@@ -66,35 +63,22 @@ func Serve() error {
 		pool.Close()
 	}()
 
-	// Get client for hub
-	hubClient, err := k8s_client.NewClientForHub()
-	if err != nil {
-		return fmt.Errorf("error creating client for hub: %w", err)
-	}
-
-	alarmsDict := dictionary.New(hubClient)
-	alarmsDict.Load(ctx)
-
-	// TODO: Audit and Insert data database
-
-	// TODO: Launch k8s job for DB remove archived data
-
 	// Init server
 	// Create the handler
-	alarmServer := internal.AlarmsServer{
-		AlarmsRepository: &repo.AlarmsRepository{
+	server := api.ResourceServer{
+		Repository: &repo.ResourceRepository{
 			Db: pool,
 		},
 	}
 
-	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,
+	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
 		generated.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  common.GetOranReqErrFunc(),
 			ResponseErrorHandlerFunc: common.GetOranRespErrFunc(),
 		},
 	)
 
-	r := http.NewServeMux()
+	router := http.NewServeMux()
 
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
@@ -103,7 +87,7 @@ func Serve() error {
 	}
 
 	opt := generated.StdHTTPServerOptions{
-		BaseRouter: r,
+		BaseRouter: router,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
 			common.OpenAPIValidation(swagger),
 			common.LogDuration(),
@@ -112,11 +96,11 @@ func Serve() error {
 	}
 
 	// Register the handler
-	generated.HandlerWithOptions(alarmServerStrictHandler, opt)
+	generated.HandlerWithOptions(serverStrictHandler, opt)
 
 	// Server config
 	srv := &http.Server{
-		Handler:      r,
+		Handler:      router,
 		Addr:         net.JoinHostPort(host, port),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
@@ -128,11 +112,6 @@ func Serve() error {
 
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)
-
-	// Configure AM right before the server starts listening
-	if err := alertmanager.Setup(ctx, hubClient); err != nil {
-		return fmt.Errorf("error configuring alert manager: %w", err)
-	}
 
 	// Start server
 	go func() {

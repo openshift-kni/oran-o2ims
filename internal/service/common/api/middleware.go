@@ -1,15 +1,16 @@
-package internal
+package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
-	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
@@ -28,15 +29,8 @@ func LogDuration() Middleware {
 	}
 }
 
-// AlarmsOapiValidation to validate all incoming requests as specified in the spec
-func AlarmsOapiValidation() Middleware {
-	// This also validates the spec file
-	swagger, err := api.GetSwagger()
-	if err != nil {
-		// Panic will allow for defer statements to execute
-		panic(fmt.Sprintf("failed to get swagger: %s", err))
-	}
-
+// OpenAPIValidation to validate all incoming requests as specified in the spec
+func OpenAPIValidation(swagger *openapi3.T) Middleware {
 	// Clear out the servers array in the swagger spec, that skips validating
 	// that server names match. We don't know how this thing will be run.
 	swagger.Servers = nil
@@ -57,5 +51,42 @@ func getOranErrHandler() func(w http.ResponseWriter, message string, statusCode 
 			Status: statusCode,
 		})
 		http.Error(w, string(out), statusCode)
+	}
+}
+
+// GracefulShutdown allow graceful shutdown with timeout
+func GracefulShutdown(srv *http.Server) error {
+	// Create shutdown context with 10 second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Attempt graceful shutdown
+	if err := srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("failed graceful shutdown: %w", err)
+	}
+
+	slog.Info("Server gracefully stopped")
+	return nil
+}
+
+// GetOranReqErrFunc override default validation errors to allow for O-RAN specific struct
+func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		out, _ := json.Marshal(common.ProblemDetails{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		})
+		http.Error(w, string(out), http.StatusBadRequest)
+	}
+}
+
+// GetOranRespErrFunc override default internal server error to allow for O-RAN specific struct
+func GetOranRespErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		out, _ := json.Marshal(common.ProblemDetails{
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		})
+		http.Error(w, string(out), http.StatusInternalServerError)
 	}
 }

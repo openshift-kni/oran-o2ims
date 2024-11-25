@@ -13,11 +13,7 @@ import (
 //go:embed db/migrations/*.sql
 var migrations embed.FS
 
-const (
-	username = "resources"
-	database = "resources"
-)
-
+// StartResourcesMigration initiates the migration process for the resource server database
 func StartResourcesMigration() error {
 	driver, err := iofs.New(migrations, "db/migrations")
 	if err != nil {
