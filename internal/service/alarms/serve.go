@@ -17,7 +17,7 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 
-	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
@@ -51,9 +51,9 @@ func Serve() error {
 		cancel()
 	}()
 
-	password, exists := os.LookupEnv(utils.ResourcesPasswordEnvName)
+	password, exists := os.LookupEnv(utils.AlarmsPasswordEnvName)
 	if !exists {
-		return fmt.Errorf("missing %s environment variable", utils.ResourcesPasswordEnvName)
+		return fmt.Errorf("missing %s environment variable", utils.AlarmsPasswordEnvName)
 	}
 
 	// Init DB client
@@ -87,8 +87,8 @@ func Serve() error {
 		},
 	}
 
-	alarmServerStrictHandler := api.NewStrictHandlerWithOptions(&alarmServer, nil,
-		api.StrictHTTPServerOptions{
+	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,
+		generated.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  common.GetOranReqErrFunc(),
 			ResponseErrorHandlerFunc: common.GetOranRespErrFunc(),
 		},
@@ -97,14 +97,14 @@ func Serve() error {
 	r := http.NewServeMux()
 
 	// This also validates the spec file
-	swagger, err := api.GetSwagger()
+	swagger, err := generated.GetSwagger()
 	if err != nil {
 		return fmt.Errorf("failed to get swagger: %w", err)
 	}
 
-	opt := api.StdHTTPServerOptions{
+	opt := generated.StdHTTPServerOptions{
 		BaseRouter: r,
-		Middlewares: []api.MiddlewareFunc{ // Add middlewares here
+		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
 			common.OpenAPIValidation(swagger),
 			common.LogDuration(),
 		},
@@ -112,7 +112,7 @@ func Serve() error {
 	}
 
 	// Register the handler
-	api.HandlerWithOptions(alarmServerStrictHandler, opt)
+	generated.HandlerWithOptions(alarmServerStrictHandler, opt)
 
 	// Server config
 	srv := &http.Server{
