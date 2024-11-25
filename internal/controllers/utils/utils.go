@@ -182,6 +182,11 @@ func HasApiEndpoints(serverName string) bool {
 		serverName == InventoryAlarmSubscriptionServerName
 }
 
+// HasDatabase determines whether a server owns a logical database instance
+func HasDatabase(serverName string) bool {
+	return serverName == InventoryResourceServerName
+}
+
 func GetDeploymentVolumes(serverName string) []corev1.Volume {
 	if HasApiEndpoints(serverName) {
 		tlsDefaultMode := int32(os.FileMode(0o400))
@@ -508,8 +513,8 @@ func loadDefaultCABundles(config *tls.Config) error {
 		config.RootCAs.AppendCertsFromPEM(data)
 	}
 
-	if data, err := os.ReadFile(defaultServiceCAFile); err != nil {
-		return fmt.Errorf("failed to read service CA file '%s': %w", defaultServiceCAFile, err)
+	if data, err := os.ReadFile(DefaultServiceCAFile); err != nil {
+		return fmt.Errorf("failed to read service CA file '%s': %w", DefaultServiceCAFile, err)
 	} else {
 		// This will enable accessing internal services signed by the service account signer.
 		config.RootCAs.AppendCertsFromPEM(data)

@@ -83,7 +83,7 @@ const (
 	defaultSearchApiURL     = "https://search-search-api.open-cluster-management.svc.cluster.local:4010"
 	defaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
 	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
-	defaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
+	DefaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
 )
 
 // Default timeout values
@@ -190,8 +190,9 @@ const (
 
 // POD Container Names
 const (
-	ServerContainerName = "server"
-	RbacContainerName   = "rbac"
+	MigrationContainerName = "migration"
+	RbacContainerName      = "rbac"
+	ServerContainerName    = "server"
 )
 
 // POD Port Values

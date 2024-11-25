@@ -96,6 +96,12 @@ func NewHandler(cfg MigrationConfig) (*MigrationHandler, error) {
 		connStr += fmt.Sprintf("&x-migrations-table=%s", cfg.MigrationsTable)
 	}
 
+	if _, err := os.Stat(utils.DefaultServiceCAFile); err == nil {
+		connStr += fmt.Sprintf("&sslrootcert=%s", utils.DefaultServiceCAFile)
+	} else {
+		slog.Warn("No service CA file found")
+	}
+
 	m, err := migrate.NewWithSourceInstance("iofs", cfg.Source, connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create migrate instance: %w", err)
