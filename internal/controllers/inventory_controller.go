@@ -591,11 +591,9 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
-	if t.object.Status.IngressHost == "" {
-		err = t.storeIngressDomain(ctx)
-		if err != nil {
-			return
-		}
+	err = t.storeIngressDomain(ctx)
+	if err != nil {
+		return
 	}
 
 	if t.object.Status.ClusterID == "" {
@@ -605,11 +603,9 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
-	if t.object.Status.SearchURL == "" {
-		err = t.storeSearchURL(ctx)
-		if err != nil {
-			return
-		}
+	err = t.storeSearchURL(ctx)
+	if err != nil {
+		return
 	}
 
 	// Register with SMO (if necessary)
