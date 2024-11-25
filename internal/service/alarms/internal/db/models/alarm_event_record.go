@@ -26,3 +26,7 @@ type AlarmEventRecord struct {
 	AlarmSequenceNumber   int64                  `db:"alarm_sequence_number"`
 	CreatedAt             time.Time              `db:"created_at"`
 }
+
+func (r *AlarmEventRecord) TableName() string {
+	return "alarm_event_record"
+}

@@ -17,7 +17,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/imdario/mergo v1.0.0
 	github.com/itchyny/gojq v0.12.14
-	github.com/jackc/pgx/v5 v5.5.4
+	github.com/jackc/pgx/v5 v5.5.5
 	github.com/json-iterator/go v1.1.12
 	github.com/oapi-codegen/nethttp-middleware v1.0.2
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
@@ -37,6 +37,7 @@ require (
 	github.com/r3labs/diff/v3 v3.0.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
+	github.com/stephenafamo/bob v0.28.0
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 	github.com/thoas/go-funk v0.9.3
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -57,6 +58,8 @@ require (
 
 require (
 	github.com/PaesslerAG/gval v1.0.0 // indirect
+	github.com/aarondl/json v0.0.0-20221020222930-8b0db17ef1bf // indirect
+	github.com/aarondl/opt v0.0.0-20230114172057-b91f370c41f0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -112,7 +115,9 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
 	github.com/speakeasy-api/openapi-overlay v0.9.0 // indirect
+	github.com/stephenafamo/scan v0.6.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
