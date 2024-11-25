@@ -203,21 +203,6 @@ func GetDeploymentVolumes(serverName string) []corev1.Volume {
 		}
 	}
 
-	if HasDatabase(serverName) || serverName == InventoryDatabaseServerName {
-		defaultMode := int32(os.FileMode(0o400))
-		return []corev1.Volume{
-			{
-				Name: "database-passwords",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						DefaultMode: &defaultMode,
-						SecretName:  fmt.Sprintf("%s-passwords", InventoryDatabaseServerName),
-					},
-				},
-			},
-		}
-	}
-
 	return []corev1.Volume{}
 }
 
