@@ -476,7 +476,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 	if t.object.Spec.SmoConfig == nil || t.object.Spec.CloudID == nil {
 		meta.SetStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			metav1.Condition{
 				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
 				Status:  metav1.ConditionFalse,
@@ -496,7 +496,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 			)
 
 			meta.SetStatusCondition(
-				&t.object.Status.DeploymentsStatus.Conditions,
+				&t.object.Status.Conditions,
 				metav1.Condition{
 					Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
 					Status:  metav1.ConditionFalse,
@@ -509,7 +509,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		}
 
 		meta.SetStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			metav1.Condition{
 				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
 				Status:  metav1.ConditionTrue,
@@ -594,7 +594,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 
 	// Create the database
 	err = t.createDatabase(ctx)
-	if updateError := t.updateORANO2ISMUsedConfigStatus(ctx, utils.InventoryDatabaseServerName,
+	if updateError := t.updateInventoryUsedConfigStatus(ctx, utils.InventoryDatabaseServerName,
 		nil, utils.InventoryConditionReasons.DatabaseDeploymentFailed, err); updateError != nil {
 		t.logger.ErrorContext(ctx, "Failed to report database status", slog.String("error", updateError.Error()))
 		return nextReconcile, updateError
@@ -671,7 +671,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
-	err = t.updateORANO2ISMDeploymentStatus(ctx)
+	err = t.updateInventoryDeploymentStatus(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -981,7 +981,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 
 	deploymentContainerArgs, err := utils.GetServerArgs(t.object, serverName)
 	if err != nil {
-		err2 := t.updateORANO2ISMUsedConfigStatus(
+		err2 := t.updateInventoryUsedConfigStatus(
 			ctx, serverName, deploymentContainerArgs,
 			utils.InventoryConditionReasons.ServerArgumentsError, err)
 		if err2 != nil {
@@ -989,7 +989,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		}
 		return utils.InventoryConditionReasons.ServerArgumentsError, fmt.Errorf("failed to get server arguments: %w", err)
 	}
-	err = t.updateORANO2ISMUsedConfigStatus(ctx, serverName, deploymentContainerArgs, "", nil)
+	err = t.updateInventoryUsedConfigStatus(ctx, serverName, deploymentContainerArgs, "", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to update ORANO2ISMUsedConfigStatus: %w", err)
 	}
@@ -1310,7 +1310,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	return nil
 }
 
-func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, deploymentName string) {
+func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, deploymentName string) {
 	deployment := &appsv1.Deployment{}
 	err := t.client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: utils.InventoryNamespace}, deployment)
 
@@ -1320,7 +1320,7 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 			reason = string(utils.InventoryConditionReasons.DeploymentNotFound)
 		}
 		meta.SetStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			metav1.Condition{
 				Type:    string(utils.InventoryConditionTypes.Error),
 				Status:  metav1.ConditionTrue,
@@ -1330,7 +1330,7 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 		)
 
 		meta.SetStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			metav1.Condition{
 				Type:    string(utils.InventoryConditionTypes.Ready),
 				Status:  metav1.ConditionFalse,
@@ -1340,16 +1340,16 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 		)
 	} else {
 		meta.RemoveStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			string(utils.InventoryConditionTypes.Error))
 		meta.RemoveStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			string(utils.InventoryConditionTypes.Ready))
 		for _, condition := range deployment.Status.Conditions {
 			// Obtain the status directly from the Deployment resources.
 			if condition.Type == "Available" {
 				meta.SetStatusCondition(
-					&t.object.Status.DeploymentsStatus.Conditions,
+					&t.object.Status.Conditions,
 					metav1.Condition{
 						Type:    string(utils.MapAvailableDeploymentNameConditionType[deploymentName]),
 						Status:  metav1.ConditionStatus(condition.Status),
@@ -1362,10 +1362,10 @@ func (t *reconcilerTask) updateORANO2ISMStatusConditions(ctx context.Context, de
 	}
 }
 
-func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
+func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 	ctx context.Context, serverName string, deploymentArgs []string,
 	errorReason utils.InventoryConditionReason, err error) error {
-	t.logger.InfoContext(ctx, "[updateORANO2ISMUsedConfigStatus]")
+	t.logger.InfoContext(ctx, "[updateInventoryUsedConfigStatus]")
 
 	if serverName == utils.InventoryMetadataServerName {
 		t.object.Status.UsedServerConfig.MetadataServerUsedConfig = deploymentArgs
@@ -1382,7 +1382,7 @@ func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
 	// If there is an error passed, include it in the condition.
 	if err != nil {
 		meta.SetStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			metav1.Condition{
 				Type:    string(utils.MapErrorDeploymentNameConditionType[serverName]),
 				Status:  "True",
@@ -1392,40 +1392,40 @@ func (t *reconcilerTask) updateORANO2ISMUsedConfigStatus(
 		)
 
 		meta.RemoveStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			string(utils.MapAvailableDeploymentNameConditionType[serverName]))
 	} else {
 		meta.RemoveStatusCondition(
-			&t.object.Status.DeploymentsStatus.Conditions,
+			&t.object.Status.Conditions,
 			string(utils.MapErrorDeploymentNameConditionType[serverName]))
 	}
 
 	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-		return fmt.Errorf("failed to update ORANO2ISMUsedConfig CR status: %w", err)
+		return fmt.Errorf("failed to update inventory used config CR status: %w", err)
 	}
 
 	return nil
 }
 
-func (t *reconcilerTask) updateORANO2ISMDeploymentStatus(ctx context.Context) error {
+func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) error {
 
-	t.logger.InfoContext(ctx, "[updateORANO2ISMDeploymentStatus]")
+	t.logger.InfoContext(ctx, "[updateInventoryDeploymentStatus]")
 	if t.object.Spec.MetadataServerConfig.Enabled {
-		t.updateORANO2ISMStatusConditions(ctx, utils.InventoryMetadataServerName)
+		t.updateInventoryStatusConditions(ctx, utils.InventoryMetadataServerName)
 	}
 
 	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
-		t.updateORANO2ISMStatusConditions(ctx, utils.InventoryDeploymentManagerServerName)
+		t.updateInventoryStatusConditions(ctx, utils.InventoryDeploymentManagerServerName)
 	}
 
 	if t.object.Spec.ResourceServerConfig.Enabled {
-		t.updateORANO2ISMStatusConditions(ctx, utils.InventoryResourceServerName)
+		t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
 	}
 
-	t.updateORANO2ISMStatusConditions(ctx, utils.InventoryDatabaseServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryDatabaseServerName)
 
 	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-		return fmt.Errorf("failed to update ORANO2ISMDeployment CR status: %w", err)
+		return fmt.Errorf("failed to update inventory deployment CR status: %w", err)
 	}
 
 	return nil

@@ -175,8 +175,6 @@ type DeploymentsStatus struct {
 	MetadataServerStatus string `json:"metadataServerStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Resource Server Status"
 	ResourceServerStatus string `json:"resourceServerStatus,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 type UsedServerConfig struct {
@@ -189,6 +187,8 @@ type UsedServerConfig struct {
 type InventoryStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployments Status"
 	DeploymentsStatus DeploymentsStatus `json:"deploymentStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployments Status"
