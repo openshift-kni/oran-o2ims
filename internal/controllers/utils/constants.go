@@ -77,10 +77,15 @@ const (
 	DefaultNamespaceEnvName = "OCLOUD_MANAGER_NAMESPACE"
 )
 
+// Search API attributes
+const (
+	SearchApiLabelKey   = "search-monitor"
+	SearchApiLabelValue = "search-api"
+)
+
 // Default values for backend URL and token:
 const (
 	defaultApiServerURL     = "https://kubernetes.default.svc"
-	defaultSearchApiURL     = "https://search-search-api.open-cluster-management.svc.cluster.local:4010"
 	defaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
 	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
 	DefaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only

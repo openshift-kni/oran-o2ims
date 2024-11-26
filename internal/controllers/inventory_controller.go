@@ -568,15 +568,32 @@ func (t *reconcilerTask) storeClusterID(ctx context.Context) error {
 	return nil
 }
 
+// storeSearchURL stores the Search API URL onto the object status for later retrieval.
+func (t *reconcilerTask) storeSearchURL(ctx context.Context) error {
+	if t.object.Spec.ResourceServerConfig.BackendURL == "" {
+		searchURL, err := utils.GetSearchURL(ctx, t.client)
+		if err != nil {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to get Search API URL.",
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to get Search API URL: %s", err.Error())
+		}
+		t.object.Status.SearchURL = searchURL
+	} else {
+		t.object.Status.SearchURL = t.object.Spec.ResourceServerConfig.BackendURL
+	}
+
+	return nil
+}
+
 func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
-	if t.object.Status.IngressHost == "" {
-		err = t.storeIngressDomain(ctx)
-		if err != nil {
-			return
-		}
+	err = t.storeIngressDomain(ctx)
+	if err != nil {
+		return
 	}
 
 	if t.object.Status.ClusterID == "" {
@@ -584,6 +601,11 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		if err != nil {
 			return
 		}
+	}
+
+	err = t.storeSearchURL(ctx)
+	if err != nil {
+		return
 	}
 
 	// Register with SMO (if necessary)
