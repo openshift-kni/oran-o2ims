@@ -17,11 +17,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
-const vendorLabelName = "vendor"
-const openshiftVersionLabelName = "openshiftVersion"
-const clusterIDLabelName = "clusterID"
-const localClusterLabelName = "local-cluster"
-
 // Interface compile enforcement
 var _ DataSource = (*K8SDataSource)(nil)
 
@@ -131,8 +126,8 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 	}
 
 	// We know these extensions exist because we checked when we processed the NodeCluster
-	vendor := (*extensions)[vendorLabelName].(string)
-	version := (*extensions)[openshiftVersionLabelName].(string)
+	vendor := (*extensions)[utils.ClusterVendorExtension].(string)
+	version := (*extensions)[utils.OpenshiftVersionLabelName].(string)
 	clusterType := (*extensions)[utils.ClusterModelExtension].(string)
 
 	resourceTypeName := d.makeNodeClusterTypeName(clusterType, vendor, version)
@@ -263,31 +258,31 @@ func (d *K8SDataSource) getExtensionsFromLabels(labels map[string]string) map[st
 
 // convertManagedClusterToNodeCluster converts a ManagedCluster to a ManagedCluster object
 func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster v1.ManagedCluster) (models.NodeCluster, error) {
-	vendor, found := cluster.Labels[vendorLabelName]
+	vendor, found := cluster.Labels[utils.ClusterVendorExtension]
 	if !found {
 		return models.NodeCluster{}, fmt.Errorf("no vendor label found on cluster %s", cluster.Name)
 	}
 
 	var version string
 	if vendor == "OpenShift" {
-		version, found = cluster.Labels[openshiftVersionLabelName]
+		version, found = cluster.Labels[utils.OpenshiftVersionLabelName]
 		if !found {
 			return models.NodeCluster{}, fmt.Errorf("no version label found on cluster %s", cluster.Name)
 		}
 	}
 
 	var clusterID string
-	clusterID, found = cluster.Labels[clusterIDLabelName]
+	clusterID, found = cluster.Labels[utils.ClusterIDLabelName]
 	if !found {
-		return models.NodeCluster{}, fmt.Errorf("no '%s' found on cluster %s", clusterIDLabelName, cluster.Name)
+		return models.NodeCluster{}, fmt.Errorf("no '%s' found on cluster %s", utils.ClusterIDLabelName, cluster.Name)
 	}
 
 	// Determine the cluster type so we can differentiate between a hub and a managed cluster
 	clusterType := utils.ClusterModelManagedCluster
-	if value, found := cluster.Labels[localClusterLabelName]; found {
+	if value, found := cluster.Labels[utils.LocalClusterLabelName]; found {
 		localCluster, err := strconv.ParseBool(value)
 		if err != nil {
-			return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' value as boolean: %w", localClusterLabelName, err)
+			return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' value as boolean: %w", utils.LocalClusterLabelName, err)
 		}
 		if localCluster {
 			clusterType = utils.ClusterModelHubCluster
@@ -297,7 +292,7 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster v1.ManagedClu
 	// Use the cluster ID label to facilitate mapping to alarms and possibly other entities
 	resourceID, err := uuid.Parse(clusterID)
 	if err != nil {
-		return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' label value '%s' into UUID", clusterIDLabelName, clusterID)
+		return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' label value '%s' into UUID", utils.ClusterIDLabelName, clusterID)
 	}
 
 	// For now continue to generate UUID values based on the string values assigned

@@ -1,4 +1,4 @@
-package dictionary
+package dictionary_definition
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,14 +17,14 @@ import (
 )
 
 const (
-	version416 = "4.16"
-	version415 = "4.15"
+	version4167 = "4.16.7"
+	version4152 = "4.15.2"
 )
 
-var _ = Describe("AlarmDictionary", func() {
+var _ = Describe("AlarmDictionaryDefinition", func() {
 	Describe("getManagedCluster", func() {
 		var (
-			r      *AlarmDictionary
+			r      *AlarmDictionaryDefinition
 			ctx    context.Context
 			scheme *runtime.Scheme
 		)
@@ -33,7 +34,7 @@ var _ = Describe("AlarmDictionary", func() {
 			_ = clusterv1.AddToScheme(scheme)
 
 			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
-			r = &AlarmDictionary{
+			r = &AlarmDictionaryDefinition{
 				Client: withWatch,
 			}
 
@@ -45,8 +46,8 @@ var _ = Describe("AlarmDictionary", func() {
 						Name:      "cluster-1",
 						Namespace: "default",
 						Labels: map[string]string{
-							managedClusterVersionLabel: version416,
-							localClusterLabel:          "true",
+							utils.OpenshiftVersionLabelName: version4167,
+							utils.LocalClusterLabelName:     "true",
 						},
 					},
 				},
@@ -55,7 +56,7 @@ var _ = Describe("AlarmDictionary", func() {
 						Name:      "cluster-2",
 						Namespace: "default",
 						Labels: map[string]string{
-							managedClusterVersionLabel: version416,
+							utils.OpenshiftVersionLabelName: version4167,
 						},
 					},
 				},
@@ -64,8 +65,8 @@ var _ = Describe("AlarmDictionary", func() {
 						Name:      "cluster-3",
 						Namespace: "default",
 						Labels: map[string]string{
-							managedClusterVersionLabel: version415,
-							localClusterLabel:          "true",
+							utils.OpenshiftVersionLabelName: version4167,
+							utils.LocalClusterLabelName:     "true",
 						},
 					},
 				},
@@ -78,20 +79,20 @@ var _ = Describe("AlarmDictionary", func() {
 		})
 
 		It("returns a cluster with the correct version", func() {
-			cluster, err := r.getManagedCluster(ctx, version416)
+			cluster, err := r.getManagedCluster(ctx, version4167)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cluster.Labels[managedClusterVersionLabel]).To(Equal(version416))
-			Expect(cluster.Labels).ToNot(HaveKey(localClusterLabel))
+			Expect(cluster.Labels[utils.OpenshiftVersionLabelName]).To(Equal(version4167))
+			Expect(cluster.Labels).ToNot(HaveKey(utils.LocalClusterLabelName))
 		})
 		It("returns an error when no cluster is found", func() {
-			_, err := r.getManagedCluster(ctx, version415)
+			_, err := r.getManagedCluster(ctx, version4152)
 			Expect(err).To(HaveOccurred())
 		})
 	})
 	Describe("processManagedCluster", func() {
 		var (
-			r      *AlarmDictionary
+			r      *AlarmDictionaryDefinition
 			ctx    context.Context
 			scheme *runtime.Scheme
 
@@ -103,7 +104,7 @@ var _ = Describe("AlarmDictionary", func() {
 			_ = clusterv1.AddToScheme(scheme)
 
 			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
-			r = &AlarmDictionary{
+			r = &AlarmDictionaryDefinition{
 				Client: withWatch,
 			}
 
@@ -114,7 +115,7 @@ var _ = Describe("AlarmDictionary", func() {
 					Name:      "cluster-1",
 					Namespace: "default",
 					Labels: map[string]string{
-						managedClusterVersionLabel: version416,
+						utils.OpenshiftVersionLabelName: version4167,
 					},
 				},
 			}
@@ -213,7 +214,7 @@ var _ = Describe("AlarmDictionary", func() {
 		})
 
 		It("returns prometheus rules associated with a cluster", func() {
-			rules, err := r.processManagedCluster(ctx, version416)
+			rules, err := r.processManagedCluster(ctx, version4167)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rules).To(HaveLen(2))

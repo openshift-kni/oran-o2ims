@@ -261,6 +261,10 @@ const (
 
 	ClusterModelHubCluster     = "hub-cluster"
 	ClusterModelManagedCluster = "managed-cluster"
+
+	OpenshiftVersionLabelName = "openshiftVersion"
+	ClusterIDLabelName        = "clusterID"
+	LocalClusterLabelName     = "local-cluster"
 )
 
 // Alertmanager values

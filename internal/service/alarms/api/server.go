@@ -1,4 +1,4 @@
-package internal
+package api
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
@@ -25,6 +26,12 @@ const (
 	DefaultRetentionPeriod = 10
 	minRetentionPeriod     = 1
 )
+
+// AlarmsServerConfig defines the configuration attributes for the alarms server
+type AlarmsServerConfig struct {
+	Address       string
+	GlobalCloudID string
+}
 
 type AlarmsServer struct {
 	// GlobalCloudID is the global O-Cloud identifier. Create subscription requests are blocked if the global O-Cloud identifier is not set
@@ -271,7 +278,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		}
 
 		// Check if associated alarm definition has clearing type "manual". If not, return 409.
-		alarmDefinition, err := a.AlarmsRepository.GetAlarmDefinition(ctx, record.AlarmDefinitionID)
+		alarmDefinition, err := a.AlarmsRepository.GetAlarmDefinition(ctx, *record.AlarmDefinitionID)
 		if errors.Is(err, utils.ErrNotFound) {
 			return api.PatchAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				AdditionalAttributes: &map[string]string{
@@ -293,7 +300,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		}
 
 		// Check if the Alarm Event Record has already been cleared
-		if record.PerceivedSeverity == int(perceivedSeverity) {
+		if record.PerceivedSeverity == perceivedSeverity {
 			// Nothing to patch
 			return api.PatchAlarm409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				AdditionalAttributes: &map[string]string{
@@ -305,7 +312,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		}
 
 		// Patch the Alarm Event Record
-		record.PerceivedSeverity = int(perceivedSeverity)
+		record.PerceivedSeverity = perceivedSeverity
 		currentTime := time.Now()
 		record.AlarmClearedTime = &currentTime
 		record.AlarmChangedTime = &currentTime
@@ -469,13 +476,37 @@ func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProb
 	return nil, fmt.Errorf("not implemented")
 }
 
+// AmNotification handles an API request coming from AlertManager with CaaS alerts. This api is used internally.
+// Note: the errors returned can also be view under alertmanager pod logs but also logging here for convenience
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
-	// TODO: Implement the logic to handle the AM notification
-	slog.Debug("Received AM notification", "groupLabels", request.Body.GroupLabels)
-	for _, alert := range request.Body.Alerts {
-		slog.Debug("Alert", "fingerprint", alert.Fingerprint, "startsAt", alert.StartsAt, "status", alert.Status)
+	// Audit the table with full list of alerts in the current payload. If missing set them to resolve
+	if err := a.AlarmsRepository.ResolveNotificationIfNotInCurrent(ctx, request.Body); err != nil {
+		msg := "failed to resolve notification that are not present"
+		slog.Error(msg, "error", err)
+		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
+	// Get the definition data based on current set of Alert names and managed cluster ID
+	alarmDefinitions, err := a.AlarmsRepository.GetAlarmDefinitions(ctx, request.Body, a.ClusterServer.ClusterIDToResourceTypeID)
+	if err != nil {
+		msg := "failed to get AlarmDefinitions"
+		slog.Error(msg, "error", err)
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
+
+	// Combine possible definitions with events
+	aerModels := alertmanager.ConvertAmToAlarmEventRecordModels(request.Body, alarmDefinitions, a.ClusterServer.ClusterIDToResourceTypeID)
+
+	// Insert and update AlarmEventRecord
+	if err := a.AlarmsRepository.UpsertAlarmEventRecord(ctx, aerModels); err != nil {
+		msg := "failed to upsert AlarmEventRecord to db"
+		slog.Error(msg, "error", err)
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
+
+	//TODO: Get subscriber
+
+	//TODO: Notify subscriber
 	return api.AmNotification200Response{}, nil
 }
 

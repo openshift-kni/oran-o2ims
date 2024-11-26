@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
+
 	"github.com/spf13/cobra"
 
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
@@ -11,7 +13,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms"
 )
 
-var config alarms.AlarmsServerConfig
+var config api.AlarmsServerConfig
 
 // alarmsServe represents start alarms command
 var alarmsServe = &cobra.Command{
