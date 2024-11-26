@@ -4,6 +4,13 @@ github.com/PaesslerAG/gval
 # github.com/PaesslerAG/jsonpath v0.1.1
 ## explicit
 github.com/PaesslerAG/jsonpath
+# github.com/aarondl/json v0.0.0-20221020222930-8b0db17ef1bf
+## explicit; go 1.18
+github.com/aarondl/json
+# github.com/aarondl/opt v0.0.0-20230114172057-b91f370c41f0
+## explicit; go 1.18
+github.com/aarondl/opt
+github.com/aarondl/opt/internal/globaldata
 # github.com/apapsch/go-jsonmerge/v2 v2.0.0
 ## explicit; go 1.12
 github.com/apapsch/go-jsonmerge/v2
@@ -171,7 +178,7 @@ github.com/jackc/pgpassfile
 # github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a
 ## explicit; go 1.14
 github.com/jackc/pgservicefile
-# github.com/jackc/pgx/v5 v5.5.4
+# github.com/jackc/pgx/v5 v5.5.5
 ## explicit; go 1.19
 github.com/jackc/pgx/v5
 github.com/jackc/pgx/v5/internal/anynil
@@ -358,6 +365,9 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494
+## explicit; go 1.13
+github.com/qdm12/reprint
 # github.com/r3labs/diff/v3 v3.0.1
 ## explicit; go 1.13
 github.com/r3labs/diff/v3
@@ -371,6 +381,25 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 ## explicit; go 1.12
 github.com/spf13/pflag
+# github.com/stephenafamo/bob v0.28.0
+## explicit; go 1.22
+github.com/stephenafamo/bob
+github.com/stephenafamo/bob/clause
+github.com/stephenafamo/bob/dialect/psql
+github.com/stephenafamo/bob/dialect/psql/dialect
+github.com/stephenafamo/bob/dialect/psql/dm
+github.com/stephenafamo/bob/dialect/psql/im
+github.com/stephenafamo/bob/dialect/psql/sm
+github.com/stephenafamo/bob/dialect/psql/um
+github.com/stephenafamo/bob/expr
+github.com/stephenafamo/bob/internal
+github.com/stephenafamo/bob/internal/mappings
+github.com/stephenafamo/bob/mods
+github.com/stephenafamo/bob/orm
+# github.com/stephenafamo/scan v0.6.1
+## explicit; go 1.18
+github.com/stephenafamo/scan
+github.com/stephenafamo/scan/stdscan
 # github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 ## explicit; go 1.21
 github.com/stolostron/siteconfig/api/v1alpha1
