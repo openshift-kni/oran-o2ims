@@ -2,6 +2,7 @@ package alertmanager
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -11,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 var _ = Describe("Alertmanager", func() {
@@ -49,7 +52,8 @@ var _ = Describe("Alertmanager", func() {
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, secret)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(secret.Data[secretKey]).To(Equal(alertManagerConfig))
+			data := strings.Replace(string(alertManagerConfig), "{{ .url }}", utils.GetServiceURL(utils.InventoryAlarmServerName), 1)
+			Expect(secret.Data[secretKey]).To(Equal([]byte(data)))
 		})
 	})
 })

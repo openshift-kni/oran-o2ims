@@ -120,8 +120,8 @@ type ResourceServerConfig struct {
 	Extensions []string `json:"extensions,omitempty"`
 }
 
-// AlarmSubscriptionServerConfig contains the configuration for the alarm subscription server.
-type AlarmSubscriptionServerConfig struct {
+// AlarmServerConfig contains the configuration for the alarm server.
+type AlarmServerConfig struct {
 	//+kubebuilder:default:={enabled:true}
 	ServerConfig `json:",inline"`
 }
@@ -148,10 +148,10 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	ResourceServerConfig ResourceServerConfig `json:"resourceServerConfig,omitempty"`
-	// AlarmSubscriptionServerConfig contains the configuration for the alarm server.
+	// AlarmServerConfig contains the configuration for the alarm server.
 	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Alarm Subscription Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	AlarmSubscriptionServerConfig AlarmSubscriptionServerConfig `json:"alarmSubscriptionServerConfig"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Alarm Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	AlarmServerConfig AlarmServerConfig `json:"alarmServerConfig"`
 	// IngressHost defines the FQDN for the IMS endpoints.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ingress Host",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -175,6 +175,8 @@ type DeploymentsStatus struct {
 	MetadataServerStatus string `json:"metadataServerStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Resource Server Status"
 	ResourceServerStatus string `json:"resourceServerStatus,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Alarm Server Status"
+	AlarmServerStatus string `json:"alarmServerStatus,omitempty"`
 }
 
 type UsedServerConfig struct {

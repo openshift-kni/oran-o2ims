@@ -26,13 +26,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sptr "k8s.io/utils/ptr"
+
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -48,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=view.open-cluster-management.io,resources=managedclusterviews,verbs=create
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
@@ -63,7 +65,7 @@ import (
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="cluster.open-cluster-management.io",resources=managedclusters,verbs=get;list;watch
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch;update
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
@@ -321,16 +323,35 @@ func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context,
 	return
 }
 
-// setupAlarmSubscriptionServerConfig creates the resources necessary to start the Alarm Subscription Server.
-func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+// setupAlarmServerConfig creates the resources necessary to start the Alarm Server.
+func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	// Create the needed ServiceAccount.
-	err = t.createServiceAccount(ctx, utils.InventoryAlarmSubscriptionServerName)
+	err = t.createServiceAccount(ctx, utils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy ServiceAccount for Alarm Subscription server.",
+			"Failed to deploy ServiceAccount for the alarm server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createAlarmServerClusterRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create alarm server cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createAlarmServerClusterRoleBinding(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create alarm server cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
@@ -338,33 +359,33 @@ func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context,
 
 	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
 	// API requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryAlarmSubscriptionServerName)
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create alarm subscription RBAC proxy cluster role binding",
+			"Failed to create alarm server RBAC proxy cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the Service needed for the alarm subscription server.
-	err = t.createService(ctx, utils.InventoryAlarmSubscriptionServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	// Create the Service needed for the alarm server.
+	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy Service for Alarm Subscription server.",
+			"Failed to deploy Service for alarm server.",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the alarm subscription-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryAlarmSubscriptionServerName)
+	// Create the alarm-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy the alarm subscription server.",
+			"Failed to deploy the alarm server.",
 			slog.String("error", err.Error()),
 		)
 		if errorReason == "" {
@@ -373,7 +394,7 @@ func (t *reconcilerTask) setupAlarmSubscriptionServerConfig(ctx context.Context,
 		}
 	}
 
-	return
+	return nextReconcile, err
 }
 
 // setupOAuthClient is a wrapper around the similarly named method in the utils package.  The purpose for this wrapper
@@ -633,7 +654,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 
 	// Create the needed Ingress if at least one server is required by the Spec.
 	if t.object.Spec.MetadataServerConfig.Enabled || t.object.Spec.DeploymentManagerServerConfig.Enabled ||
-		t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmSubscriptionServerConfig.Enabled {
+		t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmServerConfig.Enabled {
 		err = t.createIngress(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -656,9 +677,17 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
+	// Start the alarm server if required by the Spec.
+	if t.object.Spec.AlarmServerConfig.Enabled {
+		// Create the resources required by the alarm server
+		nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
+		if err != nil {
+			return
+		}
+	}
+
 	// Start the resource server if required by the Spec.
 	if t.object.Spec.ResourceServerConfig.Enabled {
-		// The ResourceServer requires the searchAPIBackendURL. Check it has been defined.
 		// Create the needed ServiceAccount.
 		nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
 		if err != nil {
@@ -684,10 +713,10 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
-	// Start the alarm subscription server if required by the Spec.
-	if t.object.Spec.AlarmSubscriptionServerConfig.Enabled {
-		// Create the alarm subscription server.
-		nextReconcile, err = t.setupAlarmSubscriptionServerConfig(ctx, nextReconcile)
+	// Start the alarm server if required by the Spec.
+	if t.object.Spec.AlarmServerConfig.Enabled {
+		// Create the alarm server.
+		nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
 		if err != nil {
 			return
 		}
@@ -950,6 +979,109 @@ func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Cont
 	return nil
 }
 
+func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", t.object.Namespace, utils.InventoryAlarmServerName,
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{
+					"cluster.open-cluster-management.io",
+				},
+				Resources: []string{
+					"managedclusters",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"services",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"secrets",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"update",
+				},
+			},
+			{
+				APIGroups: []string{
+					"monitoring.coreos.com",
+				},
+				Resources: []string{
+					"prometheusrules",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Alarm Server cluster role: %w", err)
+	}
+
+	return nil
+}
+
+func (t *reconcilerTask) createAlarmServerClusterRoleBinding(ctx context.Context) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.InventoryAlarmServerName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.InventoryAlarmServerName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: t.object.Namespace,
+				Name:      utils.InventoryAlarmServerName,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Alarm Server cluster role binding: %w", err)
+	}
+
+	return nil
+}
+
 // createServerRbacClusterRoleBinding attaches the kube-rbac-proxy cluster role to the server's service account so that
 // its instance of the kube-rbac-proxy can access the kubernetes API via the service account credentials.
 func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context, serverName string) error {
@@ -1030,6 +1162,26 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	// Disable privilege escalation for the RBAC proxy
 	privilegeEscalation := false
 
+	var envVars []corev1.EnvVar
+	if utils.HasDatabase(serverName) {
+		envVarName, err := utils.GetServerDatabasePasswordName(serverName)
+		if err != nil {
+			return "", fmt.Errorf("failed to get server database password: %w", err)
+		}
+		envVar := corev1.EnvVar{
+			Name: envVarName,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-passwords", utils.InventoryDatabaseServerName),
+					},
+					Key: envVarName,
+				},
+			},
+		}
+		envVars = append(envVars, envVar)
+	}
+
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
 		Replicas: k8sptr.To(int32(1)),
@@ -1095,6 +1247,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 						VolumeMounts:    deploymentVolumeMounts,
 						Command:         []string{"/usr/bin/oran-o2ims"},
 						Args:            deploymentContainerArgs,
+						Env:             envVars,
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          "api",
@@ -1116,14 +1269,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         []string{"/usr/bin/oran-o2ims"},
 				Args:            []string{serverName, "migrate"},
-				EnvFrom: []corev1.EnvFromSource{
-					{
-						SecretRef: &corev1.SecretEnvSource{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: fmt.Sprintf("%s-passwords", utils.InventoryDatabaseServerName)},
-						},
-					},
-				},
+				Env:             envVars,
 			},
 		}
 	}
@@ -1283,14 +1429,14 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureMonitoring/v1/alarmSubscriptions",
+								Path: "/O2ims_infrastructureMonitoring",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "alarm-subscription-server",
+										Name: "alarms-server",
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.InventoryIngressName,
 										},
@@ -1432,6 +1578,10 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) error {
 
 	t.logger.InfoContext(ctx, "[updateInventoryDeploymentStatus]")
+	if t.object.Spec.AlarmServerConfig.Enabled {
+		t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
+	}
+
 	if t.object.Spec.MetadataServerConfig.Enabled {
 		t.updateInventoryStatusConditions(ctx, utils.InventoryMetadataServerName)
 	}

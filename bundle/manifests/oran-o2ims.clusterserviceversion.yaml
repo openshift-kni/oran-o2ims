@@ -128,9 +128,6 @@ metadata:
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "alarmSubscriptionServerConfig": {
-              "enabled": false
-            },
             "caBundleName": "o2ims-custom-ca-certs",
             "cloudID": "b7dcb3ff-583d-42d9-abb5-f484386fc688",
             "smo": {
@@ -670,10 +667,9 @@ spec:
         name: ""
         version: apps/v1
       specDescriptors:
-      - description: AlarmSubscriptionServerConfig contains the configuration for
-          the alarm server.
-        displayName: Alarm Subscription Server Configuration
-        path: alarmSubscriptionServerConfig
+      - description: AlarmServerConfig contains the configuration for the alarm server.
+        displayName: Alarm Server Configuration
+        path: alarmServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
@@ -801,6 +797,8 @@ spec:
         path: conditions
       - displayName: Deployments Status
         path: deploymentStatus
+      - displayName: Alarm Server Status
+        path: deploymentStatus.alarmServerStatus
       - displayName: Deployment Server Status
         path: deploymentStatus.deploymentServerStatus
       - displayName: Metadata Server Status
@@ -1105,6 +1103,14 @@ spec:
           - imagebasedgroupupgrades/status
           verbs:
           - get
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - prometheusrules
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - networking.k8s.io
           resources:

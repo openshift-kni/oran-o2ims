@@ -27,7 +27,7 @@ import (
 // Alarm server config values
 const (
 	host         = "127.0.0.1"
-	port         = "8080"
+	port         = "8000"
 	readTimeout  = 5 * time.Second
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second

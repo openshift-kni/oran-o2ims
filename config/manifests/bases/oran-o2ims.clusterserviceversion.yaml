@@ -105,10 +105,9 @@ spec:
         name: ""
         version: apps/v1
       specDescriptors:
-      - description: AlarmSubscriptionServerConfig contains the configuration for
-          the alarm server.
-        displayName: Alarm Subscription Server Configuration
-        path: alarmSubscriptionServerConfig
+      - description: AlarmServerConfig contains the configuration for the alarm server.
+        displayName: Alarm Server Configuration
+        path: alarmServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
@@ -236,6 +235,8 @@ spec:
         path: conditions
       - displayName: Deployments Status
         path: deploymentStatus
+      - displayName: Alarm Server Status
+        path: deploymentStatus.alarmServerStatus
       - displayName: Deployment Server Status
         path: deploymentStatus.deploymentServerStatus
       - displayName: Metadata Server Status
