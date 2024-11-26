@@ -413,7 +413,7 @@ sync-submodules:
 ##@ O-RAN Alarms Server
 
 .PHNOY: alarms
-alarms: undeploy uninstall deploy clean-am-service connect-postgres run-alarms-migrate create-am-service run-alarms ##Run full alarms stack
+alarms: bundle deploy clean-am-service connect-postgres run-alarms-migrate create-am-service run-alarms ##Run full alarms stack
 
 create-am-service: ##Creates alarm manager service and endpoint to expose a DNS entry.
 	oc apply -k ./internal/service/alarms/k8s/base --wait=true
@@ -425,10 +425,10 @@ clean-am-service: ##Deletes alarm manager service and endpoint.
 
 .PHONY: run-alarms
 run-alarms: go-generate binary ##Run alarms server locally
-	$(LOCALBIN)/$(BINARY_NAME) alarms-server serve
+	POSTGRES_HOSTNAME=localhost ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server serve
 
 run-alarms-migrate: binary ##Migrate all the way up
-	ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
+	DEBUG=yes POSTGRES_HOSTNAME=localhost INSECURE_SKIP_VERIFY=true ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
 
 run-resources-migrate: binary ##Migrate all the way up
 	ORAN_O2IMS_RESOURCES_PASSWORD=$(ORAN_O2IMS_RESOURCES_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) resource-server migrate
