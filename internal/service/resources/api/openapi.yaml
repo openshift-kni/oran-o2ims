@@ -590,6 +590,10 @@ components:
           type: string
           description: Provider of the Resource.
           example: "Some Corporation, Inc."
+        model:
+            type: string
+            description: Information about the model of the resource as defined by its provider.
+            example: "X-1000"
         version:
           type: string
           description: Version or generation of the resource as defined by its provider.
