@@ -92,6 +92,8 @@ func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNames
 	// Modify the secret metadata to set the target namespace and remove resourceVersion
 	secret.ObjectMeta.Namespace = targetNamespace
 	secret.ObjectMeta.ResourceVersion = ""
+	// Remove any existing owner references
+	secret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{}
 
 	// Create the secret in the target namespace
 	err = CreateK8sCR(ctx, c, secret, nil, UPDATE)
