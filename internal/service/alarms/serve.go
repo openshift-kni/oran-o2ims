@@ -18,9 +18,9 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
@@ -67,7 +67,7 @@ func Serve() error {
 	}()
 
 	// Get client for hub
-	hubClient, err := k8s_client.NewClientForHub()
+	hubClient, err := k8s.NewClientForHub()
 	if err != nil {
 		return fmt.Errorf("error creating client for hub: %w", err)
 	}

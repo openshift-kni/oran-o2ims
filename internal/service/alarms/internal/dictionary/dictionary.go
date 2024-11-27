@@ -13,8 +13,9 @@ import (
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
 const (
@@ -115,7 +116,7 @@ func (r *AlarmDictionary) processHub(ctx context.Context) ([]monitoringv1.Rule, 
 }
 
 // Needed for testing
-var getClientForCluster = k8s_client.NewClientForCluster
+var getClientForCluster = k8s.NewClientForCluster
 
 // processCluster processes a cluster resource type
 func (r *AlarmDictionary) processCluster(ctx context.Context, version string) ([]monitoringv1.Rule, error) {
@@ -145,7 +146,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 	versionSelector, _ := labels.NewRequirement(managedClusterVersionLabel, selection.Equals, []string{version})
 	localClusterRequirement, _ := labels.NewRequirement(localClusterLabel, selection.NotEquals, []string{"true"})
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, k8s_client.ListRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
 
 	var managedClusters clusterv1.ManagedClusterList
@@ -166,7 +167,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 
 // getRules gets rules defined within a PrometheusRule resource
 func (r *AlarmDictionary) getRules(ctx context.Context, cl crclient.Client) ([]monitoringv1.Rule, error) {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, k8s_client.ListRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
 
 	var promRules monitoringv1.PrometheusRuleList

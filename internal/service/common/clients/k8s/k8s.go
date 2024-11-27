@@ -1,9 +1,8 @@
-package k8s_client
+package k8s
 
 import (
 	"context"
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -17,13 +16,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
 const (
-	ListRequestTimeout   = 30 * time.Second
-	SingleRequestTimeout = 10 * time.Second
-
 	// https://gist.github.com/dlbewley/f57eb2bb5b69d2db0df7b171329a68cc
 	secretTypeLabel      = "hive.openshift.io/secret-type"
 	secretTypeLabelValue = "kubeconfig"
@@ -81,7 +78,7 @@ func getClusterKubeConfigFromSecret(ctx context.Context, hubClient client.Client
 	selector := labels.NewSelector()
 	kubeConfigSelector, _ := labels.NewRequirement(secretTypeLabel, selection.Equals, []string{secretTypeLabelValue})
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, ListRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
 
 	var secrets corev1.SecretList

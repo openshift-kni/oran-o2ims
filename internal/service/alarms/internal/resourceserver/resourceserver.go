@@ -2,8 +2,6 @@ package resourceserver
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,8 +10,8 @@ import (
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 )
 
 const (
@@ -41,23 +39,9 @@ func New() (*ResourceServer, error) {
 	}
 
 	// Set up transport
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			// #nosec G402: InsecureSkipVerify set true.
-			InsecureSkipVerify: utils.GetTLSSkipVerify(),
-		},
-	}
-
-	if !tr.TLSClientConfig.InsecureSkipVerify {
-		tr.TLSClientConfig.RootCAs = x509.NewCertPool()
-		data, err := os.ReadFile(utils.DefaultServiceCAFile)
-		if err != nil {
-			// Should never happen
-			return nil, fmt.Errorf("failed to read CA file: %w", err)
-		}
-
-		tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(data)
+	tr, err := utils.GetDefaultBackendTransport()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http transport: %w", err)
 	}
 
 	hc := http.Client{Transport: tr}
@@ -106,7 +90,7 @@ func (r *ResourceServer) GetAll(ctx context.Context) error {
 
 // GetResourceTypes lists all resource types
 func (r *ResourceServer) GetResourceTypes(ctx context.Context) (*[]ResourceType, error) {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, k8s_client.ListRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.SingleRequestTimeout)
 	defer cancel()
 
 	resp, err := r.client.GetResourceTypesWithResponse(ctxWithTimeout, nil)
