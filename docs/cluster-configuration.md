@@ -72,7 +72,8 @@ The `status.conditions` records the success/failure of the update.
 
 The cluster configuration goes to the `ManagedCluster` CR and the nodes configuration to the corresponding `BMH`s, as expected.
 
-**Note**: ManagedCluster and node extra labels&annotations are the only fields that can be edited post installation. All the other fields are immutable and are rejected by the O-Cloud Manager. These changes would be rejected anyway by webhooks put in place by other operators for cluster installation resources (ex: `ClusterDeployment`)
+**Note**: ManagedCluster and node extra labels&annotations are the only fields that can be edited post installation. All the other fields are immutable and are rejected by the O-Cloud Manager.
+These changes would be rejected anyway by webhooks put in place by other operators for cluster installation resources (ex: `ClusterDeployment`)
 
 ### Updates to the policyTemplateParameters field under ProvisioningRequest spec.templateParameters
 
@@ -124,7 +125,8 @@ metadata:
   namespace: ztp-sno-ran-du-v4-Y-Z
 ```
 
-Once a policy matched with a ManagedCluster deployed through a ProvisioningRequest becomes `NonCompliant`, it's reflected in the ProvisioningRequest `status.extensions.policies` and the time when it becomes `NonCompliant` is also recorded. The `ConfigurationApplied` condition reflects that the configuration is being applied.
+Once a policy matched with a ManagedCluster deployed through a ProvisioningRequest becomes `NonCompliant`, it's reflected in the ProvisioningRequest `status.extensions.policies` and the time when it becomes `NonCompliant`
+is also recorded. The `ConfigurationApplied` condition reflects that the configuration is being applied.
 
 ```yaml
 status:

@@ -7,7 +7,9 @@ Note: this flow is useful if a DNS configuration is mandatory. E.g. for using th
 ## Deployment
 
 ### Requirements
+
 Ensure libvirt is available on the host:
+
 ```bash
 sudo yum -y install libvirt libvirt-daemon-driver-qemu qemu-kvm
 sudo usermod -aG qemu,libvirt $(id -un)
@@ -16,6 +18,7 @@ sudo systemctl enable --now libvirtd
 ```
 
 ### Clone dev-scripts
+
 ```bash
 git clone https://github.com/openshift-metal3/dev-scripts
 ```
@@ -23,19 +26,24 @@ git clone https://github.com/openshift-metal3/dev-scripts
 ### Configuration
 
 #### Create a config file
+
 ```bash
 cp config_example.sh config_$USER.sh
 ```
 
 #### Set CI_TOKEN
-Go to https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com/, click on your name in the top
+
+Go to <https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com/>, click on your name in the top
 right, copy the login command, extract the token from the command and use it to set `CI_TOKEN` in `config_$USER.sh`.
 
 #### Get pull secret
-Rename the secret obtained from [cloud.openshift.com](https://cloud.redhat.com/openshift/install/pull-secret), originally pull_secret.txt into JSON format as `pull_secret.json`. 
+
+Rename the secret obtained from [cloud.openshift.com](https://cloud.redhat.com/openshift/install/pull-secret), originally pull_secret.txt into JSON format as `pull_secret.json`.
 
 #### Set config vars
+
 Add the following the `config_$USER.sh` file:
+
 ```bash
 # Control plane
 export NUM_MASTERS=3
@@ -58,12 +66,14 @@ export REDFISH_EMULATOR_IGNORE_BOOT_DEVICE=True
 ### Installation
 
 #### Deploy env
+
 ```bash
 cd dev-scripts
 make
 ```
 
 #### Destroy env
+
 ```bash
 cd dev-scripts
 make clean
@@ -72,6 +82,7 @@ make clean
 ## Access the hub cluster
 
 ### kubeconfig
+
 ```bash
 export KUBECONFIG=/home/$USER/dev-scripts/ocp/ostest/auth/kubeconfig
 ```
@@ -79,6 +90,7 @@ export KUBECONFIG=/home/$USER/dev-scripts/ocp/ostest/auth/kubeconfig
 ### Web Console
 
 #### Configure the local /etc/hosts
+
 ```bash
 <host_ip> console-openshift-console.apps.ostest.test.metalkube.org oauth-openshift.apps.ostest.test.metalkube.org grafana-open-cluster-management-observability.apps.ostest.test.metalkube.org observatorium-api-open-cluster-management-observability.apps.ostest.test.metalkube.org alertmanager-open-cluster-management-observability.apps.ostest.test.metalkube.org
 ```
@@ -86,18 +98,23 @@ export KUBECONFIG=/home/$USER/dev-scripts/ocp/ostest/auth/kubeconfig
 #### Install and configure xinetd
 
 ##### Install
+
 ```bash
 sudo dnf install xinetd
 ```
 
 ##### Find API VIP
+
 ```bash
 cat /etc/NetworkManager/dnsmasq.d/openshift-ostest.conf
 ```
+
 E.g. address=/.apps.ostest.test.metalkube.org/11.0.0.4
 
 ##### Add config file
-*/etc/xinetd.d/openshift*
+
+/etc/xinetd.d/openshift
+
 ```bash
 service openshift-ingress-ssl
 {
@@ -119,22 +136,28 @@ service openshift-ingress-ssl
 ```
 
 ##### Restart xinetd
+
 ```bash
 sudo systemctl restart xinetd
 ```
 
 #### Access the Web Console
-Navigate to: https://console-openshift-console.apps.ostest.test.metalkube.org
+
+Navigate to: <https://console-openshift-console.apps.ostest.test.metalkube.org>
+
 * User: kubeadmin
 * Password: `cat /home/$USER/dev-scripts/ocp/ostest/auth/kubeadmin-password`
 
 ## ACM configuration
+
 See details [here](./env_acm.md).
 
 ## Deploy spoke clusters
 
 ### Enable assisted-service
+
 oc apply -f asc.yaml
+
 ```bash
 apiVersion: agent-install.openshift.io/v1beta1
 kind: AgentServiceConfig
@@ -162,11 +185,15 @@ spec:
 ```
 
 ### Clone assited-service repo and create a deploy.sh script
+
 Clone assited-service repo
+
 ```bash
 git clone https://github.com/openshift/assisted-service.git
 ```
+
 Under the cloned repo path create and populate: /assisted-service/deploy/operator/ztp/deploy.sh.
+
 ```bash
 # Spoke
 export SPOKE_NAME="spoke$1"
@@ -188,11 +215,13 @@ export EXTRA_BAREMETALHOSTS_FILE=/home/$USER/dev-scripts/ocp/ostest/bmh.json
 ```
 
 ### Patch BMO Provisioning
+
 ```bash
 oc patch provisioning provisioning-configuration --type='merge' -p '{"spec":{"watchAllNamespaces":true}}'
 ```
 
 ### Run deploy script
+
 ```bash
 chmod +x deploy.sh
 # Deploy spoke0
@@ -200,7 +229,9 @@ chmod +x deploy.sh
 # Deploy spoke1
 ./deploy.sh 1
 ```
+
 Note: if an Agent is not discovered for a while, ssh to the machine and start agent.service.
+
 ```bash
 export IP=$(virsh net-dhcp-leases ostestbm | grep extraworker-0 | awk '{print $5}' | head -c -4)
 ssh core@$IP
@@ -208,10 +239,13 @@ sudo systemctl start agent
 ```
 
 ### Import a spoke cluster
+
 Navigate to web console:
+
 * All Clusters > Infrastructure > Clusters > Cluster list > spoke0 > Actions > Import cluster
 
 ### Access a spoke cluster
+
 ```bash
 # Update /etc/hosts
 export SPOKE_APIVIP=$(oc -n spoke0 get aci spoke0 -o json | jq -r '.status.apiVIP')
