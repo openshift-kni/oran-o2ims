@@ -8,17 +8,16 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
-
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
-
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
-
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
 type AlarmsServer struct {
 	AlarmsRepository *repo.AlarmsRepository
+	ResourceServer   *resourceserver.ResourceServer
 }
 
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
