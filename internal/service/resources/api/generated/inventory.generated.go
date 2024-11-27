@@ -754,37 +754,37 @@ type GetResourceTypesParams struct {
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Get API versions
-	// (GET /O2ims-infrastructureInventory/api_versions)
+	// (GET /o2ims-infrastructureInventory/api_versions)
 	GetAllVersions(w http.ResponseWriter, r *http.Request, params GetAllVersionsParams)
 	// Get O-Cloud info
-	// (GET /O2ims-infrastructureInventory/v1)
+	// (GET /o2ims-infrastructureInventory/v1)
 	GetCloudInfo(w http.ResponseWriter, r *http.Request, params GetCloudInfoParams)
 	// Get minor API versions
-	// (GET /O2ims-infrastructureInventory/v1/api_versions)
+	// (GET /o2ims-infrastructureInventory/v1/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request, params GetMinorVersionsParams)
 	// Get deployment managers
-	// (GET /O2ims-infrastructureInventory/v1/deploymentManagers)
+	// (GET /o2ims-infrastructureInventory/v1/deploymentManagers)
 	GetDeploymentManagers(w http.ResponseWriter, r *http.Request, params GetDeploymentManagersParams)
 	// Get deployment manager
-	// (GET /O2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId})
+	// (GET /o2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId})
 	GetDeploymentManager(w http.ResponseWriter, r *http.Request, deploymentManagerId DeploymentManagerId, params GetDeploymentManagerParams)
 	// Get resource pools
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools)
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools)
 	GetResourcePools(w http.ResponseWriter, r *http.Request, params GetResourcePoolsParams)
 	// Get a resource pool
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId})
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId})
 	GetResourcePool(w http.ResponseWriter, r *http.Request, resourcePoolId ResourcePoolId)
 	// Get resources in a resource pool
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources)
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources)
 	GetResources(w http.ResponseWriter, r *http.Request, resourcePoolId ResourcePoolId, params GetResourcesParams)
 	// Get a resource in a resource pool
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId})
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId})
 	GetResource(w http.ResponseWriter, r *http.Request, resourcePoolId ResourcePoolId, resourceId ResourceId)
 	// Get resource types
-	// (GET /O2ims-infrastructureInventory/v1/resourceTypes)
+	// (GET /o2ims-infrastructureInventory/v1/resourceTypes)
 	GetResourceTypes(w http.ResponseWriter, r *http.Request, params GetResourceTypesParams)
 	// Get a resource type
-	// (GET /O2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId})
+	// (GET /o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId})
 	GetResourceType(w http.ResponseWriter, r *http.Request, resourceTypeId ResourceTypeId)
 }
 
@@ -1331,17 +1331,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/api_versions", wrapper.GetAllVersions)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1", wrapper.GetCloudInfo)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/api_versions", wrapper.GetMinorVersions)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/deploymentManagers", wrapper.GetDeploymentManagers)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}", wrapper.GetDeploymentManager)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/resourcePools", wrapper.GetResourcePools)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}", wrapper.GetResourcePool)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources", wrapper.GetResources)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}", wrapper.GetResource)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/resourceTypes", wrapper.GetResourceTypes)
-	m.HandleFunc("GET "+options.BaseURL+"/O2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}", wrapper.GetResourceType)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/api_versions", wrapper.GetAllVersions)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1", wrapper.GetCloudInfo)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/api_versions", wrapper.GetMinorVersions)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/deploymentManagers", wrapper.GetDeploymentManagers)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}", wrapper.GetDeploymentManager)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourcePools", wrapper.GetResourcePools)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}", wrapper.GetResourcePool)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources", wrapper.GetResources)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}", wrapper.GetResource)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourceTypes", wrapper.GetResourceTypes)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}", wrapper.GetResourceType)
 
 	return m
 }
@@ -1782,37 +1782,37 @@ func (response GetResourceType500ApplicationProblemPlusJSONResponse) VisitGetRes
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Get API versions
-	// (GET /O2ims-infrastructureInventory/api_versions)
+	// (GET /o2ims-infrastructureInventory/api_versions)
 	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
 	// Get O-Cloud info
-	// (GET /O2ims-infrastructureInventory/v1)
+	// (GET /o2ims-infrastructureInventory/v1)
 	GetCloudInfo(ctx context.Context, request GetCloudInfoRequestObject) (GetCloudInfoResponseObject, error)
 	// Get minor API versions
-	// (GET /O2ims-infrastructureInventory/v1/api_versions)
+	// (GET /o2ims-infrastructureInventory/v1/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 	// Get deployment managers
-	// (GET /O2ims-infrastructureInventory/v1/deploymentManagers)
+	// (GET /o2ims-infrastructureInventory/v1/deploymentManagers)
 	GetDeploymentManagers(ctx context.Context, request GetDeploymentManagersRequestObject) (GetDeploymentManagersResponseObject, error)
 	// Get deployment manager
-	// (GET /O2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId})
+	// (GET /o2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId})
 	GetDeploymentManager(ctx context.Context, request GetDeploymentManagerRequestObject) (GetDeploymentManagerResponseObject, error)
 	// Get resource pools
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools)
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools)
 	GetResourcePools(ctx context.Context, request GetResourcePoolsRequestObject) (GetResourcePoolsResponseObject, error)
 	// Get a resource pool
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId})
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId})
 	GetResourcePool(ctx context.Context, request GetResourcePoolRequestObject) (GetResourcePoolResponseObject, error)
 	// Get resources in a resource pool
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources)
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources)
 	GetResources(ctx context.Context, request GetResourcesRequestObject) (GetResourcesResponseObject, error)
 	// Get a resource in a resource pool
-	// (GET /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId})
+	// (GET /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId})
 	GetResource(ctx context.Context, request GetResourceRequestObject) (GetResourceResponseObject, error)
 	// Get resource types
-	// (GET /O2ims-infrastructureInventory/v1/resourceTypes)
+	// (GET /o2ims-infrastructureInventory/v1/resourceTypes)
 	GetResourceTypes(ctx context.Context, request GetResourceTypesRequestObject) (GetResourceTypesResponseObject, error)
 	// Get a resource type
-	// (GET /O2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId})
+	// (GET /o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId})
 	GetResourceType(ctx context.Context, request GetResourceTypeRequestObject) (GetResourceTypeResponseObject, error)
 }
 
@@ -2203,30 +2203,30 @@ var swaggerSpec = []string{
 	"u+7e6GDXHeFx6GL/8MjFw4OD3cHRUTg+HK6T+LruRG0jTX5CvW49EtywGNAp4wnjOqD00IT6/fZ1VvVI",
 	"8Kwg1ebYGtyYzghvoU+1thTEqwzdD3eHo/5gsHYizOF9S6orX5iyACKn2EYjBDo1s6073spjQMsbjidX",
 	"k87WkrakWmv0OLmatGXWkiYKuQ36u/01615LGRXrcZo1GFhexAqWcULK9HO2P5R2Y7egstNa9aXl8m4p",
-	"JaScXHEIyS9Vye3oGqRLaMixkDz1ZcohL0Pu3A+2luoVZ14E8RlITCLRvMzAOdY5yToIap9fVcYvv/l0",
-	"TuiiVJUqiBT9CaJX9kNCS01G1mu5bd4lSjgKAOCsXb0l5attNc3lBM1VBnTzDAi/JBGmZoG8p0knWyKy",
-	"nnD7zrXpQtFSq4aFU0Yp+FkRTKVrDwtAksQQKBDVFrHyAkMLi7pAnb/fp6/ASNFNo/s/Mk67OURTOpEo",
-	"xgu00O0uYcpNa3LJYUiIAshXsq3BRVDnpLW8LrFMO6q7b25vr5AZgHwWQNGJs1SU+ZKEloRFqIQZcO0t",
-	"REatotItyb26UkUa616h6komUaOJzJpp9Mug5hUAfUQv8ShZN8c9/f0KkEjT/ZlyhWR1kNGFfou++2gS",
-	"GnxDhG4xp6X+cP0+69TRAevYizD9PHXsTWzuD7aXDUdCN69nlxMd/XOy9XBUtyXs+4wHusjA0OT89jW6",
-	"fn2K9o4Ox+jD3sdWU2sIT98W+yzleKaAa9ZEqBbKLpqntKaQgPlp7rA5WslIfwf9Wd98BcSb24u3r9DD",
-	"HGjVMlHxhloMOorY12YTDgKo7E2pStt5zxsWIo3zxv+apLtuszOLLMmw77N4pU/Ukr91kDwINfPxoz0z",
-	"cIqjM+aLrpZHcwGVH3PQTSUeHvR30XeXvmRKHAqZvHJUHolKO6oEUNFnLse0z/hsJ2APNGI4+FcS/HAw",
-	"OjIRydxp1yzoamJ7DMxFaDkPFfdhWqAR8YEKbYX2xaaTBPtzQEOd/KucPTw89LF+rPmxc8XO28np+bub",
-	"c3fY3+3PZRyVvN9ZzoNK7yUMlafsnmNTnnPs7FkgkmA511JfkV9VorwvYYMZyKaIrvVbkMJWlOyroRkG",
-	"UfLLcUieuAr4bS8OjUmat1KyUsGPIE+iKIcmvco34Xxoxx/FkJ2V35Tz2NuGhv1CDYWEOIiEKa0pmQx3",
-	"d01LAZVApcFVSWRNb+dnYTBh8Sbb1uhJGP+pfS1H6vsghOmhYZ7EGkS0aiTThhL5Y88ZLeXbhoR/eTL/",
-	"NbjVsoV/w4G+iwOhEcz+t8JXdqefdRwB54z3ddSzedbYasXUs4uK4w9OVsJwPqopqwHtOm5mIqvobERo",
-	"96aidedP5EulhqWN/GYNEb94zzN6TyFgbZ9bes/mGSsLizGhjHenqxzIx/hnxjuLAQ2fu1BkX3LYBjns",
-	"xbGe17Gahv0E92r0pm/mZM32ZdHhN2fNhb4x59lysv66jyd73lpFuOZbI82mjQ0y4golvjjtMzpti4xL",
-	"XtvihVv7787XlvdNHjdFod3vGq327I0du+0Fme3c8X9LMm3x5Cdg2XZVfcP+O9odfRt83Ra1ZwiyN3If",
-	"sCnFhSylQf//Srx5lnBTbojZDClUGqC6QMJ1hfwLPtgQH1R6I58FGjS19oIKntFLq+IteWjVz7Zxzp2v",
-	"1ea1LRBAS+PsUo/d2GFr7XW/acat+sYTkm1DKi959k+cZ2te8tu6cP5YbOrMxftHug9hE88WT3br3kvm",
-	"3v71radkbfESnv7k4WmZ37fEqmePU8WjpyGQjaPW7xC0Si9E/S7I5VlQy0tEeAEs3U71HCHhdpHAlqUB",
-	"lflWlQYM+ZfSwJYAQ79z9LylgVxrL6WBLf10WWVAWnuv+6Xxg218s8jJppv/KXm5eB9tqcNunY3t+wa/",
-	"S341rvEclYFMKi+J9iXRZvawzIXtd7xkvlE0lja/a0V5gqWz+s2Rztv5rj/3YFJZ/Q+E6YbO/M29nv3j",
-	"b4TOis4aTINKw4/lo7Ja3prQXKPJehsmaPnrAmIzYqW7h5a/sbAZsXY6wnn8+Pg/AQAA//97FKUe8nEA",
-	"AA==",
+	"JaScXHEIyS9Vye2wIYmFS2jIsZA89WXKIS9D7twPtpbqFWdeBPEZSEwi0bzMwDnWOck6CGqfX1XGL7/5",
+	"dE7oolSVKogU/QmiV/ZDQktNRtZruW3eJUo4CgDgrF29JeWrbTXN5QTNVQZ08wwIvyQRpmaBvKdJJ1si",
+	"sp5w+8616ULRUquGhVNGKfhZEUylaw8LQJLEECgQ1Rax8gJDC4u6QJ2/36evwEjRTaP7PzJOuzlEUzqR",
+	"KMYLtNDtLmHKTWtyyWFIiALIV7KtwUVQ56S1vC6xTDuqu29ub6+QGYB8FkDRibNUlPmShJaERaiEGXDt",
+	"LURGraLSLcm9ulJFGuteoepKJlGjicyaafTLoOYVAH1EL/EoWTfHPf39CpBI0/2ZcoVkdZDRhX6Lvvto",
+	"Ehp8Q4RuMael/nD9PuvU0QHr2Isw/Tx17E1s7g+2lw1HQjevZ5cTHf1zsvVwVLcl7PuMB7rIwNDk/PY1",
+	"un59ivaODsfow97HVlNrCE/fFvss5XimgGvWRKgWyi6ap7SmkID5ae6wOVrJSH8H/VnffAXEm9uLt6/Q",
+	"wxxo1TJR8YZaDDqK2NdmEw4CqOxNqUrbec8bFiKN88b/mqS7brMziyzJsO+zeKVP1JK/dZA8CDXz8aM9",
+	"M3CKozPmi66WR3MBlR9z0E0lHh70d9F3l75kShwKmbxyVB6JSjuqBFDRZy7HtM/4bCdgDzRiOPhXEvxw",
+	"MDoyEcncadcs6GpiewzMRWg5DxX3YVqgEfGBCm2F9sWmkwT7c0BDnfyrnD08PPSxfqz5sXPFztvJ6fm7",
+	"m3N32N/tz2UclbzfWc6DSu8lDJWn7J5jU55z7OxZIJJgOddSX5FfVaK8L2GDGcimiK71W5DCVpTsq6EZ",
+	"BlHyy3FInrgK+G0vDo1JmrdSslLBjyBPoiiHJr3KN+F8aMcfxZCdld+U89jbhob9Qg2FhDiIhCmtKZkM",
+	"d3dNSwGVQKXBVUlkTW/nZ2EwYfEm29boSRj/qX0tR+r7IITpoWGexBpEtGok04YS+WPPGS3l24aEf3ky",
+	"/zW41bKFf8OBvosDoRHM/rfCV3ann3UcAeeM93XUs3nW2GrF1LOLiuMPTlbCcD6qKasB7TpuZiKr6GxE",
+	"aPemonXnT+RLpYaljfxmDRG/eM8zek8hYG2fW3rP5hkrC4sxoYx3p6scyMf4Z8Y7iwENn7tQZF9y2AY5",
+	"7MWxntexmob9BPdq9KZv5mTN9mXR4TdnzYW+MefZcrL+uo8ne95aRbjmWyPNpo0NMuIKJb447TM6bYuM",
+	"S17b4oVb++/O15b3TR43RaHd7xqt9uyNHbvtBZnt3PF/SzJt8eQnYNl2VX3D/jvaHX0bfN0WtWcIsjdy",
+	"H7ApxYUspUH//0q8eZZwU26I2QwpVBqgukDCdYX8Cz7YEB9UeiOfBRo0tfaCCp7RS6viLXlo1c+2cc6d",
+	"r9XmtS0QQEvj7FKP3dhha+11v2nGrfrGE5JtQyovefZPnGdrXvLbunD+WGzqzMX7R7oPYRPPFk92695L",
+	"5t7+9a2nZG3xEp7+5OFpmd+3xKpnj1PFo6chkI2j1u8QtEovRP0uyOVZUMtLRHgBLN1O9Rwh4XaRwJal",
+	"AZX5VpUGDPmX0sCWAEO/c/S8pYFcay+lgS39dFllQFp7r/ul8YNtfLPIyaab/yl5uXgfbanDbp2N7fsG",
+	"v0t+Na7xHJWBTCovifYl0Wb2sMyF7Xe8ZL5RNJY2v2tFeYKls/rNkc7b+a4/92BSWf0PhOmGzvzNvZ79",
+	"42+EzorOGkyDSsOP5aOyWt6a0FyjyXobJmj56wJiM2Klu4eWv7GwGbF2OsJ5/Pj4PwEAAP//yw32VfJx",
+	"AAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
