@@ -95,8 +95,8 @@ spec:
                       default values for ClusterInstance
                     type: string
                   hwTemplate:
-                    description: HwTemplate defines a reference to a hardware template
-                      configmap
+                    description: HwTemplate defines a reference to a HardwareTemplate
+                      resource
                     type: string
                   policyTemplateDefaults:
                     description: |-

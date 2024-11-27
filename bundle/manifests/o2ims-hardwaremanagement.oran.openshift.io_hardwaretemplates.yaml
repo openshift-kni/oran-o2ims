@@ -1,19 +1,19 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: nodepools.o2ims-hardwaremanagement.oran.openshift.io
+  creationTimestamp: null
+  name: hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io
 spec:
   group: o2ims-hardwaremanagement.oran.openshift.io
   names:
-    kind: NodePool
-    listKind: NodePoolList
-    plural: nodepools
+    kind: HardwareTemplate
+    listKind: HardwareTemplateList
+    plural: hardwaretemplates
     shortNames:
-    - orannp
-    singular: nodepool
+    - oranhwtmpl
+    singular: hardwaretemplate
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -23,10 +23,13 @@ spec:
     - jsonPath: .status.conditions[-1:].reason
       name: State
       type: string
+    - jsonPath: .status.conditions[-1:].message
+      name: Details
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: NodePool is the schema for an allocation request of nodes
+        description: HardwareTemplate is the Schema for the hardwaretemplates API
         properties:
           apiVersion:
             description: |-
@@ -46,75 +49,64 @@ spec:
           metadata:
             type: object
           spec:
-            description: NodePoolSpec describes a pool of nodes to allocate
+            description: HardwareTemplateSpec defines the desired state of HardwareTemplate
             properties:
-              cloudID:
-                description: |-
-                  CloudID is the identifier of the O-Cloud that generated this request. The hardware
-                  manager may want to use this to tag the nodes in its database, and to generate
-                  statistics.
+              bootInterfaceLabel:
+                description: BootInterfaceLabel is the label of the boot interface.
+                minLength: 1
                 type: string
               extensions:
                 additionalProperties:
                   type: string
+                description: Extensions holds additional custom key-value pairs that
+                  can be used to extend the node pool's configuration.
                 type: object
+              hardwareProvisioningTimeout:
+                description: HardwareProvisioningTimeout defines the timeout duration
+                  string for the hardware provisioning.
+                type: string
               hwMgrId:
                 description: HwMgrId is the identifier for the hardware manager plugin
                   adaptor.
+                minLength: 1
                 type: string
-              location:
-                description: Location
-                type: string
-              nodeGroup:
+              nodePoolData:
+                description: NodePoolData defines a collection of NodePoolData items
                 items:
+                  description: NodePoolData provides the necessary information for
+                    populating a node pool
                   properties:
-                    nodePoolData:
-                      description: NodePoolData provides the necessary information
-                        for populating a node pool
-                      properties:
-                        hwProfile:
-                          minLength: 1
-                          type: string
-                        name:
-                          minLength: 1
-                          type: string
-                        resourcePoolId:
-                          minLength: 1
-                          type: string
-                        role:
-                          enum:
-                          - master
-                          - worker
-                          type: string
-                      required:
-                      - hwProfile
-                      - name
-                      - resourcePoolId
-                      - role
-                      type: object
-                    size:
-                      type: integer
+                    hwProfile:
+                      minLength: 1
+                      type: string
+                    name:
+                      minLength: 1
+                      type: string
+                    resourcePoolId:
+                      minLength: 1
+                      type: string
+                    role:
+                      enum:
+                      - master
+                      - worker
+                      type: string
                   required:
-                  - nodePoolData
-                  - size
+                  - hwProfile
+                  - name
+                  - resourcePoolId
+                  - role
                   type: object
+                minItems: 1
                 type: array
-              site:
-                description: Site
-                type: string
             required:
-            - cloudID
-            - nodeGroup
-            - site
+            - bootInterfaceLabel
+            - hwMgrId
+            - nodePoolData
             type: object
           status:
-            description: |-
-              NodePoolStatus describes the observed state of a request to allocate and prepare
-              a node that will eventually be part of a deployment manager.
+            description: HardwareTemplateStatus defines the observed state of HardwareTemplate
             properties:
               conditions:
-                description: Conditions represent the latest available observations
-                  of an NodePool's state.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -183,25 +175,20 @@ spec:
                   - type
                   type: object
                 type: array
-              hwMgrPlugin:
-                description: GenerationStatus represents the observed generation for
-                  an operator.
-                properties:
-                  observedGeneration:
-                    format: int64
-                    type: integer
-                type: object
-              properties:
-                description: Properties represent the node properties in the pool
-                properties:
-                  nodeNames:
-                    items:
-                      type: string
-                    type: array
-                type: object
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: Spec changes are not allowed for a HardwareTemplate that has passed
+            the validation
+          rule: '!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type==''Validation''
+            && c.status==''False'') || oldSelf.spec == self.spec'
     served: true
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

@@ -62,16 +62,11 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	// Load hardware provisioning timeout if exists.
 	if !t.isHardwareProvisionSkipped() {
 		hwCmName := clusterTemplate.Spec.Templates.HwTemplate
-		hwCm, err := utils.GetConfigmap(
-			ctx, t.client, hwCmName, utils.InventoryNamespace)
+		hwTimeout, err := utils.GetTimeoutFromHWTemplate(ctx, t.client, hwCmName)
 		if err != nil {
-			return fmt.Errorf("failed to get ConfigMap %s: %w", hwCmName, err)
+			return fmt.Errorf("failed to get timeout from hardware template %s: %w", hwCmName, err)
 		}
-		hwTimeout, err := utils.ExtractTimeoutFromConfigMap(
-			hwCm, utils.HardwareProvisioningTimeoutConfigKey)
-		if err != nil {
-			return fmt.Errorf("failed to get timeout config for hardware provisioning: %w", err)
-		}
+
 		if hwTimeout != 0 {
 			t.timeouts.hardwareProvisioning = hwTimeout
 		}

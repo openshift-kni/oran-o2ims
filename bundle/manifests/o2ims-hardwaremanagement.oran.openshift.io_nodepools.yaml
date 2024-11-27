@@ -68,26 +68,34 @@ spec:
               nodeGroup:
                 items:
                   properties:
-                    hwProfile:
-                      type: string
-                    interfaces:
-                      items:
-                        type: string
-                      minItems: 1
-                      type: array
-                    name:
-                      type: string
-                    resourcePoolId:
-                      type: string
-                    role:
-                      type: string
+                    nodePoolData:
+                      description: NodePoolData provides the necessary information
+                        for populating a node pool
+                      properties:
+                        hwProfile:
+                          minLength: 1
+                          type: string
+                        name:
+                          minLength: 1
+                          type: string
+                        resourcePoolId:
+                          minLength: 1
+                          type: string
+                        role:
+                          enum:
+                          - master
+                          - worker
+                          type: string
+                      required:
+                      - hwProfile
+                      - name
+                      - resourcePoolId
+                      - role
+                      type: object
                     size:
                       type: integer
                   required:
-                  - hwProfile
-                  - name
-                  - resourcePoolId
-                  - role
+                  - nodePoolData
                   - size
                   type: object
                 type: array
@@ -105,9 +113,8 @@ spec:
               a node that will eventually be part of a deployment manager.
             properties:
               conditions:
-                description: |-
-                  Conditions represent the observations of the NodePool's current state.
-                  Possible values of the condition type are `Provisioned` and `Unknown`.
+                description: Conditions represent the latest available observations
+                  of an NodePool's state.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for

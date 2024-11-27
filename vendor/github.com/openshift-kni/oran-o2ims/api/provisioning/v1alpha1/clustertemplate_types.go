@@ -64,7 +64,7 @@ type ClusterTemplateSpec struct {
 
 // Templates defines the references to the templates required for ClusterTemplate.
 type Templates struct {
-	// HwTemplate defines a reference to a hardware template configmap
+	// HwTemplate defines a reference to a HardwareTemplate resource
 	HwTemplate string `json:"hwTemplate,omitempty"`
 
 	// ClusterInstanceDefaults defines a reference to a configmap with

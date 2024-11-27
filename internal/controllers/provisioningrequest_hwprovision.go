@@ -362,6 +362,66 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	return status == metav1.ConditionTrue, timedOutOrFailed, err
 }
 
+// checkExistingNodePool checks for an existing NodePool and verifies changes if necessary
+func (t *provisioningRequestReconcilerTask) checkExistingNodePool(ctx context.Context, clusterInstance *siteconfig.ClusterInstance,
+	hwTemplate *hwv1alpha1.HardwareTemplate, nodePool *hwv1alpha1.NodePool) error {
+
+	ns := utils.GetHwMgrPluginNS()
+	exist, err := utils.DoesK8SResourceExist(ctx, t.client, clusterInstance.GetName(), ns, nodePool)
+	if err != nil {
+		return fmt.Errorf("failed to get NodePool %s in namespace %s: %w", clusterInstance.GetName(), ns, err)
+	}
+
+	if exist {
+		changed, err := utils.CompareHardwareTemplateWithNodePool(hwTemplate, nodePool)
+		if err != nil {
+			return utils.NewInputError("%w", err)
+		}
+		if changed && !utils.IsProvisioningStateFulfilled(t.object) {
+			return utils.NewInputError("hardware template changes are not allowed until the cluster provisioning is fulfilled")
+		}
+	}
+
+	return nil
+}
+
+// buildNodePoolSpec builds the NodePool spec based on the templates and cluster instance
+func (t *provisioningRequestReconcilerTask) buildNodePoolSpec(clusterInstance *siteconfig.ClusterInstance,
+	hwTemplate *hwv1alpha1.HardwareTemplate, nodePool *hwv1alpha1.NodePool) error {
+
+	roleCounts := make(map[string]int)
+	for _, node := range clusterInstance.Spec.Nodes {
+		roleCounts[node.Role]++
+	}
+
+	nodeGroups := []hwv1alpha1.NodeGroup{}
+	for _, group := range hwTemplate.Spec.NodePoolData {
+		nodeGroup := utils.NewNodeGroup(group, roleCounts)
+		nodeGroups = append(nodeGroups, nodeGroup)
+	}
+
+	siteID, err := utils.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamOCloudSiteId)
+	if err != nil {
+		return fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamOCloudSiteId, err)
+	}
+
+	nodePool.Spec.CloudID = clusterInstance.GetName()
+	nodePool.Spec.Site = siteID.(string)
+	nodePool.Spec.HwMgrId = hwTemplate.Spec.HwMgrId
+	nodePool.Spec.Extensions = hwTemplate.Spec.Extensions
+	nodePool.Spec.NodeGroup = nodeGroups
+	nodePool.ObjectMeta.Name = clusterInstance.GetName()
+	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
+
+	// Add boot interface label annotation to the generated nodePool
+	utils.SetNodePoolAnnotations(nodePool, utils.HwTemplateBootIfaceLabel, hwTemplate.Spec.BootInterfaceLabel)
+	// Add ProvisioningRequest labels to the generated nodePool
+	utils.SetNodePoolLabels(nodePool, provisioningRequestNameLabel, t.object.Name)
+
+	return nil
+}
+
 func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
 	clusterInstance *siteconfig.ClusterInstance) (*hwv1alpha1.NodePool, error) {
 
@@ -372,79 +432,35 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 		return nil, fmt.Errorf("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
 	}
 
-	hwTemplateCmName := clusterTemplate.Spec.Templates.HwTemplate
-	hwTemplateCm, err := utils.GetConfigmap(ctx, t.client, hwTemplateCmName, utils.InventoryNamespace)
+	hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
+	hwTemplate, err := utils.GetHardwareTemplate(ctx, t.client, hwTemplateName)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to get the %s configmap for Hardware Template, err: %w", hwTemplateCmName, err)
+		return nil, fmt.Errorf("failed to get the HardwareTemplate %s resource: %w ", hwTemplateName, err)
 	}
 
-	nodeGroup, err := utils.ExtractTemplateDataFromConfigMap[[]hwv1alpha1.NodeGroup](
-		hwTemplateCm, utils.HwTemplateNodePool)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to get the Hardware template from ConfigMap %s, err: %w", hwTemplateCmName, err)
-	}
-
-	// Check if the NodePool exists
-	ns := utils.GetHwMgrPluginNS()
-	exist, err := utils.DoesK8SResourceExist(ctx, t.client, clusterInstance.GetName(), ns, nodePool)
-	if err != nil {
-		return nodePool, fmt.Errorf("failed to get NodePool %s in namespace %s: %w", clusterInstance.GetName(), ns, err)
-	}
-
-	if exist {
-		// Verify the changes
-		changed, err := utils.CompareConfigMapWithNodePool(hwTemplateCm, nodePool, nodeGroup)
-		if err != nil {
-			return nodePool, utils.NewInputError("%w", err)
+	if err := t.checkExistingNodePool(ctx, clusterInstance, hwTemplate, nodePool); err != nil {
+		if utils.IsInputError(err) {
+			updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, utils.ConditionType(hwv1alpha1.Validation),
+				utils.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, err.Error())
+			if updateErr != nil {
+				// nolint: wrapcheck
+				return nil, updateErr
+			}
 		}
-		if changed && !utils.IsProvisioningStateFulfilled(t.object) {
-			return nodePool, utils.NewInputError("hardware template changes are not allowed until the cluster provisioning is fulfilled")
-		}
+		return nil, err
 	}
 
-	roleCounts := make(map[string]int)
-	err = utils.ProcessClusterNodeGroups(clusterInstance, nodeGroup, roleCounts)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to get the process node spec err: %w", err)
+	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed
+	updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, utils.ConditionType(hwv1alpha1.Validation),
+		utils.ConditionReason(hwv1alpha1.Completed), metav1.ConditionTrue, "Validated")
+	if updateErr != nil {
+		// nolint: wrapcheck
+		return nil, updateErr
 	}
 
-	for i, group := range nodeGroup {
-		if count, ok := roleCounts[group.Role]; ok {
-			nodeGroup[i].Size = count
-		}
+	if err := t.buildNodePoolSpec(clusterInstance, hwTemplate, nodePool); err != nil {
+		return nil, err
 	}
 
-	siteID, err := utils.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamOCloudSiteId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamOCloudSiteId, err)
-	}
-
-	// Extract extensions from HW Template
-	extensions, err := utils.ExtractTemplateDataFromConfigMap[map[string]string](
-		hwTemplateCm, utils.HwTemplateExtensions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.HwTemplateExtensions, err)
-	}
-
-	nodePool.Spec.CloudID = clusterInstance.GetName()
-	nodePool.Spec.Site = siteID.(string)
-	nodePool.Spec.HwMgrId = hwTemplateCm.Data[utils.HwTemplatePluginMgr]
-	nodePool.Spec.NodeGroup = nodeGroup
-	nodePool.ObjectMeta.Name = clusterInstance.GetName()
-	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
-	nodePool.Spec.Extensions = extensions
-	// Add boot interface label to the generated nodePool
-	annotation := make(map[string]string)
-	annotation[utils.HwTemplateBootIfaceLabel] = hwTemplateCm.Data[utils.HwTemplateBootIfaceLabel]
-	nodePool.SetAnnotations(annotation)
-
-	// Add ProvisioningRequest labels to the generated nodePool
-	labels := make(map[string]string)
-	labels[provisioningRequestNameLabel] = t.object.Name
-	nodePool.SetLabels(labels)
 	return nodePool, nil
 }

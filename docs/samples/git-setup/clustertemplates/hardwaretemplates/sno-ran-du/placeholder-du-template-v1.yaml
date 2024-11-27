@@ -1,15 +1,17 @@
-apiVersion: v1
-kind: ConfigMap
+apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+kind: HardwareTemplate
 metadata:
-  name: placeholder-du-template-configmap-v1
+  name: placeholder-du-template-v1
   namespace: oran-o2ims
-data:
+spec:
   # hardwareProvisioningTimeout is optional.
   # The value should be a duration string
   # (e.g., "30m" for 30 minutes)
   # hardwareProvisioningTimeout: "30m"
   hwMgrId: oran-hwmgr-plugin-test
   bootInterfaceLabel: bootable-interface
-  node-pools-data: |
-    - name: master
+  nodePoolData:
+    - name: controller
+      role: master
       hwProfile: profile-proliant-gen11-dual-processor-256G-v1
+      resourcePoolId: master-pool

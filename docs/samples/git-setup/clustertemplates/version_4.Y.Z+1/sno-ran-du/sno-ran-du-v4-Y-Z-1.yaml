@@ -8,7 +8,7 @@ spec:
   version: v4-Y-Z+1-1
   release: 4.Y.Z+1
   templates:
-    hwTemplate: placeholder-du-template-configmap-v1
+    hwTemplate: placeholder-du-template-v1
     clusterInstanceDefaults: clusterinstance-defaults-v1
     policyTemplateDefaults: policytemplate-defaults-v1
   templateParameterSchema:

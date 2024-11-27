@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
-	"time"
-
 	"sync"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -40,50 +38,6 @@ func (e *ConditionDoesNotExistsErr) Error() string {
 func IsConditionDoesNotExistsErr(err error) bool {
 	var customErr *ConditionDoesNotExistsErr
 	return errors.As(err, &customErr)
-}
-
-// FindNodeGroupByRole finds the matching NodeGroup by role
-func FindNodeGroupByRole(role string, nodeGroups []hwv1alpha1.NodeGroup) (*hwv1alpha1.NodeGroup, error) {
-	for i, group := range nodeGroups {
-		if group.Role == role {
-			return &nodeGroups[i], nil
-		}
-	}
-	return nil, fmt.Errorf("node group with role %s not found", role)
-}
-
-// ProcessClusterNodeGroups extracts the node interfaces per role and count the nodes per group
-func ProcessClusterNodeGroups(clusterInstance *siteconfig.ClusterInstance, nodeGroups []hwv1alpha1.NodeGroup, roleCounts map[string]int) error {
-	// Map to keep track of processed roles and the corresponding interfaces
-	processedRoles := make(map[string][]string)
-
-	for _, node := range clusterInstance.Spec.Nodes {
-		// Count the nodes per group
-		roleCounts[node.Role]++
-
-		// Find the node group corresponding to this role
-		nodeGroup, err := FindNodeGroupByRole(node.Role, nodeGroups)
-		if err != nil {
-			return fmt.Errorf("could not find node group for role %s: %w", node.Role, err)
-		}
-
-		// Get the interface names for the current node
-		var currentInterfaces []string
-		for _, iface := range node.NodeNetwork.Interfaces {
-			currentInterfaces = append(currentInterfaces, iface.Name)
-		}
-
-		// If the role has not been processed yet, add the interfaces
-		// else check if the interfaces are the same as the first node with this role
-		if _, ok := processedRoles[node.Role]; !ok {
-			nodeGroup.Interfaces = currentInterfaces
-			processedRoles[node.Role] = currentInterfaces
-		} else if !slices.Equal(processedRoles[node.Role], currentInterfaces) {
-			// Nodes with the same role and hardware profile should have identical interfaces
-			return fmt.Errorf("%s has inconsistent interfaces for role %s", node.HostName, node.Role)
-		}
-	}
-	return nil
 }
 
 // getBootInterfaceLabel extracts the boot interface label from the NodePool annotations
@@ -368,56 +322,15 @@ func HandleHardwareTimeout(
 	return timedOutOrFailed, reason, message
 }
 
-// ValidateConfigMapFields validates the necessary fields in the hardware template ConfigMap
-func ValidateConfigMapFields(configMap *corev1.ConfigMap) error {
-	// Check for hwMgrId
-	_, exists := configMap.Data[HwTemplatePluginMgr]
-	if !exists {
-		return fmt.Errorf("missing required field '%s' in ConfigMap", HwTemplatePluginMgr)
-	}
-
-	// Check for bootInterfaceLabel
-	_, exists = configMap.Data[HwTemplateBootIfaceLabel]
-	if !exists {
-		return fmt.Errorf("missing required field '%s' in ConfigMap", HwTemplateBootIfaceLabel)
-	}
-
-	// Extract and validate node-pools-data
-	nodeGroup, err := ExtractTemplateDataFromConfigMap[[]hwv1alpha1.NodeGroup](configMap, HwTemplateNodePool)
-	if err != nil {
-		return fmt.Errorf("failed to parse 'node-pools-data' in ConfigMap %s: %w", configMap.Name, err)
-	}
-	if len(nodeGroup) == 0 {
-		return fmt.Errorf("required field 'node-pools-data' is empty in ConfigMap %s", configMap.Name)
-	}
-
-	// Validate each node group entry
-	for i, ng := range nodeGroup {
-		if ng.Name == "" {
-			return fmt.Errorf("missing 'name' in node-pools-data element at index %d", i)
-		}
-		if ng.HwProfile == "" {
-			return fmt.Errorf("missing 'hwProfile' in node-pools-data element at index %d", i)
-		}
-		if ng.Role == "" {
-			return fmt.Errorf("missing 'role' in node-pools-data element at index %d", i)
-		}
-		if ng.ResourcePoolId == "" {
-			return fmt.Errorf("missing 'resourcePoolId' in node-pools-data element at index %d", i)
-		}
-	}
-	return nil
-}
-
-// CompareConfigMapWithNodePool checks if there are any changes in the hardware template config map
-func CompareConfigMapWithNodePool(configMap *corev1.ConfigMap, nodePool *hwv1alpha1.NodePool, nodeGroup []hwv1alpha1.NodeGroup) (bool, error) {
+// CompareHardwareTemplateWithNodePool checks if there are any changes in the hardware template resource
+func CompareHardwareTemplateWithNodePool(hardwareTemplate *hwv1alpha1.HardwareTemplate, nodePool *hwv1alpha1.NodePool) (bool, error) {
 
 	changesDetected := false
 
 	// Check for changes in hwMgrId
-	if configMap.Data[HwTemplatePluginMgr] != nodePool.Spec.HwMgrId {
-		return true, fmt.Errorf("unallowed change detected in '%s': ConfigMap has %s, but NodePool has %s",
-			HwTemplatePluginMgr, configMap.Data[HwTemplatePluginMgr], nodePool.Spec.HwMgrId)
+	if hardwareTemplate.Spec.HwMgrId != nodePool.Spec.HwMgrId {
+		return true, fmt.Errorf("unallowed change detected in '%s': Hardware Template has %s, but NodePool has %s",
+			HwTemplatePluginMgr, hardwareTemplate.Spec.HwMgrId, nodePool.Spec.HwMgrId)
 	}
 
 	// Check for changes in bootInterfaceLabel
@@ -425,27 +338,33 @@ func CompareConfigMapWithNodePool(configMap *corev1.ConfigMap, nodePool *hwv1alp
 	if err != nil {
 		return false, err
 	}
-	if configMap.Data[HwTemplateBootIfaceLabel] != bootIfaceLabel {
-		return true, fmt.Errorf("unallowed change detected in '%s': ConfigMap has %s, but NodePool has %s",
-			HwTemplateBootIfaceLabel, configMap.Data[HwTemplateBootIfaceLabel], bootIfaceLabel)
+	if hardwareTemplate.Spec.BootInterfaceLabel != bootIfaceLabel {
+		return true, fmt.Errorf("unallowed change detected in '%s': Hardware Template has %s, but NodePool has %s",
+			HwTemplateBootIfaceLabel, hardwareTemplate.Spec.BootInterfaceLabel, bootIfaceLabel)
 	}
 
 	// Check each group, allowing only hwProfile to be changed
 	for _, specNodeGroup := range nodePool.Spec.NodeGroup {
 		var found bool
-		for _, ng := range nodeGroup {
-			if specNodeGroup.Name == ng.Name {
+		for _, ng := range hardwareTemplate.Spec.NodePoolData {
+
+			if specNodeGroup.NodePoolData.Name == ng.Name {
 				found = true
-				if specNodeGroup.HwProfile != ng.HwProfile {
+
+				// Check for changes in HwProfile
+				if specNodeGroup.NodePoolData.HwProfile != ng.HwProfile {
 					changesDetected = true
 				}
 				break
 			}
 		}
+
+		// If no match was found for the current specNodeGroup, return an error
 		if !found {
-			return true, fmt.Errorf("node group %s found in NodePool spec but not in ConfigMap", specNodeGroup.Name)
+			return true, fmt.Errorf("node group %s found in NodePool spec but not in Hardware Template", specNodeGroup.NodePoolData.Name)
 		}
 	}
+
 	return changesDetected, nil
 }
 
@@ -462,9 +381,104 @@ func GetRoleToGroupNameMap(nodePool *hwv1alpha1.NodePool) map[string]string {
 	roleToNodeGroupName := make(map[string]string)
 	for _, nodeGroup := range nodePool.Spec.NodeGroup {
 
-		if _, exists := roleToNodeGroupName[nodeGroup.Role]; !exists {
-			roleToNodeGroupName[nodeGroup.Role] = nodeGroup.Name
+		if _, exists := roleToNodeGroupName[nodeGroup.NodePoolData.Role]; !exists {
+			roleToNodeGroupName[nodeGroup.NodePoolData.Role] = nodeGroup.NodePoolData.Name
 		}
 	}
 	return roleToNodeGroupName
+}
+
+// GetHardwareTemplate retrieves the hardware template resource for a given name
+func GetHardwareTemplate(ctx context.Context, c client.Client, hwTemplateName string) (*hwv1alpha1.HardwareTemplate, error) {
+	hwTemplate := &hwv1alpha1.HardwareTemplate{}
+
+	exists, err := DoesK8SResourceExist(ctx, c, hwTemplateName, InventoryNamespace, hwTemplate)
+	if err != nil {
+		return hwTemplate, fmt.Errorf("failed to retrieve hardware template resource %s: %w", hwTemplateName, err)
+	}
+	if !exists {
+		return hwTemplate, fmt.Errorf("hardware template resource %s does not exist", hwTemplateName)
+	}
+	return hwTemplate, nil
+}
+
+// NewNodeGroup populates NodeGroup
+func NewNodeGroup(group hwv1alpha1.NodePoolData, roleCounts map[string]int) hwv1alpha1.NodeGroup {
+	var nodeGroup hwv1alpha1.NodeGroup
+
+	// Populate embedded NodePoolData fields
+	nodeGroup.NodePoolData = group
+
+	// Assign size if available in roleCounts
+	if count, ok := roleCounts[group.Role]; ok {
+		nodeGroup.Size = count
+	}
+
+	return nodeGroup
+}
+
+// SetNodePoolAnnotations sets annotations on the NodePool
+func SetNodePoolAnnotations(nodePool *hwv1alpha1.NodePool, name, value string) {
+	annotations := nodePool.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[name] = value
+	nodePool.SetAnnotations(annotations)
+}
+
+// SetNodePoolLabels sets labels on the NodePool
+func SetNodePoolLabels(nodePool *hwv1alpha1.NodePool, label, value string) {
+	labels := nodePool.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[label] = value
+	nodePool.SetLabels(labels)
+}
+
+// UpdateHardwareTemplateStatusCondition updates the status condition of the HardwareTemplate resource
+func UpdateHardwareTemplateStatusCondition(ctx context.Context, c client.Client, hardwareTemplate *hwv1alpha1.HardwareTemplate,
+	conditionType ConditionType, conditionReason ConditionReason, conditionStatus metav1.ConditionStatus, message string) error {
+
+	SetStatusCondition(&hardwareTemplate.Status.Conditions,
+		conditionType,
+		conditionReason,
+		conditionStatus,
+		message)
+
+	err := UpdateK8sCRStatus(ctx, c, hardwareTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to update status for HardwareTemplate %s: %w", hardwareTemplate.Name, err)
+	}
+	return nil
+}
+
+// GetTimeoutFromHWTemplate retrieves the timeout value from the hardware template resource.
+// converting it from duration string to time.Duration. Returns an error if the value is not a
+// valid duration string.
+func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string) (time.Duration, error) {
+
+	hwTemplate, err := GetHardwareTemplate(ctx, c, name)
+	if err != nil {
+		return 0, err
+	}
+
+	if hwTemplate.Spec.HardwareProvisioningTimeout != "" {
+		timeout, err := time.ParseDuration(hwTemplate.Spec.HardwareProvisioningTimeout)
+		if err != nil {
+			errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string: %v",
+				name, err)
+			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, ConditionType(hwv1alpha1.Validation),
+				ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, errMessage)
+			if updateErr != nil {
+				// nolint: wrapcheck
+				return 0, updateErr
+			}
+			return 0, NewInputError(errMessage)
+		}
+		return timeout, nil
+	}
+
+	return 0, nil
 }

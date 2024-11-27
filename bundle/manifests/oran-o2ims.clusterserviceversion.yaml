@@ -6,6 +6,39 @@ metadata:
       [
         {
           "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "HardwareTemplate",
+          "metadata": {
+            "name": "sample-hwtemplate-v1",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "bootInterfaceLabel": "bootable-interface",
+            "extensions": {
+              "resourceTypeId": "ResourceGroup~2.1.1"
+            },
+            "hardwareProvisioningTimeout": "60m",
+            "hwMgrId": "hwmgr-1",
+            "nodePoolData": [
+              {
+                "hwProfile": "profile-spr-single-processor-64G",
+                "name": "controller",
+                "resourcePoolID": "master-pool",
+                "role": "master"
+              },
+              {
+                "hwProfile": "profile-spr-dual-processor-128G",
+                "name": "worker",
+                "resourcePoolID": "worker-pool",
+                "role": "worker"
+              }
+            ]
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
           "kind": "Node",
           "metadata": {
             "labels": {
@@ -76,20 +109,21 @@ metadata:
             "hwMgrId": "loopback-1",
             "nodeGroup": [
               {
-                "hwProfile": "sample-master-profile",
-                "interfaces": [
-                  "eno1"
-                ],
-                "name": "master",
-                "resourcePoolId": "xyz",
-                "role": "master",
+                "nodePoolData": {
+                  "hwProfile": "sample-master-profile",
+                  "name": "controller",
+                  "resourcePoolId": "master-pool",
+                  "role": "master"
+                },
                 "size": 1
               },
               {
-                "hwProfile": "sample-worker-profile",
-                "name": "worker",
-                "resourcePoolId": "xyz",
-                "role": "worker",
+                "nodePoolData": {
+                  "hwProfile": "sample-worker-profile",
+                  "name": "worker",
+                  "resourcePoolId": "worker-pool",
+                  "role": "worker"
+                },
                 "size": 0
               }
             ],
@@ -375,7 +409,7 @@ metadata:
             },
             "templates": {
               "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
-              "hwTemplate": "sample-hwtemplate-configmap-v1",
+              "hwTemplate": "sample-hwtemplate-v1",
               "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults",
               "upgradeDefaults": "upgrade-defaults-v1"
             },
@@ -658,6 +692,42 @@ spec:
       - displayName: Conditions
         path: conditions
       version: v1alpha1
+    - description: HardwareTemplate is the Schema for the hardwaretemplates API
+      displayName: ORAN O2IMS Hardware Template
+      kind: HardwareTemplate
+      name: hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: ConfigMap
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: BootInterfaceLabel is the label of the boot interface.
+        displayName: Boot Interface Label
+        path: bootInterfaceLabel
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Extensions holds additional custom key-value pairs that can be
+          used to extend the node pool's configuration.
+        displayName: Extensions
+        path: extensions
+      - description: HardwareProvisioningTimeout defines the timeout duration string
+          for the hardware provisioning.
+        displayName: Hardware Provisioning Timeout
+        path: hardwareProvisioningTimeout
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
+        displayName: Hardware Manager ID
+        path: hwMgrId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: NodePoolData defines a collection of NodePoolData items
+        displayName: Node Pool Data
+        path: nodePoolData
+      statusDescriptors:
+      - displayName: Conditions
+        path: conditions
+      version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
       displayName: ORAN O2IMS Inventory
       kind: Inventory
@@ -850,9 +920,8 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
-      - description: |-
-          Conditions represent the observations of the NodePool's current state.
-          Possible values of the condition type are `Provisioned` and `Unknown`.
+      - description: Conditions represent the latest available observations of an
+          NodePool's state.
         displayName: Conditions
         path: conditions
       - displayName: Hw Mgr Plugin

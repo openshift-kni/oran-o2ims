@@ -472,17 +472,17 @@ metadata:
 
 We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` CR.
 
-In this example we are updating the `hwProfile` under `data.node-pools-data.hwProfile` in the [placeholder-du-template-configmap-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-configmap-v1.yaml) hardware template ConfigMap.
+In this example we are updating the `hwProfile` under `spec.nodePoolData.hwProfile` in the [placeholder-du-template-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v1.yaml) hardware template resource.
 
 The following steps are required:
 
 1. Upversion the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) ClusterTemplate:
-    * Create a new version of the [placeholder-du-template-configmap-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-configmap-v1.yaml) hardware template ConfigMap - [placeholder-du-template-configmap-v2](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-configmap-v2.yaml)
-        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `data.node-pools-data.hwProfile` from `profile-proliant-gen11-dual-processor-256G-v1` to `profile-proliant-gen11-dual-processor-256G-v2`.
+    * Create a new version of the [placeholder-du-template-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v1.yaml) hardware template resource - [placeholder-du-template-v2](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v2.yaml)
+        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `spec.nodePoolData.hwProfile` from `profile-proliant-gen11-dual-processor-256G-v1` to `profile-proliant-gen11-dual-processor-256G-v2`.
     * Create a new version of the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` - [sno-ran-du.v4-Y-Z-5](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-5.yaml).
         * update the name from `sno-ran-du.v4-Y-Z-4` to `sno-ran-du.v4-Y-Z-5` (the namespace remains `sno-ran-du-v4-Y-Z`).
         * update `spec.version` from `v4-Y-Z-4` to `v4-Y-Z-5`.
-        * update `spec.templates.hwTemplate` from `placeholder-du-template-configmap-v1` to `placeholder-du-template-configmap-v2`.
+        * update `spec.templates.hwTemplate` from `placeholder-du-template-v1` to `placeholder-du-template-v2`.
 2. Update the kustomization files to include the new resources. ArgoCD will automatically sync them to the hub cluster.
     * The O-Cloud manager validates the new `ClusterTemplate`, but no other action is taken since the `ProvisioningRequest` has not been updated.
 3. The SMO selects the new `ClusterTemplate` version in the `ProvisioningRequest`.

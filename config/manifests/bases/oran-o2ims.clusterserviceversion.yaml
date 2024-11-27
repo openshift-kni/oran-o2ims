@@ -96,6 +96,42 @@ spec:
       - displayName: Conditions
         path: conditions
       version: v1alpha1
+    - description: HardwareTemplate is the Schema for the hardwaretemplates API
+      displayName: ORAN O2IMS Hardware Template
+      kind: HardwareTemplate
+      name: hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: ConfigMap
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: BootInterfaceLabel is the label of the boot interface.
+        displayName: Boot Interface Label
+        path: bootInterfaceLabel
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Extensions holds additional custom key-value pairs that can be
+          used to extend the node pool's configuration.
+        displayName: Extensions
+        path: extensions
+      - description: HardwareProvisioningTimeout defines the timeout duration string
+          for the hardware provisioning.
+        displayName: Hardware Provisioning Timeout
+        path: hardwareProvisioningTimeout
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
+        displayName: Hardware Manager ID
+        path: hwMgrId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: NodePoolData defines a collection of NodePoolData items
+        displayName: Node Pool Data
+        path: nodePoolData
+      statusDescriptors:
+      - displayName: Conditions
+        path: conditions
+      version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
       displayName: ORAN O2IMS Inventory
       kind: Inventory
@@ -288,9 +324,8 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
-      - description: |-
-          Conditions represent the observations of the NodePool's current state.
-          Possible values of the condition type are `Provisioned` and `Unknown`.
+      - description: Conditions represent the latest available observations of an
+          NodePool's state.
         displayName: Conditions
         path: conditions
       - displayName: Hw Mgr Plugin

@@ -35,7 +35,7 @@ var _ = Describe("policyManagement", func() {
 		ctNamespace  = "clustertemplate-a-v4-16"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
-		hwTemplateCm = "hwTemplate-v1"
+		hwTemplate   = "hwTemplate-v1"
 	)
 
 	BeforeEach(func() {
@@ -60,7 +60,7 @@ var _ = Describe("policyManagement", func() {
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
-						HwTemplate:              hwTemplateCm,
+						HwTemplate:              hwTemplate,
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
 				},
@@ -123,24 +123,30 @@ cpu-reserved: "0-1"
 defaultHugepagesSize: "1G"`,
 				},
 			},
-			&corev1.ConfigMap{
+			// hardware template
+			&hwv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplateCm,
+					Name:      hwTemplate,
 					Namespace: utils.InventoryNamespace,
 				},
-				Data: map[string]string{
-					utils.HwTemplatePluginMgr:      utils.UnitTestHwmgrID,
-					utils.HwTemplateBootIfaceLabel: "bootable-interface",
-					utils.HwTemplateNodePool: `
-- name: controller
-  hwProfile: profile-spr-single-processor-64G
-  role: master
-  resourcePoolId: xyz
-- name: worker
-  hwProfile: profile-spr-dual-processor-128G
-  role: worker
-  resourcePoolId: xyz`,
-					utils.HwTemplateExtensions: `resourceTypeId: ResourceGroup~2.1.1`,
+				Spec: hwv1alpha1.HardwareTemplateSpec{
+					HwMgrId:                     utils.UnitTestHwmgrID,
+					BootInterfaceLabel:          "bootable-interface",
+					HardwareProvisioningTimeout: "1m",
+					NodePoolData: []hwv1alpha1.NodePoolData{
+						{
+							Name:           "controller",
+							Role:           "master",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-single-processor-64G",
+						},
+						{
+							Name:           "worker",
+							Role:           "worker",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-dual-processor-128G",
+						},
+					},
 				},
 			},
 			// Pull secret.
@@ -222,15 +228,18 @@ defaultHugepagesSize: "1G"`,
 				HwMgrId: utils.UnitTestHwmgrID,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
-						Name:       "controller",
-						HwProfile:  "profile-spr-single-processor-64G",
-						Size:       1,
-						Interfaces: []string{"eno1", "eth0", "eth1"},
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name:      "controller",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+						Size: 1,
 					},
 					{
-						Name:      "worker",
-						HwProfile: "profile-spr-dual-processor-128G",
-						Size:      0,
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name:      "worker",
+							HwProfile: "profile-spr-dual-processor-128G",
+						},
+						Size: 0,
 					},
 				},
 			},

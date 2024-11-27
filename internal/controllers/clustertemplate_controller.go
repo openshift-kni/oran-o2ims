@@ -42,7 +42,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/google/uuid"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -184,21 +183,10 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		validationErrs = append(validationErrs, err.Error())
 	}
 
-	// Validate the HW template configmap if it's provided
-	if t.object.Spec.Templates.HwTemplate != "" {
-		err = validateConfigmapReference[[]hwv1alpha1.NodeGroup](
-			ctx, t.client,
-			t.object.Spec.Templates.HwTemplate,
-			utils.InventoryNamespace,
-			utils.HwTemplateNodePool,
-			utils.HardwareProvisioningTimeoutConfigKey)
-		if err != nil {
-			if !utils.IsInputError(err) {
-				return false, fmt.Errorf("failed to validate the ConfigMap %s for hw template: %w",
-					t.object.Spec.Templates.HwTemplate, err)
-			}
-			validationErrs = append(validationErrs, err.Error())
-		}
+	// Validate the timeout value from the hardware template
+	_, err = utils.GetTimeoutFromHWTemplate(ctx, t.client, t.object.Spec.Templates.HwTemplate)
+	if err != nil {
+		validationErrs = append(validationErrs, err.Error())
 	}
 
 	// Validate the ClusterInstance defaults configmap
@@ -312,12 +300,6 @@ func validateConfigmapReference[T any](
 	data, err := utils.ExtractTemplateDataFromConfigMap[T](existingConfigmap, templateDataKey)
 	if err != nil {
 		return err
-	}
-
-	if templateDataKey == utils.HwTemplateNodePool {
-		if err = utils.ValidateConfigMapFields(existingConfigmap); err != nil {
-			return utils.NewInputError("failed to validate the hardware template ConfigMap %s: %w", existingConfigmap.Name, err)
-		}
 	}
 
 	if templateDataKey == utils.ClusterInstanceTemplateDefaultsConfigmapKey {

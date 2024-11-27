@@ -6,6 +6,7 @@ resources:
 # Hardware management:
 - v1alpha1_node.yaml
 - v1alpha1_nodepool.yaml
+- v1alpha1_hardwaretemplate.yaml
 
 # Provisioning:
 - v1alpha1_clustertemplate.yaml
