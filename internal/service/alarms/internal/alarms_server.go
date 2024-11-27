@@ -26,22 +26,22 @@ var _ api.StrictServerInterface = (*AlarmsServer)(nil)
 
 func (a *AlarmsServer) GetSubscriptions(ctx context.Context, request api.GetSubscriptionsRequestObject) (api.GetSubscriptionsResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.DeleteSubscriptionRequestObject) (api.DeleteSubscriptionResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *AlarmsServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsRequestObject) (api.GetAlarmsResponseObject, error) {
@@ -78,17 +78,17 @@ func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequest
 
 func (a *AlarmsServer) AckAlarm(ctx context.Context, request api.AckAlarmRequestObject) (api.AckAlarmResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *AlarmsServer) GetProbableCauses(ctx context.Context, request api.GetProbableCausesRequestObject) (api.GetProbableCausesResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProbableCauseRequestObject) (api.GetProbableCauseResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
@@ -103,7 +103,7 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 
 func (a *AlarmsServer) HwNotification(ctx context.Context, request api.HwNotificationRequestObject) (api.HwNotificationResponseObject, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func convertAerModelToApi(aerModel models.AlarmEventRecord) api.AlarmEventRecord {
