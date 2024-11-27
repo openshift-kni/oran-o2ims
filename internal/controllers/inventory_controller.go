@@ -1211,8 +1211,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 								Drop: []corev1.Capability{"ALL"},
 							},
 						},
-						Image:           rbacProxyImage,
-						ImagePullPolicy: corev1.PullIfNotPresent,
+						Image: rbacProxyImage,
 						Args: []string{
 							"--secure-listen-address=0.0.0.0:8443",
 							"--upstream=http://127.0.0.1:8000/",
@@ -1241,13 +1240,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 						VolumeMounts: deploymentVolumeMounts,
 					},
 					{
-						Name:            utils.ServerContainerName,
-						Image:           image,
-						ImagePullPolicy: corev1.PullIfNotPresent,
-						VolumeMounts:    deploymentVolumeMounts,
-						Command:         []string{"/usr/bin/oran-o2ims"},
-						Args:            deploymentContainerArgs,
-						Env:             envVars,
+						Name:         utils.ServerContainerName,
+						Image:        image,
+						VolumeMounts: deploymentVolumeMounts,
+						Command:      []string{"/usr/bin/oran-o2ims"},
+						Args:         deploymentContainerArgs,
+						Env:          envVars,
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          "api",
@@ -1264,12 +1262,11 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	if utils.HasDatabase(serverName) {
 		deploymentSpec.Template.Spec.InitContainers = []corev1.Container{
 			{
-				Name:            utils.MigrationContainerName,
-				Image:           image,
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         []string{"/usr/bin/oran-o2ims"},
-				Args:            []string{serverName, "migrate"},
-				Env:             envVars,
+				Name:    utils.MigrationContainerName,
+				Image:   image,
+				Command: []string{"/usr/bin/oran-o2ims"},
+				Args:    []string{serverName, "migrate"},
+				Env:     envVars,
 			},
 		}
 	}
