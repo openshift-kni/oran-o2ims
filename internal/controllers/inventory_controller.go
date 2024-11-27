@@ -1429,7 +1429,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/O2ims_infrastructureMonitoring",
+								Path: "/o2ims-infrastructureMonitoring",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType

@@ -49,7 +49,7 @@ tags:
 
 paths:
 
-  /O2ims-infrastructureInventory/api_versions:
+  /o2ims-infrastructureInventory/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
@@ -81,7 +81,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims-infrastructureInventory/v1:
+  /o2ims-infrastructureInventory/v1:
     get:
       operationId: getCloudInfo
       summary: Get O-Cloud info
@@ -113,7 +113,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims-infrastructureInventory/v1/api_versions:
+  /o2ims-infrastructureInventory/v1/api_versions:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
@@ -145,7 +145,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims-infrastructureInventory/v1/deploymentManagers:
+  /o2ims-infrastructureInventory/v1/deploymentManagers:
     get:
       operationId: getDeploymentManagers
       summary: Get deployment managers
@@ -180,7 +180,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}:
+  /o2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}:
     get:
       operationId: getDeploymentManager
       summary: Get deployment manager
@@ -219,7 +219,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims-infrastructureInventory/v1/resourceTypes:
+  /o2ims-infrastructureInventory/v1/resourceTypes:
     get:
       operationId: getResourceTypes
       summary: Get resource types
@@ -254,7 +254,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}:
+  /o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}:
     get:
       operationId: getResourceType
       summary: Get a resource type
@@ -292,7 +292,7 @@ paths:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
 
-  /O2ims-infrastructureInventory/v1/resourcePools:
+  /o2ims-infrastructureInventory/v1/resourcePools:
     get:
       operationId: getResourcePools
       summary: Get resource pools
@@ -327,7 +327,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}:
+  /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}:
     get:
       operationId: getResourcePool
       summary: Get a resource pool
@@ -365,7 +365,7 @@ paths:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
 
-  /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources:
+  /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources:
     get:
       operationId: getResources
       summary: Get resources in a resource pool
@@ -408,7 +408,7 @@ paths:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
 
-  /O2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}:
+  /o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}:
     get:
       operationId: getResource
       summary: Get a resource in a resource pool

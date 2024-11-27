@@ -27,7 +27,7 @@ tags:
       Internal endpoints. This is tag is also useful generating client code.
 
 paths:
-  /O2ims_infrastructureMonitoring/v1/alarms:
+  /o2ims-infrastructureMonitoring/v1/alarms:
     get:
       operationId: GetAlarms
       summary: Retrieve the list of alarms
@@ -65,7 +65,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}:
+  /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}:
     get:
       operationId: GetAlarm
       summary: Retrieve exactly one alarm
@@ -162,7 +162,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions:
+  /o2ims-infrastructureMonitoring/v1/alarmSubscriptions:
     get:
       operationId: GetSubscriptions
       summary: Retrieve the list of alarm subscriptions
@@ -242,7 +242,7 @@ paths:
                 '500':
                   description: Internal server error
 
-  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}:
+  /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}:
     get:
       operationId: GetSubscription
       summary: Retrieve exactly one subscription
@@ -316,7 +316,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/probableCauses:
+  /o2ims-infrastructureMonitoring/v1/probableCauses:
     get:
       operationId: GetProbableCauses
       summary: Retrieve all probable causes
@@ -338,7 +338,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/probableCauses/{probableCauseId}:
+  /o2ims-infrastructureMonitoring/v1/probableCauses/{probableCauseId}:
     get:
       operationId: GetProbableCause
       summary: Retrieve exactly one probable cause
@@ -680,7 +680,7 @@ components:
         objectRef:
           type: string
           description: The URL to the AlarmEventRecord object.
-          example: hostname.com/O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+          example: hostname.com/o2ims-infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
         alarmEventRecordId:
           type: string
           format: uuid

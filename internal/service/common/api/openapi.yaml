@@ -147,7 +147,7 @@ components:
       properties:
         uriPrefix:
           type: string
-          example: "/O2ims-infrastructureInventory/v1"
+          example: "/o2ims-infrastructureInventory/v1"
         apiVersions:
           type: array
           items:
