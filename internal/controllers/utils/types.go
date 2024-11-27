@@ -15,12 +15,14 @@ var InventoryConditionTypes = struct {
 	MetadataServerAvailable   InventoryConditionType
 	DeploymentServerAvailable InventoryConditionType
 	ResourceServerAvailable   InventoryConditionType
+	AlarmServerError          InventoryConditionType
 	DatabaseServerError       InventoryConditionType
 	MetadataServerError       InventoryConditionType
 	DeploymentServerError     InventoryConditionType
 	ResourceServerError       InventoryConditionType
 	SmoRegistrationCompleted  InventoryConditionType
 	DatabaseServerAvailable   InventoryConditionType
+	AlarmServerAvailable      InventoryConditionType
 }{
 	Ready:                     "InventoryReady",
 	NotReady:                  "InventoryConditionType",
@@ -29,12 +31,14 @@ var InventoryConditionTypes = struct {
 	MetadataServerAvailable:   "MetadataServerAvailable",
 	DeploymentServerAvailable: "DeploymentServerAvailable",
 	ResourceServerAvailable:   "ResourceServerAvailable",
+	AlarmServerError:          "AlarmServerError",
 	DatabaseServerError:       "DatabaseServerError",
 	MetadataServerError:       "MetadataServerError",
 	DeploymentServerError:     "DeploymentServerError",
 	ResourceServerError:       "ResourceServerError",
 	SmoRegistrationCompleted:  "SmoRegistrationCompleted",
 	DatabaseServerAvailable:   "DatabaseServerAvailable",
+	AlarmServerAvailable:      "AlarmServerAvailable",
 }
 
 type InventoryConditionReason string
@@ -60,6 +64,7 @@ var InventoryConditionReasons = struct {
 }
 
 var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{
+	InventoryAlarmServerName:             InventoryConditionTypes.AlarmServerAvailable,
 	InventoryDatabaseServerName:          InventoryConditionTypes.DatabaseServerAvailable,
 	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerAvailable,
 	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerAvailable,
@@ -67,6 +72,7 @@ var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{
 }
 
 var MapErrorDeploymentNameConditionType = map[string]InventoryConditionType{
+	InventoryAlarmServerName:             InventoryConditionTypes.AlarmServerError,
 	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerError,
 	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerError,
 	InventoryResourceServerName:          InventoryConditionTypes.ResourceServerError,

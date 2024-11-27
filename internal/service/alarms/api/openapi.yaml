@@ -12,8 +12,8 @@ externalDocs:
   url: https://specifications.o-ran.org/download?id=674
 
 servers:
-  - url: http://localhost:8080
-    description: O-RAN Alarms Server
+- url: http://localhost:8000
+  description: O-RAN Alarms Server
 
 tags:
   - name: alarms

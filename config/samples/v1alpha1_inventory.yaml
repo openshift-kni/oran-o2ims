@@ -10,8 +10,6 @@ metadata:
   name: default
   namespace: oran-o2ims
 spec:
-  alarmSubscriptionServerConfig:
-    enabled: false
   cloudID: b7dcb3ff-583d-42d9-abb5-f484386fc688
   smo:
     url: https://smo.example.com

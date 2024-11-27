@@ -39,11 +39,11 @@ spec:
           spec:
             description: InventorySpec defines the desired state of Inventory
             properties:
-              alarmSubscriptionServerConfig:
+              alarmServerConfig:
                 default:
                   enabled: true
-                description: AlarmSubscriptionServerConfig contains the configuration
-                  for the alarm server.
+                description: AlarmServerConfig contains the configuration for the
+                  alarm server.
                 properties:
                   enabled:
                     default: true
@@ -278,6 +278,8 @@ spec:
                 type: array
               deploymentStatus:
                 properties:
+                  alarmServerStatus:
+                    type: string
                   deploymentServerStatus:
                     type: string
                   metadataServerStatus:

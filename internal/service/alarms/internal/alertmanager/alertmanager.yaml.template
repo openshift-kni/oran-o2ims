@@ -24,7 +24,5 @@ receivers:
   - name: oran_alarm_receiver
     webhook_configs:
     - send_resolved: true
-      # Hardcoded 8080 port (same as http server)
-      # TODO: delete port from url once we have a proper k8s service
-      url: http://alarm-server.oran-o2ims.svc.cluster.local:8080/internal/v1/caas-alerts/alertmanager
+      url: {{ .url }}/internal/v1/caas-alerts/alertmanager
   - name: "null"

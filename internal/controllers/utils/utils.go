@@ -178,15 +178,16 @@ func extensionsToExtensionArgs(extensions []string) []string {
 // HasApiEndpoints determines whether a server exposes a set of API endpoints
 func HasApiEndpoints(serverName string) bool {
 	return serverName == InventoryDatabaseServerName ||
+		serverName == InventoryAlarmServerName ||
 		serverName == InventoryMetadataServerName ||
 		serverName == InventoryResourceServerName ||
-		serverName == InventoryDeploymentManagerServerName ||
-		serverName == InventoryAlarmSubscriptionServerName
+		serverName == InventoryDeploymentManagerServerName
 }
 
 // HasDatabase determines whether a server owns a logical database instance
 func HasDatabase(serverName string) bool {
-	return serverName == InventoryResourceServerName
+	return serverName == InventoryResourceServerName ||
+		serverName == InventoryAlarmServerName
 }
 
 func GetDeploymentVolumes(serverName string) []corev1.Volume {
@@ -298,10 +299,28 @@ func GetSearchURL(ctx context.Context, c client.Client) (string, error) {
 	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", service.Name, service.Namespace, service.Spec.Ports[0].Port), nil
 }
 
+// GetServerDatabasePasswordName retrieves name of the environment variable used to store the server's database password
+func GetServerDatabasePasswordName(serverName string) (string, error) {
+	switch serverName {
+	case InventoryAlarmServerName:
+		return AlarmsPasswordEnvName, nil
+	case InventoryResourceServerName:
+		return ResourcesPasswordEnvName, nil
+	default:
+		return "", fmt.Errorf("database name not found for server '%s'", serverName)
+	}
+}
+
 func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
 	cloudId := DefaultOCloudID
 	if inventory.Spec.CloudID != nil {
 		cloudId = *inventory.Spec.CloudID
+	}
+
+	// AlarmServer
+	if serverName == InventoryAlarmServerName {
+		result = slices.Clone(AlarmServerArgs)
+		return
 	}
 
 	// MetadataServer
@@ -724,9 +743,9 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 			Namespace: GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace),
 		},
 		Spec: inventoryv1alpha1.InventorySpec{
-			AlarmSubscriptionServerConfig: inventoryv1alpha1.AlarmSubscriptionServerConfig{
+			AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
 				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: false},
+					Enabled: true},
 			},
 			DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
 				ServerConfig: inventoryv1alpha1.ServerConfig{
@@ -770,4 +789,9 @@ func GetDatabaseHostname() string {
 // found matching the supplied environment variable name.
 func GetPasswordOrRandom(envName string) string {
 	return GetEnvOrDefault(envName, uuid.Must(uuid.NewRandom()).String())
+}
+
+// GetServiceURL constructs the default service URL for a server
+func GetServiceURL(serverName string) string {
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), DefaultServicePort)
 }

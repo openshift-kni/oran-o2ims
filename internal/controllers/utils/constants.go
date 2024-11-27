@@ -13,8 +13,7 @@ const (
 	InventoryMetadata          = "metadata"
 	InventoryDeploymentManager = "deployment-manager"
 	InventoryResource          = "resource"
-	InventoryAlarmSubscription = "alarm-subscription"
-	InventoryAlarmNotification = "alarm-notification"
+	InventoryAlarms            = "alarms"
 )
 
 // Suffix for server names
@@ -26,8 +25,7 @@ const (
 	InventoryMetadataServerName          = InventoryMetadata + serverSuffix
 	InventoryDeploymentManagerServerName = InventoryDeploymentManager + serverSuffix
 	InventoryResourceServerName          = InventoryResource + serverSuffix
-	InventoryAlarmSubscriptionServerName = InventoryAlarmSubscription + serverSuffix
-	InventoryAlarmNotificationServerName = InventoryAlarmNotification + serverSuffix
+	InventoryAlarmServerName             = InventoryAlarms + serverSuffix
 )
 
 // InventoryIngressName the name of our Ingress controller instance
@@ -41,6 +39,10 @@ const (
 
 // Container arguments
 var (
+	AlarmServerArgs = []string{
+		"alarms-server",
+		"serve",
+	}
 	MetadataServerArgs = []string{
 		"start",
 		"metadata-server",
@@ -202,8 +204,9 @@ const (
 
 // POD Port Values
 const (
-	DefaultServicePort = 8000
-	DefaultTargetPort  = "https"
+	DefaultServicePort   = 8000
+	DefaultTargetPort    = "https"
+	DefaultContainerPort = 8000
 
 	DatabaseServicePort = 5432
 	DatabaseTargetPort  = "database"
