@@ -1195,6 +1195,26 @@ spec:
         - apiGroups:
           - o2ims-hardwaremanagement.oran.openshift.io
           resources:
+          - hardwaretemplates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwaretemplates/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
           - nodepools
           verbs:
           - create
