@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	namespace  = "open-cluster-management-observability"
+	namespace  = utils.AlertmanagerNamespace
 	secretName = "alertmanager-config"
 	secretKey  = "alertmanager.yaml"
 )
@@ -46,7 +46,9 @@ func Setup(ctx context.Context, cl client.Client) error {
 
 	var rendered bytes.Buffer
 	err = t.ExecuteTemplate(&rendered, templateName, map[string]string{
-		"url": utils.GetServiceURL(utils.InventoryAlarmServerName),
+		"url":             utils.GetServiceURL(utils.InventoryAlarmServerName),
+		"caFile":          utils.DefaultServiceCAFile,
+		"bearerTokenFile": utils.DefaultBackendTokenFile,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render alertmanager.yaml: %w", err)

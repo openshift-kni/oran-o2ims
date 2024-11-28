@@ -4,6 +4,11 @@ kind: ClusterRole
 metadata:
   name: manager-role
 rules:
+- nonResourceURLs:
+  - /internal/v1/caas-alerts/alertmanager
+  verbs:
+  - create
+  - post
 - apiGroups:
   - ""
   resources:

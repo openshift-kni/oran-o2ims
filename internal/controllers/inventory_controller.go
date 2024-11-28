@@ -69,6 +69,7 @@ import (
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
+//+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -352,6 +353,17 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to create alarm server cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Needed for the Alertmanager to be able to send alerts to the alarm server
+	err = t.createAlertmanagerClusterRoleAndBinding(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create alertmanager cluster role and binding",
 			slog.String("error", err.Error()),
 		)
 		return
@@ -1077,6 +1089,67 @@ func (t *reconcilerTask) createAlarmServerClusterRoleBinding(ctx context.Context
 
 	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Alarm Server cluster role binding: %w", err)
+	}
+
+	return nil
+}
+
+// createAlertmanagerClusterRoleAndBinding creates the cluster role and binding needed for the Alertmanager to be able to
+// send alerts to the alarm server.
+func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Context) error {
+	// Cluster Role
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", t.object.Namespace, utils.AlertmanagerObjectName,
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				NonResourceURLs: []string{
+					"/internal/v1/caas-alerts/alertmanager",
+				},
+				Verbs: []string{
+					// Expected to be post given that it is a nonResourceURLs, but it only works with create.
+					// Adding post in case something changes in the future. It doesn't hurt to have it.
+					"create",
+					"post",
+				},
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Alertmanager cluster role: %w", err)
+	}
+
+	// Cluster Role Binding
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.AlertmanagerObjectName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.AlertmanagerObjectName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: utils.AlertmanagerNamespace,
+				Name:      utils.AlertmanagerSA,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Alertmanager cluster role binding: %w", err)
 	}
 
 	return nil

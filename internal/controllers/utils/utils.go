@@ -230,7 +230,7 @@ func GetBackendTokenArg(backendToken string) string {
 		return fmt.Sprintf("--backend-token=%s", backendToken)
 	}
 
-	return fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile)
+	return fmt.Sprintf("--backend-token-file=%s", DefaultBackendTokenFile)
 }
 
 // GetIngressDomain will determine the network domain of the default ingress controller

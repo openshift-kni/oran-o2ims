@@ -1,6 +1,12 @@
 ---
 global:
   resolve_timeout: 5m
+  http_config:
+    authorization:
+      type: Bearer
+      credentials_file: {{ .bearerTokenFile }}
+    tls_config:
+      ca_file: {{ .caFile }}
 route:
   group_wait: 30s
   group_interval: 1m

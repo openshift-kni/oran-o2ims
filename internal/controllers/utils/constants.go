@@ -88,7 +88,7 @@ const (
 // Default values for backend URL and token:
 const (
 	defaultApiServerURL     = "https://kubernetes.default.svc"
-	defaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
+	DefaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
 	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
 	DefaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
 )
@@ -242,4 +242,11 @@ const (
 	ResourcesPasswordEnvName = "ORAN_O2IMS_RESOURCES_PASSWORD" // nolint: gosec
 
 	DatabaseHostnameEnvVar = "POSTGRES_HOSTNAME"
+)
+
+// Alertmanager values
+const (
+	AlertmanagerObjectName = "alertmanager"
+	AlertmanagerNamespace  = "open-cluster-management-observability"
+	AlertmanagerSA         = "alertmanager"
 )
