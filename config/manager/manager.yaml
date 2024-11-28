@@ -77,7 +77,7 @@ spec:
         - name: KUBE_RBAC_PROXY_IMAGE
           # A placeholder for the replacement kustomization that will inject the rbac image from that container spec
           value: kube-rbac-proxy:latest
-        - name: RELATED_IMAGE_POSTGRES_IMAGE
+        - name: POSTGRES_IMAGE
           value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
         - name: HWMGR_PLUGIN_NAMESPACE
           # A placeholder for the replacement kustomization that will inject the value from the config map
