@@ -4,10 +4,12 @@ Follow these instructions to deploy an ACM hub cluster with additional managed c
 The deployment is done using a [kci](https://github.com/karmab/kcli-openshift4-baremetal) script that installs a 3-nodes cluster ACM hub and 2 spoke clusters.
 Note: if the spoke clusters auto-import fails, the clusters should be manually imported to the ACM hub.
 
-## Deployment 
+## Deployment
 
 ### Requirements
+
 Ensure libvirt is available on the host:
+
 ```bash
 sudo yum -y install libvirt libvirt-daemon-driver-qemu qemu-kvm
 sudo usermod -aG qemu,libvirt $(id -un)
@@ -16,23 +18,28 @@ sudo systemctl enable --now libvirtd
 ```
 
 ### Install [kcli](https://kcli.readthedocs.io/en/latest/)
+
 ```bash
 curl https://raw.githubusercontent.com/karmab/kcli/main/install.sh | sudo bash
 ```
 
 ### Clone kcli-openshift4-baremetal
+
 ```bash
 git clone https://github.com/karmab/kcli-openshift4-baremetal
 ```
 
 ### Create parameters yaml
+
 In the cloned repo, create a kcli_parameters.yaml file and set values as required.
 Ensure the following exist in the machine:
+
 * `pullsecret`: path to the pull secret file
 * `pool`: libvirt storage pool to store the images
 
 E.g.
 *kcli_parameters.yaml*
+
 ```yaml
 lab: true
 pullsecret: /root/pull-secret.json
@@ -87,7 +94,9 @@ apps:
 ```
 
 ### Create the environment
+
 Run the following command to create all the VMs and install ACM:
+
 ```bash
 kcli create plan -f ./plans/kcli_plan_ztp.yml --paramfile ./kcli_parameters.yaml --force
 ```
@@ -95,6 +104,7 @@ kcli create plan -f ./plans/kcli_plan_ztp.yml --paramfile ./kcli_parameters.yaml
 ## Access clusters
 
 ### Get kubeconfig files
+
 ```bash
 kcli ssh root@oran-hub01-installer
 # Hub cluster kubeconfig
@@ -107,6 +117,7 @@ cat kubeconfig.mgmt-spoke2
 ### Hub's web console
 
 #### Configure the local /etc/hosts
+
 ```bash
 <host_ip> api.oran-hub01.rdu-infra-edge.corp console-openshift-console.apps.oran-hub01.rdu-infra-edge.corp oauth-openshift.apps.oran-hub01.rdu-infra-edge.corp assisted-service-multicluster-engine.apps.oran-hub01.rdu-infra-edge.corp search-api-open-cluster-management.apps.oran-hub01.rdu-infra-edge.corp multicluster-global-hub-manager-multicluster-global-hub.apps.oran-hub01.rdu-infra-edge.corp
 ```
@@ -114,6 +125,7 @@ cat kubeconfig.mgmt-spoke2
 #### Use sshuttle or xinetd
 
 ##### sshuttle
+
 ```bash
 sshuttle -r <user>@<host> 192.168.131.0/24 -v
 ```
@@ -121,7 +133,9 @@ sshuttle -r <user>@<host> 192.168.131.0/24 -v
 ##### xinetd
 
 ###### Add config file
-*/etc/xinetd.d/openshift*
+
+/etc/xinetd.d/openshift
+
 ```bash
 service openshift-api
 {
@@ -173,11 +187,13 @@ service openshift-ingress
 ```
 
 ###### Restart xinetd
+
 ```bash
 sudo systemctl restart xinetd
 ```
 
 ###### Ensure 443 and 6443 ports are open
+
 ```bash
 sudo firewall-cmd --zone=public --permanent --add-service=https
 sudo firewall-cmd --permanent --add-port=6443/tcp
@@ -185,4 +201,5 @@ sudo firewall-cmd --reload
 ```
 
 ## ACM configuration
+
 See details [here](./env_acm.md).

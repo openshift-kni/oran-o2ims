@@ -52,7 +52,8 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # openshift.io/oran-o2ims-bundle:$VERSION and openshift.io/oran-o2ims-catalog:$VERSION.
-IMAGE_TAG_BASE ?= quay.io/openshift-kni/oran-o2ims-operator
+IMAGE_NAME ?= oran-o2ims-operator
+IMAGE_TAG_BASE ?= quay.io/openshift-kni/${IMAGE_NAME}
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -409,6 +410,24 @@ scorecard-test: operator-sdk
 sync-submodules:
 	@echo "Syncing submodules"
 	hack/sync-submodules.sh
+
+# markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
+.PHONY: markdownlint-image
+markdownlint-image:  ## Build local container markdownlint-image
+	$(CONTAINER_TOOL) image build -f ./hack/Dockerfile.markdownlint --tag $(IMAGE_NAME)-markdownlint:latest
+
+.PHONY: markdownlint-image-clean
+markdownlint-image-clean:  ## Remove locally cached markdownlint-image
+	$(CONTAINER_TOOL) image rm $(IMAGE_NAME)-markdownlint:latest
+
+markdownlint: markdownlint-image  ## run the markdown linter
+	$(CONTAINER_TOOL) run \
+		--rm=true \
+		--env RUN_LOCAL=true \
+		--env VALIDATE_MARKDOWN=true \
+		--env PULL_BASE_SHA=$(PULL_BASE_SHA) \
+		-v $$(pwd):/workdir:Z \
+		$(IMAGE_NAME)-markdownlint:latest
 
 ##@ O-RAN Alarms Server
 
