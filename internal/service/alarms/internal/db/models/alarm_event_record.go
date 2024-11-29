@@ -30,3 +30,5 @@ type AlarmEventRecord struct {
 func (r *AlarmEventRecord) TableName() string {
 	return "alarm_event_record"
 }
+
+func (r *AlarmEventRecord) PrimaryKey() string { return "alarm_event_record_id" }
