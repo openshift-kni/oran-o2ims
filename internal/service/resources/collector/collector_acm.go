@@ -31,6 +31,7 @@ var _ DataSource = (*ACMDataSource)(nil)
 type ACMDataSource struct {
 	dataSourceID        uuid.UUID
 	cloudID             uuid.UUID
+	globalCloudID       uuid.UUID
 	extensions          []string
 	jqTool              *jq.Tool
 	hubClient           client.Client
@@ -57,7 +58,7 @@ const graphqlQuery = `query ($input: [SearchInput]) {
 
 // NewACMDataSource creates a new instance of an ACM data source collector whose purpose is to collect data from the
 // ACM search API to be included in the resource, resource pool, resource type, and deployment manager tables.
-func NewACMDataSource(cloudID uuid.UUID, backendURL string, extensions []string) (DataSource, error) {
+func NewACMDataSource(cloudID, globalCloudID uuid.UUID, backendURL string, extensions []string) (DataSource, error) {
 	// TODO: this needs to be refactored so that the token is re-read if a 401 error is returned so that we can
 	//   refresh it automatically.
 	backendTokenData, err := os.ReadFile(utils.DefaultBackendTokenFile)
@@ -134,6 +135,7 @@ func NewACMDataSource(cloudID uuid.UUID, backendURL string, extensions []string)
 	return &ACMDataSource{
 		generationID:        0,
 		cloudID:             cloudID,
+		globalCloudID:       globalCloudID,
 		extensions:          extensions,
 		jqTool:              jqTool,
 		hubClient:           hubClient,
@@ -436,7 +438,7 @@ func (d *ACMDataSource) convertClusterToResourcePool(from data.Object) (to model
 
 	to = models.ResourcePool{
 		ResourcePoolID:   resourcePoolID,
-		GlobalLocationID: "",
+		GlobalLocationID: d.globalCloudID,
 		Name:             name,
 		Description:      description,
 		OCloudID:         d.cloudID,
@@ -545,7 +547,7 @@ func (d *ACMDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 		Description:         cluster.Name,
 		OCloudID:            d.cloudID,
 		URL:                 url,
-		Locations:           []string{}, // TODO: populate with locations from all pools
+		Locations:           []uuid.UUID{d.globalCloudID},
 		Capabilities:        nil,
 		CapacityInfo:        d.makeCapacityInfo(cluster),
 		Extensions:          &extensions,

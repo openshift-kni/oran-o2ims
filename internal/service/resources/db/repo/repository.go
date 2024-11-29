@@ -48,6 +48,11 @@ func (r *ResourcesRepository) CreateSubscription(ctx context.Context, subscripti
 	return utils.Create[models.Subscription](ctx, r.Db, *subscription)
 }
 
+// UpdateSubscription updates a specific Subscription tuple
+func (r *ResourcesRepository) UpdateSubscription(ctx context.Context, subscription *models.Subscription) (*models.Subscription, error) {
+	return utils.Update[models.Subscription](ctx, r.Db, *subscription.SubscriptionID, *subscription)
+}
+
 // GetResourceTypes retrieves all ResourceType tuples or returns an empty array if no tuples are found
 func (r *ResourcesRepository) GetResourceTypes(ctx context.Context) ([]models.ResourceType, error) {
 	return utils.FindAll[models.ResourceType](ctx, r.Db)
@@ -133,4 +138,20 @@ func (r *ResourcesRepository) CreateDataSource(ctx context.Context, dataSource *
 // UpdateDataSource updates a specific DataSource tuple
 func (r *ResourcesRepository) UpdateDataSource(ctx context.Context, dataSource *models.DataSource) (*models.DataSource, error) {
 	return utils.Update[models.DataSource](ctx, r.Db, *dataSource.DataSourceID, *dataSource)
+}
+
+// CreateDataChangeEvent creates a new DataSource tuple
+func (r *ResourcesRepository) CreateDataChangeEvent(ctx context.Context, dataChangeEvent *models.DataChangeEvent) (*models.DataChangeEvent, error) {
+	return utils.Create[models.DataChangeEvent](ctx, r.Db, *dataChangeEvent)
+}
+
+// DeleteDataChangeEvent deletes a DataChangeEvent tuple.  The caller should ensure that it exists prior to calling this.
+func (r *ResourcesRepository) DeleteDataChangeEvent(ctx context.Context, id uuid.UUID) (int64, error) {
+	expr := psql.Quote(models.DataChangeEvent{}.PrimaryKey()).EQ(psql.Arg(id))
+	return utils.Delete[models.DataChangeEvent](ctx, r.Db, expr)
+}
+
+// GetDataChangeEvents retrieves all DataChangeEvent tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetDataChangeEvents(ctx context.Context) ([]models.DataChangeEvent, error) {
+	return utils.FindAll[models.DataChangeEvent](ctx, r.Db)
 }
