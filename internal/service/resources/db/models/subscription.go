@@ -17,8 +17,9 @@ type Subscription struct {
 	ConsumerSubscriptionID *uuid.UUID `db:"consumer_subscription_id"`
 	Filter                 *string    `db:"filter"`
 	Callback               string     `db:"callback"`
-	EventCursor            int        `db:"event_cursor"`
-	CreatedAt              *time.Time `db:"created_at"`
+	// EventCursor holds the SequenceID of the last processed event.  Sequences start at 1 so we initialize this to 0.
+	EventCursor int        `db:"event_cursor"`
+	CreatedAt   *time.Time `db:"created_at"`
 }
 
 // TableName returns the table name associated to this model

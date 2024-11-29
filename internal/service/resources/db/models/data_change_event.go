@@ -19,6 +19,7 @@ type DataChangeEvent struct {
 	ParentID     *uuid.UUID `db:"parent_id"`
 	BeforeState  *string    `db:"before_state"`
 	AfterState   *string    `db:"after_state"`
+	SequenceID   *int       `db:"sequence_id"`
 	CreatedAt    *time.Time `db:"created_at"`
 }
 
@@ -28,7 +29,7 @@ func (r DataChangeEvent) TableName() string {
 }
 
 // PrimaryKey returns the primary key column associated to this model
-func (r DataChangeEvent) PrimaryKey() string { return "id" }
+func (r DataChangeEvent) PrimaryKey() string { return "data_change_id" }
 
 // OnConflict returns the column or constraint to be used in the UPSERT operation
 func (r DataChangeEvent) OnConflict() string {
