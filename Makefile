@@ -414,7 +414,7 @@ sync-submodules:
 # markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
 .PHONY: markdownlint-image
 markdownlint-image:  ## Build local container markdownlint-image
-	$(CONTAINER_TOOL) image build -f ./hack/Dockerfile.markdownlint --tag $(IMAGE_NAME)-markdownlint:latest
+	$(CONTAINER_TOOL) image build -f ./hack/Dockerfile.markdownlint --tag $(IMAGE_NAME)-markdownlint:latest ./hack
 
 .PHONY: markdownlint-image-clean
 markdownlint-image-clean:  ## Remove locally cached markdownlint-image
