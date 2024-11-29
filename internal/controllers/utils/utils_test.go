@@ -92,7 +92,7 @@ var _ = Describe("ExtensionUtils", func() {
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
 			fmt.Sprintf("--backend-url=%s", defaultApiServerURL),
-			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
+			fmt.Sprintf("--backend-token-file=%s", DefaultBackendTokenFile),
 		)
 		expectedArgs = append(expectedArgs,
 			"--extensions=.metadata.labels[\"name\"] as $name |\n{\n  name: $name,\n  alias: $name\n}\n",
@@ -117,7 +117,7 @@ var _ = Describe("ExtensionUtils", func() {
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
 			fmt.Sprintf("--backend-url=%s", defaultApiServerURL),
-			fmt.Sprintf("--backend-token-file=%s", defaultBackendTokenFile),
+			fmt.Sprintf("--backend-token-file=%s", DefaultBackendTokenFile),
 		)
 		Expect(actualArgs).To(Equal(expectedArgs))
 	})

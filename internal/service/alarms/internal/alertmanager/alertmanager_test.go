@@ -53,6 +53,9 @@ var _ = Describe("Alertmanager", func() {
 			err = c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, secret)
 			Expect(err).NotTo(HaveOccurred())
 			data := strings.Replace(string(alertManagerConfig), "{{ .url }}", utils.GetServiceURL(utils.InventoryAlarmServerName), 1)
+			data = strings.Replace(data, "{{ .caFile }}", utils.DefaultServiceCAFile, 1)
+			data = strings.Replace(data, "{{ .bearerTokenFile }}", utils.DefaultBackendTokenFile, 1)
+
 			Expect(secret.Data[secretKey]).To(Equal([]byte(data)))
 		})
 	})
