@@ -432,7 +432,8 @@ markdownlint: markdownlint-image  ## run the markdown linter
 ##@ O-RAN Alarms Server
 
 .PHNOY: alarms
-alarms: bundle deploy clean-am-service connect-postgres run-alarms-migrate create-am-service run-alarms ##Run full alarms stack
+alarms: ##Run full alarms stack
+	IMG=$(IMAGE_TAG_BASE):latest make bundle deploy clean-am-service connect-postgres connect-resource-server run-alarms-migrate create-am-service run-alarms
 
 create-am-service: ##Creates alarm manager service and endpoint to expose a DNS entry.
 	oc apply -k ./internal/service/alarms/k8s/base --wait=true
@@ -444,7 +445,8 @@ clean-am-service: ##Deletes alarm manager service and endpoint.
 
 .PHONY: run-alarms
 run-alarms: go-generate binary ##Run alarms server locally
-	POSTGRES_HOSTNAME=localhost ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server serve
+	@oc exec -n $(OCLOUD_MANAGER_NAMESPACE) $(shell oc get pods -n $(OCLOUD_MANAGER_NAMESPACE) -l app=alarms-server -o=jsonpath='{.items[0].metadata.name}') -- cat /var/run/secrets/kubernetes.io/serviceaccount/token > /tmp/token
+	TOKEN_PATH=/tmp/token RESOURCE_SERVER_URL="https://localhost:8001" INSECURE_SKIP_VERIFY=true POSTGRES_HOSTNAME=localhost ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server serve
 
 run-alarms-migrate: binary ##Migrate all the way up
 	DEBUG=yes POSTGRES_HOSTNAME=localhost INSECURE_SKIP_VERIFY=true ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
@@ -459,3 +461,8 @@ connect-postgres: ##Connect to O-RAN postgres
 	oc wait --for=condition=Ready pod -l app=postgres-server -n oran-o2ims --timeout=30s
 	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace oran-o2ims"
 	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &
+
+.PHONY: connect-resource-server
+connect-resource-server: ##Connect to resource server svc
+	@echo "Starting port-forward in background on port 8001:8000 to resource server svc in namespace oran-o2ims"
+	nohup oc port-forward --address localhost svc/resource-server 8001:8000 -n oran-o2ims > pgproxy_resource.log 2>&1 &
