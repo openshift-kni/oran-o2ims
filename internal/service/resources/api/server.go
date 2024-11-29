@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
+	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
@@ -30,21 +33,20 @@ type ResourceServerConfig struct {
 
 // ResourceServer defines the instance attributes for an instance of a resource server
 type ResourceServer struct {
-	Config *ResourceServerConfig
-	Info   api.OCloudInfo
-	Repo   *repo.ResourcesRepository
+	Config                   *ResourceServerConfig
+	Info                     api.OCloudInfo
+	Repo                     *repo.ResourcesRepository
+	SubscriptionEventHandler notifier.SubscriptionEventHandler
 }
-
-// baseURL is the prefix for all of our supported API endpoints
-var baseURL = "/o2ims-infrastructureInventory/v1"
-var currentVersion = "1.0.0"
 
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
+	version := utils2.CurrentInventoryVersion
+	baseURL := utils2.BaseInventoryURL
 	versions := []generated.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &version,
 		},
 	}
 
@@ -62,9 +64,11 @@ func (r *ResourceServer) GetCloudInfo(ctx context.Context, request api.GetCloudI
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
 	// We currently only support a single version
+	version := utils2.CurrentInventoryVersion
+	baseURL := utils2.BaseInventoryURL
 	versions := []generated.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &version,
 		},
 	}
 
@@ -129,6 +133,21 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 	return api.GetSubscriptions200JSONResponse(objects), nil
 }
 
+// validateSubscription validates a subscription before accepting the request
+func (r *ResourceServer) validateSubscription(request api.CreateSubscriptionRequestObject) error {
+	callback := request.Body.Callback
+	u, err := url.Parse(callback)
+	if err != nil {
+		return fmt.Errorf("invalid callback URL: %w", err)
+	}
+
+	if u.Scheme != "https" {
+		return fmt.Errorf("invalid callback scheme %q, only https is supported", u.Scheme)
+	}
+
+	return nil
+}
+
 // CreateSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
 	consumerSubscriptionId := "<null>"
@@ -136,6 +155,18 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 		consumerSubscriptionId = request.Body.ConsumerSubscriptionId.String()
 	}
 
+	// Validate the subscription
+	if err := r.validateSubscription(request); err != nil {
+		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"consumerSubscriptionId": consumerSubscriptionId,
+				"callback":               request.Body.Callback,
+				"filter":                 "",
+			},
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
 	// Convert from Model -> DB
 	record := models.SubscriptionFromModel(request.Body)
 
@@ -165,6 +196,12 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 			Status: http.StatusInternalServerError,
 		}, nil
 	}
+
+	// Signal the notifier to handle this new subscription
+	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+		Removed:      false,
+		Subscription: models.SubscriptionToInfo(result),
+	})
 
 	response := models.SubscriptionToModel(result)
 	return api.CreateSubscription201JSONResponse(response), nil
@@ -217,6 +254,14 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 			Status: http.StatusNotFound,
 		}, nil
 	}
+
+	// Signal the notifier to handle this subscription change
+	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+		Removed: true,
+		Subscription: models.SubscriptionToInfo(&models.Subscription{
+			SubscriptionID: &request.SubscriptionId,
+		}),
+	})
 
 	return api.DeleteSubscription200Response{}, nil
 }

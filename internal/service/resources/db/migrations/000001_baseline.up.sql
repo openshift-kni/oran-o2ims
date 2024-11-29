@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS data_change_event
     parent_id      UUID NULL,
     before_state json        NULL,
     after_state json NULL,
+    sequence_id SERIAL,                -- track insertion order rather than rely on timestamp since precision may cause ambiguity
     created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
