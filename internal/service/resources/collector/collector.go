@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
@@ -28,17 +29,23 @@ type DataSource interface {
 	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
 }
 
+type NotificationHandler interface {
+	Notify(event *notifier.Notification)
+}
+
 // Collector defines the attributes required by the collector implementation.
 type Collector struct {
-	repository  *repo.ResourcesRepository
-	dataSources []DataSource
+	notificationHandler NotificationHandler
+	repository          *repo.ResourcesRepository
+	dataSources         []DataSource
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(repo *repo.ResourcesRepository, dataSources []DataSource) *Collector {
+func NewCollector(repo *repo.ResourcesRepository, notificationHandler NotificationHandler, dataSources []DataSource) *Collector {
 	return &Collector{
-		repository:  repo,
-		dataSources: dataSources,
+		repository:          repo,
+		notificationHandler: notificationHandler,
+		dataSources:         dataSources,
 	}
 }
 
@@ -79,7 +86,7 @@ func (c *Collector) init(ctx context.Context) error {
 }
 
 // initDataSource initializes a single data source from persistent storage.  This recovers its unique UUID and
-// generation ID so that it continues from its last save point.
+// generation NotificationID so that it continues from its last save point.
 func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) error {
 	name := dataSource.Name()
 	record, err := c.repository.GetDataSourceByName(ctx, name)
@@ -184,8 +191,8 @@ func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
 			return nil, fmt.Errorf("failed to persist resource type': %w", err)
 		}
 
-		if dataChangeEvent != nil { // nolint: staticcheck
-			// TODO: notify the notification processor of the new data change event via a channel
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 
@@ -200,8 +207,8 @@ func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
 			return nil, fmt.Errorf("failed to persist resource: %w", err)
 		}
 
-		if dataChangeEvent != nil { // nolint: staticcheck
-			// TODO: notify the notification processor of the new data change event via a channel
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 
@@ -227,8 +234,8 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource DataSou
 			return nil, fmt.Errorf("failed to persist resource pool: %w", err)
 		}
 
-		if dataChangeEvent != nil { // nolint: staticcheck
-			// TODO: notify the notification processor of the new data change event
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 
@@ -254,8 +261,8 @@ func (c *Collector) collectDeploymentManagers(ctx context.Context, dataSource Da
 			return nil, fmt.Errorf("failed to persist deployment manager: %w", err)
 		}
 
-		if dataChangeEvent != nil { // nolint: staticcheck
-			// TODO: notify the notification processor of the new data change event
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 
