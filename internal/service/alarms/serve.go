@@ -13,15 +13,15 @@ import (
 	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
-
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
 // Alarm server config values
@@ -67,13 +67,26 @@ func Serve() error {
 	}()
 
 	// Get client for hub
-	hubClient, err := k8s_client.NewClientForHub()
+	hubClient, err := k8s.NewClientForHub()
 	if err != nil {
 		return fmt.Errorf("error creating client for hub: %w", err)
 	}
 
+	// Initialize resource server client
+	rs, err := resourceserver.New()
+	if err != nil {
+		return fmt.Errorf("error creating resource server client: %w", err)
+	}
+
+	// Get all needed resources from the resource server
+	err = rs.GetAll(ctx)
+	if err != nil {
+		slog.Warn("error getting resources from the resource server", "error", err)
+	}
+
+	// Load dictionary
 	alarmsDict := dictionary.New(hubClient)
-	alarmsDict.Load(ctx)
+	alarmsDict.Load(ctx, rs.ResourceTypes)
 
 	// TODO: Audit and Insert data database
 
@@ -85,6 +98,7 @@ func Serve() error {
 		AlarmsRepository: &repo.AlarmsRepository{
 			Db: pool,
 		},
+		ResourceServer: rs,
 	}
 
 	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,

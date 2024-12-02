@@ -6,13 +6,16 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/google/uuid"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/k8s_client"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
 const (
@@ -29,55 +32,59 @@ const (
 type AlarmDictionary struct {
 	Client crclient.Client
 
-	RulesMap map[int][]monitoringv1.Rule
+	RulesMap map[uuid.UUID][]monitoringv1.Rule
 }
 
 func New(client crclient.Client) *AlarmDictionary {
 	return &AlarmDictionary{
 		Client:   client,
-		RulesMap: make(map[int][]monitoringv1.Rule),
+		RulesMap: make(map[uuid.UUID][]monitoringv1.Rule),
 	}
 }
 
 // Load loads the alarm dictionary
-func (r *AlarmDictionary) Load(ctx context.Context) {
-	// TODO: List Resource Type from Resource Server
-	resourceTypeList := getResourceTypes()
+func (r *AlarmDictionary) Load(ctx context.Context, resourceTypes *[]resourceserver.ResourceType) {
+	slog.Info("loading alarm dictionaries")
+
+	if resourceTypes == nil {
+		slog.Warn("no resource types to load")
+		return
+	}
 
 	type result struct {
-		resourceTypeID int
+		resourceTypeID uuid.UUID
 		rules          []monitoringv1.Rule
 		err            error
 	}
 
 	wg := sync.WaitGroup{}
 	resultChannel := make(chan result)
-	for _, resource := range resourceTypeList {
+	for _, resourceType := range *resourceTypes {
 		wg.Add(1)
-		go func(resource resourceType) {
+		go func(resourceType resourceserver.ResourceType) {
 			var err error
 			var rules []monitoringv1.Rule
 
 			defer func() {
 				wg.Done()
 				resultChannel <- result{
-					resourceTypeID: resource.id,
+					resourceTypeID: resourceType.ResourceTypeId,
 					rules:          rules,
 					err:            err,
 				}
 			}()
 
 			// TODO: this needs to be updated once the resource type content is defined by the Resource Server. Not expected to be this simple.
-			switch resource.model {
+			switch resourceType.Model {
 			case resourceTypeCluster:
-				rules, err = r.processCluster(ctx, resource.version)
+				rules, err = r.processCluster(ctx, resourceType.Version)
 			case resourceTypeHub:
 				rules, err = r.processHub(ctx)
 				// TODO: Logic to process Hub cluster rules will be added after the ones for the managed cluster are implemented
 			default:
-				err = fmt.Errorf("unsupported resource type: %s", resource.model)
+				err = fmt.Errorf("unsupported resource type: %s", resourceType.Model)
 			}
-		}(resource)
+		}(resourceType)
 	}
 
 	go func() {
@@ -95,8 +102,7 @@ func (r *AlarmDictionary) Load(ctx context.Context) {
 		slog.Info("loaded rules for resource type", "ResourceType ID", res.resourceTypeID, "rules count", len(res.rules))
 	}
 
-	// TODO: Load future alarm dictionary struct
-	// TODO: Load alarm dictionary into DB
+	// TODO: Load data into DB
 }
 
 func (r *AlarmDictionary) processHub(ctx context.Context) ([]monitoringv1.Rule, error) {
@@ -110,7 +116,7 @@ func (r *AlarmDictionary) processHub(ctx context.Context) ([]monitoringv1.Rule, 
 }
 
 // Needed for testing
-var getClientForCluster = k8s_client.NewClientForCluster
+var getClientForCluster = k8s.NewClientForCluster
 
 // processCluster processes a cluster resource type
 func (r *AlarmDictionary) processCluster(ctx context.Context, version string) ([]monitoringv1.Rule, error) {
@@ -140,7 +146,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 	versionSelector, _ := labels.NewRequirement(managedClusterVersionLabel, selection.Equals, []string{version})
 	localClusterRequirement, _ := labels.NewRequirement(localClusterLabel, selection.NotEquals, []string{"true"})
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, k8s_client.ListRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
 
 	var managedClusters clusterv1.ManagedClusterList
@@ -161,7 +167,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 
 // getRules gets rules defined within a PrometheusRule resource
 func (r *AlarmDictionary) getRules(ctx context.Context, cl crclient.Client) ([]monitoringv1.Rule, error) {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, k8s_client.ListRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
 
 	var promRules monitoringv1.PrometheusRuleList
@@ -179,32 +185,4 @@ func (r *AlarmDictionary) getRules(ctx context.Context, cl crclient.Client) ([]m
 	}
 
 	return rules, nil
-}
-
-// TODO: Delete once Resource Type is defined by Resource Server
-type resourceType struct {
-	id      int
-	model   string
-	version string
-}
-
-// TODO: Replace with actual resource type list from Resource Server
-func getResourceTypes() []resourceType {
-	return []resourceType{
-		{
-			id:      1,
-			model:   resourceTypeCluster,
-			version: "4.14",
-		},
-		{
-			id:      2,
-			model:   resourceTypeCluster,
-			version: "4.15",
-		},
-		{
-			id:      3,
-			model:   resourceTypeCluster,
-			version: "4.16",
-		},
-	}
 }

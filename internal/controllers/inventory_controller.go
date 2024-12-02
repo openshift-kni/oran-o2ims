@@ -70,6 +70,7 @@ import (
 //+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
+//+kubebuilder:rbac:urls="/o2ims-infrastructureInventory/v1/resourceTypes",verbs=get;list
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -1050,6 +1051,15 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 					"get",
 					"list",
 					"watch",
+				},
+			},
+			{
+				NonResourceURLs: []string{
+					"/o2ims-infrastructureInventory/v1/resourceTypes",
+				},
+				Verbs: []string{
+					"get",
+					"list",
 				},
 			},
 		},

@@ -1043,6 +1043,11 @@ spec:
           verbs:
           - create
           - post
+        - nonResourceURLs:
+          - /o2ims-infrastructureInventory/v1/resourceTypes
+          verbs:
+          - get
+          - list
         - apiGroups:
           - ""
           resources:
