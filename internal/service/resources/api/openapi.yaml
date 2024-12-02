@@ -758,7 +758,6 @@ components:
             country: "ES"
       required:
       - oCloudId
-      - globalCloudId
       - name
       - description
       - serviceUri

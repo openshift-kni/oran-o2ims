@@ -133,14 +133,17 @@ func GetTokenFlag(
 
 // Names of command line flags:
 const (
+	APIListenerAddressFlagName        = "api-listener-address"
+	APIListenerTLSCertFlagName        = "api-listener-tls-crt"
+	APIListenerTLSKeyFlagName         = "api-listener-tls-key"
 	backendTokenFileFlagName          = "backend-token-file"
 	backendTokenFlagName              = "backend-token"
 	backendTypeFlagName               = "backend-type"
-	backendURLFlagName                = "backend-url"
-	cloudIDFlagName                   = "cloud-id"
-	extensionsFlagName                = "extensions"
-	externalAddressFlagName           = "external-address"
-	globalCloudIDFlagName             = "global-cloud-id"
+	BackendURLFlagName                = "backend-url"
+	CloudIDFlagName                   = "cloud-id"
+	ExtensionsFlagName                = "extensions"
+	ExternalAddressFlagName           = "external-address"
+	GlobalCloudIDFlagName             = "global-cloud-id"
 	namespaceFlagName                 = "namespace"
 	resourceServerTokenFlagName       = "resource-server-token"
 	resourceServerURLFlagName         = "resource-server-url"
