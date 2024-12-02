@@ -48,12 +48,12 @@ func AlarmSubscriptionServer() *cobra.Command {
 	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
 	_ = flags.String(
-		globalCloudIDFlagName,
+		GlobalCloudIDFlagName,
 		"",
 		"Global O-Cloud identifier.",
 	)
 	_ = flags.StringArray(
-		extensionsFlagName,
+		ExtensionsFlagName,
 		[]string{},
 		"Extension to add to alarm subscriptions.",
 	)
@@ -106,12 +106,12 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 
 	// Get the cloud identifier:
-	globalCloudID, err := flags.GetString(globalCloudIDFlagName)
+	globalCloudID, err := flags.GetString(GlobalCloudIDFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to get global cloud identifier flag",
-			"flag", globalCloudIDFlagName,
+			"flag", GlobalCloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -120,7 +120,7 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 		logger.ErrorContext(
 			ctx,
 			"Global cloud identifier is empty",
-			"flag", globalCloudIDFlagName,
+			"flag", GlobalCloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
@@ -131,12 +131,12 @@ func (c *AlarmSubscriptionServerCommand) run(cmd *cobra.Command, argv []string) 
 	)
 
 	// Get the extensions details:
-	extensions, err := flags.GetStringArray(extensionsFlagName)
+	extensions, err := flags.GetStringArray(ExtensionsFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to extension flag",
-			"flag", extensionsFlagName,
+			"flag", ExtensionsFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
