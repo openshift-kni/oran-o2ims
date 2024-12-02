@@ -23,7 +23,9 @@ func GetAllDBTagsFromStruct[T db.Model](s T) DBTag {
 	tags := make(DBTag)
 
 	st := reflect.TypeOf(s)
-	st = st.Elem()
+	if st.Kind() != reflect.Struct {
+		st = st.Elem()
+	}
 
 	for i := 0; i < st.NumField(); i++ {
 		tags[st.Field(i).Name] = st.Field(i).Tag.Get("db")
@@ -38,7 +40,9 @@ func GetDBTagsFromStructFields[T db.Model](s T, fields ...string) DBTag {
 	tags := make(DBTag)
 
 	st := reflect.TypeOf(s)
-	st = st.Elem()
+	if st.Kind() != reflect.Struct {
+		st = st.Elem()
+	}
 
 	for _, field := range fields {
 		f, found := st.FieldByName(field)

@@ -141,52 +141,52 @@ type AlarmDictionaryManagementInterfaceId string
 type DeploymentManager struct {
 	// Capabilities Information about the capabilities supported by the Deployment Manager and its set of deployment management
 	// services based on the resources allocated to the Deployment Manager.
-	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
+	Capabilities map[string]string `json:"capabilities"`
 
 	// Capacity Information about the available, allocated and reserved capacity of O-Cloud Resources allocated to the
 	// Deployment Manager.
-	Capacity *map[string]interface{} `json:"capacity,omitempty"`
+	Capacity map[string]string `json:"capacity"`
 
 	// DeploymentManagerId Identifier for the Deployment Manager. This identifier is allocated by the O-Cloud.
-	DeploymentManagerId *openapi_types.UUID `json:"deploymentManagerId,omitempty"`
+	DeploymentManagerId openapi_types.UUID `json:"deploymentManagerId"`
 
 	// Description Human readable description of the deployment manager
-	Description *string `json:"description,omitempty"`
+	Description string `json:"description"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related Deployment Manager.
-	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+	Extensions *map[string]string `json:"extensions,omitempty"`
 
 	// Name Human readable description of the deployment manager
-	Name *string `json:"name,omitempty"`
+	Name string `json:"name"`
 
 	// OCloudId Identifier for the containing O-Cloud.
-	OCloudId *openapi_types.UUID `json:"oCloudId,omitempty"`
+	OCloudId openapi_types.UUID `json:"oCloudId"`
 
 	// ServiceUri The fully qualified URI to a Deployment Management server for O2dms services. Since the O2dms provides
 	// multiple services, this entry is for the {apiRoot} only.
-	ServiceUri *string `json:"serviceUri,omitempty"`
+	ServiceUri string `json:"serviceUri"`
 
 	// SupportedLocations List of globalLocationIDs that were assigned to the OCloud Site(s) which this Deployment Manager supports.
-	SupportedLocations *[]string `json:"supportedLocations,omitempty"`
+	SupportedLocations []string `json:"supportedLocations"`
 }
 
 // OCloudInfo defines model for OCloudInfo.
 type OCloudInfo struct {
 	// Description Human readable description of the O-Cloud as provided by the SMO at cloud genesis.
-	Description *string                 `json:"description,omitempty"`
-	Extensions  *map[string]interface{} `json:"extensions,omitempty"`
+	Description string             `json:"description"`
+	Extensions  *map[string]string `json:"extensions,omitempty"`
 
 	// GlobalCloudId Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud IMS Inventory.
-	GlobalCloudId *openapi_types.UUID `json:"globalCloudId,omitempty"`
+	GlobalCloudId openapi_types.UUID `json:"globalCloudId"`
 
 	// Name Human readable name of the O-Cloud as identified by the SMO at cloud genesis.
-	Name *string `json:"name,omitempty"`
+	Name string `json:"name"`
 
 	// OCloudId Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
-	OCloudId *openapi_types.UUID `json:"oCloudId,omitempty"`
+	OCloudId openapi_types.UUID `json:"oCloudId"`
 
 	// ServiceUri The URI root to all services provided by the O2ims interface. Inventory is one of these services.
-	ServiceUri *string `json:"serviceUri,omitempty"`
+	ServiceUri string `json:"serviceUri"`
 }
 
 // Resource Information about a resource.
@@ -198,7 +198,7 @@ type Resource struct {
 	Elements []Resource `json:"elements"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource.
-	Extensions map[string]interface{} `json:"extensions"`
+	Extensions map[string]string `json:"extensions"`
 
 	// GlobalAssetId Identifier or serial number of the resource, if available. It is required only if the resource has been
 	// identified during its addition to the cloud as a reportable asset in the SMO inventory.
@@ -224,7 +224,7 @@ type ResourcePool struct {
 	Description string `json:"description"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
-	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+	Extensions *map[string]string `json:"extensions,omitempty"`
 
 	// GlobalLocationId This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
 	GlobalLocationId openapi_types.UUID `json:"globalLocationId"`
@@ -250,7 +250,7 @@ type ResourceType struct {
 	Description string `json:"description"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-	Extensions map[string]interface{} `json:"extensions"`
+	Extensions map[string]string `json:"extensions"`
 
 	// Model Information about the model of the resource as defined by its provider.
 	Model string `json:"model"`
@@ -280,17 +280,37 @@ type ResourceTypeResourceClass string
 // ResourceTypeResourceKind Value describing “physicality” of the resource type.
 type ResourceTypeResourceKind string
 
+// Subscription Information about an inventory subscription.
+type Subscription struct {
+	// Callback The fully qualified URI to a consumer procedure which can process a Post of the
+	// InventoryEventNotification.
+	Callback string `json:"callback"`
+
+	// ConsumerSubscriptionId Identifier for the consumer of events sent due to the Subscription.
+	ConsumerSubscriptionId *string `json:"consumerSubscriptionId,omitempty"`
+
+	// Filter Criteria for events which do not need to be reported or will be filtered by the subscription
+	// notification service. Therefore, if a filter is not provided then all events are reported.
+	Filter *string `json:"filter,omitempty"`
+
+	// SubscriptionId Identifier for the Subscription. This identifier is allocated by the O-Cloud.
+	SubscriptionId *openapi_types.UUID `json:"subscriptionId,omitempty"`
+}
+
 // DeploymentManagerId defines model for deploymentManagerId.
-type DeploymentManagerId = string
+type DeploymentManagerId = openapi_types.UUID
 
 // ResourceId defines model for resourceId.
-type ResourceId = string
+type ResourceId = openapi_types.UUID
 
 // ResourcePoolId defines model for resourcePoolId.
-type ResourcePoolId = string
+type ResourcePoolId = openapi_types.UUID
 
 // ResourceTypeId defines model for resourceTypeId.
-type ResourceTypeId = string
+type ResourceTypeId = openapi_types.UUID
+
+// SubscriptionId defines model for subscriptionId.
+type SubscriptionId = openapi_types.UUID
 
 // GetAllVersionsParams defines parameters for GetAllVersions.
 type GetAllVersionsParams struct {
@@ -752,6 +772,124 @@ type GetResourceTypesParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
+// GetSubscriptionsParams defines parameters for GetSubscriptions.
+type GetSubscriptionsParams struct {
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
+}
+
+// GetSubscriptionParams defines parameters for GetSubscription.
+type GetSubscriptionParams struct {
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+}
+
+// CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
+type CreateSubscriptionJSONRequestBody = Subscription
+
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
 
@@ -857,6 +995,20 @@ type ClientInterface interface {
 
 	// GetResourceType request
 	GetResourceType(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSubscriptions request
+	GetSubscriptions(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSubscriptionWithBody request with any body
+	CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSubscription(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteSubscription request
+	DeleteSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSubscription request
+	GetSubscription(ctx context.Context, subscriptionId SubscriptionId, params *GetSubscriptionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetAllVersions(ctx context.Context, params *GetAllVersionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -981,6 +1133,66 @@ func (c *Client) GetResourceTypes(ctx context.Context, params *GetResourceTypesP
 
 func (c *Client) GetResourceType(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourceTypeRequest(c.Server, resourceTypeId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSubscriptions(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSubscriptionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSubscriptionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSubscription(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSubscriptionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSubscriptionRequest(c.Server, subscriptionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSubscription(ctx context.Context, subscriptionId SubscriptionId, params *GetSubscriptionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSubscriptionRequest(c.Server, subscriptionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1698,6 +1910,233 @@ func NewGetResourceTypeRequest(server string, resourceTypeId ResourceTypeId) (*h
 	return req, nil
 }
 
+// NewGetSubscriptionsRequest generates requests for GetSubscriptions
+func NewGetSubscriptionsRequest(server string, params *GetSubscriptionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.ExcludeFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Fields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Filter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateSubscriptionRequest calls the generic CreateSubscription builder with application/json body
+func NewCreateSubscriptionRequest(server string, body CreateSubscriptionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSubscriptionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateSubscriptionRequestWithBody generates requests for CreateSubscription with any type of body
+func NewCreateSubscriptionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteSubscriptionRequest generates requests for DeleteSubscription
+func NewDeleteSubscriptionRequest(server string, subscriptionId SubscriptionId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "subscriptionId", runtime.ParamLocationPath, subscriptionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSubscriptionRequest generates requests for GetSubscription
+func NewGetSubscriptionRequest(server string, subscriptionId SubscriptionId, params *GetSubscriptionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "subscriptionId", runtime.ParamLocationPath, subscriptionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.ExcludeFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Fields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -1773,6 +2212,20 @@ type ClientWithResponsesInterface interface {
 
 	// GetResourceTypeWithResponse request
 	GetResourceTypeWithResponse(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*GetResourceTypeResponse, error)
+
+	// GetSubscriptionsWithResponse request
+	GetSubscriptionsWithResponse(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error)
+
+	// CreateSubscriptionWithBodyWithResponse request with any body
+	CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
+
+	CreateSubscriptionWithResponse(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
+
+	// DeleteSubscriptionWithResponse request
+	DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error)
+
+	// GetSubscriptionWithResponse request
+	GetSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, params *GetSubscriptionParams, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error)
 }
 
 type GetAllVersionsResponse struct {
@@ -2044,6 +2497,102 @@ func (r GetResourceTypeResponse) StatusCode() int {
 	return 0
 }
 
+type GetSubscriptionsResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *[]Subscription
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSubscriptionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSubscriptionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSubscriptionResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON201                   *Subscription
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteSubscriptionResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	ApplicationProblemJSON404 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSubscriptionResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *Subscription
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON404 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // GetAllVersionsWithResponse request returning *GetAllVersionsResponse
 func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, params *GetAllVersionsParams, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error) {
 	rsp, err := c.GetAllVersions(ctx, params, reqEditors...)
@@ -2141,6 +2690,50 @@ func (c *ClientWithResponses) GetResourceTypeWithResponse(ctx context.Context, r
 		return nil, err
 	}
 	return ParseGetResourceTypeResponse(rsp)
+}
+
+// GetSubscriptionsWithResponse request returning *GetSubscriptionsResponse
+func (c *ClientWithResponses) GetSubscriptionsWithResponse(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error) {
+	rsp, err := c.GetSubscriptions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSubscriptionsResponse(rsp)
+}
+
+// CreateSubscriptionWithBodyWithResponse request with arbitrary body returning *CreateSubscriptionResponse
+func (c *ClientWithResponses) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
+	rsp, err := c.CreateSubscriptionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSubscriptionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSubscriptionWithResponse(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
+	rsp, err := c.CreateSubscription(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSubscriptionResponse(rsp)
+}
+
+// DeleteSubscriptionWithResponse request returning *DeleteSubscriptionResponse
+func (c *ClientWithResponses) DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error) {
+	rsp, err := c.DeleteSubscription(ctx, subscriptionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSubscriptionResponse(rsp)
+}
+
+// GetSubscriptionWithResponse request returning *GetSubscriptionResponse
+func (c *ClientWithResponses) GetSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, params *GetSubscriptionParams, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error) {
+	rsp, err := c.GetSubscription(ctx, subscriptionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSubscriptionResponse(rsp)
 }
 
 // ParseGetAllVersionsResponse parses an HTTP response from a GetAllVersionsWithResponse call
@@ -2618,99 +3211,268 @@ func ParseGetResourceTypeResponse(rsp *http.Response) (*GetResourceTypeResponse,
 	return response, nil
 }
 
+// ParseGetSubscriptionsResponse parses an HTTP response from a GetSubscriptionsWithResponse call
+func ParseGetSubscriptionsResponse(rsp *http.Response) (*GetSubscriptionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSubscriptionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Subscription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSubscriptionResponse parses an HTTP response from a CreateSubscriptionWithResponse call
+func ParseCreateSubscriptionResponse(rsp *http.Response) (*CreateSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Subscription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteSubscriptionResponse parses an HTTP response from a DeleteSubscriptionWithResponse call
+func ParseDeleteSubscriptionResponse(rsp *http.Response) (*DeleteSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSubscriptionResponse parses an HTTP response from a GetSubscriptionWithResponse call
+func ParseGetSubscriptionResponse(rsp *http.Response) (*GetSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Subscription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xde3PcOHL/KigmVbe+DEea0Wj0uNpKKZK8nlrLUiT5LimPywLJ5gzWJEADoLQTr6ru",
-	"gyRf7j5JCg++yXlJu+tk5X8sDYFGo9GPXzeao6+Oz+KEUaBSOMdfnQRzHIMErn/zWRwz+gkn5BNLgKr/",
-	"4Wc/SgN4TSAK9JgAhM9JIgmjzrFzyuIYIwGKjoQARURIxEIUqvGIQwgcqA8CSYYsKRRyFiM5B8RBpJHs",
-	"T+mUnmN/Xp+EiEDYfkhxDD3EOFKLfUn143wZ9VCUmPAWSERYzEH00WvGpxR+xnESQa/MhWLgzmcplXxx",
-	"h0TqGVosNE/gZwlUEEbFnVnlWLF5d3enqGkKn/TH4vti5I4lZ8dN6d/mQJGcE4FyOSMi6J8kSgUEiDK7",
-	"gQcSRciDjLdAi8SIHBFLQUu2PhDBPVBENM8LhLl6kkTEJzJaIELtoFQQOlNDpvTOMH1XMNSfUqfnWAk5",
-	"x46WdHNPTs8h6sC/pKB/UcOcY6cqC6fnCH8OMVaKIheJGiEkJ3TmPD722tQrfAa9svs0kvqdtGoG0uiN",
-	"mmU1BmEaPEHNrHp1nMe6OoajSK9kqOUKxEGmnGpNe8Lpb3/qkQTePPUbwNyfI58TCZxgfYanjEpMqECM",
-	"gjqqmHFAojqwVzsmiInPIkZFH2kVqA3XKjClMk0iQL6hrywEU8QS4Fgy3st1pFAcdZxlJu5xlCpluJ1D",
-	"Pg/5mE6ppwYvskMOWRSxB7WAkYrQZ/wLuszm/IIuAGsOtvn3y5T+4ub/Sj9u8U/RUupK5Z2ijC6w9Ocg",
-	"rIexEvGzE1EfaSF08oXu4Mud+a2dFhEIvqQ4Uja0hJyhNZOraM04YGUAco5pF72MFtxtQIvxVj4NLUJX",
-	"8aXVJixmik55RSv3GIEQSzdYorVqjwWt+gYL2oYWtUrRQStgIBBlMlOODt4sLasU3XwpSqv0wtKywl9O",
-	"a5X8f1EWeZvPqgQLNUn5O0WgRMc6VPsb834CXzZjyZRmU+34zniCyuEkFS0AxbVbooIEMKWr44dyst9/",
-	"B19aHHrv/N9f5SHkthCLghCKMOazNFYgMd+gdVZ1XjUTX+5KDpDFCeYgptSfg/85Pw9zgmyl8fczjrRZ",
-	"KZ9rzjhbQCCRJgnjEsVpJIly4ZkjrktRM5Ctn4tySuuy7AjFmj8i58DR3fnNnTrbu/c3TQET2irgm977",
-	"m1fVMG2FnNmIioxY9DI1UAuIBGtUo+AcBQjUNjxAIuWcpTSwakPoLAL0JWUSRH9Kl++7jEisOps4hO7i",
-	"BfKjVEjgd616o9HAn4pRf6rtJz+BPLJ2xGGtVwqP9DQgMVoQozgVEsXKblHIuEGoSn8ikDowB0QBA7Ul",
-	"PahF94rYqpFN286JmNLyTtGfMQ3+XDOv/ACViNRprymPv3SZV/3oVyM0g1tXQ7SckYKPV534TOOs5fgs",
-	"gCRiC2XsF5jiGfBJ0ERm7yn5kgIiAVBJQgJcnSFGxVwUm8l1bsf7w+FgfzxyD73dfXc0GGPXC/091x/u",
-	"73r+eAQDjDPuEyznBfNtfPUcDl9SwiFwjiVPYfnOOAiWch822FA2pb6NvcPA98Z7nusNwl13FAx99/DQ",
-	"C9398Wg0Hh/sQrg7aN9GiYntuL9iLNpiByhhLHr+bVhuttvK7SLZ5jCQotjIVFgAnw4/+YyD+ITjYDxa",
-	"zrhdexPGH7OHOkE9iTCPzyAklBi267uY0JDxGGuXhT2WSpVQYDULBfm0vtNzEq6CmSSg6eoRJ4HxdTjq",
-	"qrS8tRlwDBIHWGL0GRauCaoJJlwYZyIZwkIwn2AJKDZZRZhGxSwbajlE2ku3iNhKwSAa57FnGDydYzrT",
-	"QmzbeEB8LE3c0pQUo76eodClRMz3U84hQEHKbS3CSibCQtqhf0E4CFSICEAFgKCHYhYodchcIE1j5/iD",
-	"c3J2dn7m9Jyz87fnt/qni8uzyevJ+ZnzsVc/RMt+cW5t+nfF2T0JFPxBaZsqFux6oNjnmAgIVOZHRBZT",
-	"rziJMV+gH2GBCLVi1jqDzoivz1Zl7U7PMVriHDtpSgKnm+MSh0sYjhidAUf58/v83KucF+FUYSqMSgSz",
-	"gT6jGXTNcN+U1mYXmyZUgkYkBqJwwDrol5JoXRhRDGGqBIoVzQelDnOcJEAhsKwIoMKAZcUFhCH4UvQq",
-	"7PRM9q3BGIkT7CvlxRxwDlDFQkiIKypck+hbLKRR41UqXD829FfgBhxQ9DAn/tyE84YGB8uWf6f9UedJ",
-	"irnCtDpbsFjI0G+n6EeA1c8dBplpr0APc9BCM7wSgfRMJbxUMuWsfBxFC13TwDRVP9eM7f3t5cXJ7eRU",
-	"mdnJu/cnb1uNzER/FawnVAIPcXvUzZ1YPlyrkR6P2D1wK17Nrc1GOKYiJlIduBEMEeicSiIX6NY4revz",
-	"m9vryent5PLdsYaISniX7mnE0gBNLm7QDfB7YnA1ETYT0SXVmEijwJfDycWN2TmREGv/m4lAP2vdtf0A",
-	"c44X6vfk8zum5O7rIKA9+YrDIXmBkvFqkVNk9UxzcrREuFqBSazj+QwL9N3Vj69y7zOlDT3OBZhL/S+I",
-	"9KFf4aRC3ZLI3SeanNXEtFoqnCVMQHANKlCdaGbEEkuYpSTAKn1W3GaTEdezETbTWw3tsRzcP7Q4/rIl",
-	"Np1CM9K1uOKu7dRMsssi2nWk1wECPrZEYwND8iPdDIbk0zpgSBXe5Ef8zxxC59j5p53i8mjHIqOdOixq",
-	"UQBcZfkmB1xVxjMnax16Q3nNPGWtDR9cbExpr9q/WOaKC6J2zY2Z6RchQaB7oAHjBuRBgESqmcPmRuC+",
-	"SqjMKabIUxE2A2wBeiByrgJiAr5SkfpkwUL5oJxiABG5B25LzCqz5CxIfdmxadDusj1WXLrXJ++QGWGw",
-	"GyhvW0Fpxyboizk2qakFSQnwbO/XJZTdj1kAkQrYU1r53O6mncffMYIg9BJDvvEYYtSszUy1+ln7KB2q",
-	"cRP6opmIpi/BSRIRc3mjFZulUaA0W1uZwmDmgHEuwYYq63WxlJx4qYS1w1HD83S5x4rV5gLYKq6UvHNb",
-	"RDmrF1rWiimdtZ9qWPFxgj0Skez3VXR1HlKak1V7TUVRPS3YRZZfnRsQKZAArfsNztSPUyoyC/awAhQs",
-	"vy7Wx6pCScR8bI25faWODFkx7BO5WHeD+B6TCHsR9EqLqk1wUExCgDKKajuZF7ru5HRK12Z1rWrfpMh+",
-	"s1ykZQGbCRZjSZkze1qW+f42RcGViXKwLEd+k8aY6rRUSbot321qcIXLi7y+2hpT86Lvb1WrWfuMaWum",
-	"uaU8Ghtn+kDXVJvS7XqrJgzHQ/8wHBy4+0Nv3x2NByP3CPbH7uFgiGE4CPEhPlhHE6xtv+ekyZa+10tV",
-	"lvslxZEuKKH31xMt/6ZQ9Y/aCs0uLodBLFDmO/rohqjURKu2fpJkacuU5tch2eieiT5AJV8o68ik8hUn",
-	"5Jox+YgYzRPuXCZzKRNxvLMTL/pW/47Ho9Fe67Yz5/iWGb+/RBlnEfNwlA2cnAmDUR+AqzgnyIwWnu/S",
-	"eJwbIuE78aqMt1u8r2VCbBbTH1sU1yyrfKbuTasEkifaeuZEcX5iuYu6ubhEWCJfP58BBUFEv+kJWBqs",
-	"9gP5nK9O1jpz7JzfOD1nnnrqbFNv12nbujmddUyrtiFChdTZcn6GxbZaXbRZKVpkKB77nAnRoCfQZ8oe",
-	"aKYRBTXjxx7WFKSJzQIJyTgEGZoqA+sJvQcqmclJC5kf+gN/sD8I3OHh0ZE78o/GrncwDt1RCEfD3fHI",
-	"2z/w1vEMaznD7JK+pim54DbQlXjhduoKe8L59pHGe1QfnVqZ5xkjoSrFb0z4XRytcqycMam9axTlrrCh",
-	"LJdDEpdyiH6hB9WGGVG4037DTR7v7Ci8Ec2ZkMeHu7u7rSi8YWwZkloP6FbvBJ/VK+Wk6ypEWQCt3ibS",
-	"AUq0Cz+/zYnJbC5VPqMLNhrthkjEOIqAlxCvypx0dTifWFi/ud8loe6EkboyUPbuy0pCuXhbErnfHjaV",
-	"Zdzhdk+EALnKLLnSQ4IjRNPYK+w0I99DJCyAfR9NpNLjLAHUgT5rTMilPccCeQAUTWnJ1dg7MpXQ4KBo",
-	"gdBwKvNMSitV0NWKhRX7mWtVHorkLrUGLbxxOD7wD4bu4dFg3x0djDzX2xsfuePB0SHgQXjgjcM2tZtx",
-	"liYtJ/YjLB4YDwQKgDJdMzIjy5e3HkSMzgSSrL9Ryr/s9r4FaWZKt3FastLlNS/iSxfqR/7hPhyM3CEc",
-	"Hboj2AvcwxB8F/bx4egoOBof+ONN1ui6IV+yYVPuyAqB7R5lf7y3dxDsgnvoAbijg2DPxaHvuXv+eDjw",
-	"wxAPvbW8v8Sz5VqgPvb03SNHfqQgSbjISokNJ7MZWizXUmpNFY3WhNqVf9XKq3ljyafa/eXqXvFWH5fE",
-	"EbXyZrGk1J3xqwQUQ//byFu7eKp74Tw1CdqiW8OmfZYob5m/TZJjyqANCpc7D7KRRb67ju5Hlr11izwz",
-	"YDOOkznxcYSyya3npBx6ABL8VXWT8/fPgnAbB1JDr501j28y9V/VJ7XMdao59ZykANxb17eCPW94AIOR",
-	"O9o/PHJHwdGei+Fg7AaBj/f3jwZHe7BGfavD5+VuLj+NFgOyWlF1dctcWFdnzxIXVrQMtd0kVm4oS2lx",
-	"457xw5IWqGytUxVKnGPn9PLi6v3teUdbj/OOBXABMeOLN2Q2fy9JRP4Ly3KVvbI7M1QXZkgUKUVNk14B",
-	"yrDHdDONHjQnszlKC4pIzjmIOYuCXKt0I8hgH8WEphJE5bb52HnDhEGEKTXNOal1tbFNfTsuwOzVUcfF",
-	"UEMMZ5031MeO8/ix+wLUuR+sZOKxtaD8PAFLa9M3FrBqPBWb1jec6wYCcx1a36/2+ebC2FtosG8zZF71",
-	"Jf/hDlrz2qf4/WxfJb8PAUnjZe7VmmB9udcpNaoUIc6i9qWyIkWewfRLDUbv352dv5680318mXn3nHfn",
-	"t3+7vP5x8u4Hp+fc3F5en/xwrvxXwXExtpPlHwltiQd/1epRgqr/+Pt/J/OFUHGayMU//v4/3fJq4fnq",
-	"zX/eTE5P3jo95+3lD/qnCp+l58+O+p8SorC/7x+Mdt290cGuO8Lj0MX+4ZGLhwcHu4Ojo3B8OFwn+nZd",
-	"zNpunjxNvm7NS25YDOiU8YRxbTU9NKF+v32dVY0aPKuKtXmXda3tfrg7HPUHg7WjcZ5jtMTb8q2tdhjF",
-	"Nhp+2Kmpbd3wVuYiLa9ZnlxNOvtb2iJ7rdvk5GrSFt5LJ1HIbdDf7a9ZfFvKqFiP06zLwfIiVrCME1Km",
-	"n7P9obQbuwUVItcqci2Xd0s9I+XkikNIfq5KbocNSSxcQkOOheSpL1MOeS10536wtVSvOPMiiM9AYhKJ",
-	"5o0KzgHXSdbGUPv8qjJ++fWrc0IXpdJYQaRokhC9sh0SWup0slbLbQcxUcJRKARnPfMtuENtq6kuJ2iu",
-	"IqCbR0D4OYkwNQvkjVU64hORNabbF79NK4yWWtUtnDJKwc8qcQozeFgAkiSGQCG5No+VVzlaWNRV8vwl",
-	"Q30PR4qWHt2EknHazSGa0olEMV6ghe65CVNu+qNLBkNCFEC+ku1PLpw6J601foll2lFifnN7e4XMAOSz",
-	"AIp2oKWizJcktCQsQiXMgGtrITJqFZXui+7VD1WksW5Yqq5kAjWayKyjR7+Rat5D0HWCEo+SdXPc01/y",
-	"AIk0LagpV3BaOxl922BTgD6ahAbfEKH73GmpSV2/VDt1tMM69iJMP08dex2c24NtqMOR0B302Q1JRxOf",
-	"bM3Q6rqEfZ/xQFc6GJqc375G169P0d7R4Rh92PvYqmoN4ekra5+lHM8Ues46GdVC2W33lNYOJGB+mhts",
-	"jlYy0t9Bf9Y330Px5vbi7Sv0MAda1UxUvCYXg/Yi9t3dhIMAKntTqsJ23niHhUjj/O2DmqS7rtQzjSzJ",
-	"sO+zeKVN1IK/NZDcCTXj8aNNXDjF0RnzRVffpbkFy3MtdFPxhwf9XfTdpS+ZEodCJq8cFUei0o4qDlT0",
-	"mcsx7TM+2wnYA40YDv6VBN8fjI6MRzIX6zUNuprYRgdzG1uOQ8WlnBZoRHygQmuhfbvqJMH+HNBQB/8q",
-	"Zw8PD32sH2t+7Fyx83Zyev7u5twd9nf7cxlHJet3lvOgwnsJQ+Uhu+fYkOccO3sWiCRYzrXUV8RXFSjv",
-	"S9hgBrIpomv9KqawZS37fmqGQZT8chySB64CftvbS6OS5tWYrF7xA8iTKMqhSa/ydTwf2vFHMWRn5df1",
-	"PPa2oWG/1UMhIQ4iYerUlEyGu7umr4FKoNLgqiSyqrfzkzCYsHidbmv0JIz91L4bJPV9EMI08jBPYg0i",
-	"Wk8kOw0l8seeM1rKt3UJ//Jk/mtwq2UL/4YDfSEIQiOY/W+Fr6yxIGt7As4Z72uvZ+Os0dWKqme3Jccf",
-	"nKyO4nxUU1YD2nXMzHhW0dkN0W5NRf/QH8iWSl1TG9nNGiJ+sZ5ntJ5CwFo/t7SezSNW5hZjQhnvDlc5",
-	"kI/xT4x3FgMaNnehyL7EsA1i2IthPa9hNRX7CebVaJDfzMiaPdSiw27Omgt9Y8az5WT9nSNPtry1inDN",
-	"V1eanSMbRMQVh/hitM9otC0yLlltixVubb87X1teenncFIV2v/C02rI3Nuy2t3S2M8f/K8G0xZKfgGXb",
-	"j+obtt/R7ujb4Ou2qD1DkL0W/IBNKS5kKQ36/1/8zbO4m3JXzmZIodKF1QUSrivkX/DBhvig0qD5LNCg",
-	"eWovqOAZrbQq3pKFVu1sG+Pc+VrtoNsCAbR07y612I0Nttbj96tG3KptPCHYNqTyEmf/wHG2ZiW/rgnn",
-	"j8Wmxly8BKX7EDaxbPFks+69RO7t3yF7StQWL+7pD+6eltl9i696dj9VPHoaAtnYa/0GTqv0VtZvglye",
-	"BbW8eIQXwNJtVM/hEm4XCWxZGlCRb1VpwJB/KQ1sCTD0i0/PWxrIT+2lNLClnS6rDEir73W7NHawjW0W",
-	"Mdl08z8lLhcvxS012K2jsX3f4DeJr8Y0nqMykEnlJdC+BNpMH5aZsP2imcw2isbS5he+KEuwdFa/OdJ5",
-	"O9/1NydMKKv/lTLd0Jm/Ptizf4GO0FnRWYNpUGn4sXxUVstbE5prNFlvwwQtf+JAbEasdPfQ8oceNiPW",
-	"Tkc4jx8f/zcAAP///ij7m3dyAAA=",
+	"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",
+	"4uq+hgAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

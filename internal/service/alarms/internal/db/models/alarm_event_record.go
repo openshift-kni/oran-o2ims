@@ -27,6 +27,8 @@ type AlarmEventRecord struct {
 	CreatedAt             time.Time              `db:"created_at"`
 }
 
-func (r *AlarmEventRecord) TableName() string {
+func (r AlarmEventRecord) TableName() string {
 	return "alarm_event_record"
 }
+
+func (r AlarmEventRecord) PrimaryKey() string { return "alarm_event_record_id" }

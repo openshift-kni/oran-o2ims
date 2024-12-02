@@ -34,6 +34,9 @@ tags:
 - name: deploymentManagers
   description: |
     Information about deployment managers.
+- name: subscriptions
+  description: |
+    Information about inventory subscriptions.
 - name: metadata
   description: |
     Service metadata, including versions and O-Cloud information.
@@ -206,6 +209,138 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureInventory/v1/subscriptions:
+    get:
+      operationId: getSubscriptions
+      summary: Get subscriptions
+      description: |
+        Returns the list of inventory subscriptions.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of subscriptions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+    post:
+      operationId: createSubscription
+      summary: Create subscriptions
+      description: |
+        Creates an inventory subscriptions.
+      tags:
+      - subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subscription'
+      responses:
+        '201':
+          description: |
+            Successfully created the subscriptions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureInventory/v1/subscriptions/{subscriptionId}:
+    get:
+      operationId: getSubscription
+      summary: Get subscription
+      description: |
+        Returns the details of a subscription.
+      parameters:
+      - $ref: "#/components/parameters/subscriptionId"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the subscription.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+    delete:
+      operationId: deleteSubscription
+      summary: Delete subscription
+      description: |
+        Deletes a subscription.
+      parameters:
+      - $ref: "#/components/parameters/subscriptionId"
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: |
+            Successfully deleted the subscription.
         '404':
           description: The specified entity was not found.
           content:
@@ -456,7 +591,19 @@ components:
       required: true
       schema:
         type: string
+        format: uuid
       example: 65221564-8b05-416a-bfc3-c250bc64e1aa
+
+    subscriptionId:
+      name: subscriptionId
+      description: |
+        Unique identifier of a subscription.
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: aa83d0ba-a5ee-4f1f-be84-f334b21166cf
 
     resourcePoolId:
       name: resourcePoolId
@@ -466,6 +613,7 @@ components:
       required: true
       schema:
         type: string
+        format: uuid
       example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
 
     resourceId:
@@ -476,6 +624,7 @@ components:
       required: true
       schema:
         type: string
+        format: uuid
       example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
 
     resourceTypeId:
@@ -486,7 +635,8 @@ components:
       required: true
       schema:
         type: string
-      example: node_8_cores_amd64
+        format: uuid
+      example: 31a69575-3f90-4eb5-b8fa-8f8e23f99cf0
 
   schemas:
     DeploymentManager:
@@ -525,18 +675,60 @@ components:
             type: string
         capabilities:
           type: object
+          additionalProperties:
+            type: string
           description: |
             Information about the capabilities supported by the Deployment Manager and its set of deployment management
             services based on the resources allocated to the Deployment Manager.
         capacity:
           type: object
+          additionalProperties:
+            type: string
           description: |
             Information about the available, allocated and reserved capacity of O-Cloud Resources allocated to the
             Deployment Manager.
         extensions:
           type: object
+          additionalProperties:
+            type: string
           description: |
             List of metadata key-value pairs used to associate meaningful metadata to the related Deployment Manager.
+      required:
+      - deploymentManagerId
+      - name
+      - description
+      - oCloudId
+      - serviceUri
+      - supportedLocations
+      - capabilities
+      - capacity
+
+    Subscription:
+      description: |
+        Information about an inventory subscription.
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+          description: Identifier for the Subscription. This identifier is allocated by the O-Cloud.
+          example: "65221564-8b05-416a-bfc3-c250bc64e1aa"
+        consumerSubscriptionId:
+          type: string
+          description: Identifier for the consumer of events sent due to the Subscription.
+        filter:
+          type: string
+          description: |
+            Criteria for events which do not need to be reported or will be filtered by the subscription 
+            notification service. Therefore, if a filter is not provided then all events are reported.
+        callback:
+          type: string
+          description: |
+            The fully qualified URI to a consumer procedure which can process a Post of the 
+            InventoryEventNotification.
+          example: https://smo.example.com/smo/v1/ocloud_inventory_observer
+      required:
+      - callback
 
     OCloudInfo:
       type: object
@@ -565,9 +757,17 @@ components:
           example: "http://localhost:8000"
         extensions:
           type: object
+          additionalProperties:
+            type: string
           example:
             hub: "hub0"
             country: "ES"
+      required:
+      - oCloudId
+      - globalCloudId
+      - name
+      - description
+      - serviceUri
 
     ResourceType:
       description: |
@@ -591,9 +791,9 @@ components:
           description: Provider of the Resource.
           example: "Some Corporation, Inc."
         model:
-            type: string
-            description: Information about the model of the resource as defined by its provider.
-            example: "X-1000"
+          type: string
+          description: Information about the model of the resource as defined by its provider.
+          example: "X-1000"
         version:
           type: string
           description: Version or generation of the resource as defined by its provider.
@@ -617,6 +817,8 @@ components:
           example: "COMPUTE"
         extensions:
           type: object
+          additionalProperties:
+            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
         alarmDictionary:
           # TODO: should define this as a model
@@ -681,6 +883,8 @@ components:
           example: "EU"
         extensions:
           type: object
+          additionalProperties:
+            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
       required:
       - resourcePoolId
@@ -734,6 +938,8 @@ components:
             type: string
         extensions:
           type: object
+          additionalProperties:
+            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource.
       required:
       - resourceId

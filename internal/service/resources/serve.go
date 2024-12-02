@@ -14,11 +14,10 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
-
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
 // Resource server config values
@@ -63,12 +62,15 @@ func Serve() error {
 		pool.Close()
 	}()
 
+	// Init the repositories
+	repository := &repo.ResourcesRepository{
+		Db: pool,
+	}
+
 	// Init server
 	// Create the handler
 	server := api.ResourceServer{
-		Repository: &repo.ResourceRepository{
-			Db: pool,
-		},
+		Repo: repository,
 	}
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
