@@ -17,9 +17,21 @@ import (
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
 var _ api.StrictServerInterface = (*ResourceServer)(nil)
 
+// ResourceServerConfig defines the configuration attributes for the resource server
+type ResourceServerConfig struct {
+	Address         string
+	CloudID         string
+	GlobalCloudID   string
+	BackendURL      string
+	Extensions      []string
+	ExternalAddress string
+}
+
+// ResourceServer defines the instance attributes for an instance of a resource server
 type ResourceServer struct {
-	Info api.OCloudInfo
-	Repo *repo.ResourcesRepository
+	Config *ResourceServerConfig
+	Info   api.OCloudInfo
+	Repo   *repo.ResourcesRepository
 }
 
 // baseURL is the prefix for all of our supported API endpoints
