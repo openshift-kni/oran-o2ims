@@ -28,7 +28,7 @@ var _ = Describe("Utils", func() {
 	Describe("DB tags", func() {
 		It("returns all tags of the alarm_event_record", func() {
 			ar := mockDBModel{}
-			tags := GetAllDBTagsFromStruct(&ar)
+			tags := GetAllDBTagsFromStruct(&ar, IncludeNilValues)
 
 			st := reflect.TypeOf(ar)
 			Expect(tags).To(HaveLen(st.NumField()))
@@ -50,6 +50,31 @@ var _ = Describe("Utils", func() {
 			tags := GetDBTagsFromStructFields(&ar, "RecordID", "nonExistentField")
 			Expect(len(tags)).To(Equal(1))
 			Expect(tags).To(ConsistOf("record_id"))
+		})
+
+		It("excludes nil pointers", func() {
+			ar := mockDBModel{}
+			tags := GetAllDBTagsFromStruct(&ar, ExcludeNilValues)
+			Expect(tags).To(ConsistOf(
+				"record_id", "raised_time",
+				"extensions", "created_at"))
+			values := GetFieldValues(&ar, tags)
+			Expect(len(values)).To(Equal(len(tags)))
+			Expect(values).To(ConsistOf(ar.RecordID, ar.RaisedTime, ar.Extensions, ar.CreatedAt))
+		})
+
+		It("includes non-nil pointers", func() {
+			changedTime := time.Now()
+			ar := mockDBModel{
+				ChangedTime: &changedTime,
+			}
+			tags := GetAllDBTagsFromStruct(&ar, ExcludeNilValues)
+			Expect(tags).To(ConsistOf(
+				"record_id", "raised_time", "changed_time",
+				"extensions", "created_at"))
+			values := GetFieldValues(&ar, tags)
+			Expect(len(values)).To(Equal(len(tags)))
+			Expect(values).To(ConsistOf(ar.RecordID, ar.RaisedTime, ar.ChangedTime, ar.Extensions, ar.CreatedAt))
 		})
 	})
 })

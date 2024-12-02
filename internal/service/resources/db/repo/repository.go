@@ -2,13 +2,9 @@ package repo
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/stephenafamo/bob/dialect/psql"
-	"github.com/stephenafamo/bob/dialect/psql/im"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
@@ -46,46 +42,7 @@ func (r *ResourcesRepository) DeleteSubscription(ctx context.Context, id uuid.UU
 
 // CreateSubscription create a new Subscription tuple or returns nil if not found
 func (r *ResourcesRepository) CreateSubscription(ctx context.Context, subscription *models.Subscription) (*models.Subscription, error) {
-	var record models.Subscription
-	tags := utils.GetAllDBTagsFromStruct(record)
-
-	query := psql.Insert(im.Into(subscription.TableName()), im.Returning(tags.Columns()...))
-
-	// Mandatory fields
-	columns := []string{"subscription_id", "callback"}
-	values := []any{*subscription.SubscriptionID, subscription.Callback}
-
-	// Optional fields
-	if subscription.ConsumerSubscriptionID != nil {
-		columns = append(columns, "consumer_subscription_id")
-		values = append(values, *subscription.ConsumerSubscriptionID)
-	}
-	if subscription.Filter != nil {
-		columns = append(columns, "filter")
-		values = append(values, *subscription.Filter)
-	}
-
-	// Add columns and corresponding values
-	query.Expression.Columns = columns
-	query.Apply(im.Values(psql.Arg(values...)))
-
-	sql, args, err := query.Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create insert expression: %w", err)
-	}
-
-	// Run the query
-	result, err := r.Db.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute insert expression '%s' with args '%s': %w", sql, args, err)
-	}
-
-	record, err = pgx.CollectExactlyOneRow(result, pgx.RowToStructByName[models.Subscription])
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract inserted subscription record: %w", err)
-	}
-
-	return &record, nil
+	return utils.Create[models.Subscription](ctx, r.Db, *subscription)
 }
 
 // GetResourceTypes retrieves all ResourceType tuples or returns an empty array if no tuples are found
