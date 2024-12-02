@@ -107,3 +107,14 @@ func (r *ResourcesRepository) GetResourcePools(ctx context.Context) ([]models.Re
 func (r *ResourcesRepository) GetResourcePool(ctx context.Context, id uuid.UUID) ([]models.ResourcePool, error) {
 	return utils.Find[models.ResourcePool](ctx, r.Db, id, nil)
 }
+
+// GetResourcePoolResources retrieves all Resource tuples for a specific ResourcePool returns an empty array if not found
+func (r *ResourcesRepository) GetResourcePoolResources(ctx context.Context, id uuid.UUID) ([]models.Resource, error) {
+	e := psql.Quote("resource_pool_id").EQ(psql.Arg(id))
+	return utils.Search[models.Resource](ctx, r.Db, e)
+}
+
+// GetResource retrieves a specific ResourceType tuple or returns nil if not found
+func (r *ResourcesRepository) GetResource(ctx context.Context, id uuid.UUID) ([]models.Resource, error) {
+	return utils.Find[models.Resource](ctx, r.Db, id, nil)
+}

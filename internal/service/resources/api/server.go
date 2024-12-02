@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
@@ -15,25 +16,47 @@ import (
 var _ api.StrictServerInterface = (*ResourceServer)(nil)
 
 type ResourceServer struct {
+	Info api.OCloudInfo
 	Repo *repo.ResourcesRepository
 }
 
+// baseURL is the prefix for all of our supported API endpoints
+var baseURL = "/o2ims-infrastructureInventory/v1"
+var currentVersion = "1.0.0"
+
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	// We currently only support a single version
+	versions := []generated.APIVersion{
+		{
+			Version: &currentVersion,
+		},
+	}
+
+	return api.GetAllVersions200JSONResponse(generated.APIVersions{
+		ApiVersions: &versions,
+		UriPrefix:   &baseURL,
+	}), nil
 }
 
 // GetCloudInfo receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetCloudInfo(ctx context.Context, request api.GetCloudInfoRequestObject) (api.GetCloudInfoResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	return api.GetCloudInfo200JSONResponse(r.Info), nil
 }
 
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	// We currently only support a single version
+	versions := []generated.APIVersion{
+		{
+			Version: &currentVersion,
+		},
+	}
+
+	return api.GetMinorVersions200JSONResponse(generated.APIVersions{
+		ApiVersions: &versions,
+		UriPrefix:   &baseURL,
+	}), nil
 }
 
 // GetDeploymentManagers receives the API request to this endpoint, executes the request, and responds appropriately
@@ -45,18 +68,7 @@ func (r *ResourceServer) GetDeploymentManagers(ctx context.Context, request api.
 
 	objects := make([]api.DeploymentManager, len(records))
 	for i, record := range records {
-		objects[i], err = models.DeploymentManagerToModel(&record)
-		if err != nil {
-			slog.Error("error converting database record", "source", record)
-			return api.GetDeploymentManagers500ApplicationProblemPlusJSONResponse{
-				AdditionalAttributes: &map[string]string{
-					"deploymentManagerId": record.ClusterID.String(),
-				},
-				Detail:   err.Error(),
-				Instance: nil,
-				Status:   http.StatusInternalServerError,
-			}, nil
-		}
+		objects[i] = models.DeploymentManagerToModel(&record)
 	}
 
 	return api.GetDeploymentManagers200JSONResponse(objects), nil
@@ -85,18 +97,7 @@ func (r *ResourceServer) GetDeploymentManager(ctx context.Context, request api.G
 		}, nil
 	}
 
-	object, err := models.DeploymentManagerToModel(&records[0])
-	if err != nil {
-		slog.Error("error converting database records", "source", records[0])
-		return api.GetDeploymentManager500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"deploymentManagerId": request.DeploymentManagerId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
+	object := models.DeploymentManagerToModel(&records[0])
 	return api.GetDeploymentManager200JSONResponse(object), nil
 }
 
@@ -109,18 +110,7 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 
 	objects := make([]api.Subscription, len(records))
 	for i, record := range records {
-		objects[i], err = models.SubscriptionToModel(&record)
-		if err != nil {
-			slog.Error("error converting database record", "source", record)
-			return api.GetSubscriptions500ApplicationProblemPlusJSONResponse{
-				AdditionalAttributes: &map[string]string{
-					"subscriptionId": record.SubscriptionID.String(),
-				},
-				Detail:   err.Error(),
-				Instance: nil,
-				Status:   http.StatusInternalServerError,
-			}, nil
-		}
+		objects[i] = models.SubscriptionToModel(&record)
 	}
 
 	return api.GetSubscriptions200JSONResponse(objects), nil
@@ -134,17 +124,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 	}
 
 	// Convert from Model -> DB
-	record, err := models.SubscriptionFromModel(request.Body)
-	if err != nil {
-		slog.Error("error converting to database record", "source", request)
-		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"consumerSubscriptionId": consumerSubscriptionId,
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
+	record := models.SubscriptionFromModel(request.Body)
 
 	// Set internal fields
 	record.EventCursor = 0
@@ -173,20 +153,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 		}, nil
 	}
 
-	response, err := models.SubscriptionToModel(result)
-	if err != nil {
-		slog.Error("error converting database record", "source", result)
-		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"consumerSubscriptionId": consumerSubscriptionId,
-			},
-			Detail: err.Error(),
-			// TODO: map errors to 400 if possible; else 500
-			Status: http.StatusInternalServerError,
-		}, nil
-
-	}
-
+	response := models.SubscriptionToModel(result)
 	return api.CreateSubscription201JSONResponse(response), nil
 }
 
@@ -213,18 +180,7 @@ func (r *ResourceServer) GetSubscription(ctx context.Context, request api.GetSub
 		}, nil
 	}
 
-	object, err := models.SubscriptionToModel(&records[0])
-	if err != nil {
-		slog.Error("error converting database records", "source", records[0])
-		return api.GetSubscription500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"subscriptionId": request.SubscriptionId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
+	object := models.SubscriptionToModel(&records[0])
 	return api.GetSubscription200JSONResponse(object), nil
 }
 
@@ -256,32 +212,158 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 
 // GetResourcePools receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourcePools(ctx context.Context, request api.GetResourcePoolsRequestObject) (api.GetResourcePoolsResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	records, err := r.Repo.GetResourcePools(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve resource pools: %w", err)
+	}
+
+	objects := make([]api.ResourcePool, len(records))
+	for i, record := range records {
+		objects[i] = models.ResourcePoolToModel(&record)
+	}
+
+	return api.GetResourcePools200JSONResponse(objects), nil
 }
 
 // GetResourcePool receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetResourcePoolRequestObject) (api.GetResourcePoolResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	records, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
+	if err != nil {
+		return api.GetResourcePool500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	if len(records) == 0 {
+		return api.GetResourcePool404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: "requested resourcePool not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+
+	object := models.ResourcePoolToModel(&records[0])
+	return api.GetResourcePool200JSONResponse(object), nil
 }
 
 // GetResources receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResourcesRequestObject) (api.GetResourcesResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	// First, find the pool
+	pools, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
+	if err != nil {
+		return api.GetResources500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	if len(pools) == 0 {
+		return api.GetResources404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: "requested resource pool not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+
+	// Next, get the resources
+	records, err := r.Repo.GetResourcePoolResources(ctx, request.ResourcePoolId)
+	if err != nil {
+		return api.GetResources500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	// Convert from DB -> API
+	objects := make([]api.Resource, len(records))
+	for i, record := range records {
+		// TODO: include child resources (not sure that's required unless directly querying resource)
+		objects[i] = models.ResourceToModel(&record, nil)
+	}
+
+	return api.GetResources200JSONResponse(objects), nil
 }
 
 // GetResource receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourceRequestObject) (api.GetResourceResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	// First, find the pool
+	pools, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
+	if err != nil {
+		return api.GetResource500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	if len(pools) == 0 {
+		return api.GetResource404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: "requested resource pool not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+
+	// Next, get the resources
+	records, err := r.Repo.GetResource(ctx, request.ResourceId)
+	if err != nil {
+		return api.GetResource500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	if len(records) == 0 {
+		return api.GetResource404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+				"resourceId":     request.ResourceId.String(),
+			},
+			Detail: "requested resource not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+
+	// TODO: include child resources (note sure we'll have that use case)
+
+	object := models.ResourceToModel(&records[0], nil)
+	return api.GetResource200JSONResponse(object), nil
 }
 
 // GetResourceTypes receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetResourceTypesRequestObject) (api.GetResourceTypesResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	records, err := r.Repo.GetResourceTypes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resource types: %w", err)
+	}
+
+	objects := make([]api.ResourceType, len(records))
+	for i, record := range records {
+		objects[i] = models.ResourceTypeToModel(&record)
+	}
+
+	return api.GetResourceTypes200JSONResponse(objects), nil
 }
 
 // GetResourceType receives the API request to this endpoint, executes the request, and responds appropriately
@@ -307,17 +389,6 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 		}, nil
 	}
 
-	object, err := models.ResourceTypeToModel(&records[0])
-	if err != nil {
-		slog.Error("error converting database records", "source", records[0])
-		return api.GetResourceType500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"resourceTypeId": request.ResourceTypeId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
+	object := models.ResourceTypeToModel(&records[0])
 	return api.GetResourceType200JSONResponse(object), nil
 }

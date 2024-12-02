@@ -1,15 +1,13 @@
 package models
 
 import (
-	"fmt"
-
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 )
 
 // DeploymentManagerToModel converts a DB tuple to an API Model
-func DeploymentManagerToModel(record *DeploymentManager) (generated.DeploymentManager, error) {
+func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentManager {
 	object := generated.DeploymentManager{
 		Capabilities:        map[string]string{},
 		Capacity:            map[string]string{},
@@ -30,11 +28,11 @@ func DeploymentManagerToModel(record *DeploymentManager) (generated.DeploymentMa
 		object.Capabilities = record.Capabilities
 	}
 
-	return object, nil
+	return object
 }
 
 // ResourceTypeToModel converts a DB tuple to an API Model
-func ResourceTypeToModel(record *ResourceType) (generated.ResourceType, error) {
+func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 	object := generated.ResourceType{
 		AlarmDictionary: nil,
 		Description:     record.Description,
@@ -48,11 +46,11 @@ func ResourceTypeToModel(record *ResourceType) (generated.ResourceType, error) {
 		Version:         record.Version,
 	}
 
-	return object, nil
+	return object
 }
 
 // SubscriptionToModel converts a DB tuple to an API Model
-func SubscriptionToModel(record *Subscription) (generated.Subscription, error) {
+func SubscriptionToModel(record *Subscription) generated.Subscription {
 	object := generated.Subscription{
 		Callback:               record.Callback,
 		ConsumerSubscriptionId: record.ConsumerSubscriptionID,
@@ -60,15 +58,12 @@ func SubscriptionToModel(record *Subscription) (generated.Subscription, error) {
 		SubscriptionId:         record.SubscriptionID,
 	}
 
-	return object, nil
+	return object
 }
 
-// SubscriptionFromModel converts a API model to a DB tuple
-func SubscriptionFromModel(object *generated.Subscription) (*Subscription, error) {
-	id, err := uuid.NewRandom()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate subscription ID: %w", err)
-	}
+// SubscriptionFromModel converts an API model to a DB tuple
+func SubscriptionFromModel(object *generated.Subscription) *Subscription {
+	id := uuid.Must(uuid.NewRandom())
 
 	record := Subscription{
 		SubscriptionID:         &id,
@@ -78,5 +73,51 @@ func SubscriptionFromModel(object *generated.Subscription) (*Subscription, error
 		EventCursor:            0,
 	}
 
-	return &record, nil
+	return &record
+}
+
+// ResourcePoolToModel converts a DB tuple to an API model
+func ResourcePoolToModel(record *ResourcePool) generated.ResourcePool {
+	object := generated.ResourcePool{
+		Description:      record.Description,
+		Extensions:       record.Extensions,
+		GlobalLocationId: record.GlobalLocationID,
+		Location:         record.Location,
+		Name:             record.Name,
+		OCloudId:         record.OCloudID,
+		ResourcePoolId:   *record.ResourcePoolID,
+	}
+
+	return object
+}
+
+// ResourceToModel converts a DB tuple to an API model
+func ResourceToModel(record *Resource, elements []Resource) generated.Resource {
+	object := generated.Resource{
+		Description:    record.Description,
+		Extensions:     record.Extensions,
+		ResourceId:     *record.ResourceID,
+		ResourcePoolId: record.ResourcePoolID,
+		ResourceTypeId: record.ResourceTypeID,
+	}
+
+	if record.Groups != nil {
+		object.Groups = *record.Groups
+	}
+
+	if record.Tags != nil {
+		object.Tags = *record.Tags
+	}
+
+	if record.GlobalAssetID != nil {
+		object.GlobalAssetId = *record.GlobalAssetID
+	}
+
+	if elements != nil {
+		object.Elements = make([]generated.Resource, len(elements))
+		for i, element := range elements {
+			object.Elements[i] = ResourceToModel(&element, nil)
+		}
+	}
+	return object
 }

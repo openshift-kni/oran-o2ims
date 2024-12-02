@@ -30,11 +30,11 @@ CREATE TABLE IF NOT EXISTS resource_type
 CREATE TABLE IF NOT EXISTS resource_pool
 (
     resource_pool_id   UUID PRIMARY KEY,
-    global_location_id VARCHAR(64)  NOT NULL,
+    global_location_id UUID        NOT NULL,
     name               VARCHAR(255) NOT NULL,
-    description        TEXT         NULL,
+    description        TEXT        NOT NULL,
     o_cloud_id         UUID         NOT NULL,
-    location           VARCHAR(64)  NOT NULL,
+    location           VARCHAR(64) NULL,
     extensions         json         NULL,
     data_source_id     INTEGER      NOT NULL,
     generation_id      INTEGER      NOT NULL DEFAULT 0,
@@ -47,11 +47,13 @@ CREATE TABLE IF NOT EXISTS resource_pool
 CREATE TABLE IF NOT EXISTS resource
 (
     resource_id      UUID PRIMARY KEY,
-    description      TEXT         NULL,
+    description      TEXT          NOT NULL,
     resource_type_id UUID         NOT NULL,
     global_asset_id  VARCHAR(255) NULL,
-    resource_pool_id UUID         NULL,
+    resource_pool_id UUID          NOT NULL,
     extensions       json         NULL,
+    groups           VARCHAR(64)[] NULL,
+    tags             VARCHAR(64)[] NULL,
     data_source_id   INTEGER      NOT NULL,
     generation_id    INTEGER      NOT NULL DEFAULT 0,
     external_id      VARCHAR(255),                                    -- FQDN of resource in downstream data source (e.g., id=XXX)

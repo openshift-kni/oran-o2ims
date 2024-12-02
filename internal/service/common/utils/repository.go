@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dm"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
@@ -101,4 +102,34 @@ func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (
 	}
 
 	return result.RowsAffected(), nil
+}
+
+// Search retrieves a tuple from the database using arbitrary column values.  If no record is found an empty array is returned.
+func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Expression) ([]T, error) {
+	// Build sql query
+	var record T
+	tags := GetAllDBTagsFromStruct(record)
+
+	query, args, err := psql.Select(
+		sm.Columns(tags.Columns()...),
+		sm.From(record.TableName()),
+		sm.Where(expression),
+	).Build()
+	if err != nil {
+		return []T{}, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	// Run query
+	rows, _ := db.Query(ctx, query, args...) // note: err is passed on to Collect* func so we can ignore this
+	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Info("No Entity found", "expression", expression, "table", record.TableName())
+			return []T{}, nil
+		}
+		return []T{}, fmt.Errorf("failed to call database: %w", err)
+	}
+
+	slog.Info("records found", "table", record.TableName(), "expression", expression)
+	return []T{record}, nil
 }
