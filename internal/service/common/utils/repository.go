@@ -40,7 +40,7 @@ func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, col
 	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Info("No Entity found", "uuid", uuid, "table", record.TableName())
+			slog.Info("no record found", "uuid", uuid, "table", record.TableName())
 			return []T{}, nil
 		}
 		return []T{}, fmt.Errorf("failed to call database: %w", err)
@@ -74,6 +74,7 @@ func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []any) (
 	records, err = pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Info("no records found", "table", record.TableName())
 			return []T{}, nil
 		}
 		return []T{}, fmt.Errorf("failed to call database: %w", err)
@@ -121,15 +122,15 @@ func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Ex
 
 	// Run query
 	rows, _ := db.Query(ctx, query, args...) // note: err is passed on to Collect* func so we can ignore this
-	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
+	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Info("No Entity found", "expression", expression, "table", record.TableName())
+			slog.Info("no records found", "table", record.TableName(), "expression", expression)
 			return []T{}, nil
 		}
 		return []T{}, fmt.Errorf("failed to call database: %w", err)
 	}
 
-	slog.Info("records found", "table", record.TableName(), "expression", expression)
-	return []T{record}, nil
+	slog.Info("records found", "table", record.TableName(), "expression", expression, "count", len(records))
+	return records, nil
 }
