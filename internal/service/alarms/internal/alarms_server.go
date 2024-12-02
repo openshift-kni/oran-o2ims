@@ -2,8 +2,9 @@ package internal
 
 import (
 	"context"
-
 	"log/slog"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 
 	"fmt"
 	"net/http"
@@ -90,11 +91,43 @@ func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProb
 	return nil, fmt.Errorf("not implemented")
 }
 
+// AmNotification Used internally, alertmanager from ACM calls here.
+// Note: the errors returned can also be view under alertmanager pod logs but also logging here for convenience
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
-	// TODO: Implement the logic to handle the AM notification
-	slog.Debug("Received AM notification", "groupLabels", request.Body.GroupLabels)
-	for _, alert := range request.Body.Alerts {
-		slog.Debug("Alert", "fingerprint", alert.Fingerprint, "startsAt", alert.StartsAt, "status", alert.Status)
+	// Audit the table with full list of alerts in the current payload. If missing set them to resolve
+	if err := a.AlarmsRepository.ResolveNotificationIfNotInCurrent(ctx, request.Body); err != nil {
+		msg := "failed to resolve notification that are not present"
+		slog.Error(msg, "err", err)
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
+
+	// Get the definition data based on current set of Alert names and managed cluster ID
+	alarmDefinitions, err := a.AlarmsRepository.GetAlarmDefinitions(ctx, request.Body)
+	if err != nil {
+		msg := "failed to get AlarmDefinitions"
+		slog.Error(msg, "err", err)
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
+
+	// Combine possible definitions with events
+	aerModels := alertmanager.ConvertAmToAlarmEventRecordModels(request.Body, alarmDefinitions)
+
+	// Insert and update AlarmEventRecord
+	if err := a.AlarmsRepository.UpsertAlarmEventRecord(ctx, aerModels); err != nil {
+		msg := "failed to upsert AlarmEventRecord to db"
+		slog.Error(msg, "err", err)
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
+
+	//TODO: Get subscriber
+
+	//TODO: Notify subscriber
+
+	// Removed resolved events and move to archive
+	if err := a.AlarmsRepository.ArchiveResolvedAlarmEventRecords(ctx); err != nil {
+		msg := "failed to archive AlarmEventRecord to db"
+		slog.Error(msg, "err", err)
+		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
 	return api.AmNotification200Response{}, nil
@@ -112,10 +145,11 @@ func convertAerModelToApi(aerModel models.AlarmEventRecord) api.AlarmEventRecord
 		AlarmChangedTime:      aerModel.AlarmChangedTime,
 		AlarmClearedTime:      aerModel.AlarmClearedTime,
 		AlarmDefinitionId:     aerModel.AlarmDefinitionID,
-		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
+		AlarmEventRecordId:    *aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
-		PerceivedSeverity:     api.PerceivedSeverity(aerModel.PerceivedSeverity),
+		PerceivedSeverity:     aerModel.PerceivedSeverity,
 		ProbableCauseId:       aerModel.ProbableCauseID,
 		ResourceTypeID:        aerModel.ResourceTypeID,
+		Extensions:            aerModel.Extensions,
 	}
 }
