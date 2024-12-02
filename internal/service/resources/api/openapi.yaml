@@ -735,7 +735,10 @@ components:
         globalCloudId:
           type: string
           format: uuid
-          description: Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud IMS Inventory.
+          description: | 
+            Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud 
+            instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud
+            IMS Inventory.
           example: "8c1c151d-2899-4c96-b76f-4fe92064b57b"
         name:
           type: string

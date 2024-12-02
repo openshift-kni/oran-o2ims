@@ -25,9 +25,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
+
+	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
@@ -52,22 +53,22 @@ func ResourceServer() *cobra.Command {
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
 	AddTokenFlags(flags)
 	_ = flags.String(
-		cloudIDFlagName,
+		CloudIDFlagName,
 		"",
 		"O-Cloud identifier.",
 	)
 	_ = flags.String(
-		backendURLFlagName,
+		BackendURLFlagName,
 		"",
 		"URL of the backend server.",
 	)
 	_ = flags.String(
-		globalCloudIDFlagName,
+		GlobalCloudIDFlagName,
 		"",
 		"Global O-Cloud identifier.",
 	)
 	_ = flags.StringArray(
-		extensionsFlagName,
+		ExtensionsFlagName,
 		[]string{},
 		"Extension to add to resources and resource pools.",
 	)
@@ -121,12 +122,12 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 
 	// Get the cloud identifier:
-	cloudID, err := flags.GetString(cloudIDFlagName)
+	cloudID, err := flags.GetString(CloudIDFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
 			"Failed to get cloud identifier flag",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -135,7 +136,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		c.logger.ErrorContext(
 			ctx,
 			"Cloud identifier is empty",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
@@ -146,12 +147,12 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	)
 
 	// Get the backend details:
-	backendURL, err := flags.GetString(backendURLFlagName)
+	backendURL, err := flags.GetString(BackendURLFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
 			"Failed to get backend URL flag",
-			"flag", backendURLFlagName,
+			"flag", BackendURLFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -160,17 +161,17 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		c.logger.ErrorContext(
 			ctx,
 			"Backend URL is empty",
-			"flag", backendURLFlagName,
+			"flag", BackendURLFlagName,
 		)
 		return exit.Error(1)
 	}
 
-	extensions, err := flags.GetStringArray(extensionsFlagName)
+	extensions, err := flags.GetStringArray(ExtensionsFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
 			"Failed to extension flag",
-			"flag", extensionsFlagName,
+			"flag", ExtensionsFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -190,12 +191,12 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 	)
 
 	// Get the cloud identifier:
-	globalCloudID, err := flags.GetString(globalCloudIDFlagName)
+	globalCloudID, err := flags.GetString(GlobalCloudIDFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
 			"Failed to get global cloud identifier flag",
-			"flag", globalCloudIDFlagName,
+			"flag", GlobalCloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -204,7 +205,7 @@ func (c *ResourceServerCommand) run(cmd *cobra.Command, argv []string) error {
 		c.logger.ErrorContext(
 			ctx,
 			"Global cloud identifier is empty",
-			"flag", globalCloudIDFlagName,
+			"flag", GlobalCloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
