@@ -17,13 +17,16 @@ import (
 )
 
 // Find retrieves a specific tuple from the database table specified.  If no record is found an empty array is returned.
-func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) ([]T, error) {
+func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, columns []any) ([]T, error) {
 	// Build sql query
 	var record T
-	tags := GetAllDBTagsFromStruct(record)
+	if columns == nil {
+		tags := GetAllDBTagsFromStruct(record)
+		columns = tags.Columns()
+	}
 
 	query, args, err := psql.Select(
-		sm.Columns(tags.Columns()...),
+		sm.Columns(columns...),
 		sm.From(record.TableName()),
 		sm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
 	).Build()
@@ -48,14 +51,17 @@ func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) ([]
 
 // FindAll retrieves all tuples from the database table specified.  If no records are found then an empty array is
 // returned.
-func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool) ([]T, error) {
+func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []any) ([]T, error) {
 	// Build sql query
 	var record T
 	var records []T
-	tags := GetAllDBTagsFromStruct(record)
+	if columns == nil {
+		tags := GetAllDBTagsFromStruct(record)
+		columns = tags.Columns()
+	}
 
 	query, args, err := psql.Select(
-		sm.Columns(tags.Columns()...),
+		sm.Columns(columns...),
 		sm.From(record.TableName()),
 	).Build()
 	if err != nil {
@@ -78,21 +84,21 @@ func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool) ([]T, error) {
 
 // Delete deletes a specific tuple from the database table specified.  If no matching tuples are found an error will be
 // returned therefore the caller is responsible for checking for existing records.
-func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, id uuid.UUID) error {
+func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (int64, error) {
 	var record T
 	query := psql.Delete(
 		dm.From(record.TableName()),
-		dm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(id))))
+		dm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))))
 
 	sql, params, err := query.Build()
 	if err != nil {
-		return fmt.Errorf("failed to build delete query for '%s/%s': %w", record.TableName(), id, err)
+		return 0, fmt.Errorf("failed to build delete query for '%s/%s': %w", record.TableName(), uuid, err)
 	}
 
-	_, err = db.Exec(ctx, sql, params...)
+	result, err := db.Exec(ctx, sql, params...)
 	if err != nil {
-		return fmt.Errorf("failed to delete '%s/%s': %w", record.TableName(), id, err)
+		return 0, fmt.Errorf("failed to delete '%s/%s': %w", record.TableName(), uuid, err)
 	}
 
-	return nil
+	return result.RowsAffected(), nil
 }

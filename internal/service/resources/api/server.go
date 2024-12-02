@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
@@ -41,11 +40,7 @@ func (r *ResourceServer) GetMinorVersions(ctx context.Context, request api.GetMi
 func (r *ResourceServer) GetDeploymentManagers(ctx context.Context, request api.GetDeploymentManagersRequestObject) (api.GetDeploymentManagersResponseObject, error) {
 	records, err := r.Repo.GetDeploymentManagers(ctx)
 	if err != nil {
-		return api.GetDeploymentManagers500ApplicationProblemPlusJSONResponse{
-			Detail:   err.Error(),
-			Instance: nil,
-			Status:   http.StatusInternalServerError,
-		}, nil
+		return nil, fmt.Errorf("failed to get deployment managers: %w", err)
 	}
 
 	objects := make([]api.DeploymentManager, len(records))
@@ -109,11 +104,7 @@ func (r *ResourceServer) GetDeploymentManager(ctx context.Context, request api.G
 func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSubscriptionsRequestObject) (api.GetSubscriptionsResponseObject, error) {
 	records, err := r.Repo.GetSubscriptions(ctx)
 	if err != nil {
-		return api.GetSubscriptions500ApplicationProblemPlusJSONResponse{
-			Detail:   err.Error(),
-			Instance: nil,
-			Status:   http.StatusInternalServerError,
-		}, nil
+		return nil, fmt.Errorf("failed to get subscriptions: %w", err)
 	}
 
 	objects := make([]api.Subscription, len(records))
@@ -156,12 +147,11 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 	}
 
 	// Set internal fields
-	record.CreatedAt = time.Now()
 	record.EventCursor = 0
 
-	err = r.Repo.CreateSubscription(ctx, record)
+	result, err := r.Repo.CreateSubscription(ctx, record)
 	if err != nil {
-		slog.Error("error writing database record", "target", record)
+		slog.Error("error writing database record", "target", record, "error", err.Error())
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"consumerSubscriptionId": consumerSubscriptionId,
@@ -172,20 +162,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 		}, nil
 	}
 
-	// Re-query the DB to get the stored copy
-	results, err := r.Repo.GetSubscription(ctx, *record.SubscriptionID)
-	if err != nil {
-		slog.Error("error re-reading created database record", "target", record)
-		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"consumerSubscriptionId": consumerSubscriptionId,
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
-	if len(results) == 0 {
+	if result == nil {
 		slog.Error("unable to retrieve newly created database record", "target", record)
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
@@ -196,9 +173,9 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 		}, nil
 	}
 
-	response, err := models.SubscriptionToModel(&results[0])
+	response, err := models.SubscriptionToModel(result)
 	if err != nil {
-		slog.Error("error converting database record", "source", results[0])
+		slog.Error("error converting database record", "source", result)
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"consumerSubscriptionId": consumerSubscriptionId,
@@ -253,7 +230,7 @@ func (r *ResourceServer) GetSubscription(ctx context.Context, request api.GetSub
 
 // DeleteSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.DeleteSubscriptionRequestObject) (api.DeleteSubscriptionResponseObject, error) {
-	records, err := r.Repo.GetSubscription(ctx, request.SubscriptionId)
+	count, err := r.Repo.DeleteSubscription(ctx, request.SubscriptionId)
 	if err != nil {
 		return api.DeleteSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
@@ -264,24 +241,13 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 		}, nil
 	}
 
-	if len(records) == 0 {
+	if count == 0 {
 		return api.DeleteSubscription404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"subscriptionId": request.SubscriptionId.String(),
 			},
 			Detail: "requested subscription not found",
 			Status: http.StatusNotFound,
-		}, nil
-	}
-
-	err = r.Repo.DeleteSubscription(ctx, *records[0].SubscriptionID)
-	if err != nil {
-		return api.DeleteSubscription500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"subscriptionId": request.SubscriptionId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
 		}, nil
 	}
 
