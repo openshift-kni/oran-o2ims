@@ -23,6 +23,51 @@ import (
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
+// ClusterInstanceParamsSubSchemaForNoHWTemplate is the expected subschema for the
+// ClusterInstanceParams when no hardware template is provided.
+const ClusterInstanceParamsSubSchemaForNoHWTemplate = `
+type: object
+properties:
+  nodes:
+    items:
+      properties:
+        bmcAddress:
+          type: string
+        bmcCredentialsDetails:
+          type: object
+          properties:
+            username:
+              type: string
+            password:
+              type: string
+          required:
+          - username
+          - password
+        bootMACAddress:
+          type: string
+        nodeNetwork:
+          type: object
+          properties:
+            interfaces:
+              type: array
+              items:
+                type: object
+                properties:
+                  macAddress:
+                    type: string
+              required:
+              - macAddress
+          required:
+          - interfaces
+      required:
+      - bmcAddress
+      - bmcCredentialsDetails
+      - bootMACAddress
+      - nodeNetwork
+required:
+- nodes
+`
+
 // ExtractSubSchema extracts a Sub schema indexed by subSchemaKey from a Main schema
 func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema map[string]any, err error) {
 	jsonObject := make(map[string]any)

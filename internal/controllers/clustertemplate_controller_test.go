@@ -11,6 +11,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1039,6 +1040,9 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: getClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						Templates: provisioningv1alpha1.Templates{
+							HwTemplate: "hwTemplate-v1",
+						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
 			"nodeClusterName": {"type": "string"},
@@ -1068,6 +1072,9 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: getClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						Templates: provisioningv1alpha1.Templates{
+							HwTemplate: "hwTemplate-v1",
+						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
 			"nodeClusterName": {"type": "string"},
@@ -1097,6 +1104,9 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: getClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						Templates: provisioningv1alpha1.Templates{
+							HwTemplate: "hwTemplate-v1",
+						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
 			"nodeClusterName": {"type": "string"},
@@ -1126,6 +1136,9 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: getClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						Templates: provisioningv1alpha1.Templates{
+							HwTemplate: "hwTemplate-v1",
+						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
 			"oCloudSiteId": {"type": "string"},
@@ -1154,6 +1167,9 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: getClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						Templates: provisioningv1alpha1.Templates{
+							HwTemplate: "hwTemplate-v1",
+						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
 			"oCloudSiteId": {"type": "string"},
@@ -1186,3 +1202,109 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 		})
 	}
 }
+
+var _ = Describe("validateSchemaWithoutHWTemplate", func() {
+
+	var baseSchema map[string]any
+
+	BeforeEach(func() {
+		err := yaml.Unmarshal([]byte(utils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &baseSchema)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("Returns error for missing nodes property", func() {
+		// Remove the nodes property
+		delete(baseSchema["properties"].(map[string]any), "nodes")
+
+		err := validateSchemaWithoutHWTemplate(baseSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(
+			"unexpected clusterInstanceParameters structure: missing key \"nodes\" in field \"clusterInstanceParameters.properties\""))
+	})
+
+	It("Returns error for missing required properties in nodes", func() {
+		// Remove bmcCredentialsDetails from nodes properties
+		nodeProperties := baseSchema["properties"].(map[string]any)["nodes"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+		delete(nodeProperties, "bmcCredentialsDetails")
+
+		err := validateSchemaWithoutHWTemplate(baseSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"missing key \"bmcCredentialsDetails\" in field \"clusterInstanceParameters.properties.nodes.items.properties\""))
+	})
+
+	It("Returns error for missing required username in bmcCredentialsDetails", func() {
+		// Remove username from bmcCredentialsDetails properties
+		nodes := baseSchema["properties"].(map[string]any)["nodes"].(map[string]any)
+		items := nodes["items"].(map[string]any)
+		properties := items["properties"].(map[string]any)
+		bmcCredentialsDetails := properties["bmcCredentialsDetails"].(map[string]any)
+		bmcCredentialsDetailsProperties := bmcCredentialsDetails["properties"].(map[string]any)
+		delete(bmcCredentialsDetailsProperties, "username")
+
+		err := validateSchemaWithoutHWTemplate(baseSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"missing key \"username\" in field \"clusterInstanceParameters.properties.nodes.items.properties.bmcCredentialsDetails.properties\""))
+	})
+
+	It("Returns error for bmcCredentialsDetails required field not being an array", func() {
+		// Change bmcCredentialsDetails required field to be a non-array type
+		nodes := baseSchema["properties"].(map[string]any)["nodes"].(map[string]any)
+		items := nodes["items"].(map[string]any)
+		properties := items["properties"].(map[string]any)
+		bmcCredentialsDetails := properties["bmcCredentialsDetails"].(map[string]any)
+		bmcCredentialsDetails["required"] = "notAnArray"
+
+		err := validateSchemaWithoutHWTemplate(baseSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"expected a list for key \"required\" in field \"clusterInstanceParameters.properties.nodes.items.properties.bmcCredentialsDetails\""))
+	})
+
+	It("Returns error for incorrect type of nodeNetwork interfaces", func() {
+		// Change the type of interfaces to string instead of object
+		nodes := baseSchema["properties"].(map[string]any)["nodes"].(map[string]any)
+		items := nodes["items"].(map[string]any)
+		properties := items["properties"].(map[string]any)
+		nodeNetworkProperties := properties["nodeNetwork"].(map[string]any)["properties"].(map[string]any)
+		nodeNetworkProperties["interfaces"] = "incorrectType"
+
+		err := validateSchemaWithoutHWTemplate(baseSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"expected a map for key \"interfaces\" in field \"clusterInstanceParameters.properties.nodes.items.properties.nodeNetwork.properties\""))
+	})
+
+	It("Returns error for missing required macAddress in nodeNetwork interfaces", func() {
+		// Remove macAddress from nodeNetwork interfaces required properties
+		nodes := baseSchema["properties"].(map[string]any)["nodes"].(map[string]any)
+		items := nodes["items"].(map[string]any)
+		properties := items["properties"].(map[string]any)
+		nodeNetwork := properties["nodeNetwork"].(map[string]any)
+		nodeNetworkProperties := nodeNetwork["properties"].(map[string]any)
+		interfaces := nodeNetworkProperties["interfaces"].(map[string]any)
+		required := interfaces["required"].([]any)
+		for i, v := range required {
+			if v == "macAddress" {
+				interfaces["required"] = append(required[:i], required[i+1:]...)
+				interfaces["required"] = append(interfaces["required"].([]any), "testString")
+				break
+			}
+		}
+
+		err := validateSchemaWithoutHWTemplate(baseSchema)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"list in field \"clusterInstanceParameters.properties.nodes.items.properties.nodeNetwork.properties.interfaces.required\" is missing element: macAddress"))
+	})
+
+	It("Returns nil for valid schema", func() {
+		// Re-initialize the base schema for a valid test
+		err := yaml.Unmarshal([]byte(utils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &baseSchema)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = validateSchemaWithoutHWTemplate(baseSchema)
+		Expect(err).ToNot(HaveOccurred())
+	})
+})
