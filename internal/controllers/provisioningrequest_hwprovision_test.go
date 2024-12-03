@@ -730,6 +730,23 @@ var _ = Describe("updateClusterInstance", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("returns error when no match handware node", func() {
+		task.clusterInput.clusterInstanceData = map[string]any{
+			"nodes": []any{
+				map[string]any{
+					"hostName": "masterNode",
+				},
+				map[string]any{
+					"hostName": "workerNode",
+				},
+			},
+		}
+		np.Status.Properties = hwv1alpha1.Properties{}
+		err := task.updateClusterInstance(ctx, ci, np)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to find matches for the following nodes"))
+	})
+
 	It("returns no error when updateClusterInstance succeeds", func() {
 		task.clusterInput.clusterInstanceData = map[string]any{
 			"nodes": []any{
@@ -815,6 +832,25 @@ func getInterfaceMap(interfaces []*hwv1alpha1.Interface) []map[string]interface{
 }
 
 func createNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
+	if interfaces == nil {
+		interfaces = []*hwv1alpha1.Interface{
+			{
+				Name:       "eno1",
+				Label:      "bootable-interface",
+				MACAddress: "00:00:00:01:20:30",
+			},
+			{
+				Name:       "eth0",
+				Label:      "base-interface",
+				MACAddress: "00:00:00:01:20:31",
+			},
+			{
+				Name:       "eth1",
+				Label:      "data-interface",
+				MACAddress: "00:00:00:01:20:32",
+			},
+		}
+	}
 	return &hwv1alpha1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
