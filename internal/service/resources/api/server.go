@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
@@ -76,8 +78,16 @@ func (r *ResourceServer) GetDeploymentManagers(ctx context.Context, request api.
 
 // GetDeploymentManager receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetDeploymentManager(ctx context.Context, request api.GetDeploymentManagerRequestObject) (api.GetDeploymentManagerResponseObject, error) {
-	records, err := r.Repo.GetDeploymentManager(ctx, request.DeploymentManagerId)
-	if err != nil {
+	record, err := r.Repo.GetDeploymentManager(ctx, request.DeploymentManagerId)
+	if errors.Is(err, utils.ErrNotFound) {
+		return api.GetDeploymentManager404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"deploymentManagerId": request.DeploymentManagerId.String(),
+			},
+			Detail: "requested deploymentManager not found",
+			Status: http.StatusNotFound,
+		}, nil
+	} else if err != nil {
 		return api.GetDeploymentManager500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"deploymentManagerId": request.DeploymentManagerId.String(),
@@ -87,17 +97,7 @@ func (r *ResourceServer) GetDeploymentManager(ctx context.Context, request api.G
 		}, nil
 	}
 
-	if len(records) == 0 {
-		return api.GetDeploymentManager404ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"deploymentManagerId": request.DeploymentManagerId.String(),
-			},
-			Detail: "requested deploymentManager not found",
-			Status: http.StatusNotFound,
-		}, nil
-	}
-
-	object := models.DeploymentManagerToModel(&records[0])
+	object := models.DeploymentManagerToModel(record)
 	return api.GetDeploymentManager200JSONResponse(object), nil
 }
 
@@ -159,8 +159,16 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 
 // GetSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
-	records, err := r.Repo.GetSubscription(ctx, request.SubscriptionId)
-	if err != nil {
+	record, err := r.Repo.GetSubscription(ctx, request.SubscriptionId)
+	if errors.Is(err, utils.ErrNotFound) {
+		return api.GetSubscription404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"subscriptionId": request.SubscriptionId.String(),
+			},
+			Detail: "requested subscription not found",
+			Status: http.StatusNotFound,
+		}, nil
+	} else if err != nil {
 		return api.GetSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"subscriptionId": request.SubscriptionId.String(),
@@ -170,17 +178,7 @@ func (r *ResourceServer) GetSubscription(ctx context.Context, request api.GetSub
 		}, nil
 	}
 
-	if len(records) == 0 {
-		return api.GetSubscription404ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"subscriptionId": request.SubscriptionId.String(),
-			},
-			Detail: "requested subscription not found",
-			Status: http.StatusNotFound,
-		}, nil
-	}
-
-	object := models.SubscriptionToModel(&records[0])
+	object := models.SubscriptionToModel(record)
 	return api.GetSubscription200JSONResponse(object), nil
 }
 
@@ -227,8 +225,16 @@ func (r *ResourceServer) GetResourcePools(ctx context.Context, request api.GetRe
 
 // GetResourcePool receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetResourcePoolRequestObject) (api.GetResourcePoolResponseObject, error) {
-	records, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
-	if err != nil {
+	record, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
+	if errors.Is(err, utils.ErrNotFound) {
+		return api.GetResourcePool404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: "requested resourcePool not found",
+			Status: http.StatusNotFound,
+		}, nil
+	} else if err != nil {
 		return api.GetResourcePool500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
@@ -238,41 +244,28 @@ func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetRes
 		}, nil
 	}
 
-	if len(records) == 0 {
-		return api.GetResourcePool404ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"resourcePoolId": request.ResourcePoolId.String(),
-			},
-			Detail: "requested resourcePool not found",
-			Status: http.StatusNotFound,
-		}, nil
-	}
-
-	object := models.ResourcePoolToModel(&records[0])
+	object := models.ResourcePoolToModel(record)
 	return api.GetResourcePool200JSONResponse(object), nil
 }
 
 // GetResources receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResourcesRequestObject) (api.GetResourcesResponseObject, error) {
 	// First, find the pool
-	pools, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
-	if err != nil {
-		return api.GetResources500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"resourcePoolId": request.ResourcePoolId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
-	if len(pools) == 0 {
+	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); !exists {
 		return api.GetResources404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
 			},
 			Detail: "requested resource pool not found",
 			Status: http.StatusNotFound,
+		}, nil
+	} else if err != nil {
+		return api.GetResources500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
 		}, nil
 	}
 
@@ -301,18 +294,7 @@ func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResour
 // GetResource receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourceRequestObject) (api.GetResourceResponseObject, error) {
 	// First, find the pool
-	pools, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
-	if err != nil {
-		return api.GetResource500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"resourcePoolId": request.ResourcePoolId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
-	if len(pools) == 0 {
+	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); !exists {
 		return api.GetResource404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
@@ -320,11 +302,7 @@ func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourc
 			Detail: "requested resource pool not found",
 			Status: http.StatusNotFound,
 		}, nil
-	}
-
-	// Next, get the resources
-	records, err := r.Repo.GetResource(ctx, request.ResourceId)
-	if err != nil {
+	} else if err != nil {
 		return api.GetResource500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
@@ -334,7 +312,9 @@ func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourc
 		}, nil
 	}
 
-	if len(records) == 0 {
+	// Next, get the resources
+	record, err := r.Repo.GetResource(ctx, request.ResourceId)
+	if errors.Is(err, utils.ErrNotFound) {
 		return api.GetResource404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
@@ -343,11 +323,19 @@ func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourc
 			Detail: "requested resource not found",
 			Status: http.StatusNotFound,
 		}, nil
+	} else if err != nil {
+		return api.GetResource500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourcePoolId": request.ResourcePoolId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
 	}
 
 	// TODO: include child resources (note sure we'll have that use case)
 
-	object := models.ResourceToModel(&records[0], nil)
+	object := models.ResourceToModel(record, nil)
 	return api.GetResource200JSONResponse(object), nil
 }
 
@@ -368,8 +356,16 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 
 // GetResourceType receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetResourceTypeRequestObject) (api.GetResourceTypeResponseObject, error) {
-	records, err := r.Repo.GetResourceType(ctx, request.ResourceTypeId)
-	if err != nil {
+	record, err := r.Repo.GetResourceType(ctx, request.ResourceTypeId)
+	if errors.Is(err, utils.ErrNotFound) {
+		return api.GetResourceType404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourceTypeId": request.ResourceTypeId.String(),
+			},
+			Detail: "requested resourceType not found",
+			Status: http.StatusNotFound,
+		}, nil
+	} else if err != nil {
 		return api.GetResourceType500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourceTypeId": request.ResourceTypeId.String(),
@@ -379,16 +375,6 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 		}, nil
 	}
 
-	if len(records) == 0 {
-		return api.GetResourceType404ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"resourceTypeId": request.ResourceTypeId.String(),
-			},
-			Detail: "requested resourceType not found",
-			Status: http.StatusNotFound,
-		}, nil
-	}
-
-	object := models.ResourceTypeToModel(&records[0])
+	object := models.ResourceTypeToModel(record)
 	return api.GetResourceType200JSONResponse(object), nil
 }
