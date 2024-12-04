@@ -17,6 +17,6 @@ type AlarmsRepository struct {
 }
 
 // GetAlarmEventRecordWithUuid grabs a row of alarm_event_record using uuid
-func (ar *AlarmsRepository) GetAlarmEventRecordWithUuid(ctx context.Context, uuid uuid.UUID) ([]models.AlarmEventRecord, error) {
+func (ar *AlarmsRepository) GetAlarmEventRecordWithUuid(ctx context.Context, uuid uuid.UUID) (*models.AlarmEventRecord, error) {
 	return utils.Find[models.AlarmEventRecord](ctx, ar.Db, uuid, nil)
 }

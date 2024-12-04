@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
@@ -71,6 +73,14 @@ func Serve() error {
 	// Create the handler
 	server := api.ResourceServer{
 		Repo: repository,
+		// TODO: fill in with data from command line arguments
+		Info: generated.OCloudInfo{
+			Description:   "OpenShift O-Cloud Manager",
+			GlobalCloudId: uuid.Must(uuid.NewRandom()),
+			Name:          "OpenShift O-Cloud Manager",
+			OCloudId:      uuid.Must(uuid.NewRandom()),
+			ServiceUri:    "https://o2ims.apps.example.com",
+		},
 	}
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,

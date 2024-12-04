@@ -51,5 +51,32 @@ var _ = Describe("Utils", func() {
 			Expect(len(tags)).To(Equal(1))
 			Expect(tags).To(ConsistOf("record_id"))
 		})
+
+		It("excludes nil pointers", func() {
+			ar := mockDBModel{}
+			tags := GetNonNilDBTagsFromStruct(&ar)
+			Expect(tags).To(ConsistOf(
+				"record_id", "raised_time",
+				"extensions", "created_at"))
+			columns, values := GetColumnsAndValues(&ar, tags)
+			Expect(columns).To(ConsistOf(tags.Columns()))
+			Expect(len(values)).To(Equal(len(columns)))
+			Expect(values).To(ConsistOf(ar.RecordID, ar.RaisedTime, ar.Extensions, ar.CreatedAt))
+		})
+
+		It("includes non-nil pointers", func() {
+			changedTime := time.Now()
+			ar := mockDBModel{
+				ChangedTime: &changedTime,
+			}
+			tags := GetNonNilDBTagsFromStruct(&ar)
+			Expect(tags.Columns()).To(ConsistOf(
+				"record_id", "raised_time", "changed_time",
+				"extensions", "created_at"))
+			columns, values := GetColumnsAndValues(&ar, tags)
+			Expect(columns).To(ConsistOf(tags.Columns()))
+			Expect(len(values)).To(Equal(len(columns)))
+			Expect(values).To(ConsistOf(ar.RecordID, ar.RaisedTime, ar.ChangedTime, ar.Extensions, ar.CreatedAt))
+		})
 	})
 })

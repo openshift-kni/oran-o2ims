@@ -58,9 +58,6 @@ paths:
       summary: Get API versions
       description: |
         Returns the complete list of API versions implemented by the service.
-      parameters:
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - metadata
       responses:
@@ -122,9 +119,6 @@ paths:
       summary: Get minor API versions
       description: |
         Returns the list of minor API versions implemented for this major version of the API.
-      parameters:
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - metadata
       responses:
