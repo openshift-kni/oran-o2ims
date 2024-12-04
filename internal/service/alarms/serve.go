@@ -84,8 +84,13 @@ func Serve() error {
 		slog.Warn("error getting resources from the resource server", "error", err)
 	}
 
+	// Init alarm repository
+	alarmRepository := &repo.AlarmsRepository{
+		Db: pool,
+	}
+
 	// Load dictionary
-	alarmsDict := dictionary.New(hubClient)
+	alarmsDict := dictionary.New(hubClient, alarmRepository)
 	alarmsDict.Load(ctx, rs.ResourceTypes)
 
 	// TODO: Audit and Insert data database
@@ -95,10 +100,8 @@ func Serve() error {
 	// Init server
 	// Create the handler
 	alarmServer := internal.AlarmsServer{
-		AlarmsRepository: &repo.AlarmsRepository{
-			Db: pool,
-		},
-		ResourceServer: rs,
+		AlarmsRepository: alarmRepository,
+		ResourceServer:   rs,
 	}
 
 	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,

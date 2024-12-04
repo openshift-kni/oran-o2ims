@@ -34,3 +34,6 @@ func (r ResourceType) TableName() string {
 
 // PrimaryKey returns the primary key column associated to this model
 func (r ResourceType) PrimaryKey() string { return "resource_type_id" }
+
+// OnConflict returns the column or constraint to be used in the UPSERT operation
+func (r ResourceType) OnConflict() string { return "" }
