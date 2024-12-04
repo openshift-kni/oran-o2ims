@@ -7,10 +7,9 @@ import (
 )
 
 type DBTag map[string]string
-type DBValue map[string]interface{}
 
-const IncludeNilValues = false
-const ExcludeNilValues = true
+const includeNilValues = false
+const excludeNilValues = true
 
 // Columns is used in the Columns method of the SelectBuilder to convert the DBTag to a slice of any.
 func (r DBTag) Columns() []any {
@@ -22,18 +21,8 @@ func (r DBTag) Columns() []any {
 	return columns
 }
 
-// Values is used in the Values method of the SelectBuilder to convert the DBValue to a slice of any.
-func (r DBValue) Values() []any {
-	values := make([]any, 0, len(r))
-	for _, value := range r {
-		values = append(values, value)
-	}
-
-	return values
-}
-
-// GetAllDBTagsFromStruct returns a map of field names to their db tags.
-func GetAllDBTagsFromStruct[T db.Model](s T, excludeNilValues bool) DBTag {
+// getDBTagsFromStruct returns a map of field names to their db tags.
+func getDBTagsFromStruct[T db.Model](s T, excludeNilValues bool) DBTag {
 	tags := make(DBTag)
 
 	st := reflect.TypeOf(s)
@@ -60,6 +49,17 @@ func GetAllDBTagsFromStruct[T db.Model](s T, excludeNilValues bool) DBTag {
 	}
 
 	return tags
+}
+
+// GetNonNilDBTagsFromStruct returns a map of field names to their db tags.  Only non-pointer fields
+// or non-nil pointer fields are considered.
+func GetNonNilDBTagsFromStruct[T db.Model](s T) DBTag {
+	return getDBTagsFromStruct(s, excludeNilValues)
+}
+
+// GetAllDBTagsFromStruct returns a map of field names to their db tags.
+func GetAllDBTagsFromStruct[T db.Model](s T) DBTag {
+	return getDBTagsFromStruct(s, includeNilValues)
 }
 
 // GetColumnsAndValues returns the list of values associated to the field names specified in the tags parameter.  Both the

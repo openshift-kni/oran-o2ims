@@ -251,7 +251,7 @@ func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetRes
 // GetResources receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResourcesRequestObject) (api.GetResourcesResponseObject, error) {
 	// First, find the pool
-	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); !exists {
+	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); err == nil && !exists {
 		return api.GetResources404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
@@ -294,7 +294,7 @@ func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResour
 // GetResource receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourceRequestObject) (api.GetResourceResponseObject, error) {
 	// First, find the pool
-	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); !exists {
+	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); err == nil && !exists {
 		return api.GetResource404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),

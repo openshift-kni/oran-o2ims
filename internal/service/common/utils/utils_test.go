@@ -28,7 +28,7 @@ var _ = Describe("Utils", func() {
 	Describe("DB tags", func() {
 		It("returns all tags of the alarm_event_record", func() {
 			ar := mockDBModel{}
-			tags := GetAllDBTagsFromStruct(&ar, IncludeNilValues)
+			tags := GetAllDBTagsFromStruct(&ar)
 
 			st := reflect.TypeOf(ar)
 			Expect(tags).To(HaveLen(st.NumField()))
@@ -54,7 +54,7 @@ var _ = Describe("Utils", func() {
 
 		It("excludes nil pointers", func() {
 			ar := mockDBModel{}
-			tags := GetAllDBTagsFromStruct(&ar, ExcludeNilValues)
+			tags := GetNonNilDBTagsFromStruct(&ar)
 			Expect(tags).To(ConsistOf(
 				"record_id", "raised_time",
 				"extensions", "created_at"))
@@ -69,7 +69,7 @@ var _ = Describe("Utils", func() {
 			ar := mockDBModel{
 				ChangedTime: &changedTime,
 			}
-			tags := GetAllDBTagsFromStruct(&ar, ExcludeNilValues)
+			tags := GetNonNilDBTagsFromStruct(&ar)
 			Expect(tags.Columns()).To(ConsistOf(
 				"record_id", "raised_time", "changed_time",
 				"extensions", "created_at"))

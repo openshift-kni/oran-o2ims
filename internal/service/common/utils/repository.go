@@ -29,7 +29,7 @@ func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, col
 	// Build sql query
 	var record T
 	if columns == nil {
-		tags := GetAllDBTagsFromStruct(record, IncludeNilValues)
+		tags := GetAllDBTagsFromStruct(record)
 		columns = tags.Columns()
 	}
 
@@ -62,9 +62,7 @@ func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, col
 // FindAll retrieves all tuples from the database table specified.  If no records are found then an empty array is
 // returned.
 func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []any) ([]T, error) {
-	var record T
-	e := psql.Quote(record.PrimaryKey()).IsNotNull()
-	return Search[T](ctx, db, e, columns)
+	return Search[T](ctx, db, nil, columns)
 }
 
 // Delete deletes a specific tuple from the database table specified.  If no matching tuples are found an error will be
@@ -96,15 +94,20 @@ func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Ex
 	// Build sql query
 	var record T
 	if columns == nil {
-		tags := GetAllDBTagsFromStruct(record, IncludeNilValues)
+		tags := GetAllDBTagsFromStruct(record)
 		columns = tags.Columns()
 	}
 
-	sql, args, err := psql.Select(
+	params := []bob.Mod[*dialect.SelectQuery]{
 		sm.Columns(columns...),
 		sm.From(record.TableName()),
-		sm.Where(expression),
-	).Build()
+	}
+
+	if expression != nil {
+		params = append(params, sm.Where(expression))
+	}
+
+	sql, args, err := psql.Select(params...).Build()
 	if err != nil {
 		return []T{}, fmt.Errorf("failed to build query: %w", err)
 	}
@@ -115,10 +118,6 @@ func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Ex
 	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
 	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Debug("no records found", "table", record.TableName(), "expression", expression)
-			return []T{}, nil
-		}
 		return []T{}, fmt.Errorf("failed to execute query: %w", err)
 	}
 
@@ -129,13 +128,18 @@ func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Ex
 // Exists checks whether a record exists in the table with a primary key that matches uuid.
 func Exists[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (bool, error) {
 	var record T
-	query := fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=%s)",
-		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey()), psql.Arg(uuid))
+	query := psql.RawQuery(fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=?)",
+		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), uuid)
 
-	slog.Debug("executing query", "query", query, "args", uuid.String())
+	sql, args, err := query.Build()
+	if err != nil {
+		return false, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	slog.Error("executing query", "sql", sql, "args", args)
 
 	var result bool
-	err := db.QueryRow(ctx, query, uuid).Scan(&result)
+	err = db.QueryRow(ctx, sql, args...).Scan(&result)
 	if err != nil {
 		return false, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -146,11 +150,10 @@ func Exists[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (
 // Create creates a record of the requested model type.  The stored record is returned on success; otherwise an error
 // is returned.
 func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T) (*T, error) {
-	nonNilTags := GetAllDBTagsFromStruct(record, ExcludeNilValues)
-	tags := GetAllDBTagsFromStruct(record, IncludeNilValues)
+	nonNilTags := GetNonNilDBTagsFromStruct(record)
 
 	// Return all columns to get any defaulted values that the DB may set
-	query := psql.Insert(im.Into(record.TableName()), im.Returning(tags.Columns()...))
+	query := psql.Insert(im.Into(record.TableName()), im.Returning("*"))
 
 	// Add columns to the expression.  Maintain the order here so that it coincides with the order of the values
 	columns, values := GetColumnsAndValues(record, nonNilTags)
@@ -181,7 +184,7 @@ func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T) (*T, er
 // Update attempts to update a record with a matching primary key.  The stored record is returned on success; otherwise
 // an error is returned.
 func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, uuid uuid.UUID) (*T, error) {
-	tags := GetAllDBTagsFromStruct(record, IncludeNilValues)
+	tags := GetAllDBTagsFromStruct(record)
 
 	// Set up the arguments to the call to psql.Update(...) by using an array because there's no obvious way to add
 	// multiple Set(..) operation without having to add them one at a time separately.

@@ -9,13 +9,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/jackc/pgx/v5"
-
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 type AlarmsServer struct {
@@ -60,9 +59,7 @@ func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsReque
 // GetAlarm returns an AlarmEventRecord with a given ID
 func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequestObject) (api.GetAlarmResponseObject, error) {
 	aerModel, err := a.AlarmsRepository.GetAlarmEventRecordWithUuid(ctx, request.AlarmEventRecordId)
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("failed to get AlarmEventRecord due to issues with DB conn: %w", err)
-	} else if err != nil {
+	if errors.Is(err, utils.ErrNotFound) {
 		// Nothing found
 		return api.GetAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 			AdditionalAttributes: &map[string]string{
@@ -71,6 +68,8 @@ func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequest
 			Detail: "Could not find AlarmEventRecord for given UUID",
 			Status: http.StatusNotFound,
 		}), nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get AlarmEventRecord due to issues with DB conn: %w", err)
 	}
 
 	return api.GetAlarm200JSONResponse(convertAerModelToApi(*aerModel)), nil
