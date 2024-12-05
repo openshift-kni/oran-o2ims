@@ -24,6 +24,7 @@ type DataSource interface {
 	IncrGenerationID() int
 	GetResourcePools(ctx context.Context) ([]models.ResourcePool, error)
 	GetResources(ctx context.Context, pools []models.ResourcePool) ([]models.Resource, error)
+	GetDeploymentManagers(ctx context.Context) ([]models.DeploymentManager, error)
 	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
 }
 
@@ -138,6 +139,12 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 		return fmt.Errorf("failed to collect resources: %w", err)
 	}
 
+	// Get the list of deployment managers for this data source
+	_, err = c.collectDeploymentManagers(ctx, dataSource)
+	if err != nil {
+		return fmt.Errorf("failed to collect deployment managers: %w", err)
+	}
+
 	// TODO: purge stale record
 
 	// TODO: persist data source info
@@ -226,4 +233,31 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource DataSou
 	}
 
 	return pools, nil
+}
+
+// collectDeploymentManagers collects DeploymentManager objects from the data source, persists them to the database,
+// and signals any change events to the notification processor.
+func (c *Collector) collectDeploymentManagers(ctx context.Context, dataSource DataSource) ([]models.DeploymentManager, error) {
+	dms, err := dataSource.GetDeploymentManagers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment managers: %w", err)
+	}
+
+	// Loop over the set of deployment managers and insert (or update) as needed
+	for _, dm := range dms {
+		dataChangeEvent, err := persistObjectWithChangeEvent(
+			ctx, c.repository.Db, dm, dm.DeploymentManagerID, nil, func(object interface{}) any {
+				record, _ := object.(models.ResourcePool)
+				return models.ResourcePoolToModel(&record)
+			})
+		if err != nil {
+			return nil, fmt.Errorf("failed to persist deployment manager: %w", err)
+		}
+
+		if dataChangeEvent != nil { // nolint: staticcheck
+			// TODO: notify the notification processor of the new data change event
+		}
+	}
+
+	return dms, nil
 }

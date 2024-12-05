@@ -10,12 +10,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/itchyny/gojq"
 	"github.com/thoas/go-funk"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	v1 "open-cluster-management.io/api/cluster/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
 	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/service"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
@@ -28,6 +33,7 @@ type ACMDataSource struct {
 	cloudID             uuid.UUID
 	extensions          []string
 	jqTool              *jq.Tool
+	hubClient           client.Client
 	resourceFetcher     *service.ResourceFetcher
 	resourcePoolFetcher *service.ResourcePoolFetcher
 	generationID        int
@@ -119,11 +125,18 @@ func NewACMDataSource(cloudID uuid.UUID, backendURL string, extensions []string)
 		}
 	}
 
+	// Create a k8s client for the hub to be able to retrieve managed cluster info
+	hubClient, err := k8s.NewClientForHub()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create k8s client for hub: %w", err)
+	}
+
 	return &ACMDataSource{
 		generationID:        0,
 		cloudID:             cloudID,
 		extensions:          extensions,
 		jqTool:              jqTool,
+		hubClient:           hubClient,
 		resourceFetcher:     resourceFetcher,
 		resourcePoolFetcher: resourcePoolFetcher,
 	}, nil
@@ -251,6 +264,28 @@ func (d *ACMDataSource) GetResourcePools(ctx context.Context) ([]models.Resource
 			// a single bad object.
 		} else {
 			results = append(results, result)
+		}
+	}
+
+	return results, nil
+}
+
+// GetDeploymentManagers returns the list of deployment managers for this data source
+func (d *ACMDataSource) GetDeploymentManagers(ctx context.Context) ([]models.DeploymentManager, error) {
+	var clusters v1.ManagedClusterList
+	err := d.hubClient.List(ctx, &clusters)
+	if err != nil {
+		return []models.DeploymentManager{}, fmt.Errorf("failed to list clusters: %w", err)
+	}
+
+	var results []models.DeploymentManager
+	for _, cluster := range clusters.Items {
+		if dm, err := d.convertManagedClusterToDeploymentManager(ctx, cluster); err != nil {
+			slog.Warn("failed to convert managed cluster to deployment manager", "cluster", cluster, "error", err)
+			// Continue on conversion failures so that we don't exclude valid data just because of
+			// a single bad object.
+		} else {
+			results = append(results, dm)
 		}
 	}
 
@@ -413,4 +448,111 @@ func (d *ACMDataSource) convertClusterToResourcePool(from data.Object) (to model
 	}
 
 	return
+}
+
+// makeCapacityInfo creates a map of strings of capacity attributes for the cluster
+func (d *ACMDataSource) makeCapacityInfo(cluster v1.ManagedCluster) map[string]string {
+	results := make(map[string]string)
+	tags := []string{"cpu", "ephemeral-storage", "hugepages-1Gi", "hugepages-2Mi", "memory", "pods"}
+	for _, tag := range tags {
+		if value, found := cluster.Status.Allocatable[v1.ResourceName(tag)]; found {
+			results[tag] = value.String()
+		}
+	}
+	return results
+}
+
+// getClusterClientConfig retrieves the cluster client config for the specified cluster.
+func (d *ACMDataSource) getClusterClientConfig(ctx context.Context, clusterName string) (*clientcmdapi.Config, error) {
+	// Fetch the kubeconfig for this cluster
+	kubeConfig, err := k8s.GetClusterKubeConfigFromSecret(ctx, d.hubClient, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster kubeconfig: %w", err)
+	}
+
+	config, err := clientcmd.Load(kubeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cluster config: %w", err)
+	}
+
+	return config, nil
+}
+
+// getDeploymentManagerExtensions builds the extensions required for the deployment manager
+func (d *ACMDataSource) getDeploymentManagerExtensions(ctx context.Context, clusterName string) (map[string]string, error) {
+	// Fetch the kubeconfig for this cluster and provide the info as extensions to the returned object. This
+	// is anticipated as a temporary measure since eventually SMO will require accessing the API using an OAuth token
+	// acquired from an OAuth server.
+	config, err := d.getClusterClientConfig(ctx, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster config: %w", err)
+	}
+
+	var caData, url string
+	if cluster, found := config.Clusters[clusterName]; found {
+		caData = string(cluster.CertificateAuthorityData)
+		url = cluster.Server
+	}
+
+	var adminUser, adminCert, adminKey string
+	if authInfo, found := config.AuthInfos["admin"]; found {
+		adminUser = "admin"
+		adminCert = string(authInfo.ClientCertificateData)
+		adminKey = string(authInfo.ClientKeyData)
+	}
+
+	return map[string]string{
+		"profileName":          "k8s",
+		"admin_client_cert":    adminCert,
+		"admin_client_key":     adminKey,
+		"admin_user":           adminUser,
+		"cluster_ca_cert":      caData,
+		"cluster_api_endpoint": url,
+	}, nil
+}
+
+// convertManagedClusterToDeploymentManager converts a ManagedCluster to a DeploymentManager object
+func (d *ACMDataSource) convertManagedClusterToDeploymentManager(ctx context.Context, cluster v1.ManagedCluster) (models.DeploymentManager, error) {
+	clusterID, found := cluster.Labels["clusterID"]
+	if !found {
+		return models.DeploymentManager{}, fmt.Errorf("clusterID label not found in cluster %s", cluster.Name)
+	}
+	deploymentManagerID, err := uuid.Parse(clusterID)
+	if err != nil {
+		return models.DeploymentManager{}, fmt.Errorf("failed to parse from clusterID '%s' from %s", clusterID, cluster.Name)
+	}
+
+	url := ""
+	for _, clientConfig := range cluster.Spec.ManagedClusterClientConfigs {
+		if clientConfig.URL != "" {
+			url = clientConfig.URL
+			break
+		}
+	}
+
+	if url == "" {
+		return models.DeploymentManager{}, fmt.Errorf("failed to find URL for cluster %s", cluster.Name)
+	}
+
+	extensions, err := d.getDeploymentManagerExtensions(ctx, cluster.Name)
+	if err != nil {
+		return models.DeploymentManager{}, fmt.Errorf("failed to get extensions for cluster %s", cluster.Name)
+	}
+
+	to := models.DeploymentManager{
+		DeploymentManagerID: deploymentManagerID,
+		Name:                cluster.Name,
+		Description:         cluster.Name,
+		OCloudID:            d.cloudID,
+		URL:                 url,
+		Locations:           []string{}, // TODO: populate with locations from all pools
+		Capabilities:        nil,
+		CapacityInfo:        d.makeCapacityInfo(cluster),
+		Extensions:          &extensions,
+		DataSourceID:        d.dataSourceID,
+		GenerationID:        d.generationID,
+		ExternalID:          "",
+	}
+
+	return to, nil
 }
