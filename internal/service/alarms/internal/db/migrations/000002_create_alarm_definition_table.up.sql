@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS alarm_definition (
     alarm_name VARCHAR(255) NOT NULL, -- Short name for the alarm
     alarm_last_change VARCHAR(50) NOT NULL, -- Version in which this alarm last changed. Can use alarmDict version
     alarm_change_type VARCHAR(20) DEFAULT 'added' NOT NULL, -- Type of change (added, deleted, modified)
-    alarm_description TEXT NOT NULL, -- For caas it's rules[].summary
+    alarm_description TEXT NOT NULL, -- For caas it's rules[].summary and rules[].description
     proposed_repair_actions TEXT NOT NULL, -- For caas it's rules[].runbook_url
     clearing_type VARCHAR(20) DEFAULT 'automatic' NOT NULL, -- Clearing type (automatic or manual)
     management_interface_id VARCHAR(20)[] DEFAULT ARRAY['O2IMS']::VARCHAR[], -- Use default
@@ -19,7 +19,14 @@ CREATE TABLE IF NOT EXISTS alarm_definition (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record creation timestamp, Auto
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record last update timestamp, Auto
 
-    CONSTRAINT unique_resource_type_alarm_name UNIQUE (resource_type_id, alarm_name), -- Ensures unique alarm names per resource type. Assume that this is always true, but adding a check in case case we ever miss something. This also optimizes lookup.
+    -- Internal rule properties
+    -- There exists alerts within the same PrometheusRule.Group that have the same name but different severity label.
+    -- By adding this columns and a unique constraint on (resource_type_id, alarm_name, severity), we can differentiate between them.
+    -- All the Alerts from the Core Platform Monitoring have a severity label (except alert Watchdog). Alerts without a severity label are not affected by this.
+    severity VARCHAR(20) NOT NULL, -- severity of the alarm, obtained from severity label
+
+    -- Constraints
+    CONSTRAINT unique_alarm UNIQUE(resource_type_id, alarm_name, severity), -- This is what uniquely identifies an alarm
     CONSTRAINT fk_alarm_dictionary FOREIGN KEY (alarm_dictionary_id) REFERENCES alarm_dictionary(alarm_dictionary_id) ON DELETE CASCADE, -- Delete auto
     CONSTRAINT chk_alarm_change_type CHECK (alarm_change_type IN ('added', 'deleted', 'modified')),
     CONSTRAINT chk_clearing_type CHECK (clearing_type IN ('automatic', 'manual'))

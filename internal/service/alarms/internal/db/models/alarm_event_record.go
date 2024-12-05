@@ -27,8 +27,17 @@ type AlarmEventRecord struct {
 	CreatedAt             time.Time              `db:"created_at"`
 }
 
+// TableName returns the name of the table in the database
 func (r AlarmEventRecord) TableName() string {
 	return "alarm_event_record"
 }
 
-func (r AlarmEventRecord) PrimaryKey() string { return "alarm_event_record_id" }
+// PrimaryKey returns the primary key of the table
+func (r AlarmEventRecord) PrimaryKey() string {
+	return "alarm_event_record_id"
+}
+
+// OnConflict returns the column or constraint to be used in the UPSERT operation
+func (r AlarmEventRecord) OnConflict() string {
+	return ""
+}

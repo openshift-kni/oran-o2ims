@@ -24,6 +24,10 @@ func (m *mockDBModel) PrimaryKey() string {
 	return "record_id"
 }
 
+func (m *mockDBModel) OnConflict() string {
+	return "record_id"
+}
+
 var _ = Describe("Utils", func() {
 	Describe("DB tags", func() {
 		It("returns all tags of the alarm_event_record", func() {

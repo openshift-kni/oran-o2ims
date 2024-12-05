@@ -65,24 +65,23 @@ func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []any) (
 	return Search[T](ctx, db, nil, columns)
 }
 
-// Delete deletes a specific tuple from the database table specified.  If no matching tuples are found an error will be
-// returned therefore the caller is responsible for checking for existing records.
-func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (int64, error) {
+// Delete deletes a specific tuple from the database table specified given an expression for Where clause
+func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, expr psql.Expression) (int64, error) {
 	var record T
 	query := psql.Delete(
 		dm.From(record.TableName()),
-		dm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))))
+		dm.Where(expr))
 
 	sql, args, err := query.Build()
 	if err != nil {
-		return 0, fmt.Errorf("failed to build delete query for '%s/%s': %w", record.TableName(), uuid, err)
+		return 0, fmt.Errorf("failed to build delete query for '%s': %w", record.TableName(), err)
 	}
 
 	slog.Debug("executing statement", "query", query, "args", args)
 
 	result, err := db.Exec(ctx, sql, args...)
 	if err != nil {
-		return 0, fmt.Errorf("failed to delete '%s/%s': %w", record.TableName(), uuid, err)
+		return 0, fmt.Errorf("failed to delete '%s': %w", record.TableName(), err)
 	}
 
 	return result.RowsAffected(), nil
@@ -220,4 +219,73 @@ func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, uuid uu
 	}
 
 	return &record, nil
+}
+
+// UpsertOnConflict inserts or updates a set of records in the database table specified. It uses the bob.Mod OnConflict to define the columns to check for conflicts.
+// Args: ctx - context, db - pgxpool.Pool, columns - columns to check for conflicts, values - values to insert or update
+// Returns: records - the records only contain the primary key, error - if any
+func UpsertOnConflict[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []string, values []bob.Expression) ([]T, error) {
+	var record T
+
+	modInsert := []bob.Mod[*dialect.InsertQuery]{
+		im.Into(record.TableName(), columns...),
+		im.OnConflict(record.OnConflict()).DoUpdate(
+			im.SetExcluded(columns...)),
+		im.Returning(record.PrimaryKey()),
+	}
+
+	for _, value := range values {
+		modInsert = append(modInsert, im.Values(value))
+	}
+
+	query := psql.Insert(
+		modInsert...,
+	)
+
+	return executeUpsert[T](ctx, db, query)
+}
+
+// UpsertOnConflictConstraint inserts or updates a set of records in the database table specified. It uses the bob.Mod OnConflictOnConstraint to define the constraint to check for conflicts.
+// Args: ctx - context, db - pgxpool.Pool, columns - columns to check for conflicts, values - values to insert or update
+// Returns: records - the records only contain the primary key, error - if any
+func UpsertOnConflictConstraint[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []string, values []bob.Expression) ([]T, error) {
+	var record T
+
+	modInsert := []bob.Mod[*dialect.InsertQuery]{
+		im.Into(record.TableName(), columns...),
+		im.OnConflictOnConstraint(record.OnConflict()).DoUpdate(
+			im.SetExcluded(columns...)),
+		im.Returning(record.PrimaryKey()),
+	}
+
+	for _, value := range values {
+		modInsert = append(modInsert, im.Values(value))
+	}
+
+	query := psql.Insert(
+		modInsert...,
+	)
+
+	return executeUpsert[T](ctx, db, query)
+}
+
+// executeUpsert executes the upsert query and returns the records
+// TODO: this might be used by other functions
+func executeUpsert[T db.Model](ctx context.Context, db *pgxpool.Pool, query bob.BaseQuery[*dialect.InsertQuery]) ([]T, error) {
+	var record T
+
+	sql, args, err := query.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create upsert expression: %w", err)
+	}
+
+	// Run query
+	rows, _ := db.Query(ctx, sql, args...)
+	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
+	if err != nil {
+		return nil, fmt.Errorf("failed to call database: %w", err)
+	}
+
+	slog.Info("upsert successful", "affected rows", len(records), "table", record.TableName())
+	return records, nil
 }

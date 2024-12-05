@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS alarm_dictionary (
 
     -- Internal
     alarm_dictionary_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique identifier for each alarm dictionary
-    resource_type_id UUID NOT NULL, -- One-to-one relation between a resourceType and alarmDictionary
+    resource_type_id UUID NOT NULL UNIQUE, -- One-to-one relation between a resourceType and alarmDictionary
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record creation timestamp
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP -- Record last update timestamp
 );

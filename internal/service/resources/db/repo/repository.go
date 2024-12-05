@@ -38,7 +38,8 @@ func (r *ResourcesRepository) GetSubscription(ctx context.Context, id uuid.UUID)
 
 // DeleteSubscription deletes a Subscription tuple.  The caller should ensure that it exists prior to calling this.
 func (r *ResourcesRepository) DeleteSubscription(ctx context.Context, id uuid.UUID) (int64, error) {
-	return utils.Delete[models.Subscription](ctx, r.Db, id)
+	expr := psql.Quote(models.Subscription{}.PrimaryKey()).EQ(psql.Arg(id))
+	return utils.Delete[models.Subscription](ctx, r.Db, expr)
 }
 
 // CreateSubscription create a new Subscription tuple or returns nil if not found

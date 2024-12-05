@@ -35,3 +35,6 @@ func (r DeploymentManager) TableName() string {
 
 // PrimaryKey returns the primary key column associated to this model
 func (r DeploymentManager) PrimaryKey() string { return "cluster_id" }
+
+// OnConflict returns the column or constraint to be used in the UPSERT operation
+func (r DeploymentManager) OnConflict() string { return "" }
