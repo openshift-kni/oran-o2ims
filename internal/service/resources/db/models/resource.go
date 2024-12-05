@@ -13,7 +13,7 @@ var _ db.Model = (*Resource)(nil)
 
 // Resource represents a record in the resource table.
 type Resource struct {
-	ResourceID     *uuid.UUID        `db:"resource_id"`
+	ResourceID     uuid.UUID         `db:"resource_id"` // Non-nil because we always set this from named values
 	Description    string            `db:"description"`
 	ResourceTypeID uuid.UUID         `db:"resource_type_id"`
 	GlobalAssetID  *string           `db:"global_asset_id"`
@@ -21,10 +21,10 @@ type Resource struct {
 	Extensions     map[string]string `db:"extensions"`
 	Groups         *[]string         `db:"groups"`
 	Tags           *[]string         `db:"tags"`
-	DataSourceID   int               `db:"data_source_id"`
+	DataSourceID   uuid.UUID         `db:"data_source_id"`
 	GenerationID   int               `db:"generation_id"`
 	ExternalID     string            `db:"external_id"`
-	CreatedAt      time.Time         `db:"created_at"`
+	CreatedAt      *time.Time        `db:"created_at"`
 }
 
 // TableName returns the table name associated to this model
