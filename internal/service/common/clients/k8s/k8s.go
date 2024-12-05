@@ -16,8 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 )
 
 const (
@@ -55,7 +56,7 @@ func GetSchemeForHub() *runtime.Scheme {
 
 // NewClientForCluster creates a new client for a managed cluster
 func NewClientForCluster(ctx context.Context, hubClient client.Client, clusterName string) (client.Client, error) {
-	kubeConfig, err := getClusterKubeConfigFromSecret(ctx, hubClient, clusterName)
+	kubeConfig, err := GetClusterKubeConfigFromSecret(ctx, hubClient, clusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +74,8 @@ func NewClientForCluster(ctx context.Context, hubClient client.Client, clusterNa
 	return c, nil
 }
 
-// getClusterKubeConfigFromSecret retrieves the cluster kubeconfig from a secret
-func getClusterKubeConfigFromSecret(ctx context.Context, hubClient client.Client, clusterName string) ([]byte, error) {
+// GetClusterKubeConfigFromSecret retrieves the cluster kubeconfig from a secret
+func GetClusterKubeConfigFromSecret(ctx context.Context, hubClient client.Client, clusterName string) ([]byte, error) {
 	selector := labels.NewSelector()
 	kubeConfigSelector, _ := labels.NewRequirement(secretTypeLabel, selection.Equals, []string{secretTypeLabelValue})
 

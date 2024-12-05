@@ -683,8 +683,6 @@ components:
             Deployment Manager.
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: |
             List of metadata key-value pairs used to associate meaningful metadata to the related Deployment Manager.
       required:
@@ -873,6 +871,7 @@ components:
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
         globalLocationId:
           type: string
+          format: uuid
           description: This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
         location:
           type: string
