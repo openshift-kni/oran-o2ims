@@ -48,6 +48,10 @@ spec:
           spec:
             description: NodeSpec describes a node presents a hardware server
             properties:
+              extensions:
+                additionalProperties:
+                  type: string
+                type: object
               groupName:
                 description: GroupName
                 type: string

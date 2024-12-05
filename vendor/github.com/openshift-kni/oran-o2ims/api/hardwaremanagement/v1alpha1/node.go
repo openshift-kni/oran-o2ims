@@ -31,12 +31,17 @@ type NodeSpec struct {
 	// NodePool
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Node Pool",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	NodePool string `json:"nodePool"`
+
 	// GroupName
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Group Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	GroupName string `json:"groupName"`
+
 	// HwProfile
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Profile",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HwProfile string `json:"hwProfile"`
+
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
 // BMC describes BMC details of a hardware server
