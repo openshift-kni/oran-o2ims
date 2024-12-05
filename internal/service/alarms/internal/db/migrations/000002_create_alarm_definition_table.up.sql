@@ -44,7 +44,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to populate resource_type_id
-CREATE TRIGGER populate_alarm_definition_resource_type_id
+CREATE OR REPLACE TRIGGER populate_alarm_definition_resource_type_id
     BEFORE INSERT OR UPDATE ON alarm_definition
     FOR EACH ROW
     EXECUTE FUNCTION set_alarm_definition_resource_type_id();
@@ -59,7 +59,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to execute update_alarm_definition_timestamp before each update on alarm_definition
-CREATE TRIGGER set_alarm_definition_updated_at
+CREATE OR REPLACE TRIGGER set_alarm_definition_updated_at
     BEFORE UPDATE ON alarm_definition
     FOR EACH ROW
     EXECUTE FUNCTION update_alarm_definition_timestamp();
