@@ -41,8 +41,21 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 }
 
 func (a *AlarmsServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	subsModel, err := a.AlarmsRepository.GetAlarmSubscriptionWithUuid(ctx, request.AlarmSubscriptionId)
+	if errors.Is(err, utils.ErrNotFound) {
+		// Nothing found
+		return api.GetSubscription404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{
+				"UUID": request.AlarmSubscriptionId.String(),
+			},
+			Detail: "Could not find Alarm Subscription for given UUID",
+			Status: http.StatusNotFound,
+		}), nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get AlarmSubscriptionRecord due to issues with DB conn: %w", err)
+	}
+
+	return api.GetSubscription200JSONResponse(models.ConvertSubsModelToApi(*subsModel)), nil
 }
 
 func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsRequestObject) (api.GetAlarmsResponseObject, error) {
@@ -72,7 +85,7 @@ func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequest
 		return nil, fmt.Errorf("failed to get AlarmEventRecord due to issues with DB conn: %w", err)
 	}
 
-	return api.GetAlarm200JSONResponse(convertAerModelToApi(*aerModel)), nil
+	return api.GetAlarm200JSONResponse(models.ConvertAerModelToApi(*aerModel)), nil
 }
 
 func (a *AlarmsServer) AckAlarm(ctx context.Context, request api.AckAlarmRequestObject) (api.AckAlarmResponseObject, error) {
@@ -103,19 +116,4 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 func (a *AlarmsServer) HwNotification(ctx context.Context, request api.HwNotificationRequestObject) (api.HwNotificationResponseObject, error) {
 	// TODO implement me
 	return nil, fmt.Errorf("not implemented")
-}
-
-func convertAerModelToApi(aerModel models.AlarmEventRecord) api.AlarmEventRecord {
-	return api.AlarmEventRecord{
-		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
-		AlarmAcknowledgedTime: aerModel.AlarmAcknowledgedTime,
-		AlarmChangedTime:      aerModel.AlarmChangedTime,
-		AlarmClearedTime:      aerModel.AlarmClearedTime,
-		AlarmDefinitionId:     aerModel.AlarmDefinitionID,
-		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
-		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
-		PerceivedSeverity:     api.PerceivedSeverity(aerModel.PerceivedSeverity),
-		ProbableCauseId:       aerModel.ProbableCauseID,
-		ResourceTypeID:        aerModel.ResourceTypeID,
-	}
 }
