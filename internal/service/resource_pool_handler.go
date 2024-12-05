@@ -21,10 +21,15 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
+
+	"github.com/itchyny/gojq"
+	"github.com/thoas/go-funk"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/graphql"
+	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 )
@@ -55,6 +60,7 @@ type ResourcePoolHandler struct {
 	backendClient       *http.Client
 	graphqlQuery        string
 	graphqlVars         *model.SearchInput
+	jqTool              *jq.Tool
 	resourcePoolFetcher *ResourcePoolFetcher
 }
 
@@ -155,6 +161,31 @@ func (b *ResourcePoolHandlerBuilder) Build() (
 		Transport: backendTransport,
 	}
 
+	// Create a jq compiler function for parsing labels
+	compilerFunc := gojq.WithFunction("parse_labels", 0, 1, func(x any, _ []any) any {
+		if labels, ok := x.(string); ok {
+			return data.GetLabelsMap(labels)
+		}
+		return nil
+	})
+
+	// Create the jq tool:
+	jqTool, err := jq.NewTool().
+		SetLogger(b.logger).
+		SetCompilerOption(&compilerFunc).
+		Build()
+	if err != nil {
+		return
+	}
+
+	// Check that extensions are at least syntactically valid:
+	for _, extension := range b.extensions {
+		_, err = jqTool.Compile(extension)
+		if err != nil {
+			return
+		}
+	}
+
 	// Create and populate the object:
 	result = &ResourcePoolHandler{
 		logger:           b.logger,
@@ -166,6 +197,7 @@ func (b *ResourcePoolHandlerBuilder) Build() (
 		backendClient:    backendClient,
 		graphqlQuery:     b.graphqlQuery,
 		graphqlVars:      b.graphqlVars,
+		jqTool:           jqTool,
 	}
 	return
 }
@@ -234,19 +266,94 @@ func (h *ResourcePoolHandler) fetchItems(
 	if err != nil {
 		return
 	}
-	return h.resourcePoolFetcher.FetchItems(ctx)
+	items, err := h.resourcePoolFetcher.FetchItems(ctx)
+	if err != nil {
+		return
+	}
+
+	// Transform Clusters to ResourcePools
+	result = data.Map(items, h.mapClusterItem)
+
+	return
 }
 
 func (h *ResourcePoolHandler) fetchItem(ctx context.Context,
 	id string) (resourcePool data.Object, err error) { // nolint: unparam
 	// Fetch resource pools
-	resourcePools, err := h.resourcePoolFetcher.FetchItems(ctx)
+	items, err := h.resourcePoolFetcher.FetchItems(ctx)
 	if err != nil {
 		return
 	}
 
+	// Transform Items to O2 Resources
+	resourcePools := data.Map(items, h.mapClusterItem)
+
 	// Get first result
 	resourcePool, err = resourcePools.Next(ctx)
+
+	return
+}
+
+// Map Cluster to an O2 ResourcePool object.
+func (h *ResourcePoolHandler) mapClusterItem(ctx context.Context,
+	from data.Object) (to data.Object, err error) {
+	resourcePoolId, err := data.GetString(from,
+		graphql.PropertyCluster("resourcePoolId").MapProperty())
+	if err != nil {
+		return
+	}
+
+	name, err := data.GetString(from,
+		graphql.PropertyCluster("name").MapProperty())
+	if err != nil {
+		return
+	}
+
+	labels, err := data.GetString(from, "label")
+	if err != nil {
+		return
+	}
+	labelsMap := data.GetLabelsMap(labels)
+	labelsKeys := funk.Keys(labelsMap)
+
+	// Set 'location' according to the 'region' label
+	regionKey := funk.Find(labelsKeys, func(key string) bool {
+		return strings.Contains(key, "region")
+	})
+	var location string
+	if regionKey != nil {
+		location = labelsMap[regionKey.(string)].(string)
+	}
+
+	// Set 'description' according to the 'clusterID' label
+	clusterIDKey := funk.Find(labelsKeys, func(key string) bool {
+		return strings.Contains(key, "clusterID")
+	})
+	var description string
+	if clusterIDKey != nil {
+		description = labelsMap[clusterIDKey.(string)].(string)
+	}
+
+	// Add the extensions:
+	extensionsMap, err := data.GetExtensions(from, h.extensions, h.jqTool)
+	if err != nil {
+		return
+	}
+	if len(extensionsMap) == 0 {
+		// Fallback to all labels
+		extensionsMap = labelsMap
+	}
+
+	to = data.Object{
+		"resourcePoolId": resourcePoolId,
+		"name":           name,
+		"oCloudId":       h.cloudID,
+		"extensions":     extensionsMap,
+		"location":       location,
+		"description":    description,
+		// TODO: no direct mapping to a property in Cluster object
+		"globalLocationId": "",
+	}
 
 	return
 }
