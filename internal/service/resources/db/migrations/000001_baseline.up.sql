@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS resource_type
     vendor           VARCHAR(64)  NOT NULL,
     model            VARCHAR(64)  NOT NULL,
     version          VARCHAR(64)  NOT NULL,
-    resource_kind    INTEGER      NOT NULL,                           -- enum of physical, logical, etc...
-    resource_class   INTEGER      NOT NULL,                           -- enum of compute, networking, storage, etc...
+    resource_kind  VARCHAR(32) NOT NULL,                                 -- enum of physical, logical, etc...
+    resource_class VARCHAR(32) NOT NULL,                                 -- enum of compute, networking, storage, etc...
     extensions       json         NULL,
     data_source_id UUID NOT NULL,
     generation_id    INTEGER      NOT NULL DEFAULT 0,
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS data_change_event
 CREATE TABLE subscription
 (
     subscription_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    consumer_subscription_id VARCHAR(64),
+    consumer_subscription_id UUID,
     filter                   TEXT,
     callback                 TEXT    NOT NULL,
     event_cursor             INTEGER NOT NULL DEFAULT 0,

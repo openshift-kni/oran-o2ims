@@ -106,13 +106,13 @@ func (r *ResourcesRepository) UpdateResource(ctx context.Context, resource *mode
 
 // GetDataSource retrieves a specific DataSource tuple or returns ErrNotFound if not found
 func (r *ResourcesRepository) GetDataSource(ctx context.Context, id uuid.UUID) (*models.DataSource, error) {
-	return utils.Find[models.DataSource](ctx, r.Db, id, nil)
+	return utils.Find[models.DataSource](ctx, r.Db, id)
 }
 
 // GetDataSourceByName retrieves a specific DataSource tuple by name or returns ErrNotFound if not found
 func (r *ResourcesRepository) GetDataSourceByName(ctx context.Context, name string) (*models.DataSource, error) {
 	e := psql.Quote("name").EQ(psql.Arg(name))
-	records, err := utils.Search[models.DataSource](ctx, r.Db, e, nil)
+	records, err := utils.Search[models.DataSource](ctx, r.Db, e)
 	if err != nil {
 		return nil, err
 	}
