@@ -14,7 +14,7 @@ var _ db.Model = (*ResourcePool)(nil)
 // ResourcePool represents a record in the resource_pool table.
 type ResourcePool struct {
 	ResourcePoolID   uuid.UUID          `db:"resource_pool_id"` // Non-nil because we always set this from named values
-	GlobalLocationID string             `db:"global_location_id"`
+	GlobalLocationID uuid.UUID          `db:"global_location_id"`
 	Name             string             `db:"name"`
 	Description      string             `db:"description"`
 	OCloudID         uuid.UUID          `db:"o_cloud_id"`

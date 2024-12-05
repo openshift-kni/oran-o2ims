@@ -18,7 +18,7 @@ type DeploymentManager struct {
 	Description         string             `db:"description"`
 	OCloudID            uuid.UUID          `db:"o_cloud_id"`
 	URL                 string             `db:"url"`
-	Locations           []string           `db:"locations"`
+	Locations           []uuid.UUID        `db:"locations"`
 	Capabilities        map[string]string  `db:"capabilities"`
 	CapacityInfo        map[string]string  `db:"capacity_info"`
 	Extensions          *map[string]string `db:"extensions"`

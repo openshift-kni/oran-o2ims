@@ -667,6 +667,7 @@ components:
             List of globalLocationIDs that were assigned to the OCloud Site(s) which this Deployment Manager supports.
           items:
             type: string
+            format: uuid
         capabilities:
           type: object
           additionalProperties:
@@ -873,6 +874,7 @@ components:
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
         globalLocationId:
           type: string
+          format: uuid
           description: This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
         location:
           type: string
