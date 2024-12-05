@@ -53,7 +53,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to execute update_alarm_event_sequence before updating alarm_event_record
-CREATE TRIGGER update_alarm_event_sequence
+CREATE OR REPLACE TRIGGER update_alarm_event_sequence
     BEFORE UPDATE ON alarm_event_record
     FOR EACH ROW
     EXECUTE FUNCTION update_alarm_event_sequence();

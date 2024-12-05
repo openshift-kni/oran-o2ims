@@ -22,7 +22,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger execute update_subscription_timestamp to update the updated_at timestamp for alarm_subscription_info
-CREATE TRIGGER update_subscription_timestamp
+CREATE OR REPLACE TRIGGER update_subscription_timestamp
     BEFORE UPDATE ON alarm_subscription_info
     FOR EACH ROW
     EXECUTE FUNCTION update_subscription_timestamp();

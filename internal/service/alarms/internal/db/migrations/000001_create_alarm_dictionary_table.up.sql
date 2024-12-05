@@ -25,7 +25,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to execute update_alarm_dictionary_timestamp before each update on alarm_dictionary
-CREATE TRIGGER set_alarm_dictionary_timestamp
+CREATE OR REPLACE TRIGGER set_alarm_dictionary_timestamp
     BEFORE UPDATE ON alarm_dictionary
     FOR EACH ROW
     EXECUTE FUNCTION update_alarm_dictionary_timestamp();
