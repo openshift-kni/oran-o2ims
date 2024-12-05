@@ -85,7 +85,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	}
 
 	// Create the build-in data sources
-	acm, err := collector.NewACMDataSource(cloudID, config.BackendURL, config.Extensions)
+	acm, err := collector.NewACMDataSource(cloudID, globalCloudID, config.BackendURL, config.Extensions)
 	if err != nil {
 		return fmt.Errorf("failed to create ACM data source: %w", err)
 	}

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS resource_type
 CREATE TABLE IF NOT EXISTS resource_pool
 (
     resource_pool_id   UUID PRIMARY KEY,
-    global_location_id VARCHAR(64) NOT NULL,
+    global_location_id UUID NOT NULL,
     name               VARCHAR(255) NOT NULL,
     description        TEXT        NOT NULL,
     o_cloud_id         UUID         NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS deployment_manager
     description    TEXT          NOT NULL,
     o_cloud_id     UUID          NOT NULL,
     url            VARCHAR(255)  NOT NULL,
-    locations      VARCHAR(64)[] NOT NULL,
+    locations VARCHAR(64)[] NOT NULL,
     capabilities   json          NULL,
     capacity_info  json          NULL,
     extensions     json          NULL,
