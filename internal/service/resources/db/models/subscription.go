@@ -18,7 +18,7 @@ type Subscription struct {
 	Filter                 *string    `db:"filter"`
 	Callback               string     `db:"callback"`
 	EventCursor            int        `db:"event_cursor"`
-	CreatedAt              time.Time  `db:"created_at"`
+	CreatedAt              *time.Time `db:"created_at"`
 }
 
 // TableName returns the table name associated to this model
