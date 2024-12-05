@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
@@ -26,8 +27,6 @@ import (
 
 // Alarm server config values
 const (
-	host         = "127.0.0.1"
-	port         = "8000"
 	readTimeout  = 5 * time.Second
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second
@@ -36,8 +35,13 @@ const (
 	database = "alarms"
 )
 
+type AlarmsServerConfig struct {
+	Address       string
+	GlobalCloudID string
+}
+
 // Serve start alarms server
-func Serve() error {
+func Serve(config *AlarmsServerConfig) error {
 	slog.Info("Starting Alarm server")
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
@@ -97,9 +101,19 @@ func Serve() error {
 
 	// TODO: Launch k8s job for DB remove archived data
 
+	// Parse global cloud id
+	var globalCloudID uuid.UUID
+	if config.GlobalCloudID != utils.DefaultOCloudID {
+		globalCloudID, err = uuid.Parse(config.GlobalCloudID)
+		if err != nil {
+			return fmt.Errorf("failed to parse global cloud id: %w", err)
+		}
+	}
+
 	// Init server
 	// Create the handler
 	alarmServer := internal.AlarmsServer{
+		GlobalCloudID:    globalCloudID,
 		AlarmsRepository: alarmRepository,
 		ResourceServer:   rs,
 	}
@@ -134,7 +148,7 @@ func Serve() error {
 	// Server config
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         net.JoinHostPort(host, port),
+		Addr:         config.Address,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,

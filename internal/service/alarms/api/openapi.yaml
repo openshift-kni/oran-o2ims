@@ -218,6 +218,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error
           content:
@@ -295,7 +301,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        '200':
           description: Successful deletion
         '400':
           description: Bad request
@@ -526,10 +532,12 @@ components:
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         filter:
           type: string
+          enum: [ new, change, clear, acknowledge ]
           description: |
             Criteria for events which do not need to be reported or will be filtered by the subscription 
             notification service. Therefore, if a filter is not provided then all events are reported.
-            Only the attributes in AlarmEventRecord are filterable.
+            It can be filtered by criteria based on the type of notification of fields of the
+            AlarmEventRecord.
           example: (eq,perceivedSeverity,0)
         callback:
           type: string

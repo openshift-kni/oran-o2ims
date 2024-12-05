@@ -320,6 +320,9 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 	// AlarmServer
 	if serverName == InventoryAlarmServerName {
 		result = slices.Clone(AlarmServerArgs)
+		result = append(
+			result,
+			fmt.Sprintf("--global-cloud-id=%s", cloudId))
 		return
 	}
 

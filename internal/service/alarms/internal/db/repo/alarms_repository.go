@@ -21,9 +21,30 @@ type AlarmsRepository struct {
 	Db *pgxpool.Pool
 }
 
-// GetAlarmEventRecordWithUuid grabs a row of alarm_event_record using uuid
-func (ar *AlarmsRepository) GetAlarmEventRecordWithUuid(ctx context.Context, uuid uuid.UUID) (*models.AlarmEventRecord, error) {
-	return utils.Find[models.AlarmEventRecord](ctx, ar.Db, uuid)
+// GetAlarmEventRecord grabs a row of alarm_event_record using a primary key
+func (ar *AlarmsRepository) GetAlarmEventRecord(ctx context.Context, id uuid.UUID) (*models.AlarmEventRecord, error) {
+	return utils.Find[models.AlarmEventRecord](ctx, ar.Db, id)
+}
+
+// GetAlarmSubscriptions grabs all rows of alarm_subscription
+func (ar *AlarmsRepository) GetAlarmSubscriptions(ctx context.Context) ([]models.AlarmSubscription, error) {
+	return utils.FindAll[models.AlarmSubscription](ctx, ar.Db)
+}
+
+// DeleteAlarmSubscription deletes a row of alarm_subscription using a primary key
+func (ar *AlarmsRepository) DeleteAlarmSubscription(ctx context.Context, id uuid.UUID) (int64, error) {
+	expr := psql.Quote(models.AlarmSubscription{}.PrimaryKey()).EQ(psql.Arg(id))
+	return utils.Delete[models.AlarmSubscription](ctx, ar.Db, expr)
+}
+
+// CreateAlarmSubscription inserts a new row of alarm_subscription
+func (ar *AlarmsRepository) CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error) {
+	return utils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "Filter", "Callback")
+}
+
+// GetAlarmSubscription grabs a row of alarm_subscription using a primary key
+func (ar *AlarmsRepository) GetAlarmSubscription(ctx context.Context, id uuid.UUID) (*models.AlarmSubscription, error) {
+	return utils.Find[models.AlarmSubscription](ctx, ar.Db, id)
 }
 
 // DeleteAlarmDictionariesNotIn deletes all alarm dictionaries that are not in the list of resource type IDs

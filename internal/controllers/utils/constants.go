@@ -42,6 +42,7 @@ var (
 	AlarmServerArgs = []string{
 		"alarms-server",
 		"serve",
+		"--api-listener-address=127.0.0.1:8000",
 	}
 	MetadataServerArgs = []string{
 		"start",
