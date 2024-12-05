@@ -23,17 +23,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
-	"github.com/openshift-kni/oran-o2ims/internal/graphql"
-	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
-
-	"github.com/itchyny/gojq"
-	"github.com/thoas/go-funk"
 )
 
 type ResourcePoolFetcher struct {
@@ -45,7 +39,6 @@ type ResourcePoolFetcher struct {
 	extensions    []string
 	graphqlQuery  string
 	graphqlVars   *model.SearchInput
-	jqTool        *jq.Tool
 }
 
 // ResourcePoolFetcherBuilder contains the data and logic needed to create a new ResourcePoolFetcher.
@@ -157,31 +150,6 @@ func (b *ResourcePoolFetcherBuilder) Build() (
 		Transport: backendTransport,
 	}
 
-	// Create a jq compiler function for parsing labels
-	compilerFunc := gojq.WithFunction("parse_labels", 0, 1, func(x any, _ []any) any {
-		if labels, ok := x.(string); ok {
-			return data.GetLabelsMap(labels)
-		}
-		return nil
-	})
-
-	// Create the jq tool:
-	jqTool, err := jq.NewTool().
-		SetLogger(b.logger).
-		SetCompilerOption(&compilerFunc).
-		Build()
-	if err != nil {
-		return
-	}
-
-	// Check that extensions are at least syntactically valid:
-	for _, extension := range b.extensions {
-		_, err = jqTool.Compile(extension)
-		if err != nil {
-			return
-		}
-	}
-
 	// Create and populate the object:
 	result = &ResourcePoolFetcher{
 		logger:        b.logger,
@@ -192,7 +160,6 @@ func (b *ResourcePoolFetcherBuilder) Build() (
 		extensions:    b.extensions,
 		graphqlQuery:  b.graphqlQuery,
 		graphqlVars:   b.graphqlVars,
-		jqTool:        jqTool,
 	}
 	return
 }
@@ -200,7 +167,7 @@ func (b *ResourcePoolFetcherBuilder) Build() (
 // FetchItems returns a data stream of O2 ResourcePools.
 // The items are converted from Clusters fetched from the search API.
 func (r *ResourcePoolFetcher) FetchItems(
-	ctx context.Context) (resourcePools data.Stream, err error) {
+	ctx context.Context) (clusters data.Stream, err error) {
 	// Search Clusters
 	response, err := r.getSearchResponse(ctx)
 	if err != nil {
@@ -208,16 +175,13 @@ func (r *ResourcePoolFetcher) FetchItems(
 	}
 
 	// Create reader for Clusters
-	clusters, err := k8s.NewStream().
+	clusters, err = k8s.NewStream().
 		SetLogger(r.logger).
 		SetReader(response).
 		Build()
 	if err != nil {
 		return
 	}
-
-	// Transform Clusters to ResourcePools
-	resourcePools = data.Map(clusters, r.mapClusterItem)
 
 	return
 }
@@ -275,70 +239,6 @@ func (r *ResourcePoolFetcher) getSearchResponse(ctx context.Context) (result io.
 	}
 
 	result = response.Body
-
-	return
-}
-
-// Map Cluster to an O2 ResourcePool object.
-func (r *ResourcePoolFetcher) mapClusterItem(ctx context.Context,
-	from data.Object) (to data.Object, err error) {
-	resourcePoolId, err := data.GetString(from,
-		graphql.PropertyCluster("resourcePoolId").MapProperty())
-	if err != nil {
-		return
-	}
-
-	name, err := data.GetString(from,
-		graphql.PropertyCluster("name").MapProperty())
-	if err != nil {
-		return
-	}
-
-	labels, err := data.GetString(from, "label")
-	if err != nil {
-		return
-	}
-	labelsMap := data.GetLabelsMap(labels)
-	labelsKeys := funk.Keys(labelsMap)
-
-	// Set 'location' according to the 'region' label
-	regionKey := funk.Find(labelsKeys, func(key string) bool {
-		return strings.Contains(key, "region")
-	})
-	var location string
-	if regionKey != nil {
-		location = labelsMap[regionKey.(string)].(string)
-	}
-
-	// Set 'description' according to the 'clusterID' label
-	clusterIDKey := funk.Find(labelsKeys, func(key string) bool {
-		return strings.Contains(key, "clusterID")
-	})
-	var description string
-	if clusterIDKey != nil {
-		description = labelsMap[clusterIDKey.(string)].(string)
-	}
-
-	// Add the extensions:
-	extensionsMap, err := data.GetExtensions(from, r.extensions, r.jqTool)
-	if err != nil {
-		return
-	}
-	if len(extensionsMap) == 0 {
-		// Fallback to all labels
-		extensionsMap = labelsMap
-	}
-
-	to = data.Object{
-		"resourcePoolId": resourcePoolId,
-		"name":           name,
-		"oCloudId":       r.cloudID,
-		"extensions":     extensionsMap,
-		"location":       location,
-		"description":    description,
-		// TODO: no direct mapping to a property in Cluster object
-		"globalLocationId": "",
-	}
 
 	return
 }
