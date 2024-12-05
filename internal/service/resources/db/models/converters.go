@@ -11,7 +11,7 @@ func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentMan
 	object := generated.DeploymentManager{
 		Capabilities:        map[string]string{},
 		Capacity:            map[string]string{},
-		DeploymentManagerId: *record.ClusterID,
+		DeploymentManagerId: record.DeploymentManagerID,
 		Description:         record.Description,
 		Extensions:          record.Extensions,
 		Name:                record.Name,
@@ -41,7 +41,7 @@ func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 		Name:            record.Name,
 		ResourceClass:   "",
 		ResourceKind:    "",
-		ResourceTypeId:  *record.ResourceTypeID,
+		ResourceTypeId:  record.ResourceTypeID,
 		Vendor:          record.Vendor,
 		Version:         record.Version,
 	}
@@ -85,7 +85,7 @@ func ResourcePoolToModel(record *ResourcePool) generated.ResourcePool {
 		Location:         record.Location,
 		Name:             record.Name,
 		OCloudId:         record.OCloudID,
-		ResourcePoolId:   *record.ResourcePoolID,
+		ResourcePoolId:   record.ResourcePoolID,
 	}
 
 	return object
@@ -96,7 +96,7 @@ func ResourceToModel(record *Resource, elements []Resource) generated.Resource {
 	object := generated.Resource{
 		Description:    record.Description,
 		Extensions:     record.Extensions,
-		ResourceId:     *record.ResourceID,
+		ResourceId:     record.ResourceID,
 		ResourcePoolId: record.ResourcePoolID,
 		ResourceTypeId: record.ResourceTypeID,
 	}
