@@ -939,6 +939,8 @@ spec:
         name: ""
         version: v1
       specDescriptors:
+      - displayName: Extensions
+        path: extensions
       - description: GroupName
         displayName: Group Name
         path: groupName
