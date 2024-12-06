@@ -17,6 +17,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.hwMgrId
+      name: HwMgr Id
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -60,7 +63,7 @@ spec:
                 type: object
               hwMgrId:
                 description: HwMgrId is the identifier for the hardware manager plugin
-                  adaptor.
+                  instance.
                 type: string
               location:
                 description: Location
