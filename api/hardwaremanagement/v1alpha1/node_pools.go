@@ -42,7 +42,7 @@ type NodePoolSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	LocationSpec `json:",inline"`
 
-	// HwMgrId is the identifier for the hardware manager plugin adaptor.
+	// HwMgrId is the identifier for the hardware manager plugin instance.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HwMgrId string `json:"hwMgrId,omitempty"`
 
@@ -90,6 +90,7 @@ type NodePoolStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=nodepools,shortName=orannp
+// +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hwMgrId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
 // +operator-sdk:csv:customresourcedefinitions:displayName="Node Pool",resources={{Namespace, v1}}
