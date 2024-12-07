@@ -53,12 +53,12 @@ func AlarmServer() *cobra.Command {
 	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
 	_ = flags.String(
-		cloudIDFlagName,
+		CloudIDFlagName,
 		"",
 		"O-Cloud identifier.",
 	)
 	_ = flags.String(
-		backendURLFlagName,
+		BackendURLFlagName,
 		"",
 		"URL of the backend server.",
 	)
@@ -78,7 +78,7 @@ func AlarmServer() *cobra.Command {
 		"Token for authenticating to the resource server.",
 	)
 	_ = flags.StringArray(
-		extensionsFlagName,
+		ExtensionsFlagName,
 		[]string{},
 		"Extension to add to alarms.",
 	)
@@ -122,12 +122,12 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 
 	// Get the cloud identifier:
-	cloudID, err := flags.GetString(cloudIDFlagName)
+	cloudID, err := flags.GetString(CloudIDFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
 			"Failed to get cloud identifier flag",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -136,7 +136,7 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		c.logger.ErrorContext(
 			ctx,
 			"Cloud identifier is empty",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
@@ -147,12 +147,12 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 	)
 
 	// Get the backend details:
-	backendURL, err := flags.GetString(backendURLFlagName)
+	backendURL, err := flags.GetString(BackendURLFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
 			"Failed to get backend URL flag",
-			"flag", backendURLFlagName,
+			"flag", BackendURLFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -161,7 +161,7 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		c.logger.ErrorContext(
 			ctx,
 			"Backend URL is empty",
-			"flag", backendURLFlagName,
+			"flag", BackendURLFlagName,
 		)
 		return exit.Error(1)
 	}
@@ -213,12 +213,12 @@ func (c *AlarmServerCommand) run(cmd *cobra.Command, argv []string) error {
 		resourceServerToken = backendToken
 	}
 
-	extensions, err := flags.GetStringArray(extensionsFlagName)
+	extensions, err := flags.GetStringArray(ExtensionsFlagName)
 	if err != nil {
 		c.logger.ErrorContext(
 			ctx,
 			"Failed to extension flag",
-			"flag", extensionsFlagName,
+			"flag", ExtensionsFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)

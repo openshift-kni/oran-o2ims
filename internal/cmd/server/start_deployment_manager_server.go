@@ -47,12 +47,12 @@ func DeploymentManagerServer() *cobra.Command {
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
 	AddTokenFlags(flags)
 	_ = flags.String(
-		cloudIDFlagName,
+		CloudIDFlagName,
 		"",
 		"O-Cloud identifier.",
 	)
 	_ = flags.String(
-		backendURLFlagName,
+		BackendURLFlagName,
 		"",
 		"URL of the backend server.",
 	)
@@ -66,12 +66,12 @@ func DeploymentManagerServer() *cobra.Command {
 		),
 	)
 	_ = flags.StringArray(
-		extensionsFlagName,
+		ExtensionsFlagName,
 		[]string{},
 		"Extension to add to deployment managers.",
 	)
 	_ = flags.String(
-		externalAddressFlagName,
+		ExternalAddressFlagName,
 		"",
 		"External address.",
 	)
@@ -114,12 +114,12 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	}
 
 	// Get the cloud identifier:
-	cloudID, err := flags.GetString(cloudIDFlagName)
+	cloudID, err := flags.GetString(CloudIDFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to get cloud identifier flag",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -128,7 +128,7 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		logger.ErrorContext(
 			ctx,
 			"Cloud identifier is empty",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
@@ -161,12 +161,12 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		)
 		return exit.Error(1)
 	}
-	backendURL, err := flags.GetString(backendURLFlagName)
+	backendURL, err := flags.GetString(BackendURLFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to get backend URL flag",
-			"flag", backendURLFlagName,
+			"flag", BackendURLFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -175,16 +175,16 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 		logger.ErrorContext(
 			ctx,
 			"Backend URL is empty",
-			"flag", backendURLFlagName,
+			"flag", BackendURLFlagName,
 		)
 		return exit.Error(1)
 	}
-	extensions, err := flags.GetStringArray(extensionsFlagName)
+	extensions, err := flags.GetStringArray(ExtensionsFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to extension flag",
-			"flag", extensionsFlagName,
+			"flag", ExtensionsFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -206,12 +206,12 @@ func (c *DeploymentManagerServerCommand) run(cmd *cobra.Command, argv []string) 
 	)
 
 	// Get the external address:
-	externalAddress, err := flags.GetString(externalAddressFlagName)
+	externalAddress, err := flags.GetString(ExternalAddressFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to get external address flag",
-			slog.String("flag", externalAddressFlagName),
+			slog.String("flag", ExternalAddressFlagName),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)

@@ -25,16 +25,16 @@ var ErrNotFound = errors.New("record not found")
 
 // Find retrieves a specific tuple from the database table specified.  If no record is found ErrNotFound is returned
 // as an error; otherwise a pointer to the stored record is returned or a generic error on failure.
-func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, columns []any) (*T, error) {
+func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, fields ...string) (*T, error) {
 	// Build sql query
 	var record T
-	if columns == nil {
-		tags := GetAllDBTagsFromStruct(record)
-		columns = tags.Columns()
+	tags := GetAllDBTagsFromStruct(record)
+	if len(fields) > 0 {
+		tags = GetDBTagsFromStructFields(record, fields...)
 	}
 
 	sql, args, err := psql.Select(
-		sm.Columns(columns...),
+		sm.Columns(tags.Columns()...),
 		sm.From(record.TableName()),
 		sm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
 	).Build()
@@ -61,8 +61,8 @@ func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, col
 
 // FindAll retrieves all tuples from the database table specified.  If no records are found then an empty array is
 // returned.
-func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []any) ([]T, error) {
-	return Search[T](ctx, db, nil, columns)
+func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, fields ...string) ([]T, error) {
+	return Search[T](ctx, db, nil, fields...)
 }
 
 // Delete deletes a specific tuple from the database table specified given an expression for Where clause
@@ -89,16 +89,16 @@ func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, expr psql.Express
 
 // Search retrieves a tuple from the database using arbitrary column values.  If no record is found an empty array
 // is returned.
-func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Expression, columns []any) ([]T, error) {
+func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Expression, fields ...string) ([]T, error) {
 	// Build sql query
 	var record T
-	if columns == nil {
-		tags := GetAllDBTagsFromStruct(record)
-		columns = tags.Columns()
+	tags := GetAllDBTagsFromStruct(record)
+	if len(fields) > 0 {
+		tags = GetDBTagsFromStructFields(record, fields...)
 	}
 
 	params := []bob.Mod[*dialect.SelectQuery]{
-		sm.Columns(columns...),
+		sm.Columns(tags.Columns()...),
 		sm.From(record.TableName()),
 	}
 
@@ -150,9 +150,10 @@ func Exists[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (
 // is returned.
 func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T) (*T, error) {
 	nonNilTags := GetNonNilDBTagsFromStruct(record)
+	tags := GetAllDBTagsFromStruct(record)
 
 	// Return all columns to get any defaulted values that the DB may set
-	query := psql.Insert(im.Into(record.TableName()), im.Returning("*"))
+	query := psql.Insert(im.Into(record.TableName()), im.Returning(tags.Columns()...))
 
 	// Add columns to the expression.  Maintain the order here so that it coincides with the order of the values
 	columns, values := GetColumnsAndValues(record, nonNilTags)
@@ -181,16 +182,21 @@ func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T) (*T, er
 }
 
 // Update attempts to update a record with a matching primary key.  The stored record is returned on success; otherwise
-// an error is returned.
-func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, uuid uuid.UUID) (*T, error) {
-	tags := GetAllDBTagsFromStruct(record)
+// an error is returned.  If the `fields` argument is set then only those columns are updated but the returned object
+// will contain all columns.
+func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, uuid uuid.UUID, fields ...string) (*T, error) {
+	all := GetAllDBTagsFromStruct(record)
+	tags := all
+	if len(fields) > 0 {
+		tags = GetDBTagsFromStructFields(record, fields...)
+	}
 
 	// Set up the arguments to the call to psql.Update(...) by using an array because there's no obvious way to add
 	// multiple Set(..) operation without having to add them one at a time separately.
 	mods := []bob.Mod[*dialect.UpdateQuery]{
 		um.Table(record.TableName()),
 		um.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
-		um.Returning(tags.Columns()...)}
+		um.Returning(all.Columns()...)}
 
 	// Add the individual column sets
 	columns, values := GetColumnsAndValues(record, tags)
@@ -215,7 +221,7 @@ func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, uuid uu
 
 	record, err = pgx.CollectExactlyOneRow(result, pgx.RowToStructByName[T])
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract inserted record: %w", err)
+		return nil, fmt.Errorf("failed to extract updated record: %w", err)
 	}
 
 	return &record, nil
