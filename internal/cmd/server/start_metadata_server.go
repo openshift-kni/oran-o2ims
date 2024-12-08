@@ -46,17 +46,17 @@ func MetadataServer() *cobra.Command {
 	network.AddListenerFlags(flags, network.APIListener, network.APIAddress)
 	network.AddListenerFlags(flags, network.MetricsListener, network.MetricsAddress)
 	_ = flags.String(
-		cloudIDFlagName,
+		CloudIDFlagName,
 		"",
 		"O-Cloud identifier.",
 	)
 	_ = flags.String(
-		globalCloudIDFlagName,
+		GlobalCloudIDFlagName,
 		"",
 		"Global O-Cloud identifier.",
 	)
 	_ = flags.String(
-		externalAddressFlagName,
+		ExternalAddressFlagName,
 		"",
 		"External address.",
 	)
@@ -99,12 +99,12 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	}
 
 	// Get the cloud identifier:
-	cloudID, err := flags.GetString(cloudIDFlagName)
+	cloudID, err := flags.GetString(CloudIDFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to get cloud identifier flag",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -113,7 +113,7 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		logger.ErrorContext(
 			ctx,
 			"Cloud identifier is empty",
-			"flag", cloudIDFlagName,
+			"flag", CloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
@@ -124,12 +124,12 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	)
 
 	// Get the cloud identifier:
-	globalCloudID, err := flags.GetString(globalCloudIDFlagName)
+	globalCloudID, err := flags.GetString(GlobalCloudIDFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to get global cloud identifier flag",
-			"flag", globalCloudIDFlagName,
+			"flag", GlobalCloudIDFlagName,
 			"error", err.Error(),
 		)
 		return exit.Error(1)
@@ -138,7 +138,7 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 		logger.ErrorContext(
 			ctx,
 			"Global cloud identifier is empty",
-			"flag", globalCloudIDFlagName,
+			"flag", GlobalCloudIDFlagName,
 		)
 		return exit.Error(1)
 	}
@@ -149,12 +149,12 @@ func (c *MetadataServerCommand) run(cmd *cobra.Command, argv []string) error {
 	)
 
 	// Get the external address:
-	externalAddress, err := flags.GetString(externalAddressFlagName)
+	externalAddress, err := flags.GetString(ExternalAddressFlagName)
 	if err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Failed to get external address flag",
-			slog.String("flag", externalAddressFlagName),
+			slog.String("flag", ExternalAddressFlagName),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)

@@ -709,6 +709,7 @@ components:
           example: "65221564-8b05-416a-bfc3-c250bc64e1aa"
         consumerSubscriptionId:
           type: string
+          format: uuid
           description: Identifier for the consumer of events sent due to the Subscription.
         filter:
           type: string
@@ -758,7 +759,6 @@ components:
             country: "ES"
       required:
       - oCloudId
-      - globalCloudId
       - name
       - description
       - serviceUri
@@ -869,7 +869,6 @@ components:
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
         globalLocationId:
           type: string
-          format: uuid
           description: This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
         location:
           type: string
@@ -1064,3 +1063,42 @@ components:
       - managementInterfaceId
       - pkNotificationField
       - alarmAdditionalFields
+
+    InventoryChangeNotification:
+      description: Information about an inventory change notification
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+          description: |
+            A unique identifier to represent this notification event
+        consumerSubscriptionId:
+          type: string
+          description: |
+            The value provided by the consumer in the subscription
+        notificationEventType:
+          type: integer
+          description: |
+            One of the following values: 0 - create, 1 - modify, 2 - delete
+        objectRef:
+          type: string
+          description: |
+            The URL to the object. This is not required if the notificationEventType is 2 (DELETE). It will point to
+            one of the following data types defined in clause 3.2.6 and the reference will match the type of objects
+            supplied in priorObjectState and/or postObjectState.
+        priorObjectState:
+          type: string
+          description: |
+            This is required if the notificationEventType is 1 (MODIFY) or 2 (DELETE) and is one of the following
+            data types defined in clause 3.2.6 and will match the type of object in postObjectState and/or the type
+            referred to in objectRef.
+        postObjectState:
+          type: string
+          description: |
+            This is required if the notificationEventType is 0 (CREATE) or 1 (MODIFY) and is one of the following data
+            types defined in clause 3.2.6 and will match the type of object in priorObjectState and/or the type
+            referred to in objectRef.
+      required:
+      - notificationId
+      - notificationEventType
