@@ -23,15 +23,15 @@ import (
 // ErrNotFound represents the error returned by any repository when not record matches the requested criteria
 var ErrNotFound = errors.New("record not found")
 
-// Find retrieves a specific tuple from the database table specified.  If no record is found ErrNotFound is returned
-// as an error; otherwise a pointer to the stored record is returned or a generic error on failure.
-func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, fields ...string) (*T, error) {
-	// Build sql query
+// Following functions are meant to fulfill basic CRUD operations on the database. More complex queries or bulk operations
+// for Insert or Update should be built in the repository files of the specific service and called one of the Execute helper functions.
+
+// Find retrieves a specific tuple from the database table specified.
+// The `uuid` argument is the primary key of the record to retrieve.
+// If no record is found ErrNotFound is returned as an error.
+func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (*T, error) {
 	var record T
 	tags := GetAllDBTagsFromStruct(record)
-	if len(fields) > 0 {
-		tags = GetDBTagsFromStructFields(record, fields...)
-	}
 
 	sql, args, err := psql.Select(
 		sm.Columns(tags.Columns()...),
@@ -42,42 +42,55 @@ func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, fie
 		return nil, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
-	// Run query
-	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
-	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Debug("no record found", "uuid", uuid, "table", record.TableName())
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("failed to execute query: %w", err)
-	}
-
-	slog.Debug("record found", "table", record.TableName(), "uuid", uuid)
-	return &record, nil
+	return ExecuteCollectExactlyOneRow[T](ctx, db, sql, args)
 }
 
-// FindAll retrieves all tuples from the database table specified.  If no records are found then an empty array is
-// returned.
+// FindAll retrieves all tuples from the database table specified.
+// The `fields` argument is a list of columns to retrieve. If no fields are specified then all columns are fetched.
+// If no records are found then an empty array is returned.
 func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, fields ...string) ([]T, error) {
 	return Search[T](ctx, db, nil, fields...)
 }
 
-// Delete deletes a specific tuple from the database table specified given an expression for Where clause
-func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, expr psql.Expression) (int64, error) {
+// Search retrieves tuples from the database table specified using a custom expression.
+// The `fields` argument is a list of columns to retrieve. If no fields are specified then all columns are fetched.
+// The `whereExpr` argument is a custom expression to filter the records.
+// If no records are found then an empty array is returned.
+func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr bob.Expression, fields ...string) ([]T, error) {
+	// Build sql query
+	var record T
+	tags := GetAllDBTagsFromStruct(record)
+	if len(fields) > 0 {
+		tags = GetDBTagsFromStructFields(record, fields...)
+	}
+
+	sql, args, err := psql.Select(
+		sm.Columns(tags.Columns()...),
+		sm.From(record.TableName()),
+		sm.Where(whereExpr),
+	).Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	return ExecuteCollectRows[T](ctx, db, sql, args)
+}
+
+// Delete deletes a specific tuple from the database table specified using a custom expression.
+// The `whereExpr` argument is a custom expression to filter the records.
+// The number of rows affected is returned on success; otherwise an error is returned.
+func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr psql.Expression) (int64, error) {
 	var record T
 	query := psql.Delete(
 		dm.From(record.TableName()),
-		dm.Where(expr))
+		dm.Where(whereExpr))
 
 	sql, args, err := query.Build()
 	if err != nil {
 		return 0, fmt.Errorf("failed to build delete query for '%s': %w", record.TableName(), err)
 	}
 
-	slog.Debug("executing statement", "query", query, "args", args)
+	slog.Debug("executing statement", "sql", sql, "args", args)
 
 	result, err := db.Exec(ctx, sql, args...)
 	if err != nil {
@@ -87,67 +100,9 @@ func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, expr psql.Express
 	return result.RowsAffected(), nil
 }
 
-// Search retrieves a tuple from the database using arbitrary column values.  If no record is found an empty array
-// is returned.
-func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, expression bob.Expression, fields ...string) ([]T, error) {
-	// Build sql query
-	var record T
-	tags := GetAllDBTagsFromStruct(record)
-	if len(fields) > 0 {
-		tags = GetDBTagsFromStructFields(record, fields...)
-	}
-
-	params := []bob.Mod[*dialect.SelectQuery]{
-		sm.Columns(tags.Columns()...),
-		sm.From(record.TableName()),
-	}
-
-	if expression != nil {
-		params = append(params, sm.Where(expression))
-	}
-
-	sql, args, err := psql.Select(params...).Build()
-	if err != nil {
-		return []T{}, fmt.Errorf("failed to build query: %w", err)
-	}
-
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
-	// Run query
-	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
-	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
-	if err != nil {
-		return []T{}, fmt.Errorf("failed to execute query: %w", err)
-	}
-
-	slog.Debug("records found", "table", record.TableName(), "expression", expression, "count", len(records))
-	return records, nil
-}
-
-// Exists checks whether a record exists in the table with a primary key that matches uuid.
-func Exists[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (bool, error) {
-	var record T
-	query := psql.RawQuery(fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=?)",
-		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), uuid)
-
-	sql, args, err := query.Build()
-	if err != nil {
-		return false, fmt.Errorf("failed to build query: %w", err)
-	}
-
-	slog.Error("executing query", "sql", sql, "args", args)
-
-	var result bool
-	err = db.QueryRow(ctx, sql, args...).Scan(&result)
-	if err != nil {
-		return false, fmt.Errorf("failed to execute query: %w", err)
-	}
-
-	return result, nil
-}
-
-// Create creates a record of the requested model type.  The stored record is returned on success; otherwise an error
-// is returned.
+// Create creates a record of the requested model type.
+// The "record" argument is the record to store in the database. Only fields with non-nil values are stored.
+// The stored record is returned on success; otherwise an error is returned.
 func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T) (*T, error) {
 	nonNilTags := GetNonNilDBTagsFromStruct(record)
 	tags := GetAllDBTagsFromStruct(record)
@@ -165,26 +120,15 @@ func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T) (*T, er
 		return nil, fmt.Errorf("failed to create insert expression: %w", err)
 	}
 
-	slog.Debug("executing statement", "query", sql, "args", args)
-
-	// Run the query
-	result, err := db.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute insert expression '%s' with args '%s': %w", sql, args, err)
-	}
-
-	record, err = pgx.CollectExactlyOneRow(result, pgx.RowToStructByName[T])
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract inserted record: %w", err)
-	}
-
-	return &record, nil
+	return ExecuteCollectExactlyOneRow[T](ctx, db, sql, args)
 }
 
-// Update attempts to update a record with a matching primary key.  The stored record is returned on success; otherwise
-// an error is returned.  If the `fields` argument is set then only those columns are updated but the returned object
-// will contain all columns.
-func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, uuid uuid.UUID, fields ...string) (*T, error) {
+// Update attempts to update a record of the requested model type.
+// The `uuid` argument is the primary key of the record to update.
+// The `record` argument is the record to update in the database.
+// The `fields` argument is a list of columns to update. If no fields are specified only non-nil fields are updated.
+// The updated record is returned on success; otherwise an error is returned.
+func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, record T, fields ...string) (*T, error) {
 	all := GetAllDBTagsFromStruct(record)
 	tags := all
 	if len(fields) > 0 {
@@ -211,87 +155,71 @@ func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, uuid uu
 		return nil, fmt.Errorf("failed to create update expression: %w", err)
 	}
 
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
-	// Run the query
-	result, err := db.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute insert expression '%s' with args '%s': %w", sql, args, err)
-	}
-
-	record, err = pgx.CollectExactlyOneRow(result, pgx.RowToStructByName[T])
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract updated record: %w", err)
-	}
-
-	return &record, nil
+	return ExecuteCollectExactlyOneRow[T](ctx, db, sql, args)
 }
 
-// UpsertOnConflict inserts or updates a set of records in the database table specified. It uses the bob.Mod OnConflict to define the columns to check for conflicts.
-// Args: ctx - context, db - pgxpool.Pool, columns - columns to check for conflicts, values - values to insert or update
-// Returns: records - the records only contain the primary key, error - if any
-func UpsertOnConflict[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []string, values []bob.Expression) ([]T, error) {
+// Exists checks whether a record exists in the database table specified.
+// The `uuid` argument is the primary key of the record to check.
+func Exists[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (bool, error) {
 	var record T
 
-	modInsert := []bob.Mod[*dialect.InsertQuery]{
-		im.Into(record.TableName(), columns...),
-		im.OnConflict(record.OnConflict()).DoUpdate(
-			im.SetExcluded(columns...)),
-		im.Returning(record.PrimaryKey()),
-	}
-
-	for _, value := range values {
-		modInsert = append(modInsert, im.Values(value))
-	}
-
-	query := psql.Insert(
-		modInsert...,
-	)
-
-	return executeUpsert[T](ctx, db, query)
-}
-
-// UpsertOnConflictConstraint inserts or updates a set of records in the database table specified. It uses the bob.Mod OnConflictOnConstraint to define the constraint to check for conflicts.
-// Args: ctx - context, db - pgxpool.Pool, columns - columns to check for conflicts, values - values to insert or update
-// Returns: records - the records only contain the primary key, error - if any
-func UpsertOnConflictConstraint[T db.Model](ctx context.Context, db *pgxpool.Pool, columns []string, values []bob.Expression) ([]T, error) {
-	var record T
-
-	modInsert := []bob.Mod[*dialect.InsertQuery]{
-		im.Into(record.TableName(), columns...),
-		im.OnConflictOnConstraint(record.OnConflict()).DoUpdate(
-			im.SetExcluded(columns...)),
-		im.Returning(record.PrimaryKey()),
-	}
-
-	for _, value := range values {
-		modInsert = append(modInsert, im.Values(value))
-	}
-
-	query := psql.Insert(
-		modInsert...,
-	)
-
-	return executeUpsert[T](ctx, db, query)
-}
-
-// executeUpsert executes the upsert query and returns the records
-// TODO: this might be used by other functions
-func executeUpsert[T db.Model](ctx context.Context, db *pgxpool.Pool, query bob.BaseQuery[*dialect.InsertQuery]) ([]T, error) {
-	var record T
+	query := psql.RawQuery(fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=?)",
+		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), uuid)
 
 	sql, args, err := query.Build()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create upsert expression: %w", err)
+		return false, fmt.Errorf("failed to build query: %w", err)
 	}
+
+	slog.Error("executing query", "sql", sql, "args", args)
+
+	var result bool
+	err = db.QueryRow(ctx, sql, args...).Scan(&result)
+	if err != nil {
+		return false, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	return result, nil
+}
+
+// Helper Execute Query functions
+
+// ExecuteCollectExactlyOneRow executes a query and collects result using pgx.CollectExactlyOneRow.
+func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db *pgxpool.Pool, sql string, args []any) (*T, error) {
+	var record T
+	var err error
+
+	slog.Debug("executing statement", "sql", sql, "args", args)
 
 	// Run query
-	rows, _ := db.Query(ctx, sql, args...)
-	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
+	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
-		return nil, fmt.Errorf("failed to call database: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("no record found", "table", record.TableName())
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	slog.Info("upsert successful", "affected rows", len(records), "table", record.TableName())
+	slog.Debug("record found", "table", record.TableName())
+	return &record, nil
+}
+
+// ExecuteCollectRows executes a query and collects result using pgx.CollectRows.
+func ExecuteCollectRows[T db.Model](ctx context.Context, db *pgxpool.Pool, sql string, args []any) ([]T, error) {
+	var record T
+	var err error
+
+	slog.Debug("executing statement", "sql", sql, "args", args)
+
+	// Run query
+	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
+	if err != nil {
+		return []T{}, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	slog.Debug("records found", "table", record.TableName(), "count", len(records))
 	return records, nil
 }
