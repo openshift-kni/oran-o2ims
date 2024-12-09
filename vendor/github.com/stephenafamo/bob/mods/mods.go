@@ -1,6 +1,7 @@
 package mods
 
 import (
+	"context"
 	"io"
 
 	"github.com/stephenafamo/bob"
@@ -16,18 +17,12 @@ func (q QueryMods[T]) Apply(query T) {
 	}
 }
 
-type QueryModFunc[T any] func(T)
-
-func (q QueryModFunc[T]) Apply(query T) {
-	q(query)
-}
-
 // This is a generic type for expressions can take extra mods as a function
 // allows for some fluent API, for example with functions
 type Moddable[T bob.Expression] func(...bob.Mod[T]) T
 
-func (m Moddable[T]) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-	return m().WriteSQL(w, d, start)
+func (m Moddable[T]) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+	return m().WriteSQL(ctx, w, d, start)
 }
 
 type With[Q interface{ AppendWith(clause.CTE) }] clause.CTE
@@ -174,4 +169,10 @@ type set[Q interface{ AppendSet(clauses ...any) }] []any
 
 func (s set[Q]) Apply(q Q) {
 	q.AppendSet(s...)
+}
+
+type Hook[Q interface{ AppendHooks(...bob.Hook[Q]) }] []bob.Hook[Q]
+
+func (h Hook[Q]) Apply(q Q) {
+	q.AppendHooks(h...)
 }

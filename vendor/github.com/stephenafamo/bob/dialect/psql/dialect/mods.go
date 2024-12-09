@@ -1,6 +1,7 @@
 package dialect
 
 import (
+	"context"
 	"io"
 
 	"github.com/stephenafamo/bob"
@@ -13,9 +14,9 @@ type Distinct struct {
 	On []any
 }
 
-func (di Distinct) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (di Distinct) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
 	w.Write([]byte("DISTINCT"))
-	return bob.ExpressSlice(w, d, start, di.On, " ON (", ", ", ")")
+	return bob.ExpressSlice(ctx, w, d, start, di.On, " ON (", ", ", ")")
 }
 
 func With[Q interface{ AppendWith(clause.CTE) }](name string, columns ...string) CTEChain[Q] {
@@ -122,8 +123,13 @@ func FullJoin[Q Joinable](e any) JoinChain[Q] {
 	return Join[Q](clause.FullJoin, e)
 }
 
-func CrossJoin[Q Joinable](e any) bob.Mod[Q] {
-	return Join[Q](clause.CrossJoin, e)
+func CrossJoin[Q Joinable](e any) CrossJoinChain[Q] {
+	return CrossJoinChain[Q](func() clause.Join {
+		return clause.Join{
+			Type: clause.CrossJoin,
+			To:   clause.From{Table: e},
+		}
+	})
 }
 
 type JoinChain[Q Joinable] func() clause.Join
@@ -197,6 +203,34 @@ func (j JoinChain[Q]) Using(using ...string) bob.Mod[Q] {
 	return mods.Join[Q](jo)
 }
 
+type CrossJoinChain[Q Joinable] func() clause.Join
+
+func (j CrossJoinChain[Q]) Apply(q Q) {
+	q.AppendJoin(j())
+}
+
+func (j CrossJoinChain[Q]) As(alias string, columns ...string) bob.Mod[Q] {
+	jo := j()
+	jo.To.Alias = alias
+	jo.To.Columns = columns
+
+	return CrossJoinChain[Q](func() clause.Join {
+		return jo
+	})
+}
+
+type collation struct {
+	name string
+}
+
+func (c collation) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, _ int) ([]any, error) {
+	if _, err := w.Write([]byte(" COLLATE ")); err != nil {
+		return nil, err
+	}
+	d.WriteQuoted(w, c.name)
+	return nil, nil
+}
+
 type OrderBy[Q interface{ AppendOrder(clause.OrderDef) }] func() clause.OrderDef
 
 func (s OrderBy[Q]) Apply(q Q) {
@@ -248,9 +282,9 @@ func (o OrderBy[Q]) NullsLast() OrderBy[Q] {
 	})
 }
 
-func (o OrderBy[Q]) Collate(collation string) OrderBy[Q] {
+func (o OrderBy[Q]) Collate(collationName string) OrderBy[Q] {
 	order := o()
-	order.CollationName = collation
+	order.Collation = collation{name: collationName}
 
 	return OrderBy[Q](func() clause.OrderDef {
 		return order
@@ -416,8 +450,8 @@ func (w *WindowChain[T]) FromUnboundedPreceding() T {
 
 func (w *WindowChain[T]) FromPreceding(exp any) T {
 	w.def.SetStart(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " PRECEDING")
+		func(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+			return bob.ExpressIf(ctx, w, d, start, exp, true, "", " PRECEDING")
 		}),
 	)
 	return w.Wrap
@@ -430,8 +464,8 @@ func (w *WindowChain[T]) FromCurrentRow() T {
 
 func (w *WindowChain[T]) FromFollowing(exp any) T {
 	w.def.SetStart(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " FOLLOWING")
+		func(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+			return bob.ExpressIf(ctx, w, d, start, exp, true, "", " FOLLOWING")
 		}),
 	)
 	return w.Wrap
@@ -439,8 +473,8 @@ func (w *WindowChain[T]) FromFollowing(exp any) T {
 
 func (w *WindowChain[T]) ToPreceding(exp any) T {
 	w.def.SetEnd(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " PRECEDING")
+		func(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+			return bob.ExpressIf(ctx, w, d, start, exp, true, "", " PRECEDING")
 		}),
 	)
 	return w.Wrap
@@ -453,8 +487,8 @@ func (w *WindowChain[T]) ToCurrentRow(count int) T {
 
 func (w *WindowChain[T]) ToFollowing(exp any) T {
 	w.def.SetEnd(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " FOLLOWING")
+		func(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+			return bob.ExpressIf(ctx, w, d, start, exp, true, "", " FOLLOWING")
 		}),
 	)
 	return w.Wrap
