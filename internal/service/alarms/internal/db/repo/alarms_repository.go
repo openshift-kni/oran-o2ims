@@ -24,6 +24,11 @@ func (ar *AlarmsRepository) GetAlarmEventRecordWithUuid(ctx context.Context, uui
 	return utils.Find[models.AlarmEventRecord](ctx, ar.Db, uuid)
 }
 
+// GetAlarmSubscriptionWithUuid grabs a row of alarm_subscription using uuid
+func (ar *AlarmsRepository) GetAlarmSubscriptionWithUuid(ctx context.Context, uuid uuid.UUID) (*models.AlarmSubscription, error) {
+	return utils.Find[models.AlarmSubscription](ctx, ar.Db, uuid, nil)
+}
+
 // DeleteAlarmDictionariesNotIn deletes all alarm dictionaries that are not in the list of resource type IDs
 func (ar *AlarmsRepository) DeleteAlarmDictionariesNotIn(ctx context.Context, ids []any) error {
 	tags := utils.GetDBTagsFromStructFields(models.AlarmDictionary{}, "ResourceTypeID")
