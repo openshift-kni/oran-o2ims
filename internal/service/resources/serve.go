@@ -16,15 +16,15 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
 )
 
 // Resource server config values
 const (
-	host         = "127.0.0.1"
-	port         = "8000"
 	readTimeout  = 5 * time.Second
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second
@@ -73,15 +73,29 @@ func Serve(config *api.ResourceServerConfig) error {
 	if config.GlobalCloudID != utils.DefaultOCloudID {
 		value, err := uuid.Parse(config.GlobalCloudID)
 		if err != nil {
-			return fmt.Errorf("failed to parse global cloud ID '%s': %w", config.GlobalCloudID, err)
+			return fmt.Errorf("failed to parse global cloud NotificationID '%s': %w", config.GlobalCloudID, err)
 		}
 		globalCloudID = value
 	}
 
 	cloudID, err := uuid.Parse(config.CloudID)
 	if err != nil {
-		return fmt.Errorf("failed to parse cloud ID '%s': %w", config.CloudID, err)
+		return fmt.Errorf("failed to parse cloud NotificationID '%s': %w", config.CloudID, err)
 	}
+
+	// Create the build-in data sources
+	acm, err := collector.NewACMDataSource(cloudID, config.BackendURL, config.Extensions)
+	if err != nil {
+		return fmt.Errorf("failed to create ACM data source: %w", err)
+	}
+
+	// Create the notifier with our resource specific subscription and notification providers.
+	notificationsProvider := repo.NewNotificationStorageProvider(repository)
+	subscriptionsProvider := repo.NewSubscriptionStorageProvider(repository)
+	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider)
+
+	// Create the collector
+	resourceCollector := collector.NewCollector(repository, resourceNotifier, []collector.DataSource{acm})
 
 	// Init server
 	// Create the handler
@@ -95,6 +109,7 @@ func Serve(config *api.ResourceServerConfig) error {
 			OCloudId:      cloudID,
 			ServiceUri:    config.ExternalAddress,
 		},
+		SubscriptionEventHandler: resourceNotifier,
 	}
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
@@ -131,15 +146,31 @@ func Serve(config *api.ResourceServerConfig) error {
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,
-		ErrorLog: slog.NewLogLogger(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		ErrorLog: slog.NewLogLogger(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			AddSource: true,
 		}), slog.LevelError),
 	}
 
-	// Channel to listen for errors coming from the listener.
-	serverErrors := make(chan error, 1)
+	// Start resource notifier
+	notifierErrors := make(chan error, 1)
+	go func() {
+		slog.Info("Starting resource notifier")
+		if err := resourceNotifier.Run(ctx); err != nil {
+			notifierErrors <- err
+		}
+	}()
+
+	// Start resource collector
+	collectorErrors := make(chan error, 1)
+	go func() {
+		slog.Info("Starting resource collector")
+		if err := resourceCollector.Run(ctx); err != nil {
+			collectorErrors <- err
+		}
+	}()
 
 	// Start server
+	serverErrors := make(chan error, 1)
 	go func() {
 		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -151,6 +182,10 @@ func Serve(config *api.ResourceServerConfig) error {
 	select {
 	case err := <-serverErrors:
 		return fmt.Errorf("error starting server: %w", err)
+	case err := <-collectorErrors:
+		return fmt.Errorf("error starting collector: %w", err)
+	case err := <-notifierErrors:
+		return fmt.Errorf("error starting notifier: %w", err)
 	case <-ctx.Done():
 		slog.Info("Shutting down server")
 		if err := common.GracefulShutdown(srv); err != nil {
