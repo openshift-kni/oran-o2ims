@@ -40,6 +40,14 @@ type NodeSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Profile",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HwProfile string `json:"hwProfile"`
 
+	// HwMgrId is the identifier for the hardware manager instance.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HwMgrId string `json:"hwMgrId,omitempty"`
+
+	// HwMgrNodeId is the node identifier from the hardware manager.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager Node ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HwMgrNodeId string `json:"hwMgrNodeId,omitempty"`
+
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
@@ -80,6 +88,9 @@ type NodeStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=nodes,shortName=orannode
+// +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hwMgrId"
+// +kubebuilder:printcolumn:name="NodePool",type="string",JSONPath=".spec.nodePool"
+// +kubebuilder:printcolumn:name="HwMgr Node Id",type="string",JSONPath=".spec.hwMgrNodeId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
 // +operator-sdk:csv:customresourcedefinitions:displayName="Node",resources={{Namespace, v1}}

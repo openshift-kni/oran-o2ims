@@ -306,7 +306,7 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Extensions
         path: extensions
-      - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
+      - description: HwMgrId is the identifier for the hardware manager plugin instance.
         displayName: Hardware Manager ID
         path: hwMgrId
         x-descriptors:
@@ -348,6 +348,16 @@ spec:
       - description: GroupName
         displayName: Group Name
         path: groupName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrId is the identifier for the hardware manager instance.
+        displayName: Hardware Manager ID
+        path: hwMgrId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrNodeId is the node identifier from the hardware manager.
+        displayName: Hardware Manager Node ID
+        path: hwMgrNodeId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: HwProfile

@@ -17,6 +17,15 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.hwMgrId
+      name: HwMgr Id
+      type: string
+    - jsonPath: .spec.nodePool
+      name: NodePool
+      type: string
+    - jsonPath: .spec.hwMgrNodeId
+      name: HwMgr Node Id
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -54,6 +63,13 @@ spec:
                 type: object
               groupName:
                 description: GroupName
+                type: string
+              hwMgrId:
+                description: HwMgrId is the identifier for the hardware manager instance.
+                type: string
+              hwMgrNodeId:
+                description: HwMgrNodeId is the node identifier from the hardware
+                  manager.
                 type: string
               hwProfile:
                 description: HwProfile
