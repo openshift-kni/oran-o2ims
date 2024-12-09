@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acm-route
+  namespace: ztp-sno-ran-full-du-v4-Y-Z
+data:
+  host: '{{hub (lookup "route.openshift.io/v1" "Route" "open-cluster-management-observability" "alertmanager").spec.host hub}}'
