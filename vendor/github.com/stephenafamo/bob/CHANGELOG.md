@@ -3,6 +3,8 @@
 <!--toc:start-->
 
 - [Changelog](#changelog)
+  - [[v0.29.0] - 2024-11-20](#v0290-2024-11-20)
+  - [[v0.28.1] - 2024-06-28](#v0281-2024-06-28)
   - [[v0.28.0] - 2024-06-25](#v0280-2024-06-25)
   - [[v0.27.1] - 2024-06-05](#v0271-2024-06-05)
   - [[v0.27.0] - 2024-06-05](#v0270-2024-06-05)
@@ -37,6 +39,93 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [v0.29.0] - 2024-11-20
+
+### Added
+
+- Added error constants for matching against both specific and generic unique constraint errors raised by the underlying database driver. (thanks @mbezhanov)
+- Added support for regular expressions in the `only` and `except` table filters. (thanks @mbezhanov)
+- Added `ContextualMods` which are similar to regular mods but take a context argument. They are applied whenever the query is built.  
+  This makes it cleaner to do certain things, like populating the select columns of a model if none was explicitly added.  
+  The previous way this was done was unreliable since using `q.MustBuild()` would not add the columns while `bob.MustBuild(q)` will add them correctly.
+- `modelSlice.UpdateMod()` and `modelSlice.DeleteMod()` are new methods that returns a mod for update and delete queries on a slice of models.  
+  It adds `WHERE pk IN (pk1, pk2, pk3, ...)` to the query, and also schedule running the **hooks**.
+- Added `bob.ToMods` which a slice of structs that implement `bob.Mod[T]` to a Mod. This is useful since Go does not allow using a slice of structs as a slice of an interface the struct implements.
+- Added `bob.HookableQuery` interface. If a query implements this interface, the method `RunHooks(ctx, exec)` will be called before the query is executed.
+- Added `bob.HookableType` interface. If a type implements this interface, the method `AfterQueryHook(ctx, exec, bob.QueryType)` will be called after the query is executed.  
+  This is how `AfterSeleect/Insert/Update/DeleteHooks` hooks are now implemented.
+- Added `Type() QueryType` method to `bob.Query` to get the type of query it is. Available constants are `Unknown, Select, Insert, Update, Delete`.
+- Postgres and SQLite Update/Delete queries now refresh the models after the query is executed. This is enabled by the `RETURNING` clause, so it is not available in MySQL.
+- Added the `Case()` starter to all dialects to build `CASE` expressions. (thanks @k4n4ry)
+- Added `bob.Named()` which is used to add named arguments to the query and bind them later.
+- Added `bob.BindNamed` which takes an argument (struct, map, or a single value type) to be used to bind named arguments in a query. See changes to `bob.Prepare()` for details of which type can be used.
+- Indexes now include more information such as the type, unique and comment fields.
+- Constraints now include a comment field.
+- Added `Checks` field to DBConstraints so that drivers can also load check constraints. (not yet supported by the SQLite driver).
+- Added comments field to Table definitions.
+
+### Changed
+
+- `context.Context` is now passed to `Query.WriteQuery()` and `Expression.WriteSQL()` methods. This allows for more control over how the query is built and executed.  
+  This change made is possible to delete some hacks and simplify the codebase.
+  - The `Name()` and `NameAs()` methods of Views/Tables no longer need the context argument since the context will be passed when writing the expression. The API then becomes cleaner.
+  - Preloading mods no longer need to store a context internally. `SetLoadContext()` and `GetLoadContext()` have removed.
+  - The `ToExpr` field in `orm.RelSide` which was used for preloading is no longer needed and has been removed.
+- Moved `orm.Hooks` to `bob.Hooks` since it should not be limited to only ORM queries.
+- Moved `mods.QueryModFunc` to `bob.ModFunc` since it should be available to all packages.
+- The mod capability for `orm.Setter` is now reversed. It should now be a mod for Insert and have a method that returns a mod for Update.  
+   This makes more sense since one would at most use one setter during updates, but can use multiple setters in a bulk insert.
+- `table.InsertQ` has been renamed to `table.Insert`. The old implementation of `Insert` has been removed.  
+   The same functionality can be achieved by using `modelSlice.Insert()` or creating an `Insert` query using `table.Insert()`.
+- `table.UpdateQ` has been renamed to `table.Update`. The old implementation of `Update` has been removed.  
+   The same functionality can be achieved by using `modelSlice.Update()` or creating an `Update` query using `table.Update()`.
+- `table.DeleteQ` has been renamed to `table.Delete`. The old implementation of `Delete` has been removed.  
+   The same functionality can be achieved by using `modelSlice.Delete()` or creating an `Delete` query using `table.Delete()`.
+- `BeforeInsertHooks` now only takes a single `ModelSetter` at a time.  
+   This is because it is not possible to know before executing the queries exactly how many setters are being used since additional rows can be inserted by applying another setter as a mod.
+- `bob.Cache()` now requires an `Executor`. This is used to run any query hooks.
+- `bob.Prepare()` now requires a type parameter to be used to bind named arguments. The type can either be:
+  - A struct with fields that match the named arguments in the query
+  - A map with string keys. When supplied, the values in the map will be used to bind the named arguments in the query.
+  - When there is only a single named argument, one of the following can be used:
+    - A primitive type (int, bool, string, etc)
+    - `time.Time`
+    - Any type that implements `driver.Valuer`.
+- `Index` columns are no longer just strings, but are a struct to include more information such as the sort order.
+
+### Removed
+
+- Remove MS SQL artifacts. (thanks @mbezhanov)
+- Remove redundant type parameter from `bob.Load`.
+- Removed `Before/AfterUpsertMods`. Upserts are really just inserts with a conflict clause and should be treated as such.
+- Removed `Insert/InsertMany/Upsert/UpsertMany` methods from `orm.Table` since they are not needed.  
+  It is possible to do the same thing, with similar effor using the the `InsertQ` method (which is now renamed to `Insert`).
+- Remove `Update` and `Delete` methods from `orm.Table` since they are not needed.  
+  It is possible to do the same thing, with similar effor using the the `UpdateQ` and `DeleteQ` methods (which are now renamed to `Update` and `Delete`).
+- `context.Context` and `bob.Executor` are no longer passed when creating a Table/ViewQuery. It is now passed at the point of execution with `Exec/One/All/Cursor`.
+- Remove `Prepare` methods from table and view qureries. Since `bob.Prepare()` now takes a type parameter, it is not possible to prepare from a method since Go does not allow additional type parameters in methods.
+- Removed the **Prisma** and **Atlas** code generation drivers. It is better for Bob to focus on being able to generate code from the database in the most robust and detailed way and if the user wants, they can use other tools (such as prisma and atlas) to manage migrations before the code generation.
+- Removed `Expressions` from Index definitions. It is now merged with the `Columns` field with an `IsExpression` field to indicate if the column is an expression.
+
+### Fixed
+
+- Removed unnecessary import of `strings` in `bobfactory_random.go`.
+- Fixed data races in unit tests. (thanks @mbezhanov)
+- Fixed invalid SQL statements generated by `sm.OrderBy().Collate()`. (thanks @mbezhanov)
+- Fixed a bug preventing specific columns from being excluded when generating models from SQLite. (thanks @mbezhanov)
+- Fixed an issue where invalid code is generated if a configured relationship has `from_where` or `to_where`.
+- Fixed `ModelSlice.ReloadAll()` method for models with multiple primary keys.
+
+## [v0.28.1] - 2024-06-28
+
+### Fixed
+
+- Also add the enum to the type array if an array of the enum is added. This is to prvent issues if the enum is only used in an array.
+- Handle null column names in expression indexes. (thanks @mbezhanov)
+- CROSS JOINS now allow aliases
 
 ## [v0.28.0] - 2024-06-25
 

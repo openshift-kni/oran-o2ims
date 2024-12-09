@@ -20,7 +20,7 @@ func Distinct(on ...any) bob.Mod[*dialect.SelectQuery] {
 		on = []any{} // nil means no distinct
 	}
 
-	return mods.QueryModFunc[*dialect.SelectQuery](func(q *dialect.SelectQuery) {
+	return bob.ModFunc[*dialect.SelectQuery](func(q *dialect.SelectQuery) {
 		q.Distinct.On = on
 	})
 }
@@ -63,7 +63,7 @@ func FullJoin(e any) dialect.JoinChain[*dialect.SelectQuery] {
 	return dialect.FullJoin[*dialect.SelectQuery](e)
 }
 
-func CrossJoin(e any) bob.Mod[*dialect.SelectQuery] {
+func CrossJoin(e any) dialect.CrossJoinChain[*dialect.SelectQuery] {
 	return dialect.CrossJoin[*dialect.SelectQuery](e)
 }
 

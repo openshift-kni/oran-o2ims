@@ -1,6 +1,7 @@
 package clause
 
 import (
+	"context"
 	"io"
 
 	"github.com/stephenafamo/bob"
@@ -13,13 +14,13 @@ type Values struct {
 
 	// for multiple inserts
 	// each sub-slice is one set of values
-	Vals []value
+	Vals []Value
 }
 
-type value []bob.Expression
+type Value []bob.Expression
 
-func (v value) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-	return bob.ExpressSlice(w, d, start, v, "(", ", ", ")")
+func (v Value) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+	return bob.ExpressSlice(ctx, w, d, start, v, "(", ", ", ")")
 }
 
 func (v *Values) AppendValues(vals ...bob.Expression) {
@@ -30,15 +31,15 @@ func (v *Values) AppendValues(vals ...bob.Expression) {
 	v.Vals = append(v.Vals, vals)
 }
 
-func (v Values) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (v Values) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
 	// If a query is present, use it
 	if v.Query != nil {
-		return v.Query.WriteQuery(w, start)
+		return v.Query.WriteQuery(ctx, w, start)
 	}
 
 	// If values are present, use them
 	if len(v.Vals) > 0 {
-		return bob.ExpressSlice(w, d, start, v.Vals, "VALUES ", ", ", "")
+		return bob.ExpressSlice(ctx, w, d, start, v.Vals, "VALUES ", ", ", "")
 	}
 
 	// If no value was present, use default value
