@@ -1451,7 +1451,7 @@ spec:
                 - --upstream=http://127.0.0.1:8080/
                 - --logtostderr=true
                 - --v=0
-                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
+                image: quay.io/openshift/origin-kube-rbac-proxy:4.18
                 name: kube-rbac-proxy
                 ports:
                 - containerPort: 8443
@@ -1480,7 +1480,7 @@ spec:
                 - name: IMAGE
                   value: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
                 - name: KUBE_RBAC_PROXY_IMAGE
-                  value: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
+                  value: quay.io/openshift/origin-kube-rbac-proxy:4.18
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
                 - name: HWMGR_PLUGIN_NAMESPACE
