@@ -13,6 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
+
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
@@ -23,8 +25,6 @@ import (
 
 // Resource server config values
 const (
-	host         = "127.0.0.1"
-	port         = "8000"
 	readTimeout  = 5 * time.Second
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second
@@ -41,6 +41,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	go func() {
 		sig := <-shutdown
@@ -82,6 +83,15 @@ func Serve(config *api.ResourceServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse cloud ID '%s': %w", config.CloudID, err)
 	}
+
+	// Create the build-in data sources
+	acm, err := collector.NewACMDataSource(cloudID, config.BackendURL, config.Extensions)
+	if err != nil {
+		return fmt.Errorf("failed to create ACM data source: %w", err)
+	}
+
+	// Create the collector
+	resourceCollector := collector.NewCollector(repository, []collector.DataSource{acm})
 
 	// Init server
 	// Create the handler
@@ -131,15 +141,22 @@ func Serve(config *api.ResourceServerConfig) error {
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,
-		ErrorLog: slog.NewLogLogger(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		ErrorLog: slog.NewLogLogger(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			AddSource: true,
 		}), slog.LevelError),
 	}
 
-	// Channel to listen for errors coming from the listener.
-	serverErrors := make(chan error, 1)
+	// Start resource collector
+	collectorErrors := make(chan error, 1)
+	go func() {
+		slog.Info("Starting resource collector")
+		if err := resourceCollector.Run(ctx); err != nil {
+			collectorErrors <- err
+		}
+	}()
 
 	// Start server
+	serverErrors := make(chan error, 1)
 	go func() {
 		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -147,15 +164,24 @@ func Serve(config *api.ResourceServerConfig) error {
 		}
 	}()
 
+	defer func() {
+		// Cancel the context in case it wasn't already canceled
+		cancel()
+		// Shutdown the http server
+		slog.Info("Shutting down server")
+		if err := common.GracefulShutdown(srv); err != nil {
+			slog.Error("error shutting down server", "error", err)
+		}
+	}()
+
 	// Blocking select
 	select {
 	case err := <-serverErrors:
 		return fmt.Errorf("error starting server: %w", err)
+	case err := <-collectorErrors:
+		return fmt.Errorf("error starting collector: %w", err)
 	case <-ctx.Done():
-		slog.Info("Shutting down server")
-		if err := common.GracefulShutdown(srv); err != nil {
-			return fmt.Errorf("error shutting down server: %w", err)
-		}
+		slog.Info("Process shutting down")
 	}
 
 	return nil

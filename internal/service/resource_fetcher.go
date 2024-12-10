@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	KindNode = "Node"
+	KindNode    = "Node"
+	KindCluster = "Cluster"
 )
 
 type ResourceFetcher struct {

@@ -11,6 +11,9 @@ import (
 // Interface compile enforcement
 var _ db.Model = (*ResourceType)(nil)
 
+type ResourceKind string
+type ResourceClass string
+
 // ResourceType represents a record in the resource_type table.
 type ResourceType struct {
 	ResourceTypeID uuid.UUID         `db:"resource_type_id"` // Non-nil because we always set this from named values
@@ -19,8 +22,8 @@ type ResourceType struct {
 	Vendor         string            `db:"vendor"`
 	Model          string            `db:"model"`
 	Version        string            `db:"version"`
-	ResourceKind   int               `db:"resource_kind"`
-	ResourceClass  int               `db:"resource_class"`
+	ResourceKind   ResourceKind      `db:"resource_kind"`
+	ResourceClass  ResourceClass     `db:"resource_class"`
 	Extensions     map[string]string `db:"extensions"`
 	DataSourceID   uuid.UUID         `db:"data_source_id"`
 	GenerationID   int               `db:"generation_id"`

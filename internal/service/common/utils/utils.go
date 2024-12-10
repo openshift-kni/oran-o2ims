@@ -21,6 +21,16 @@ func (r DBTag) Columns() []any {
 	return columns
 }
 
+// Fields is used get the list of field names from the DBTag map
+func (r DBTag) Fields() []string {
+	fields := make([]string, 0, len(r))
+	for f := range r {
+		fields = append(fields, f)
+	}
+
+	return fields
+}
+
 // getDBTagsFromStruct returns a map of field names to their db tags.
 func getDBTagsFromStruct[T db.Model](s T, excludeNilValues bool) DBTag {
 	tags := make(DBTag)
@@ -111,6 +121,55 @@ func GetDBTagsFromStructFields[T db.Model](s T, fields ...string) DBTag {
 		}
 
 		tags[f.Name] = f.Tag.Get("db")
+	}
+
+	return tags
+}
+
+// CompareObjects compares two objects and returns the tags for fields having differing values.  Any field names listed
+// in `excluded` are ignored.
+func CompareObjects[T db.Model](a, b T, excluded ...string) DBTag {
+	tags := make(DBTag)
+	excludedFields := make(map[string]bool)
+	for _, field := range excluded {
+		excludedFields[field] = true
+	}
+
+	ta := reflect.TypeOf(a)
+	va := reflect.ValueOf(a)
+	vb := reflect.ValueOf(b)
+	if ta.Kind() != reflect.Struct {
+		ta = ta.Elem()
+		va = va.Elem()
+		vb = vb.Elem()
+	}
+
+	for i := 0; i < ta.NumField(); i++ {
+		field := ta.Field(i)
+		fieldName := field.Name
+		tagValue := field.Tag.Get("db")
+		aFieldValue := va.FieldByName(fieldName)
+		bFieldValue := vb.FieldByName(fieldName)
+		if _, found := excludedFields[fieldName]; found {
+			// ignore any fields that were explicitly excluded by the caller.
+			continue
+		}
+
+		switch {
+		case field.Type.Kind() != reflect.Ptr:
+			// Non-pointer value compare them directly
+			if !reflect.DeepEqual(aFieldValue.Interface(), bFieldValue.Interface()) {
+				tags[fieldName] = tagValue
+			}
+		case aFieldValue.IsNil() != bFieldValue.IsNil():
+			// Pointer nil-ness are different so include this field
+			tags[fieldName] = tagValue
+		case !aFieldValue.IsNil():
+			// Compare non-nil values
+			if !reflect.DeepEqual(aFieldValue.Interface(), bFieldValue.Interface()) {
+				tags[fieldName] = tagValue
+			}
+		}
 	}
 
 	return tags
