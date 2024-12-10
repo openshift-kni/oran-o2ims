@@ -80,7 +80,7 @@ func (r *ResourcesRepository) CreateResourcePool(ctx context.Context, resourcePo
 
 // UpdateResourcePool updates a specific ResourcePool tuple
 func (r *ResourcesRepository) UpdateResourcePool(ctx context.Context, resourcePool *models.ResourcePool) (*models.ResourcePool, error) {
-	return utils.Update[models.ResourcePool](ctx, r.Db, *resourcePool, resourcePool.ResourcePoolID)
+	return utils.Update[models.ResourcePool](ctx, r.Db, resourcePool.ResourcePoolID, *resourcePool)
 }
 
 // GetResourcePoolResources retrieves all Resource tuples for a specific ResourcePool returns an empty array if not found
@@ -101,18 +101,18 @@ func (r *ResourcesRepository) CreateResource(ctx context.Context, resource *mode
 
 // UpdateResource updates a specific Resource tuple
 func (r *ResourcesRepository) UpdateResource(ctx context.Context, resource *models.Resource) (*models.Resource, error) {
-	return utils.Update[models.Resource](ctx, r.Db, *resource, resource.ResourceID)
+	return utils.Update[models.Resource](ctx, r.Db, resource.ResourceID, *resource)
 }
 
 // GetDataSource retrieves a specific DataSource tuple or returns ErrNotFound if not found
 func (r *ResourcesRepository) GetDataSource(ctx context.Context, id uuid.UUID) (*models.DataSource, error) {
-	return utils.Find[models.DataSource](ctx, r.Db, id, nil)
+	return utils.Find[models.DataSource](ctx, r.Db, id)
 }
 
 // GetDataSourceByName retrieves a specific DataSource tuple by name or returns ErrNotFound if not found
 func (r *ResourcesRepository) GetDataSourceByName(ctx context.Context, name string) (*models.DataSource, error) {
 	e := psql.Quote("name").EQ(psql.Arg(name))
-	records, err := utils.Search[models.DataSource](ctx, r.Db, e, nil)
+	records, err := utils.Search[models.DataSource](ctx, r.Db, e)
 	if err != nil {
 		return nil, err
 	}
@@ -132,5 +132,5 @@ func (r *ResourcesRepository) CreateDataSource(ctx context.Context, dataSource *
 
 // UpdateDataSource updates a specific DataSource tuple
 func (r *ResourcesRepository) UpdateDataSource(ctx context.Context, dataSource *models.DataSource) (*models.DataSource, error) {
-	return utils.Update[models.DataSource](ctx, r.Db, *dataSource, *dataSource.DataSourceID)
+	return utils.Update[models.DataSource](ctx, r.Db, *dataSource.DataSourceID, *dataSource)
 }
