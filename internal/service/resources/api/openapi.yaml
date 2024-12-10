@@ -709,6 +709,7 @@ components:
           example: "65221564-8b05-416a-bfc3-c250bc64e1aa"
         consumerSubscriptionId:
           type: string
+          format: uuid
           description: Identifier for the consumer of events sent due to the Subscription.
         filter:
           type: string

@@ -132,7 +132,7 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
 	consumerSubscriptionId := "<null>"
 	if request.Body.ConsumerSubscriptionId != nil {
-		consumerSubscriptionId = *request.Body.ConsumerSubscriptionId
+		consumerSubscriptionId = request.Body.ConsumerSubscriptionId.String()
 	}
 
 	// Convert from Model -> DB
@@ -150,17 +150,6 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 			},
 			Detail: err.Error(),
 			// TODO: map errors to 400 if possible; else 500
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
-	if result == nil {
-		slog.Error("unable to retrieve newly created database record", "target", record)
-		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"consumerSubscriptionId": consumerSubscriptionId,
-			},
-			Detail: "unable to retrieve newly created database record",
 			Status: http.StatusInternalServerError,
 		}, nil
 	}
