@@ -64,6 +64,10 @@ func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr bob.Exp
 		tags = GetDBTagsFromStructFields(record, fields...)
 	}
 
+	if whereExpr == nil {
+		whereExpr = psql.RawQuery("1=1")
+	}
+
 	sql, args, err := psql.Select(
 		sm.Columns(tags.Columns()...),
 		sm.From(record.TableName()),
@@ -101,19 +105,22 @@ func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr psql.Ex
 }
 
 // Create creates a record of the requested model type.
-// The "record" argument is the record to store in the database. Only fields with non-nil values are stored.
+// The "record" argument is the record to store in the database.
+// The "fields" argument is a list of columns to store. If no fields are specified only non-nil fields are stored.
 // The stored record is returned on success; otherwise an error is returned.
-func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T) (*T, error) {
-	nonNilTags := GetNonNilDBTagsFromStruct(record)
-	tags := GetAllDBTagsFromStruct(record)
+func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, fields ...string) (*T, error) {
+	all := GetAllDBTagsFromStruct(record)
+	tags := GetNonNilDBTagsFromStruct(record)
+	if len(fields) > 0 {
+		tags = GetDBTagsFromStructFields(record, fields...)
+	}
 
-	// Return all columns to get any defaulted values that the DB may set
-	query := psql.Insert(im.Into(record.TableName()), im.Returning(tags.Columns()...))
+	columns, values := GetColumnsAndValues(record, tags)
 
-	// Add columns to the expression.  Maintain the order here so that it coincides with the order of the values
-	columns, values := GetColumnsAndValues(record, nonNilTags)
-	query.Expression.Columns = columns
-	query.Apply(im.Values(psql.Arg(values...)))
+	query := psql.Insert(
+		im.Into(record.TableName(), columns...),
+		im.Values(psql.Arg(values...)),
+		im.Returning(all.Columns()...))
 
 	sql, args, err := query.Build()
 	if err != nil {
