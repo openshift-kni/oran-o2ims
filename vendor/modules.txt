@@ -160,11 +160,11 @@ github.com/inconshreveable/mousetrap
 # github.com/invopop/yaml v0.3.1
 ## explicit; go 1.14
 github.com/invopop/yaml
-# github.com/itchyny/gojq v0.12.14
-## explicit; go 1.19
+# github.com/itchyny/gojq v0.12.17
+## explicit; go 1.21
 github.com/itchyny/gojq
-# github.com/itchyny/timefmt-go v0.1.5
-## explicit; go 1.17
+# github.com/itchyny/timefmt-go v0.1.6
+## explicit; go 1.20
 github.com/itchyny/timefmt-go
 # github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 ## explicit; go 1.12
