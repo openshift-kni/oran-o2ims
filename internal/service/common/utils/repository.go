@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dialect"
@@ -26,10 +26,17 @@ var ErrNotFound = errors.New("record not found")
 // Following functions are meant to fulfill basic CRUD operations on the database. More complex queries or bulk operations
 // for Insert or Update should be built in the repository files of the specific service and called one of the Execute helper functions.
 
+// DBQuery is an abstraction to allow passing either a pool or a transaction query function to any of the utilities.
+type DBQuery interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (commandTag pgconn.CommandTag, err error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // Find retrieves a specific tuple from the database table specified.
 // The `uuid` argument is the primary key of the record to retrieve.
 // If no record is found ErrNotFound is returned as an error.
-func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (*T, error) {
+func Find[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (*T, error) {
 	var record T
 	tags := GetAllDBTagsFromStruct(record)
 
@@ -48,7 +55,7 @@ func Find[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (*T
 // FindAll retrieves all tuples from the database table specified.
 // The `fields` argument is a list of columns to retrieve. If no fields are specified then all columns are fetched.
 // If no records are found then an empty array is returned.
-func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, fields ...string) ([]T, error) {
+func FindAll[T db.Model](ctx context.Context, db DBQuery, fields ...string) ([]T, error) {
 	return Search[T](ctx, db, nil, fields...)
 }
 
@@ -56,7 +63,7 @@ func FindAll[T db.Model](ctx context.Context, db *pgxpool.Pool, fields ...string
 // The `fields` argument is a list of columns to retrieve. If no fields are specified then all columns are fetched.
 // The `whereExpr` argument is a custom expression to filter the records.
 // If no records are found then an empty array is returned.
-func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr bob.Expression, fields ...string) ([]T, error) {
+func Search[T db.Model](ctx context.Context, db DBQuery, whereExpr bob.Expression, fields ...string) ([]T, error) {
 	// Build sql query
 	var record T
 	tags := GetAllDBTagsFromStruct(record)
@@ -83,7 +90,7 @@ func Search[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr bob.Exp
 // Delete deletes a specific tuple from the database table specified using a custom expression.
 // The `whereExpr` argument is a custom expression to filter the records.
 // The number of rows affected is returned on success; otherwise an error is returned.
-func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr psql.Expression) (int64, error) {
+func Delete[T db.Model](ctx context.Context, db DBQuery, whereExpr psql.Expression) (int64, error) {
 	var record T
 	query := psql.Delete(
 		dm.From(record.TableName()),
@@ -108,7 +115,7 @@ func Delete[T db.Model](ctx context.Context, db *pgxpool.Pool, whereExpr psql.Ex
 // The "record" argument is the record to store in the database.
 // The "fields" argument is a list of columns to store. If no fields are specified only non-nil fields are stored.
 // The stored record is returned on success; otherwise an error is returned.
-func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, fields ...string) (*T, error) {
+func Create[T db.Model](ctx context.Context, db DBQuery, record T, fields ...string) (*T, error) {
 	all := GetAllDBTagsFromStruct(record)
 	tags := GetNonNilDBTagsFromStruct(record)
 	if len(fields) > 0 {
@@ -135,7 +142,7 @@ func Create[T db.Model](ctx context.Context, db *pgxpool.Pool, record T, fields 
 // The `record` argument is the record to update in the database.
 // The `fields` argument is a list of columns to update. If no fields are specified only non-nil fields are updated.
 // The updated record is returned on success; otherwise an error is returned.
-func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, record T, fields ...string) (*T, error) {
+func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record T, fields ...string) (*T, error) {
 	all := GetAllDBTagsFromStruct(record)
 	tags := all
 	if len(fields) > 0 {
@@ -167,7 +174,7 @@ func Update[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID, r
 
 // Exists checks whether a record exists in the database table specified.
 // The `uuid` argument is the primary key of the record to check.
-func Exists[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (bool, error) {
+func Exists[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (bool, error) {
 	var record T
 
 	query := psql.RawQuery(fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=?)",
@@ -192,7 +199,7 @@ func Exists[T db.Model](ctx context.Context, db *pgxpool.Pool, uuid uuid.UUID) (
 // Helper Execute Query functions
 
 // ExecuteCollectExactlyOneRow executes a query and collects result using pgx.CollectExactlyOneRow.
-func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db *pgxpool.Pool, sql string, args []any) (*T, error) {
+func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sql string, args []any) (*T, error) {
 	var record T
 	var err error
 
@@ -214,7 +221,7 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db *pgxpool.Po
 }
 
 // ExecuteCollectRows executes a query and collects result using pgx.CollectRows.
-func ExecuteCollectRows[T db.Model](ctx context.Context, db *pgxpool.Pool, sql string, args []any) ([]T, error) {
+func ExecuteCollectRows[T db.Model](ctx context.Context, db DBQuery, sql string, args []any) ([]T, error) {
 	var record T
 	var err error
 
