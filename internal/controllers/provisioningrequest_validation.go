@@ -33,7 +33,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	}
 
 	if err = t.validateTemplateInputMatchesSchema(clusterTemplate); err != nil {
-		return utils.NewInputError(err.Error())
+		return utils.NewInputError("%s", err.Error())
 	}
 
 	if err = t.validateClusterInstanceInputMatchesSchema(ctx, clusterTemplate); err != nil {
@@ -312,7 +312,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 		// if same labels/annotations exist in both.
 		if err := t.overrideClusterInstanceLabelsOrAnnotations(
 			clusterTemplateInput, clusterTemplateDefaultsMap); err != nil {
-			return nil, utils.NewInputError(err.Error())
+			return nil, utils.NewInputError("%s", err.Error())
 		}
 	}
 

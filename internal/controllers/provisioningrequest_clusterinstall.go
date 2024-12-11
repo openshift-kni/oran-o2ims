@@ -111,8 +111,8 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 				}
 
 				if len(disallowedChanges) != 0 {
-					return nil, utils.NewInputError(fmt.Sprintf(
-						"detected changes in immutable fields: %s", strings.Join(disallowedChanges, ", ")))
+					return nil, utils.NewInputError(
+						"detected changes in immutable fields: %s", strings.Join(disallowedChanges, ", "))
 				}
 			}
 		}
@@ -216,7 +216,7 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 				return fmt.Errorf("failed to create ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
-			return utils.NewInputError(err.Error())
+			return utils.NewInputError("%s", err.Error())
 		}
 	} else {
 		if _, ok := clusterInstance.(*siteconfig.ClusterInstance); ok {
@@ -245,7 +245,7 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 				return fmt.Errorf("failed to patch ClusterInstance: %w", err)
 			}
 			// Invalid or webhook error
-			return utils.NewInputError(err.Error())
+			return utils.NewInputError("%s", err.Error())
 		}
 	}
 

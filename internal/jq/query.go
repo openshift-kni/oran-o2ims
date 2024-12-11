@@ -131,6 +131,9 @@ func (q *Query) convert(input, output any) error {
 		case *int:
 			*output = input
 		case *int32:
+			if input < math.MinInt32 || input > math.MaxInt32 {
+				return fmt.Errorf("value %d overflows int32", input)
+			}
 			*output = int32(input)
 		case *int64:
 			*output = int64(input)
