@@ -51,7 +51,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
 	open-cluster-management.io/api v0.14.0
-	open-cluster-management.io/governance-policy-propagator v0.14.0
+	open-cluster-management.io/governance-policy-propagator v0.15.0
 	sigs.k8s.io/controller-runtime v0.19.3
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -65,6 +65,8 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/distribution/reference v0.5.0 // indirect
+	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
@@ -81,7 +83,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/gnostic-models v0.6.8 // indirect
+	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241029153458-d1b30febd7db // indirect
@@ -107,6 +109,7 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/opencontainers/image-spec v1.1.0-rc5 // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/openshift/hive/apis v0.0.0-20240306163002-9c5806a63531 // indirect
@@ -116,6 +119,7 @@ require (
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
+	github.com/sergi/go-diff v1.3.1 // indirect
 	github.com/speakeasy-api/openapi-overlay v0.9.0 // indirect
 	github.com/stephenafamo/scan v0.6.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
