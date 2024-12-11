@@ -41,7 +41,7 @@ require (
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 	github.com/thoas/go-funk v0.9.3
 	github.com/xeipuuv/gojsonschema v1.2.0
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 	golang.org/x/net v0.32.0
 	golang.org/x/oauth2 v0.24.0
 	gopkg.in/yaml.v3 v3.0.1
