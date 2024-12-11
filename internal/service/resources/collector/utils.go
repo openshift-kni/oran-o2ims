@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/openshift-kni/oran-o2ims/internal/model"
@@ -27,15 +28,15 @@ type GenericModelConverter func(object interface{}) any
 // persistObject persists an object to its database table.  If the object does not already have a
 // persisted representation then it is created; otherwise any modified fields are updated in the
 // database tuple.  The function returns both the before and after versions of the object.
-func persistObject[T db.Model](ctx context.Context, db *pgxpool.Pool,
+func persistObject[T db.Model](ctx context.Context, tx pgx.Tx,
 	object T, uuid uuid.UUID) (*T, *T, error) {
 	var before, after *T
 	// Store the object into the database handling cases for both insert/update separately so that we have access to the
 	// before & after view of the data.
-	var record, err = utils.Find[T](ctx, db, uuid)
+	var record, err = utils.Find[T](ctx, tx, uuid)
 	if errors.Is(err, utils.ErrNotFound) {
 		// New object instance
-		after, err = utils.Create[T](ctx, db, object)
+		after, err = utils.Create[T](ctx, tx, object)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create object '%s/%s': %w", object.TableName(), uuid, err)
 		}
@@ -60,7 +61,7 @@ func persistObject[T db.Model](ctx context.Context, db *pgxpool.Pool,
 		return before, after, nil
 	}
 
-	after, err = utils.Update[T](ctx, db, uuid, object, tags.Fields()...)
+	after, err = utils.Update[T](ctx, tx, uuid, object, tags.Fields()...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to update object '%s/%s': %w", object.TableName(), uuid, err)
 	}
@@ -73,7 +74,7 @@ func persistObject[T db.Model](ctx context.Context, db *pgxpool.Pool,
 
 // persistDataChangeEvent persists a data change object to its database table.  The before and
 // after model objects are marshaled to JSON prior to being stored.
-func persistDataChangeEvent(ctx context.Context, db *pgxpool.Pool, tableName string, uuid uuid.UUID,
+func persistDataChangeEvent(ctx context.Context, tx pgx.Tx, tableName string, uuid uuid.UUID,
 	parentUUID *uuid.UUID, before, after any) (*models.DataChangeEvent, error) {
 	var err error
 	var beforeJSON, afterJSON []byte
@@ -103,12 +104,21 @@ func persistDataChangeEvent(ctx context.Context, db *pgxpool.Pool, tableName str
 		dataChangeEvent.AfterState = &value
 	}
 
-	result, err := utils.Create[models.DataChangeEvent](ctx, db, dataChangeEvent)
+	result, err := utils.Create[models.DataChangeEvent](ctx, tx, dataChangeEvent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create data change event: %w", err)
 	}
 
 	return result, nil
+}
+
+// rollback attempts to execute a rollback on a transaction.  It is safe to invoke this as a
+// deferred function call even if the transaction has already been committed.
+func rollback(ctx context.Context, tx pgx.Tx) {
+	err := tx.Rollback(ctx)
+	if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+		slog.Error("failed to rollback transaction", "error", err)
+	}
 }
 
 // persistObjectWithChangeEvent persists an object to its database table and if the external API
@@ -119,14 +129,15 @@ func persistObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.P
 	uuid uuid.UUID, parentUUID *uuid.UUID,
 	converter GenericModelConverter) (*models.DataChangeEvent, error) {
 	var dataChangeEvent *models.DataChangeEvent
-	txCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	tx, err := db.Begin(txCtx)
+
+	tx, err := db.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	before, after, err := persistObject(ctx, db, record, uuid)
+	defer rollback(ctx, tx)
+
+	before, after, err := persistObject(ctx, tx, record, uuid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to persist object: %w", err)
 	}
@@ -141,7 +152,7 @@ func persistObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.P
 	if beforeModel == nil || !reflect.DeepEqual(beforeModel, afterModel) {
 		// Capture a change event if the data actually changed
 		dataChangeEvent, err = persistDataChangeEvent(
-			ctx, db, record.TableName(), uuid, parentUUID, beforeModel, afterModel)
+			ctx, tx, record.TableName(), uuid, parentUUID, beforeModel, afterModel)
 		if err != nil {
 			return nil, fmt.Errorf("failed to persist resource type data change object: %w", err)
 		}
