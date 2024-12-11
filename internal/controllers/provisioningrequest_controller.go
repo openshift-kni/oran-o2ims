@@ -588,9 +588,8 @@ func (t *provisioningRequestReconcilerTask) getCrClusterTemplateRef(ctx context.
 
 	// If the referenced ClusterTemplate does not exist, log and return an appropriate error.
 	return nil, utils.NewInputError(
-		fmt.Sprintf(
-			"a valid (%s) ClusterTemplate does not exist in any namespace",
-			clusterTemplateRefName))
+		"a valid (%s) ClusterTemplate does not exist in any namespace",
+		clusterTemplateRefName)
 }
 
 func (r *ProvisioningRequestReconciler) handleFinalizer(

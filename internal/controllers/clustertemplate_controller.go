@@ -268,7 +268,7 @@ func validateUpgradeDefaultsConfigmap(
 		if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 			return fmt.Errorf("failed to create IBGU: %w", err)
 		}
-		return utils.NewInputError(err.Error())
+		return utils.NewInputError("%s", err.Error())
 	}
 	existingConfigmap, err := utils.GetConfigmap(ctx, c, name, namespace)
 	if err != nil {
@@ -455,21 +455,21 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	if len(badType) != 0 {
 		validationFailureReason += fmt.Sprintf(" The following entries are present but have a unexpected type: %s.",
 			strings.Join(badType, ","))
-		return utils.NewInputError(validationFailureReason)
+		return utils.NewInputError("%s", validationFailureReason)
 	}
 	if len(missingRequired) != 0 {
 		validationFailureReason += fmt.Sprintf(" The following entries are missing in the required section of the template: %s",
 			strings.Join(missingRequired, ","))
-		return utils.NewInputError(validationFailureReason)
+		return utils.NewInputError("%s", validationFailureReason)
 	}
 
 	policyTemplateParamsSchema := subSchemas[utils.TemplateParamPolicyConfig].(map[string]any)
 	if err := validatePolicyTemplateParamsSchema(policyTemplateParamsSchema); err != nil {
-		return utils.NewInputError(fmt.Sprintf("Error validating the policyTemplateParameters schema: %s", err.Error()))
+		return utils.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
 	}
 	clusterInstanceParamsSchema := subSchemas[utils.TemplateParamClusterInstance].(map[string]any)
 	if err := validateClusterInstanceParamsSchema(object.Spec.Templates.HwTemplate, clusterInstanceParamsSchema); err != nil {
-		return utils.NewInputError(fmt.Sprintf("Error validating the clusterInstanceParameters schema: %s", err.Error()))
+		return utils.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
 	}
 	return nil
 }

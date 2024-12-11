@@ -148,10 +148,8 @@ func (b *SubscriptionHandlerBuilder) Build(ctx context.Context) (
 	if b.subscriptionIdString != SubscriptionIdAlarm &&
 		b.subscriptionIdString != SubscriptionIdInfrastructureInventory {
 		err = fmt.Errorf(
-			fmt.Sprintf(
-				"subscription type can only be %s or %s",
-				SubscriptionIdAlarm, SubscriptionIdInfrastructureInventory,
-			),
+			"subscription type can only be %s or %s",
+			SubscriptionIdAlarm, SubscriptionIdInfrastructureInventory,
 		)
 		return
 	}

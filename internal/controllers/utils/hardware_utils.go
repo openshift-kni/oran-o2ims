@@ -475,7 +475,7 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 				// nolint: wrapcheck
 				return 0, updateErr
 			}
-			return 0, NewInputError(errMessage)
+			return 0, NewInputError("%s", errMessage)
 		}
 		return timeout, nil
 	}
