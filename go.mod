@@ -1,6 +1,7 @@
 module github.com/openshift-kni/oran-o2ims
 
 go 1.22.0
+toolchain go1.23.4
 
 // Needed for importing the siteconfig operator, taken from the siteconfig operator repo.
 replace github.com/openshift/assisted-service/models => github.com/openshift/assisted-service/models v0.0.0-20230831114549-1922eda29cf8
@@ -32,7 +33,7 @@ require (
 	github.com/openshift/api v0.0.0-20240423014330-2cb60a113ad1
 	github.com/openshift/assisted-service/api v0.0.0-20240405132132-484ec5c683c6
 	github.com/peterhellberg/link v1.2.0
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.76.2
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.78.2
 	github.com/prometheus/client_golang v1.20.5
 	github.com/r3labs/diff/v3 v3.0.1
 	github.com/spf13/cobra v1.8.1
