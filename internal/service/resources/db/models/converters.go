@@ -1,9 +1,14 @@
 package models
 
 import (
+	"fmt"
+	"log/slog"
+
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
 // DeploymentManagerToModel converts a DB tuple to an API Model
@@ -11,7 +16,7 @@ func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentMan
 	object := generated.DeploymentManager{
 		Capabilities:        map[string]string{},
 		Capacity:            map[string]string{},
-		DeploymentManagerId: *record.ClusterID,
+		DeploymentManagerId: record.DeploymentManagerID,
 		Description:         record.Description,
 		Extensions:          record.Extensions,
 		Name:                record.Name,
@@ -41,7 +46,7 @@ func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 		Name:            record.Name,
 		ResourceClass:   "",
 		ResourceKind:    "",
-		ResourceTypeId:  *record.ResourceTypeID,
+		ResourceTypeId:  record.ResourceTypeID,
 		Vendor:          record.Vendor,
 		Version:         record.Version,
 	}
@@ -85,7 +90,7 @@ func ResourcePoolToModel(record *ResourcePool) generated.ResourcePool {
 		Location:         record.Location,
 		Name:             record.Name,
 		OCloudId:         record.OCloudID,
-		ResourcePoolId:   *record.ResourcePoolID,
+		ResourcePoolId:   record.ResourcePoolID,
 	}
 
 	return object
@@ -96,7 +101,7 @@ func ResourceToModel(record *Resource, elements []Resource) generated.Resource {
 	object := generated.Resource{
 		Description:    record.Description,
 		Extensions:     record.Extensions,
-		ResourceId:     *record.ResourceID,
+		ResourceId:     record.ResourceID,
 		ResourcePoolId: record.ResourcePoolID,
 		ResourceTypeId: record.ResourceTypeID,
 	}
@@ -120,4 +125,71 @@ func ResourceToModel(record *Resource, elements []Resource) generated.Resource {
 		}
 	}
 	return object
+}
+
+// getEventType determines the event type based on the object transition
+func getEventType(before, after *string) int {
+	switch {
+	case before == nil && after != nil:
+		return 0
+	case before != nil && after != nil:
+		return 1
+	case before != nil:
+		return 2
+	default:
+		slog.Warn("unsupported event type", "before", before, "after", after)
+		return -1
+	}
+}
+
+// getObjectReference builds a partial URL referencing the API path location of the object
+func getObjectReference(objectType string, objectID uuid.UUID, parentID *uuid.UUID) *string {
+	var value string
+	switch objectType {
+	case ResourceType{}.TableName():
+		value = fmt.Sprintf("%s/resourceTypes/%s", utils.BaseInventoryURL, objectID.String())
+	case Resource{}.TableName():
+		value = fmt.Sprintf("%s/resourcePools/%s/resources/%s", utils.BaseInventoryURL, parentID.String(), objectID.String())
+	case ResourcePool{}.TableName():
+		value = fmt.Sprintf("%s/resourcePools/%s", utils.BaseInventoryURL, objectID.String())
+	case DeploymentManager{}.TableName():
+		value = fmt.Sprintf("%s/deploymentManagers/%s", utils.BaseInventoryURL, objectID.String())
+	default:
+		return nil
+	}
+
+	return &value
+}
+
+// DataChangeEventToModel converts a DB tuple to an API model
+func DataChangeEventToModel(record *DataChangeEvent) generated.InventoryChangeNotification {
+	eventType := getEventType(record.BeforeState, record.AfterState)
+	object := generated.InventoryChangeNotification{
+		NotificationEventType: generated.InventoryChangeNotificationNotificationEventType(eventType),
+		NotificationId:        *record.DataChangeID,
+		ObjectRef:             getObjectReference(record.ObjectType, record.ObjectID, record.ParentID),
+		PostObjectState:       record.AfterState,
+		PriorObjectState:      record.BeforeState,
+	}
+
+	return object
+}
+
+// DataChangeEventToNotification converts a DataChangeEvent to a generic Notification
+func DataChangeEventToNotification(record *DataChangeEvent) *notifier.Notification {
+	return &notifier.Notification{
+		NotificationID: *record.DataChangeID,
+		SequenceID:     *record.SequenceID,
+		Payload:        DataChangeEventToModel(record),
+	}
+}
+
+// SubscriptionToInfo converts a Subscription to a generic SubscriptionInfo
+func SubscriptionToInfo(record *Subscription) *notifier.SubscriptionInfo {
+	return &notifier.SubscriptionInfo{
+		SubscriptionID: *record.SubscriptionID,
+		Callback:       record.Callback,
+		Filter:         record.Filter,
+		EventCursor:    record.EventCursor,
+	}
 }
