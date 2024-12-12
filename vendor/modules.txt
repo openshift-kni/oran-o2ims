@@ -47,7 +47,7 @@ github.com/evanphx/json-patch/v5/internal/json
 # github.com/fxamacker/cbor/v2 v2.7.0
 ## explicit; go 1.17
 github.com/fxamacker/cbor/v2
-# github.com/getkin/kin-openapi v0.127.0
+# github.com/getkin/kin-openapi v0.128.0
 ## explicit; go 1.20
 github.com/getkin/kin-openapi/openapi3
 github.com/getkin/kin-openapi/openapi3filter

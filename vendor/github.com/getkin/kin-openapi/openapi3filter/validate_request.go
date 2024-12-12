@@ -114,11 +114,7 @@ func appendToQueryValues[T any](q url.Values, parameterName string, v []T) {
 // populateDefaultQueryParameters populates default values inside query parameters, while ensuring types are respected
 func populateDefaultQueryParameters(q url.Values, parameterName string, value any) {
 	switch t := value.(type) {
-	case []string:
-		appendToQueryValues(q, parameterName, t)
-	case []float64:
-		appendToQueryValues(q, parameterName, t)
-	case []int:
+	case []interface{}:
 		appendToQueryValues(q, parameterName, t)
 	default:
 		q.Add(parameterName, fmt.Sprintf("%v", value))
@@ -319,6 +315,9 @@ func ValidateRequestBody(ctx context.Context, input *RequestValidationInput, req
 	}
 	if options.ExcludeReadOnlyValidations {
 		opts = append(opts, openapi3.DisableReadOnlyValidation())
+	}
+	if options.RegexCompiler != nil {
+		opts = append(opts, openapi3.SetSchemaRegexCompiler(options.RegexCompiler))
 	}
 
 	// Validate JSON with the schema
