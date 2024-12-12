@@ -12,7 +12,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/go-task/slim-sprig/v3 v3.0.0
 	github.com/golang-jwt/jwt/v4 v4.5.1
-	github.com/golang-migrate/migrate/v4 v4.17.1
+	github.com/golang-migrate/migrate/v4 v4.18.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/imdario/mergo v1.0.0
@@ -65,8 +65,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/distribution/reference v0.5.0 // indirect
-	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
@@ -109,7 +107,6 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/opencontainers/image-spec v1.1.0-rc5 // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/openshift/hive/apis v0.0.0-20240306163002-9c5806a63531 // indirect
