@@ -23,7 +23,7 @@ require (
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/onsi/ginkgo/v2 v2.22.0
-	github.com/onsi/gomega v1.36.0
+	github.com/onsi/gomega v1.36.1
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241015193426-dd5c5bc228e8
 	github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512
 	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241001130125-a052f08603f7
