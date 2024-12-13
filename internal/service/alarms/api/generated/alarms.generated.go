@@ -431,6 +431,9 @@ type ServerInterface interface {
 	// Receive hardware alerts
 	// (POST /internal/v1/hardware-alerts/{hwVendorName})
 	HwNotification(w http.ResponseWriter, r *http.Request, hwVendorName string)
+	// Get API versions
+	// (GET /o2ims-infrastructureMonitoring/api_versions)
+	GetAllVersions(w http.ResponseWriter, r *http.Request)
 	// Retrieve the list of alarm subscriptions
 	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
 	GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams)
@@ -452,6 +455,9 @@ type ServerInterface interface {
 	// Modify exactly one alarm to acknowledge
 	// (PATCH /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
 	AckAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
+	// Get minor API versions
+	// (GET /o2ims-infrastructureMonitoring/v1/api_versions)
+	GetMinorVersions(w http.ResponseWriter, r *http.Request)
 	// Retrieve all probable causes
 	// (GET /o2ims-infrastructureMonitoring/v1/probableCauses)
 	GetProbableCauses(w http.ResponseWriter, r *http.Request)
@@ -499,6 +505,20 @@ func (siw *ServerInterfaceWrapper) HwNotification(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.HwNotification(w, r, hwVendorName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAllVersions operation middleware
+func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAllVersions(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -708,6 +728,20 @@ func (siw *ServerInterfaceWrapper) AckAlarm(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// GetMinorVersions operation middleware
+func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMinorVersions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProbableCauses operation middleware
 func (siw *ServerInterfaceWrapper) GetProbableCauses(w http.ResponseWriter, r *http.Request) {
 
@@ -869,6 +903,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("POST "+options.BaseURL+"/internal/v1/caas-alerts/alertmanager", wrapper.AmNotification)
 	m.HandleFunc("POST "+options.BaseURL+"/internal/v1/hardware-alerts/{hwVendorName}", wrapper.HwNotification)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/api_versions", wrapper.GetAllVersions)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions", wrapper.GetSubscriptions)
 	m.HandleFunc("POST "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions", wrapper.CreateSubscription)
 	m.HandleFunc("DELETE "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.DeleteSubscription)
@@ -876,6 +911,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms", wrapper.GetAlarms)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.GetAlarm)
 	m.HandleFunc("PATCH "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.AckAlarm)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/api_versions", wrapper.GetMinorVersions)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/probableCauses", wrapper.GetProbableCauses)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/probableCauses/{probableCauseId}", wrapper.GetProbableCause)
 
@@ -945,6 +981,40 @@ type HwNotification500Response struct {
 func (response HwNotification500Response) VisitHwNotificationResponse(w http.ResponseWriter) error {
 	w.WriteHeader(500)
 	return nil
+}
+
+type GetAllVersionsRequestObject struct {
+}
+
+type GetAllVersionsResponseObject interface {
+	VisitGetAllVersionsResponse(w http.ResponseWriter) error
+}
+
+type GetAllVersions200JSONResponse externalRef0.APIVersions
+
+func (response GetAllVersions200JSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAllVersions400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions400ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAllVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions500ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type GetSubscriptionsRequestObject struct {
@@ -1264,6 +1334,40 @@ func (response AckAlarm500ApplicationProblemPlusJSONResponse) VisitAckAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetMinorVersionsRequestObject struct {
+}
+
+type GetMinorVersionsResponseObject interface {
+	VisitGetMinorVersionsResponse(w http.ResponseWriter) error
+}
+
+type GetMinorVersions200JSONResponse externalRef0.APIVersions
+
+func (response GetMinorVersions200JSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions400ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions500ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetProbableCausesRequestObject struct {
 }
 
@@ -1341,6 +1445,9 @@ type StrictServerInterface interface {
 	// Receive hardware alerts
 	// (POST /internal/v1/hardware-alerts/{hwVendorName})
 	HwNotification(ctx context.Context, request HwNotificationRequestObject) (HwNotificationResponseObject, error)
+	// Get API versions
+	// (GET /o2ims-infrastructureMonitoring/api_versions)
+	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
 	// Retrieve the list of alarm subscriptions
 	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
 	GetSubscriptions(ctx context.Context, request GetSubscriptionsRequestObject) (GetSubscriptionsResponseObject, error)
@@ -1362,6 +1469,9 @@ type StrictServerInterface interface {
 	// Modify exactly one alarm to acknowledge
 	// (PATCH /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
 	AckAlarm(ctx context.Context, request AckAlarmRequestObject) (AckAlarmResponseObject, error)
+	// Get minor API versions
+	// (GET /o2ims-infrastructureMonitoring/v1/api_versions)
+	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 	// Retrieve all probable causes
 	// (GET /o2ims-infrastructureMonitoring/v1/probableCauses)
 	GetProbableCauses(ctx context.Context, request GetProbableCausesRequestObject) (GetProbableCausesResponseObject, error)
@@ -1456,6 +1566,30 @@ func (sh *strictHandler) HwNotification(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(HwNotificationResponseObject); ok {
 		if err := validResponse.VisitHwNotificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAllVersions operation middleware
+func (sh *strictHandler) GetAllVersions(w http.ResponseWriter, r *http.Request) {
+	var request GetAllVersionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAllVersions(ctx, request.(GetAllVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAllVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAllVersionsResponseObject); ok {
+		if err := validResponse.VisitGetAllVersionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1657,6 +1791,30 @@ func (sh *strictHandler) AckAlarm(w http.ResponseWriter, r *http.Request, alarmE
 	}
 }
 
+// GetMinorVersions operation middleware
+func (sh *strictHandler) GetMinorVersions(w http.ResponseWriter, r *http.Request) {
+	var request GetMinorVersionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMinorVersions(ctx, request.(GetMinorVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMinorVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMinorVersionsResponseObject); ok {
+		if err := validResponse.VisitGetMinorVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetProbableCauses operation middleware
 func (sh *strictHandler) GetProbableCauses(w http.ResponseWriter, r *http.Request) {
 	var request GetProbableCausesRequestObject
@@ -1710,89 +1868,93 @@ func (sh *strictHandler) GetProbableCause(w http.ResponseWriter, r *http.Request
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

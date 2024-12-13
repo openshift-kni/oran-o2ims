@@ -29,6 +29,40 @@ type AlarmsServer struct {
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
 var _ api.StrictServerInterface = (*AlarmsServer)(nil)
 
+// baseURL is the prefix for all of our supported API endpoints
+var baseURL = "/o2ims-infrastructureMonitoring/v1"
+var currentVersion = "1.0.0"
+
+// GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *AlarmsServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
+	// We currently only support a single version
+	versions := []common.APIVersion{
+		{
+			Version: &currentVersion,
+		},
+	}
+
+	return api.GetAllVersions200JSONResponse(common.APIVersions{
+		ApiVersions: &versions,
+		UriPrefix:   &baseURL,
+	}), nil
+}
+
+// GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *AlarmsServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
+	// We currently only support a single version
+	versions := []common.APIVersion{
+		{
+			Version: &currentVersion,
+		},
+	}
+
+	return api.GetMinorVersions200JSONResponse(common.APIVersions{
+		ApiVersions: &versions,
+		UriPrefix:   &baseURL,
+	}), nil
+}
+
 // GetSubscriptions handles an API request to fetch Alarm Subscriptions
 func (a *AlarmsServer) GetSubscriptions(ctx context.Context, _ api.GetSubscriptionsRequestObject) (api.GetSubscriptionsResponseObject, error) {
 	records, err := a.AlarmsRepository.GetAlarmSubscriptions(ctx)

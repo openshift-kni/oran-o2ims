@@ -27,6 +27,65 @@ tags:
       Internal endpoints. This is tag is also useful generating client code.
 
 paths:
+  /o2ims-infrastructureMonitoring/api_versions:
+    get:
+      operationId: getAllVersions
+      summary: Get API versions
+      description: |
+        Returns the complete list of API versions implemented by the service.
+      tags:
+      - metadata
+      responses:
+        '200':
+          description: |
+            Successfully obtained the complete list of versions.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureMonitoring/v1/api_versions:
+    get:
+      operationId: getMinorVersions
+      summary: Get minor API versions
+      description: |
+        Returns the list of minor API versions implemented for this major version of the API.
+      tags:
+      - metadata
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+
   /o2ims-infrastructureMonitoring/v1/alarms:
     get:
       operationId: GetAlarms
