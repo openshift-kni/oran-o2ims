@@ -1283,7 +1283,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		properties := items["properties"].(map[string]any)
 		nodeNetwork := properties["nodeNetwork"].(map[string]any)
 		nodeNetworkProperties := nodeNetwork["properties"].(map[string]any)
-		interfaces := nodeNetworkProperties["interfaces"].(map[string]any)
+		interfaces := nodeNetworkProperties["interfaces"].(map[string]any)["items"].(map[string]any)
 		required := interfaces["required"].([]any)
 		for i, v := range required {
 			if v == "macAddress" {
@@ -1296,7 +1296,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		err := validateSchemaWithoutHWTemplate(baseSchema)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
-			"list in field \"clusterInstanceParameters.properties.nodes.items.properties.nodeNetwork.properties.interfaces.required\" is missing element: macAddress"))
+			"list in field \"clusterInstanceParameters.properties.nodes.items.properties.nodeNetwork.properties.interfaces.items.required\" is missing element: macAddress"))
 	})
 
 	It("Returns nil for valid schema", func() {

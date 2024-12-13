@@ -55,8 +55,8 @@ properties:
                 properties:
                   macAddress:
                     type: string
-              required:
-              - macAddress
+                required:
+                - macAddress
           required:
           - interfaces
       required:
