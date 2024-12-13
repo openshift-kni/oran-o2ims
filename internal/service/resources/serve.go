@@ -122,16 +122,16 @@ func Serve(config *api.ResourceServerConfig) error {
 		Level:     slog.LevelDebug, // TODO: set with server args
 	}))
 
-	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
-	filterAdapter, err := common.NewFilterAdapter(logger)
-	if err != nil {
-		return fmt.Errorf("error creating filter filterAdapter: %w", err)
-	}
-
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
 	if err != nil {
 		return fmt.Errorf("failed to get swagger: %w", err)
+	}
+
+	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
+	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
+	if err != nil {
+		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
 	opt := generated.StdHTTPServerOptions{

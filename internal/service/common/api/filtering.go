@@ -7,6 +7,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
+	"strconv"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/routers"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
@@ -24,6 +30,8 @@ const (
 // these objects can be created once at server initialization time and re-used in the ResponseFilter
 // middleware.
 type FilterAdapter struct {
+	swagger            *openapi3.T
+	router             routers.Router
 	pathsParser        *search.PathsParser
 	projectorEvaluator *search.ProjectorEvaluator
 	selectorEvaluator  *search.SelectorEvaluator
@@ -31,7 +39,7 @@ type FilterAdapter struct {
 }
 
 // NewFilterAdapter creates a new filter adapter to be passed to a ResponseFilter
-func NewFilterAdapter(logger *slog.Logger) (*FilterAdapter, error) {
+func NewFilterAdapter(logger *slog.Logger, swagger *openapi3.T) (*FilterAdapter, error) {
 	pathsParser, err := search.NewPathsParser().SetLogger(logger).Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build paths parser: %w", err)
@@ -65,7 +73,16 @@ func NewFilterAdapter(logger *slog.Logger) (*FilterAdapter, error) {
 		return nil, fmt.Errorf("failed to build projector evaluator: %w", err)
 	}
 
+	// We don't want the host to be considered
+	swagger.Servers = nil
+	router, err := gorillamux.NewRouter(swagger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create router: %w", err)
+	}
+
 	return &FilterAdapter{
+		swagger:            swagger,
+		router:             router,
 		pathsParser:        pathsParser,
 		projectorEvaluator: projectEvaluator,
 		selectorEvaluator:  selectorEvaluator,
@@ -82,6 +99,34 @@ func (a *FilterAdapter) ParseFields(fields ...string) ([]search.Path, error) {
 	return paths, nil
 }
 
+// EnforceRequiredFields ensures that required fields are always included and never excluded
+func (a *FilterAdapter) EnforceRequiredFields(projector *search.Projector, r *http.Request) error {
+	requiredFields, err := a.getRequiredFields(r)
+	if err != nil {
+		return err
+	}
+	if len(projector.Include) > 0 {
+		// If any fields are explicitly included then make sure that they are a superset of the required fields.
+		projector.Include = append(projector.Include, requiredFields...)
+	}
+	excludedFields := make([]search.Path, 0)
+	for _, field := range projector.Exclude {
+		found := false
+		for _, required := range requiredFields {
+			if slices.Equal(field, required) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Only allow fields to be excluded if they are not in the required list.
+			excludedFields = append(excludedFields, field)
+		}
+	}
+	projector.Exclude = excludedFields
+	return nil
+}
+
 // ParseFilter delegates the function of parsing the filter fields to the selector parser.
 func (a *FilterAdapter) ParseFilter(query string) (*search.Selector, error) {
 	selector, err := a.selectorParser.Parse(query)
@@ -89,6 +134,107 @@ func (a *FilterAdapter) ParseFilter(query string) (*search.Selector, error) {
 		return nil, fmt.Errorf("failed to parse filter: %w", err)
 	}
 	return selector, nil
+}
+
+// getOperation attempts to lookup the OpenAPI Operation for the given request
+func (a *FilterAdapter) getOperation(r *http.Request) (*openapi3.Operation, error) {
+	route, _, err := a.router.FindRoute(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find route: %w", err)
+	}
+
+	operation := route.Operation
+	if operation == nil {
+		return nil, fmt.Errorf("failed to find operation")
+	}
+
+	return operation, nil
+}
+
+// getResponseSchema attempts to lookup the OpenAPI Schema for the given request
+func (a *FilterAdapter) getResponseSchema(operation *openapi3.Operation) (*openapi3.Schema, error) {
+	responses := operation.Responses
+	if responses == nil {
+		return nil, fmt.Errorf("failed to find responses")
+	}
+
+	// We currently only do filtering on successful responses so we force this to be 200
+	responseRef := responses.Value(strconv.Itoa(http.StatusOK))
+	if responseRef == nil {
+		return nil, fmt.Errorf("failed to find response reference")
+	}
+
+	response := responseRef.Value
+	if response == nil {
+		return nil, fmt.Errorf("failed to find response")
+	}
+
+	content := response.Content.Get("application/json")
+	if content == nil {
+		return nil, fmt.Errorf("failed to find content")
+	}
+
+	schemaRef := content.Schema
+	if schemaRef == nil {
+		return nil, fmt.Errorf("failed to find schema reference")
+	}
+
+	schema := schemaRef.Value
+	if schema == nil {
+		return nil, fmt.Errorf("failed to find schema")
+	}
+
+	return schema, nil
+}
+
+// makePaths converts an array of strings to an array of Path objects
+func (a *FilterAdapter) makePaths(fields []string) []search.Path {
+	paths := make([]search.Path, len(fields))
+	for i, field := range fields {
+		paths[i] = []string{field}
+	}
+	return paths
+}
+
+// getRequiredFields attempts to build the list of fields required in the response for the given request.  The required
+// fields are extracted from the OpenAPI response schema.
+func (a *FilterAdapter) getRequiredFields(r *http.Request) ([]search.Path, error) {
+	operation, err := a.getOperation(r)
+	if err != nil {
+		return []search.Path{}, err
+	}
+
+	schema, err := a.getResponseSchema(operation)
+	if err != nil {
+		return []search.Path{}, err
+	}
+
+	schemaTypes := schema.Type
+	if schemaTypes == nil {
+		return []search.Path{}, fmt.Errorf("failed to find schema")
+	}
+
+	if schemaTypes.Includes("array") {
+		itemsRef := schema.Items
+		if itemsRef == nil {
+			return []search.Path{}, fmt.Errorf("failed to find items reference for array schema")
+		}
+
+		items := itemsRef.Value
+		if items == nil {
+			return []search.Path{}, fmt.Errorf("failed to find items for array schema")
+		}
+
+		return a.makePaths(items.Required), nil
+	}
+
+	if schemaTypes.Includes("object") {
+		return a.makePaths(schema.Required), nil
+	}
+
+	// We don't currently support any responses other than object or array
+
+	return []search.Path{}, nil
 }
 
 // EvaluateSelector delegates the function of evaluating the set of search selectors to the selector evaluator.
@@ -134,8 +280,8 @@ type FilterResponseInterceptor struct {
 	adapter    *FilterAdapter
 	original   http.ResponseWriter
 	buf        bytes.Buffer
-	projector  search.Projector
-	selector   search.Selector
+	projector  *search.Projector
+	selector   *search.Selector
 	statusCode int
 }
 
@@ -164,7 +310,7 @@ func (i *FilterResponseInterceptor) Write(data []byte) (int, error) {
 // necessary.  Both the selector (filtering) and projector (transformations) are applied to any
 // operations that have a 200 status code and contain valid JSON for either a list or object
 // representation.
-func (i *FilterResponseInterceptor) Flush() error {
+func (i *FilterResponseInterceptor) Flush(r *http.Request) error {
 	if i.statusCode != 200 || (i.projector.Empty() && len(i.selector.Terms) == 0) {
 		// We're only interested in GET requests for lists and objects when there are filters
 		// provided and only on successful requests; therefore for all other combinations we can
@@ -195,7 +341,7 @@ func (i *FilterResponseInterceptor) Flush() error {
 		if len(i.selector.Terms) > 0 {
 			// Apply the selector to reduce the list of items down to only those of interest to the caller.
 			for _, item := range listResult {
-				ok, err := i.adapter.EvaluateSelector(&i.selector, item)
+				ok, err := i.adapter.EvaluateSelector(i.selector, item)
 				if err != nil {
 					// Not likely a 500 error so send a 400 and return nil instead
 					return i.adapter.Error(i.original, err.Error(), http.StatusBadRequest)
@@ -210,9 +356,9 @@ func (i *FilterResponseInterceptor) Flush() error {
 
 		if !i.projector.Empty() {
 			// Apply the projector to reduce the attributes included in each item down to only those of interest to the
-			// caller.
+			// caller.  Mandatory fields cannot be excluded so we force them to be included.
 			for index, item := range items {
-				mappedItem, err := i.adapter.EvaluateProjector(&i.projector, item)
+				mappedItem, err := i.adapter.EvaluateProjector(i.projector, item)
 				if err != nil {
 					// Not likely a 500 error so send a 400 and return nil instead
 					return i.adapter.Error(i.original, err.Error(), http.StatusBadRequest)
@@ -231,7 +377,7 @@ func (i *FilterResponseInterceptor) Flush() error {
 
 		// Apply the projector to reduce the attributes included in each item down to only those of interest to the
 		// caller.
-		item, err := i.adapter.EvaluateProjector(&i.projector, objectResult)
+		item, err := i.adapter.EvaluateProjector(i.projector, objectResult)
 		if err != nil {
 			// Not likely a 500 error so send a 400 and return nil instead
 			return i.adapter.Error(i.original, err.Error(), http.StatusBadRequest)
@@ -281,6 +427,14 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 				}
 			}
 
+			if !projector.Empty() {
+				// Get the required fields for this request and make sure they are always included and never excluded
+				if err = adapter.EnforceRequiredFields(&projector, r); err != nil {
+					slog.Warn("unable to determine required fields for request", "request", r.URL, "error", err)
+					// For now, we'll treat this as a warning to handle any unexpected case
+				}
+			}
+
 			if values, ok := query[filter]; ok && len(values) > 0 {
 				for _, value := range values {
 					result, err := adapter.ParseFilter(value)
@@ -297,13 +451,13 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 			interceptor := &FilterResponseInterceptor{
 				original:  w,
 				adapter:   adapter,
-				projector: projector,
-				selector:  selector,
+				projector: &projector,
+				selector:  &selector,
 			}
 
 			next.ServeHTTP(interceptor, r)
 
-			if err = interceptor.Flush(); err != nil {
+			if err = interceptor.Flush(r); err != nil {
 				text := fmt.Sprintf("failed to flush interceptor: %s", err.Error())
 				_ = adapter.Error(w, text, http.StatusInternalServerError)
 			}
