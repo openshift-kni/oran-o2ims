@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP -- Record last update timestamp
 
     -- check does not fail with NULL
-    CONSTRAINT chk_filter CHECK (filter IN ('new', 'change', 'clear', 'acknowledge'))
+    CONSTRAINT chk_filter CHECK (filter IN ('new', 'change', 'clear', 'acknowledge')),
+    CONSTRAINT unique_callback UNIQUE (callback)
 );
 
 -- Function to update the updated_at column on modification

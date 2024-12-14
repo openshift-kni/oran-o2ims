@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -60,6 +61,16 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 
 	record, err := a.AlarmsRepository.CreateAlarmSubscription(ctx, r)
 	if err != nil {
+		if strings.Contains(err.Error(), "unique_callback") {
+			// 409 is a more common choice for a duplicate entry, but the conformance tests expect a 400
+			return api.CreateSubscription400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{
+					"callback": request.Body.Callback,
+				},
+				Detail: "callback value must be unique",
+				Status: http.StatusBadRequest,
+			}), nil
+		}
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 			Detail: err.Error(),
 			Status: http.StatusInternalServerError,

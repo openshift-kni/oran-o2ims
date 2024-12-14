@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -143,6 +144,17 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 
 	result, err := r.Repo.CreateSubscription(ctx, record)
 	if err != nil {
+		if strings.Contains(err.Error(), "unique_callback") {
+			// 409 is a more common choice for a duplicate entry, but the conformance tests expect a 400
+			return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
+				AdditionalAttributes: &map[string]string{
+					"consumerSubscriptionId": consumerSubscriptionId,
+					"callback":               request.Body.Callback,
+				},
+				Detail: "callback value must be unique",
+				Status: http.StatusBadRequest,
+			}, nil
+		}
 		slog.Error("error writing database record", "target", record, "error", err.Error())
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
