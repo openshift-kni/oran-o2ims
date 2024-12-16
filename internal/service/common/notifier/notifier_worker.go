@@ -1,9 +1,7 @@
 package notifier
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -40,8 +38,8 @@ type SubscriptionWorker struct {
 	subscription *SubscriptionInfo
 	// workChannel is the channel to be used to sent work to the worker
 	workChannel chan *SubscriptionJob
-	// completionChannel is the channel to be used to report back to the notifier when an event is complete
-	completionChannel chan *SubscriptionJobComplete
+	// subscriptionJobCompleteChannel is the channel to be used to report back to the notifier when an event is complete
+	subscriptionJobCompleteChannel chan *SubscriptionJobComplete
 	// ctx is the context passed to the go routine.  If the subscription is canceled or the server is stopping the
 	// context will be canceled
 	ctx context.Context
@@ -60,7 +58,8 @@ type SubscriptionWorker struct {
 }
 
 // NewSubscriptionWorker creates a new subscription worker object to service a specific subscription
-func NewSubscriptionWorker(ctx context.Context, completionChannel chan *SubscriptionJobComplete, subscription *SubscriptionInfo) (*SubscriptionWorker, error) {
+func NewSubscriptionWorker(ctx context.Context, subscriptionJobCompleteChannel chan *SubscriptionJobComplete,
+	subscription *SubscriptionInfo) (*SubscriptionWorker, error) {
 	// Create a client for this subscription.
 	// TODO: fill in the oauth attributes from the SMO config passed to the server
 	client, err := utils.SetupOAuthClient(ctx, utils.OAuthClientConfig{})
@@ -77,14 +76,14 @@ func NewSubscriptionWorker(ctx context.Context, completionChannel chan *Subscrip
 
 	workerCtx, cancel := context.WithCancel(ctx)
 	return &SubscriptionWorker{
-		subscription:      subscription,
-		workChannel:       make(chan *SubscriptionJob, 1),
-		completionChannel: completionChannel,
-		cancel:            cancel,
-		ctx:               workerCtx,
-		currentEventDone:  make(chan *SubscriptionJobComplete, 1),
-		client:            client,
-		logger:            logger,
+		subscription:                   subscription,
+		workChannel:                    make(chan *SubscriptionJob, 1),
+		subscriptionJobCompleteChannel: subscriptionJobCompleteChannel,
+		cancel:                         cancel,
+		ctx:                            workerCtx,
+		currentEventDone:               make(chan *SubscriptionJobComplete, 1),
+		client:                         client,
+		logger:                         logger,
 	}, nil
 }
 
@@ -101,7 +100,7 @@ func (w *SubscriptionWorker) Shutdown() {
 // releaseEvents releases all pending events back to the notifier
 func (w *SubscriptionWorker) releaseEvents() {
 	for _, event := range w.events {
-		w.completionChannel <- &SubscriptionJobComplete{
+		w.subscriptionJobCompleteChannel <- &SubscriptionJobComplete{
 			subscriptionID: w.subscription.SubscriptionID,
 			notificationID: event.NotificationID,
 			sequenceID:     event.SequenceID,
@@ -111,7 +110,7 @@ func (w *SubscriptionWorker) releaseEvents() {
 
 // Run executes that main loop for the worker handling events as they arrive.
 func (w *SubscriptionWorker) Run() {
-	w.logger.Info("subscription worker started")
+	w.logger.Info("subscription worker started", "callback", w.subscription.Callback)
 
 	for {
 		select {
@@ -131,7 +130,7 @@ func (w *SubscriptionWorker) Run() {
 func (w *SubscriptionWorker) handleCurrentEventCompletion(e *SubscriptionJobComplete) {
 	w.currentEvent = nil
 	// forward to the notifier so that it can release the event
-	w.completionChannel <- e
+	w.subscriptionJobCompleteChannel <- e
 	// handle the next event
 	w.processNextEvent(w.ctx)
 }
@@ -146,78 +145,7 @@ func (w *SubscriptionWorker) handleSubscriptionJob(ctx context.Context, job *Sub
 
 	if w.currentEvent == nil {
 		w.currentEvent = job.notification
-		go w.processEvent(ctx, w.currentEvent)
-	}
-}
-
-// sendNotification sends the inventory change notification to the subscriber
-func (w *SubscriptionWorker) sendNotification(ctx context.Context, notification *Notification) error {
-	body, err := json.Marshal(notification.Payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal notification payload: %w", err)
-	}
-
-	buffer := bytes.NewBuffer(body)
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, w.subscription.Callback, buffer)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-	response, err := w.client.Do(request)
-	if err != nil {
-		return fmt.Errorf("failed to send notification: %w", err)
-	}
-
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("notification failed: %v", response.StatusCode)
-	}
-
-	return nil
-}
-
-// processEvent attempts to send a notification to the subscriber.  It does so until it succeeds or the maximum
-// number of retries has been reached.  When it completes or timeout it sends a job completion event and signals back
-// to the worker that this current event is complete
-func (w *SubscriptionWorker) processEvent(ctx context.Context, event *Notification) {
-	w.logger.Info("processing data change event",
-		"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
-
-	var err error = nil
-	for i := 0; i < maxRetries; i++ {
-		err = w.sendNotification(ctx, event)
-		if err == nil {
-			break
-		}
-
-		w.logger.Warn("failed to send notification", "error", err,
-			"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
-
-		select {
-		case <-ctx.Done():
-			w.logger.Warn("context canceled while sending notification",
-				"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
-			break
-		case <-time.After(retryDelay):
-			w.logger.Debug("retrying notification",
-				"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
-		}
-	}
-
-	if err != nil {
-		w.logger.Error("error sending notification; retries exceeded", "error", err,
-			"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
-		// TODO: If we were able to send this one then we are not likely to be able to send any
-		//  of the others so perhaps we should purge our queue, or enter a longer backoff period.
-	} else {
-		w.logger.Info("notification sent",
-			"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
-	}
-
-	w.currentEventDone <- &SubscriptionJobComplete{
-		subscriptionID: w.subscription.SubscriptionID,
-		notificationID: event.NotificationID,
-		sequenceID:     event.SequenceID,
+		go processEvent(ctx, w.logger, w.client, w.currentEventDone, *w.currentEvent, w.subscription.SubscriptionID, w.subscription.Callback)
 	}
 }
 
@@ -233,5 +161,5 @@ func (w *SubscriptionWorker) processNextEvent(ctx context.Context) {
 	w.currentEvent, w.events = w.events[0], w.events[1:]
 
 	// Launch a task to send the notification (or retry on failures)
-	go w.processEvent(ctx, w.currentEvent)
+	go processEvent(ctx, w.logger, w.client, w.currentEventDone, *w.currentEvent, w.subscription.SubscriptionID, w.subscription.Callback)
 }

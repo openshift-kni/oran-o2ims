@@ -314,8 +314,7 @@ func (d *ACMDataSource) convertNodeToResource(from data.Object) (to models.Resou
 		return
 	}
 
-	resourceIDName, err := data.GetString(from,
-		graphql.PropertyNode("resourceID").MapProperty())
+	name, err := data.GetString(from, "name")
 	if err != nil {
 		return
 	}
@@ -355,7 +354,7 @@ func (d *ACMDataSource) convertNodeToResource(from data.Object) (to models.Resou
 	extensions := convertMapAnyToString(extensionsMap)
 
 	// For now continue to generate UUID values based on the string values assigned
-	resourceID := makeUUIDFromName(ResourceUUIDNamespace, d.cloudID, resourceIDName)
+	resourceID := makeUUIDFromName(ResourceUUIDNamespace, d.cloudID, name)
 	resourcePoolID := makeUUIDFromName(ResourcePoolUUIDNamespace, d.cloudID, resourcePoolIdName)
 
 	resourceTypeID := d.makeResourceTypeID(cpu, architecture)
@@ -370,7 +369,7 @@ func (d *ACMDataSource) convertNodeToResource(from data.Object) (to models.Resou
 		Tags:           nil,
 		DataSourceID:   d.dataSourceID,
 		GenerationID:   d.generationID,
-		ExternalID:     resourceIDName,
+		ExternalID:     globalAssetId,
 	}
 
 	return

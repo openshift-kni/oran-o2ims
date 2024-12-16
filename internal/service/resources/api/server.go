@@ -157,11 +157,15 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 
 	// Validate the subscription
 	if err := r.validateSubscription(request); err != nil {
+		filter := "<null>"
+		if request.Body.Filter != nil {
+			filter = *request.Body.Filter
+		}
 		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"consumerSubscriptionId": consumerSubscriptionId,
 				"callback":               request.Body.Callback,
-				"filter":                 "",
+				"filter":                 filter,
 			},
 			Detail: err.Error(),
 			Status: http.StatusBadRequest,

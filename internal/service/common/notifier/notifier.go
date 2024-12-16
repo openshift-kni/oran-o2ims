@@ -9,6 +9,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// DefaultBufferedChannelSize defines the default size for buffered channels used across the notifier.
+const DefaultBufferedChannelSize = 10
+
 // Notification defines a generic notification object.  The payload should support JSON marshaling.
 type Notification struct {
 	NotificationID uuid.UUID
@@ -65,16 +68,18 @@ type Notifier struct {
 	subscriptionJobCompleteChannel chan *SubscriptionJobComplete
 	// workers is the list of workers started to service subscriptions.  It is mapped by
 	// subscription uuid value.
-	workers              map[uuid.UUID]*SubscriptionWorker
+	workers map[uuid.UUID]*SubscriptionWorker
+	// NotificationProvider is a plugable interface which provides persistence handling for notifications
 	NotificationProvider NotificationProvider
+	// SubscriptionProvider is a plugable interface which provides persistence handling for subscriptions
 	SubscriptionProvider SubscriptionProvider
 }
 
 // NewNotifier creates a new instance of a Notifier
 func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider NotificationProvider) *Notifier {
-	eventChannel := make(chan *Notification, 10)
-	subscriptionChannel := make(chan *SubscriptionEvent, 10)
-	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, 10)
+	eventChannel := make(chan *Notification, DefaultBufferedChannelSize)
+	subscriptionChannel := make(chan *SubscriptionEvent, DefaultBufferedChannelSize)
+	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, DefaultBufferedChannelSize)
 	return &Notifier{
 		SubscriptionProvider:           subscriptionProvider,
 		NotificationProvider:           notificationProvider,
@@ -104,7 +109,7 @@ func (n *Notifier) Run(ctx context.Context) error {
 			}
 		case e := <-n.subscriptionChannel:
 			if err := n.handleSubscriptionEvent(ctx, e); err != nil {
-				return err
+				slog.Error("failed to handle subscription event", "error", err)
 			}
 		case <-ctx.Done():
 			n.shutdownWorkers()
