@@ -44,7 +44,7 @@ CREATE OR REPLACE FUNCTION update_alarm_event_sequence()
     RETURNS TRIGGER AS $$
 BEGIN
     -- Update sequence if status changes to 'resolved' or if alarm_changed_time is updated
-    IF (NEW.status = 'resolved' AND OLD.status IS DISTINCT FROM 'resolved')
+    IF (NEW.alarm_status = 'resolved' AND OLD.alarm_status IS DISTINCT FROM 'resolved')
        OR (NEW.alarm_changed_time IS DISTINCT FROM OLD.alarm_changed_time) THEN
         NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
     END IF;

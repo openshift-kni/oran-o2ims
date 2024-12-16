@@ -165,8 +165,8 @@ paths:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
     patch:
-      operationId: AckAlarm
-      summary: Modify exactly one alarm to acknowledge
+      operationId: PatchAlarm
+      summary: Modify an individual alarm record
       tags:
         - alarms
       parameters:
@@ -573,8 +573,8 @@ components:
           type: boolean
           description: Acknowledge an alarm.
           example: false
-      required:
-        - alarmAcknowledged
+        perceivedSeverity:
+            $ref: '#/components/schemas/PerceivedSeverity'
 
     AlarmSubscriptionInfo:
       type: object

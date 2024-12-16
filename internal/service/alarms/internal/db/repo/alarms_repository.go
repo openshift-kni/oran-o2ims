@@ -21,6 +21,15 @@ type AlarmsRepository struct {
 	Db *pgxpool.Pool
 }
 
+// GetAlarmEventRecords grabs all rows of alarm_event_record
+func (ar *AlarmsRepository) GetAlarmEventRecords(ctx context.Context) ([]models.AlarmEventRecord, error) {
+	return utils.FindAll[models.AlarmEventRecord](ctx, ar.Db)
+}
+
+func (ar *AlarmsRepository) PatchAlarmEventRecordACK(ctx context.Context, id uuid.UUID, record *models.AlarmEventRecord) (*models.AlarmEventRecord, error) {
+	return utils.Update[models.AlarmEventRecord](ctx, ar.Db, id, *record, "AlarmAcknowledged", "AlarmAcknowledgedTime", "PerceivedSeverity", "AlarmClearedTime", "AlarmChangedTime")
+}
+
 // GetAlarmEventRecord grabs a row of alarm_event_record using a primary key
 func (ar *AlarmsRepository) GetAlarmEventRecord(ctx context.Context, id uuid.UUID) (*models.AlarmEventRecord, error) {
 	return utils.Find[models.AlarmEventRecord](ctx, ar.Db, id)
@@ -54,6 +63,11 @@ func (ar *AlarmsRepository) DeleteAlarmDictionariesNotIn(ctx context.Context, id
 	expr := psql.Quote(tags["ResourceTypeID"]).NotIn(psql.Arg(ids...))
 	_, err := utils.Delete[models.AlarmDictionary](ctx, ar.Db, expr)
 	return err
+}
+
+// GetAlarmDefinition grabs a row of alarm_definition using a primary key
+func (ar *AlarmsRepository) GetAlarmDefinition(ctx context.Context, id uuid.UUID) (*models.AlarmDefinition, error) {
+	return utils.Find[models.AlarmDefinition](ctx, ar.Db, id)
 }
 
 // DeleteAlarmDefinitionsNotIn deletes all alarm definitions identified by the primary key that are not in the list of IDs.
