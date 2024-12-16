@@ -1,0 +1,161 @@
+#
+# Copyright (c) 2024 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+# compliance with the License. You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is
+# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing permissions and limitations under the
+# License.
+#
+
+openapi: 3.0.3
+
+info:
+  title: O2IMS Infrastructure Artifacts API
+  version: 1.0.0
+  description: API for O2IMS Infrastructure Artifacts
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  contact:
+    name: Red Hat
+    url: https://www.redhat.com
+
+externalDocs:
+  description: O-RAN O2ims Interface Specification
+  url: TBD
+
+servers:
+- url: http://localhost:8000
+
+tags:
+- name: managedInfrastructureTemplates
+  description: |
+    Information about infrastructure templates.
+
+paths:
+
+  /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates:
+    get:
+      operationId: getManagedInfrastructureTemplates
+      summary: Get managed infrastructure templates 
+      description: |
+        Returns the list of managed infrastructure templatess.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - managedInfrastructureTemplates
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of managed infrastructure templates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ManagedInfrastructureTemplate'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}:
+    get:
+      operationId: getManagedInfrastructureTemplate
+      summary: Get managed infrastructure templates
+      description: |
+        Returns the details of a managed infrastructure template.
+      parameters:
+      - $ref: "#/components/parameters/managedInfrastructureTemplateId"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      tags:
+      - managedInfrastructureTemplates
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the managed infrastructure template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedInfrastructureTemplate"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+components:
+  parameters:
+    managedInfrastructureTemplateId:
+      name: managedInfrastructureTemplateId
+      description: |
+        Unique identifier of a managed infrastructure template.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: fa242779-dfef-414e-b2b1-3b75d6f6b65d
+
+  schemas:
+    ManagedInfrastructureTemplate:
+      description: |
+        Information about a managed infrastructure template.
+      type: object
+      properties:
+        artifactResourceId:
+          type: string
+          format: uuid
+          description: Identifier for the managed infrastructure template. This identifier is allocated by the O-Cloud.
+          example: "fa242779-dfef-414e-b2b1-3b75d6f6b65d"
+        version:
+          type: string
+          example: "v4-17-3-1"
+        description:
+          type: string
+          description: Details about the current managed infrastructure template.
+        parameterSchema:
+          type: object
+          description: |
+            Defines the parameters required for ClusterTemplate. The parameter definitions should follow the OpenAPI V3 schema and explicitly define required fields.
+          example:
+        name:
+          type: string
+          description: Human readable description of managed infrastructure template
+      required:
+      - artifactResourceId
+      - version
+      - description
+      - parameterSchema
+      - name
+
+        
+        
