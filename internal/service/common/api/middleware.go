@@ -11,6 +11,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
+
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
@@ -43,6 +44,16 @@ func OpenAPIValidation(swagger *openapi3.T) Middleware {
 	})
 }
 
+// problemDetails writes an error message using the appropriate header for an ORAN error response
+func problemDetails(w http.ResponseWriter, body string, code int) {
+	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
+	w.WriteHeader(code)
+	_, err := fmt.Fprintln(w, body)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // getOranErrHandler override default validation error to allow for O-RAN specific error
 func getOranErrHandler() func(w http.ResponseWriter, message string, statusCode int) {
 	return func(w http.ResponseWriter, message string, statusCode int) {
@@ -50,7 +61,7 @@ func getOranErrHandler() func(w http.ResponseWriter, message string, statusCode 
 			Detail: message,
 			Status: statusCode,
 		})
-		http.Error(w, string(out), statusCode)
+		problemDetails(w, string(out), statusCode)
 	}
 }
 
@@ -76,7 +87,7 @@ func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error)
 			Detail: err.Error(),
 			Status: http.StatusBadRequest,
 		})
-		http.Error(w, string(out), http.StatusBadRequest)
+		problemDetails(w, string(out), http.StatusBadRequest)
 	}
 }
 
@@ -87,6 +98,18 @@ func GetOranRespErrFunc() func(w http.ResponseWriter, r *http.Request, err error
 			Detail: err.Error(),
 			Status: http.StatusInternalServerError,
 		})
-		http.Error(w, string(out), http.StatusInternalServerError)
+		problemDetails(w, string(out), http.StatusInternalServerError)
+	}
+}
+
+// NotFoundFunc is used to override the default 404 response which is a text only reply so that we can respond with the
+// required JSON body.
+func NotFoundFunc() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		out, _ := json.Marshal(common.ProblemDetails{
+			Detail: fmt.Sprintf("Path '%s' not found", r.RequestURI),
+			Status: http.StatusNotFound,
+		})
+		problemDetails(w, string(out), http.StatusNotFound)
 	}
 }

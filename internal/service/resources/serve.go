@@ -115,6 +115,8 @@ func Serve(config *api.ResourceServerConfig) error {
 	)
 
 	router := http.NewServeMux()
+	// Register a default handler that replies with 404 so that we can override the response format
+	router.HandleFunc("/", common.NotFoundFunc())
 
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
