@@ -292,7 +292,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241015193426-dd5c5bc228e8
+# github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241213003211-a57a58a5c4f2
 ## explicit; go 1.22.0
 github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades
 github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1
@@ -712,7 +712,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/client-go v12.0.0+incompatible => k8s.io/client-go v0.31.2
+# k8s.io/client-go v12.0.0+incompatible => k8s.io/client-go v0.31.4
 ## explicit; go 1.22.0
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
 k8s.io/client-go/applyconfigurations/admissionregistration/v1alpha1
@@ -1088,4 +1088,4 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/openshift-kni/oran-o2ims/api/inventory => ./api/inventory
 # github.com/openshift-kni/oran-o2ims/api/provisioning => ./api/provisioning
 # github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
-# k8s.io/client-go => k8s.io/client-go v0.31.2
+# k8s.io/client-go => k8s.io/client-go v0.31.4
