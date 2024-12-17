@@ -124,16 +124,29 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Register a default handler that replies with 404 so that we can override the response format
 	router.HandleFunc("/", common.NotFoundFunc())
 
+	// Create a new logger to be passed to things that need a logger
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug, // TODO: set with server args
+	}))
+
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
 	if err != nil {
 		return fmt.Errorf("failed to get swagger: %w", err)
 	}
 
+	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
+	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
+	if err != nil {
+		return fmt.Errorf("error creating filter filterAdapter: %w", err)
+	}
+
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: router,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
 			common.OpenAPIValidation(swagger),
+			common.ResponseFilter(filterAdapter),
 			common.LogDuration(),
 		},
 		ErrorHandlerFunc: common.GetOranReqErrFunc(),
