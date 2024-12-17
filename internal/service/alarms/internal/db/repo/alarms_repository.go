@@ -3,8 +3,9 @@ package repo
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"log/slog"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/stephenafamo/bob/dialect/psql/dm"
 

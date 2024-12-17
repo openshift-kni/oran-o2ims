@@ -254,19 +254,3 @@ func (a *AlarmsServer) HwNotification(ctx context.Context, request api.HwNotific
 	// TODO implement me
 	return nil, fmt.Errorf("not implemented")
 }
-
-func convertAerModelToApi(aerModel models.AlarmEventRecord) api.AlarmEventRecord {
-	return api.AlarmEventRecord{
-		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
-		AlarmAcknowledgedTime: aerModel.AlarmAcknowledgedTime,
-		AlarmChangedTime:      aerModel.AlarmChangedTime,
-		AlarmClearedTime:      aerModel.AlarmClearedTime,
-		AlarmDefinitionId:     aerModel.AlarmDefinitionID,
-		AlarmEventRecordId:    *aerModel.AlarmEventRecordID,
-		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
-		PerceivedSeverity:     aerModel.PerceivedSeverity,
-		ProbableCauseId:       aerModel.ProbableCauseID,
-		ResourceTypeID:        aerModel.ResourceTypeID,
-		Extensions:            aerModel.Extensions,
-	}
-}
