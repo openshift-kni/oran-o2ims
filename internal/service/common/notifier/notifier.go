@@ -179,7 +179,7 @@ func (n *Notifier) loadSubscriptions(ctx context.Context) error {
 			return fmt.Errorf("failed to create subscription worker: %w", err)
 		}
 
-		n.workers[subscriptionID].Run()
+		go n.workers[subscriptionID].Run()
 	}
 
 	slog.Info("subscriptions loaded", "count", len(n.workers))
