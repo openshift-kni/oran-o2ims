@@ -160,6 +160,12 @@ spec:
         path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: ClusterServerConfig contains the configuration for the resource
+          server.
+        displayName: Cluster Server Configuration
+        path: clusterServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Deployment Manager Server Configuration
         path: deploymentManagerServerConfig
         x-descriptors:

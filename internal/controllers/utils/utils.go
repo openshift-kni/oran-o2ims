@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"reflect"
 	"slices"
@@ -178,6 +179,7 @@ func extensionsToExtensionArgs(extensions []string) []string {
 // HasApiEndpoints determines whether a server exposes a set of API endpoints
 func HasApiEndpoints(serverName string) bool {
 	return serverName == InventoryDatabaseServerName ||
+		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryMetadataServerName ||
 		serverName == InventoryResourceServerName ||
@@ -187,6 +189,7 @@ func HasApiEndpoints(serverName string) bool {
 // HasDatabase determines whether a server owns a logical database instance
 func HasDatabase(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
+		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName
 }
 
@@ -306,6 +309,8 @@ func GetServerDatabasePasswordName(serverName string) (string, error) {
 		return AlarmsPasswordEnvName, nil
 	case InventoryResourceServerName:
 		return ResourcesPasswordEnvName, nil
+	case InventoryClusterServerName:
+		return ClustersPasswordEnvName, nil
 	default:
 		return "", fmt.Errorf("database name not found for server '%s'", serverName)
 	}
@@ -352,6 +357,16 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			GetBackendTokenArg(inventory.Spec.ResourceServerConfig.BackendToken))
 
 		return result, nil
+	}
+
+	// ClusterServer
+	if serverName == InventoryClusterServerName {
+		result = slices.Clone(ClusterServerArgs)
+		result = append(
+			result,
+			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID))
+
+		return
 	}
 
 	// DeploymentManagerServer
@@ -765,6 +780,11 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 					Enabled: true,
 				},
 			},
+			ClusterServerConfig: inventoryv1alpha1.ClusterServerConfig{
+				ServerConfig: inventoryv1alpha1.ServerConfig{
+					Enabled: true,
+				},
+			},
 		},
 	}
 
@@ -797,4 +817,39 @@ func GetPasswordOrRandom(envName string) string {
 // GetServiceURL constructs the default service URL for a server
 func GetServiceURL(serverName string) string {
 	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), DefaultServicePort)
+}
+
+// MakeUUIDFromName generates a namespaced uuid value from the specified namespace and name values.  The values are
+// scoped to a `cloudID` to avoid conflicts with other systems.
+func MakeUUIDFromName(namespace string, cloudID uuid.UUID, name string) uuid.UUID {
+	value := fmt.Sprintf("%s/%s", cloudID.String(), name)
+	namespaceUUID := uuid.MustParse(namespace)
+	return uuid.NewSHA1(namespaceUUID, []byte(value))
+}
+
+// ConvertMapAnyToString converts a map of any to a map of strings.  Values not of type string are
+// ignored.
+func ConvertMapAnyToString(input map[string]any) map[string]string {
+	output := make(map[string]string)
+	for key, value := range input {
+		if _, ok := input[key].(string); ok {
+			output[key] = value.(string)
+		}
+	}
+	return output
+}
+
+// GenerateSearchApiUrl appends graphql path to the backend URL to form the fully qualified search path
+func GenerateSearchApiUrl(backendURL string) (string, error) {
+	u, err := url.Parse(backendURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse backend URL %s: %w", backendURL, err)
+	}
+
+	// Split URL address
+	hostArr := strings.Split(u.Host, ".")
+
+	// Generate search API URL
+	searchUri := strings.Join(hostArr, ".")
+	return fmt.Sprintf("%s://%s/searchapi/graphql", u.Scheme, searchUri), nil
 }

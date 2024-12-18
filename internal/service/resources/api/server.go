@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 
+	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
@@ -135,16 +136,11 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 
 // validateSubscription validates a subscription before accepting the request
 func (r *ResourceServer) validateSubscription(request api.CreateSubscriptionRequestObject) error {
-	callback := request.Body.Callback
-	u, err := url.Parse(callback)
+	err := api2.ValidateCallbackURL(request.Body.Callback)
 	if err != nil {
-		return fmt.Errorf("invalid callback URL: %w", err)
+		return fmt.Errorf("invalid callback url: %w", err)
 	}
-
-	if u.Scheme != "https" {
-		return fmt.Errorf("invalid callback scheme %q, only https is supported", u.Scheme)
-	}
-
+	// TODO: add validation of filter and move to common if filter syntax is the same for all servers
 	return nil
 }
 
@@ -171,6 +167,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 			Status: http.StatusBadRequest,
 		}, nil
 	}
+
 	// Convert from Model -> DB
 	record := models.SubscriptionFromModel(request.Body)
 
@@ -262,7 +259,7 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 	// Signal the notifier to handle this subscription change
 	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
 		Removed: true,
-		Subscription: models.SubscriptionToInfo(&models.Subscription{
+		Subscription: models.SubscriptionToInfo(&models2.Subscription{
 			SubscriptionID: &request.SubscriptionId,
 		}),
 	})

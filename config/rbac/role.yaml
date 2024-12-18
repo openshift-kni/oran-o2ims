@@ -10,6 +10,16 @@ rules:
   - create
   - post
 - nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/clusterResourceTypes
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusterTypes
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
   - /o2ims-infrastructureInventory/v1/resourceTypes
   verbs:
   - get
@@ -81,6 +91,14 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - agent-install.openshift.io
+  resources:
+  - agents
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - apps
