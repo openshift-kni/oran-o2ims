@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
@@ -262,7 +263,7 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 	// Signal the notifier to handle this subscription change
 	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
 		Removed: true,
-		Subscription: models.SubscriptionToInfo(&models.Subscription{
+		Subscription: models.SubscriptionToInfo(&models2.Subscription{
 			SubscriptionID: &request.SubscriptionId,
 		}),
 	})

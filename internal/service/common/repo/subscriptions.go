@@ -16,11 +16,11 @@ var _ notifier.SubscriptionProvider = (*SubscriptionStorageProvider)(nil)
 // SubscriptionStorageProvider implements the SubscriptionProvider interface as a means to abstract the concrete
 // subscription type out of the Notifier
 type SubscriptionStorageProvider struct {
-	repository *ResourcesRepository
+	repository *CommonRepository
 }
 
 // NewSubscriptionStorageProvider creates a new SubscriptionProvider
-func NewSubscriptionStorageProvider(repository *ResourcesRepository) notifier.SubscriptionProvider {
+func NewSubscriptionStorageProvider(repository *CommonRepository) notifier.SubscriptionProvider {
 	return &SubscriptionStorageProvider{
 		repository: repository,
 	}
