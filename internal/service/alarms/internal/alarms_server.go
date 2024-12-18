@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	apiresources "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 )
 
 type AlarmsServer struct {
@@ -159,15 +161,19 @@ func (a *AlarmsServer) GetSubscription(ctx context.Context, request api.GetSubsc
 	return api.GetSubscription200JSONResponse(models.ConvertSubscriptionModelToApi(*record)), nil
 }
 
-func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsRequestObject) (api.GetAlarmsResponseObject, error) {
-	// TODO implement me
-
-	// Fill out more details
-	p := common.ProblemDetails{
-		Detail: "invalid `filter` parameter syntax",
-		Status: http.StatusBadRequest,
+// GetAlarms handles an API request to fetch Alarm Event Records
+func (a *AlarmsServer) GetAlarms(ctx context.Context, _ api.GetAlarmsRequestObject) (api.GetAlarmsResponseObject, error) {
+	records, err := a.AlarmsRepository.GetAlarmEventRecords(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Alarm Event Records: %w", err)
 	}
-	return api.GetAlarms400ApplicationProblemPlusJSONResponse(p), nil
+
+	objects := make([]api.AlarmEventRecord, 0, len(records))
+	for _, record := range records {
+		objects = append(objects, models.ConvertAlarmEventRecordModelToApi(record))
+	}
+
+	return api.GetAlarms200JSONResponse(objects), nil
 }
 
 // GetAlarm handles an API request to retrieve an Alarm Event Record
@@ -190,9 +196,149 @@ func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequest
 	return api.GetAlarm200JSONResponse(models.ConvertAlarmEventRecordModelToApi(*record)), nil
 }
 
-func (a *AlarmsServer) AckAlarm(ctx context.Context, request api.AckAlarmRequestObject) (api.AckAlarmResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+// PatchAlarm handles an API request to patch an Alarm Event Record
+func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmRequestObject) (api.PatchAlarmResponseObject, error) {
+	// Fetch the Alarm Event Record to be patched
+	record, err := a.AlarmsRepository.GetAlarmEventRecord(ctx, request.AlarmEventRecordId)
+	if errors.Is(err, utils.ErrNotFound) {
+		// Nothing found
+		return api.PatchAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{
+				"alarmEventRecordId": request.AlarmEventRecordId.String(),
+			},
+			Detail: "requested Alarm Event Record not found",
+			Status: http.StatusNotFound,
+		}), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Alarm Event Record: %w", err)
+	}
+
+	// Check that request has at least one field to patch
+	if request.Body.AlarmAcknowledged == nil && request.Body.PerceivedSeverity == nil {
+		// Bad request - at least one field is required to patch
+		return api.PatchAlarm400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{
+				"alarmEventRecordId": request.AlarmEventRecordId.String(),
+			},
+			Detail: "at least one field is required to patch",
+			Status: http.StatusBadRequest,
+		}), nil
+	}
+
+	// Check if both fields are included in the request
+	if request.Body.AlarmAcknowledged != nil && request.Body.PerceivedSeverity != nil {
+		// Bad request - only one field is allowed to be patched
+		return api.PatchAlarm400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{
+				"alarmEventRecordId": request.AlarmEventRecordId.String(),
+			},
+			Detail: "either alarmAcknowledged or perceivedSeverity shall be included in a request message content, but not both",
+			Status: http.StatusBadRequest,
+		}), nil
+
+	}
+
+	// Patch perceivedSeverity
+	if request.Body.PerceivedSeverity != nil {
+		perceivedSeverity := *request.Body.PerceivedSeverity
+		// Only the value "5" for "CLEARED" is permitted in a request message content
+		if perceivedSeverity != api.CLEARED {
+			return api.PatchAlarm400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{
+					"alarmEventRecordId": request.AlarmEventRecordId.String(),
+				},
+				Detail: fmt.Sprintf("only the value %d for CLEARED is permitted in the perceivedSeverity field", api.CLEARED),
+				Status: http.StatusBadRequest,
+			}), nil
+		}
+
+		// Check if associated alarm definition has clearing type "manual". If not, return 409.
+		alarmDefinition, err := a.AlarmsRepository.GetAlarmDefinition(ctx, record.AlarmDefinitionID)
+		if errors.Is(err, utils.ErrNotFound) {
+			return api.PatchAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{
+					"alarmEventRecordId": request.AlarmEventRecordId.String(),
+				},
+				Detail: "associated Alarm Definition not found",
+				Status: http.StatusNotFound,
+			}), nil
+		}
+
+		if alarmDefinition.ClearingType != string(apiresources.MANUAL) {
+			return api.PatchAlarm409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{
+					"alarmEventRecordId": request.AlarmEventRecordId.String(),
+				},
+				Detail: "cannot clear an alarm with clearing type other than MANUAL",
+				Status: http.StatusConflict,
+			}), nil
+		}
+
+		// Check if the Alarm Event Record has already been cleared
+		if record.PerceivedSeverity == int(perceivedSeverity) {
+			// Nothing to patch
+			return api.PatchAlarm409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{
+					"alarmEventRecordId": request.AlarmEventRecordId.String(),
+				},
+				Detail: "Alarm record is already cleared",
+				Status: http.StatusConflict,
+			}), nil
+		}
+
+		// Patch the Alarm Event Record
+		record.PerceivedSeverity = int(perceivedSeverity)
+		currentTime := time.Now()
+		record.AlarmClearedTime = &currentTime
+		record.AlarmChangedTime = &currentTime
+	}
+
+	// Patch alarmAcknowledged
+	if request.Body.AlarmAcknowledged != nil {
+		alarmAcknowledged := *request.Body.AlarmAcknowledged
+
+		// Check if requested Acknowledged status is true
+		if !alarmAcknowledged {
+			// Bad request - Acknowledged status is expected to be true
+			return api.PatchAlarm400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{
+					"alarmEventRecordId": request.AlarmEventRecordId.String(),
+				},
+				Detail: "alarmAcknowledged field is expected to be true",
+				Status: http.StatusBadRequest,
+			}), nil
+		}
+
+		// Check if the Alarm Event Record has already been acknowledged
+		if record.AlarmAcknowledged == alarmAcknowledged {
+			// Nothing to patch
+			return api.PatchAlarm400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{
+					"alarmEventRecordId": request.AlarmEventRecordId.String(),
+				},
+				Detail: "Alarm record is already acknowledged",
+				Status: http.StatusConflict,
+			}), nil
+		}
+
+		// Patch the Alarm Event Record
+		record.AlarmAcknowledged = alarmAcknowledged
+		currentTime := time.Now()
+		record.AlarmAcknowledgedTime = &currentTime
+		record.AlarmChangedTime = &currentTime
+	}
+
+	// Update the Alarm Event Record
+	updated, err := a.AlarmsRepository.PatchAlarmEventRecordACK(ctx, request.AlarmEventRecordId, record)
+	if err != nil {
+		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
+	}
+
+	slog.Debug("Alarm acknowledged/cleared", "alarmEventRecordId", updated.AlarmEventRecordID, "alarmAcknowledged", updated.AlarmAcknowledged, "alarmAcknowledgedTime", updated.AlarmAcknowledgedTime,
+		"alarmClearedTime", updated.AlarmClearedTime, "perceivedSeverity", updated.PerceivedSeverity, "alarmChangedTime", updated.AlarmChangedTime)
+
+	return api.PatchAlarm200JSONResponse{AlarmAcknowledged: request.Body.AlarmAcknowledged, PerceivedSeverity: request.Body.PerceivedSeverity}, nil
 }
 
 func (a *AlarmsServer) GetProbableCauses(ctx context.Context, request api.GetProbableCausesRequestObject) (api.GetProbableCausesResponseObject, error) {

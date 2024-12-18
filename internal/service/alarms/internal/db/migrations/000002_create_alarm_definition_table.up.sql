@@ -4,10 +4,10 @@ CREATE TABLE IF NOT EXISTS alarm_definition (
     alarm_definition_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique identifier for each alarm
     alarm_name VARCHAR(255) NOT NULL, -- Short name for the alarm
     alarm_last_change VARCHAR(50) NOT NULL, -- Version in which this alarm last changed. Can use alarmDict version
-    alarm_change_type VARCHAR(20) DEFAULT 'added' NOT NULL, -- Type of change (added, deleted, modified)
+    alarm_change_type VARCHAR(20) DEFAULT 'ADDED' NOT NULL, -- Type of change (ADDED, DELETED, MODIFIED)
     alarm_description TEXT NOT NULL, -- For caas it's rules[].summary and rules[].description
     proposed_repair_actions TEXT NOT NULL, -- For caas it's rules[].runbook_url
-    clearing_type VARCHAR(20) DEFAULT 'automatic' NOT NULL, -- Clearing type (automatic or manual)
+    clearing_type VARCHAR(20) DEFAULT 'AUTOMATIC' NOT NULL, -- Clearing type (AUTOMATIC or MANUAL)
     management_interface_id VARCHAR(20)[] DEFAULT ARRAY['O2IMS']::VARCHAR[], -- Use default
     pk_notification_field TEXT[] DEFAULT ARRAY['alarmDefinitionID']::TEXT[], -- Use default
     alarm_additional_fields JSONB, -- In case of caas alerts, add anything that we didnt read from annotations or labels of the rules. Any data from PrometheusRule CR (where the rules are) may also dumped here.
@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS alarm_definition (
     -- Constraints
     CONSTRAINT unique_alarm UNIQUE(resource_type_id, alarm_name, severity), -- This is what uniquely identifies an alarm
     CONSTRAINT fk_alarm_dictionary FOREIGN KEY (alarm_dictionary_id) REFERENCES alarm_dictionary(alarm_dictionary_id) ON DELETE CASCADE, -- Delete auto
-    CONSTRAINT chk_alarm_change_type CHECK (alarm_change_type IN ('added', 'deleted', 'modified')),
-    CONSTRAINT chk_clearing_type CHECK (clearing_type IN ('automatic', 'manual'))
+    CONSTRAINT chk_alarm_change_type CHECK (alarm_change_type IN ('ADDED', 'DELETED', 'MODIFIED')),
+    CONSTRAINT chk_clearing_type CHECK (clearing_type IN ('AUTOMATIC', 'MANUAL'))
 );
 
 
