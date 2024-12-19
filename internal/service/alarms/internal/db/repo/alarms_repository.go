@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,6 +34,55 @@ func (ar *AlarmsRepository) PatchAlarmEventRecordACK(ctx context.Context, id uui
 // GetAlarmEventRecord grabs a row of alarm_event_record using a primary key
 func (ar *AlarmsRepository) GetAlarmEventRecord(ctx context.Context, id uuid.UUID) (*models.AlarmEventRecord, error) {
 	return utils.Find[models.AlarmEventRecord](ctx, ar.Db, id)
+}
+
+// CreateServiceConfiguration inserts a new row of alarm_service_configuration or returns the existing one
+func (ar *AlarmsRepository) CreateServiceConfiguration(ctx context.Context, defaultRetentionPeriod int) (*models.ServiceConfiguration, error) {
+	records, err := utils.FindAll[models.ServiceConfiguration](ctx, ar.Db)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return record if it already exists
+	if len(records) == 1 {
+		slog.Debug("Service configuration already exists")
+		return &records[0], nil
+	}
+
+	// If there are more than one record, pick the first one and delete the rest
+	if len(records) > 1 {
+		slog.Debug("Multiple service configurations found, deleting all but the first")
+
+		ids := make([]any, 0, len(records)-1)
+		for i := 1; i < len(records); i++ {
+			ids = append(ids, records[i].ID)
+		}
+
+		_, err = utils.Delete[models.AlarmDefinition](ctx, ar.Db, psql.Quote(models.AlarmDefinition{}.PrimaryKey()).In(psql.Arg(ids...)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete additional service configurations: %w", err)
+		}
+
+		return &records[0], nil
+	}
+
+	slog.Debug("Creating new service configuration")
+
+	// Create a new record
+	record := models.ServiceConfiguration{
+		RetentionPeriod: defaultRetentionPeriod,
+	}
+	return utils.Create[models.ServiceConfiguration](ctx, ar.Db, record, "RetentionPeriod")
+}
+
+// GetServiceConfigurations grabs all rows of alarm_service_configuration
+func (ar *AlarmsRepository) GetServiceConfigurations(ctx context.Context) ([]models.ServiceConfiguration, error) {
+	return utils.FindAll[models.ServiceConfiguration](ctx, ar.Db)
+}
+
+// UpdateServiceConfiguration updates a row of alarm_service_configuration using a primary key
+func (ar *AlarmsRepository) UpdateServiceConfiguration(ctx context.Context, id uuid.UUID, record *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+	return utils.Update[models.ServiceConfiguration](ctx, ar.Db, id, *record, "RetentionPeriod", "Extensions")
 }
 
 // GetAlarmSubscriptions grabs all rows of alarm_subscription
