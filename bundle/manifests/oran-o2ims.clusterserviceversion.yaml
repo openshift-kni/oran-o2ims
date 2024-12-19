@@ -1143,6 +1143,14 @@ spec:
           - update
           - watch
         - apiGroups:
+          - agent-install.openshift.io
+          resources:
+          - agents
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - apps
           resources:
           - deployments

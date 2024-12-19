@@ -604,8 +604,6 @@ components:
             Human readable description of the Node Cluster Type.
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored extend the information 
             provided about the Node Cluster Type.
@@ -638,8 +636,6 @@ components:
             Human readable description of the NodeCluster.
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored extend the information 
             provided about the NodeCluster.
@@ -700,8 +696,6 @@ components:
             Human readable description of the Cluster Resource Type.
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored extend the information
             provided about the Cluster Resource Type.
@@ -729,8 +723,6 @@ components:
             Human readable description of the cluster resource.
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored extend the information
             provided about the Cluster Resource.

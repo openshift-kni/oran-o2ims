@@ -79,9 +79,9 @@ func Serve(config *api.ClusterServerConfig) error {
 	}
 
 	// Create the build-in data sources
-	acm, err := collector.NewACMDataSource(cloudID, config.BackendURL, config.Extensions)
+	k8s, err := collector.NewK8SDataSource(cloudID, config.Extensions)
 	if err != nil {
-		return fmt.Errorf("failed to create ACM data source: %w", err)
+		return fmt.Errorf("failed to create Kubernetes data source: %w", err)
 	}
 
 	// Create the notifier with our resource specific subscription and notification providers.
@@ -90,7 +90,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider)
 
 	// Create the collector
-	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{acm})
+	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{k8s})
 
 	// Init server
 	// Create the handler

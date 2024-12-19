@@ -19,7 +19,7 @@ func ClusterResourceToModel(record *ClusterResource) generated.ClusterResource {
 		ClusterResourceId:     record.ClusterResourceID,
 		ClusterResourceTypeId: record.ClusterResourceTypeID,
 		Description:           record.Description,
-		Extensions:            &record.Extensions,
+		Extensions:            record.Extensions,
 		MemberOf:              nil, // TODO
 		Name:                  record.Name,
 		ResourceId:            record.ResourceID,
@@ -31,7 +31,7 @@ func ClusterResourceTypeToModel(record *ClusterResourceType) generated.ClusterRe
 	return generated.ClusterResourceType{
 		ClusterResourceTypeId: record.ClusterResourceTypeID,
 		Description:           record.Description,
-		Extensions:            &record.Extensions,
+		Extensions:            record.Extensions,
 		Name:                  record.Name,
 	}
 }
@@ -45,9 +45,9 @@ func NodeClusterToModel(record *NodeCluster) generated.NodeCluster {
 		ClientNodeClusterId:            record.ClientNodeClusterID,
 		ClusterDistributionDescription: record.ClusterDistributionDescription,
 		ClusterResourceGroups:          record.ClusterResourceGroups,
-		ClusterResourceIds:             []uuid.UUID{}, // TODO
+		ClusterResourceIds:             []uuid.UUID{}, // TODO: caller should pass in this list
 		Description:                    record.Description,
-		Extensions:                     &record.Extensions,
+		Extensions:                     record.Extensions,
 		Name:                           record.Name,
 	}
 }
@@ -56,7 +56,7 @@ func NodeClusterToModel(record *NodeCluster) generated.NodeCluster {
 func NodeClusterTypeToModel(record *NodeClusterType) generated.NodeClusterType {
 	return generated.NodeClusterType{
 		Description:       record.Description,
-		Extensions:        &record.Extensions,
+		Extensions:        record.Extensions,
 		Name:              record.Name,
 		NodeClusterTypeId: record.NodeClusterTypeID,
 	}

@@ -49,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+//+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=view.open-cluster-management.io,resources=managedclusterviews,verbs=create
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
@@ -1065,6 +1066,7 @@ func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Cont
 
 	return nil
 }
+
 func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1090,21 +1092,10 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 			},
 			{
 				APIGroups: []string{
-					"view.open-cluster-management.io",
+					"agent-install.openshift.io",
 				},
 				Resources: []string{
-					"managedclusterviews",
-				},
-				Verbs: []string{
-					"create",
-				},
-			},
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"nodes",
+					"agents",
 				},
 				Verbs: []string{
 					"get",
@@ -1116,7 +1107,7 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Resource Server cluster role: %w", err)
+		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
 	}
 
 	return nil

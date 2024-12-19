@@ -13,13 +13,13 @@ var _ db.Model = (*NodeClusterType)(nil)
 
 // NodeClusterType represents a record in the node_cluster_type table.
 type NodeClusterType struct {
-	NodeClusterTypeID uuid.UUID         `db:"node_cluster_type_id"` // Non-nil because we always set this from named values
-	Name              string            `db:"name"`
-	Description       string            `db:"description"`
-	Extensions        map[string]string `db:"extensions"`
-	DataSourceID      uuid.UUID         `db:"data_source_id"`
-	GenerationID      int               `db:"generation_id"`
-	CreatedAt         *time.Time        `db:"created_at"`
+	NodeClusterTypeID uuid.UUID               `db:"node_cluster_type_id"` // Non-nil because we always set this from named values
+	Name              string                  `db:"name"`
+	Description       string                  `db:"description"`
+	Extensions        *map[string]interface{} `db:"extensions"`
+	DataSourceID      uuid.UUID               `db:"data_source_id"`
+	GenerationID      int                     `db:"generation_id"`
+	CreatedAt         *time.Time              `db:"created_at"`
 }
 
 // TableName returns the table name associated to this model
