@@ -21,6 +21,7 @@ import (
 	"os"
 
 	alarmscmd "github.com/openshift-kni/oran-o2ims/internal/service/alarms/cmd"
+	clustercmd "github.com/openshift-kni/oran-o2ims/internal/service/cluster/cmd"
 	inventorycmd "github.com/openshift-kni/oran-o2ims/internal/service/resources/cmd"
 
 	"github.com/openshift-kni/oran-o2ims/internal"
@@ -41,6 +42,7 @@ func main() {
 		AddCommand(cmd.Start).
 		AddCommand(cmd.Version).
 		AddCommand(alarmscmd.GetAlarmRootCmd).        // TODO: all server should have same root to share init info
+		AddCommand(clustercmd.GetClusterRootCmd).     // TODO: all server should have same root to share init info
 		AddCommand(inventorycmd.GetResourcesRootCmd). // TODO: all server should have same root to share init info
 		Build()
 	if err != nil {

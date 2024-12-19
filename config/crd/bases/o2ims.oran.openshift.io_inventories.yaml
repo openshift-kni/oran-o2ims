@@ -62,6 +62,23 @@ spec:
                 description: CloudID is the global cloud ID value used to correlate
                   the SMO inventory record with the deployed cloud instance.
                 type: string
+              clusterServerConfig:
+                default:
+                  enabled: true
+                description: ClusterServerConfig contains the configuration for the
+                  resource server.
+                properties:
+                  backendToken:
+                    type: string
+                  backendURL:
+                    type: string
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                required:
+                - enabled
+                type: object
               deploymentManagerServerConfig:
                 default:
                   enabled: true

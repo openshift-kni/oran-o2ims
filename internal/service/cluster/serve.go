@@ -1,4 +1,4 @@
-package resources
+package cluster
 
 import (
 	"context"
@@ -14,14 +14,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api"
+	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/collector"
+	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
 )
 
 // Resource server config values
@@ -30,13 +30,13 @@ const (
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second
 
-	username = "resources"
-	database = "resources"
+	username = "clusters"
+	database = "clusters"
 )
 
 // Serve start alarms server
-func Serve(config *api.ResourceServerConfig) error {
-	slog.Info("Starting resource server")
+func Serve(config *api.ClusterServerConfig) error {
+	slog.Info("Starting cluster server")
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -50,9 +50,9 @@ func Serve(config *api.ResourceServerConfig) error {
 		cancel()
 	}()
 
-	password, exists := os.LookupEnv(utils.ResourcesPasswordEnvName)
+	password, exists := os.LookupEnv(utils.ClustersPasswordEnvName)
 	if !exists {
-		return fmt.Errorf("missing %s environment variable", utils.ResourcesPasswordEnvName)
+		return fmt.Errorf("missing %s environment variable", utils.ClustersPasswordEnvName)
 	}
 
 	// Init DB client
@@ -69,19 +69,8 @@ func Serve(config *api.ResourceServerConfig) error {
 	commonRepository := &repo2.CommonRepository{
 		Db: pool,
 	}
-
-	repository := &repo.ResourcesRepository{
+	repository := &repo.ClusterRepository{
 		CommonRepository: *commonRepository,
-	}
-
-	// Convert arguments
-	var globalCloudID uuid.UUID
-	if config.GlobalCloudID != utils.DefaultOCloudID {
-		value, err := uuid.Parse(config.GlobalCloudID)
-		if err != nil {
-			return fmt.Errorf("failed to parse global cloud NotificationID '%s': %w", config.GlobalCloudID, err)
-		}
-		globalCloudID = value
 	}
 
 	cloudID, err := uuid.Parse(config.CloudID)
@@ -90,32 +79,25 @@ func Serve(config *api.ResourceServerConfig) error {
 	}
 
 	// Create the build-in data sources
-	acm, err := collector.NewACMDataSource(cloudID, globalCloudID, config.BackendURL, config.Extensions)
+	k8s, err := collector.NewK8SDataSource(cloudID, config.Extensions)
 	if err != nil {
-		return fmt.Errorf("failed to create ACM data source: %w", err)
+		return fmt.Errorf("failed to create Kubernetes data source: %w", err)
 	}
 
 	// Create the notifier with our resource specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository)
-	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider)
+	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider)
 
 	// Create the collector
-	resourceCollector := collector.NewCollector(repository, resourceNotifier, []collector.DataSource{acm})
+	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{k8s})
 
 	// Init server
 	// Create the handler
-	server := api.ResourceServer{
-		Config: config,
-		Repo:   repository,
-		Info: generated.OCloudInfo{
-			Description:   "OpenShift O-Cloud Manager",
-			GlobalCloudId: globalCloudID,
-			Name:          "OpenShift O-Cloud Manager",
-			OCloudId:      cloudID,
-			ServiceUri:    config.ExternalAddress,
-		},
-		SubscriptionEventHandler: resourceNotifier,
+	server := api.ClusterServer{
+		Config:                   config,
+		Repo:                     repository,
+		SubscriptionEventHandler: clusterNotifier,
 	}
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
@@ -175,8 +157,8 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Start resource notifier
 	notifierErrors := make(chan error, 1)
 	go func() {
-		slog.Info("Starting resource notifier")
-		if err := resourceNotifier.Run(ctx); err != nil {
+		slog.Info("Starting cluster notifier")
+		if err := clusterNotifier.Run(ctx); err != nil {
 			notifierErrors <- err
 		}
 	}()
@@ -184,8 +166,8 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Start resource collector
 	collectorErrors := make(chan error, 1)
 	go func() {
-		slog.Info("Starting resource collector")
-		if err := resourceCollector.Run(ctx); err != nil {
+		slog.Info("Starting cluster collector")
+		if err := clusterCollector.Run(ctx); err != nil {
 			collectorErrors <- err
 		}
 	}()

@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
+	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
 )
 
 const pollingDelay = 10 * time.Minute
@@ -26,10 +26,10 @@ type DataSource interface {
 	SetGenerationID(value int)
 	GetGenerationID() int
 	IncrGenerationID() int
-	GetResourcePools(ctx context.Context) ([]models.ResourcePool, error)
-	GetResources(ctx context.Context, pools []models.ResourcePool) ([]models.Resource, error)
-	GetDeploymentManagers(ctx context.Context) ([]models.DeploymentManager, error)
-	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
+	GetNodeClusters(ctx context.Context) ([]models.NodeCluster, error)
+	GetClusterResources(ctx context.Context, pools []models.NodeCluster) ([]models.ClusterResource, error)
+	MakeNodeClusterType(resource *models.NodeCluster) (*models.NodeClusterType, error)
+	MakeClusterResourceType(resource *models.ClusterResource) (*models.ClusterResourceType, error)
 }
 
 type NotificationHandler interface {
@@ -39,12 +39,12 @@ type NotificationHandler interface {
 // Collector defines the attributes required by the collector implementation.
 type Collector struct {
 	notificationHandler NotificationHandler
-	repository          *repo.ResourcesRepository
+	repository          *repo.ClusterRepository
 	dataSources         []DataSource
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(repo *repo.ResourcesRepository, notificationHandler NotificationHandler, dataSources []DataSource) *Collector {
+func NewCollector(repo *repo.ClusterRepository, notificationHandler NotificationHandler, dataSources []DataSource) *Collector {
 	return &Collector{
 		repository:          repo,
 		notificationHandler: notificationHandler,
@@ -135,22 +135,16 @@ func (c *Collector) execute(ctx context.Context) {
 
 // executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
 func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSource) (err error) {
-	// Get the list of resource pools for this data source
-	pools, err := c.collectResourcePools(ctx, dataSource)
+	// Get the list of node cluster for this data source
+	pools, err := c.collectNodeClusters(ctx, dataSource)
 	if err != nil {
-		return fmt.Errorf("failed to collect resource pools: %w", err)
+		return fmt.Errorf("failed to collect node clusters: %w", err)
 	}
 
-	// Get the list of resources for this data source
-	_, err = c.collectResources(ctx, dataSource, pools)
+	// Get the list of cluster resources for this data source
+	_, err = c.collectClusterResources(ctx, dataSource, pools)
 	if err != nil {
-		return fmt.Errorf("failed to collect resources: %w", err)
-	}
-
-	// Get the list of deployment managers for this data source
-	_, err = c.collectDeploymentManagers(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to collect deployment managers: %w", err)
+		return fmt.Errorf("failed to collect cluster resources: %w", err)
 	}
 
 	// TODO: purge stale record
@@ -160,38 +154,38 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 	return nil
 }
 
-// collectResources collects Resource objects from the data source, persists them to the database,
-// and signals any change events to the notification processor.
-func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
-	pools []models.ResourcePool) ([]models.Resource, error) {
-	slog.Debug("collecting resource and types", "source", dataSource.Name())
+// collectClusterResources collects ClusterResource objects from the data source, persists them to
+// the database, and signals any change events to the notification processor.
+func (c *Collector) collectClusterResources(ctx context.Context, dataSource DataSource,
+	pools []models.NodeCluster) ([]models.ClusterResource, error) {
+	slog.Debug("collecting cluster resources and types", "source", dataSource.Name())
 
-	resources, err := dataSource.GetResources(ctx, pools)
+	resources, err := dataSource.GetClusterResources(ctx, pools)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resources: %w", err)
+		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
-	// Loop over the set of resources and create the associated resource types.
+	// Loop over the set of cluster resources and create the associated cluster resource types.
 	seen := make(map[uuid.UUID]bool)
 	for _, resource := range resources {
-		resourceType, err := dataSource.MakeResourceType(&resource)
+		resourceType, err := dataSource.MakeClusterResourceType(&resource)
 		if err != nil {
-			return nil, fmt.Errorf("failed to make resource type from '%v': %w", resource, err)
+			return nil, fmt.Errorf("failed to make cluster resource type from '%v': %w", resource, err)
 		}
 
-		if seen[resourceType.ResourceTypeID] {
+		if seen[resourceType.ClusterResourceTypeID] {
 			// We have already seen this one so skip
 			continue
 		}
-		seen[resourceType.ResourceTypeID] = true
+		seen[resourceType.ClusterResourceTypeID] = true
 
 		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
-				record, _ := object.(models.ResourceType)
-				return models.ResourceTypeToModel(&record)
+			ctx, c.repository.Db, *resourceType, resourceType.ClusterResourceTypeID, nil, func(object interface{}) any {
+				record, _ := object.(models.ClusterResourceType)
+				return models.ClusterResourceTypeToModel(&record)
 			})
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource type': %w", err)
+			return nil, fmt.Errorf("failed to persist cluster resource type': %w", err)
 		}
 
 		if dataChangeEvent != nil {
@@ -199,15 +193,15 @@ func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
 		}
 	}
 
-	// Loop over the set of resources and insert (or update) as needed
+	// Loop over the set of cluster resources and insert (or update) as needed
 	for _, resource := range resources {
 		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
-				record, _ := object.(models.Resource)
-				return models.ResourceToModel(&record, nil)
+			ctx, c.repository.Db, resource, resource.ClusterResourceID, nil, func(object interface{}) any {
+				record, _ := object.(models.ClusterResource)
+				return models.ClusterResourceToModel(&record)
 			})
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource: %w", err)
+			return nil, fmt.Errorf("failed to persist cluster resource: %w", err)
 		}
 
 		if dataChangeEvent != nil {
@@ -218,25 +212,37 @@ func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
 	return resources, nil
 }
 
-// collectResourcePools collects ResourcePool objects from the data source, persists them to the database,
-// and signals any change events to the notification processor.
-func (c *Collector) collectResourcePools(ctx context.Context, dataSource DataSource) ([]models.ResourcePool, error) {
-	slog.Debug("collecting resource pools", "source", dataSource.Name())
+// collectNodeClusters collects NodeCluster objects from the data source, persists them to
+// the database, and signals any change events to the notification processor.
+func (c *Collector) collectNodeClusters(ctx context.Context, dataSource DataSource) ([]models.NodeCluster, error) {
+	slog.Debug("collecting node clusters and types", "source", dataSource.Name())
 
-	pools, err := dataSource.GetResourcePools(ctx)
+	clusters, err := dataSource.GetNodeClusters(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource pools: %w", err)
+		return nil, fmt.Errorf("failed to get node clsuters: %w", err)
 	}
 
-	// Loop over the set of resource pools and insert (or update) as needed
-	for _, pool := range pools {
+	// Loop over the set of resources and create the associated resource types.
+	seen := make(map[uuid.UUID]bool)
+	for _, cluster := range clusters {
+		resourceType, err := dataSource.MakeNodeClusterType(&cluster)
+		if err != nil {
+			return nil, fmt.Errorf("failed to make node cluster type from '%v': %w", cluster, err)
+		}
+
+		if seen[resourceType.NodeClusterTypeID] {
+			// We have already seen this one so skip
+			continue
+		}
+		seen[resourceType.NodeClusterTypeID] = true
+
 		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
-				record, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&record)
+			ctx, c.repository.Db, *resourceType, resourceType.NodeClusterTypeID, nil, func(object interface{}) any {
+				record, _ := object.(models.NodeClusterType)
+				return models.NodeClusterTypeToModel(&record)
 			})
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource pool: %w", err)
+			return nil, fmt.Errorf("failed to persist node cluster type': %w", err)
 		}
 
 		if dataChangeEvent != nil {
@@ -244,28 +250,15 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource DataSou
 		}
 	}
 
-	return pools, nil
-}
-
-// collectDeploymentManagers collects DeploymentManager objects from the data source, persists them to the database,
-// and signals any change events to the notification processor.
-func (c *Collector) collectDeploymentManagers(ctx context.Context, dataSource DataSource) ([]models.DeploymentManager, error) {
-	slog.Debug("collecting deployment managers", "source", dataSource.Name())
-
-	dms, err := dataSource.GetDeploymentManagers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get deployment managers: %w", err)
-	}
-
-	// Loop over the set of deployment managers and insert (or update) as needed
-	for _, dm := range dms {
+	// Loop over the set of node cluster  and insert (or update) as needed
+	for _, cluster := range clusters {
 		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, dm, dm.DeploymentManagerID, nil, func(object interface{}) any {
-				record, _ := object.(models.DeploymentManager)
-				return models.DeploymentManagerToModel(&record)
+			ctx, c.repository.Db, cluster, cluster.NodeClusterID, &cluster.NodeClusterID, func(object interface{}) any {
+				record, _ := object.(models.NodeCluster)
+				return models.NodeClusterToModel(&record)
 			})
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist deployment manager: %w", err)
+			return nil, fmt.Errorf("failed to persist node cluster: %w", err)
 		}
 
 		if dataChangeEvent != nil {
@@ -273,5 +266,5 @@ func (c *Collector) collectDeploymentManagers(ctx context.Context, dataSource Da
 		}
 	}
 
-	return dms, nil
+	return clusters, nil
 }

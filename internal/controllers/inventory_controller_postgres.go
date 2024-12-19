@@ -22,14 +22,15 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/postgres"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sptr "k8s.io/utils/ptr"
+
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/service/postgres"
 )
 
 // deployPostgresServer deploys the actual Postgres database server instance.  Prior to invoking this method the other
@@ -179,6 +180,7 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 			utils.AdminPasswordEnvName:     []byte(utils.GetPasswordOrRandom(utils.AdminPasswordEnvName)),
 			utils.AlarmsPasswordEnvName:    []byte(utils.GetPasswordOrRandom(utils.AlarmsPasswordEnvName)),
 			utils.ResourcesPasswordEnvName: []byte(utils.GetPasswordOrRandom(utils.ResourcesPasswordEnvName)),
+			utils.ClustersPasswordEnvName:  []byte(utils.GetPasswordOrRandom(utils.ClustersPasswordEnvName)),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create passwords: %w", err)
@@ -197,6 +199,9 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 		}
 		if _, ok := existing.Data[utils.ResourcesPasswordEnvName]; !ok {
 			existing.Data[utils.ResourcesPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.ResourcesPasswordEnvName))
+		}
+		if _, ok := existing.Data[utils.ClustersPasswordEnvName]; !ok {
+			existing.Data[utils.ClustersPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.ClustersPasswordEnvName))
 		}
 
 		err = utils.CreateK8sCR(ctx, t.client, &existing, t.object, utils.UPDATE)

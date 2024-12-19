@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
@@ -55,7 +56,7 @@ func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 }
 
 // SubscriptionToModel converts a DB tuple to an API Model
-func SubscriptionToModel(record *Subscription) generated.Subscription {
+func SubscriptionToModel(record *models2.Subscription) generated.Subscription {
 	object := generated.Subscription{
 		Callback:               record.Callback,
 		ConsumerSubscriptionId: record.ConsumerSubscriptionID,
@@ -67,10 +68,10 @@ func SubscriptionToModel(record *Subscription) generated.Subscription {
 }
 
 // SubscriptionFromModel converts an API model to a DB tuple
-func SubscriptionFromModel(object *generated.Subscription) *Subscription {
+func SubscriptionFromModel(object *generated.Subscription) *models2.Subscription {
 	id := uuid.Must(uuid.NewRandom())
 
-	record := Subscription{
+	record := models2.Subscription{
 		SubscriptionID:         &id,
 		ConsumerSubscriptionID: object.ConsumerSubscriptionId,
 		Filter:                 object.Filter,
@@ -162,7 +163,7 @@ func getObjectReference(objectType string, objectID uuid.UUID, parentID *uuid.UU
 }
 
 // DataChangeEventToModel converts a DB tuple to an API model
-func DataChangeEventToModel(record *DataChangeEvent) generated.InventoryChangeNotification {
+func DataChangeEventToModel(record *models2.DataChangeEvent) generated.InventoryChangeNotification {
 	eventType := getEventType(record.BeforeState, record.AfterState)
 	object := generated.InventoryChangeNotification{
 		NotificationEventType: generated.InventoryChangeNotificationNotificationEventType(eventType),
@@ -176,7 +177,7 @@ func DataChangeEventToModel(record *DataChangeEvent) generated.InventoryChangeNo
 }
 
 // DataChangeEventToNotification converts a DataChangeEvent to a generic Notification
-func DataChangeEventToNotification(record *DataChangeEvent) *notifier.Notification {
+func DataChangeEventToNotification(record *models2.DataChangeEvent) *notifier.Notification {
 	return &notifier.Notification{
 		NotificationID: *record.DataChangeID,
 		SequenceID:     *record.SequenceID,
@@ -185,7 +186,7 @@ func DataChangeEventToNotification(record *DataChangeEvent) *notifier.Notificati
 }
 
 // SubscriptionToInfo converts a Subscription to a generic SubscriptionInfo
-func SubscriptionToInfo(record *Subscription) *notifier.SubscriptionInfo {
+func SubscriptionToInfo(record *models2.Subscription) *notifier.SubscriptionInfo {
 	return &notifier.SubscriptionInfo{
 		SubscriptionID: *record.SubscriptionID,
 		Callback:       record.Callback,

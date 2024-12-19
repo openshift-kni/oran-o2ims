@@ -756,6 +756,20 @@ spec:
         path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: ClusterServerConfig contains the configuration for the resource
+          server.
+        displayName: Cluster Server Configuration
+        path: clusterServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Backend Token
+        path: clusterServerConfig.backendToken
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Backend URL
+        path: clusterServerConfig.backendURL
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Deployment Manager Server Configuration
         path: deploymentManagerServerConfig
         x-descriptors:
@@ -1127,6 +1141,14 @@ spec:
           - list
           - patch
           - update
+          - watch
+        - apiGroups:
+          - agent-install.openshift.io
+          resources:
+          - agents
+          verbs:
+          - get
+          - list
           - watch
         - apiGroups:
           - apps
