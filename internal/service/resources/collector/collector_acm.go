@@ -67,7 +67,7 @@ func NewACMDataSource(cloudID, globalCloudID uuid.UUID, backendURL string, exten
 	}
 	backendToken := strings.TrimSpace(string(backendTokenData))
 
-	searchAPI, err := generateSearchApiUrl(backendURL)
+	searchAPI, err := utils.GenerateSearchApiUrl(backendURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate search API URL: %w", err)
 	}
@@ -179,7 +179,7 @@ func (d *ACMDataSource) makeResourceTypeName(cpu, architecture string) string {
 // makeResourceTypeID builds a UUID value for this resource type based on its name so that it has
 // a consistent value each time it is created.
 func (d *ACMDataSource) makeResourceTypeID(cpu, architecture string) uuid.UUID {
-	return makeUUIDFromName(ResourceTypeUUIDNamespace, d.cloudID, d.makeResourceTypeName(cpu, architecture))
+	return utils.MakeUUIDFromName(ResourceTypeUUIDNamespace, d.cloudID, d.makeResourceTypeName(cpu, architecture))
 }
 
 // MakeResourceType creates an instance of a ResourceType from a Resource object.
@@ -195,7 +195,7 @@ func (d *ACMDataSource) MakeResourceType(resource *models.Resource) (*models.Res
 	}
 
 	resourceTypeName := d.makeResourceTypeName(cpu, architecture)
-	resourceTypeID := makeUUIDFromName(ResourceTypeUUIDNamespace, d.cloudID, d.makeResourceTypeName(cpu, architecture))
+	resourceTypeID := utils.MakeUUIDFromName(ResourceTypeUUIDNamespace, d.cloudID, d.makeResourceTypeName(cpu, architecture))
 
 	// TODO: finish filling this in with data
 	result := models.ResourceType{
@@ -351,11 +351,11 @@ func (d *ACMDataSource) convertNodeToResource(from data.Object) (to models.Resou
 
 	// Convert the extensions to strings since that's how our API side models are defined.  We know the data is coming
 	// from the ACM search API, and it is all represented as strings so there shouldn't be an issue doing the conversion.
-	extensions := convertMapAnyToString(extensionsMap)
+	extensions := utils.ConvertMapAnyToString(extensionsMap)
 
 	// For now continue to generate UUID values based on the string values assigned
-	resourceID := makeUUIDFromName(ResourceUUIDNamespace, d.cloudID, name)
-	resourcePoolID := makeUUIDFromName(ResourcePoolUUIDNamespace, d.cloudID, resourcePoolIdName)
+	resourceID := utils.MakeUUIDFromName(ResourceUUIDNamespace, d.cloudID, name)
+	resourcePoolID := utils.MakeUUIDFromName(ResourcePoolUUIDNamespace, d.cloudID, resourcePoolIdName)
 
 	resourceTypeID := d.makeResourceTypeID(cpu, architecture)
 	to = models.Resource{
@@ -426,10 +426,10 @@ func (d *ACMDataSource) convertClusterToResourcePool(from data.Object) (to model
 
 	// Convert the extensions to strings since that's how our API side models are defined.  We know the data is coming
 	// from the ACM search API, and it is all represented as strings so there shouldn't be an issue doing the conversion.
-	extensions := convertMapAnyToString(extensionsMap)
+	extensions := utils.ConvertMapAnyToString(extensionsMap)
 
 	// For now continue to generate UUID values based on the string values assigned
-	resourcePoolID := makeUUIDFromName(ResourcePoolUUIDNamespace, d.cloudID, resourcePoolIdName)
+	resourcePoolID := utils.MakeUUIDFromName(ResourcePoolUUIDNamespace, d.cloudID, resourcePoolIdName)
 
 	to = models.ResourcePool{
 		ResourcePoolID:   resourcePoolID,

@@ -15,6 +15,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
+	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	apiresources "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
@@ -89,6 +90,17 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 			Detail: "provisioning of Alarm Subscriptions is blocked until the SMO attributes are configured",
 			Status: http.StatusConflict,
 		}), nil
+	}
+
+	// Validate the subscription
+	if err := api2.ValidateCallbackURL(request.Body.Callback); err != nil {
+		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"callback": request.Body.Callback,
+			},
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
 	}
 
 	r := models.ConvertSubscriptionAPIToModel(request.Body)

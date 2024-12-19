@@ -49,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+//+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=view.open-cluster-management.io,resources=managedclusterviews,verbs=create
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
@@ -71,6 +72,8 @@ import (
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
 //+kubebuilder:rbac:urls="/o2ims-infrastructureInventory/v1/resourceTypes",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/clusterResourceTypes",verbs=get;list
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -188,6 +191,80 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy the Resource server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return nextReconcile, err
+}
+
+// setupClusterServerConfig creates the resources necessary to start the Resource Server.
+func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createServiceAccount(ctx, utils.InventoryClusterServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ServiceAccount for the cluster server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createClusterServerClusterRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create cluster server cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createClusterServerClusterRoleBinding(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create cluster server cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
+	// API requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryClusterServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create cluster server RBAC proxy cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the cluster server.
+	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for cluster server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the cluster-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.InventoryClusterServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the cluster server.",
 			slog.String("error", err.Error()),
 		)
 		if errorReason == "" {
@@ -690,19 +767,19 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
-	// Start the alarm server if required by the Spec.
-	if t.object.Spec.AlarmServerConfig.Enabled {
-		// Create the resources required by the alarm server
-		nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
+	// Start the resource server if required by the Spec.
+	if t.object.Spec.ResourceServerConfig.Enabled {
+		// Create the resources required by the resource server
+		nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
 		if err != nil {
 			return
 		}
 	}
 
-	// Start the resource server if required by the Spec.
-	if t.object.Spec.ResourceServerConfig.Enabled {
-		// Create the needed ServiceAccount.
-		nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
+	// Start the cluster server if required by the Spec.
+	if t.object.Spec.ClusterServerConfig.Enabled {
+		// Create the resources required by the cluster server
+		nextReconcile, err = t.setupClusterServerConfig(ctx, nextReconcile)
 		if err != nil {
 			return
 		}
@@ -710,7 +787,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 
 	// Start the metadata server if required by the Spec.
 	if t.object.Spec.MetadataServerConfig.Enabled {
-		// Create the needed ServiceAccount.
+		// Create the resources required by the metadata server
 		nextReconcile, err = t.setupMetadataServerConfig(ctx, nextReconcile)
 		if err != nil {
 			return
@@ -992,6 +1069,84 @@ func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Cont
 	return nil
 }
 
+func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", t.object.Namespace, utils.InventoryClusterServerName,
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			// We need to read managed clusters, as that is the main source for the
+			// information about clusters.
+			{
+				APIGroups: []string{
+					"cluster.open-cluster-management.io",
+				},
+				Resources: []string{
+					"managedclusters",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"agent-install.openshift.io",
+				},
+				Resources: []string{
+					"agents",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
+	}
+
+	return nil
+}
+
+func (t *reconcilerTask) createClusterServerClusterRoleBinding(ctx context.Context) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.InventoryClusterServerName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.InventoryClusterServerName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: t.object.Namespace,
+				Name:      utils.InventoryClusterServerName,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Cluster Server cluster role binding: %w", err)
+	}
+
+	return nil
+}
+
 func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1056,6 +1211,8 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 			{
 				NonResourceURLs: []string{
 					"/o2ims-infrastructureInventory/v1/resourceTypes",
+					"/o2ims-infrastructureCluster/v1/nodeClusterTypes",
+					"/o2ims-infrastructureCluster/v1/clusterResourceTypes",
 				},
 				Verbs: []string{
 					"get",
@@ -1502,6 +1659,21 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
 										Name: "deployment-manager-server",
+										Port: networkingv1.ServiceBackendPort{
+											Name: utils.InventoryIngressName,
+										},
+									},
+								},
+							},
+							{
+								Path: "/o2ims-infrastructureCluster",
+								PathType: func() *networkingv1.PathType {
+									pathType := networkingv1.PathTypePrefix
+									return &pathType
+								}(),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: utils.InventoryClusterServerName,
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.InventoryIngressName,
 										},
