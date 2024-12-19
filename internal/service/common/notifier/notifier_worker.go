@@ -137,15 +137,17 @@ func (w *SubscriptionWorker) handleCurrentEventCompletion(e *SubscriptionJobComp
 
 // handleSubscriptionJob receives a new subscription job and queues it for processing
 func (w *SubscriptionWorker) handleSubscriptionJob(ctx context.Context, job *SubscriptionJob) {
-	// Queue it
-	w.events = append(w.events, job.notification)
 	w.logger.Info("data change event job received",
 		"notificationID", job.notification.NotificationID,
 		"sequenceID", job.notification.SequenceID)
 
 	if w.currentEvent == nil {
+		// Handle it immediately
 		w.currentEvent = job.notification
 		go processEvent(ctx, w.logger, w.client, w.currentEventDone, *w.currentEvent, w.subscription.SubscriptionID, w.subscription.Callback)
+	} else {
+		// Queue it
+		w.events = append(w.events, job.notification)
 	}
 }
 
