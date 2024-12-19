@@ -10,8 +10,8 @@ CREATE SEQUENCE IF NOT EXISTS alarm_sequence_seq
 CREATE TABLE IF NOT EXISTS alarm_event_record (
     -- O-RAN
     alarm_event_record_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique identifier for each event record
-    alarm_definition_id UUID NOT NULL, -- From alarm_definition table
-    probable_cause_id UUID NOT NULL, -- From alarm_definition table
+    alarm_definition_id UUID, -- From alarm_definition table
+    probable_cause_id UUID, -- From alarm_definition table
     alarm_raised_time TIMESTAMPTZ NOT NULL, -- From current alert notification
     alarm_changed_time TIMESTAMPTZ, -- From current alert notification
     alarm_cleared_time TIMESTAMPTZ, -- From current alert notification
@@ -21,9 +21,8 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     extensions JSONB, -- Additional data for extensibility
 
     -- O-RAN additional data to create AlarmEventNotification
-    resource_id UUID NOT NULL, -- Same as manager_cluster_id for caas alerts
-    resource_type_id UUID NOT NULL, -- Derived from manager_cluster_id
-    notification_event_type INT NOT NULL, -- Should be enum calculated from current alert
+    resource_id UUID, -- Same as manager_cluster_id for caas alerts
+    resource_type_id UUID, -- Derived from manager_cluster_id
 
     -- Internal
     alarm_status VARCHAR(20) DEFAULT 'firing' NOT NULL, -- Status of the alarm (either 'firing' or 'resolved'). This is also used to archive it later.

@@ -12,9 +12,9 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 		AlarmChangedTime:      aerModel.AlarmChangedTime,
 		AlarmClearedTime:      aerModel.AlarmClearedTime,
 		AlarmDefinitionId:     aerModel.AlarmDefinitionID,
-		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
+		AlarmEventRecordId:    *aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
-		PerceivedSeverity:     api.PerceivedSeverity(aerModel.PerceivedSeverity),
+		PerceivedSeverity:     aerModel.PerceivedSeverity,
 		ProbableCauseId:       aerModel.ProbableCauseID,
 		ResourceTypeID:        aerModel.ResourceTypeID,
 	}
