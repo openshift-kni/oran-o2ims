@@ -1,6 +1,10 @@
 <!-- vscode-markdown-toc -->
 # O-RAN O2IMS
 
+<!-- markdownlint-disable MD033 -->
+<a href="https://github.com/o-ran-sc/it-test/tree/master/test_scripts/O2IMS_Compliance_Test"><img src="https://img.shields.io/badge/O--RAN_SC_O2_IMS_Automated_Test_Compliance-59%25-yellow"/></a>
+<!-- markdownlint-enable MD033 -->
+
 * [Operator Deployment](#operator-deployment)
   * [Deploy the operator on your cluster](#deploy-the-operator-on-your-cluster)
   * [Update Inventory CR](#update-inventory-cr)
