@@ -13,22 +13,17 @@ import (
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
 const (
-	managedClusterVersionLabel = "openshiftVersion-major-minor"
+	managedClusterVersionLabel = "openshiftVersion"
 	localClusterLabel          = "local-cluster"
-)
-
-// TODO: create a file with the resource type names once they are defined by the Resource Server
-const (
-	resourceTypeCluster = "Cluster"
-	resourceTypeHub     = "Hub"
 )
 
 type AlarmDictionary struct {
@@ -48,47 +43,53 @@ func New(client crclient.Client, ar *repo.AlarmsRepository) *AlarmDictionary {
 }
 
 // Load loads the alarm dictionary
-func (r *AlarmDictionary) Load(ctx context.Context, resourceTypes *[]resourceserver.ResourceType) {
+func (r *AlarmDictionary) Load(ctx context.Context, nodeClusterTypes *[]clusterserver.NodeClusterType) {
 	slog.Info("loading alarm dictionaries")
 
-	if resourceTypes == nil {
-		slog.Warn("no resource types to load")
+	if nodeClusterTypes == nil {
+		slog.Warn("no node cluster types to load")
 		return
 	}
 
 	type result struct {
-		resourceTypeID uuid.UUID
-		rules          []monitoringv1.Rule
-		err            error
+		NodeClusterTypeID uuid.UUID
+		rules             []monitoringv1.Rule
+		err               error
 	}
 
 	wg := sync.WaitGroup{}
 	resultChannel := make(chan result)
-	for _, resourceType := range *resourceTypes {
+	for _, nct := range *nodeClusterTypes {
 		wg.Add(1)
-		go func(resourceType resourceserver.ResourceType) {
+		go func(nodeClusterType clusterserver.NodeClusterType) {
 			var err error
 			var rules []monitoringv1.Rule
 
 			defer func() {
-				wg.Done()
 				resultChannel <- result{
-					resourceTypeID: resourceType.ResourceTypeId,
-					rules:          rules,
-					err:            err,
+					NodeClusterTypeID: nodeClusterType.NodeClusterTypeId,
+					rules:             rules,
+					err:               err,
 				}
+				wg.Done()
 			}()
 
-			// TODO: this needs to be updated once the resource type content is defined by the Resource Server. Not expected to be this simple.
-			switch resourceType.Model {
-			case resourceTypeCluster:
-				rules, err = r.processCluster(ctx, resourceType.Version)
-			case resourceTypeHub:
+			extensions, err := getVendorExtensions(nodeClusterType)
+			if err != nil {
+				// Should never happen
+				err = fmt.Errorf("error getting vendor extensions: %w", err)
+				return
+			}
+
+			switch extensions.model {
+			case utils.ClusterModelManagedCluster:
+				rules, err = r.processManagedCluster(ctx, extensions.version)
+			case utils.ClusterModelHubCluster:
 				rules, err = r.processHub(ctx)
 			default:
-				err = fmt.Errorf("unsupported resource type: %s", resourceType.Model)
+				err = fmt.Errorf("unsupported node cluster type: %s", extensions.model)
 			}
-		}(resourceType)
+		}(nct)
 	}
 
 	go func() {
@@ -98,15 +99,15 @@ func (r *AlarmDictionary) Load(ctx context.Context, resourceTypes *[]resourceser
 
 	for res := range resultChannel {
 		if res.err != nil {
-			slog.Error("error fetching rules for resource type", "ResourceType ID", res.resourceTypeID, "error", res.err)
+			slog.Error("error fetching rules for node cluster type", "NodeClusterType ID", res.NodeClusterTypeID, "error", res.err)
 			continue
 		}
 
-		r.RulesMap[res.resourceTypeID] = res.rules
-		slog.Info("loaded rules for resource type", "ResourceType ID", res.resourceTypeID, "rules count", len(res.rules))
+		r.RulesMap[res.NodeClusterTypeID] = res.rules
+		slog.Info("loaded rules for node cluster type", "NodeClusterType ID", res.NodeClusterTypeID, "rules count", len(res.rules))
 	}
 
-	r.syncDictionaries(ctx, *resourceTypes)
+	r.syncDictionaries(ctx, *nodeClusterTypes)
 }
 
 func (r *AlarmDictionary) processHub(ctx context.Context) ([]monitoringv1.Rule, error) {
@@ -122,8 +123,8 @@ func (r *AlarmDictionary) processHub(ctx context.Context) ([]monitoringv1.Rule, 
 // Needed for testing
 var getClientForCluster = k8s.NewClientForCluster
 
-// processCluster processes a cluster resource type
-func (r *AlarmDictionary) processCluster(ctx context.Context, version string) ([]monitoringv1.Rule, error) {
+// processManagedCluster processes a managed cluster
+func (r *AlarmDictionary) processManagedCluster(ctx context.Context, version string) ([]monitoringv1.Rule, error) {
 	cluster, err := r.getManagedCluster(ctx, version)
 	if err != nil {
 		return nil, err
@@ -169,7 +170,7 @@ func (r *AlarmDictionary) getManagedCluster(ctx context.Context, version string)
 	return &managedClusters.Items[0], nil
 }
 
-// getRules gets rules defined within a PrometheusRule resource
+// getRules gets rules defined within a PrometheusRule
 func (r *AlarmDictionary) getRules(ctx context.Context, cl crclient.Client) ([]monitoringv1.Rule, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
@@ -197,13 +198,13 @@ func (r *AlarmDictionary) getRules(ctx context.Context, cl crclient.Client) ([]m
 }
 
 // syncDictionaries synchronizes the alarm dictionaries in the database
-func (r *AlarmDictionary) syncDictionaries(ctx context.Context, resourceTypes []resourceserver.ResourceType) {
+func (r *AlarmDictionary) syncDictionaries(ctx context.Context, nodeClusterTypes []clusterserver.NodeClusterType) {
 	slog.Info("synchronizing alarm dictionaries in the database")
 
-	// Delete Dictionaries that do not have a corresponding resource type
-	ids := make([]any, 0, len(resourceTypes))
-	for _, resourceType := range resourceTypes {
-		ids = append(ids, resourceType.ResourceTypeId)
+	// Delete Dictionaries that do not have a corresponding Node Cluster Type
+	ids := make([]any, 0, len(nodeClusterTypes))
+	for _, nodeClusterType := range nodeClusterTypes {
+		ids = append(ids, nodeClusterType.NodeClusterTypeId)
 	}
 
 	err := r.AlarmsRepository.DeleteAlarmDictionariesNotIn(ctx, ids)
@@ -214,39 +215,45 @@ func (r *AlarmDictionary) syncDictionaries(ctx context.Context, resourceTypes []
 	// Upsert Dictionaries and Alarms
 	// pgx.Pool is safe for concurrent use
 	var wg sync.WaitGroup
-	for _, rt := range resourceTypes {
+	for _, nct := range nodeClusterTypes {
 		wg.Add(1)
-		go func(resourceType resourceserver.ResourceType) {
+		go func(nodeClusterType clusterserver.NodeClusterType) {
 			defer wg.Done()
 
-			// Early to check in case it was not possible to collect rules for the resource type
-			if _, ok := r.RulesMap[resourceType.ResourceTypeId]; !ok {
-				slog.Error("no rules collected for resource type", "resourceTypeID", resourceType.ResourceTypeId)
+			// Early to check in case it was not possible to collect rules for the node cluster type
+			if _, ok := r.RulesMap[nodeClusterType.NodeClusterTypeId]; !ok {
+				slog.Error("no rules collected for node cluster type", "NodeClusterTypeId", nodeClusterType.NodeClusterTypeId)
+				return
+			}
+
+			extensions, err := getVendorExtensions(nodeClusterType)
+			if err != nil {
+				slog.Error("error getting vendor extensions", "error", err)
 				return
 			}
 
 			// Alarm Dictionary record
 			alarmDict := models.AlarmDictionary{
-				AlarmDictionaryVersion: resourceType.Version,
-				EntityType:             fmt.Sprintf("%s-%s", resourceType.Model, resourceType.Version),
-				Vendor:                 resourceType.Version,
-				ResourceTypeID:         resourceType.ResourceTypeId,
+				AlarmDictionaryVersion: extensions.version,
+				EntityType:             fmt.Sprintf("%s-%s", extensions.model, extensions.version),
+				Vendor:                 extensions.vendor,
+				ObjectTypeID:           nodeClusterType.NodeClusterTypeId,
 			}
 
 			// Upsert Alarm Dictionary
 			alarmDictRecords, err := r.AlarmsRepository.UpsertAlarmDictionary(ctx, alarmDict)
 			if err != nil {
-				slog.Error("error upserting alarm dictionary", "resourceTypeID", resourceType.ResourceTypeId, "error", err)
+				slog.Error("error upserting alarm dictionary", "NodeClusterTypeId", nodeClusterType.NodeClusterTypeId, "error", err)
 				return
 			}
 
 			if len(alarmDictRecords) != 1 {
 				// Should never happen
-				slog.Error("unexpected number of Alarm Dictionary records, expected 1", "resourceTypeID", resourceType.ResourceTypeId, "count", len(alarmDictRecords))
+				slog.Error("unexpected number of Alarm Dictionary records, expected 1", "NodeClusterTypeId", nodeClusterType.NodeClusterTypeId, "count", len(alarmDictRecords))
 				return
 			}
 
-			slog.Debug("alarm dictionary upserted", "resourceTypeID", resourceType.ResourceTypeId, "id", alarmDictRecords[0].AlarmDictionaryID)
+			slog.Debug("alarm dictionary upserted", "NodeClusterTypeId", nodeClusterType.NodeClusterTypeId, "id", alarmDictRecords[0].AlarmDictionaryID)
 
 			// Upsert will complain if there are rules with the same Alert and Severity
 			// We need to filter them out. First occurrence wins.
@@ -257,7 +264,7 @@ func (r *AlarmDictionary) syncDictionaries(ctx context.Context, resourceTypes []
 
 			var filteredRules []monitoringv1.Rule
 			exist := make(map[uniqueAlarm]bool)
-			for _, rule := range r.RulesMap[resourceType.ResourceTypeId] {
+			for _, rule := range r.RulesMap[nodeClusterType.NodeClusterTypeId] {
 				if !exist[uniqueAlarm{Alert: rule.Alert, Severity: rule.Labels["severity"]}] {
 					exist[uniqueAlarm{Alert: rule.Alert, Severity: rule.Labels["severity"]}] = true
 					filteredRules = append(filteredRules, rule)
@@ -292,24 +299,59 @@ func (r *AlarmDictionary) syncDictionaries(ctx context.Context, resourceTypes []
 			// Upsert Alarm Definitions
 			alarmDefinitionRecords, err := r.AlarmsRepository.UpsertAlarmDefinitions(ctx, records)
 			if err != nil {
-				slog.Error("error upserting alarm definitions", "resourceTypeID", resourceType.ResourceTypeId, "error", err)
+				slog.Error("error upserting alarm definitions", "NodeClusterTypeId", nodeClusterType.NodeClusterTypeId, "error", err)
 				return
 			}
 
-			slog.Debug("alarm definitions upserted", "resourceTypeID", resourceType.ResourceTypeId, "count", len(alarmDefinitionRecords))
+			slog.Debug("alarm definitions upserted", "NodeClusterTypeId", nodeClusterType.NodeClusterTypeId, "count", len(alarmDefinitionRecords))
 
 			// Delete Alarm Definitions that were not upserted
 			alarmDefinitionIDs := make([]any, 0, len(alarmDefinitionRecords))
 			for _, record := range alarmDefinitionRecords {
 				alarmDefinitionIDs = append(alarmDefinitionIDs, record.AlarmDefinitionID)
 			}
-			err = r.AlarmsRepository.DeleteAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs, resourceType.ResourceTypeId)
+			err = r.AlarmsRepository.DeleteAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs, nodeClusterType.NodeClusterTypeId)
 			if err != nil {
-				slog.Error("error deleting alarm definitions", "resourceTypeID", resourceType.ResourceTypeId, "error", err)
+				slog.Error("error deleting alarm definitions", "NodeClusterTypeId", nodeClusterType.NodeClusterTypeId, "error", err)
 			}
-		}(rt)
+		}(nct)
 	}
 
 	wg.Wait()
 	slog.Info("alarm dictionaries synchronized")
+}
+
+type vendorExtensions struct {
+	model   string
+	version string
+	vendor  string
+}
+
+// getVendorExtensions gets the vendor extensions from the node cluster type.
+// Should never return an error.
+func getVendorExtensions(nodeClusterType clusterserver.NodeClusterType) (*vendorExtensions, error) {
+	if nodeClusterType.Extensions == nil {
+		return nil, fmt.Errorf("no extensions found for node cluster type %d", nodeClusterType.NodeClusterTypeId)
+	}
+
+	model, ok := (*nodeClusterType.Extensions)[utils.ClusterModelExtension].(string)
+	if !ok {
+		return nil, fmt.Errorf("no model extension found for node cluster type %s", nodeClusterType.NodeClusterTypeId)
+	}
+
+	version, ok := (*nodeClusterType.Extensions)[utils.ClusterVersionExtension].(string)
+	if !ok {
+		return nil, fmt.Errorf("no version extension found for node cluster type %s", nodeClusterType.NodeClusterTypeId)
+	}
+
+	vendor, ok := (*nodeClusterType.Extensions)[utils.ClusterVendorExtension].(string)
+	if !ok {
+		return nil, fmt.Errorf("no vendor extension found for node cluster type %s", nodeClusterType.NodeClusterTypeId)
+	}
+
+	return &vendorExtensions{
+		model:   model,
+		version: version,
+		vendor:  vendor,
+	}, nil
 }

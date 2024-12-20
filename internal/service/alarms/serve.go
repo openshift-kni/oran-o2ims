@@ -17,9 +17,9 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/resourceserver"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
@@ -76,16 +76,16 @@ func Serve(config *AlarmsServerConfig) error {
 		return fmt.Errorf("error creating client for hub: %w", err)
 	}
 
-	// Initialize resource server client
-	rs, err := resourceserver.New()
+	// Initialize cluter server client
+	cs, err := clusterserver.New()
 	if err != nil {
-		return fmt.Errorf("error creating resource server client: %w", err)
+		return fmt.Errorf("error creating cluster server client: %w", err)
 	}
 
-	// Get all needed resources from the resource server
-	err = rs.GetAll(ctx)
+	// Get all needed objects from the cluster server
+	err = cs.GetAll(ctx)
 	if err != nil {
-		slog.Warn("error getting resources from the resource server", "error", err)
+		slog.Warn("error getting objects from the cluster server", "error", err)
 	}
 
 	// Init alarm repository
@@ -95,7 +95,7 @@ func Serve(config *AlarmsServerConfig) error {
 
 	// Load dictionary
 	alarmsDict := dictionary.New(hubClient, alarmRepository)
-	alarmsDict.Load(ctx, rs.ResourceTypes)
+	alarmsDict.Load(ctx, cs.NodeClusterTypes)
 
 	// TODO: Audit and Insert data database
 
@@ -115,7 +115,7 @@ func Serve(config *AlarmsServerConfig) error {
 	alarmServer := internal.AlarmsServer{
 		GlobalCloudID:    globalCloudID,
 		AlarmsRepository: alarmRepository,
-		ResourceServer:   rs,
+		ClusterServer:    cs,
 	}
 
 	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,

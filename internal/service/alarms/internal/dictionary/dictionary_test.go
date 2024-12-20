@@ -89,7 +89,7 @@ var _ = Describe("AlarmDictionary", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
-	Describe("processCluster", func() {
+	Describe("processManagedCluster", func() {
 		var (
 			r      *AlarmDictionary
 			ctx    context.Context
@@ -213,7 +213,7 @@ var _ = Describe("AlarmDictionary", func() {
 		})
 
 		It("returns prometheus rules associated with a cluster", func() {
-			rules, err := r.processCluster(ctx, version416)
+			rules, err := r.processManagedCluster(ctx, version416)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rules).To(HaveLen(2))

@@ -17,9 +17,9 @@ type AlarmDictionary struct {
 	ManagementInterfaceID        []string `db:"management_interface_id"`
 	PKNotificationField          []string `db:"pk_notification_field"`
 
-	ResourceTypeID uuid.UUID `db:"resource_type_id"`
-	CreatedAt      time.Time `db:"created_at"`
-	UpdatedAt      time.Time `db:"updated_at"`
+	ObjectTypeID uuid.UUID `db:"object_type_id"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
 }
 
 // TableName returns the name of the table in the database
@@ -34,5 +34,5 @@ func (r AlarmDictionary) PrimaryKey() string {
 
 // OnConflict returns the column or constraint to be used in the UPSERT operation
 func (r AlarmDictionary) OnConflict() string {
-	return "resource_type_id"
+	return "object_type_id"
 }

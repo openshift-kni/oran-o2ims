@@ -56,11 +56,11 @@ func (ar *AlarmsRepository) GetAlarmSubscription(ctx context.Context, id uuid.UU
 	return utils.Find[models.AlarmSubscription](ctx, ar.Db, id)
 }
 
-// DeleteAlarmDictionariesNotIn deletes all alarm dictionaries that are not in the list of resource type IDs
+// DeleteAlarmDictionariesNotIn deletes all alarm dictionaries that are not in the list of object type IDs
 func (ar *AlarmsRepository) DeleteAlarmDictionariesNotIn(ctx context.Context, ids []any) error {
-	tags := utils.GetDBTagsFromStructFields(models.AlarmDictionary{}, "ResourceTypeID")
+	tags := utils.GetDBTagsFromStructFields(models.AlarmDictionary{}, "ObjectTypeID")
 
-	expr := psql.Quote(tags["ResourceTypeID"]).NotIn(psql.Arg(ids...))
+	expr := psql.Quote(tags["ObjectTypeID"]).NotIn(psql.Arg(ids...))
 	_, err := utils.Delete[models.AlarmDictionary](ctx, ar.Db, expr)
 	return err
 }
@@ -71,11 +71,11 @@ func (ar *AlarmsRepository) GetAlarmDefinition(ctx context.Context, id uuid.UUID
 }
 
 // DeleteAlarmDefinitionsNotIn deletes all alarm definitions identified by the primary key that are not in the list of IDs.
-// The Where expression also uses the column "resource_type_id" to filter the records
-func (ar *AlarmsRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, resourceTypeID uuid.UUID) error {
-	tags := utils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "ResourceTypeID")
+// The Where expression also uses the column "object_type_id" to filter the records
+func (ar *AlarmsRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, id uuid.UUID) error {
+	tags := utils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "ObjectTypeID")
 
-	expr := psql.Quote(models.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["ResourceTypeID"]).EQ(psql.Arg(resourceTypeID)))
+	expr := psql.Quote(models.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["ObjectTypeID"]).EQ(psql.Arg(id)))
 	_, err := utils.Delete[models.AlarmDefinition](ctx, ar.Db, expr)
 	return err
 }
@@ -84,13 +84,13 @@ func (ar *AlarmsRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids
 func (ar *AlarmsRepository) UpsertAlarmDictionary(ctx context.Context, record models.AlarmDictionary) ([]models.AlarmDictionary, error) {
 	dbModel := models.AlarmDictionary{}
 
-	tags := utils.GetDBTagsFromStructFields(dbModel, "AlarmDictionaryVersion", "EntityType", "Vendor", "ResourceTypeID")
+	tags := utils.GetDBTagsFromStructFields(dbModel, "AlarmDictionaryVersion", "EntityType", "Vendor", "ObjectTypeID")
 
-	columns := []string{tags["AlarmDictionaryVersion"], tags["EntityType"], tags["Vendor"], tags["ResourceTypeID"]}
+	columns := []string{tags["AlarmDictionaryVersion"], tags["EntityType"], tags["Vendor"], tags["ObjectTypeID"]}
 
 	query := psql.Insert(
 		im.Into(record.TableName(), columns...),
-		im.Values(psql.Arg(record.AlarmDictionaryVersion, record.EntityType, record.Vendor, record.ResourceTypeID)),
+		im.Values(psql.Arg(record.AlarmDictionaryVersion, record.EntityType, record.Vendor, record.ObjectTypeID)),
 		im.OnConflict(record.OnConflict()).DoUpdate(
 			im.SetExcluded(columns...)),
 		im.Returning(record.PrimaryKey()),

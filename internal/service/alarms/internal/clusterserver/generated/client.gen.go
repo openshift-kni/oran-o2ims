@@ -22,168 +22,20 @@ import (
 	externalRef0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
-// Defines values for AlarmDefinitionAlarmChangeType.
+// Defines values for ClusterChangeNotificationNotificationEventType.
 const (
-	ADDED    AlarmDefinitionAlarmChangeType = "ADDED"
-	DELETED  AlarmDefinitionAlarmChangeType = "DELETED"
-	MODIFIED AlarmDefinitionAlarmChangeType = "MODIFIED"
+	N0 ClusterChangeNotificationNotificationEventType = 0
+	N1 ClusterChangeNotificationNotificationEventType = 1
+	N2 ClusterChangeNotificationNotificationEventType = 2
 )
 
-// Defines values for AlarmDefinitionClearingType.
-const (
-	AUTOMATIC AlarmDefinitionClearingType = "AUTOMATIC"
-	MANUAL    AlarmDefinitionClearingType = "MANUAL"
-)
-
-// Defines values for AlarmDefinitionManagementInterfaceId.
-const (
-	AlarmDefinitionManagementInterfaceIdO2IMS AlarmDefinitionManagementInterfaceId = "O2IMS"
-)
-
-// Defines values for AlarmDictionaryManagementInterfaceId.
-const (
-	AlarmDictionaryManagementInterfaceIdO2IMS AlarmDictionaryManagementInterfaceId = "O2IMS"
-)
-
-// Defines values for InventoryChangeNotificationNotificationEventType.
-const (
-	N0 InventoryChangeNotificationNotificationEventType = 0
-	N1 InventoryChangeNotificationNotificationEventType = 1
-	N2 InventoryChangeNotificationNotificationEventType = 2
-)
-
-// Defines values for ResourceTypeResourceClass.
-const (
-	ResourceTypeResourceClassCOMPUTE    ResourceTypeResourceClass = "COMPUTE"
-	ResourceTypeResourceClassNETWORKING ResourceTypeResourceClass = "NETWORKING"
-	ResourceTypeResourceClassSTORAGE    ResourceTypeResourceClass = "STORAGE"
-	ResourceTypeResourceClassUNDEFINED  ResourceTypeResourceClass = "UNDEFINED"
-)
-
-// Defines values for ResourceTypeResourceKind.
-const (
-	ResourceTypeResourceKindLOGICAL   ResourceTypeResourceKind = "LOGICAL"
-	ResourceTypeResourceKindPHYSICAL  ResourceTypeResourceKind = "PHYSICAL"
-	ResourceTypeResourceKindUNDEFINED ResourceTypeResourceKind = "UNDEFINED"
-)
-
-// AlarmDefinition Information about an alarm definition.
-type AlarmDefinition struct {
-	// AlarmAdditionalFields List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-	AlarmAdditionalFields map[string]interface{} `json:"alarmAdditionalFields"`
-
-	// AlarmChangeType Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
-	AlarmChangeType AlarmDefinitionAlarmChangeType `json:"alarmChangeType"`
-
-	// AlarmDefinitionId Provides a unique identifier of the alarm being raised. This is the Primary Key into the Alarm Dictionary
-	AlarmDefinitionId openapi_types.UUID `json:"alarmDefinitionId"`
-
-	// AlarmDescription Provides a longer descriptive meaning of the alarm condition and a description of the consequences of the
-	// alarm condition. This is intended to be read by an operator to give an idea of what happened and a sense of
-	// the effects, consequences, and other impacted areas of the system.
-	AlarmDescription string `json:"alarmDescription"`
-
-	// AlarmLastChange Indicates the Alarm Dictionary Version in which this alarm last changed.
-	AlarmLastChange string `json:"alarmLastChange"`
-
-	// AlarmName Provides short name for the alarm
-	AlarmName string `json:"alarmName"`
-
-	// ClearingType Identifies whether alarm is cleared automatically or manually.
-	ClearingType AlarmDefinitionClearingType `json:"clearingType"`
-
-	// ManagementInterfaceId List of management interface over which alarms are transmitted for this Entity Type.
-	// RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
-	ManagementInterfaceId []AlarmDefinitionManagementInterfaceId `json:"managementInterfaceId"`
-
-	// PkNotificationField Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
-	// Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
-	PkNotificationField []string `json:"pkNotificationField"`
-
-	// ProposedRepairActions Provides guidance for proposed repair actions.
-	ProposedRepairActions string `json:"proposedRepairActions"`
-}
-
-// AlarmDefinitionAlarmChangeType Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
-type AlarmDefinitionAlarmChangeType string
-
-// AlarmDefinitionClearingType Identifies whether alarm is cleared automatically or manually.
-type AlarmDefinitionClearingType string
-
-// AlarmDefinitionManagementInterfaceId defines model for AlarmDefinition.ManagementInterfaceId.
-type AlarmDefinitionManagementInterfaceId string
-
-// AlarmDictionary Information about an alarm dictionary.
-type AlarmDictionary struct {
-	AlarmDefinition []AlarmDefinition `json:"alarmDefinition"`
-
-	// AlarmDictionarySchema Version of the Alarm Dictionary Schema to which this alarm dictionary conforms.
-	AlarmDictionarySchema string `json:"alarmDictionarySchema"`
-
-	// AlarmDictionaryVersion Version of the Alarm Dictionary. Version is vendor defined such that the version of the dictionary can be
-	// associated with a specific version of the software delivery of this product.
-	AlarmDictionaryVersion string `json:"alarmDictionaryVersion"`
-
-	// EntityType O-RAN entity type emitting the alarm: This shall be unique per vendor ResourceType.model and
-	// ResourceType.version
-	EntityType string `json:"entityType"`
-
-	// ManagementInterfaceId List of management interface over which alarms are transmitted for this Entity Type.
-	// RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
-	ManagementInterfaceId []AlarmDictionaryManagementInterfaceId `json:"managementInterfaceId"`
-
-	// PkNotificationField Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
-	// Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
-	PkNotificationField []string `json:"pkNotificationField"`
-
-	// Vendor Vendor of the Entity Type to whom this Alarm Dictionary applies. This should be the same value as in the
-	// ResourceType.vendor attribute
-	Vendor string `json:"vendor"`
-}
-
-// AlarmDictionaryManagementInterfaceId defines model for AlarmDictionary.ManagementInterfaceId.
-type AlarmDictionaryManagementInterfaceId string
-
-// DeploymentManager Information about a deployment manager.
-type DeploymentManager struct {
-	// Capabilities Information about the capabilities supported by the Deployment Manager and its set of deployment management
-	// services based on the resources allocated to the Deployment Manager.
-	Capabilities map[string]string `json:"capabilities"`
-
-	// Capacity Information about the available, allocated and reserved capacity of O-Cloud Resources allocated to the
-	// Deployment Manager.
-	Capacity map[string]string `json:"capacity"`
-
-	// DeploymentManagerId Identifier for the Deployment Manager. This identifier is allocated by the O-Cloud.
-	DeploymentManagerId openapi_types.UUID `json:"deploymentManagerId"`
-
-	// Description Human readable description of the deployment manager
-	Description string `json:"description"`
-
-	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related Deployment Manager.
-	Extensions *map[string]interface{} `json:"extensions,omitempty"`
-
-	// Name Human readable description of the deployment manager
-	Name string `json:"name"`
-
-	// OCloudId Identifier for the containing O-Cloud.
-	OCloudId openapi_types.UUID `json:"oCloudId"`
-
-	// ServiceUri The fully qualified URI to a Deployment Management server for O2dms services. Since the O2dms provides
-	// multiple services, this entry is for the {apiRoot} only.
-	ServiceUri string `json:"serviceUri"`
-
-	// SupportedLocations List of globalLocationIDs that were assigned to the OCloud Site(s) which this Deployment Manager supports.
-	SupportedLocations []string `json:"supportedLocations"`
-}
-
-// InventoryChangeNotification Information about an inventory change notification
-type InventoryChangeNotification struct {
+// ClusterChangeNotification Information about an inventory change notification
+type ClusterChangeNotification struct {
 	// ConsumerSubscriptionId The value provided by the consumer in the subscription
 	ConsumerSubscriptionId *openapi_types.UUID `json:"consumerSubscriptionId,omitempty"`
 
 	// NotificationEventType One of the following values: 0 - create, 1 - modify, 2 - delete
-	NotificationEventType InventoryChangeNotificationNotificationEventType `json:"notificationEventType"`
+	NotificationEventType ClusterChangeNotificationNotificationEventType `json:"notificationEventType"`
 
 	// NotificationId A unique identifier to represent this notification event
 	NotificationId openapi_types.UUID `json:"notificationId"`
@@ -204,120 +56,102 @@ type InventoryChangeNotification struct {
 	PriorObjectState *string `json:"priorObjectState,omitempty"`
 }
 
-// InventoryChangeNotificationNotificationEventType One of the following values: 0 - create, 1 - modify, 2 - delete
-type InventoryChangeNotificationNotificationEventType int
+// ClusterChangeNotificationNotificationEventType One of the following values: 0 - create, 1 - modify, 2 - delete
+type ClusterChangeNotificationNotificationEventType int
 
-// OCloudInfo defines model for OCloudInfo.
-type OCloudInfo struct {
-	// Description Human readable description of the O-Cloud as provided by the SMO at cloud genesis.
-	Description string             `json:"description"`
-	Extensions  *map[string]string `json:"extensions,omitempty"`
+// ClusterResource Information about a Cluster Resource
+type ClusterResource struct {
+	// ArtifactResourceIds Identifiers for the artifact(s) which this resource is based on.
+	ArtifactResourceIds *[]openapi_types.UUID `json:"artifactResourceIds,omitempty"`
 
-	// GlobalCloudId Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud
-	// instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud
-	// IMS Inventory.
-	GlobalCloudId openapi_types.UUID `json:"globalCloudId"`
+	// ClusterResourceId Unique identifier for the ClusterResource instance
+	ClusterResourceId openapi_types.UUID `json:"clusterResourceId"`
 
-	// Name Human readable name of the O-Cloud as identified by the SMO at cloud genesis.
-	Name string `json:"name"`
+	// ClusterResourceTypeId Identifier for the ClusterResourceType for this resource.
+	ClusterResourceTypeId openapi_types.UUID `json:"clusterResourceTypeId"`
 
-	// OCloudId Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
-	OCloudId openapi_types.UUID `json:"oCloudId"`
-
-	// ServiceUri The URI root to all services provided by the O2ims interface. Inventory is one of these services.
-	ServiceUri string `json:"serviceUri"`
-}
-
-// Resource Information about a resource.
-type Resource struct {
-	// Description Human readable description of the resource.
+	// Description Human readable description of the cluster resource.
 	Description string `json:"description"`
 
-	// Elements The resource might be composed of smaller resources or other resource instances of a different type
-	Elements []Resource `json:"elements"`
+	// Extensions These are unspecified (not standardized) properties (keys) which are tailored extend the information
+	// provided about the Cluster Resource.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
 
-	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource.
-	Extensions map[string]string `json:"extensions"`
+	// MemberOf list of other ClusterResources which are linked together.
+	MemberOf *[]string `json:"memberOf,omitempty"`
 
-	// GlobalAssetId Identifier or serial number of the resource, if available. It is required only if the resource has been
-	// identified during its addition to the cloud as a reportable asset in the SMO inventory.
-	GlobalAssetId string `json:"globalAssetId"`
-
-	// Groups Keywords denoting groups a resource belongs to.
-	Groups []string `json:"groups"`
-
-	// ResourceId Identifier for the Resource. This identifier is allocated by the O-Cloud.
-	ResourceId     openapi_types.UUID `json:"resourceId"`
-	ResourcePoolId openapi_types.UUID `json:"resourcePoolId"`
-
-	// ResourceTypeId Identifier for the Resource Type of this resource.
-	ResourceTypeId openapi_types.UUID `json:"resourceTypeId"`
-
-	// Tags Keywords describing or classifying the resource instance
-	Tags []string `json:"tags"`
-}
-
-// ResourcePool Information about a resource pool.
-type ResourcePool struct {
-	// Description Human readable description of the resource pool.
-	Description string `json:"description"`
-
-	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
-	Extensions *map[string]string `json:"extensions,omitempty"`
-
-	// GlobalLocationId This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
-	GlobalLocationId openapi_types.UUID `json:"globalLocationId"`
-
-	// Location Information about the geographical location of the resource pool as detected by the O-Cloud.
-	Location *string `json:"location,omitempty"`
-
-	// Name Human readable name of the resource pool.
+	// Name Name of the cluster resource
 	Name string `json:"name"`
 
-	// OCloudId Identifier for the containing O-Cloud.
-	OCloudId openapi_types.UUID `json:"oCloudId"`
-
-	// ResourcePoolId Identifier for the Resource Pool in the O-Cloud instance. This identifier is allocated by the O-Cloud.
-	ResourcePoolId openapi_types.UUID `json:"resourcePoolId"`
+	// ResourceId Identifier for the inventory resource which this resource is mapped to
+	ResourceId openapi_types.UUID `json:"resourceId"`
 }
 
-// ResourceType Information about a resource type.
-type ResourceType struct {
-	AlarmDictionary map[string]interface{} `json:"alarmDictionary"`
+// ClusterResourceType Information about a Cluster Resource Type
+type ClusterResourceType struct {
+	// ClusterResourceTypeId Unique identifier for the ClusterResourceType instance
+	ClusterResourceTypeId openapi_types.UUID `json:"clusterResourceTypeId"`
 
-	// Description Human readable description of the resource type.
+	// Description Human readable description of the Cluster Resource Type.
 	Description string `json:"description"`
 
-	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-	Extensions map[string]string `json:"extensions"`
+	// Extensions These are unspecified (not standardized) properties (keys) which are tailored extend the information
+	// provided about the Cluster Resource Type.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
 
-	// Model Information about the model of the resource as defined by its provider.
-	Model string `json:"model"`
-
-	// Name Human readable name of the resource type.
+	// Name Name of the Cluster Resource Type
 	Name string `json:"name"`
-
-	// ResourceClass Functional role of the resource type within the cloud.
-	ResourceClass ResourceTypeResourceClass `json:"resourceClass"`
-
-	// ResourceKind Value describing “physicality” of the resource type.
-	ResourceKind ResourceTypeResourceKind `json:"resourceKind"`
-
-	// ResourceTypeId Identifier for the Resource Type. This identifier is allocated by the O-Cloud.
-	ResourceTypeId openapi_types.UUID `json:"resourceTypeId"`
-
-	// Vendor Provider of the Resource.
-	Vendor string `json:"vendor"`
-
-	// Version Version or generation of the resource as defined by its provider.
-	Version string `json:"version"`
 }
 
-// ResourceTypeResourceClass Functional role of the resource type within the cloud.
-type ResourceTypeResourceClass string
+// NodeCluster Information about a Node Cluster
+type NodeCluster struct {
+	// ArtifactResourceId Identifier for the template artifact which this NodeCluster is based on.
+	ArtifactResourceId openapi_types.UUID `json:"artifactResourceId"`
 
-// ResourceTypeResourceKind Value describing “physicality” of the resource type.
-type ResourceTypeResourceKind string
+	// ClientNodeClusterId Unique identifier for the NodeCluster instance assigned by the consumer who requested its creation
+	ClientNodeClusterId openapi_types.UUID `json:"clientNodeClusterId"`
+
+	// ClusterDistributionDescription Human readable text identifying the method of distribution of ClusterResources over OCloud Sites.
+	ClusterDistributionDescription string `json:"clusterDistributionDescription"`
+
+	// ClusterResourceGroups Optional list node groups that comprise the cluster resources which compose the NodeCluster
+	ClusterResourceGroups *[]openapi_types.UUID `json:"clusterResourceGroups,omitempty"`
+
+	// ClusterResourceIds The list of cluster resource identifiers that are used to construct this NodeCluster.
+	ClusterResourceIds []openapi_types.UUID `json:"clusterResourceIds"`
+
+	// Description Human readable description of the NodeCluster.
+	Description string `json:"description"`
+
+	// Extensions These are unspecified (not standardized) properties (keys) which are tailored extend the information
+	// provided about the NodeCluster.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+
+	// Name Name of the NodeCluster.
+	Name string `json:"name"`
+
+	// NodeClusterId Unique identifier for the NodeClusterType instance
+	NodeClusterId openapi_types.UUID `json:"nodeClusterId"`
+
+	// NodeClusterTypeId Identifier for the NodeClusterType that this NodeCluster is.
+	NodeClusterTypeId openapi_types.UUID `json:"nodeClusterTypeId"`
+}
+
+// NodeClusterType Information about a Node Cluster Type
+type NodeClusterType struct {
+	// Description Human readable description of the Node Cluster Type.
+	Description string `json:"description"`
+
+	// Extensions These are unspecified (not standardized) properties (keys) which are tailored extend the information
+	// provided about the Node Cluster Type.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+
+	// Name Name of the Node Cluster Type
+	Name string `json:"name"`
+
+	// NodeClusterTypeId Unique identifier for the NodeClusterType instance
+	NodeClusterTypeId openapi_types.UUID `json:"nodeClusterTypeId"`
+}
 
 // Subscription Information about an inventory subscription.
 type Subscription struct {
@@ -336,53 +170,23 @@ type Subscription struct {
 	SubscriptionId *openapi_types.UUID `json:"subscriptionId,omitempty"`
 }
 
-// DeploymentManagerId defines model for deploymentManagerId.
-type DeploymentManagerId = openapi_types.UUID
+// ClusterResourceId defines model for clusterResourceId.
+type ClusterResourceId = openapi_types.UUID
 
-// ResourceId defines model for resourceId.
-type ResourceId = openapi_types.UUID
+// ClusterResourceTypeId defines model for clusterResourceTypeId.
+type ClusterResourceTypeId = openapi_types.UUID
 
-// ResourcePoolId defines model for resourcePoolId.
-type ResourcePoolId = openapi_types.UUID
+// NodeClusterId defines model for nodeClusterId.
+type NodeClusterId = openapi_types.UUID
 
-// ResourceTypeId defines model for resourceTypeId.
-type ResourceTypeId = openapi_types.UUID
+// NodeClusterTypeId defines model for nodeClusterTypeId.
+type NodeClusterTypeId = openapi_types.UUID
 
 // SubscriptionId defines model for subscriptionId.
 type SubscriptionId = openapi_types.UUID
 
-// GetCloudInfoParams defines parameters for GetCloudInfo.
-type GetCloudInfoParams struct {
-	// ExcludeFields Comma separated list of field references to exclude from the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to exclude the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// exclude_fields=extensions/country
-	// ```
-	//
-	// When this parameter isn't used no field will be excluded.
-	//
-	// Fields in this list will be excluded even if they are explicitly included using the
-	// `fields` parameter.
-	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
-
-	// Fields Comma separated list of field references to include in the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to get the `name` field and the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// fields=name,extensions/country
-	// ```
-	//
-	// When this parameter isn't used all the fields will be returned.
-	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
-}
-
-// GetDeploymentManagersParams defines parameters for GetDeploymentManagers.
-type GetDeploymentManagersParams struct {
+// GetClusterResourceTypesParams defines parameters for GetClusterResourceTypes.
+type GetClusterResourceTypesParams struct {
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -466,38 +270,8 @@ type GetDeploymentManagersParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
-// GetDeploymentManagerParams defines parameters for GetDeploymentManager.
-type GetDeploymentManagerParams struct {
-	// ExcludeFields Comma separated list of field references to exclude from the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to exclude the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// exclude_fields=extensions/country
-	// ```
-	//
-	// When this parameter isn't used no field will be excluded.
-	//
-	// Fields in this list will be excluded even if they are explicitly included using the
-	// `fields` parameter.
-	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
-
-	// Fields Comma separated list of field references to include in the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to get the `name` field and the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// fields=name,extensions/country
-	// ```
-	//
-	// When this parameter isn't used all the fields will be returned.
-	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
-}
-
-// GetResourcePoolsParams defines parameters for GetResourcePools.
-type GetResourcePoolsParams struct {
+// GetClusterResourcesParams defines parameters for GetClusterResources.
+type GetClusterResourcesParams struct {
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -581,8 +355,8 @@ type GetResourcePoolsParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
-// GetResourcesParams defines parameters for GetResources.
-type GetResourcesParams struct {
+// GetNodeClusterTypesParams defines parameters for GetNodeClusterTypes.
+type GetNodeClusterTypesParams struct {
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -666,8 +440,8 @@ type GetResourcesParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
-// GetResourceTypesParams defines parameters for GetResourceTypes.
-type GetResourceTypesParams struct {
+// GetNodeClustersParams defines parameters for GetNodeClusters.
+type GetNodeClustersParams struct {
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -945,35 +719,32 @@ type ClientInterface interface {
 	// GetAllVersions request
 	GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetCloudInfo request
-	GetCloudInfo(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// GetMinorVersions request
 	GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetDeploymentManagers request
-	GetDeploymentManagers(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetClusterResourceTypes request
+	GetClusterResourceTypes(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetDeploymentManager request
-	GetDeploymentManager(ctx context.Context, deploymentManagerId DeploymentManagerId, params *GetDeploymentManagerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetClusterResourceType request
+	GetClusterResourceType(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetResourcePools request
-	GetResourcePools(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetClusterResources request
+	GetClusterResources(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetResourcePool request
-	GetResourcePool(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetClusterResource request
+	GetClusterResource(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetResources request
-	GetResources(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetNodeClusterTypes request
+	GetNodeClusterTypes(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetResource request
-	GetResource(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetNodeClusterType request
+	GetNodeClusterType(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetResourceTypes request
-	GetResourceTypes(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetNodeClusters request
+	GetNodeClusters(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetResourceType request
-	GetResourceType(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetNodeCluster request
+	GetNodeCluster(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSubscriptions request
 	GetSubscriptions(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1002,18 +773,6 @@ func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditor
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetCloudInfo(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetCloudInfoRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMinorVersionsRequest(c.Server)
 	if err != nil {
@@ -1026,8 +785,8 @@ func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEdit
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetDeploymentManagers(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetDeploymentManagersRequest(c.Server, params)
+func (c *Client) GetClusterResourceTypes(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterResourceTypesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1038,8 +797,8 @@ func (c *Client) GetDeploymentManagers(ctx context.Context, params *GetDeploymen
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetDeploymentManager(ctx context.Context, deploymentManagerId DeploymentManagerId, params *GetDeploymentManagerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetDeploymentManagerRequest(c.Server, deploymentManagerId, params)
+func (c *Client) GetClusterResourceType(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterResourceTypeRequest(c.Server, clusterResourceTypeId)
 	if err != nil {
 		return nil, err
 	}
@@ -1050,8 +809,8 @@ func (c *Client) GetDeploymentManager(ctx context.Context, deploymentManagerId D
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResourcePools(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourcePoolsRequest(c.Server, params)
+func (c *Client) GetClusterResources(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterResourcesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1062,8 +821,8 @@ func (c *Client) GetResourcePools(ctx context.Context, params *GetResourcePoolsP
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResourcePool(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourcePoolRequest(c.Server, resourcePoolId)
+func (c *Client) GetClusterResource(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterResourceRequest(c.Server, clusterResourceId)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,8 +833,8 @@ func (c *Client) GetResourcePool(ctx context.Context, resourcePoolId ResourcePoo
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResources(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourcesRequest(c.Server, resourcePoolId, params)
+func (c *Client) GetNodeClusterTypes(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNodeClusterTypesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1086,8 +845,8 @@ func (c *Client) GetResources(ctx context.Context, resourcePoolId ResourcePoolId
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResource(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourceRequest(c.Server, resourcePoolId, resourceId)
+func (c *Client) GetNodeClusterType(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNodeClusterTypeRequest(c.Server, nodeClusterTypeId)
 	if err != nil {
 		return nil, err
 	}
@@ -1098,8 +857,8 @@ func (c *Client) GetResource(ctx context.Context, resourcePoolId ResourcePoolId,
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResourceTypes(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourceTypesRequest(c.Server, params)
+func (c *Client) GetNodeClusters(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNodeClustersRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1110,8 +869,8 @@ func (c *Client) GetResourceTypes(ctx context.Context, params *GetResourceTypesP
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetResourceType(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourceTypeRequest(c.Server, resourceTypeId)
+func (c *Client) GetNodeCluster(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNodeClusterRequest(c.Server, nodeClusterId)
 	if err != nil {
 		return nil, err
 	}
@@ -1191,7 +950,7 @@ func NewGetAllVersionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/api_versions")
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/api_versions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1199,71 +958,6 @@ func NewGetAllVersionsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetCloudInfoRequest generates requests for GetCloudInfo
-func NewGetCloudInfoRequest(server string, params *GetCloudInfoParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.ExcludeFields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		if params.Fields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -1283,7 +977,7 @@ func NewGetMinorVersionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/api_versions")
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/api_versions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1301,8 +995,8 @@ func NewGetMinorVersionsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewGetDeploymentManagersRequest generates requests for GetDeploymentManagers
-func NewGetDeploymentManagersRequest(server string, params *GetDeploymentManagersParams) (*http.Request, error) {
+// NewGetClusterResourceTypesRequest generates requests for GetClusterResourceTypes
+func NewGetClusterResourceTypesRequest(server string, params *GetClusterResourceTypesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1310,160 +1004,7 @@ func NewGetDeploymentManagersRequest(server string, params *GetDeploymentManager
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/deploymentManagers")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.ExcludeFields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		if params.Fields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		if params.Filter != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetDeploymentManagerRequest generates requests for GetDeploymentManager
-func NewGetDeploymentManagerRequest(server string, deploymentManagerId DeploymentManagerId, params *GetDeploymentManagerParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "deploymentManagerId", runtime.ParamLocationPath, deploymentManagerId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/deploymentManagers/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.ExcludeFields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		if params.Fields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetResourcePoolsRequest generates requests for GetResourcePools
-func NewGetResourcePoolsRequest(server string, params *GetResourcePoolsParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/resourcePools")
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResourceTypes")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1535,13 +1076,13 @@ func NewGetResourcePoolsRequest(server string, params *GetResourcePoolsParams) (
 	return req, nil
 }
 
-// NewGetResourcePoolRequest generates requests for GetResourcePool
-func NewGetResourcePoolRequest(server string, resourcePoolId ResourcePoolId) (*http.Request, error) {
+// NewGetClusterResourceTypeRequest generates requests for GetClusterResourceType
+func NewGetClusterResourceTypeRequest(server string, clusterResourceTypeId ClusterResourceTypeId) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "resourcePoolId", runtime.ParamLocationPath, resourcePoolId)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "clusterResourceTypeId", runtime.ParamLocationPath, clusterResourceTypeId)
 	if err != nil {
 		return nil, err
 	}
@@ -1551,7 +1092,7 @@ func NewGetResourcePoolRequest(server string, resourcePoolId ResourcePoolId) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/resourcePools/%s", pathParam0)
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResourceTypes/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1569,137 +1110,8 @@ func NewGetResourcePoolRequest(server string, resourcePoolId ResourcePoolId) (*h
 	return req, nil
 }
 
-// NewGetResourcesRequest generates requests for GetResources
-func NewGetResourcesRequest(server string, resourcePoolId ResourcePoolId, params *GetResourcesParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "resourcePoolId", runtime.ParamLocationPath, resourcePoolId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/resourcePools/%s/resources", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.ExcludeFields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		if params.Fields != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		if params.Filter != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetResourceRequest generates requests for GetResource
-func NewGetResourceRequest(server string, resourcePoolId ResourcePoolId, resourceId ResourceId) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "resourcePoolId", runtime.ParamLocationPath, resourcePoolId)
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "resourceId", runtime.ParamLocationPath, resourceId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/resourcePools/%s/resources/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetResourceTypesRequest generates requests for GetResourceTypes
-func NewGetResourceTypesRequest(server string, params *GetResourceTypesParams) (*http.Request, error) {
+// NewGetClusterResourcesRequest generates requests for GetClusterResources
+func NewGetClusterResourcesRequest(server string, params *GetClusterResourcesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1707,7 +1119,7 @@ func NewGetResourceTypesRequest(server string, params *GetResourceTypesParams) (
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/resourceTypes")
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResources")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1779,13 +1191,13 @@ func NewGetResourceTypesRequest(server string, params *GetResourceTypesParams) (
 	return req, nil
 }
 
-// NewGetResourceTypeRequest generates requests for GetResourceType
-func NewGetResourceTypeRequest(server string, resourceTypeId ResourceTypeId) (*http.Request, error) {
+// NewGetClusterResourceRequest generates requests for GetClusterResource
+func NewGetClusterResourceRequest(server string, clusterResourceId ClusterResourceId) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "resourceTypeId", runtime.ParamLocationPath, resourceTypeId)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "clusterResourceId", runtime.ParamLocationPath, clusterResourceId)
 	if err != nil {
 		return nil, err
 	}
@@ -1795,7 +1207,237 @@ func NewGetResourceTypeRequest(server string, resourceTypeId ResourceTypeId) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/resourceTypes/%s", pathParam0)
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResources/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetNodeClusterTypesRequest generates requests for GetNodeClusterTypes
+func NewGetNodeClusterTypesRequest(server string, params *GetNodeClusterTypesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusterTypes")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.ExcludeFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Fields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Filter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetNodeClusterTypeRequest generates requests for GetNodeClusterType
+func NewGetNodeClusterTypeRequest(server string, nodeClusterTypeId NodeClusterTypeId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "nodeClusterTypeId", runtime.ParamLocationPath, nodeClusterTypeId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusterTypes/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetNodeClustersRequest generates requests for GetNodeClusters
+func NewGetNodeClustersRequest(server string, params *GetNodeClustersParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusters")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.ExcludeFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Fields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Filter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetNodeClusterRequest generates requests for GetNodeCluster
+func NewGetNodeClusterRequest(server string, nodeClusterId NodeClusterId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "nodeClusterId", runtime.ParamLocationPath, nodeClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusters/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1822,7 +1464,7 @@ func NewGetSubscriptionsRequest(server string, params *GetSubscriptionsParams) (
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions")
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1914,7 +1556,7 @@ func NewCreateSubscriptionRequestWithBody(server string, contentType string, bod
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions")
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1950,7 +1592,7 @@ func NewDeleteSubscriptionRequest(server string, subscriptionId SubscriptionId) 
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1984,7 +1626,7 @@ func NewGetSubscriptionRequest(server string, subscriptionId SubscriptionId, par
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/subscriptions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2086,35 +1728,32 @@ type ClientWithResponsesInterface interface {
 	// GetAllVersionsWithResponse request
 	GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error)
 
-	// GetCloudInfoWithResponse request
-	GetCloudInfoWithResponse(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*GetCloudInfoResponse, error)
-
 	// GetMinorVersionsWithResponse request
 	GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error)
 
-	// GetDeploymentManagersWithResponse request
-	GetDeploymentManagersWithResponse(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*GetDeploymentManagersResponse, error)
+	// GetClusterResourceTypesWithResponse request
+	GetClusterResourceTypesWithResponse(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*GetClusterResourceTypesResponse, error)
 
-	// GetDeploymentManagerWithResponse request
-	GetDeploymentManagerWithResponse(ctx context.Context, deploymentManagerId DeploymentManagerId, params *GetDeploymentManagerParams, reqEditors ...RequestEditorFn) (*GetDeploymentManagerResponse, error)
+	// GetClusterResourceTypeWithResponse request
+	GetClusterResourceTypeWithResponse(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*GetClusterResourceTypeResponse, error)
 
-	// GetResourcePoolsWithResponse request
-	GetResourcePoolsWithResponse(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error)
+	// GetClusterResourcesWithResponse request
+	GetClusterResourcesWithResponse(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*GetClusterResourcesResponse, error)
 
-	// GetResourcePoolWithResponse request
-	GetResourcePoolWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error)
+	// GetClusterResourceWithResponse request
+	GetClusterResourceWithResponse(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*GetClusterResourceResponse, error)
 
-	// GetResourcesWithResponse request
-	GetResourcesWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error)
+	// GetNodeClusterTypesWithResponse request
+	GetNodeClusterTypesWithResponse(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*GetNodeClusterTypesResponse, error)
 
-	// GetResourceWithResponse request
-	GetResourceWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*GetResourceResponse, error)
+	// GetNodeClusterTypeWithResponse request
+	GetNodeClusterTypeWithResponse(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*GetNodeClusterTypeResponse, error)
 
-	// GetResourceTypesWithResponse request
-	GetResourceTypesWithResponse(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*GetResourceTypesResponse, error)
+	// GetNodeClustersWithResponse request
+	GetNodeClustersWithResponse(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*GetNodeClustersResponse, error)
 
-	// GetResourceTypeWithResponse request
-	GetResourceTypeWithResponse(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*GetResourceTypeResponse, error)
+	// GetNodeClusterWithResponse request
+	GetNodeClusterWithResponse(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*GetNodeClusterResponse, error)
 
 	// GetSubscriptionsWithResponse request
 	GetSubscriptionsWithResponse(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error)
@@ -2155,30 +1794,6 @@ func (r GetAllVersionsResponse) StatusCode() int {
 	return 0
 }
 
-type GetCloudInfoResponse struct {
-	Body                      []byte
-	HTTPResponse              *http.Response
-	JSON200                   *OCloudInfo
-	ApplicationProblemJSON400 *externalRef0.ProblemDetails
-	ApplicationProblemJSON500 *externalRef0.ProblemDetails
-}
-
-// Status returns HTTPResponse.Status
-func (r GetCloudInfoResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetCloudInfoResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type GetMinorVersionsResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
@@ -2203,16 +1818,16 @@ func (r GetMinorVersionsResponse) StatusCode() int {
 	return 0
 }
 
-type GetDeploymentManagersResponse struct {
+type GetClusterResourceTypesResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *[]DeploymentManager
+	JSON200                   *[]ClusterResourceType
 	ApplicationProblemJSON400 *externalRef0.ProblemDetails
 	ApplicationProblemJSON500 *externalRef0.ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
-func (r GetDeploymentManagersResponse) Status() string {
+func (r GetClusterResourceTypesResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2220,24 +1835,24 @@ func (r GetDeploymentManagersResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetDeploymentManagersResponse) StatusCode() int {
+func (r GetClusterResourceTypesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetDeploymentManagerResponse struct {
+type GetClusterResourceTypeResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *DeploymentManager
+	JSON200                   *ClusterResourceType
 	ApplicationProblemJSON400 *externalRef0.ProblemDetails
 	ApplicationProblemJSON404 *externalRef0.ProblemDetails
 	ApplicationProblemJSON500 *externalRef0.ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
-func (r GetDeploymentManagerResponse) Status() string {
+func (r GetClusterResourceTypeResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2245,23 +1860,23 @@ func (r GetDeploymentManagerResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetDeploymentManagerResponse) StatusCode() int {
+func (r GetClusterResourceTypeResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetResourcePoolsResponse struct {
+type GetClusterResourcesResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *[]ResourcePool
+	JSON200                   *[]ClusterResource
 	ApplicationProblemJSON400 *externalRef0.ProblemDetails
 	ApplicationProblemJSON500 *externalRef0.ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
-func (r GetResourcePoolsResponse) Status() string {
+func (r GetClusterResourcesResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2269,49 +1884,24 @@ func (r GetResourcePoolsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetResourcePoolsResponse) StatusCode() int {
+func (r GetClusterResourcesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetResourcePoolResponse struct {
+type GetClusterResourceResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *ResourcePool
-	ApplicationProblemJSON400 *externalRef0.ProblemDetails
-	ApplicationProblemJSON404 *externalRef0.ProblemDetails
-	ApplicationProblemJSON500 *externalRef0.ProblemDetails
-}
-
-// Status returns HTTPResponse.Status
-func (r GetResourcePoolResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetResourcePoolResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetResourcesResponse struct {
-	Body                      []byte
-	HTTPResponse              *http.Response
-	JSON200                   *[]Resource
+	JSON200                   *ClusterResource
 	ApplicationProblemJSON400 *externalRef0.ProblemDetails
 	ApplicationProblemJSON404 *externalRef0.ProblemDetails
 	ApplicationProblemJSON500 *externalRef0.ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
-func (r GetResourcesResponse) Status() string {
+func (r GetClusterResourceResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2319,24 +1909,48 @@ func (r GetResourcesResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetResourcesResponse) StatusCode() int {
+func (r GetClusterResourceResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetResourceResponse struct {
+type GetNodeClusterTypesResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *Resource
+	JSON200                   *[]NodeClusterType
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetNodeClusterTypesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetNodeClusterTypesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetNodeClusterTypeResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *NodeClusterType
 	ApplicationProblemJSON400 *externalRef0.ProblemDetails
 	ApplicationProblemJSON404 *externalRef0.ProblemDetails
 	ApplicationProblemJSON500 *externalRef0.ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
-func (r GetResourceResponse) Status() string {
+func (r GetNodeClusterTypeResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2344,23 +1958,23 @@ func (r GetResourceResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetResourceResponse) StatusCode() int {
+func (r GetNodeClusterTypeResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetResourceTypesResponse struct {
+type GetNodeClustersResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *[]ResourceType
+	JSON200                   *[]NodeCluster
 	ApplicationProblemJSON400 *externalRef0.ProblemDetails
 	ApplicationProblemJSON500 *externalRef0.ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
-func (r GetResourceTypesResponse) Status() string {
+func (r GetNodeClustersResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2368,24 +1982,24 @@ func (r GetResourceTypesResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetResourceTypesResponse) StatusCode() int {
+func (r GetNodeClustersResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetResourceTypeResponse struct {
+type GetNodeClusterResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *ResourceType
+	JSON200                   *NodeCluster
 	ApplicationProblemJSON400 *externalRef0.ProblemDetails
 	ApplicationProblemJSON404 *externalRef0.ProblemDetails
 	ApplicationProblemJSON500 *externalRef0.ProblemDetails
 }
 
 // Status returns HTTPResponse.Status
-func (r GetResourceTypeResponse) Status() string {
+func (r GetNodeClusterResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2393,7 +2007,7 @@ func (r GetResourceTypeResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetResourceTypeResponse) StatusCode() int {
+func (r GetNodeClusterResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2505,15 +2119,6 @@ func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, re
 	return ParseGetAllVersionsResponse(rsp)
 }
 
-// GetCloudInfoWithResponse request returning *GetCloudInfoResponse
-func (c *ClientWithResponses) GetCloudInfoWithResponse(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*GetCloudInfoResponse, error) {
-	rsp, err := c.GetCloudInfo(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetCloudInfoResponse(rsp)
-}
-
 // GetMinorVersionsWithResponse request returning *GetMinorVersionsResponse
 func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error) {
 	rsp, err := c.GetMinorVersions(ctx, reqEditors...)
@@ -2523,76 +2128,76 @@ func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, 
 	return ParseGetMinorVersionsResponse(rsp)
 }
 
-// GetDeploymentManagersWithResponse request returning *GetDeploymentManagersResponse
-func (c *ClientWithResponses) GetDeploymentManagersWithResponse(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*GetDeploymentManagersResponse, error) {
-	rsp, err := c.GetDeploymentManagers(ctx, params, reqEditors...)
+// GetClusterResourceTypesWithResponse request returning *GetClusterResourceTypesResponse
+func (c *ClientWithResponses) GetClusterResourceTypesWithResponse(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*GetClusterResourceTypesResponse, error) {
+	rsp, err := c.GetClusterResourceTypes(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetDeploymentManagersResponse(rsp)
+	return ParseGetClusterResourceTypesResponse(rsp)
 }
 
-// GetDeploymentManagerWithResponse request returning *GetDeploymentManagerResponse
-func (c *ClientWithResponses) GetDeploymentManagerWithResponse(ctx context.Context, deploymentManagerId DeploymentManagerId, params *GetDeploymentManagerParams, reqEditors ...RequestEditorFn) (*GetDeploymentManagerResponse, error) {
-	rsp, err := c.GetDeploymentManager(ctx, deploymentManagerId, params, reqEditors...)
+// GetClusterResourceTypeWithResponse request returning *GetClusterResourceTypeResponse
+func (c *ClientWithResponses) GetClusterResourceTypeWithResponse(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*GetClusterResourceTypeResponse, error) {
+	rsp, err := c.GetClusterResourceType(ctx, clusterResourceTypeId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetDeploymentManagerResponse(rsp)
+	return ParseGetClusterResourceTypeResponse(rsp)
 }
 
-// GetResourcePoolsWithResponse request returning *GetResourcePoolsResponse
-func (c *ClientWithResponses) GetResourcePoolsWithResponse(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error) {
-	rsp, err := c.GetResourcePools(ctx, params, reqEditors...)
+// GetClusterResourcesWithResponse request returning *GetClusterResourcesResponse
+func (c *ClientWithResponses) GetClusterResourcesWithResponse(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*GetClusterResourcesResponse, error) {
+	rsp, err := c.GetClusterResources(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetResourcePoolsResponse(rsp)
+	return ParseGetClusterResourcesResponse(rsp)
 }
 
-// GetResourcePoolWithResponse request returning *GetResourcePoolResponse
-func (c *ClientWithResponses) GetResourcePoolWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error) {
-	rsp, err := c.GetResourcePool(ctx, resourcePoolId, reqEditors...)
+// GetClusterResourceWithResponse request returning *GetClusterResourceResponse
+func (c *ClientWithResponses) GetClusterResourceWithResponse(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*GetClusterResourceResponse, error) {
+	rsp, err := c.GetClusterResource(ctx, clusterResourceId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetResourcePoolResponse(rsp)
+	return ParseGetClusterResourceResponse(rsp)
 }
 
-// GetResourcesWithResponse request returning *GetResourcesResponse
-func (c *ClientWithResponses) GetResourcesWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error) {
-	rsp, err := c.GetResources(ctx, resourcePoolId, params, reqEditors...)
+// GetNodeClusterTypesWithResponse request returning *GetNodeClusterTypesResponse
+func (c *ClientWithResponses) GetNodeClusterTypesWithResponse(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*GetNodeClusterTypesResponse, error) {
+	rsp, err := c.GetNodeClusterTypes(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetResourcesResponse(rsp)
+	return ParseGetNodeClusterTypesResponse(rsp)
 }
 
-// GetResourceWithResponse request returning *GetResourceResponse
-func (c *ClientWithResponses) GetResourceWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*GetResourceResponse, error) {
-	rsp, err := c.GetResource(ctx, resourcePoolId, resourceId, reqEditors...)
+// GetNodeClusterTypeWithResponse request returning *GetNodeClusterTypeResponse
+func (c *ClientWithResponses) GetNodeClusterTypeWithResponse(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*GetNodeClusterTypeResponse, error) {
+	rsp, err := c.GetNodeClusterType(ctx, nodeClusterTypeId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetResourceResponse(rsp)
+	return ParseGetNodeClusterTypeResponse(rsp)
 }
 
-// GetResourceTypesWithResponse request returning *GetResourceTypesResponse
-func (c *ClientWithResponses) GetResourceTypesWithResponse(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*GetResourceTypesResponse, error) {
-	rsp, err := c.GetResourceTypes(ctx, params, reqEditors...)
+// GetNodeClustersWithResponse request returning *GetNodeClustersResponse
+func (c *ClientWithResponses) GetNodeClustersWithResponse(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*GetNodeClustersResponse, error) {
+	rsp, err := c.GetNodeClusters(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetResourceTypesResponse(rsp)
+	return ParseGetNodeClustersResponse(rsp)
 }
 
-// GetResourceTypeWithResponse request returning *GetResourceTypeResponse
-func (c *ClientWithResponses) GetResourceTypeWithResponse(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*GetResourceTypeResponse, error) {
-	rsp, err := c.GetResourceType(ctx, resourceTypeId, reqEditors...)
+// GetNodeClusterWithResponse request returning *GetNodeClusterResponse
+func (c *ClientWithResponses) GetNodeClusterWithResponse(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*GetNodeClusterResponse, error) {
+	rsp, err := c.GetNodeCluster(ctx, nodeClusterId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetResourceTypeResponse(rsp)
+	return ParseGetNodeClusterResponse(rsp)
 }
 
 // GetSubscriptionsWithResponse request returning *GetSubscriptionsResponse
@@ -2679,46 +2284,6 @@ func ParseGetAllVersionsResponse(rsp *http.Response) (*GetAllVersionsResponse, e
 	return response, nil
 }
 
-// ParseGetCloudInfoResponse parses an HTTP response from a GetCloudInfoWithResponse call
-func ParseGetCloudInfoResponse(rsp *http.Response) (*GetCloudInfoResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetCloudInfoResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OCloudInfo
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest externalRef0.ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest externalRef0.ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseGetMinorVersionsResponse parses an HTTP response from a GetMinorVersionsWithResponse call
 func ParseGetMinorVersionsResponse(rsp *http.Response) (*GetMinorVersionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2759,22 +2324,22 @@ func ParseGetMinorVersionsResponse(rsp *http.Response) (*GetMinorVersionsRespons
 	return response, nil
 }
 
-// ParseGetDeploymentManagersResponse parses an HTTP response from a GetDeploymentManagersWithResponse call
-func ParseGetDeploymentManagersResponse(rsp *http.Response) (*GetDeploymentManagersResponse, error) {
+// ParseGetClusterResourceTypesResponse parses an HTTP response from a GetClusterResourceTypesWithResponse call
+func ParseGetClusterResourceTypesResponse(rsp *http.Response) (*GetClusterResourceTypesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetDeploymentManagersResponse{
+	response := &GetClusterResourceTypesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []DeploymentManager
+		var dest []ClusterResourceType
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2799,109 +2364,22 @@ func ParseGetDeploymentManagersResponse(rsp *http.Response) (*GetDeploymentManag
 	return response, nil
 }
 
-// ParseGetDeploymentManagerResponse parses an HTTP response from a GetDeploymentManagerWithResponse call
-func ParseGetDeploymentManagerResponse(rsp *http.Response) (*GetDeploymentManagerResponse, error) {
+// ParseGetClusterResourceTypeResponse parses an HTTP response from a GetClusterResourceTypeWithResponse call
+func ParseGetClusterResourceTypeResponse(rsp *http.Response) (*GetClusterResourceTypeResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetDeploymentManagerResponse{
+	response := &GetClusterResourceTypeResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest DeploymentManager
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest externalRef0.ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest externalRef0.ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest externalRef0.ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetResourcePoolsResponse parses an HTTP response from a GetResourcePoolsWithResponse call
-func ParseGetResourcePoolsResponse(rsp *http.Response) (*GetResourcePoolsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetResourcePoolsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []ResourcePool
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest externalRef0.ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest externalRef0.ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetResourcePoolResponse parses an HTTP response from a GetResourcePoolWithResponse call
-func ParseGetResourcePoolResponse(rsp *http.Response) (*GetResourcePoolResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetResourcePoolResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ResourcePool
+		var dest ClusterResourceType
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2933,22 +2411,62 @@ func ParseGetResourcePoolResponse(rsp *http.Response) (*GetResourcePoolResponse,
 	return response, nil
 }
 
-// ParseGetResourcesResponse parses an HTTP response from a GetResourcesWithResponse call
-func ParseGetResourcesResponse(rsp *http.Response) (*GetResourcesResponse, error) {
+// ParseGetClusterResourcesResponse parses an HTTP response from a GetClusterResourcesWithResponse call
+func ParseGetClusterResourcesResponse(rsp *http.Response) (*GetClusterResourcesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetResourcesResponse{
+	response := &GetClusterResourcesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []Resource
+		var dest []ClusterResource
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetClusterResourceResponse parses an HTTP response from a GetClusterResourceWithResponse call
+func ParseGetClusterResourceResponse(rsp *http.Response) (*GetClusterResourceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterResourceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterResource
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2980,22 +2498,62 @@ func ParseGetResourcesResponse(rsp *http.Response) (*GetResourcesResponse, error
 	return response, nil
 }
 
-// ParseGetResourceResponse parses an HTTP response from a GetResourceWithResponse call
-func ParseGetResourceResponse(rsp *http.Response) (*GetResourceResponse, error) {
+// ParseGetNodeClusterTypesResponse parses an HTTP response from a GetNodeClusterTypesWithResponse call
+func ParseGetNodeClusterTypesResponse(rsp *http.Response) (*GetNodeClusterTypesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetResourceResponse{
+	response := &GetNodeClusterTypesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Resource
+		var dest []NodeClusterType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetNodeClusterTypeResponse parses an HTTP response from a GetNodeClusterTypeWithResponse call
+func ParseGetNodeClusterTypeResponse(rsp *http.Response) (*GetNodeClusterTypeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetNodeClusterTypeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NodeClusterType
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -3027,22 +2585,22 @@ func ParseGetResourceResponse(rsp *http.Response) (*GetResourceResponse, error) 
 	return response, nil
 }
 
-// ParseGetResourceTypesResponse parses an HTTP response from a GetResourceTypesWithResponse call
-func ParseGetResourceTypesResponse(rsp *http.Response) (*GetResourceTypesResponse, error) {
+// ParseGetNodeClustersResponse parses an HTTP response from a GetNodeClustersWithResponse call
+func ParseGetNodeClustersResponse(rsp *http.Response) (*GetNodeClustersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetResourceTypesResponse{
+	response := &GetNodeClustersResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []ResourceType
+		var dest []NodeCluster
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -3067,22 +2625,22 @@ func ParseGetResourceTypesResponse(rsp *http.Response) (*GetResourceTypesRespons
 	return response, nil
 }
 
-// ParseGetResourceTypeResponse parses an HTTP response from a GetResourceTypeWithResponse call
-func ParseGetResourceTypeResponse(rsp *http.Response) (*GetResourceTypeResponse, error) {
+// ParseGetNodeClusterResponse parses an HTTP response from a GetNodeClusterWithResponse call
+func ParseGetNodeClusterResponse(rsp *http.Response) (*GetNodeClusterResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetResourceTypeResponse{
+	response := &GetNodeClusterResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ResourceType
+		var dest NodeCluster
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -3277,110 +2835,76 @@ func ParseGetSubscriptionResponse(rsp *http.Response) (*GetSubscriptionResponse,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"wxx/nHo7Ym46Mvo9/W8AAAD//4SDsjNLiwAA",
+	"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",
+	"+f8DAAD///e3tc6iaAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
