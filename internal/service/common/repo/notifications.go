@@ -16,11 +16,11 @@ var _ notifier.NotificationProvider = (*NotificationStorageProvider)(nil)
 // NotificationStorageProvider implements the NotificationProvider interface as a means to abstract the concrete
 // notification type out of the Notifier
 type NotificationStorageProvider struct {
-	repository *ResourcesRepository
+	repository *CommonRepository
 }
 
 // NewNotificationStorageProvider creates a new NotificationProvider
-func NewNotificationStorageProvider(repository *ResourcesRepository) notifier.NotificationProvider {
+func NewNotificationStorageProvider(repository *CommonRepository) notifier.NotificationProvider {
 	return &NotificationStorageProvider{
 		repository: repository,
 	}

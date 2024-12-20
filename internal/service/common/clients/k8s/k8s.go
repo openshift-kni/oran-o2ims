@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agentv1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,6 +51,7 @@ func GetSchemeForHub() *runtime.Scheme {
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta2.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+	utilruntime.Must(agentv1beta1.AddToScheme(scheme))
 
 	return scheme
 }

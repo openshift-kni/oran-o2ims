@@ -120,6 +120,13 @@ type ResourceServerConfig struct {
 	Extensions []string `json:"extensions,omitempty"`
 }
 
+// ClusterServerConfig contains the configuration for the cluster server.
+type ClusterServerConfig struct {
+	//+kubebuilder:default:={enabled:true}
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:bool"}
+	ServerConfig `json:",inline"`
+}
+
 // AlarmServerConfig contains the configuration for the alarm server.
 type AlarmServerConfig struct {
 	//+kubebuilder:default:={enabled:true}
@@ -148,6 +155,10 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	ResourceServerConfig ResourceServerConfig `json:"resourceServerConfig,omitempty"`
+	// ClusterServerConfig contains the configuration for the resource server.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ClusterServerConfig ClusterServerConfig `json:"clusterServerConfig,omitempty"`
 	// AlarmServerConfig contains the configuration for the alarm server.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Alarm Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}

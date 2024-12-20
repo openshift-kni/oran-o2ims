@@ -14,6 +14,7 @@ const (
 	InventoryDeploymentManager = "deployment-manager"
 	InventoryResource          = "resource"
 	InventoryAlarms            = "alarms"
+	InventoryCluster           = "cluster"
 )
 
 // Suffix for server names
@@ -26,6 +27,7 @@ const (
 	InventoryDeploymentManagerServerName = InventoryDeploymentManager + serverSuffix
 	InventoryResourceServerName          = InventoryResource + serverSuffix
 	InventoryAlarmServerName             = InventoryAlarms + serverSuffix
+	InventoryClusterServerName           = InventoryCluster + serverSuffix
 )
 
 // InventoryIngressName the name of our Ingress controller instance
@@ -63,6 +65,11 @@ var (
 		"resource-server",
 		"--log-level=debug",
 		"--log-file=stdout",
+		"--api-listener-address=127.0.0.1:8000",
+	}
+	ClusterServerArgs = []string{
+		"cluster-server",
+		"serve",
 		"--api-listener-address=127.0.0.1:8000",
 	}
 )
@@ -241,6 +248,7 @@ const (
 	AdminPasswordEnvName     = "POSTGRESQL_ADMIN_PASSWORD"     // nolint: gosec
 	AlarmsPasswordEnvName    = "ORAN_O2IMS_ALARMS_PASSWORD"    // nolint: gosec
 	ResourcesPasswordEnvName = "ORAN_O2IMS_RESOURCES_PASSWORD" // nolint: gosec
+	ClustersPasswordEnvName  = "ORAN_O2IMS_CLUSTERS_PASSWORD"  // nolint: gosec
 
 	DatabaseHostnameEnvVar = "POSTGRES_HOSTNAME"
 )
