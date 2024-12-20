@@ -20,6 +20,7 @@ import (
 const vendorLabelName = "vendor"
 const openshiftVersionLabelName = "openshiftVersion"
 const clusterIDLabelName = "clusterID"
+const localClusterLabelName = "local-cluster"
 
 // Interface compile enforcement
 var _ DataSource = (*K8SDataSource)(nil)
@@ -132,15 +133,26 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 	// We know these extensions exist because we checked when we processed the NodeCluster
 	vendor := (*extensions)[vendorLabelName].(string)
 	version := (*extensions)[openshiftVersionLabelName].(string)
+	clusterType := (*extensions)[utils.ClusterModelExtension].(string)
 
-	resourceTypeName := d.makeNodeClusterTypeName(vendor, version)
+	resourceTypeName := d.makeNodeClusterTypeName(clusterType, vendor, version)
 	resourceTypeID := utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, resourceTypeName)
+
+	// We expect that the standard will eventually evolve to contain more attributes to align more
+	// closely with how ResourceType was defined, but for now we'll add some additional info as
+	// extensions so that they are known to clients.  These will be used by the alarm code to build
+	// the dictionary.
+	typeExtensions := map[string]interface{}{
+		utils.ClusterVendorExtension:  vendor,
+		utils.ClusterVersionExtension: version,
+		utils.ClusterModelExtension:   clusterType,
+	}
 
 	result := models.NodeClusterType{
 		NodeClusterTypeID: resourceTypeID,
 		Name:              resourceTypeName,
 		Description:       resourceTypeName,
-		Extensions:        nil,
+		Extensions:        &typeExtensions,
 		DataSourceID:      d.dataSourceID,
 		GenerationID:      d.generationID,
 	}
@@ -230,14 +242,14 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) mode
 }
 
 // makeNodeClusterTypeName builds a descriptive string to represent the node cluster type
-func (d *K8SDataSource) makeNodeClusterTypeName(vendor, version string) string {
-	return fmt.Sprintf("%s-%s", vendor, version)
+func (d *K8SDataSource) makeNodeClusterTypeName(clusterType, vendor, version string) string {
+	return fmt.Sprintf("%s-%s-%s", clusterType, vendor, version)
 }
 
 // makeClusterResourceTypeID builds a UUID value for this resource type based on its name so that it has
 // a consistent value each time it is created.
-func (d *K8SDataSource) makeNodeClusterTypeID(vendor, version string) uuid.UUID {
-	return utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, d.makeNodeClusterTypeName(vendor, version))
+func (d *K8SDataSource) makeNodeClusterTypeID(clusterType, vendor, version string) uuid.UUID {
+	return utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, d.makeNodeClusterTypeName(clusterType, vendor, version))
 }
 
 // getExtensionsFromLabels converts a label map to an extensions map
@@ -270,6 +282,18 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster v1.ManagedClu
 		return models.NodeCluster{}, fmt.Errorf("no '%s' found on cluster %s", clusterIDLabelName, cluster.Name)
 	}
 
+	// Determine the cluster type so we can differentiate between a hub and a managed cluster
+	clusterType := utils.ClusterModelManagedCluster
+	if value, found := cluster.Labels[localClusterLabelName]; found {
+		localCluster, err := strconv.ParseBool(value)
+		if err != nil {
+			return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' value as boolean: %w", localClusterLabelName, err)
+		}
+		if localCluster {
+			clusterType = utils.ClusterModelHubCluster
+		}
+	}
+
 	// Use the cluster ID label to facilitate mapping to alarms and possibly other entities
 	resourceID, err := uuid.Parse(clusterID)
 	if err != nil {
@@ -277,10 +301,13 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster v1.ManagedClu
 	}
 
 	// For now continue to generate UUID values based on the string values assigned
-	resourceTypeID := d.makeNodeClusterTypeID(vendor, version)
+	resourceTypeID := d.makeNodeClusterTypeID(clusterType, vendor, version)
 
 	// Until we know which extensions we want to expose we'll just publish all labels
 	extensions := d.getExtensionsFromLabels(cluster.Labels)
+
+	// Add the cluster type so that clients don't have to depend on the local-cluster bool
+	extensions[utils.ClusterModelExtension] = clusterType
 
 	to := models.NodeCluster{
 		NodeClusterID:                  resourceID,
