@@ -253,6 +253,16 @@ const (
 	DatabaseHostnameEnvVar = "POSTGRES_HOSTNAME"
 )
 
+// NodeCluster/ClusterResource extensions
+const (
+	ClusterModelExtension   = "model"
+	ClusterVersionExtension = "version"
+	ClusterVendorExtension  = "vendor"
+
+	ClusterModelHubCluster     = "hub-cluster"
+	ClusterModelManagedCluster = "managed-cluster"
+)
+
 // Alertmanager values
 const (
 	AlertmanagerObjectName = "alertmanager"
