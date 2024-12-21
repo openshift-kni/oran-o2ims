@@ -21,7 +21,7 @@ type AlarmDefinition struct {
 	AlarmAdditionalFields map[string]string `db:"alarm_additional_fields"`
 
 	AlarmDictionaryID uuid.UUID `db:"alarm_dictionary_id"`
-	ResourceTypeID    uuid.UUID `db:"resource_type_id"`
+	ObjectTypeID      uuid.UUID `db:"object_type_id"`
 	ProbableCauseID   uuid.UUID `db:"probable_cause_id"`
 	Severity          string    `db:"severity"`
 

@@ -433,7 +433,7 @@ markdownlint: markdownlint-image  ## run the markdown linter
 
 .PHNOY: alarms
 alarms: ##Run full alarms stack
-	IMG=$(IMAGE_TAG_BASE):latest make bundle deploy clean-am-service connect-postgres connect-resource-server run-alarms-migrate create-am-service run-alarms
+	IMG=$(IMAGE_TAG_BASE):latest make bundle deploy clean-am-service connect-postgres connect-cluster-server run-alarms-migrate create-am-service run-alarms
 
 create-am-service: ##Creates alarm manager service and endpoint to expose a DNS entry.
 	oc apply -k ./internal/service/alarms/k8s/base --wait=true
@@ -462,7 +462,7 @@ connect-postgres: ##Connect to O-RAN postgres
 	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace oran-o2ims"
 	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &
 
-.PHONY: connect-resource-server
-connect-resource-server: ##Connect to resource server svc
-	@echo "Starting port-forward in background on port 8001:8000 to resource server svc in namespace oran-o2ims"
-	nohup oc port-forward --address localhost svc/resource-server 8001:8000 -n oran-o2ims > pgproxy_resource.log 2>&1 &
+.PHONY: connect-cluster-server
+connect-cluster-server: ##Connect to resource server svc
+	@echo "Starting port-forward in background on port 8001:8000 to cluster server svc in namespace oran-o2ims"
+	nohup oc port-forward --address localhost svc/cluster-server 8001:8000 -n oran-o2ims > pgproxy_resource.log 2>&1 &

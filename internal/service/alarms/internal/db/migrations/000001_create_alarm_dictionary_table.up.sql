@@ -1,16 +1,16 @@
--- Holds information about each unique resource type and its associated dictionary details
+-- Holds information about each unique object type (ResourceType or NodeClusterType) and its associated dictionary details
 CREATE TABLE IF NOT EXISTS alarm_dictionary (
     -- O-RAN
     alarm_dictionary_version VARCHAR(50) NOT NULL, -- Version of the alarm dictionary, potentially in major.minor format
     alarm_dictionary_schema_version VARCHAR(50) DEFAULT 'TBD-O-RAN-DEFINED' NOT NULL, -- Schema version, defaulted to TBD-O-RAN-DEFINED
-    entity_type VARCHAR(255) NOT NULL, -- Combination of ResourceType.model and ResourceType.version
-    vendor VARCHAR(255) NOT NULL, -- ResourceType.vendor field
+    entity_type VARCHAR(255) NOT NULL, -- Combination of objectType.model and objectType.version
+    vendor VARCHAR(255) NOT NULL, -- objectType.vendor field
     management_interface_id VARCHAR(50)[] DEFAULT ARRAY['O2IMS']::VARCHAR[], -- Management interfaces, defaults to o2ims
     pk_notification_field TEXT[] DEFAULT ARRAY['alarm_dictionary_id']::TEXT[], -- Primary key notification field, defaults to alarm_dictionary_id
 
     -- Internal
     alarm_dictionary_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique identifier for each alarm dictionary
-    resource_type_id UUID NOT NULL UNIQUE, -- One-to-one relation between a resourceType and alarmDictionary
+    object_type_id UUID NOT NULL UNIQUE, -- One-to-one relation between a object type (ResourceType or NodeClusterType) and alarmDictionary
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record creation timestamp
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP -- Record last update timestamp
 );

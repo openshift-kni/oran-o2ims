@@ -10,17 +10,12 @@ rules:
   - create
   - post
 - nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/clusterResourceTypes
-  verbs:
-  - get
-  - list
-- nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes
   verbs:
   - get
   - list
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v1/resourceTypes
+  - /o2ims-infrastructureCluster/v1/nodeClusters
   verbs:
   - get
   - list
