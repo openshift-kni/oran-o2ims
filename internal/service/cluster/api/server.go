@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
 	api "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
@@ -165,9 +167,26 @@ func (r *ClusterServer) GetNodeClusters(ctx context.Context, request api.GetNode
 		return nil, fmt.Errorf("failed to get node clusters: %w", err)
 	}
 
+	// Retrieve the list of ClusterResourceID values per NodeCluster in one query so that we don't have to look it up
+	// on a per NodeCluster basis.
+	nodeClusterResourceIDs, err := r.Repo.GetNodeClusterResourceIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node cluster resource ids: %w", err)
+	}
+
+	// Store them in a map so they are easier to access for the next operation.
+	mapper := make(map[uuid.UUID][]uuid.UUID)
+	for _, entry := range nodeClusterResourceIDs {
+		mapper[entry.NodeClusterID] = entry.ClusterResourceIDs
+	}
+
 	objects := make([]api.NodeCluster, len(records))
 	for i, record := range records {
-		objects[i] = models.NodeClusterToModel(&record)
+		clusterResourceIDs, found := mapper[record.NodeClusterID]
+		if !found {
+			clusterResourceIDs = make([]uuid.UUID, 0)
+		}
+		objects[i] = models.NodeClusterToModel(&record, clusterResourceIDs)
 	}
 
 	return api.GetNodeClusters200JSONResponse(objects), nil
@@ -194,7 +213,17 @@ func (r *ClusterServer) GetNodeCluster(ctx context.Context, request api.GetNodeC
 		}, nil
 	}
 
-	object := models.NodeClusterToModel(record)
+	resources, err := r.Repo.GetNodeClusterResources(ctx, record.NodeClusterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node cluster resources: %w", err)
+	}
+
+	ids := make([]uuid.UUID, len(resources))
+	for i, resource := range resources {
+		ids[i] = resource.ClusterResourceID
+	}
+
+	object := models.NodeClusterToModel(record, ids)
 	return api.GetNodeCluster200JSONResponse(object), nil
 }
 

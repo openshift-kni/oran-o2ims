@@ -18,6 +18,10 @@ import (
 
 const pollingDelay = 10 * time.Minute
 
+// clusterNameExtension represents a mandatory extension that data sources must add to ClusterResource objects to
+// identify their parent NodeCluster.
+const clusterNameExtension = "clusterName"
+
 // DataSource represents the operations required to be supported by any objects implementing a
 // data collection backend.
 type DataSource interface {
@@ -27,7 +31,7 @@ type DataSource interface {
 	GetGenerationID() int
 	IncrGenerationID() int
 	GetNodeClusters(ctx context.Context) ([]models.NodeCluster, error)
-	GetClusterResources(ctx context.Context, pools []models.NodeCluster) ([]models.ClusterResource, error)
+	GetClusterResources(ctx context.Context, clusters []models.NodeCluster) ([]models.ClusterResource, error)
 	MakeNodeClusterType(resource *models.NodeCluster) (*models.NodeClusterType, error)
 	MakeClusterResourceType(resource *models.ClusterResource) (*models.ClusterResourceType, error)
 }
@@ -157,12 +161,18 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 // collectClusterResources collects ClusterResource objects from the data source, persists them to
 // the database, and signals any change events to the notification processor.
 func (c *Collector) collectClusterResources(ctx context.Context, dataSource DataSource,
-	pools []models.NodeCluster) ([]models.ClusterResource, error) {
+	clusters []models.NodeCluster) ([]models.ClusterResource, error) {
 	slog.Debug("collecting cluster resources and types", "source", dataSource.Name())
 
-	resources, err := dataSource.GetClusterResources(ctx, pools)
+	resources, err := dataSource.GetClusterResources(ctx, clusters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
+	}
+
+	// Build a mapping from name to id for clusters so that we can more easily access id values
+	clusterNameToID := make(map[string]uuid.UUID)
+	for _, cluster := range clusters {
+		clusterNameToID[cluster.Name] = cluster.NodeClusterID
 	}
 
 	// Loop over the set of cluster resources and create the associated cluster resource types.
@@ -195,6 +205,13 @@ func (c *Collector) collectClusterResources(ctx context.Context, dataSource Data
 
 	// Loop over the set of cluster resources and insert (or update) as needed
 	for _, resource := range resources {
+		// Set the cluster ID since the data source doesn't have access to this info
+		if resource.Extensions != nil {
+			clusterName := (*resource.Extensions)[clusterNameExtension].(string)
+			resource.NodeClusterID = clusterNameToID[clusterName]
+			delete(*resource.Extensions, clusterNameExtension)
+		}
+
 		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
 			ctx, c.repository.Db, resource, resource.ClusterResourceID, nil, func(object interface{}) any {
 				record, _ := object.(models.ClusterResource)
@@ -250,12 +267,12 @@ func (c *Collector) collectNodeClusters(ctx context.Context, dataSource DataSour
 		}
 	}
 
-	// Loop over the set of node cluster  and insert (or update) as needed
+	// Loop over the set of node cluster and insert (or update) as needed
 	for _, cluster := range clusters {
 		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, cluster, cluster.NodeClusterID, &cluster.NodeClusterID, func(object interface{}) any {
+			ctx, c.repository.Db, cluster, cluster.NodeClusterID, nil, func(object interface{}) any {
 				record, _ := object.(models.NodeCluster)
-				return models.NodeClusterToModel(&record)
+				return models.NodeClusterToModel(&record, nil)
 			})
 		if err != nil {
 			return nil, fmt.Errorf("failed to persist node cluster: %w", err)

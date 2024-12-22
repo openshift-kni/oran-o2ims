@@ -205,6 +205,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) mode
 	resourceTypeID := d.makeClusterResourceTypeID(architecture, strconv.FormatInt(cores, 10))
 
 	extensions := map[string]interface{}{
+		clusterNameExtension: agent.Spec.ClusterDeploymentName.Name,
 		"cpu": map[string]string{
 			"cores":        strconv.FormatInt(cores, 10),
 			"architecture": architecture,
@@ -222,6 +223,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) mode
 		// TODO: add more info for disks, nics, etc...
 	}
 
+	// NodeClusterID is filled in by the caller since it has to convert the cluster name to an id.
 	return models.ClusterResource{
 		ClusterResourceID:     resourceID,
 		ClusterResourceTypeID: resourceTypeID,
