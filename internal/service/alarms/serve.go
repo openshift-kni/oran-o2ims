@@ -11,21 +11,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary_definition"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary_collector"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/notifier_provider"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
@@ -48,6 +44,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	go func() {
 		sig := <-shutdown
@@ -70,10 +67,10 @@ func Serve(config *api.AlarmsServerConfig) error {
 		pool.Close()
 	}()
 
-	// Get client for hub
-	hubClient, err := k8s.NewClientForHub()
+	// Init infrastructure clients
+	infrastructureClients, err := infrastructure.Init(ctx)
 	if err != nil {
-		return fmt.Errorf("error creating client for hub: %w", err)
+		return fmt.Errorf("error setting up and collecting objects from infrastructure servers: %w", err)
 	}
 
 	// Init alarm repository
@@ -82,6 +79,15 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 
 	// TODO: Launch k8s job for DB remove resolved data
+
+	// Load dictionary
+	alarmDictionaryCollector, err := dictionary_collector.New(alarmRepository, infrastructureClients)
+	if err != nil {
+		return fmt.Errorf("error creating alarm dictionary collector: %w", err)
+	}
+
+	// Run dictionary collector
+	alarmDictionaryCollector.Run(ctx)
 
 	// Parse global cloud id
 	var globalCloudID uuid.UUID
@@ -103,10 +109,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	alarmServer := api.AlarmsServer{
 		GlobalCloudID:    globalCloudID,
 		AlarmsRepository: alarmRepository,
-	}
-
-	if err := UpdateAlarmDictionaryAndAlarmsDefinitionData(ctx, hubClient, &alarmServer); err != nil {
-		return fmt.Errorf("error updating alarms definition data: %w", err)
+		Infrastructure:   infrastructureClients,
 	}
 
 	// start a new notifier
@@ -170,11 +173,11 @@ func Serve(config *api.AlarmsServerConfig) error {
 	serverErrors := make(chan error, 1)
 
 	// Configure AM right before the server starts listening
-	if err := alertmanager.Setup(ctx, hubClient); err != nil {
+	if err := alertmanager.Setup(ctx); err != nil {
 		return fmt.Errorf("error configuring alert manager: %w", err)
 	}
 
-	// Start server
+	// Init server
 	go func() {
 		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -191,38 +194,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 		if err := gracefulShutdownWithTasks(srv, &alarmServer); err != nil {
 			return fmt.Errorf("error shutting down server: %w", err)
 		}
-	}
-
-	return nil
-}
-
-// UpdateAlarmDictionaryAndAlarmsDefinitionData reach out to cluster server and sync DB with alarm dict and def
-func UpdateAlarmDictionaryAndAlarmsDefinitionData(ctx context.Context, hubClient client.Client, a *api.AlarmsServer) error {
-	// Initialize cluster server client
-	cs, err := clusterserver.New()
-	if err != nil {
-		return fmt.Errorf("error creating cluster server client: %w", err)
-	}
-
-	// Get all needed objects from the cluster server
-	err = cs.GetAll(ctx)
-	if err != nil {
-		return fmt.Errorf("error getting objects from the cluster server: %w", err)
-	}
-
-	// set cluster server data to alarms server
-	a.ClusterServer = cs
-
-	// Get all needed resources from the resource server
-	if err = cs.GetAll(ctx); err != nil {
-		slog.Warn("error getting resources from the resource server", "error", err)
-	}
-
-	// Load dictionary and definition
-	alarmsDictDef := dictionary_definition.New(hubClient, a.AlarmsRepository)
-	// todo Handle me
-	if err = alarmsDictDef.Load(ctx, cs.NodeClusterTypes); err != nil {
-		slog.Warn("error loading dictionary and definition data", "error", err)
 	}
 
 	return nil

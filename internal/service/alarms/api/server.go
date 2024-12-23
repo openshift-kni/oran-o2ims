@@ -15,9 +15,10 @@ import (
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver"
 	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -42,8 +43,8 @@ type AlarmsServer struct {
 	GlobalCloudID uuid.UUID
 	// AlarmsRepository is the repository for the alarms
 	AlarmsRepository *repo.AlarmsRepository
-	// ClusterServer contains the cluster server client and fetched objects
-	ClusterServer *clusterserver.ClusterServer
+	// Infrastructure clients
+	Infrastructure *infrastructure.Infrastructure
 	// Wg to allow alarm server level background tasks to finish before graceful exit
 	Wg sync.WaitGroup
 	// NotificationProvider to handle new events
@@ -513,8 +514,17 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
+	// Get NodeCluster NodeClusterType mapping
+	var clusterIDToNodeClusterTypeID map[uuid.UUID]uuid.UUID
+	for i := range a.Infrastructure.Clients {
+		if a.Infrastructure.Clients[i].Name() == clusterserver.Name {
+			clusterIDToNodeClusterTypeID = a.Infrastructure.Clients[i].(*clusterserver.ClusterServer).GetClusterIDToResourceTypeID()
+			break
+		}
+	}
+
 	// Get the definition data based on current set of Alert names and managed cluster ID
-	alarmDefinitions, err := a.AlarmsRepository.GetAlarmDefinitions(ctx, request.Body, a.ClusterServer.ClusterIDToResourceTypeID)
+	alarmDefinitions, err := a.AlarmsRepository.GetAlarmDefinitions(ctx, request.Body, clusterIDToNodeClusterTypeID)
 	if err != nil {
 		msg := "failed to get AlarmDefinitions"
 		slog.Error(msg, "error", err)
@@ -522,7 +532,7 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 	}
 
 	// Combine possible definitions with events
-	aerModels := alertmanager.ConvertAmToAlarmEventRecordModels(request.Body, alarmDefinitions, a.ClusterServer.ClusterIDToResourceTypeID)
+	aerModels := alertmanager.ConvertAmToAlarmEventRecordModels(request.Body, alarmDefinitions, clusterIDToNodeClusterTypeID)
 
 	// Insert and update AlarmEventRecord
 	if err := a.AlarmsRepository.UpsertAlarmEventRecord(ctx, aerModels); err != nil {

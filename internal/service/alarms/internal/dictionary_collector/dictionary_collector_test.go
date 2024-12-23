@@ -1,4 +1,4 @@
-package dictionary_definition
+package dictionary_collector
 
 import (
 	"context"
@@ -21,10 +21,10 @@ const (
 	version4152 = "4.15.2"
 )
 
-var _ = Describe("AlarmDictionaryDefinition", func() {
+var _ = Describe("Alarm dictionary collector for node cluster type", func() {
 	Describe("getManagedCluster", func() {
 		var (
-			r      *AlarmDictionaryDefinition
+			r      *NodeClusterTypeDictionaryService
 			ctx    context.Context
 			scheme *runtime.Scheme
 		)
@@ -34,8 +34,8 @@ var _ = Describe("AlarmDictionaryDefinition", func() {
 			_ = clusterv1.AddToScheme(scheme)
 
 			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
-			r = &AlarmDictionaryDefinition{
-				Client: withWatch,
+			r = &NodeClusterTypeDictionaryService{
+				HubClient: withWatch,
 			}
 
 			ctx = context.Background()
@@ -73,7 +73,7 @@ var _ = Describe("AlarmDictionaryDefinition", func() {
 			}
 
 			for _, cluster := range managedClusters {
-				err := r.Client.Create(ctx, cluster)
+				err := r.HubClient.Create(ctx, cluster)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -92,7 +92,7 @@ var _ = Describe("AlarmDictionaryDefinition", func() {
 	})
 	Describe("processManagedCluster", func() {
 		var (
-			r      *AlarmDictionaryDefinition
+			r      *NodeClusterTypeDictionaryService
 			ctx    context.Context
 			scheme *runtime.Scheme
 
@@ -104,8 +104,8 @@ var _ = Describe("AlarmDictionaryDefinition", func() {
 			_ = clusterv1.AddToScheme(scheme)
 
 			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
-			r = &AlarmDictionaryDefinition{
-				Client: withWatch,
+			r = &NodeClusterTypeDictionaryService{
+				HubClient: withWatch,
 			}
 
 			ctx = context.Background()
@@ -120,7 +120,7 @@ var _ = Describe("AlarmDictionaryDefinition", func() {
 				},
 			}
 
-			err := r.Client.Create(ctx, managedCluster)
+			err := r.HubClient.Create(ctx, managedCluster)
 			Expect(err).NotTo(HaveOccurred())
 
 			temp = getClientForCluster
