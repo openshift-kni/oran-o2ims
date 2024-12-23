@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
 	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -26,8 +26,9 @@ type AlarmsServer struct {
 	GlobalCloudID uuid.UUID
 	// AlarmsRepository is the repository for the alarms
 	AlarmsRepository *repo.AlarmsRepository
-	// ClusterServer contains the cluster server client and fetched objects
-	ClusterServer *clusterserver.ClusterServer
+
+	// InfrastructureClients is the clients for the infrastructure servers
+	InfrastructureClients *infrastructure.Infrastructure
 }
 
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check

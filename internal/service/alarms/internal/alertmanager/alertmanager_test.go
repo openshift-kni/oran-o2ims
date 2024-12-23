@@ -22,11 +22,18 @@ var _ = Describe("Alertmanager", func() {
 			ctx    context.Context
 			scheme *runtime.Scheme
 			c      client.Client
+
+			temp func() (client.Client, error)
 		)
 
 		BeforeEach(func() {
 			scheme = runtime.NewScheme()
 			_ = corev1.AddToScheme(scheme)
+
+			temp = getHubClient
+			getHubClient = func() (client.Client, error) {
+				return c, nil
+			}
 
 			ctx = context.Background()
 			c = fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -45,8 +52,12 @@ var _ = Describe("Alertmanager", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		AfterEach(func() {
+			getHubClient = temp
+		})
+
 		It("verifies that the alertmanager.yaml key is populated", func() {
-			err := Setup(ctx, c)
+			err := Setup(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			secret := &corev1.Secret{}

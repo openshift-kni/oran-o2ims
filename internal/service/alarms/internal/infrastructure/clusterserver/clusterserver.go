@@ -7,15 +7,18 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 )
 
 const (
+	Name = "Cluster"
+
 	clusterServerURLEnvName = "CLUSTER_SERVER_URL"
 	tokenPathEnvName        = "TOKEN_PATH"
 )
@@ -24,13 +27,20 @@ type NodeCluster = generated.NodeCluster
 type NodeClusterType = generated.NodeClusterType
 
 type ClusterServer struct {
-	client           *generated.ClientWithResponses
+	client *generated.ClientWithResponses
+
+	sync.Mutex
 	NodeClusters     *[]NodeCluster
 	NodeClusterTypes *[]NodeClusterType
 }
 
-// New creates a new cluster server object
-func New() (*ClusterServer, error) {
+// Name returns the name of the client
+func (r *ClusterServer) Name() string {
+	return Name
+}
+
+// Setup setups a new client for the cluster server
+func (r *ClusterServer) Setup() error {
 	slog.Info("Creating ClusterServer client")
 
 	url := utils.GetServiceURL(utils.InventoryClusterServerName)
@@ -44,7 +54,7 @@ func New() (*ClusterServer, error) {
 	// Set up transport
 	tr, err := utils.GetDefaultBackendTransport()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create http transport: %w", err)
+		return fmt.Errorf("failed to create http transport: %w", err)
 	}
 
 	hc := http.Client{Transport: tr}
@@ -60,25 +70,26 @@ func New() (*ClusterServer, error) {
 	// Read token
 	data, err := os.ReadFile(tokenPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read token file: %w", err)
+		return fmt.Errorf("failed to read token file: %w", err)
 	}
 
 	// Create Bearer token
 	token, err := securityprovider.NewSecurityProviderBearerToken(strings.TrimSpace(string(data)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Bearer token: %w", err)
+		return fmt.Errorf("failed to create Bearer token: %w", err)
 	}
 
 	c, err := generated.NewClientWithResponses(url, generated.WithHTTPClient(&hc), generated.WithRequestEditorFn(token.Intercept))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	return &ClusterServer{client: c}, nil
+	r.client = c
+	return nil
 }
 
-// GetAll fetches all necessary data from the cluster server
-func (r *ClusterServer) GetAll(ctx context.Context) error {
+// FetchAll fetches all necessary data from the cluster server
+func (r *ClusterServer) FetchAll(ctx context.Context) error {
 	slog.Info("Getting all objects from the cluster server")
 
 	// List node clusters
