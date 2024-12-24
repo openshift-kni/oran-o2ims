@@ -1,4 +1,4 @@
-package dictionary_test
+package dictionary_definition_test
 
 import (
 	"testing"
@@ -9,5 +9,5 @@ import (
 
 func TestDictionary(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dictionary Suite")
+	RunSpecs(t, "Dictionary Definition Suite")
 }

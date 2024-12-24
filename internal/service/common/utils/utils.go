@@ -174,3 +174,21 @@ func CompareObjects[T db.Model](a, b T, excluded ...string) DBTag {
 
 	return tags
 }
+
+// GetColumns gets the DB column names for the given fields
+func GetColumns[T db.Model](record T, fields []string) []string {
+	tags := GetDBTagsFromStructFields(record, fields...)
+	columns := make([]string, len(fields))
+	for i, field := range fields {
+		columns[i] = tags[field]
+	}
+	return columns
+}
+
+func GetColumnsAsAny(slice []string) []any {
+	result := make([]any, len(slice))
+	for i, v := range slice {
+		result[i] = v
+	}
+	return result
+}

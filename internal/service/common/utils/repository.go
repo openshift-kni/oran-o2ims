@@ -101,8 +101,6 @@ func Delete[T db.Model](ctx context.Context, db DBQuery, whereExpr psql.Expressi
 		return 0, fmt.Errorf("failed to build delete query for '%s': %w", record.TableName(), err)
 	}
 
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
 	result, err := db.Exec(ctx, sql, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete '%s': %w", record.TableName(), err)
@@ -203,8 +201,6 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sq
 	var record T
 	var err error
 
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
 	// Run query
 	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
 	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
@@ -224,8 +220,6 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sq
 func ExecuteCollectRows[T db.Model](ctx context.Context, db DBQuery, sql string, args []any) ([]T, error) {
 	var record T
 	var err error
-
-	slog.Debug("executing statement", "sql", sql, "args", args)
 
 	// Run query
 	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this

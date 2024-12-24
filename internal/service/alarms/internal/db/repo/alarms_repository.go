@@ -5,12 +5,19 @@ import (
 	"fmt"
 	"log/slog"
 
+	"time"
+
+	"github.com/stephenafamo/bob/dialect/psql/dialect"
+	"github.com/stephenafamo/bob/dialect/psql/um"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
-	"github.com/stephenafamo/bob/dialect/psql/dialect"
 	"github.com/stephenafamo/bob/dialect/psql/im"
+	"github.com/stephenafamo/bob/dialect/psql/sm"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -122,21 +129,18 @@ func (ar *AlarmsRepository) GetAlarmDefinition(ctx context.Context, id uuid.UUID
 
 // DeleteAlarmDefinitionsNotIn deletes all alarm definitions identified by the primary key that are not in the list of IDs.
 // The Where expression also uses the column "object_type_id" to filter the records
-func (ar *AlarmsRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, id uuid.UUID) error {
+func (ar *AlarmsRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, objectTypeID uuid.UUID) (int64, error) {
 	tags := utils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "ObjectTypeID")
 
-	expr := psql.Quote(models.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["ObjectTypeID"]).EQ(psql.Arg(id)))
-	_, err := utils.Delete[models.AlarmDefinition](ctx, ar.Db, expr)
-	return err
+	expr := psql.Quote(models.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["ObjectTypeID"]).EQ(psql.Arg(objectTypeID)))
+	count, err := utils.Delete[models.AlarmDefinition](ctx, ar.Db, expr)
+	return count, err
 }
 
 // UpsertAlarmDictionary inserts or updates an alarm dictionary record
 func (ar *AlarmsRepository) UpsertAlarmDictionary(ctx context.Context, record models.AlarmDictionary) ([]models.AlarmDictionary, error) {
 	dbModel := models.AlarmDictionary{}
-
-	tags := utils.GetDBTagsFromStructFields(dbModel, "AlarmDictionaryVersion", "EntityType", "Vendor", "ObjectTypeID")
-
-	columns := []string{tags["AlarmDictionaryVersion"], tags["EntityType"], tags["Vendor"], tags["ObjectTypeID"]}
+	columns := utils.GetColumns(dbModel, []string{"AlarmDictionaryVersion", "EntityType", "Vendor", "ObjectTypeID"})
 
 	query := psql.Insert(
 		im.Into(record.TableName(), columns...),
@@ -159,11 +163,14 @@ func (ar *AlarmsRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 	dbModel := models.AlarmDefinition{}
 
 	if len(records) == 0 {
-		return nil, nil
+		return []models.AlarmDefinition{}, nil
 	}
 
-	tags := utils.GetDBTagsFromStructFields(records[0], "AlarmName", "AlarmLastChange", "AlarmDescription", "ProposedRepairActions", "AlarmAdditionalFields", "AlarmDictionaryID", "Severity")
-	columns := []string{tags["AlarmName"], tags["AlarmLastChange"], tags["AlarmDescription"], tags["ProposedRepairActions"], tags["AlarmAdditionalFields"], tags["AlarmDictionaryID"], tags["Severity"]}
+	columns := utils.GetColumns(records[0], []string{
+		"AlarmName", "AlarmLastChange", "AlarmDescription",
+		"ProposedRepairActions", "AlarmAdditionalFields", "AlarmDictionaryID",
+		"Severity"},
+	)
 
 	modInsert := []bob.Mod[*dialect.InsertQuery]{
 		im.Into(dbModel.TableName(), columns...),
@@ -173,7 +180,9 @@ func (ar *AlarmsRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 	}
 
 	for _, record := range records {
-		modInsert = append(modInsert, im.Values(psql.Arg(record.AlarmName, record.AlarmLastChange, record.AlarmDescription, record.ProposedRepairActions, record.AlarmAdditionalFields, record.AlarmDictionaryID, record.Severity)))
+		modInsert = append(modInsert, im.Values(psql.Arg(record.AlarmName, record.AlarmLastChange, record.AlarmDescription,
+			record.ProposedRepairActions, record.AlarmAdditionalFields, record.AlarmDictionaryID,
+			record.Severity)))
 	}
 
 	query := psql.Insert(
@@ -186,4 +195,165 @@ func (ar *AlarmsRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 	}
 
 	return utils.ExecuteCollectRows[models.AlarmDefinition](ctx, ar.Db, sql, args)
+}
+
+// UpsertAlarmEventRecord insert and updating an AlarmEventRecord.
+func (ar *AlarmsRepository) UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord) error {
+	// Build queries for each record
+	sql, params, err := buildAlarmEventRecordUpsertQuery(records)
+	if err != nil {
+		return fmt.Errorf("failed to build query for event upsert: %w", err)
+	}
+
+	_, err = ar.Db.Exec(ctx, sql, params...)
+	if err != nil {
+		return fmt.Errorf("failed to execute upsert query: %w", err)
+	}
+
+	slog.Info("Successfully inserted alerts from alertmanager", "table", models.AlarmEventRecord{}.TableName(), "count", len(records))
+	return nil
+}
+
+// buildAlarmEventRecordUpsertQuery builds the query for insert and updating an AlarmEventRecord
+func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string, []any, error) {
+	m := models.AlarmEventRecord{}
+	query := psql.Insert(im.Into(m.TableName()))
+
+	// Set cols
+	query.Expression.Columns = utils.GetColumns(records[0], []string{
+		"AlarmRaisedTime", "AlarmClearedTime", "AlarmAcknowledgedTime",
+		"AlarmAcknowledged", "PerceivedSeverity", "Extensions",
+		"ObjectID", "ObjectTypeID", "AlarmStatus",
+		"Fingerprint", "AlarmDefinitionID", "ProbableCauseID",
+	})
+
+	// Set values
+	values := make([]bob.Mod[*dialect.InsertQuery], 0, len(records))
+	for _, record := range records {
+		values = append(values, im.Values(psql.Arg(
+			record.AlarmRaisedTime, record.AlarmClearedTime, record.AlarmAcknowledgedTime,
+			record.AlarmAcknowledged, record.PerceivedSeverity, record.Extensions,
+			record.ObjectID, record.ObjectTypeID, record.AlarmStatus,
+			record.Fingerprint, record.AlarmDefinitionID, record.ProbableCauseID,
+		)))
+	}
+	query.Apply(values...)
+
+	// Set upsert constraints
+	// Cols here should match track_alarm_update trigger function.
+	// This will ensure alarm_changed_time is always updated as long as it has not been previously acked.
+	dbTags := utils.GetAllDBTagsFromStruct(m)
+	query.Apply(im.OnConflictOnConstraint(m.OnConflict()).DoUpdate(
+		im.SetExcluded(dbTags["AlarmStatus"]),
+		im.SetExcluded(dbTags["AlarmClearedTime"]),
+		im.SetExcluded(dbTags["PerceivedSeverity"]),
+		im.SetExcluded(dbTags["ObjectID"]),
+		im.SetExcluded(dbTags["ObjectTypeID"]),
+		im.SetExcluded(dbTags["AlarmDefinitionID"]),
+		im.SetExcluded(dbTags["ProbableCauseID"]),
+	))
+
+	return query.Build() //nolint:wrapcheck
+}
+
+// GetAlarmDefinitions needed to build out aer
+func (ar *AlarmsRepository) GetAlarmDefinitions(ctx context.Context, am *api.AlertmanagerNotification, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) ([]models.AlarmDefinition, error) {
+	m := models.AlarmDefinition{}
+	dbTags := utils.GetAllDBTagsFromStruct(m)
+	query := psql.Select(
+		sm.Columns(
+			utils.GetColumnsAsAny(utils.GetColumns(m, []string{
+				"AlarmName", "AlarmDefinitionID", "ProbableCauseID",
+				"ObjectTypeID", "Severity",
+			}))...),
+		sm.From(m.TableName()),
+		sm.Where(
+			psql.Group(
+				psql.Quote(dbTags["AlarmName"]),
+				psql.Quote(dbTags["ObjectTypeID"]),
+				psql.Quote(dbTags["Severity"]),
+			).
+				In(getGetAlertNameObjectTypeIDAndSeverity(am, clusterIDToObjectTypeID)...), // Dynamically pass the pairs
+		),
+	)
+
+	sql, params, err := query.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build alarm definitions query when processing AM notification: %w", err)
+	}
+
+	return utils.ExecuteCollectRows[models.AlarmDefinition](ctx, ar.Db, sql, params)
+}
+
+func getGetAlertNameObjectTypeIDAndSeverity(am *api.AlertmanagerNotification, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) []bob.Expression {
+	var b []bob.Expression
+	for _, alert := range am.Alerts {
+		labels := *alert.Labels
+		if id := alertmanager.GetClusterID(labels); id != nil {
+			if objectTypeId, ok := clusterIDToObjectTypeID[*id]; ok {
+				_, severity := alertmanager.GetPerceivedSeverity(labels)
+				b = append(b, psql.ArgGroup(
+					alertmanager.GetAlertName(labels),
+					objectTypeId,
+					severity,
+				))
+			}
+		}
+	}
+	return b
+}
+
+// ResolveNotificationIfNotInCurrent find and only keep the alerts that are available in the current payload
+func (ar *AlarmsRepository) ResolveNotificationIfNotInCurrent(ctx context.Context, am *api.AlertmanagerNotification) error {
+	m := models.AlarmEventRecord{}
+	dbTags := utils.GetAllDBTagsFromStruct(m)
+	var (
+		tableName          = m.TableName()
+		fingerprint        = dbTags["Fingerprint"]
+		raisedTime         = dbTags["AlarmRaisedTime"]
+		clearedTime        = dbTags["AlarmClearedTime"]
+		alarmStatus        = dbTags["AlarmStatus"]
+		perceivedSeverity  = dbTags["PerceivedSeverity"]
+		alarmEventRecordID = dbTags["AlarmEventRecordID"]
+	)
+
+	updateClearedTimeCase := fmt.Sprintf(
+		"%s = CASE WHEN %s IS NULL THEN ? ELSE %s END",
+		clearedTime, clearedTime, clearedTime,
+	)
+
+	query := psql.Update(
+		um.Table(tableName),
+		um.SetCol(alarmStatus).ToArg(api.Resolved),
+		um.Set(psql.Raw(updateClearedTimeCase, time.Now())),
+		um.SetCol(perceivedSeverity).ToArg(api.CLEARED),
+		um.Where(
+			psql.Group(psql.Quote(fingerprint), psql.Quote(raisedTime)).
+				NotIn(getGetAlertFingerPrintAndStartAt(am)...),
+		),
+		um.Returning(psql.Quote(alarmEventRecordID)),
+	)
+
+	sql, params, err := query.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build AlarmEventRecord update query when processing AM notification: %w", err)
+	}
+	records, err := utils.ExecuteCollectRows[models.AlarmEventRecord](ctx, ar.Db, sql, params)
+	if err != nil {
+		return err
+	}
+
+	if len(records) > 0 {
+		slog.Info("Successfully resolved alarms that no longer exist", "records", len(records))
+	}
+	return nil
+}
+
+func getGetAlertFingerPrintAndStartAt(am *api.AlertmanagerNotification) []bob.Expression {
+	b := make([]bob.Expression, 0, len(am.Alerts))
+	for _, alert := range am.Alerts {
+		b = append(b, psql.ArgGroup(alert.Fingerprint, alert.StartsAt))
+	}
+
+	return b
 }

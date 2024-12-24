@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -24,9 +26,10 @@ type NodeCluster = generated.NodeCluster
 type NodeClusterType = generated.NodeClusterType
 
 type ClusterServer struct {
-	client           *generated.ClientWithResponses
-	NodeClusters     *[]NodeCluster
-	NodeClusterTypes *[]NodeClusterType
+	client                    *generated.ClientWithResponses
+	NodeClusters              *[]NodeCluster
+	NodeClusterTypes          *[]NodeClusterType
+	ClusterIDToResourceTypeID map[uuid.UUID]uuid.UUID
 }
 
 // New creates a new cluster server object
@@ -86,15 +89,24 @@ func (r *ClusterServer) GetAll(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get node clusters: %w", err)
 	}
+	if nodeClusters == nil {
+		return fmt.Errorf("no node clusters found: %w", err)
+	}
 
 	// List node cluster types
 	nodeClusterTypes, err := r.GetNodeClusterTypes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get node cluster types: %w", err)
 	}
+	if nodeClusterTypes == nil {
+		return fmt.Errorf("no node cluster types found: %w", err)
+	}
 
 	r.NodeClusters = nodeClusters
 	r.NodeClusterTypes = nodeClusterTypes
+
+	// Todo: not concurrency safe
+	r.ClusterResourceTypeMapping()
 
 	return nil
 }
@@ -135,4 +147,15 @@ func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context) (*[]NodeCluster
 	slog.Info("Got node cluster types", "count", len(*resp.JSON200))
 
 	return resp.JSON200, nil
+}
+
+// ClusterResourceTypeMapping map cluster ID with objectType ID for faster lookup during Caas alerts
+func (r *ClusterServer) ClusterResourceTypeMapping() {
+	mapping := make(map[uuid.UUID]uuid.UUID)
+	for _, cluster := range *r.NodeClusters {
+		mapping[cluster.NodeClusterId] = cluster.NodeClusterTypeId
+		slog.Info("Mapping cluster ID to resource type ID", "ClusterID", cluster.NodeClusterId, "NodeClusterTypeId", cluster.NodeClusterTypeId)
+	}
+
+	r.ClusterIDToResourceTypeID = mapping
 }

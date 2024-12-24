@@ -19,13 +19,6 @@ route:
     matchers:
       # Always firing alert to verify alertmanager is working
       - alertname=Watchdog
-  - receiver: oran_alarm_receiver
-    group_by:
-      # This label is guaranteed to be present in all alerts
-      - managed_cluster
-    matchers:
-      # Match alerts with a non-empty managed_cluster label
-      - managed_cluster=~".+"
 receivers:
   - name: oran_alarm_receiver
     webhook_configs:

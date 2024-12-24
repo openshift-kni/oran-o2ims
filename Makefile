@@ -152,7 +152,7 @@ run: manifests generate fmt vet binary ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: manifests generate fmt vet ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile --target ${DOCKER_TARGET} --build-arg "GOBUILD_GCFLAGS=${GOBUILD_GCFLAGS}" .
+	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile --platform=$(PLATFORMS) --target ${DOCKER_TARGET} --build-arg "GOBUILD_GCFLAGS=${GOBUILD_GCFLAGS}" .
 
 .PHONY: docker-push
 docker-push: docker-build ## Push docker image with the manager.
