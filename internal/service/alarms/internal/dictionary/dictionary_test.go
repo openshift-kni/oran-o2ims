@@ -23,7 +23,7 @@ const (
 var _ = Describe("AlarmDictionary", func() {
 	Describe("getManagedCluster", func() {
 		var (
-			r      *AlarmDictionary
+			r      *ClusterCollector
 			ctx    context.Context
 			scheme *runtime.Scheme
 		)
@@ -33,8 +33,8 @@ var _ = Describe("AlarmDictionary", func() {
 			_ = clusterv1.AddToScheme(scheme)
 
 			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
-			r = &AlarmDictionary{
-				Client: withWatch,
+			r = &ClusterCollector{
+				HubClient: withWatch,
 			}
 
 			ctx = context.Background()
@@ -72,7 +72,7 @@ var _ = Describe("AlarmDictionary", func() {
 			}
 
 			for _, cluster := range managedClusters {
-				err := r.Client.Create(ctx, cluster)
+				err := r.HubClient.Create(ctx, cluster)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -91,7 +91,7 @@ var _ = Describe("AlarmDictionary", func() {
 	})
 	Describe("processManagedCluster", func() {
 		var (
-			r      *AlarmDictionary
+			r      *ClusterCollector
 			ctx    context.Context
 			scheme *runtime.Scheme
 
@@ -103,8 +103,8 @@ var _ = Describe("AlarmDictionary", func() {
 			_ = clusterv1.AddToScheme(scheme)
 
 			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
-			r = &AlarmDictionary{
-				Client: withWatch,
+			r = &ClusterCollector{
+				HubClient: withWatch,
 			}
 
 			ctx = context.Background()
@@ -119,7 +119,7 @@ var _ = Describe("AlarmDictionary", func() {
 				},
 			}
 
-			err := r.Client.Create(ctx, managedCluster)
+			err := r.HubClient.Create(ctx, managedCluster)
 			Expect(err).NotTo(HaveOccurred())
 
 			temp = getClientForCluster
