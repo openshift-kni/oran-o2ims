@@ -21,6 +21,11 @@ import (
 	apiresources "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 )
 
+const (
+	DefaultRetentionPeriod = 10
+	minRetentionPeriod     = 1
+)
+
 type AlarmsServer struct {
 	// GlobalCloudID is the global O-Cloud identifier. Create subscription requests are blocked if the global O-Cloud identifier is not set
 	GlobalCloudID uuid.UUID
@@ -351,6 +356,107 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		"alarmClearedTime", updated.AlarmClearedTime, "perceivedSeverity", updated.PerceivedSeverity, "alarmChangedTime", updated.AlarmChangedTime)
 
 	return api.PatchAlarm200JSONResponse{AlarmAcknowledged: request.Body.AlarmAcknowledged, PerceivedSeverity: request.Body.PerceivedSeverity}, nil
+}
+
+// GetServiceConfiguration handles an API request to fetch the Alarm Service Configuration
+func (a *AlarmsServer) GetServiceConfiguration(ctx context.Context, _ api.GetServiceConfigurationRequestObject) (api.GetServiceConfigurationResponseObject, error) {
+	records, err := a.AlarmsRepository.GetServiceConfigurations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Alarm Service Configuration: %w", err)
+	}
+
+	// There must always be a single record
+	if len(records) != 1 {
+		return nil, fmt.Errorf("expected a single Alarm Service Configuration record, but got %d", len(records))
+	}
+
+	object := models.ConvertServiceConfigurationToAPI(records[0])
+
+	return api.GetServiceConfiguration200JSONResponse(object), nil
+}
+
+// PatchAlarmServiceConfiguration handles an API request to patch the Alarm Service Configuration
+func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, request api.PatchAlarmServiceConfigurationRequestObject) (api.PatchAlarmServiceConfigurationResponseObject, error) {
+	// Fetch the Alarm Service Configuration to be patched
+	records, err := a.AlarmsRepository.GetServiceConfigurations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Alarm Service Configuration: %w", err)
+	}
+
+	// There must always be a single record
+	if len(records) != 1 {
+		return nil, fmt.Errorf("expected a single Alarm Service Configuration record, but got %d", len(records))
+	}
+
+	serviceConfigRecord := records[0]
+
+	// Patch the Alarm Service Configuration
+	if request.Body.RetentionPeriod != 0 {
+		// Check if the retention period is valid
+		if serviceConfigRecord.RetentionPeriod < minRetentionPeriod {
+			return api.PatchAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				Detail: fmt.Sprintf("retentionPeriod must be greater than or equal to %d", minRetentionPeriod),
+				Status: http.StatusBadRequest,
+			}), nil
+		}
+
+		serviceConfigRecord.RetentionPeriod = request.Body.RetentionPeriod
+	}
+
+	if request.Body.Extensions != nil {
+		serviceConfigRecord.Extensions = *request.Body.Extensions
+	}
+
+	// Patch the Alarm Service Configuration
+	patched, err := a.AlarmsRepository.UpdateServiceConfiguration(ctx, serviceConfigRecord.ID, &serviceConfigRecord)
+	if err != nil {
+		return nil, fmt.Errorf("failed to patch Alarm Service Configuration: %w", err)
+	}
+
+	slog.Debug("Alarm Service Configuration patched", "retentionPeriod", patched.RetentionPeriod, "extensions", patched.Extensions)
+
+	return api.PatchAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*patched)), nil
+}
+
+func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, request api.UpdateAlarmServiceConfigurationRequestObject) (api.UpdateAlarmServiceConfigurationResponseObject, error) {
+	// Fetch the Alarm Service Configuration to be updated
+	records, err := a.AlarmsRepository.GetServiceConfigurations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Alarm Service Configuration: %w", err)
+	}
+
+	// There must always be a single record
+	if len(records) != 1 {
+		return nil, fmt.Errorf("expected a single Alarm Service Configuration record, but got %d", len(records))
+	}
+
+	serviceConfigRecord := records[0]
+
+	// Check if the retention period is valid
+	if request.Body.RetentionPeriod < minRetentionPeriod {
+		return api.UpdateAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			Detail: fmt.Sprintf("retentionPeriod must be greater than or equal to %d (day)", minRetentionPeriod),
+			Status: http.StatusBadRequest,
+		}), nil
+	}
+
+	// Update the Alarm Service Configuration
+	serviceConfigRecord.RetentionPeriod = request.Body.RetentionPeriod
+	serviceConfigRecord.Extensions = nil
+	if request.Body.Extensions != nil {
+		serviceConfigRecord.Extensions = *request.Body.Extensions
+	}
+
+	// Update the Alarm Service Configuration
+	updated, err := a.AlarmsRepository.UpdateServiceConfiguration(ctx, serviceConfigRecord.ID, &serviceConfigRecord)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update Alarm Service Configuration: %w", err)
+	}
+
+	slog.Debug("Alarm Service Configuration updated", "retentionPeriod", updated.RetentionPeriod, "extensions", updated.Extensions)
+
+	return api.UpdateAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*updated)), nil
+
 }
 
 func (a *AlarmsServer) GetProbableCauses(ctx context.Context, request api.GetProbableCausesRequestObject) (api.GetProbableCausesResponseObject, error) {

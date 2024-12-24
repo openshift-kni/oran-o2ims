@@ -110,6 +110,13 @@ func Serve(config *AlarmsServerConfig) error {
 		}
 	}
 
+	// Add Alarm Service Configuration to the database
+	serviceConfig, err := alarmRepository.CreateServiceConfiguration(ctx, internal.DefaultRetentionPeriod)
+	if err != nil {
+		return fmt.Errorf("failed to create alarm service configuration: %w", err)
+	}
+	slog.Info("Alarm Service configuration created/found", "retentionPeriod", serviceConfig.RetentionPeriod, "extensions", serviceConfig.Extensions)
+
 	// Init server
 	// Create the handler
 	alarmServer := internal.AlarmsServer{

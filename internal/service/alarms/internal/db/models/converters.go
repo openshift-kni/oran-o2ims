@@ -20,6 +20,19 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 	}
 }
 
+// ConvertServiceConfigurationToAPI converts an ServiceConfiguration DB model to an API model
+func ConvertServiceConfigurationToAPI(config ServiceConfiguration) api.AlarmServiceConfiguration {
+	apiModel := api.AlarmServiceConfiguration{
+		RetentionPeriod: config.RetentionPeriod,
+	}
+
+	if config.Extensions != nil {
+		apiModel.Extensions = &config.Extensions
+	}
+
+	return apiModel
+}
+
 // ConvertSubscriptionModelToApi converts an AlarmSubscription DB model to an API model
 func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.AlarmSubscriptionInfo {
 	apiModel := api.AlarmSubscriptionInfo{

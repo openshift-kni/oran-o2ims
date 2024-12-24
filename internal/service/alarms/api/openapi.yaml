@@ -18,7 +18,8 @@ servers:
 tags:
   - name: alarms
     description: Alarm management
-  - name: subscriptions
+  - name: service configuration
+  - name: Alarm Service Configuration
     description: Alarm subscription management
   - name: probableCauses
     description: Probable cause information
@@ -204,6 +205,106 @@ paths:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '409':
           description: Conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration:
+    get:
+      operationId: GetServiceConfiguration
+      summary: Retrieve the alarm service configuration
+      tags:
+        - service configuration
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmServiceConfiguration'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+    put:
+      operationId: UpdateAlarmServiceConfiguration
+      summary: Modify all fields of the Alarm Service Configuration.
+      tags:
+        - service configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmServiceConfiguration'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmServiceConfiguration'
+        '400':
+          description: Bad request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+    patch:
+      operationId: PatchAlarmServiceConfiguration
+      summary: Modify individual fields of the Alarm Service Configuration.
+      tags:
+        - service configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmServiceConfiguration'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmServiceConfiguration'
+        '400':
+          description: Bad request.
           content:
             application/problem+json:
               schema:
@@ -575,6 +676,23 @@ components:
           example: false
         perceivedSeverity:
             $ref: '#/components/schemas/PerceivedSeverity'
+
+    AlarmServiceConfiguration:
+      type: object
+      properties:
+        retentionPeriod:
+          type: integer
+          description: | 
+            Number of days for alarm history to be retained.
+            This value has cannot be set lower than 1 (day).
+          example: 30
+        extensions:
+          type: object
+          additionalProperties:
+            type: string
+          description: List of metadata key-value pairs used to associate meaningful metadata to the related alarm service
+      required:
+        - retentionPeriod
 
     AlarmSubscriptionInfo:
       type: object
