@@ -205,12 +205,12 @@ func (ar *AlarmsRepository) UpsertAlarmEventRecord(ctx context.Context, records 
 		return fmt.Errorf("failed to build query for event upsert: %w", err)
 	}
 
-	_, err = ar.Db.Exec(ctx, sql, params...)
+	r, err := ar.Db.Exec(ctx, sql, params...)
 	if err != nil {
 		return fmt.Errorf("failed to execute upsert query: %w", err)
 	}
 
-	slog.Info("Successfully inserted alerts from alertmanager", "table", models.AlarmEventRecord{}.TableName(), "count", len(records))
+	slog.Info("Successfully inserted and updated alerts from alertmanager", "count", r.RowsAffected())
 	return nil
 }
 
@@ -240,8 +240,8 @@ func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string
 	query.Apply(values...)
 
 	// Set upsert constraints
-	// Cols here should match track_alarm_update trigger function.
-	// This will ensure alarm_changed_time is always updated as long as it has not been previously acked.
+	// Cols here should match manage_alarm_event trigger function.
+	// This will ensure alarm_changed_time, alarm_changed_time, alarm_sequence_number are always updated as long as it has not been previously acked.
 	dbTags := utils.GetAllDBTagsFromStruct(m)
 	query.Apply(im.OnConflictOnConstraint(m.OnConflict()).DoUpdate(
 		im.SetExcluded(dbTags["AlarmStatus"]),
@@ -356,4 +356,64 @@ func getGetAlertFingerPrintAndStartAt(am *api.AlertmanagerNotification) []bob.Ex
 	}
 
 	return b
+}
+
+// GetAlarmsForSubscription for a given subscription get all alarms based on the sequence number and filter
+func (ar *AlarmsRepository) GetAlarmsForSubscription(ctx context.Context, subscription models.AlarmSubscription) ([]models.AlarmEventRecord, error) {
+	m := models.AlarmEventRecord{}
+	dbTags := utils.GetAllDBTagsFromStruct(m)
+	queryMods := []bob.Mod[*dialect.SelectQuery]{
+		sm.Columns(utils.GetColumnsAsAny(utils.GetColumns(m, []string{
+			"AlarmEventRecordID", "AlarmDefinitionID", "ProbableCauseID",
+			"AlarmRaisedTime", "AlarmChangedTime", "AlarmClearedTime",
+			"AlarmAcknowledgedTime", "AlarmAcknowledged", "PerceivedSeverity",
+			"Extensions", "ObjectID", "ObjectTypeID",
+			"NotificationEventType", "AlarmSequenceNumber",
+		}))...),
+		sm.From(m.TableName()),
+	}
+
+	// Start with the base condition
+	// Collect all events that haven't been sent to the subscriber yet
+	whereClause := psql.Quote(dbTags["AlarmSequenceNumber"]).GT(psql.Arg(subscription.EventCursor))
+	// If we have a filter, add it to the WHERE clause to reduce further
+	if subscription.Filter != nil {
+		whereClause = psql.And(
+			whereClause,
+			psql.Quote(dbTags["NotificationEventType"]).NE(psql.Arg(subscription.Filter)),
+		)
+	}
+	// Add WHERE and ORDER BY clauses
+	queryMods = append(queryMods,
+		sm.Where(whereClause),
+		sm.OrderBy(dbTags["AlarmSequenceNumber"]).Asc(),
+	)
+
+	// Build final query
+	query := psql.Select(queryMods...)
+
+	sql, params, err := query.Build()
+	if err != nil {
+		return []models.AlarmEventRecord{}, fmt.Errorf("failed to build GetAlarmsForSubscription query: %w", err)
+	}
+
+	records, err := utils.ExecuteCollectRows[models.AlarmEventRecord](ctx, ar.Db, sql, params)
+	if err != nil {
+		return []models.AlarmEventRecord{}, fmt.Errorf("failed to execute GetAlarmsForSubscription query: %w", err)
+	}
+
+	if len(records) > 0 {
+		slog.Info("Successfully got alarms for subscription", "alarm count", len(records), "Subscription", subscription.SubscriptionID)
+	}
+	return records, nil
+}
+
+// UpdateSubscriptionEventCursor update a given subscription event cursor with a alarm sequence value
+func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, subscription models.AlarmSubscription) error {
+	_, err := utils.Update[models.AlarmSubscription](ctx, ar.Db, subscription.SubscriptionID, subscription, "EventCursor")
+	if err != nil {
+		return fmt.Errorf("failed to execute UpdateSubscriptionEventCursor query: %w", err)
+	}
+
+	return nil
 }

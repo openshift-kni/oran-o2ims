@@ -18,8 +18,9 @@ servers:
 tags:
   - name: alarms
     description: Alarm management
-  - name: service configuration
-  - name: Alarm Service Configuration
+  - name: serviceConfiguration
+    description: Alarm Service Configuration
+  - name: subscriptions
     description: Alarm subscription management
   - name: probableCauses
     description: Probable cause information
@@ -227,7 +228,7 @@ paths:
       operationId: GetServiceConfiguration
       summary: Retrieve the alarm service configuration
       tags:
-        - service configuration
+        - serviceConfiguration
       responses:
         '200':
           description: Successful response
@@ -252,7 +253,7 @@ paths:
       operationId: UpdateAlarmServiceConfiguration
       summary: Modify all fields of the Alarm Service Configuration.
       tags:
-        - service configuration
+        - serviceConfiguration
       requestBody:
         required: true
         content:
@@ -289,7 +290,7 @@ paths:
       operationId: PatchAlarmServiceConfiguration
       summary: Modify individual fields of the Alarm Service Configuration.
       tags:
-        - service configuration
+        - serviceConfiguration
       requestBody:
         required: true
         content:
@@ -709,13 +710,13 @@ components:
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         filter:
           type: string
-          enum: [ new, change, clear, acknowledge ]
+          enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
           description: |
             Criteria for events which do not need to be reported or will be filtered by the subscription 
             notification service. Therefore, if a filter is not provided then all events are reported.
             It can be filtered by criteria based on the type of notification of fields of the
             AlarmEventRecord.
-          example: (eq,perceivedSeverity,0)
+          example: NEW
         callback:
           type: string
           format: uri

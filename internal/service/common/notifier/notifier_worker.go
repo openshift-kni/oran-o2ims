@@ -87,7 +87,7 @@ func (w *SubscriptionWorker) NewNotification(notification *Notification) {
 	w.workMutex.Lock()
 	defer w.workMutex.Unlock()
 	w.workQueue = append(w.workQueue, notification)
-	w.logger.Debug("notification enqueued to work queue", "size", len(w.workQueue))
+	w.logger.Debug("Notification enqueued to work queue", "size", len(w.workQueue))
 	if len(w.workQueue) == 1 {
 		// If this is the first entry in the queue, then kick the worker to process its queue; otherwise, let it finish
 		// processing the queue before kicking it again.
@@ -113,7 +113,7 @@ func (w *SubscriptionWorker) releaseNotifications() {
 
 // Run executes that main loop for the worker handling events as they arrive.
 func (w *SubscriptionWorker) Run() {
-	w.logger.Info("subscription worker started", "callback", w.subscription.Callback)
+	w.logger.Info("Subscription worker started", "callback", w.subscription.Callback)
 
 	for {
 		select {
@@ -125,7 +125,7 @@ func (w *SubscriptionWorker) Run() {
 			w.workMutex.Unlock()
 		case <-w.ctx.Done():
 			w.releaseNotifications()
-			w.logger.Info("subscription worker shutting down")
+			w.logger.Info("Subscription worker shutting down")
 			return
 		}
 	}
@@ -144,10 +144,10 @@ func (w *SubscriptionWorker) handleCurrentEventCompletion(e *SubscriptionJobComp
 
 	if len(w.workQueue) == 0 {
 		// No more events
-		w.logger.Debug("no more events to process")
+		w.logger.Debug("No more events to process")
 		return
 	}
-	w.logger.Debug("dequeued notification from work queue", "size", len(w.workQueue))
+	w.logger.Debug("Dequeued notification from work queue", "size", len(w.workQueue))
 
 	w.processNextEvent(w.ctx, w.workQueue[0])
 }

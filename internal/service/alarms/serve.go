@@ -22,11 +22,12 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
-
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary_definition"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/notifier_provider"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
 // Alarm server config values
@@ -80,9 +81,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		Db: pool,
 	}
 
-	// TODO: Audit and Insert data database
-
-	// TODO: Launch k8s job for DB remove archived data
+	// TODO: Launch k8s job for DB remove resolved data
 
 	// Parse global cloud id
 	var globalCloudID uuid.UUID
@@ -92,7 +91,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 			return fmt.Errorf("failed to parse global cloud id: %w", err)
 		}
 	}
-
 	// Add Alarm Service Configuration to the database
 	serviceConfig, err := alarmRepository.CreateServiceConfiguration(ctx, api.DefaultRetentionPeriod)
 	if err != nil {
@@ -111,7 +109,10 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("error updating alarms definition data: %w", err)
 	}
 
-	// TODO: Launch k8s job for DB remove archived data
+	// start a new notifier
+	if err := startSubscriptionNotifier(ctx, *config, &alarmServer); err != nil {
+		return fmt.Errorf("error starting alarms notifier: %w", err)
+	}
 
 	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,
 		generated.StrictHTTPServerOptions{
@@ -124,12 +125,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Register a default handler that replies with 404 so that we can override the response format
 	r.HandleFunc("/", common.NotFoundFunc())
 
-	// Create a new logger to be passed to things that need a logger
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug, // TODO: set with server args
-	}))
-
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
 	if err != nil {
@@ -137,6 +132,10 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	}))
 	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
 	if err != nil {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
@@ -189,7 +188,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("error starting server: %w", err)
 	case <-ctx.Done():
 		slog.Info("Shutting down server")
-		if err := common.GracefulShutdown(srv); err != nil {
+		if err := gracefulShutdownWithTasks(srv, &alarmServer); err != nil {
 			return fmt.Errorf("error shutting down server: %w", err)
 		}
 	}
@@ -225,6 +224,55 @@ func UpdateAlarmDictionaryAndAlarmsDefinitionData(ctx context.Context, hubClient
 	if err = alarmsDictDef.Load(ctx, cs.NodeClusterTypes); err != nil {
 		slog.Warn("error loading dictionary and definition data", "error", err)
 	}
+
+	return nil
+}
+
+// gracefulShutdownWithTasks Server may have background tasks running when SIGTERM is received. Let them continue.
+func gracefulShutdownWithTasks(srv *http.Server, alarmsServer *api.AlarmsServer) error {
+	done := make(chan struct{})
+	go func() {
+		alarmsServer.Wg.Wait()
+		close(done)
+	}()
+
+	serverErr := common.GracefulShutdown(srv)
+
+	slog.Info("Waiting for alarms server background tasks to finish")
+	select {
+	case <-done:
+		slog.Info("Successfully finished all alarms server background tasks")
+		return serverErr //nolint:wrapcheck
+	case <-time.After(29 * time.Second): // TODO: Set timeout to match terminationGracePeriodSeconds (default 30s) minus buffer for remaining defers
+		if serverErr != nil {
+			return fmt.Errorf("shutdown failed and tasks timed out: %w", serverErr)
+		}
+		return fmt.Errorf("alarms server background tasks timed out")
+	}
+}
+
+// startSubscriptionNotifier set a new startSubscriptionNotifier for alarms server
+func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfig, a *api.AlarmsServer) error {
+	// Create the OAuth client config
+	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig()
+	if err != nil {
+		return fmt.Errorf("failed to create oauth client configuration for alarms subscribers: %w", err)
+	}
+
+	notificationsProvider := notifier_provider.NewNotificationStorageProvider(a.AlarmsRepository)
+	subscriptionsProvider := notifier_provider.NewSubscriptionStorageProvider(a.AlarmsRepository)
+	newNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, oauthConfig)
+
+	a.NotificationProvider = notificationsProvider
+	a.Notifier = newNotifier
+
+	// Start alarms notifier
+	go func() {
+		slog.Info("Starting alarms subs notifier")
+		if err := newNotifier.Run(ctx); err != nil {
+			slog.Error("notifier error", "error", err)
+		}
+	}()
 
 	return nil
 }

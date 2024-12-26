@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -55,13 +57,17 @@ func SetupOAuthClient(ctx context.Context, config *OAuthClientConfig) (*http.Cli
 		if err != nil {
 			return nil, err
 		}
+		slog.Info("Configured TLS client")
 	}
 
-	c := &http.Client{
+	baseClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig}}
+			TLSClientConfig: tlsConfig,
+		},
+		Timeout: 30 * time.Second,
+	}
 
-	if config.OAuthConfig != nil {
+	if config.OAuthConfig != nil && config.OAuthConfig.ClientID != "" {
 		oauthConfig := clientcredentials.Config{
 			ClientID:       config.OAuthConfig.ClientID,
 			ClientSecret:   config.OAuthConfig.ClientSecret,
@@ -71,12 +77,25 @@ func SetupOAuthClient(ctx context.Context, config *OAuthClientConfig) (*http.Cli
 			AuthStyle:      oauth2.AuthStyleInParams,
 		}
 
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, c)
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
+		oauthClient := oauthConfig.Client(ctx)
 
-		c = oauthConfig.Client(ctx)
+		// Verify token acquisition works
+		if src, ok := oauthClient.Transport.(*oauth2.Transport); ok {
+			// Force token acquisition now to verify it works
+			_, err := src.Source.Token()
+			if err != nil {
+				return nil, fmt.Errorf("failed to acquire initial OAuth token: %w", err)
+			}
+			slog.Info("Successfully acquired initial OAuth token")
+		}
+
+		slog.Info("Successfully created oauth client")
+		return oauthClient, nil
 	}
 
-	return c, nil
+	slog.Info("Successfully created base client")
+	return baseClient, nil
 }
 
 // setupTLSConfig updates the TLS config with the related options from the OAuth configuration

@@ -74,7 +74,6 @@ func Setup(ctx context.Context, cl client.Client) error {
 func ConvertAmToAlarmEventRecordModels(am *api.AlertmanagerNotification, aDefinitionRecords []models.AlarmDefinition, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) []models.AlarmEventRecord {
 	records := make([]models.AlarmEventRecord, 0, len(am.Alerts))
 	for _, alert := range am.Alerts {
-		slog.Info("Converting Alertmanager alert", "alert name", GetAlertName(*alert.Labels))
 		record := models.AlarmEventRecord{
 			AlarmRaisedTime:  *alert.StartsAt,
 			AlarmClearedTime: setTime(*alert.EndsAt),
@@ -184,6 +183,15 @@ func severityToPerceivedSeverity(input string) api.PerceivedSeverity {
 
 // getExtensions extract oran extension from alert. For caas it's basically the labels and annotations from payload.
 func getExtensions(labels, annotations map[string]string) map[string]string {
-	maps.Copy(labels, annotations)
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	result := make(map[string]string)
+	maps.Copy(result, labels)
+	maps.Copy(result, annotations)
 	return labels
 }
