@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     consumer_subscription_id UUID NULL, -- Optional ID for the consumer's subscription identifier
     -- filter set nullable as false, but description says that if not set, all alarms are included
     -- setting as NULL based on description and model definition in O-RAN.WG6.O2IMS-INTERFACE-R004-v07.00
-    filter VARCHAR(20) NULL, -- Can be [new, change, clear, acknowledge], NULL means all
+    filter VARCHAR(20) NULL, -- Can be ['NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE'], NULL means all
     callback TEXT NOT NULL, -- URL or endpoint for sending notifications
 
     -- Internal
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP -- Record last update timestamp
 
     -- check does not fail with NULL
-    CONSTRAINT chk_filter CHECK (filter IN ('new', 'change', 'clear', 'acknowledge')),
+    CONSTRAINT chk_filter CHECK (filter IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')),
     CONSTRAINT unique_callback UNIQUE (callback)
 );
 

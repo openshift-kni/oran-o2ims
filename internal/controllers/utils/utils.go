@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
@@ -674,7 +675,10 @@ func SetupOAuthClient(ctx context.Context, config OAuthClientConfig) (*http.Clie
 
 	c := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig}}
+			TLSClientConfig: tlsConfig,
+		},
+		Timeout: 30 * time.Second,
+	}
 
 	if config.ClientId != "" {
 		config := clientcredentials.Config{
