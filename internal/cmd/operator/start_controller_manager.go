@@ -76,6 +76,10 @@ func ControllerManager() *cobra.Command {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.",
 	)
+	flags.BoolVar(&c.enableWebhooks,
+		"enable-webhooks",
+		true,
+		"Enable the o2ims validating webhooks")
 	flags.StringVar(
 		&c.image,
 		imageFlagName,
@@ -92,6 +96,7 @@ func ControllerManager() *cobra.Command {
 type ControllerManagerCommand struct {
 	metricsAddr          string
 	enableLeaderElection bool
+	enableWebhooks       bool
 	probeAddr            string
 	image                string
 }
@@ -237,6 +242,18 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
+	}
+
+	if c.enableWebhooks {
+		if err = (&provisioningv1alpha1.ProvisioningRequest{}).SetupWebhookWithManager(mgr); err != nil {
+			logger.ErrorContext(
+				ctx,
+				"Unable to create webhook",
+				slog.String("webhook", "ProvisioningRequest"),
+				slog.String("error", err.Error()),
+			)
+			return exit.Error(1)
+		}
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
