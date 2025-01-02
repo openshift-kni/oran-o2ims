@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
@@ -52,6 +53,7 @@ func GetSchemeForHub() *runtime.Scheme {
 	utilruntime.Must(clusterv1beta2.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 	utilruntime.Must(agentv1beta1.AddToScheme(scheme))
+	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
 
 	return scheme
 }
