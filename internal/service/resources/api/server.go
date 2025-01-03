@@ -19,7 +19,7 @@ import (
 	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
-// AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
+// ResourceServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
 var _ api.StrictServerInterface = (*ResourceServer)(nil)
 
 // ResourceServerConfig defines the configuration attributes for the resource server
