@@ -1,24 +1,82 @@
 package models
 
 import (
+	"fmt"
+
+	"github.com/google/uuid"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 )
 
 // ConvertAlarmEventRecordModelToApi converts an AlarmEventRecord DB model to an API model
 func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEventRecord {
-	return api.AlarmEventRecord{
+	record := api.AlarmEventRecord{
 		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
 		AlarmAcknowledgedTime: aerModel.AlarmAcknowledgedTime,
 		AlarmChangedTime:      aerModel.AlarmChangedTime,
 		AlarmClearedTime:      aerModel.AlarmClearedTime,
-		AlarmDefinitionId:     *aerModel.AlarmDefinitionID,
 		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
 		PerceivedSeverity:     aerModel.PerceivedSeverity,
-		ProbableCauseId:       *aerModel.ProbableCauseID,
-		ResourceTypeID:        *aerModel.ObjectTypeID,
 		Extensions:            aerModel.Extensions,
 	}
+
+	if aerModel.AlarmDefinitionID != nil {
+		record.AlarmDefinitionId = *aerModel.AlarmDefinitionID
+	}
+	if aerModel.ProbableCauseID != nil {
+		record.ProbableCauseId = *aerModel.ProbableCauseID
+	}
+	if aerModel.ObjectTypeID != nil {
+		record.ResourceTypeID = *aerModel.ObjectTypeID
+	}
+
+	return record
+}
+
+// convertAlarmEventRecordModelToAlarmEventNotification converts an AlarmEventRecord to api AlarmEventNotification
+func convertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, subModel AlarmSubscription, globalCloudID uuid.UUID) api.AlarmEventNotification {
+	or := fmt.Sprintf("%s/alarms/%v", "/o2ims-infrastructureMonitoring/v1", aerModel.AlarmEventRecordID.String())
+	notification := api.AlarmEventNotification{
+		AlarmAcknowledgeTime:   aerModel.AlarmAcknowledgedTime,
+		AlarmAcknowledged:      aerModel.AlarmAcknowledged,
+		AlarmEventRecordId:     aerModel.AlarmEventRecordID,
+		AlarmRaisedTime:        aerModel.AlarmRaisedTime,
+		ConsumerSubscriptionId: subModel.ConsumerSubscriptionID,
+		Extensions:             aerModel.Extensions,
+		GlobalCloudID:          globalCloudID,
+		NotificationEventType:  AlarmFilterToEventType(aerModel.NotificationEventType),
+		ObjectRef:              &or,
+		PerceivedSeverity:      aerModel.PerceivedSeverity,
+	}
+
+	// Handle all pointer fields together
+	if aerModel.AlarmChangedTime != nil {
+		notification.AlarmChangedTime = *aerModel.AlarmChangedTime
+	}
+	if aerModel.AlarmDefinitionID != nil {
+		notification.AlarmDefinitionID = *aerModel.AlarmDefinitionID
+	}
+	if aerModel.ProbableCauseID != nil {
+		notification.ProbableCauseID = *aerModel.ProbableCauseID
+	}
+	if aerModel.ObjectID != nil {
+		notification.ResourceID = *aerModel.ObjectID
+	}
+	if aerModel.ObjectTypeID != nil {
+		notification.ResourceTypeID = *aerModel.ObjectTypeID
+	}
+
+	return notification
+}
+
+// ConvertAlarmEventRecordModelsToAlarmEventNotifications converts multiple AlarmEventRecord DB to multiple api AlarmEventNotification
+func ConvertAlarmEventRecordModelsToAlarmEventNotifications(aerModel []AlarmEventRecord, subModel AlarmSubscription, globalCloudID uuid.UUID) []api.AlarmEventNotification {
+	var res []api.AlarmEventNotification
+	for _, aer := range aerModel {
+		res = append(res, convertAlarmEventRecordModelToAlarmEventNotification(aer, subModel, globalCloudID))
+	}
+
+	return res
 }
 
 // ConvertServiceConfigurationToAPI converts an ServiceConfiguration DB model to an API model
@@ -43,7 +101,7 @@ func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.Alar
 	}
 
 	if subscriptionModel.Filter != nil {
-		*apiModel.Filter = api.AlarmSubscriptionInfoFilter(*subscriptionModel.Filter)
+		apiModel.Filter = subscriptionModel.Filter
 	}
 
 	return apiModel
@@ -54,6 +112,22 @@ func ConvertSubscriptionAPIToModel(subscriptionAPI *api.AlarmSubscriptionInfo) A
 	return AlarmSubscription{
 		Callback:               subscriptionAPI.Callback,
 		ConsumerSubscriptionID: subscriptionAPI.ConsumerSubscriptionId,
-		Filter:                 (*string)(subscriptionAPI.Filter),
+		Filter:                 subscriptionAPI.Filter,
+	}
+}
+
+// AlarmFilterToEventType map text to int e.g NEW -> 0
+func AlarmFilterToEventType(filter api.AlarmSubscriptionInfoFilter) api.AlarmEventNotificationNotificationEventType {
+	switch filter {
+	case api.AlarmSubscriptionInfoFilterNEW:
+		return api.AlarmEventNotificationNotificationEventTypeNEW
+	case api.AlarmSubscriptionInfoFilterCHANGE:
+		return api.AlarmEventNotificationNotificationEventTypeCHANGE
+	case api.AlarmSubscriptionInfoFilterCLEAR:
+		return api.AlarmEventNotificationNotificationEventTypeCLEAR
+	case api.AlarmSubscriptionInfoFilterACKNOWLEDGE:
+		return api.AlarmEventNotificationNotificationEventTypeACKNOWLEDGE
+	default:
+		return api.AlarmEventNotificationNotificationEventTypeNEW
 	}
 }

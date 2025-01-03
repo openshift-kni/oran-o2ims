@@ -80,9 +80,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		Db: pool,
 	}
 
-	// TODO: Audit and Insert data database
-
-	// TODO: Launch k8s job for DB remove archived data
+	// TODO: Launch k8s job for DB remove resolved data
 
 	// Parse global cloud id
 	var globalCloudID uuid.UUID
@@ -91,6 +89,9 @@ func Serve(config *api.AlarmsServerConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to parse global cloud id: %w", err)
 		}
+	} else {
+		slog.Debug("No globalCloudID set by the operator, generating one instead")
+		globalCloudID = uuid.New()
 	}
 
 	// Add Alarm Service Configuration to the database
@@ -102,9 +103,23 @@ func Serve(config *api.AlarmsServerConfig) error {
 
 	// Init server
 	// Create the handler
+	// TODO: fill in the oauth attributes from the SMO config passed to the server
+	oc, err := utils.SetupOAuthClient(ctx, utils.OAuthClientConfig{})
+	if err != nil {
+		return fmt.Errorf("failed to setup oauth client: %w", err)
+	}
+
+	// Create a new logger to be passed to things that need a logger
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	}))
+
 	alarmServer := api.AlarmsServer{
 		GlobalCloudID:    globalCloudID,
 		AlarmsRepository: alarmRepository,
+		HttpClient:       oc,
+		Logger:           logger,
 	}
 
 	if err := UpdateAlarmDictionaryAndAlarmsDefinitionData(ctx, hubClient, &alarmServer); err != nil {
@@ -124,12 +139,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Register a default handler that replies with 404 so that we can override the response format
 	r.HandleFunc("/", common.NotFoundFunc())
 
-	// Create a new logger to be passed to things that need a logger
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug, // TODO: set with server args
-	}))
-
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
 	if err != nil {
@@ -137,7 +146,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
-	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
+	filterAdapter, err := common.NewFilterAdapter(alarmServer.Logger, swagger)
 	if err != nil {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
@@ -189,7 +198,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("error starting server: %w", err)
 	case <-ctx.Done():
 		slog.Info("Shutting down server")
-		if err := common.GracefulShutdown(srv); err != nil {
+		if err := gracefulShutdownWithTasks(srv, &alarmServer); err != nil {
 			return fmt.Errorf("error shutting down server: %w", err)
 		}
 	}
@@ -227,4 +236,27 @@ func UpdateAlarmDictionaryAndAlarmsDefinitionData(ctx context.Context, hubClient
 	}
 
 	return nil
+}
+
+// gracefulShutdownWithTasks Server may have background tasks running when SIGTERM is received. Let them continue.
+func gracefulShutdownWithTasks(srv *http.Server, alarmsServer *api.AlarmsServer) error {
+	done := make(chan struct{})
+	go func() {
+		alarmsServer.Wg.Wait()
+		close(done)
+	}()
+
+	serverErr := common.GracefulShutdown(srv)
+
+	slog.Info("Waiting for alarms server background tasks to finish")
+	select {
+	case <-done:
+		slog.Info("Successfully finished all alarms server background tasks")
+		return serverErr //nolint:wrapcheck
+	case <-time.After(29 * time.Second): // TODO: Set timeout to match terminationGracePeriodSeconds (default 30s) minus buffer for remaining defers
+		if serverErr != nil {
+			return fmt.Errorf("shutdown failed and tasks timed out: %w", serverErr)
+		}
+		return fmt.Errorf("alarms server background tasks timed out")
+	}
 }
