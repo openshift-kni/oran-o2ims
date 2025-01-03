@@ -61,25 +61,29 @@ CREATE OR REPLACE TRIGGER update_alarm_event_sequence
 CREATE OR REPLACE FUNCTION track_alarm_event_record_change_time()
     RETURNS TRIGGER AS $$
 BEGIN
-    -- Set initial change time if not set
+    -- Alarm record created. Set alarm_changed_time to alarm_raised_time
     IF NEW.alarm_changed_time IS NULL THEN
         NEW.alarm_changed_time = NEW.alarm_raised_time;
         RETURN NEW;
     END IF;
 
-    -- Skip update if alarm is acknowledged
-    IF NEW.alarm_acknowledged THEN
+    -- Alarm record cleared. Set alarm_changed_time to alarm_cleared_time
+    IF NEW.perceived_severity = 5 AND NEW.perceived_severity IS DISTINCT FROM OLD.perceived_severity THEN
+        NEW.alarm_changed_time = NEW.alarm_cleared_time;
         RETURN NEW;
     END IF;
 
-    -- Update change time if relevant fields changed
-    IF (NEW.alarm_status IS DISTINCT FROM OLD.alarm_status OR
-        NEW.alarm_cleared_time IS DISTINCT FROM OLD.alarm_cleared_time OR
-        NEW.perceived_severity IS DISTINCT FROM OLD.perceived_severity OR
-        NEW.object_id IS DISTINCT FROM OLD.object_id OR
+    -- Alarm record acknowledged. Set alarm_changed_time to alarm_acknowledged_time
+    IF NEW.alarm_acknowledged = TRUE AND NEW.alarm_acknowledged IS DISTINCT FROM OLD.alarm_acknowledged THEN
+        NEW.alarm_changed_time = NEW.alarm_acknowledged_time;
+        RETURN NEW;
+    END IF;
+
+    -- Alarm record updated. Set alarm_changed_time to current timestamp
+    IF  NEW.object_id IS DISTINCT FROM OLD.object_id OR
         NEW.object_type_id IS DISTINCT FROM OLD.object_type_id OR
         NEW.alarm_definition_id IS DISTINCT FROM OLD.alarm_definition_id OR
-        NEW.probable_cause_id IS DISTINCT FROM OLD.probable_cause_id)
+        NEW.probable_cause_id IS DISTINCT FROM OLD.probable_cause_id
     THEN
         NEW.alarm_changed_time = CURRENT_TIMESTAMP;
     END IF;
