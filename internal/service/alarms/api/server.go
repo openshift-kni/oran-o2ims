@@ -315,7 +315,6 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		record.PerceivedSeverity = perceivedSeverity
 		currentTime := time.Now()
 		record.AlarmClearedTime = &currentTime
-		record.AlarmChangedTime = &currentTime
 	}
 
 	// Patch alarmAcknowledged
@@ -350,7 +349,6 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		record.AlarmAcknowledged = alarmAcknowledged
 		currentTime := time.Now()
 		record.AlarmAcknowledgedTime = &currentTime
-		record.AlarmChangedTime = &currentTime
 	}
 
 	// Update the Alarm Event Record
