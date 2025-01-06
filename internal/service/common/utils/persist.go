@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stephenafamo/bob/dialect/psql"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -162,7 +163,44 @@ func PersistObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.P
 		dataChangeEvent, err = PersistDataChangeEvent(
 			ctx, tx, record.TableName(), uuid, parentUUID, beforeModel, afterModel)
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource type data change object: %w", err)
+			return nil, fmt.Errorf("failed to persist data change object: %w", err)
+		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return dataChangeEvent, nil
+}
+
+func DeleteObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.Pool, record T,
+	uuid uuid.UUID, parentUUID *uuid.UUID,
+	converter GenericModelConverter) (*models.DataChangeEvent, error) {
+	var dataChangeEvent *models.DataChangeEvent
+
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer Rollback(ctx, tx)
+
+	where := psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))
+	rowsAffected, err := Delete[T](ctx, tx, where)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete object: %w", err)
+	}
+
+	if rowsAffected != 0 {
+		beforeModel := converter(record)
+
+		// Capture a change event if the data actually changed
+		dataChangeEvent, err = PersistDataChangeEvent(
+			ctx, tx, record.TableName(), uuid, parentUUID, beforeModel, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to persist data change object: %w", err)
 		}
 	}
 

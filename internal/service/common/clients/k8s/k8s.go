@@ -30,13 +30,13 @@ const (
 )
 
 // NewClientForHub creates a new client for the hub cluster
-func NewClientForHub() (client.Client, error) {
+func NewClientForHub() (client.WithWatch, error) {
 	conf, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config: %w", err)
 	}
 
-	c, err := client.New(conf, client.Options{Scheme: GetSchemeForHub()})
+	c, err := client.NewWithWatch(conf, client.Options{Scheme: GetSchemeForHub()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}

@@ -21,9 +21,9 @@ var _ = Describe("Alertmanager", func() {
 		var (
 			ctx    context.Context
 			scheme *runtime.Scheme
-			c      client.Client
+			c      client.WithWatch
 
-			temp func() (client.Client, error)
+			temp func() (client.WithWatch, error)
 		)
 
 		BeforeEach(func() {
@@ -31,7 +31,7 @@ var _ = Describe("Alertmanager", func() {
 			_ = corev1.AddToScheme(scheme)
 
 			temp = getHubClient
-			getHubClient = func() (client.Client, error) {
+			getHubClient = func() (client.WithWatch, error) {
 				return c, nil
 			}
 

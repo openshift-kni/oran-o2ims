@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -18,20 +20,39 @@ import (
 
 const pollingDelay = 10 * time.Minute
 
+// asyncEventBufferSize defines the number of buffered entries in the async event channel
+const asyncEventBufferSize = 10
+
 // DataSource represents the operations required to be supported by any objects implementing a
 // data collection backend.
 type DataSource interface {
 	Name() string
-	SetID(uuid.UUID)
+	GetID() uuid.UUID
+	Init(dataSourceID uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent)
 	SetGenerationID(value int)
 	GetGenerationID() int
 	IncrGenerationID() int
+}
+
+// ResourceDataSource defines an interface of a data source capable of getting handling Inventory resources.
+type ResourceDataSource interface {
+	DataSource
 	GetResourcePools(ctx context.Context) ([]models.ResourcePool, error)
 	GetResources(ctx context.Context, pools []models.ResourcePool) ([]models.Resource, error)
-	GetDeploymentManagers(ctx context.Context) ([]models.DeploymentManager, error)
 	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
 }
 
+// DeploymentManagerDataSource defines an interface of a data source capable of getting DeploymentManager resources.
+type DeploymentManagerDataSource interface {
+	GetDeploymentManagers(ctx context.Context) ([]models.DeploymentManager, error)
+}
+
+// WatchableDataSource defines an interface of a data source capable of watching for async events.
+type WatchableDataSource interface {
+	Watch(ctx context.Context) error
+}
+
+// NotificationHandler defines an interface over which notifications are published.
 type NotificationHandler interface {
 	Notify(ctx context.Context, event *notifier.Notification)
 }
@@ -41,6 +62,7 @@ type Collector struct {
 	notificationHandler NotificationHandler
 	repository          *repo.ResourcesRepository
 	dataSources         []DataSource
+	AsyncChangeEvents   chan *async.AsyncChangeEvent
 }
 
 // NewCollector creates a new collector instance
@@ -49,6 +71,7 @@ func NewCollector(repo *repo.ResourcesRepository, notificationHandler Notificati
 		repository:          repo,
 		notificationHandler: notificationHandler,
 		dataSources:         dataSources,
+		AsyncChangeEvents:   make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
 	}
 }
 
@@ -58,13 +81,21 @@ func (c *Collector) Run(ctx context.Context) error {
 		return err
 	}
 
+	// Start listening for async events
+	if err := c.watchForChanges(ctx); err != nil {
+		return fmt.Errorf("failed to start listeners: %w", err)
+	}
+
 	// Run the initial data collection
 	c.execute(ctx)
 
 	for {
 		select {
 		// TODO: Add hook for new data sources from watch events
-		// TODO: Add hook for kick to run collection based on watch events on individual data sources
+		case event := <-c.AsyncChangeEvents:
+			if err := c.handleAsyncEvent(ctx, event); err != nil {
+				slog.Error("failed to handle async change", "event", event, "error", err)
+			}
 		case <-time.After(pollingDelay):
 			c.execute(ctx)
 		case <-ctx.Done():
@@ -104,15 +135,30 @@ func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) e
 			return fmt.Errorf("failed to create new data source %q: %w", name, err)
 		}
 
-		dataSource.SetID(*result.DataSourceID)
+		dataSource.Init(*result.DataSourceID, 0, c.AsyncChangeEvents)
 		slog.Info("created new data source", "name", name, "uuid", *result.DataSourceID)
 	case err != nil:
 		return fmt.Errorf("failed to get data source %q: %w", name, err)
 	default:
-		dataSource.SetID(*record.DataSourceID)
-		dataSource.SetGenerationID(record.GenerationID)
+		dataSource.Init(*record.DataSourceID, record.GenerationID, c.AsyncChangeEvents)
 		slog.Info("restored data source",
 			"name", name, "uuid", record.DataSourceID, "generation", record.GenerationID)
+	}
+	return nil
+}
+
+// watchForChanges starts an event listener for each data source.  Data is reported by via the channel provided to
+// each data source.
+func (c *Collector) watchForChanges(ctx context.Context) error {
+	for _, d := range c.dataSources {
+		if _, ok := d.(WatchableDataSource); !ok {
+			continue
+		}
+
+		if err := d.(WatchableDataSource).Watch(ctx); err != nil {
+			slog.Error("failed to watch for changes", "source", d.Name(), "error", err)
+			return fmt.Errorf("failed to watch for changes: %w", err)
+		}
 	}
 	return nil
 }
@@ -122,9 +168,14 @@ func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) e
 func (c *Collector) execute(ctx context.Context) {
 	slog.Debug("collector loop running", "sources", len(c.dataSources))
 	for _, d := range c.dataSources {
+		rd, ok := d.(ResourceDataSource)
+		if !ok {
+			continue
+		}
+
 		d.IncrGenerationID()
 		slog.Debug("collecting data from data source", "source", d.Name(), "generationID", d.GetGenerationID())
-		if err := c.executeOneDataSource(ctx, d); err != nil {
+		if err := c.executeOneDataSource(ctx, rd); err != nil {
 			slog.Warn("failed to collect data from data source", "source", d.Name(), "error", err)
 		} else {
 			slog.Debug("collected data from data source", "source", d.Name())
@@ -134,7 +185,9 @@ func (c *Collector) execute(ctx context.Context) {
 }
 
 // executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
-func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSource) (err error) {
+func (c *Collector) executeOneDataSource(ctx context.Context, dataSource ResourceDataSource) (err error) {
+	// TODO: Add code to retrieve alarm dictionaries
+
 	// Get the list of resource pools for this data source
 	pools, err := c.collectResourcePools(ctx, dataSource)
 	if err != nil {
@@ -147,22 +200,25 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 		return fmt.Errorf("failed to collect resources: %w", err)
 	}
 
-	// Get the list of deployment managers for this data source
-	_, err = c.collectDeploymentManagers(ctx, dataSource)
+	// Persist data source info
+	id := dataSource.GetID()
+	_, err = c.repository.UpdateDataSource(ctx, &models2.DataSource{
+		DataSourceID: &id,
+		Name:         dataSource.Name(),
+		GenerationID: dataSource.GetGenerationID(),
+	})
 	if err != nil {
-		return fmt.Errorf("failed to collect deployment managers: %w", err)
+		return fmt.Errorf("failed to update data source %q: %w", dataSource.Name(), err)
 	}
 
 	// TODO: purge stale record
-
-	// TODO: persist data source info
 
 	return nil
 }
 
 // collectResources collects Resource objects from the data source, persists them to the database,
 // and signals any change events to the notification processor.
-func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
+func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDataSource,
 	pools []models.ResourcePool) ([]models.Resource, error) {
 	slog.Debug("collecting resource and types", "source", dataSource.Name())
 
@@ -220,7 +276,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
 
 // collectResourcePools collects ResourcePool objects from the data source, persists them to the database,
 // and signals any change events to the notification processor.
-func (c *Collector) collectResourcePools(ctx context.Context, dataSource DataSource) ([]models.ResourcePool, error) {
+func (c *Collector) collectResourcePools(ctx context.Context, dataSource ResourceDataSource) ([]models.ResourcePool, error) {
 	slog.Debug("collecting resource pools", "source", dataSource.Name())
 
 	pools, err := dataSource.GetResourcePools(ctx)
@@ -247,31 +303,101 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource DataSou
 	return pools, nil
 }
 
-// collectDeploymentManagers collects DeploymentManager objects from the data source, persists them to the database,
-// and signals any change events to the notification processor.
-func (c *Collector) collectDeploymentManagers(ctx context.Context, dataSource DataSource) ([]models.DeploymentManager, error) {
-	slog.Debug("collecting deployment managers", "source", dataSource.Name())
-
-	dms, err := dataSource.GetDeploymentManagers(ctx)
+// handleDeploymentManagerSyncCompletion handles the end of sync for DeploymentManager objects.  It deletes any
+// DeploymentManager objects not included in the set of keys received during the sync operation.
+func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, ids []any) error {
+	records, err := c.repository.GetDeploymentManagersNotIn(ctx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get deployment managers: %w", err)
+		return fmt.Errorf("failed to get stale deployment managers: %w", err)
 	}
 
-	// Loop over the set of deployment managers and insert (or update) as needed
-	for _, dm := range dms {
-		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, dm, dm.DeploymentManagerID, nil, func(object interface{}) any {
-				record, _ := object.(models.DeploymentManager)
-				return models.DeploymentManagerToModel(&record)
-			})
+	count := 0
+	for _, record := range records {
+		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.DeploymentManagerID, nil, func(object interface{}) any {
+			r, _ := object.(models.DeploymentManager)
+			return models.DeploymentManagerToModel(&r)
+		})
+
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist deployment manager: %w", err)
+			return fmt.Errorf("failed to delete stale deployment manager: %w", err)
 		}
 
 		if dataChangeEvent != nil {
 			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			count++
 		}
 	}
 
-	return dms, nil
+	if count > 0 {
+		slog.Info("Deleted stale deployment manager records", "count", count)
+	}
+
+	return nil
+}
+
+// handleSyncCompletion handles the case of a data source watcher that has discovered that it is
+// out of date with the data on the API server.  In response to that, it has re-listed all objects to
+// get back to a synchronized state before processing new change events.  This function is being
+// invoked to inform us that all data has been received and that any objects in the database that
+// are not part of the set of keys received can be deleted.
+func (c *Collector) handleSyncCompletion(ctx context.Context, objectType db.Model, keys []uuid.UUID) error {
+	ids := make([]any, len(keys))
+	for i, key := range keys {
+		ids[i] = key
+	}
+
+	switch obj := objectType.(type) {
+	case models.DeploymentManager:
+		return c.handleDeploymentManagerSyncCompletion(ctx, ids)
+	default:
+		return fmt.Errorf("unsupported sync completion type for '%T'", obj)
+	}
+}
+
+// handleAsyncEvent receives and processes an async event received from a data source.
+func (c *Collector) handleAsyncEvent(ctx context.Context, event *async.AsyncChangeEvent) error {
+	if event.EventType == async.SyncComplete {
+		// The watch is expired (e.g., the ResourceVersion is too old).  We need to re-sync and start again.
+		return c.handleSyncCompletion(ctx, event.Object, event.Keys)
+	}
+
+	switch value := event.Object.(type) {
+	case models.DeploymentManager:
+		return c.handleAsyncDeploymentManagerEvent(ctx, value, event.EventType == async.Deleted)
+	default:
+		return fmt.Errorf("unknown object type '%T'", event.Object)
+	}
+}
+
+// handleAsyncDeploymentManagerEvent handles an async event received for a ClusterResource object.
+func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deploymentManager models.DeploymentManager, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+	if deleted {
+		dataChangeEvent, err = utils.DeleteObjectWithChangeEvent(
+			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+				record, _ := object.(models.DeploymentManager)
+				return models.DeploymentManagerToModel(&record)
+			})
+
+		if err != nil {
+			return fmt.Errorf("failed to delete deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)
+		}
+	} else {
+		dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
+			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+				record, _ := object.(models.DeploymentManager)
+				return models.DeploymentManagerToModel(&record)
+			})
+
+		if err != nil {
+			return fmt.Errorf("failed to update deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)
+		}
+	}
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
 }

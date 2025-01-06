@@ -26,7 +26,7 @@ func (r DataSource) TableName() string {
 }
 
 // PrimaryKey returns the primary key column associated to this model
-func (r DataSource) PrimaryKey() string { return "id" }
+func (r DataSource) PrimaryKey() string { return "data_source_id" }
 
 // OnConflict returns the column or constraint to be used in the UPSERT operation
 func (r DataSource) OnConflict() string {

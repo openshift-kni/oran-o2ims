@@ -33,10 +33,34 @@ func (r *ClusterRepository) GetNodeClusters(ctx context.Context) ([]models.NodeC
 	return utils.FindAll[models.NodeCluster](ctx, r.Db)
 }
 
+// GetNodeClustersNotIn returns the list of NodeCluster records not matching the list of keys provided, or an empty list
+// if none exist; otherwise an error
+func (r *ClusterRepository) GetNodeClustersNotIn(ctx context.Context, keys []any) ([]models.NodeCluster, error) {
+	e := psql.Quote(models.NodeCluster{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	return utils.Search[models.NodeCluster](ctx, r.Db, e)
+}
+
 // GetNodeCluster returns a NodeCluster record matching the specified UUID value or ErrNotFound if no record matched;
 // otherwise an error
 func (r *ClusterRepository) GetNodeCluster(ctx context.Context, id uuid.UUID) (*models.NodeCluster, error) {
 	return utils.Find[models.NodeCluster](ctx, r.Db, id)
+}
+
+// GetNodeClusterByName returns a NodeCluster record matching the specified name or ErrNotFound if no record matched;
+// otherwise an error
+func (r *ClusterRepository) GetNodeClusterByName(ctx context.Context, name string) (*models.NodeCluster, error) {
+	e := psql.Quote("name").EQ(psql.Arg(name))
+	results, err := utils.Search[models.NodeCluster](ctx, r.Db, e)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for node cluster by name: %w", err)
+	}
+	if len(results) == 0 {
+		return nil, utils.ErrNotFound
+	}
+	if len(results) > 1 {
+		return nil, fmt.Errorf("more than one node cluster with name %s found", name)
+	}
+	return &results[0], nil
 }
 
 // GetNodeClusterResources returns the list of ClusterResource records that have a matching "cluster_name" attribute or
@@ -81,6 +105,13 @@ func (r *ClusterRepository) GetClusterResourceType(ctx context.Context, id uuid.
 // GetClusterResources returns the list of ClusterResource records or an empty list if none exist; otherwise an error
 func (r *ClusterRepository) GetClusterResources(ctx context.Context) ([]models.ClusterResource, error) {
 	return utils.FindAll[models.ClusterResource](ctx, r.Db)
+}
+
+// GetClusterResourcesNotIn returns the list of ClusterResource records not matching the list of keys provided, or an
+// empty list if none exist; otherwise an error
+func (r *ClusterRepository) GetClusterResourcesNotIn(ctx context.Context, keys []any) ([]models.ClusterResource, error) {
+	e := psql.Quote(models.ClusterResource{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	return utils.Search[models.ClusterResource](ctx, r.Db, e)
 }
 
 // GetClusterResource returns a ClusterResource record matching the specified UUID value or ErrNotFound if no record matched;
