@@ -35,13 +35,11 @@ require (
 	github.com/peterhellberg/link v1.2.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.76.2
 	github.com/prometheus/client_golang v1.20.5
-	github.com/r3labs/diff/v3 v3.0.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	github.com/stephenafamo/bob v0.28.0
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 	github.com/thoas/go-funk v0.9.3
-	github.com/xeipuuv/gojsonschema v1.2.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/net v0.34.0
 	golang.org/x/oauth2 v0.25.0
@@ -119,6 +117,7 @@ require (
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
+	github.com/r3labs/diff/v3 v3.0.1 // indirect
 	github.com/sergi/go-diff v1.3.1 // indirect
 	github.com/speakeasy-api/openapi-overlay v0.9.0 // indirect
 	github.com/stephenafamo/scan v0.6.1 // indirect
@@ -128,6 +127,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
+	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	go.mongodb.org/mongo-driver v1.17.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect

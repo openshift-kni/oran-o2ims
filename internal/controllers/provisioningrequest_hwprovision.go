@@ -412,7 +412,7 @@ func (t *provisioningRequestReconcilerTask) buildNodePoolSpec(clusterInstance *s
 		nodeGroups = append(nodeGroups, nodeGroup)
 	}
 
-	siteID, err := utils.ExtractMatchingInput(
+	siteID, err := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamOCloudSiteId)
 	if err != nil {
 		return fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamOCloudSiteId, err)
@@ -439,7 +439,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 
 	nodePool := &hwv1alpha1.NodePool{}
 
-	clusterTemplate, err := t.getCrClusterTemplateRef(ctx)
+	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
 	}
