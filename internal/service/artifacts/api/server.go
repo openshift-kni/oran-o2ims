@@ -47,7 +47,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplates(
 		// Convert the current ClusterTemplate to ManagedInfrastructureTemplate.
 		managedInfrastructureTemplate := api.ManagedInfrastructureTemplate{
 			ArtifactResourceId: uuid,
-			Name:               clusterTemplate.Name,
+			Name:               clusterTemplate.Spec.Name,
 			Version:            clusterTemplate.Spec.Version,
 			Description:        clusterTemplate.Spec.Description,
 			ParameterSchema:    parameterSchema,
