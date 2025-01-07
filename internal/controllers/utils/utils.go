@@ -185,18 +185,18 @@ func getTLSClientCertificateSecret(serverName string, inventory *inventoryv1alph
 		return nil
 	}
 
-	switch {
-	case serverName == InventoryClusterServerName:
+	switch serverName {
+	case InventoryClusterServerName:
 		if inventory.Spec.ClusterServerConfig.ClientTLS != nil &&
 			inventory.Spec.ClusterServerConfig.ClientTLS.ClientCertificateName != nil {
 			return inventory.Spec.ClusterServerConfig.ClientTLS.ClientCertificateName
 		}
-	case serverName == InventoryResourceServerName:
+	case InventoryResourceServerName:
 		if inventory.Spec.ResourceServerConfig.ClientTLS != nil &&
 			inventory.Spec.ResourceServerConfig.ClientTLS.ClientCertificateName != nil {
 			return inventory.Spec.ResourceServerConfig.ClientTLS.ClientCertificateName
 		}
-	case serverName == InventoryAlarmServerName:
+	case InventoryAlarmServerName:
 		if inventory.Spec.AlarmServerConfig.ClientTLS != nil &&
 			inventory.Spec.AlarmServerConfig.ClientTLS.ClientCertificateName != nil {
 			return inventory.Spec.AlarmServerConfig.ClientTLS.ClientCertificateName

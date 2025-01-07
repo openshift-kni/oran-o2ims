@@ -505,7 +505,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 	}
 
 	config := utils.OAuthClientConfig{
-		CaBundle: []byte(caBundle),
+		TLSConfig: &utils.TLSConfig{CaBundle: []byte(caBundle)},
 	}
 
 	oAuthConfig := t.object.Spec.SmoConfig.OAuthConfig
@@ -525,10 +525,13 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get client-secret from secret: %s, %w", oAuthConfig.ClientSecretName, err)
 		}
 
-		config.ClientId = clientId
-		config.ClientSecret = clientSecret
-		config.TokenUrl = fmt.Sprintf("%s%s", oAuthConfig.URL, oAuthConfig.TokenEndpoint)
-		config.Scopes = oAuthConfig.Scopes
+		o := utils.OAuthConfig{
+			ClientID:     clientId,
+			ClientSecret: clientSecret,
+			TokenURL:     fmt.Sprintf("%s%s", oAuthConfig.URL, oAuthConfig.TokenEndpoint),
+			Scopes:       oAuthConfig.Scopes,
+		}
+		config.OAuthConfig = &o
 	}
 
 	if t.object.Spec.SmoConfig.TLS != nil && t.object.Spec.SmoConfig.TLS.ClientCertificateName != nil {
@@ -538,7 +541,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get client certificate from secret: %w", err)
 		}
 
-		config.ClientCert = cert
+		config.TLSConfig.ClientCert = cert
 	}
 
 	httpClient, err := utils.SetupOAuthClient(ctx, &config)

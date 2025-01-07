@@ -136,9 +136,9 @@ func (c *CommonServerConfig) CreateOAuthConfig() (*utils.OAuthClientConfig, erro
 		// Load the bundle
 		bytes, err := os.ReadFile(c.TLS.CABundleFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read CABundle file '%s': %w", c.TLS.CABundleFile, err)
+			return nil, fmt.Errorf("failed to read CA bundle file '%s': %w", c.TLS.CABundleFile, err)
 		}
-		config.CaBundle = bytes
+		config.TLSConfig = &utils.TLSConfig{CaBundle: bytes}
 		slog.Debug("using CA bundle", "path", c.TLS.CABundleFile)
 	}
 
@@ -148,18 +148,18 @@ func (c *CommonServerConfig) CreateOAuthConfig() (*utils.OAuthClientConfig, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client certificate and key pair: %w", err)
 		}
-		config.ClientCert = &cert
+		if config.TLSConfig == nil {
+			config.TLSConfig = &utils.TLSConfig{}
+		}
+		config.TLSConfig.ClientCert = &cert
 		slog.Debug("using TLS client config", "cert", c.TLS.CertFile, ",key", c.TLS.KeyFile)
 	}
 
-	config.ClientId = c.OAuth.ClientID
-	config.ClientSecret = c.OAuth.ClientSecret
-	config.TokenUrl = c.OAuth.TokenURL
-	config.Scopes = c.OAuth.Scopes
-
-	if config.TokenUrl != "" {
-		// TODO: redact id/secret
-		slog.Debug("using OAUth config", "url", c.OAuth.TokenURL, "client-id", c.OAuth.ClientID, "client-secret", c.OAuth.ClientSecret, "scopes", c.OAuth.Scopes)
+	config.OAuthConfig = &utils.OAuthConfig{
+		TokenURL:     c.OAuth.TokenURL,
+		ClientID:     c.OAuth.ClientID,
+		ClientSecret: c.OAuth.ClientSecret,
+		Scopes:       c.OAuth.Scopes,
 	}
 
 	return &config, nil
