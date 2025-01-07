@@ -1,8 +1,8 @@
--   path: /spec/template/spec/containers/1/command
-    op: replace
-    value:
-        - /usr/bin/oran-o2ims
-        - start
-        - controller-manager
-        - --health-probe-bind-address=:8081
-        - --metrics-bind-address=127.0.0.1:8080
+- path: /spec/template/spec/containers/1/command
+  op: replace
+  value:
+  - /usr/bin/oran-o2ims
+  - start
+  - controller-manager
+  - --health-probe-bind-address=:8081
+  - --metrics-bind-address=127.0.0.1:8080

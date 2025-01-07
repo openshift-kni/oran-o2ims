@@ -1,4 +1,4 @@
--   path: /spec/template/spec/containers/1/livenessProbe
-    op: remove
--   path: /spec/template/spec/containers/1/readinessProbe
-    op: remove
+- path: /spec/template/spec/containers/1/livenessProbe
+  op: remove
+- path: /spec/template/spec/containers/1/readinessProbe
+  op: remove
