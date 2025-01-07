@@ -273,3 +273,16 @@ const (
 	AlertmanagerNamespace  = "open-cluster-management-observability"
 	AlertmanagerSA         = "alertmanager"
 )
+
+// SMO TLS Mount Paths
+const (
+	TLSClientMountPath = "/secrets/smo/tls"
+	CABundleMountPath  = "/secrets/smo/certs"
+)
+
+// SMO OAuth specific environment variables.  These values are stored in environment variables to
+// avoid them being visible in the command line arguments.
+const (
+	OAuthClientIDEnvName     = "SMO_OAUTH_CLIENT_ID"
+	OAuthClientSecretEnvName = "SMO_OAUTH_CLIENT_SECRET" // nolint: gosec
+)

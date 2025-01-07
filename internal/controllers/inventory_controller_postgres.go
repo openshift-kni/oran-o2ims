@@ -39,8 +39,8 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 	t.logger.InfoContext(ctx, "[deploy postgres server]", "Name", serverName)
 
 	// Default server volumes.
-	deploymentVolumes := utils.GetDeploymentVolumes(serverName)
-	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName)
+	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
+	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName, t.object)
 
 	// Add additional database volumes.
 	deploymentVolumes = append(deploymentVolumes,

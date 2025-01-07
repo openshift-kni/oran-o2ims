@@ -58,11 +58,10 @@ type SubscriptionWorker struct {
 }
 
 // NewSubscriptionWorker creates a new subscription worker object to service a specific subscription
-func NewSubscriptionWorker(ctx context.Context, subscriptionJobCompleteChannel chan *SubscriptionJobComplete,
+func NewSubscriptionWorker(ctx context.Context, oauthConfig *utils.OAuthClientConfig, subscriptionJobCompleteChannel chan *SubscriptionJobComplete,
 	subscription *SubscriptionInfo) (*SubscriptionWorker, error) {
 	// Create a client for this subscription.
-	// TODO: fill in the oauth attributes from the SMO config passed to the server
-	client, err := utils.SetupOAuthClient(ctx, utils.OAuthClientConfig{})
+	client, err := utils.SetupOAuthClient(ctx, oauthConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup oauth client: %w", err)
 	}

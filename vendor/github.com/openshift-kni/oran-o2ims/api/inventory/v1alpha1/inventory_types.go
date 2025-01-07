@@ -26,9 +26,9 @@ import (
 // OAuthConfig defines the configurable attributes that represent the authentication mechanism.  This is currently
 // expected to be a way to acquire a token from an OAuth2 server.
 type OAuthConfig struct {
-	// Url represents the base URL of the authorization server. (e.g., https://keycloak.example.com/realms/oran)
+	// URL represents the base URL of the authorization server. (e.g., https://keycloak.example.com/realms/oran)
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth URL",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Url string `json:"url"`
+	URL string `json:"url"`
 	// TokenEndpoint represents the API endpoint used to acquire a token (e.g., /protocol/openid-connect/token) which
 	// will be appended to the base URL to form the full URL
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Token Endpoint",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -44,8 +44,8 @@ type OAuthConfig struct {
 	Scopes []string `json:"scopes"`
 }
 
-// TlsConfig defines the TLS specific attributes specific to the SMO and OAuth servers
-type TlsConfig struct {
+// TLSConfig defines the TLS specific attributes specific to the SMO and OAuth servers
+type TLSConfig struct {
 	// ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
 	// certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
 	// expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
@@ -58,9 +58,9 @@ type TlsConfig struct {
 
 // SmoConfig defines the configurable attributes to represent the SMO instance
 type SmoConfig struct {
-	// Url represents the base URL of the SMO instance
+	// URL represents the base URL of the SMO instance
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO URL",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Url string `json:"url"`
+	URL string `json:"url"`
 	// RegistrationEndpoint represents the API endpoint used to register the O2IMS with the SMO.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Registration API Endpoint",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	RegistrationEndpoint string `json:"registrationEndpoint"`
@@ -68,10 +68,10 @@ type SmoConfig struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO OAuth Configuration"
 	OAuthConfig *OAuthConfig `json:"oauth,omitempty"`
-	// TlsConfig defines the TLS attributes specific to the SMO and OAuth servers
+	// TLSConfig defines the TLS attributes specific to the SMO and OAuth servers
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS Configuration"
-	Tls *TlsConfig `json:"tls"`
+	TLS *TLSConfig `json:"tls"`
 }
 
 type ServerConfig struct {
@@ -118,6 +118,12 @@ type ResourceServerConfig struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Extensions",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Extensions []string `json:"extensions,omitempty"`
+	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
+	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
+	// establish an mTLS connection to the OAuth server or SMO.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // ClusterServerConfig contains the configuration for the cluster server.
@@ -125,12 +131,24 @@ type ClusterServerConfig struct {
 	//+kubebuilder:default:={enabled:true}
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:bool"}
 	ServerConfig `json:",inline"`
+	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
+	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
+	// establish an mTLS connection to the OAuth server or SMO.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // AlarmServerConfig contains the configuration for the alarm server.
 type AlarmServerConfig struct {
 	//+kubebuilder:default:={enabled:true}
 	ServerConfig `json:",inline"`
+	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
+	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
+	// establish an mTLS connection to the OAuth server or SMO.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // InventorySpec defines the desired state of Inventory

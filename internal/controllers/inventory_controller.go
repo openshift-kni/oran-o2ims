@@ -505,7 +505,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 	}
 
 	config := utils.OAuthClientConfig{
-		CaBundle: []byte(caBundle),
+		TLSConfig: &utils.TLSConfig{CaBundle: []byte(caBundle)},
 	}
 
 	oAuthConfig := t.object.Spec.SmoConfig.OAuthConfig
@@ -525,23 +525,26 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get client-secret from secret: %s, %w", oAuthConfig.ClientSecretName, err)
 		}
 
-		config.ClientId = clientId
-		config.ClientSecret = clientSecret
-		config.TokenUrl = fmt.Sprintf("%s%s", oAuthConfig.Url, oAuthConfig.TokenEndpoint)
-		config.Scopes = oAuthConfig.Scopes
+		o := utils.OAuthConfig{
+			ClientID:     clientId,
+			ClientSecret: clientSecret,
+			TokenURL:     fmt.Sprintf("%s%s", oAuthConfig.URL, oAuthConfig.TokenEndpoint),
+			Scopes:       oAuthConfig.Scopes,
+		}
+		config.OAuthConfig = &o
 	}
 
-	if t.object.Spec.SmoConfig.Tls != nil && t.object.Spec.SmoConfig.Tls.ClientCertificateName != nil {
-		secretName := *t.object.Spec.SmoConfig.Tls.ClientCertificateName
+	if t.object.Spec.SmoConfig.TLS != nil && t.object.Spec.SmoConfig.TLS.ClientCertificateName != nil {
+		secretName := *t.object.Spec.SmoConfig.TLS.ClientCertificateName
 		cert, err := utils.GetCertFromSecret(ctx, t.client, secretName, t.object.Namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get client certificate from secret: %w", err)
 		}
 
-		config.ClientCert = cert
+		config.TLSConfig.ClientCert = cert
 	}
 
-	httpClient, err := utils.SetupOAuthClient(ctx, config)
+	httpClient, err := utils.SetupOAuthClient(ctx, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)
 	}
@@ -569,7 +572,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal AvailableNotification: %s", err.Error())
 	}
 
-	url := fmt.Sprintf("%s%s", smo.Url, smo.RegistrationEndpoint)
+	url := fmt.Sprintf("%s%s", smo.URL, smo.RegistrationEndpoint)
 	result, err := httpClient.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to send registration request to '%s': %s", url, err.Error())
@@ -611,7 +614,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 					Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
 					Status:  metav1.ConditionFalse,
 					Reason:  err.Error(),
-					Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.Url),
+					Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.URL),
 				},
 			)
 
@@ -624,15 +627,15 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
 				Status:  metav1.ConditionTrue,
 				Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
-				Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.Url),
+				Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.URL),
 			},
 		)
 		t.logger.InfoContext(
-			ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+			ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
 		)
 	} else {
 		t.logger.InfoContext(
-			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
 		)
 	}
 
@@ -1358,8 +1361,8 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	t.logger.InfoContext(ctx, "[deploy server]", "Name", serverName)
 
 	// Server variables.
-	deploymentVolumes := utils.GetDeploymentVolumes(serverName)
-	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName)
+	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
+	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName, t.object)
 
 	// Build the deployment's metadata.
 	deploymentMeta := metav1.ObjectMeta{
@@ -1418,6 +1421,34 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 			},
 		}
 		envVars = append(envVars, envVar)
+	}
+
+	if utils.HasConnectivityToSMO(serverName) &&
+		(t.object.Spec.SmoConfig != nil && t.object.Spec.SmoConfig.OAuthConfig != nil) {
+		envVars = append(envVars, []corev1.EnvVar{
+			{
+				Name: utils.OAuthClientIDEnvName,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: t.object.Spec.SmoConfig.OAuthConfig.ClientSecretName,
+						},
+						Key: "client-id",
+					},
+				},
+			},
+			{
+				Name: utils.OAuthClientSecretEnvName,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: t.object.Spec.SmoConfig.OAuthConfig.ClientSecretName,
+						},
+						Key: "client-secret",
+					},
+				},
+			},
+		}...)
 	}
 
 	// Build the deployment's spec.

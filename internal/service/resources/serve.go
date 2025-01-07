@@ -89,7 +89,13 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to parse cloud NotificationID '%s': %w", config.CloudID, err)
 	}
 
-	// Create the build-in data sources
+	// Create the OAuth client config
+	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig()
+	if err != nil {
+		return fmt.Errorf("failed to create oauth client configuration: %w", err)
+	}
+
+	// Create the built-in data sources
 	acm, err := collector.NewACMDataSource(cloudID, globalCloudID, config.BackendURL, config.Extensions)
 	if err != nil {
 		return fmt.Errorf("failed to create ACM data source: %w", err)
@@ -98,7 +104,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Create the notifier with our resource specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository)
-	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider)
+	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, oauthConfig)
 
 	// Create the collector
 	resourceCollector := collector.NewCollector(repository, resourceNotifier, []collector.DataSource{acm})
@@ -163,7 +169,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Server config
 	srv := &http.Server{
 		Handler:      router,
-		Addr:         config.Address,
+		Addr:         config.Listener.Address,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,
