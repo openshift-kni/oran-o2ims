@@ -7,6 +7,8 @@ import (
 	"sort"
 
 	"github.com/google/uuid"
+
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // DefaultBufferedChannelSize defines the default size for buffered channels used across the notifier.
@@ -59,6 +61,8 @@ type SubscriptionEventHandler interface {
 
 // Notifier represents the data required by the notification process
 type Notifier struct {
+	// oauthConfig defines the oauth related attributes used to establish connections to subscribers
+	oauthConfig *utils.OAuthClientConfig
 	// notificationChannel is used to receive notifications about new events from the collector
 	notificationChannel chan *Notification
 	// subscriptionChannel is used to receive notifications about new/deleted subscriptions
@@ -69,20 +73,22 @@ type Notifier struct {
 	// workers is the list of workers started to service subscriptions.  It is mapped by
 	// subscription uuid value.
 	workers map[uuid.UUID]*SubscriptionWorker
-	// NotificationProvider is a plugable interface which provides persistence handling for notifications
-	NotificationProvider NotificationProvider
-	// SubscriptionProvider is a plugable interface which provides persistence handling for subscriptions
-	SubscriptionProvider SubscriptionProvider
+	// notificationProvider is a plugable interface which provides persistence handling for notifications
+	notificationProvider NotificationProvider
+	// subscriptionProvider is a plugable interface which provides persistence handling for subscriptions
+	subscriptionProvider SubscriptionProvider
 }
 
 // NewNotifier creates a new instance of a Notifier
-func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider NotificationProvider) *Notifier {
+func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider NotificationProvider,
+	oauthConfig *utils.OAuthClientConfig) *Notifier {
 	eventChannel := make(chan *Notification, DefaultBufferedChannelSize)
 	subscriptionChannel := make(chan *SubscriptionEvent, DefaultBufferedChannelSize)
 	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, DefaultBufferedChannelSize)
 	return &Notifier{
-		SubscriptionProvider:           subscriptionProvider,
-		NotificationProvider:           notificationProvider,
+		oauthConfig:                    oauthConfig,
+		subscriptionProvider:           subscriptionProvider,
+		notificationProvider:           notificationProvider,
 		notificationChannel:            eventChannel,
 		subscriptionChannel:            subscriptionChannel,
 		subscriptionJobCompleteChannel: subscriberJobCompleteChannel,
@@ -142,7 +148,7 @@ func (n *Notifier) init(ctx context.Context) error {
 func (n *Notifier) loadEvents(ctx context.Context) error {
 	slog.Info("loading events")
 
-	notifications, err := n.NotificationProvider.GetNotifications(ctx)
+	notifications, err := n.notificationProvider.GetNotifications(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get notifications: %w", err)
 	}
@@ -167,14 +173,14 @@ func (n *Notifier) loadEvents(ctx context.Context) error {
 func (n *Notifier) loadSubscriptions(ctx context.Context) error {
 	slog.Info("loading subscriptions")
 
-	subscriptions, err := n.SubscriptionProvider.GetSubscriptions(ctx)
+	subscriptions, err := n.subscriptionProvider.GetSubscriptions(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get subscriptions: %w", err)
 	}
 
 	for _, s := range subscriptions {
 		subscriptionID := s.SubscriptionID
-		n.workers[subscriptionID], err = NewSubscriptionWorker(ctx, n.subscriptionJobCompleteChannel, &s)
+		n.workers[subscriptionID], err = NewSubscriptionWorker(ctx, n.oauthConfig, n.subscriptionJobCompleteChannel, &s)
 		if err != nil {
 			return fmt.Errorf("failed to create subscription worker: %w", err)
 		}
@@ -198,7 +204,7 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 
 	count := 0
 	for _, worker := range n.workers {
-		if n.SubscriptionProvider.Matches(worker.subscription, event) {
+		if n.subscriptionProvider.Matches(worker.subscription, event) {
 			worker.NewNotification(event)
 			count++
 		}
@@ -208,7 +214,7 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 		// No subscriptions matched just delete the event
 		slog.Debug("no matching subscriptions; deleting event",
 			"NotificationID", event.NotificationID, "sequenceID", event.SequenceID)
-		if err := n.NotificationProvider.DeleteNotification(ctx, event.NotificationID); err != nil {
+		if err := n.notificationProvider.DeleteNotification(ctx, event.NotificationID); err != nil {
 			return fmt.Errorf("failed to delete notification: %w", err)
 		}
 		return nil
@@ -244,7 +250,7 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 		worker.Shutdown()
 		delete(n.workers, event.Subscription.SubscriptionID)
 	} else {
-		worker, err := NewSubscriptionWorker(ctx, n.subscriptionJobCompleteChannel, event.Subscription)
+		worker, err := NewSubscriptionWorker(ctx, n.oauthConfig, n.subscriptionJobCompleteChannel, event.Subscription)
 		if err != nil {
 			return fmt.Errorf("failed to create subscription worker: %w", err)
 		}
@@ -268,7 +274,7 @@ func (n *Notifier) handleSubscriptionJobCompleteEvent(ctx context.Context, event
 		// Update the subscriptions event cursor.
 		subscription := worker.subscription
 		subscription.EventCursor = event.sequenceID
-		if err := n.SubscriptionProvider.UpdateSubscription(ctx, subscription); err != nil {
+		if err := n.subscriptionProvider.UpdateSubscription(ctx, subscription); err != nil {
 			return fmt.Errorf("failed to update subscription: %w", err)
 		}
 	} else {
@@ -290,7 +296,7 @@ func (n *Notifier) handleSubscriptionJobCompleteEvent(ctx context.Context, event
 		slog.Debug("notification sent to all subscribers; deleting",
 			"NotificationID", event.notificationID, "sequenceID", event.sequenceID)
 
-		if err := n.NotificationProvider.DeleteNotification(ctx, event.notificationID); err != nil {
+		if err := n.notificationProvider.DeleteNotification(ctx, event.notificationID); err != nil {
 			return fmt.Errorf("failed to delete completed notification: %w", err)
 		}
 	}

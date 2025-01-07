@@ -78,7 +78,13 @@ func Serve(config *api.ClusterServerConfig) error {
 		return fmt.Errorf("failed to parse cloud NotificationID '%s': %w", config.CloudID, err)
 	}
 
-	// Create the build-in data sources
+	// Create the OAuth client config
+	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig()
+	if err != nil {
+		return fmt.Errorf("failed to create oauth client configuration: %w", err)
+	}
+
+	// Create the built-in data sources
 	k8s, err := collector.NewK8SDataSource(cloudID, config.Extensions)
 	if err != nil {
 		return fmt.Errorf("failed to create Kubernetes data source: %w", err)
@@ -87,7 +93,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	// Create the notifier with our resource specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository)
-	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider)
+	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, oauthConfig)
 
 	// Create the collector
 	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{k8s})
@@ -145,7 +151,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	// Server config
 	srv := &http.Server{
 		Handler:      router,
-		Addr:         config.Address,
+		Addr:         config.Listener.Address,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,

@@ -24,7 +24,7 @@ var _ api.StrictServerInterface = (*ClusterServer)(nil)
 
 // ClusterServerConfig defines the configuration attributes for the resource server
 type ClusterServerConfig struct {
-	Address         string
+	utils.CommonServerConfig
 	CloudID         string
 	GlobalCloudID   string
 	Extensions      []string

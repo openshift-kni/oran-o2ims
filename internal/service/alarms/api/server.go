@@ -29,6 +29,7 @@ const (
 
 // AlarmsServerConfig defines the configuration attributes for the alarms server
 type AlarmsServerConfig struct {
+	utils.CommonServerConfig
 	Address       string
 	GlobalCloudID string
 }

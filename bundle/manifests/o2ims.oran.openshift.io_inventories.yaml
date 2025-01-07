@@ -45,6 +45,21 @@ spec:
                 description: AlarmServerConfig contains the configuration for the
                   alarm server.
                 properties:
+                  clientTLS:
+                    description: |-
+                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
+                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
+                      establish an mTLS connection to the OAuth server or SMO.
+                    properties:
+                      clientCertificateName:
+                        description: |-
+                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
+                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
+                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
+                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
+                          being first and the root CA being last.
+                        type: string
+                    type: object
                   enabled:
                     default: true
                     description: Enabled indicates if the server should be started.
@@ -68,6 +83,21 @@ spec:
                 description: ClusterServerConfig contains the configuration for the
                   resource server.
                 properties:
+                  clientTLS:
+                    description: |-
+                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
+                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
+                      establish an mTLS connection to the OAuth server or SMO.
+                    properties:
+                      clientCertificateName:
+                        description: |-
+                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
+                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
+                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
+                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
+                          being first and the root CA being last.
+                        type: string
+                    type: object
                   enabled:
                     default: true
                     description: Enabled indicates if the server should be started.
@@ -136,6 +166,21 @@ spec:
                     type: string
                   backendURL:
                     type: string
+                  clientTLS:
+                    description: |-
+                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
+                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
+                      establish an mTLS connection to the OAuth server or SMO.
+                    properties:
+                      clientCertificateName:
+                        description: |-
+                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
+                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
+                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
+                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
+                          being first and the root CA being last.
+                        type: string
+                    type: object
                   enabled:
                     default: true
                     description: Enabled indicates if the server should be started.
@@ -176,7 +221,7 @@ spec:
                           will be appended to the base URL to form the full URL
                         type: string
                       url:
-                        description: Url represents the base URL of the authorization
+                        description: URL represents the base URL of the authorization
                           server. (e.g., https://keycloak.example.com/realms/oran)
                         type: string
                     required:
@@ -190,7 +235,7 @@ spec:
                       used to register the O2IMS with the SMO.
                     type: string
                   tls:
-                    description: TlsConfig defines the TLS attributes specific to
+                    description: TLSConfig defines the TLS attributes specific to
                       the SMO and OAuth servers
                     properties:
                       clientCertificateName:
@@ -203,7 +248,7 @@ spec:
                         type: string
                     type: object
                   url:
-                    description: Url represents the base URL of the SMO instance
+                    description: URL represents the base URL of the SMO instance
                     type: string
                 required:
                 - registrationEndpoint

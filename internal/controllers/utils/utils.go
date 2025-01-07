@@ -16,8 +16,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/net"
@@ -41,26 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 )
-
-// OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
-// from an OAuth capable authorization server.
-type OAuthClientConfig struct {
-	// Defines a PEM encoded set of CA certificates used to validate server certificates.  If not provided then the
-	// default root CA bundle will be used.
-	CaBundle []byte
-	// Defines the OAuth client-id attribute to be used when acquiring a token.  If not provided (for debug/testing)
-	// then a normal HTTP client without OAuth capabilities will be created
-	ClientId     string
-	ClientSecret string
-	// The absolute URL of the API endpoint to be used to acquire a token
-	// (e.g., http://example.com/realms/oran/protocol/openid-connect/token)
-	TokenUrl string
-	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
-	// the token.
-	Scopes []string
-	// The client certificate to be used when initiating connection to the server.
-	ClientCert *tls.Certificate
-}
 
 const (
 	PropertiesString = "properties"
@@ -193,10 +171,48 @@ func HasDatabase(serverName string) bool {
 		serverName == InventoryAlarmServerName
 }
 
-func GetDeploymentVolumes(serverName string) []corev1.Volume {
+// HasConnectivityToSMO determines whether a server requires reachability to the SMO for notifications
+func HasConnectivityToSMO(serverName string) bool {
+	return serverName == InventoryResourceServerName ||
+		serverName == InventoryClusterServerName ||
+		serverName == InventoryAlarmServerName
+}
+
+// getTLSClientCertificateSecret determines which TLS secret to use for the specified server.  If a specific TLS config
+// was provided for the server then that one is used; otherwise we fall back to the TLS config for the SMO.
+func getTLSClientCertificateSecret(serverName string, inventory *inventoryv1alpha1.Inventory) *string {
+	if inventory.Spec.SmoConfig == nil || inventory.Spec.SmoConfig.TLS == nil {
+		return nil
+	}
+
+	switch {
+	case serverName == InventoryClusterServerName:
+		if inventory.Spec.ClusterServerConfig.ClientTLS != nil &&
+			inventory.Spec.ClusterServerConfig.ClientTLS.ClientCertificateName != nil {
+			return inventory.Spec.ClusterServerConfig.ClientTLS.ClientCertificateName
+		}
+	case serverName == InventoryResourceServerName:
+		if inventory.Spec.ResourceServerConfig.ClientTLS != nil &&
+			inventory.Spec.ResourceServerConfig.ClientTLS.ClientCertificateName != nil {
+			return inventory.Spec.ResourceServerConfig.ClientTLS.ClientCertificateName
+		}
+	case serverName == InventoryAlarmServerName:
+		if inventory.Spec.AlarmServerConfig.ClientTLS != nil &&
+			inventory.Spec.AlarmServerConfig.ClientTLS.ClientCertificateName != nil {
+			return inventory.Spec.AlarmServerConfig.ClientTLS.ClientCertificateName
+		}
+	}
+
+	tlsConfig := inventory.Spec.SmoConfig.TLS
+	return tlsConfig.ClientCertificateName
+}
+
+// GetDeploymentVolumes builds the list of volumes applicable to the specified server
+func GetDeploymentVolumes(serverName string, inventory *inventoryv1alpha1.Inventory) []corev1.Volume {
+	var volumes []corev1.Volume
+	tlsDefaultMode := int32(os.FileMode(0o400))
 	if HasApiEndpoints(serverName) {
-		tlsDefaultMode := int32(os.FileMode(0o400))
-		return []corev1.Volume{
+		volumes = append(volumes, []corev1.Volume{
 			{
 				Name: "tls",
 				VolumeSource: corev1.VolumeSource{
@@ -206,23 +222,72 @@ func GetDeploymentVolumes(serverName string) []corev1.Volume {
 					},
 				},
 			},
+		}...)
+	}
+
+	if HasConnectivityToSMO(serverName) {
+		if inventory.Spec.SmoConfig != nil {
+			clientSecretName := getTLSClientCertificateSecret(serverName, inventory)
+			if clientSecretName != nil {
+				volumes = append(volumes, corev1.Volume{
+					Name: "smo-mtls",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							DefaultMode: &tlsDefaultMode,
+							SecretName:  *clientSecretName,
+						},
+					},
+				})
+			}
+		}
+		if inventory.Spec.CaBundleName != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: "ca-bundle",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: *inventory.Spec.CaBundleName,
+						},
+					},
+				},
+			})
 		}
 	}
 
-	return []corev1.Volume{}
+	return volumes
 }
 
-func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
+// GetDeploymentVolumeMounts builds the list of volume mounts applicable to the specified server
+func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.Inventory) []corev1.VolumeMount {
+	var mounts []corev1.VolumeMount
 	if HasApiEndpoints(serverName) {
-		return []corev1.VolumeMount{
+		mounts = append(mounts, []corev1.VolumeMount{
 			{
 				Name:      "tls",
 				MountPath: "/secrets/tls",
 			},
+		}...)
+	}
+
+	if HasConnectivityToSMO(serverName) {
+		if inventory.Spec.SmoConfig != nil {
+			clientSecretName := getTLSClientCertificateSecret(serverName, inventory)
+			if clientSecretName != nil {
+				mounts = append(mounts, corev1.VolumeMount{
+					Name:      "smo-mtls",
+					MountPath: TLSClientMountPath,
+				})
+			}
+		}
+		if inventory.Spec.CaBundleName != nil {
+			mounts = append(mounts, corev1.VolumeMount{
+				Name:      "ca-bundle",
+				MountPath: CABundleMountPath,
+			})
 		}
 	}
 
-	return []corev1.VolumeMount{}
+	return mounts
 }
 
 func GetBackendTokenArg(backendToken string) string {
@@ -316,6 +381,34 @@ func GetServerDatabasePasswordName(serverName string) (string, error) {
 	}
 }
 
+// addArgsForSMO sets up the command line arguments related to enabling communication to the SMO and OAuth server
+func addArgsForSMO(inventory *inventoryv1alpha1.Inventory, args []string) []string {
+	if inventory.Spec.SmoConfig != nil {
+		smo := inventory.Spec.SmoConfig
+
+		if smo.OAuthConfig != nil {
+			args = append(args,
+				fmt.Sprintf("--oauth-scopes=%s", strings.Join(smo.OAuthConfig.Scopes, ",")),
+				fmt.Sprintf("--oauth-token-url=%s%s", smo.OAuthConfig.URL, smo.OAuthConfig.TokenEndpoint))
+		}
+
+		if smo.TLS.ClientCertificateName != nil {
+			args = append(args,
+				fmt.Sprintf("--tls-client-cert=%s/tls.crt", TLSClientMountPath),
+				fmt.Sprintf("--tls-client-key=%s/tls.key", TLSClientMountPath),
+			)
+		}
+	}
+
+	if inventory.Spec.CaBundleName != nil {
+		args = append(args,
+			fmt.Sprintf("--ca-bundle-file=%s/ca-bundle.pem", CABundleMountPath),
+		)
+	}
+
+	return args
+}
+
 func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
 	cloudId := DefaultOCloudID
 	if inventory.Spec.CloudID != nil {
@@ -328,6 +421,9 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		result = append(
 			result,
 			fmt.Sprintf("--global-cloud-id=%s", cloudId))
+
+		// Add SMO/OAuth command line arguments
+		result = addArgsForSMO(inventory, result)
 		return
 	}
 
@@ -365,6 +461,9 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		result = append(
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID))
+
+		// Add SMO/OAuth command line arguments
+		result = addArgsForSMO(inventory, result)
 
 		return
 	}
@@ -643,55 +742,6 @@ func MapKeysToSlice(inputMap map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// SetupOAuthClient creates an HTTP client capable of acquiring an OAuth token used to authorize client requests.  If
-// the config excludes the OAuth specific sections then the client produced is a simple HTTP client without OAuth
-// capabilities.
-func SetupOAuthClient(ctx context.Context, config OAuthClientConfig) (*http.Client, error) {
-	tlsConfig, _ := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
-
-	if config.ClientCert != nil {
-		// Enable mTLS if a client certificate was provided.  The client CA is expected to be recognized by the server.
-		tlsConfig.Certificates = []tls.Certificate{*config.ClientCert}
-	}
-
-	if len(config.CaBundle) != 0 {
-		// If the user has provided a CA bundle then we must use it to build our client so that we can verify the
-		// identity of remote servers.
-		if tlsConfig.RootCAs == nil {
-			certPool := x509.NewCertPool()
-			if !certPool.AppendCertsFromPEM(config.CaBundle) {
-				return nil, fmt.Errorf("failed to append certificate bundle to pool")
-			}
-			tlsConfig.RootCAs = certPool
-		} else {
-			// We may not need the default CA bundles in this case but there's no harm in keeping them in the pool
-			// to handle cases where they may be needed.
-			tlsConfig.RootCAs.AppendCertsFromPEM(config.CaBundle)
-		}
-	}
-
-	c := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig}}
-
-	if config.ClientId != "" {
-		config := clientcredentials.Config{
-			ClientID:       config.ClientId,
-			ClientSecret:   config.ClientSecret,
-			TokenURL:       config.TokenUrl,
-			Scopes:         config.Scopes,
-			EndpointParams: nil,
-			AuthStyle:      oauth2.AuthStyleInParams,
-		}
-
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, c)
-
-		c = config.Client(ctx)
-	}
-
-	return c, nil
 }
 
 // GetClusterID retrieves the UUID value for the cluster specified by name

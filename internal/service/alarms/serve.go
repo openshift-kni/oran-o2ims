@@ -158,7 +158,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Server config
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         config.Address,
+		Addr:         config.Listener.Address,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,

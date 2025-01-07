@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms"
+	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 var config api.AlarmsServerConfig
@@ -28,23 +30,23 @@ var alarmsServe = &cobra.Command{
 }
 
 // setServerFlags creates the flag instances for the server
-func setServerFlags(cmd *cobra.Command) {
+func setServerFlags(cmd *cobra.Command) error {
 	flags := cmd.Flags()
-	flags.StringVar(
-		&config.Address,
-		server.APIListenerAddressFlagName,
-		"127.0.0.1:8000",
-		"API listener address.",
-	)
+	if err := utils2.SetCommonServerFlags(cmd, &config.CommonServerConfig); err != nil {
+		return fmt.Errorf("could not set common server flags: %w", err)
+	}
 	flags.StringVar(
 		&config.GlobalCloudID,
 		server.GlobalCloudIDFlagName,
 		utils.DefaultOCloudID,
 		"The global O-Cloud identifier.",
 	)
+	return nil
 }
 
 func init() {
-	setServerFlags(alarmsServe)
+	if err := setServerFlags(alarmsServe); err != nil {
+		panic(err)
+	}
 	AlarmRootCmd.AddCommand(alarmsServe)
 }

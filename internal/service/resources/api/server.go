@@ -24,7 +24,7 @@ var _ api.StrictServerInterface = (*ResourceServer)(nil)
 
 // ResourceServerConfig defines the configuration attributes for the resource server
 type ResourceServerConfig struct {
-	Address         string
+	utils.CommonServerConfig
 	CloudID         string
 	GlobalCloudID   string
 	BackendURL      string
