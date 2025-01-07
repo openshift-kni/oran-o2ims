@@ -449,8 +449,10 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
 			fmt.Sprintf("--backend-url=%s", inventory.Status.SearchURL),
 			fmt.Sprintf("--global-cloud-id=%s", cloudId),
-			fmt.Sprintf("--namespace=%s", inventory.Namespace),
-			GetBackendTokenArg(inventory.Spec.ResourceServerConfig.BackendToken))
+			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
+
+		// Add SMO/OAuth command line arguments
+		result = addArgsForSMO(inventory, result)
 
 		return result, nil
 	}

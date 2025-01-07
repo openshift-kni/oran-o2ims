@@ -61,10 +61,8 @@ var (
 		"--api-listener-address=127.0.0.1:8000",
 	}
 	ResourceServerArgs = []string{
-		"start",
 		"resource-server",
-		"--log-level=debug",
-		"--log-file=stdout",
+		"serve",
 		"--api-listener-address=127.0.0.1:8000",
 	}
 	ClusterServerArgs = []string{

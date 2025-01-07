@@ -1635,59 +1635,14 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 					HTTP: &networkingv1.HTTPIngressRuleValue{
 						Paths: []networkingv1.HTTPIngressPath{
 							{
-								Path: "/o2ims-infrastructureInventory/v1/resourcePools",
+								Path: "/o2ims-infrastructureInventory",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/o2ims-infrastructureInventory/v1/resourceTypes",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/o2ims-infrastructureInventory/v1/subscriptions",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/o2ims-infrastructureInventory/v1/deploymentManagers",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "deployment-manager-server",
+										Name: utils.InventoryResourceServerName,
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.InventoryIngressName,
 										},
@@ -1717,22 +1672,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "alarms-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "metadata-server",
+										Name: utils.InventoryAlarmServerName,
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.InventoryIngressName,
 										},
