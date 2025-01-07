@@ -159,9 +159,7 @@ func HasApiEndpoints(serverName string) bool {
 	return serverName == InventoryDatabaseServerName ||
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
-		serverName == InventoryMetadataServerName ||
-		serverName == InventoryResourceServerName ||
-		serverName == InventoryDeploymentManagerServerName
+		serverName == InventoryResourceServerName
 }
 
 // HasDatabase determines whether a server owns a logical database instance
@@ -427,18 +425,6 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		return
 	}
 
-	// MetadataServer
-	if serverName == InventoryMetadataServerName {
-		result = slices.Clone(MetadataServerArgs)
-		result = append(
-			result,
-			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
-			fmt.Sprintf("--global-cloud-id=%s", cloudId),
-			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
-
-		return
-	}
-
 	// ResourceServer
 	if serverName == InventoryResourceServerName {
 		result = slices.Clone(ResourceServerArgs)
@@ -450,6 +436,10 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			fmt.Sprintf("--backend-url=%s", inventory.Status.SearchURL),
 			fmt.Sprintf("--global-cloud-id=%s", cloudId),
 			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
+
+		// Add the extensions:
+		extensionsArgsArray := extensionsToExtensionArgs(inventory.Spec.ResourceServerConfig.Extensions)
+		result = append(result, extensionsArgsArray...)
 
 		// Add SMO/OAuth command line arguments
 		result = addArgsForSMO(inventory, result)
@@ -464,46 +454,12 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID))
 
+		// Add the extensions:
+		extensionsArgsArray := extensionsToExtensionArgs(inventory.Spec.ResourceServerConfig.Extensions)
+		result = append(result, extensionsArgsArray...)
+
 		// Add SMO/OAuth command line arguments
 		result = addArgsForSMO(inventory, result)
-
-		return
-	}
-
-	// DeploymentManagerServer
-	if serverName == InventoryDeploymentManagerServerName {
-		result = slices.Clone(DeploymentManagerServerArgs)
-
-		// Set the cloud identifier:
-		result = append(
-			result,
-			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
-		)
-
-		// Set the backend type:
-		if inventory.Spec.DeploymentManagerServerConfig.BackendType != "" {
-			result = append(
-				result,
-				fmt.Sprintf("--backend-type=%s", inventory.Spec.DeploymentManagerServerConfig.BackendType),
-			)
-		}
-
-		// If no backend URL has been provided then use the default URL of the Kubernetes
-		// API server of the cluster:
-		backendURL := inventory.Spec.DeploymentManagerServerConfig.BackendURL
-		if backendURL == "" {
-			backendURL = defaultApiServerURL
-		}
-
-		// Add the backend and token args:
-		result = append(
-			result,
-			fmt.Sprintf("--backend-url=%s", backendURL),
-			GetBackendTokenArg(inventory.Spec.DeploymentManagerServerConfig.BackendToken))
-
-		// Add the extensions:
-		extensionsArgsArray := extensionsToExtensionArgs(inventory.Spec.DeploymentManagerServerConfig.Extensions)
-		result = append(result, extensionsArgsArray...)
 
 		return
 	}
@@ -816,16 +772,6 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 			AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
 				ServerConfig: inventoryv1alpha1.ServerConfig{
 					Enabled: true},
-			},
-			DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true,
-				},
-			},
-			MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true,
-				},
 			},
 			ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
 				ServerConfig: inventoryv1alpha1.ServerConfig{

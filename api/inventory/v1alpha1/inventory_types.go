@@ -81,28 +81,6 @@ type ServerConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
-// MetadataServerConfig contains the configuration for the metadata server.
-type MetadataServerConfig struct {
-	//+kubebuilder:default:={enabled:true}
-	ServerConfig `json:",inline"`
-}
-
-// DeploymentManagerServerConfig contains the configuration for the deployment manager server.
-type DeploymentManagerServerConfig struct {
-	//+kubebuilder:default:={enabled:true}
-	ServerConfig `json:",inline"`
-	//+optional
-	BackendURL string `json:"backendURL,omitempty"`
-	//+optional
-	BackendToken string `json:"backendToken,omitempty"`
-	//+kubebuilder:default=regular-hub
-	//+kubebuilder:validation:Enum=regular-hub;global-hub
-	BackendType string `json:"backendType,omitempty"`
-	// This field allows the addition of extra O-Cloud information for the deployment manager server.
-	//+optional
-	Extensions []string `json:"extensions,omitempty"`
-}
-
 // ResourceServerConfig contains the configuration for the resource server.
 type ResourceServerConfig struct {
 	//+kubebuilder:default:={enabled:true}
@@ -163,12 +141,6 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	CloudID *string `json:"cloudID"`
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Metadata Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	MetadataServerConfig MetadataServerConfig `json:"metadataServerConfig"`
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Deployment Manager Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	DeploymentManagerServerConfig DeploymentManagerServerConfig `json:"deploymentManagerServerConfig"`
 	// ResourceServerConfig contains the configuration for the resource server.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}

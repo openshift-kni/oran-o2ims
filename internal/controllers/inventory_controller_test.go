@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	//+kubebuilder:scaffold:imports
 )
@@ -111,7 +112,7 @@ var _ = DescribeTable(
 		validate(result, *r)
 	},
 	Entry(
-		"Metadata server deployment is updated after edit",
+		"Resource server deployment is updated after edit",
 		[]client.Object{
 			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
@@ -121,12 +122,12 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image: &ServerTestImage,
-					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
 					},
-					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
@@ -144,21 +145,21 @@ var _ = DescribeTable(
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check that the metadata server deployment exists.
-			metadataDeployment := &appsv1.Deployment{}
+			deployment := &appsv1.Deployment{}
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryMetadataServerName,
+					Name:      utils.InventoryResourceServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				metadataDeployment)
+				deployment)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Update one of the deployment's Spec values to something random.
-			savedSpecTemplateVolumeSecret := metadataDeployment.Spec.Template.Spec.Volumes[0].Secret.SecretName
-			savedContainersArgsValue := metadataDeployment.Spec.Template.Spec.Containers[0].Args
-			metadataDeployment.Spec.Template.Spec.Volumes[0].Secret.SecretName = "made-up-name"
-			metadataDeployment.Spec.Template.Spec.Containers[0].Args = []string{"a", "b"}
+			savedSpecTemplateVolumeSecret := deployment.Spec.Template.Spec.Volumes[0].Secret.SecretName
+			savedContainersArgsValue := deployment.Spec.Template.Spec.Containers[0].Args
+			deployment.Spec.Template.Spec.Volumes[0].Secret.SecretName = "made-up-name"
+			deployment.Spec.Template.Spec.Containers[0].Args = []string{"a", "b"}
 
 			// Run the reconciliation again.
 			req := reconcile.Request{
@@ -174,17 +175,17 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryMetadataServerName,
+					Name:      utils.InventoryResourceServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				metadataDeployment)
+				deployment)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(metadataDeployment.Spec.Template.Spec.Volumes[0].Secret.SecretName).To(Equal(savedSpecTemplateVolumeSecret))
-			Expect(metadataDeployment.Spec.Template.Spec.Containers[0].Args).To(Equal(savedContainersArgsValue))
+			Expect(deployment.Spec.Template.Spec.Volumes[0].Secret.SecretName).To(Equal(savedSpecTemplateVolumeSecret))
+			Expect(deployment.Spec.Template.Spec.Containers[0].Args).To(Equal(savedContainersArgsValue))
 		},
 	),
 	Entry(
-		"Only the metadata server is required",
+		"Only the resource server is required",
 		[]client.Object{
 			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
@@ -194,12 +195,12 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image: &ServerTestImage,
-					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
 					},
-					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
@@ -217,14 +218,14 @@ var _ = DescribeTable(
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check the metadata server deployment exists.
-			metadataDeployment := &appsv1.Deployment{}
+			resourceDeployment := &appsv1.Deployment{}
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryMetadataServerName,
+					Name:      utils.InventoryResourceServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				metadataDeployment)
+				resourceDeployment)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check that the Ingress exists.
@@ -243,7 +244,7 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryMetadataServerName,
+					Name:      utils.InventoryResourceServerName,
 					Namespace: utils.InventoryNamespace,
 				},
 				serviceAccount)
@@ -254,27 +255,27 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryMetadataServerName,
+					Name:      utils.InventoryResourceServerName,
 					Namespace: utils.InventoryNamespace,
 				},
 				service)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check the deployment manager server does not exist.
-			deploymentManagerDeployment := &appsv1.Deployment{}
+			alarmsDeployment := &appsv1.Deployment{}
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryDeploymentManagerServerName,
+					Name:      utils.InventoryAlarmServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				deploymentManagerDeployment)
+				alarmsDeployment)
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryDeploymentManagerServerName)))
+			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryAlarmServerName)))
 		},
 	),
 	Entry(
-		"Metadata and deployment manager servers required",
+		"Resource and alarms servers required",
 		[]client.Object{
 			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
@@ -284,12 +285,12 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image: &ServerTestImage,
-					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
 					},
-					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: true,
 						},
@@ -307,25 +308,25 @@ var _ = DescribeTable(
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check that the metadata deployment exists.
-			metadataDeployment := &appsv1.Deployment{}
+			resourceDeployment := &appsv1.Deployment{}
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryMetadataServerName,
+					Name:      utils.InventoryResourceServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				metadataDeployment)
+				resourceDeployment)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check that the deployment manager server exists.
-			deploymentManagerDeployment := &appsv1.Deployment{}
+			alarmsDeployment := &appsv1.Deployment{}
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryDeploymentManagerServerName,
+					Name:      utils.InventoryAlarmServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				deploymentManagerDeployment)
+				alarmsDeployment)
 			Expect(err).ToNot(HaveOccurred())
 		},
 	),
@@ -340,12 +341,12 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image: &ServerTestImage,
-					MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
+					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
 					},
-					DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
 						ServerConfig: inventoryv1alpha1.ServerConfig{
 							Enabled: false,
 						},
@@ -362,28 +363,28 @@ var _ = DescribeTable(
 		func(result ctrl.Result, reconciler Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 			// Check the metadata server deployment does not exist.
-			metadataDeployment := &appsv1.Deployment{}
+			resourceDeployment := &appsv1.Deployment{}
 			err := reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryMetadataServerName,
+					Name:      utils.InventoryResourceServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				metadataDeployment)
+				resourceDeployment)
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryMetadataServerName)))
+			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryResourceServerName)))
 
 			// Check the deployment manager server does not exist.
-			deploymentManagerDeployment := &appsv1.Deployment{}
+			alarmsDeployment := &appsv1.Deployment{}
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryDeploymentManagerServerName,
+					Name:      utils.InventoryAlarmServerName,
 					Namespace: utils.InventoryNamespace,
 				},
-				deploymentManagerDeployment)
+				alarmsDeployment)
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryDeploymentManagerServerName)))
+			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryAlarmServerName)))
 		},
 	),
 )

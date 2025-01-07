@@ -198,10 +198,6 @@ spec:
           being first and the root CA being last.
         displayName: TLS client certificate
         path: clusterServerConfig.clientTLS.clientCertificateName
-      - displayName: Deployment Manager Server Configuration
-        path: deploymentManagerServerConfig
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           Image is the full reference of the container image that contains the binary. This is
           optional and the default will be the value passed to the `--image` command line flag of
@@ -213,10 +209,6 @@ spec:
       - description: IngressHost defines the FQDN for the IMS endpoints.
         displayName: Ingress Host
         path: ingressHost
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Metadata Server Configuration
-        path: metadataServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: ResourceServerConfig contains the configuration for the resource
