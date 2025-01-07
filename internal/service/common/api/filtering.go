@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 
@@ -406,7 +407,17 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var err error
-			query := r.URL.Query()
+			query, err := url.ParseQuery(r.URL.RawQuery)
+			if err != nil {
+				slog.Error("failed to parse query", "RawQuery", r.URL.RawQuery, "err", err)
+				_ = adapter.Error(
+					w,
+					fmt.Sprintf("failed to parse query: %s; error: %s", r.URL.RawQuery, err.Error()),
+					http.StatusBadRequest,
+				)
+				return
+			}
+
 			var projector search.Projector
 			var selector search.Selector
 			if values, ok := query[excludeFields]; ok && len(values) > 0 {
