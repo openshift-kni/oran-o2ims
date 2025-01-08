@@ -275,7 +275,7 @@ var _ = DescribeTable(
 		},
 	),
 	Entry(
-		"Resource and alarms servers required",
+		"Resource, alarms and artifacts servers required",
 		[]client.Object{
 			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
@@ -295,6 +295,11 @@ var _ = DescribeTable(
 							Enabled: true,
 						},
 					},
+					ArtifactsServerConfig: inventoryv1alpha1.ArtifactsServerConfig{
+						ServerConfig: inventoryv1alpha1.ServerConfig{
+							Enabled: true,
+						},
+					},
 				},
 			},
 		},
@@ -307,7 +312,7 @@ var _ = DescribeTable(
 		func(result ctrl.Result, reconciler Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
-			// Check that the metadata deployment exists.
+			// Check that the resource server exists.
 			resourceDeployment := &appsv1.Deployment{}
 			err := reconciler.Client.Get(
 				context.TODO(),
@@ -318,7 +323,7 @@ var _ = DescribeTable(
 				resourceDeployment)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Check that the deployment manager server exists.
+			// Check that the alarms server exists.
 			alarmsDeployment := &appsv1.Deployment{}
 			err = reconciler.Client.Get(
 				context.TODO(),
@@ -327,6 +332,17 @@ var _ = DescribeTable(
 					Namespace: utils.InventoryNamespace,
 				},
 				alarmsDeployment)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the artifacts server exists.
+			artifactsDeployment := &appsv1.Deployment{}
+			err = reconciler.Client.Get(
+				context.TODO(),
+				types.NamespacedName{
+					Name:      utils.InventoryArtifactsServerName,
+					Namespace: utils.InventoryNamespace,
+				},
+				artifactsDeployment)
 			Expect(err).ToNot(HaveOccurred())
 		},
 	),

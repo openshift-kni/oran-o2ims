@@ -81,6 +81,13 @@ type ServerConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
+// ArtifactsServerConfig contains the configuration for the artifacts server.
+type ArtifactsServerConfig struct {
+	//+kubebuilder:default:={enabled:true}
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:bool"}
+	ServerConfig `json:",inline"`
+}
+
 // ResourceServerConfig contains the configuration for the resource server.
 type ResourceServerConfig struct {
 	//+kubebuilder:default:={enabled:true}
@@ -141,6 +148,10 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	CloudID *string `json:"cloudID"`
+	// ArtifactsServerConfig contains the configuration for the artifacts server.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Artifacts Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ArtifactsServerConfig ArtifactsServerConfig `json:"artifactsServerConfig,omitempty"`
 	// ResourceServerConfig contains the configuration for the resource server.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -178,12 +189,14 @@ type DeploymentsStatus struct {
 	ResourceServerStatus string `json:"resourceServerStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Alarm Server Status"
 	AlarmServerStatus string `json:"alarmServerStatus,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Artifacts Server Status"
+	ArtifactsServerStatus string `json:"artifactsServerStatus,omitempty"`
 }
 
 type UsedServerConfig struct {
-	MetadataServerUsedConfig          []string `json:"metadataServerUsedConfig,omitempty"`
-	ResourceServerUsedConfig          []string `json:"resourceServerUsedConfig,omitempty"`
-	DeploymentManagerServerUsedConfig []string `json:"deploymentManagerServerUsedConfig,omitempty"`
+	ArtifactsServerUsedConfig []string `json:"artifactsServerUsedConfig,omitempty"`
+	MetadataServerUsedConfig  []string `json:"metadataServerUsedConfig,omitempty"`
+	ResourceServerUsedConfig  []string `json:"resourceServerUsedConfig,omitempty"`
 }
 
 // InventoryStatus defines the observed state of Inventory

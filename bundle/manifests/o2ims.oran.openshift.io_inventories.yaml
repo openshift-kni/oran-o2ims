@@ -67,6 +67,19 @@ spec:
                 required:
                 - enabled
                 type: object
+              artifactsServerConfig:
+                default:
+                  enabled: true
+                description: ArtifactsServerConfig contains the configuration for
+                  the artifacts server.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled indicates if the server should be started.
+                    type: boolean
+                required:
+                - enabled
+                type: object
               caBundleName:
                 description: |-
                   CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
@@ -296,6 +309,8 @@ spec:
                 properties:
                   alarmServerStatus:
                     type: string
+                  artifactsServerStatus:
+                    type: string
                   deploymentServerStatus:
                     type: string
                   metadataServerStatus:
@@ -315,7 +330,7 @@ spec:
                 type: string
               usedServerConfig:
                 properties:
-                  deploymentManagerServerUsedConfig:
+                  artifactsServerUsedConfig:
                     items:
                       type: string
                     type: array

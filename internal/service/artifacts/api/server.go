@@ -8,15 +8,19 @@ import (
 	"github.com/google/uuid"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ArtifactsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
-var _ api.StrictServerInterface = (*ArtifactsServer)(nil)
-
+type ArtifactsServerConfig struct {
+	utils.CommonServerConfig
+}
 type ArtifactsServer struct {
 	HubClient client.Client
 }
+
+// ArtifactsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
+var _ api.StrictServerInterface = (*ArtifactsServer)(nil)
 
 // Get managed infrastructure templates
 // (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates)

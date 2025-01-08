@@ -275,6 +275,79 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 	return nextReconcile, err
 }
 
+// setupArtifactsServerConfig creates the resource necessary to start the Artifacts Server.
+func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createServiceAccount(ctx, utils.InventoryArtifactsServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ServiceAccount for the Artifacts server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createArtifactsServerClusterRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create artifacts cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+	err = t.createArtifactsServerClusterRoleBinding(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create artifacts cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
+	// API requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryArtifactsServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create Artifacts server RBAC proxy cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the Artifacts server.
+	err = t.createService(ctx, utils.InventoryArtifactsServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for the Artifacts server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the artifacts-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.InventoryArtifactsServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the Artifacts server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return
+}
+
 // setupAlarmServerConfig creates the resources necessary to start the Alarm Server.
 func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
@@ -619,7 +692,8 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 
 	// Create the needed Ingress if at least one server is required by the Spec.
-	if t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmServerConfig.Enabled {
+	if t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmServerConfig.Enabled ||
+		t.object.Spec.ArtifactsServerConfig.Enabled {
 		err = t.createIngress(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -669,6 +743,15 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
+	// Start the artifacts server if required by the Spec.
+	if t.object.Spec.ArtifactsServerConfig.Enabled {
+		// Create the artifacts server.
+		nextReconcile, err = t.setupArtifactsServerConfig(ctx, nextReconcile)
+		if err != nil {
+			return
+		}
+	}
+
 	err = t.updateInventoryDeploymentStatus(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -679,6 +762,70 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
 	}
 	return
+}
+
+func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", t.object.Namespace, utils.InventoryArtifactsServerName,
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			// We need to read ClusterTemplates.
+			{
+				APIGroups: []string{
+					"o2ims.provisioning.oran.org",
+				},
+				Resources: []string{
+					"clustertemplates",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Artifacts server cluster role: %w", err)
+	}
+
+	return nil
+}
+
+func (t *reconcilerTask) createArtifactsServerClusterRoleBinding(ctx context.Context) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.InventoryArtifactsServerName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, utils.InventoryArtifactsServerName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: t.object.Namespace,
+				Name:      utils.InventoryArtifactsServerName,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Artifacts Server cluster role binding: %w", err)
+	}
+
+	return nil
 }
 
 // createSharedRbacProxyRole creates a cluster role that is used by the kube-rbac-proxy to access the authentication and
@@ -1439,6 +1586,21 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
+								Path: "/o2ims-infrastructureArtifacts",
+								PathType: func() *networkingv1.PathType {
+									pathType := networkingv1.PathTypePrefix
+									return &pathType
+								}(),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: utils.InventoryArtifactsServerName,
+										Port: networkingv1.ServiceBackendPort{
+											Name: utils.InventoryIngressName,
+										},
+									},
+								},
+							},
+							{
 								Path: "/o2ims-infrastructureMonitoring",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
@@ -1532,6 +1694,10 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 
 	if serverName == utils.InventoryResourceServerName {
 		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.InventoryArtifactsServerName {
+		t.object.Status.UsedServerConfig.ArtifactsServerUsedConfig = deploymentArgs
 	}
 
 	// If there is an error passed, include it in the condition.

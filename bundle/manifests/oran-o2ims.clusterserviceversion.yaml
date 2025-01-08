@@ -758,6 +758,12 @@ spec:
           being first and the root CA being last.
         displayName: TLS client certificate
         path: alarmServerConfig.clientTLS.clientCertificateName
+      - description: ArtifactsServerConfig contains the configuration for the artifacts
+          server.
+        displayName: Artifacts Server Configuration
+        path: artifactsServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
           with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
@@ -915,6 +921,8 @@ spec:
         path: deploymentStatus
       - displayName: Alarm Server Status
         path: deploymentStatus.alarmServerStatus
+      - displayName: Artifacts Server Status
+        path: deploymentStatus.artifactsServerStatus
       - displayName: Deployment Server Status
         path: deploymentStatus.deploymentServerStatus
       - displayName: Metadata Server Status

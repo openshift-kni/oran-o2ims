@@ -159,7 +159,8 @@ func HasApiEndpoints(serverName string) bool {
 	return serverName == InventoryDatabaseServerName ||
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
-		serverName == InventoryResourceServerName
+		serverName == InventoryResourceServerName ||
+		serverName == InventoryArtifactsServerName
 }
 
 // HasDatabase determines whether a server owns a logical database instance
@@ -422,6 +423,13 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 
 		// Add SMO/OAuth command line arguments
 		result = addArgsForSMO(inventory, result)
+		return
+	}
+
+	if serverName == InventoryArtifactsServerName {
+		result = slices.Clone(ArtifactsServerArgs)
+
+		// TODO: Add SMO/OAuth command line arguments when notifications are added.
 		return
 	}
 
@@ -770,6 +778,10 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 		},
 		Spec: inventoryv1alpha1.InventorySpec{
 			AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
+				ServerConfig: inventoryv1alpha1.ServerConfig{
+					Enabled: true},
+			},
+			ArtifactsServerConfig: inventoryv1alpha1.ArtifactsServerConfig{
 				ServerConfig: inventoryv1alpha1.ServerConfig{
 					Enabled: true},
 			},
