@@ -71,10 +71,23 @@ func Serve() error {
 		return fmt.Errorf("failed to get swagger: %w", err)
 	}
 
+	// Create a new logger to be passed where a logger is needed.
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug, // TODO: set with server args
+	}))
+
+	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters.
+	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
+	if err != nil {
+		return fmt.Errorf("error creating filter filterAdapter: %w", err)
+	}
+
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: router,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
 			common.OpenAPIValidation(swagger),
+			common.ResponseFilter(filterAdapter),
 			common.LogDuration(),
 		},
 		ErrorHandlerFunc: common.GetOranReqErrFunc(),
