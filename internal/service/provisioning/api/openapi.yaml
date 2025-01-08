@@ -1,0 +1,295 @@
+#
+# Copyright (c) 2025 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+# compliance with the License. You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is
+# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing permissions and limitations under the
+# License.
+#
+
+openapi: 3.0.3
+
+info:
+  title: O2IMS Infrastructure Provisioning API
+  version: 1.0.0
+  description: API for O2IMS Infrastructure Provisioning
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  contact:
+    name: Red Hat
+    url: https://www.redhat.com
+
+externalDocs:
+  description: O-RAN O2ims Interface Specification
+  url: TBD
+
+servers:
+- url: http://localhost:8000
+
+tags:
+- name: provisioniningRequests
+  description: |
+    Information about provisioning requests.
+
+paths:
+
+  /o2ims-infrastructureProvisioning/v1/provisioningRequests:
+    get:
+      operationId: getProvisioningRequests
+      summary: Get provisioning requests
+      description: |
+        Returns the list of provisioning requests.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - provisioningRequests
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of provisioning requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProvisioningRequest'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+    post:
+      operationId: createProvisioningRequest
+      summary: Create a provisioning request
+      description: |
+        Creates a new provisioning request.
+      tags:
+      - provisioningRequests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvisioningRequest"
+      responses:
+        '201':
+          description: Successfully created the provisioning request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisioningRequest"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+
+  /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}:
+    get:
+      operationId: getProvisioningRequest
+      summary: Get the provisioning request
+      description: |
+        Returns the details of a provisioning request.
+      parameters:
+      - $ref: "#/components/parameters/provisioningRequestId"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      tags:
+      - provisioningRequests
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the provisioning request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisioningRequest"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified provisioning request was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+    put:
+      operationId: updateProvisioningRequest
+      summary: Update a provisioning request
+      description: |
+        Replaces an existing provisioning request.
+      parameters:
+      - $ref: "#/components/parameters/provisioningRequestId"
+      tags:
+      - provisioningRequests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvisioningRequest"
+      responses:
+        '200':
+          description: Successfully updated the provisioning request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisioningRequest"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '404':
+          description: The specified provisioning request was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '412':
+          description: Precondition failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+    delete:
+      operationId: deleteProvisioningRequest
+      summary: Delete a provisioning request
+      description: |
+        Deletes a provisioning request.
+      parameters:
+      - $ref: "#/components/parameters/provisioningRequestId"
+      tags:
+      - provisioningRequests
+      responses:
+        '200':
+          description: Successfully deleted the provisioning request.
+        '404':
+          description: The specified provisioning request was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+
+components:
+  parameters:
+    provisioningRequestId:
+      name: provisioningRequestId
+      description: |
+        Unique identifier of a provisioning request.
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 123e4567-e89b-12d3-a456-426614174000
+
+  schemas:
+    ProvisioningRequest:
+      description: |
+        Information about a provisioning request.
+      type: object
+      properties:
+        provisioningRequestId:
+          type: string
+          format: uuid
+          description: |
+            Identifier for the provisioning request. This identifier is assigned by the SMO.
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          description: Human readable name of the provisioning request.
+        description:
+          type: string
+          description: Human readable description of the provisioning request.
+        templateName:
+          type: string
+          description: Name of the template used for the provisioning request.
+        templateVersion:
+          type: string
+          description: Version of the template used for the provisioning request.
+        templateParameters:
+          type: object
+          description: Input Parameters that conform to the OpenAPI V3 schema defined in the template.
+        status:
+          type: object
+          description: Status of the provisioning request.
+          properties:
+            provisioningStatus:
+              type: object
+              description: Details about the status of the provisioning request.
+              properties:
+                updateTime:
+                  type: string
+                  format: date-time
+                  description: |
+                    Timestamp indicating the last time the status of the provisioning request was updated.
+                  example: 2042-07-21T20:32:28Z
+                message:
+                  type: string
+                  description: Message describing the status of the provisioning request.
+                provisioningState:
+                  type: string
+                  description: Current state of the provisioning request.
+            nodeClusterId:
+              type: string
+              format: uuid
+              description: Identifier of the NodeCluster that has been provisioned.
+              example: "a1478db9-651f-4d30-96d6-8af13481d779"
+      required:
+      - provisioningRequestId
+      - name
+      - description
+      - templateName
+      - templateVersion
+      - templateParameters
