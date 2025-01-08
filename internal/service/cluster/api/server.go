@@ -182,11 +182,7 @@ func (r *ClusterServer) GetNodeClusters(ctx context.Context, request api.GetNode
 
 	objects := make([]api.NodeCluster, len(records))
 	for i, record := range records {
-		clusterResourceIDs, found := mapper[record.NodeClusterID]
-		if !found {
-			clusterResourceIDs = make([]uuid.UUID, 0)
-		}
-		objects[i] = models.NodeClusterToModel(&record, clusterResourceIDs)
+		objects[i] = models.NodeClusterToModel(&record, mapper[record.NodeClusterID])
 	}
 
 	return api.GetNodeClusters200JSONResponse(objects), nil
@@ -213,14 +209,22 @@ func (r *ClusterServer) GetNodeCluster(ctx context.Context, request api.GetNodeC
 		}, nil
 	}
 
-	resources, err := r.Repo.GetNodeClusterResources(ctx, record.NodeClusterID)
+	resources, err := r.Repo.GetNodeClusterResourceIDs(ctx, []any{record.NodeClusterID}...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get node cluster resources: %w", err)
+		return nil, fmt.Errorf("failed to get node cluster resource ids: %w", err)
 	}
 
-	ids := make([]uuid.UUID, len(resources))
-	for i, resource := range resources {
-		ids[i] = resource.ClusterResourceID
+	var ids []uuid.UUID
+	if len(resources) == 1 {
+		ids = resources[0].ClusterResourceIDs
+	} else if len(resources) > 1 {
+		return api.GetNodeCluster500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"NodeClusterId": request.NodeClusterId.String(),
+			},
+			Detail: "Unexpected number of NodeCluster resources",
+			Status: http.StatusInternalServerError,
+		}, nil
 	}
 
 	object := models.NodeClusterToModel(record, ids)

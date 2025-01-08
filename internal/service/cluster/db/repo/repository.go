@@ -47,16 +47,23 @@ func (r *ClusterRepository) GetNodeClusterResources(ctx context.Context, nodeClu
 }
 
 // GetNodeClusterResourceIDs returns an array of ClusterResourceIDs which contains the list of ClusterResourceID values
-// for each NodeCluster in the database.
-func (r *ClusterRepository) GetNodeClusterResourceIDs(ctx context.Context) ([]models.ClusterResourceIDs, error) {
+// for each NodeCluster in the database.  If the `clusters` parameter is set, then we scope the response to only those
+// clusters.
+func (r *ClusterRepository) GetNodeClusterResourceIDs(ctx context.Context, clusters ...any) ([]models.ClusterResourceIDs, error) {
 	// Couldn't find an obvious way to supply an alias (e.g., AS) to psql.F("array_agg", "cluster_resource_id") so opted
 	// to write this query out directly
-	sql, args, err := psql.RawQuery("SELECT node_cluster_id, array_agg(cluster_resource_id) as cluster_resource_ids " +
-		"FROM cluster_resource GROUP BY node_cluster_id").Build()
+	var err error
+	var sql string
+	var args []any
+	query := "SELECT node_cluster_id, array_agg(cluster_resource_id) as cluster_resource_ids FROM cluster_resource"
+	if len(clusters) == 0 {
+		sql, args, err = psql.RawQuery(fmt.Sprintf("%s GROUP BY node_cluster_id", query)).Build()
+	} else {
+		sql, args, err = psql.RawQuery(fmt.Sprintf("%s WHERE node_cluster_id IN (?) GROUP BY node_cluster_id", query), psql.Arg(clusters...)).Build()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
 	}
-
 	return utils.ExecuteCollectRows[models.ClusterResourceIDs](ctx, r.Db, sql, args)
 }
 

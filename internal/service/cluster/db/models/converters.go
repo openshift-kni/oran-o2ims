@@ -50,8 +50,9 @@ func NodeClusterToModel(record *NodeCluster, clusterResourceIDs []uuid.UUID) gen
 		Name:                           record.Name,
 	}
 
-	if clusterResourceIDs != nil {
-		object.ClusterResourceIds = clusterResourceIDs
+	object.ClusterResourceIds = clusterResourceIDs
+	if clusterResourceIDs == nil {
+		object.ClusterResourceIds = []uuid.UUID{}
 	}
 
 	return object

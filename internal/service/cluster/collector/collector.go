@@ -19,7 +19,9 @@ import (
 const pollingDelay = 10 * time.Minute
 
 // clusterNameExtension represents a mandatory extension that data sources must add to ClusterResource objects to
-// identify their parent NodeCluster.
+// identify their parent NodeCluster.  The term "mandatory" here doesn't refer to the definition of the spec; only that
+// internally we rely on it being present to find the node cluster ID value using its name value. We actually delete
+// this extension and do not expose it to the API.
 const clusterNameExtension = "clusterName"
 
 // DataSource represents the operations required to be supported by any objects implementing a
@@ -209,6 +211,9 @@ func (c *Collector) collectClusterResources(ctx context.Context, dataSource Data
 		if resource.Extensions != nil {
 			clusterName := (*resource.Extensions)[clusterNameExtension].(string)
 			resource.NodeClusterID = clusterNameToID[clusterName]
+			// The name extension was added for the sole purpose of allowing us to find the matching cluster ID value
+			// since it is not possible for the data source to do this directly.  Removing it since it is not required
+			// by the spec and seems redundant since the full NodeCluster can be retrieved with the ID value.
 			delete(*resource.Extensions, clusterNameExtension)
 		}
 
