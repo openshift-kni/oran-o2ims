@@ -7,7 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 
 	"github.com/google/uuid"
 
@@ -41,6 +44,12 @@ type AlarmsServer struct {
 	AlarmsRepository *repo.AlarmsRepository
 	// ClusterServer contains the cluster server client and fetched objects
 	ClusterServer *clusterserver.ClusterServer
+	// Wg to allow alarm server level background tasks to finish before graceful exit
+	Wg sync.WaitGroup
+	// NotificationProvider to handle new events
+	NotificationProvider notifier.NotificationProvider
+	// Notifier to notify subscribers with new events
+	Notifier *notifier.Notifier
 }
 
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
@@ -51,7 +60,7 @@ var baseURL = "/o2ims-infrastructureMonitoring/v1"
 var currentVersion = "1.0.0"
 
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
-func (r *AlarmsServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
+func (a *AlarmsServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
 	versions := []common.APIVersion{
 		{
@@ -66,7 +75,7 @@ func (r *AlarmsServer) GetAllVersions(ctx context.Context, request api.GetAllVer
 }
 
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
-func (r *AlarmsServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
+func (a *AlarmsServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
 	// We currently only support a single version
 	versions := []common.APIVersion{
 		{
@@ -138,6 +147,12 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 		}), nil
 	}
 
+	// Signal the notifier to handle this new subscription
+	a.Notifier.SubscriptionEvent(&notifier.SubscriptionEvent{
+		Removed:      false,
+		Subscription: models.ConvertAlertSubToNotificationSub(record),
+	})
+	slog.Info("Successfully created Alarm Subscription", "record", record)
 	return api.CreateSubscription201JSONResponse(models.ConvertSubscriptionModelToApi(*record)), nil
 }
 
@@ -164,6 +179,12 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 		}), nil
 	}
 
+	// Signal the notifier to handle this subscription change
+	a.Notifier.SubscriptionEvent(&notifier.SubscriptionEvent{
+		Removed:      true,
+		Subscription: models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{SubscriptionID: request.AlarmSubscriptionId}),
+	})
+	slog.Info("Successfully deleted Alarm Subscription", "alarmSubscriptionId", request.AlarmSubscriptionId.String())
 	return api.DeleteSubscription200Response{}, nil
 }
 
@@ -478,6 +499,8 @@ func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProb
 // AmNotification handles an API request coming from AlertManager with CaaS alerts. This api is used internally.
 // Note: the errors returned can also be view under alertmanager pod logs but also logging here for convenience
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
+	// TODO: AM auto retries if it receives 5xx error code. That means any error, even if permanent (e.g postgres syntax), will be processed the same way. Once we have a better retry mechanism for pg, update all 5xx to 4xx as needed.
+
 	// Audit the table with full list of alerts in the current payload. If missing set them to resolve
 	if err := a.AlarmsRepository.ResolveNotificationIfNotInCurrent(ctx, request.Body); err != nil {
 		msg := "failed to resolve notification that are not present"
@@ -503,9 +526,23 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
-	//TODO: Get subscriber
+	// Return 200 before subscription processing to free up AM conn
+	a.Wg.Add(1)
+	go func() {
+		defer a.Wg.Done()
+		// Create new background context for subscription processing
+		subCtx := context.Background()
+		notifications, err := a.NotificationProvider.GetNotifications(subCtx)
+		if err != nil {
+			slog.Error("failed to get alarm notifications", "error", err)
+		}
 
-	//TODO: Notify subscriber
+		for _, notification := range notifications {
+			a.Notifier.Notify(&notification)
+		}
+	}()
+
+	slog.Info("Successfully handled all alertmanager alerts")
 	return api.AmNotification200Response{}, nil
 }
 

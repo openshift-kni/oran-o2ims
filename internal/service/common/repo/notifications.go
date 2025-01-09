@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 
@@ -44,6 +45,10 @@ func (p *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 // DeleteNotification deletes a notification.  This should be invoked when the notifier has ensured
 // that the notification has been seen by all subscriptions.
 func (p *NotificationStorageProvider) DeleteNotification(ctx context.Context, notificationID uuid.UUID) error {
+	// This event has been consumed by all subscriptions
+	slog.Debug("notification sent to all subscribers; deleting",
+		"NotificationID", notificationID)
+
 	_, err := p.repository.DeleteDataChangeEvent(ctx, notificationID)
 	if err != nil {
 		return fmt.Errorf("failed to delete notification %s: %w", notificationID, err)

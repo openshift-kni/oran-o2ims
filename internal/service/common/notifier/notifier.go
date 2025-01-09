@@ -240,7 +240,7 @@ func (n *Notifier) SubscriptionEvent(event *SubscriptionEvent) {
 // handleSubscriptionEvent handles an incoming subscription change event
 func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *SubscriptionEvent) error {
 	subscriptionID := event.Subscription.SubscriptionID
-	slog.Info("handling subscription event", "removed", event.Removed, "subscription", event.Subscription)
+	slog.Info("Handling subscription event", "removed", event.Removed, "subscription", event.Subscription)
 
 	if event.Removed {
 		// The subscription has been removed.  Cleanup any associated data.
@@ -265,7 +265,6 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 	}
 
 	slog.Info("subscription event handled", "workers", len(n.workers))
-
 	return nil
 }
 
@@ -297,10 +296,6 @@ func (n *Notifier) handleSubscriptionJobCompleteEvent(ctx context.Context, event
 	}
 
 	if done {
-		// This event has been consumed by all subscriptions
-		slog.Debug("notification sent to all subscribers; deleting",
-			"NotificationID", event.notificationID, "sequenceID", event.sequenceID)
-
 		if err := n.notificationProvider.DeleteNotification(ctx, event.notificationID); err != nil {
 			return fmt.Errorf("failed to delete completed notification: %w", err)
 		}

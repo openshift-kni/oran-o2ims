@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     -- O-RAN additional data to create AlarmEventNotification
     object_id UUID, -- Same as manager_cluster_id for caas alerts. Note: nullable to capture if ACM is sending us cluster ID
     object_type_id UUID, -- Derived from manager_cluster_id. Note: nullable to capture if ACM is sending us cluster ID
+    notification_event_type VARCHAR(20) DEFAULT 'NEW' NOT NULL, -- Same as alarm_subscription_info.filter used to quickly filter and return notification
 
     -- Internal
     alarm_status VARCHAR(20) DEFAULT 'firing' NOT NULL, -- Status of the alarm (either 'firing' or 'resolved'). This is also used to archive it later.
@@ -32,68 +33,102 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
 
     CONSTRAINT unique_fingerprint_alarm_raised_time UNIQUE (fingerprint, alarm_raised_time), -- Unique constraint to prevent duplicate caas alert with the same fingerprint and time
     CONSTRAINT chk_status CHECK (alarm_status IN ('firing', 'resolved')), -- Check constraint to enforce status as either 'firing' or 'resolved'
-    CONSTRAINT chk_perceived_severity CHECK (perceived_severity IN (0, 1, 2, 3, 4, 5))  -- Check constraint to restrict perceived_severity to valid integer values. See generated ENUMs in server for more.
+    CONSTRAINT chk_perceived_severity CHECK (perceived_severity IN (0, 1, 2, 3, 4, 5)),  -- Check constraint to restrict perceived_severity to valid integer values. See generated ENUMs in server for more.
+    CONSTRAINT chk_notification_event_type CHECK (notification_event_type IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')) -- Validate notification_event_type (same as alarm_subscription_info.filter)
 );
 
 -- Set ownership of the alarm_sequence_seq sequence to alarm_event_record.alarm_sequence_number
 ALTER SEQUENCE alarm_sequence_seq OWNED BY alarm_event_record.alarm_sequence_number;
 
--- Function to update the alarm_sequence_number on specific status or time changes
-CREATE OR REPLACE FUNCTION update_alarm_event_sequence()
-    RETURNS TRIGGER AS $$
+/*
+Manages alarm lifecycle of alarm events.
+
+The trigger manage_alarm_event is called BEFORE INSERT OR UPDATE to manage:
+- alarm_changed_time: Tracks when alarm state or attributes last changed
+- notification_event_type: Indicates type of change (CLEAR/ACKNOWLEDGE/CHANGE)
+- alarm_sequence_number: Increments on state changes or updates
+
+For new alarms (INSERT):
+- Sets alarm_changed_time to alarm_raised_time
+- Sets CLEAR notification if initially resolved and alarm_changed_time to alarm_cleared_time
+- Uses auto-incremented alarm_sequence_number
+
+State transition priority (UPDATE):
+1. Alarm State Change (CLEAR) - When status becomes 'resolved'
+2. Acknowledgment (ACKNOWLEDGE) - On first acknowledgment
+3. Attribute Changes (CHANGE) - For unacknowledged alarms only
+
+alarm_sequence_number incremented when any of these changes occur:
+- Alarm status changes to resolved
+- First acknowledgment
+- Changes to key attributes (if not acknowledged)
+
+alarm_changed_time updates:
+- On change to resolved status from non-resolved, with alarm_cleared_time
+- On changes to key attributes, with current time (if not acknowledged)
+- On first time acknowledged, with alarm_acknowledged_time
+*/
+CREATE OR REPLACE FUNCTION manage_alarm_event()
+RETURNS TRIGGER AS $$
 BEGIN
-    -- Update sequence if status changes to 'resolved' or if alarm_changed_time is updated
-    IF (NEW.alarm_status = 'resolved' AND OLD.alarm_status IS DISTINCT FROM 'resolved')
-       OR (NEW.alarm_changed_time IS DISTINCT FROM OLD.alarm_changed_time) THEN
-        NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+    -- Handle new alarms
+    IF TG_OP = 'INSERT' THEN
+        NEW.alarm_changed_time := NEW.alarm_raised_time;
+        -- Set CLEAR and alarm_changed_time to alarm_cleared_time if alarm is initially resolved
+        IF NEW.alarm_status = 'resolved' THEN
+            NEW.alarm_changed_time = NEW.alarm_cleared_time;
+            NEW.notification_event_type := 'CLEAR';
+        END IF;
+
+        -- alarm_sequence_number is auto-incremented
+        RETURN NEW;
+
+    -- Handle updates to existing alarms
+    ELSIF TG_OP = 'UPDATE' THEN
+        -- 1. Alarm status handling (highest priority)
+        IF NEW.alarm_status = 'resolved' THEN
+            NEW.notification_event_type := 'CLEAR';
+
+            -- Only update change time to cleared time and sequence number if transitioning from a non-resolved state
+            IF OLD.alarm_status IS DISTINCT FROM 'resolved' THEN
+                NEW.alarm_changed_time = NEW.alarm_cleared_time;
+                NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+             END IF;
+
+        -- 2. Handling alarm_acknowledged. Set alarm_changed_time to alarm_acknowledged_time
+        ELSIF NEW.alarm_acknowledged THEN
+            NEW.notification_event_type := 'ACKNOWLEDGE';
+
+             -- Update sequence only on first acknowledgment
+            IF NEW.alarm_acknowledged IS DISTINCT FROM OLD.alarm_acknowledged THEN
+                NEW.alarm_changed_time = NEW.alarm_acknowledged_time;
+                NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+            END IF;
+
+        -- 3. Other changes (only if not acknowledged)
+        ELSIF NOT NEW.alarm_acknowledged THEN
+            IF (NEW.object_id IS DISTINCT FROM OLD.object_id OR
+                NEW.object_type_id IS DISTINCT FROM OLD.object_type_id OR
+                NEW.alarm_definition_id IS DISTINCT FROM OLD.alarm_definition_id OR
+                NEW.probable_cause_id IS DISTINCT FROM OLD.probable_cause_id)
+            THEN
+                NEW.notification_event_type := 'CHANGE';
+                NEW.alarm_changed_time := CURRENT_TIMESTAMP;
+                NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+            END IF;
+        END IF;
+
+        RETURN NEW;
     END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to execute update_alarm_event_sequence before updating alarm_event_record
-CREATE OR REPLACE TRIGGER update_alarm_event_sequence
-    BEFORE UPDATE ON alarm_event_record
+
+-- Create a trigger for managing alarm events on INSERT or UPDATE
+CREATE TRIGGER manage_alarm_event
+    BEFORE INSERT OR UPDATE
+    ON alarm_event_record
     FOR EACH ROW
-    EXECUTE FUNCTION update_alarm_event_sequence();
-
--- Function to track alarm_changed_time
-CREATE OR REPLACE FUNCTION track_alarm_event_record_change_time()
-    RETURNS TRIGGER AS $$
-BEGIN
-    -- Alarm record created. Set alarm_changed_time to alarm_raised_time
-    IF NEW.alarm_changed_time IS NULL THEN
-        NEW.alarm_changed_time = NEW.alarm_raised_time;
-        RETURN NEW;
-    END IF;
-
-    -- Alarm record cleared. Set alarm_changed_time to alarm_cleared_time
-    IF NEW.perceived_severity = 5 AND NEW.perceived_severity IS DISTINCT FROM OLD.perceived_severity THEN
-        NEW.alarm_changed_time = NEW.alarm_cleared_time;
-        RETURN NEW;
-    END IF;
-
-    -- Alarm record acknowledged. Set alarm_changed_time to alarm_acknowledged_time
-    IF NEW.alarm_acknowledged = TRUE AND NEW.alarm_acknowledged IS DISTINCT FROM OLD.alarm_acknowledged THEN
-        NEW.alarm_changed_time = NEW.alarm_acknowledged_time;
-        RETURN NEW;
-    END IF;
-
-    -- Alarm record updated. Set alarm_changed_time to current timestamp
-    IF  NEW.object_id IS DISTINCT FROM OLD.object_id OR
-        NEW.object_type_id IS DISTINCT FROM OLD.object_type_id OR
-        NEW.alarm_definition_id IS DISTINCT FROM OLD.alarm_definition_id OR
-        NEW.probable_cause_id IS DISTINCT FROM OLD.probable_cause_id
-    THEN
-        NEW.alarm_changed_time = CURRENT_TIMESTAMP;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger for updating alarm_changed_time on INSERT or UPDATE
-CREATE OR REPLACE TRIGGER track_alarm_event_record_change_time
-    BEFORE INSERT OR UPDATE ON alarm_event_record
-    FOR EACH ROW
-    EXECUTE FUNCTION track_alarm_event_record_change_time();
+    EXECUTE FUNCTION manage_alarm_event();
