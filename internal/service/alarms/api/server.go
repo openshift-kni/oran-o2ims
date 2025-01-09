@@ -148,7 +148,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 	}
 
 	// Signal the notifier to handle this new subscription
-	a.Notifier.SubscriptionEvent(&notifier.SubscriptionEvent{
+	a.Notifier.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      false,
 		Subscription: models.ConvertAlertSubToNotificationSub(record),
 	})
@@ -180,7 +180,7 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 	}
 
 	// Signal the notifier to handle this subscription change
-	a.Notifier.SubscriptionEvent(&notifier.SubscriptionEvent{
+	a.Notifier.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      true,
 		Subscription: models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{SubscriptionID: request.AlarmSubscriptionId}),
 	})
@@ -538,7 +538,7 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 		}
 
 		for _, notification := range notifications {
-			a.Notifier.Notify(&notification)
+			a.Notifier.Notify(subCtx, &notification)
 		}
 	}()
 

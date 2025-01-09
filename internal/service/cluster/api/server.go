@@ -345,7 +345,7 @@ func (r *ClusterServer) CreateSubscription(ctx context.Context, request api.Crea
 	}
 
 	// Signal the notifier to handle this new subscription
-	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+	r.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      false,
 		Subscription: models.SubscriptionToInfo(result),
 	})
@@ -403,7 +403,7 @@ func (r *ClusterServer) DeleteSubscription(ctx context.Context, request api.Dele
 	}
 
 	// Signal the notifier to handle this subscription change
-	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+	r.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed: true,
 		Subscription: models.SubscriptionToInfo(&models2.Subscription{
 			SubscriptionID: &request.SubscriptionId,

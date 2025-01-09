@@ -95,20 +95,15 @@ func (w *SubscriptionWorker) NewNotification(notification *Notification) {
 	}
 }
 
+func (w *SubscriptionWorker) GetNotifications() []*Notification {
+	w.workMutex.Lock()
+	defer w.workMutex.Unlock()
+	return w.workQueue
+}
+
 // Shutdown terminates the worker and releases any pending events
 func (w *SubscriptionWorker) Shutdown() {
 	w.cancel()
-}
-
-// releaseNotifications releases all pending notifications back to the notifier
-func (w *SubscriptionWorker) releaseNotifications() {
-	for _, notification := range w.workQueue {
-		w.subscriptionJobCompleteChannel <- &SubscriptionJobComplete{
-			subscriptionID: w.subscription.SubscriptionID,
-			notificationID: notification.NotificationID,
-			sequenceID:     notification.SequenceID,
-		}
-	}
 }
 
 // Run executes that main loop for the worker handling events as they arrive.
@@ -124,7 +119,6 @@ func (w *SubscriptionWorker) Run() {
 			w.processNextEvent(w.ctx, w.workQueue[0])
 			w.workMutex.Unlock()
 		case <-w.ctx.Done():
-			w.releaseNotifications()
 			w.logger.Info("Subscription worker shutting down")
 			return
 		}
@@ -134,8 +128,15 @@ func (w *SubscriptionWorker) Run() {
 // handleCurrentEventCompletion handles the end of the current event and looks for another event to process.
 func (w *SubscriptionWorker) handleCurrentEventCompletion(e *SubscriptionJobComplete) {
 	// Forward to the notifier so that it can release it. This may block if the notifier is busy handling other
-	// completion jobs or new notifications.
-	w.subscriptionJobCompleteChannel <- e
+	// completion jobs or new notifications.  We need to combine this into a select that also checks the context
+	// cancellation to ensure that we are not stuck here if the subscription is deleted or the notifier is shutdown
+	// while we are waiting to send this response.
+	select {
+	case w.subscriptionJobCompleteChannel <- e:
+	case <-w.ctx.Done():
+		w.logger.Info("subscription worker shutting down while sending completion event")
+		return
+	}
 
 	// dequeue the completed event and handle the next event
 	w.workMutex.Lock()
