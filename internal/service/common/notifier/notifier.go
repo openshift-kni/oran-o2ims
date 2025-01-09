@@ -12,7 +12,12 @@ import (
 )
 
 // DefaultBufferedChannelSize defines the default size for buffered channels used across the notifier.
-const DefaultBufferedChannelSize = 10
+const DefaultBufferedChannelSize = 100
+
+// CompletionChannelSize defines the buffer size of the completion channel.  We keep this small to ensure that we don't
+// process a large number of notifications without first updating the subscription cursor so workers will block until
+// completions are processed before sending more notifications.
+const CompletionChannelSize = 1
 
 // Notification defines a generic notification object.  The payload should support JSON marshaling.
 type Notification struct {
@@ -84,7 +89,7 @@ func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider
 	oauthConfig *utils.OAuthClientConfig) *Notifier {
 	eventChannel := make(chan *Notification, DefaultBufferedChannelSize)
 	subscriptionChannel := make(chan *SubscriptionEvent, DefaultBufferedChannelSize)
-	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, DefaultBufferedChannelSize)
+	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, CompletionChannelSize)
 	return &Notifier{
 		oauthConfig:                    oauthConfig,
 		subscriptionProvider:           subscriptionProvider,
