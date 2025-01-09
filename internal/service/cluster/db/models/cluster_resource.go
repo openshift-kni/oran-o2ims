@@ -16,6 +16,7 @@ type ClusterResource struct {
 	ClusterResourceID     uuid.UUID               `db:"cluster_resource_id"` // Non-nil because we always set this from named values
 	ClusterResourceTypeID uuid.UUID               `db:"cluster_resource_type_id"`
 	Name                  string                  `db:"name"`
+	NodeClusterID         uuid.UUID               `db:"node_cluster_id"`
 	Description           string                  `db:"description"`
 	Extensions            *map[string]interface{} `db:"extensions"`
 	ArtifactResourceIDs   *[]uuid.UUID            `db:"artifact_resource_ids"`
@@ -36,3 +37,21 @@ func (r ClusterResource) PrimaryKey() string { return "cluster_resource_id" }
 
 // OnConflict returns the column or constraint to be used in the UPSERT operation
 func (r ClusterResource) OnConflict() string { return "" }
+
+// ClusterResourceIDs represents the data returned in a customized query to return the list of ClusterResource ID values
+// associated to each NodeCluster
+type ClusterResourceIDs struct {
+	NodeClusterID      uuid.UUID   `db:"node_cluster_id"`
+	ClusterResourceIDs []uuid.UUID `db:"cluster_resource_ids"`
+}
+
+// TableName returns the table name associated to this model
+func (r ClusterResourceIDs) TableName() string {
+	return "cluster_resource"
+}
+
+// PrimaryKey returns the primary key column associated to this model
+func (r ClusterResourceIDs) PrimaryKey() string { return "cluster_resource_id" }
+
+// OnConflict returns the column or constraint to be used in the UPSERT operation
+func (r ClusterResourceIDs) OnConflict() string { return "" }

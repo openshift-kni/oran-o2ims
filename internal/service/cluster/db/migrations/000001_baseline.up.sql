@@ -35,37 +35,6 @@ CREATE TABLE subscription
     CONSTRAINT unique_callback UNIQUE (callback)
 );
 
--- Table: cluster_resource_type
-CREATE TABLE IF NOT EXISTS cluster_resource_type
-(
-    cluster_resource_type_id UUID PRIMARY KEY,
-    name                     VARCHAR(255) NOT NULL,
-    description              TEXT         NOT NULL,
-    extensions               json         NULL,
-    data_source_id           UUID         NOT NULL,
-    generation_id            INTEGER      NOT NULL DEFAULT 0,
-    created_at               TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
-    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id)      -- Manual cascade required for events
-);
-
--- Table: cluster_resource
-CREATE TABLE IF NOT EXISTS cluster_resource
-(
-    cluster_resource_id      UUID PRIMARY KEY,
-    cluster_resource_type_id UUID,
-    name                     VARCHAR(255) NOT NULL,
-    description              TEXT         NOT NULL,
-    extensions               json         NULL,
-    artifact_resource_ids    UUID[]       NULL,
-    resource_id              UUID         NOT NULL,
-    data_source_id           UUID         NOT NULL,
-    generation_id            INTEGER      NOT NULL DEFAULT 0,
-    external_id              VARCHAR(255) NOT NULL,                           -- FQDN of resource in downstream data source (e.g., id=XXX)
-    created_at               TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
-    FOREIGN KEY (cluster_resource_type_id) REFERENCES cluster_resource_type (cluster_resource_type_id),
-    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id)      -- Manual cascade required for events
-);
-
 -- Table: node_cluster_type
 CREATE TABLE IF NOT EXISTS node_cluster_type
 (
@@ -95,8 +64,41 @@ CREATE TABLE IF NOT EXISTS node_cluster
     generation_id                    INTEGER      NOT NULL DEFAULT 0,
     external_id                      VARCHAR(255) NOT NULL,                           -- FQDN of resource in downstream data source (e.g., id=XXX)
     created_at                       TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
-    FOREIGN KEY (node_cluster_type_id) REFERENCES node_cluster_type (node_cluster_type_id),
+    FOREIGN KEY (node_cluster_type_id) REFERENCES node_cluster_type (node_cluster_type_id),-- Manual cascade required for events
     FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id)              -- Manual cascade required for events
+);
+
+-- Table: cluster_resource_type
+CREATE TABLE IF NOT EXISTS cluster_resource_type
+(
+    cluster_resource_type_id UUID PRIMARY KEY,
+    name                     VARCHAR(255) NOT NULL,
+    description              TEXT         NOT NULL,
+    extensions               json         NULL,
+    data_source_id           UUID         NOT NULL,
+    generation_id            INTEGER      NOT NULL DEFAULT 0,
+    created_at               TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
+    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id)      -- Manual cascade required for events
+);
+
+-- Table: cluster_resource
+CREATE TABLE IF NOT EXISTS cluster_resource
+(
+    cluster_resource_id      UUID PRIMARY KEY,
+    cluster_resource_type_id UUID,
+    name                     VARCHAR(255) NOT NULL,
+    node_cluster_id          UUID         NOT NULL,
+    description              TEXT         NOT NULL,
+    extensions               json         NULL,
+    artifact_resource_ids    UUID[]       NULL,
+    resource_id              UUID         NOT NULL,
+    data_source_id           UUID         NOT NULL,
+    generation_id            INTEGER      NOT NULL DEFAULT 0,
+    external_id              VARCHAR(255) NOT NULL,                           -- FQDN of resource in downstream data source (e.g., id=XXX)
+    created_at               TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
+    FOREIGN KEY (node_cluster_id) REFERENCES node_cluster (node_cluster_id),-- Manual cascade required for events
+    FOREIGN KEY (cluster_resource_type_id) REFERENCES cluster_resource_type (cluster_resource_type_id),-- Manual cascade required for events
+    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id)      -- Manual cascade required for events
 );
 
 -- Table: cached_alarm_dictionary

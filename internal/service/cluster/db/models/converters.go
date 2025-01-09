@@ -37,19 +37,25 @@ func ClusterResourceTypeToModel(record *ClusterResourceType) generated.ClusterRe
 }
 
 // NodeClusterToModel converts a DB tuple to an API model
-func NodeClusterToModel(record *NodeCluster) generated.NodeCluster {
-	return generated.NodeCluster{
+func NodeClusterToModel(record *NodeCluster, clusterResourceIDs []uuid.UUID) generated.NodeCluster {
+	object := generated.NodeCluster{
 		NodeClusterId:                  record.NodeClusterID,
 		NodeClusterTypeId:              record.NodeClusterTypeID,
 		ArtifactResourceId:             record.ArtifactResourceID,
 		ClientNodeClusterId:            record.ClientNodeClusterID,
 		ClusterDistributionDescription: record.ClusterDistributionDescription,
 		ClusterResourceGroups:          record.ClusterResourceGroups,
-		ClusterResourceIds:             []uuid.UUID{}, // TODO: caller should pass in this list
 		Description:                    record.Description,
 		Extensions:                     record.Extensions,
 		Name:                           record.Name,
 	}
+
+	object.ClusterResourceIds = clusterResourceIDs
+	if clusterResourceIDs == nil {
+		object.ClusterResourceIds = []uuid.UUID{}
+	}
+
+	return object
 }
 
 // NodeClusterTypeToModel converts a DB tuple to an API model
