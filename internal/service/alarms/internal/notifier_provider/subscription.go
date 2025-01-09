@@ -57,6 +57,6 @@ func (s *SubscriptionStorageProvider) UpdateSubscription(ctx context.Context, su
 		return fmt.Errorf("update subscription failed for %s: %w", subscription.SubscriptionID, err)
 	}
 
-	slog.Info("Subscription courser updated", "to", subscription.EventCursor)
+	slog.Info("Subscription cursor updated", "to", subscription.EventCursor)
 	return nil
 }

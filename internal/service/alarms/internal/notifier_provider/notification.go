@@ -38,42 +38,41 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 	if len(subscriptions) == 0 {
 		slog.Info("No subscriptions to notify")
 		return notifications, nil
-	} else {
-		slog.Info("Found subscriptions to notify", "subscription count", len(subscriptions))
-		// Find the min event cursor, this will decide the total events that needs to be there ignoring the filter
-		alarms, err := n.repository.GetAlarmsForSubscription(ctx, *getMinSubscription(subscriptions))
-		if err != nil {
-			return notifications, fmt.Errorf("failed to get alarms for subscription: %w", err)
-		}
+	}
+	slog.Info("Found subscriptions to notify", "subscription count", len(subscriptions))
+	// Find the min event cursor, this will decide the total events that needs to be there ignoring the filter
+	alarms, err := n.repository.GetAlarmsForSubscription(ctx, *getMinSubscription(subscriptions))
+	if err != nil {
+		return notifications, fmt.Errorf("failed to get alarms for subscription: %w", err)
+	}
 
-		// TODO: Refactor to use a callback interface for subscription-specific payload modifications
-		// rather than cloning notifications for each subscription. This would improve efficiency
-		// and make the notification system more generic.
-		// As workaround for now using notificationID as subscriberID to link them with Match interface.
-		for _, sub := range subscriptions {
-			var subNotification []notifier.Notification
-			for _, alarm := range alarms {
-				if alarm.AlarmSequenceNumber > sub.EventCursor {
-					if sub.Filter != nil && alarm.NotificationEventType == *sub.Filter {
-						continue
-					}
-					subNotification = append(subNotification, notifier.Notification{
-						NotificationID: sub.SubscriptionID,
-						SequenceID:     int(alarm.AlarmSequenceNumber),
-						Payload:        models.ConvertAlarmEventRecordModelToAlarmEventNotification(alarm, sub, n.globalCloudID),
-					})
+	// TODO: Refactor to use a callback interface for subscription-specific payload modifications
+	// rather than cloning notifications for each subscription. This would improve efficiency
+	// and make the notification system more generic.
+	// As workaround for now using notificationID as subscriberID to link them with Match interface.
+	for _, sub := range subscriptions {
+		var subNotification []notifier.Notification
+		for _, alarm := range alarms {
+			if alarm.AlarmSequenceNumber > sub.EventCursor {
+				if sub.Filter != nil && alarm.NotificationEventType == *sub.Filter {
+					continue
 				}
+				subNotification = append(subNotification, notifier.Notification{
+					NotificationID: sub.SubscriptionID,
+					SequenceID:     int(alarm.AlarmSequenceNumber),
+					Payload:        models.ConvertAlarmEventRecordModelToAlarmEventNotification(alarm, sub, n.globalCloudID),
+				})
 			}
-			if len(subNotification) > 0 {
-				slog.Info("Subscriber will receive notifications", "subscriptionID", sub.SubscriptionID, "notification count", len(subNotification))
-			}
-
-			notifications = append(notifications, subNotification...)
+		}
+		if len(subNotification) > 0 {
+			slog.Info("Subscriber will receive notifications", "subscriptionID", sub.SubscriptionID, "notification count", len(subNotification))
 		}
 
-		if len(notifications) == 0 {
-			slog.Info("No notifications")
-		}
+		notifications = append(notifications, subNotification...)
+	}
+
+	if len(notifications) == 0 {
+		slog.Info("No notifications")
 	}
 
 	return notifications, nil

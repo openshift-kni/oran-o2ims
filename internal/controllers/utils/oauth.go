@@ -80,16 +80,6 @@ func SetupOAuthClient(ctx context.Context, config *OAuthClientConfig) (*http.Cli
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
 		oauthClient := oauthConfig.Client(ctx)
 
-		// Verify token acquisition works
-		if src, ok := oauthClient.Transport.(*oauth2.Transport); ok {
-			// Force token acquisition now to verify it works
-			_, err := src.Source.Token()
-			if err != nil {
-				return nil, fmt.Errorf("failed to acquire initial OAuth token: %w", err)
-			}
-			slog.Info("Successfully acquired initial OAuth token")
-		}
-
 		slog.Info("Successfully created oauth client")
 		return oauthClient, nil
 	}
