@@ -9,5 +9,6 @@
 !/cmd
 !/api
 !/bundle
+!/catalog
 !/vendor
 !/index_build_tmp*
