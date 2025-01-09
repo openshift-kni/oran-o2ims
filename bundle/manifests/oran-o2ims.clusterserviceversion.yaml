@@ -1549,6 +1549,7 @@ spec:
                     fieldRef:
                       fieldPath: metadata.namespace
                 image: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
+                imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
                     path: /healthz

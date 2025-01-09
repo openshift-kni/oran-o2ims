@@ -39,3 +39,13 @@ replacements:
     select:
       kind: Deployment
       name: controller-manager
+- source:
+    fieldPath: data.imagePullPolicy
+    kind: ConfigMap
+    name: env-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=manager].imagePullPolicy
+    select:
+      kind: Deployment
+      name: controller-manager
