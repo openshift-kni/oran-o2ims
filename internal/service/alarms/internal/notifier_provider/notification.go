@@ -65,14 +65,14 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 			}
 		}
 		if len(subNotification) > 0 {
-			slog.Info("Subscriber will receive notifications", "subscriptionID", sub.SubscriptionID, "notification count", len(subNotification))
+			slog.Info("Subscription will receive notifications", "subscriptionID", sub.SubscriptionID, "notification count", len(subNotification))
 		}
 
 		notifications = append(notifications, subNotification...)
 	}
 
 	if len(notifications) == 0 {
-		slog.Info("No notifications")
+		slog.Info("No notifications for any of the subscriptions")
 	}
 
 	return notifications, nil

@@ -27,15 +27,18 @@ func NewSubscriptionStorageProvider(repository *a.AlarmsRepository) notifier.Sub
 }
 
 func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]notifier.SubscriptionInfo, error) {
+	var subscriptions []notifier.SubscriptionInfo
+
 	records, err := s.repository.GetAlarmSubscriptions(ctx)
 	if err != nil {
 		return []notifier.SubscriptionInfo{}, fmt.Errorf("failed to get all subscriptions: %w", err)
 	}
 	if len(records) == 0 {
 		slog.Info("No subscriptions to notify")
+		return subscriptions, nil
 	}
 
-	var subscriptions []notifier.SubscriptionInfo
+	// Convert records to generic subs
 	for _, record := range records {
 		subscriptions = append(subscriptions, *models.ConvertAlertSubToNotificationSub(&record))
 	}

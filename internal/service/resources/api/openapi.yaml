@@ -703,6 +703,7 @@ components:
         subscriptionId:
           type: string
           format: uuid
+          readOnly: true
           description: Identifier for the Subscription. This identifier is allocated by the O-Cloud.
           example: "65221564-8b05-416a-bfc3-c250bc64e1aa"
         consumerSubscriptionId:

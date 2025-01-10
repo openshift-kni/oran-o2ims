@@ -4,11 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-
 	"time"
-
-	"github.com/stephenafamo/bob/dialect/psql/dialect"
-	"github.com/stephenafamo/bob/dialect/psql/um"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,8 +12,10 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
+	"github.com/stephenafamo/bob/dialect/psql/dialect"
 	"github.com/stephenafamo/bob/dialect/psql/im"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
+	"github.com/stephenafamo/bob/dialect/psql/um"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -105,7 +103,7 @@ func (ar *AlarmsRepository) DeleteAlarmSubscription(ctx context.Context, id uuid
 
 // CreateAlarmSubscription inserts a new row of alarm_subscription
 func (ar *AlarmsRepository) CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error) {
-	return utils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "Filter", "Callback")
+	return utils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "Filter", "Callback", "EventCursor")
 }
 
 // GetAlarmSubscription grabs a row of alarm_subscription using a primary key
@@ -416,4 +414,29 @@ func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, s
 	}
 
 	return nil
+}
+
+// GetMaxAlarmSeq get the max seq value from alarms, if no alarms return 0
+func (ar *AlarmsRepository) GetMaxAlarmSeq(ctx context.Context) (int64, error) {
+	m := models.AlarmEventRecord{}
+	dbTags := utils.GetAllDBTagsFromStruct(m)
+
+	// Create the MAX function with COALESCE to handle NULL (defaults to 0)
+	maxFunc := psql.F("COALESCE", psql.F("MAX", psql.Raw(dbTags["AlarmSequenceNumber"])), 0)
+	query := psql.Select(
+		sm.Columns(maxFunc),
+		sm.From(psql.Quote(m.TableName())),
+	)
+
+	sql, args, err := query.Build()
+	if err != nil {
+		return 0, fmt.Errorf("failed to build query to get max sequence: %w", err)
+	}
+
+	var maxSeq int64
+	if err := ar.Db.QueryRow(ctx, sql, args...).Scan(&maxSeq); err != nil {
+		return 0, fmt.Errorf("failed to get max alarm seq: %w", err)
+	}
+
+	return maxSeq, nil
 }

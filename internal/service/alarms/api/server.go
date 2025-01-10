@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
-
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
@@ -21,6 +20,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	apiresources "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 )
@@ -127,11 +127,19 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 
 	r := models.ConvertSubscriptionAPIToModel(request.Body)
 
+	// Get the max alarms sequence to avoid overwhelming new subscribers and set it as event cursor. If sub wants any previous alerts, they would simply use `/alarm(s)` endpoint
+	seq, err := a.AlarmsRepository.GetMaxAlarmSeq(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get max alarm seq for subscription %+v: %w", request.Body, err)
+	}
+	r.EventCursor = seq
+
 	// TODO: perform a Reachability check as suggested in O-RAN.WG6.ORCH-USE-CASES-R003-v11.00
 
 	record, err := a.AlarmsRepository.CreateAlarmSubscription(ctx, r)
 	if err != nil {
-		if strings.Contains(err.Error(), "unique_callback") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "unique_callback" {
 			// 409 is a more common choice for a duplicate entry, but the conformance tests expect a 400
 			return api.CreateSubscription400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				AdditionalAttributes: &map[string]string{
@@ -141,10 +149,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 				Status: http.StatusBadRequest,
 			}), nil
 		}
-		return api.CreateSubscription500ApplicationProblemPlusJSONResponse(common.ProblemDetails{
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}), nil
+		return nil, fmt.Errorf("failed to create alarm subscription: %w", err)
 	}
 
 	// Signal the notifier to handle this new subscription

@@ -701,6 +701,7 @@ components:
         subscriptionID:
           type: string
           format: uuid
+          readOnly: true
           description: Identifier for the Alarm Subscription. This identifier is allocated by the O-Cloud.
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         consumerSubscriptionId:
