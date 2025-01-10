@@ -105,35 +105,6 @@ spec:
                 required:
                 - enabled
                 type: object
-              deploymentManagerServerConfig:
-                default:
-                  enabled: true
-                description: DeploymentManagerServerConfig contains the configuration
-                  for the deployment manager server.
-                properties:
-                  backendToken:
-                    type: string
-                  backendType:
-                    default: regular-hub
-                    enum:
-                    - regular-hub
-                    - global-hub
-                    type: string
-                  backendURL:
-                    type: string
-                  enabled:
-                    default: true
-                    description: Enabled indicates if the server should be started.
-                    type: boolean
-                  extensions:
-                    description: This field allows the addition of extra O-Cloud information
-                      for the deployment manager server.
-                    items:
-                      type: string
-                    type: array
-                required:
-                - enabled
-                type: object
               image:
                 description: |-
                   Image is the full reference of the container image that contains the binary. This is
@@ -143,19 +114,6 @@ spec:
               ingressHost:
                 description: IngressHost defines the FQDN for the IMS endpoints.
                 type: string
-              metadataServerConfig:
-                default:
-                  enabled: true
-                description: MetadataServerConfig contains the configuration for the
-                  metadata server.
-                properties:
-                  enabled:
-                    default: true
-                    description: Enabled indicates if the server should be started.
-                    type: boolean
-                required:
-                - enabled
-                type: object
               resourceServerConfig:
                 default:
                   enabled: true

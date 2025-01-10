@@ -62,7 +62,7 @@ var _ = Describe("ExtensionUtils", func() {
 				Namespace: InventoryNamespace,
 			},
 			Spec: inventoryv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
+				ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
 					// The below extension matches the following CRD extensions entry:
 					//
 					// extensions:
@@ -86,13 +86,14 @@ var _ = Describe("ExtensionUtils", func() {
 			},
 		}
 
-		actualArgs, err := GetServerArgs(Inventory, InventoryDeploymentManagerServerName)
+		actualArgs, err := GetServerArgs(Inventory, InventoryResourceServerName)
 		Expect(err).ToNot(HaveOccurred())
-		expectedArgs := DeploymentManagerServerArgs
+		expectedArgs := ResourceServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
-			fmt.Sprintf("--backend-url=%s", defaultApiServerURL),
-			fmt.Sprintf("--backend-token-file=%s", DefaultBackendTokenFile),
+			fmt.Sprintf("--backend-url=%s", Inventory.Status.SearchURL),
+			"--global-cloud-id=undefined",
+			fmt.Sprintf("--external-address=https://%s", Inventory.Status.IngressHost),
 		)
 		expectedArgs = append(expectedArgs,
 			"--extensions=.metadata.labels[\"name\"] as $name |\n{\n  name: $name,\n  alias: $name\n}\n",
@@ -107,17 +108,18 @@ var _ = Describe("ExtensionUtils", func() {
 				Namespace: InventoryNamespace,
 			},
 			Spec: inventoryv1alpha1.InventorySpec{
-				DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{},
+				ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{},
 			},
 		}
 
-		actualArgs, err := GetServerArgs(Inventory, InventoryDeploymentManagerServerName)
+		actualArgs, err := GetServerArgs(Inventory, InventoryResourceServerName)
 		Expect(err).ToNot(HaveOccurred())
-		expectedArgs := DeploymentManagerServerArgs
+		expectedArgs := ResourceServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
-			fmt.Sprintf("--backend-url=%s", defaultApiServerURL),
-			fmt.Sprintf("--backend-token-file=%s", DefaultBackendTokenFile),
+			fmt.Sprintf("--backend-url=%s", Inventory.Status.SearchURL),
+			"--global-cloud-id=undefined",
+			fmt.Sprintf("--external-address=https://%s", Inventory.Status.IngressHost),
 		)
 		Expect(actualArgs).To(Equal(expectedArgs))
 	})
@@ -197,7 +199,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 			Spec: appsv1.DeploymentSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
-						ServiceAccountName: InventoryDeploymentManagerServerName,
+						ServiceAccountName: InventoryResourceServerName,
 					},
 				},
 			},

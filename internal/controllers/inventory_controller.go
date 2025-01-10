@@ -275,132 +275,6 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 	return nextReconcile, err
 }
 
-// setupMetadataServerConfig creates the resource necessary to start the Metadata Server.
-func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
-	nextReconcile = defaultResult
-
-	err = t.createServiceAccount(ctx, utils.InventoryMetadataServerName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy ServiceAccount for Metadata server.",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryMetadataServerName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create Metadata server RBAC proxy cluster role binding",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-
-	// Create the Service needed for the Metadata server.
-	err = t.createService(ctx, utils.InventoryMetadataServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy Service for Metadata server.",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-
-	// Create the metadata-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryMetadataServerName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy the Metadata server.",
-			slog.String("error", err.Error()),
-		)
-		if errorReason == "" {
-			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
-			return nextReconcile, err
-		}
-	}
-
-	return
-}
-
-// setupDeploymentManagerServerConfig creates the resources necessary to start the Deployment Manager Server.
-func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
-	nextReconcile = defaultResult
-
-	err = t.createServiceAccount(ctx, utils.InventoryDeploymentManagerServerName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create deployment manager service account",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-	err = t.createDeploymentManagerClusterRole(ctx)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create deployment manager cluster role",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-	err = t.createDeploymentManagerClusterRoleBinding(ctx)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create deployment manager cluster role binding",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryDeploymentManagerServerName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create deployment manager RBAC proxy cluster role binding",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-
-	// Create the Service needed for the Deployment Manager server.
-	err = t.createService(ctx, utils.InventoryDeploymentManagerServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy Service for Deployment Manager server.",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-
-	// Create the deployment-manager-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryDeploymentManagerServerName)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy the Deployment Manager server.",
-			slog.String("error", err.Error()),
-		)
-		if errorReason == "" {
-			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
-			return nextReconcile, err
-		}
-	}
-
-	return
-}
-
 // setupAlarmServerConfig creates the resources necessary to start the Alarm Server.
 func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
@@ -745,8 +619,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 
 	// Create the needed Ingress if at least one server is required by the Spec.
-	if t.object.Spec.MetadataServerConfig.Enabled || t.object.Spec.DeploymentManagerServerConfig.Enabled ||
-		t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmServerConfig.Enabled {
+	if t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmServerConfig.Enabled {
 		err = t.createIngress(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -787,24 +660,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
-	// Start the metadata server if required by the Spec.
-	if t.object.Spec.MetadataServerConfig.Enabled {
-		// Create the resources required by the metadata server
-		nextReconcile, err = t.setupMetadataServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
-	}
-
-	// Start the deployment server if required by the Spec.
-	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
-		// Create the service account, role and binding:
-		nextReconcile, err = t.setupDeploymentManagerServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
-	}
-
 	// Start the alarm server if required by the Spec.
 	if t.object.Spec.AlarmServerConfig.Enabled {
 		// Create the alarm server.
@@ -824,87 +679,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
 	}
 	return
-}
-
-func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context) error {
-	role := &rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.InventoryDeploymentManagerServerName,
-			),
-		},
-		Rules: []rbacv1.PolicyRule{
-			// We need to read managed clusters, as that is the main source for the
-			// information about clusters.
-			{
-				APIGroups: []string{
-					"cluster.open-cluster-management.io",
-				},
-				Resources: []string{
-					"managedclusters",
-				},
-				Verbs: []string{
-					"get",
-					"list",
-					"watch",
-				},
-			},
-
-			// We also need to read the secrets containing the admin kubeConfigs of the
-			// clusters.
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"secrets",
-				},
-				Verbs: []string{
-					"get",
-					"list",
-					"watch",
-				},
-			},
-		},
-	}
-
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Deployment Manager cluster role: %w", err)
-	}
-
-	return nil
-}
-
-func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryDeploymentManagerServerName,
-			),
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryDeploymentManagerServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryDeploymentManagerServerName,
-			},
-		},
-	}
-
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Deployment Manager cluster role binding: %w", err)
-	}
-
-	return nil
 }
 
 // createSharedRbacProxyRole creates a cluster role that is used by the kube-rbac-proxy to access the authentication and
@@ -1635,59 +1409,14 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 					HTTP: &networkingv1.HTTPIngressRuleValue{
 						Paths: []networkingv1.HTTPIngressPath{
 							{
-								Path: "/o2ims-infrastructureInventory/v1/resourcePools",
+								Path: "/o2ims-infrastructureInventory",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/o2ims-infrastructureInventory/v1/resourceTypes",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/o2ims-infrastructureInventory/v1/subscriptions",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/o2ims-infrastructureInventory/v1/deploymentManagers",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "deployment-manager-server",
+										Name: utils.InventoryResourceServerName,
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.InventoryIngressName,
 										},
@@ -1717,22 +1446,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "alarms-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "metadata-server",
+										Name: utils.InventoryAlarmServerName,
 										Port: networkingv1.ServiceBackendPort{
 											Name: utils.InventoryIngressName,
 										},
@@ -1816,14 +1530,6 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 	errorReason utils.InventoryConditionReason, err error) error {
 	t.logger.InfoContext(ctx, "[updateInventoryUsedConfigStatus]")
 
-	if serverName == utils.InventoryMetadataServerName {
-		t.object.Status.UsedServerConfig.MetadataServerUsedConfig = deploymentArgs
-	}
-
-	if serverName == utils.InventoryDeploymentManagerServerName {
-		t.object.Status.UsedServerConfig.DeploymentManagerServerUsedConfig = deploymentArgs
-	}
-
 	if serverName == utils.InventoryResourceServerName {
 		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
 	}
@@ -1861,14 +1567,6 @@ func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) er
 	t.logger.InfoContext(ctx, "[updateInventoryDeploymentStatus]")
 	if t.object.Spec.AlarmServerConfig.Enabled {
 		t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
-	}
-
-	if t.object.Spec.MetadataServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryMetadataServerName)
-	}
-
-	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryDeploymentManagerServerName)
 	}
 
 	if t.object.Spec.ResourceServerConfig.Enabled {

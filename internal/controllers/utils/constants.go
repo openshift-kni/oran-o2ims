@@ -9,12 +9,10 @@ const (
 
 // Base resource names
 const (
-	InventoryDatabase          = "postgres"
-	InventoryMetadata          = "metadata"
-	InventoryDeploymentManager = "deployment-manager"
-	InventoryResource          = "resource"
-	InventoryAlarms            = "alarms"
-	InventoryCluster           = "cluster"
+	InventoryDatabase = "postgres"
+	InventoryResource = "resource"
+	InventoryAlarms   = "alarms"
+	InventoryCluster  = "cluster"
 )
 
 // Suffix for server names
@@ -22,12 +20,10 @@ const serverSuffix = "-server"
 
 // Deployment names
 const (
-	InventoryDatabaseServerName          = InventoryDatabase + serverSuffix
-	InventoryMetadataServerName          = InventoryMetadata + serverSuffix
-	InventoryDeploymentManagerServerName = InventoryDeploymentManager + serverSuffix
-	InventoryResourceServerName          = InventoryResource + serverSuffix
-	InventoryAlarmServerName             = InventoryAlarms + serverSuffix
-	InventoryClusterServerName           = InventoryCluster + serverSuffix
+	InventoryDatabaseServerName = InventoryDatabase + serverSuffix
+	InventoryResourceServerName = InventoryResource + serverSuffix
+	InventoryAlarmServerName    = InventoryAlarms + serverSuffix
+	InventoryClusterServerName  = InventoryCluster + serverSuffix
 )
 
 // InventoryIngressName the name of our Ingress controller instance
@@ -46,25 +42,9 @@ var (
 		"serve",
 		"--api-listener-address=127.0.0.1:8000",
 	}
-	MetadataServerArgs = []string{
-		"start",
-		"metadata-server",
-		"--log-level=debug",
-		"--log-file=stdout",
-		"--api-listener-address=127.0.0.1:8000",
-	}
-	DeploymentManagerServerArgs = []string{
-		"start",
-		"deployment-manager-server",
-		"--log-level=debug",
-		"--log-file=stdout",
-		"--api-listener-address=127.0.0.1:8000",
-	}
 	ResourceServerArgs = []string{
-		"start",
 		"resource-server",
-		"--log-level=debug",
-		"--log-file=stdout",
+		"serve",
 		"--api-listener-address=127.0.0.1:8000",
 	}
 	ClusterServerArgs = []string{
