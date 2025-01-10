@@ -33,7 +33,7 @@ type DataSource interface {
 }
 
 type NotificationHandler interface {
-	Notify(event *notifier.Notification)
+	Notify(ctx context.Context, event *notifier.Notification)
 }
 
 // Collector defines the attributes required by the collector implementation.
@@ -195,7 +195,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
 		}
 
 		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 
@@ -211,7 +211,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource DataSource,
 		}
 
 		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 
@@ -240,7 +240,7 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource DataSou
 		}
 
 		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 
@@ -269,7 +269,7 @@ func (c *Collector) collectDeploymentManagers(ctx context.Context, dataSource Da
 		}
 
 		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(models.DataChangeEventToNotification(dataChangeEvent))
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
 		}
 	}
 

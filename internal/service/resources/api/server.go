@@ -199,7 +199,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 	}
 
 	// Signal the notifier to handle this new subscription
-	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+	r.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      false,
 		Subscription: models.SubscriptionToInfo(result),
 	})
@@ -257,7 +257,7 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 	}
 
 	// Signal the notifier to handle this subscription change
-	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+	r.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed: true,
 		Subscription: models.SubscriptionToInfo(&models2.Subscription{
 			SubscriptionID: &request.SubscriptionId,
