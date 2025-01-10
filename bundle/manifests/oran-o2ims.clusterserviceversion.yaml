@@ -1548,6 +1548,8 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
+                - name: IMAGE_PULL_POLICY
+                  value: IfNotPresent
                 image: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
