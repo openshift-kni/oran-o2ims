@@ -3,6 +3,7 @@
 /__debug*
 /oran-o2ims
 /bin/*
+/catalog/*
 
 # Folders
 .idea/

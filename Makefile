@@ -22,6 +22,8 @@ ginkgo_flags:=
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 4.18.0
 
+PACKAGE_NAME ?= oran-o2ims
+
 # Development/Debug passwords for database.  This requires that the operator be deployed in DEBUG=yes mode or for the
 # developer to override these values with the current passwords
 ORAN_O2IMS_ALARMS_PASSWORD ?= debug
@@ -315,7 +317,7 @@ bundle-upgrade: # Upgrade bundle on cluster using operator sdk.
 
 .PHONY: bundle-clean
 bundle-clean: # Uninstall bundle on cluster using operator sdk.
-	$(OPERATOR_SDK) cleanup oran-o2ims -n $(OCLOUD_MANAGER_NAMESPACE)
+	$(OPERATOR_SDK) cleanup $(PACKAGE_NAME) -n $(OCLOUD_MANAGER_NAMESPACE)
 	oc delete ns $(OCLOUD_MANAGER_NAMESPACE)
 
 .PHONY: opm
@@ -350,14 +352,37 @@ endif
 # Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
 # This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
+.PHONY: catalog
+catalog: opm ## Build a catalog.
+	@mkdir -p catalog
+	hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
+	$(OPM) render --output=yaml $(BUNDLE_IMG) > catalog/$(PACKAGE_NAME).yaml
+	$(OPM) validate catalog
+
 .PHONY: catalog-build
-catalog-build: opm ## Build a catalog image.
-		$(OPM) index add --container-tool $(CONTAINER_TOOL) --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
+catalog-build: catalog ## Build a catalog image.
+	$(CONTAINER_TOOL) build -f catalog.Dockerfile -t $(CATALOG_IMG) .
 
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-		$(MAKE) docker-push IMG=$(CATALOG_IMG)
+	$(CONTAINER_TOOL) push $(CATALOG_IMG)
+
+# Deploy from catalog image.
+.PHONY: catalog-deploy
+catalog-deploy: ## Deploy from catalog image.
+	hack/generate-catalog-deploy.sh \
+		--package $(PACKAGE_NAME) \
+		--namespace $(OCLOUD_MANAGER_NAMESPACE) \
+		--catalog-image $(CATALOG_IMG) \
+		--channel alpha \
+		--install-mode AllNamespaces \
+		| oc create -f -
+
+# Undeploy from catalog image.
+.PHONY: catalog-undeploy
+catalog-undeploy: ## Undeploy from catalog image.
+	hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search "o2ims.*oran"
 
 ##@ Binary
 .PHONY: binary
@@ -476,11 +501,11 @@ run-resources-migrate: binary ##Migrate all the way up
 
 .PHONY: connect-postgres
 connect-postgres: ##Connect to O-RAN postgres
-	oc wait --for=condition=Ready pod -l app=postgres-server -n oran-o2ims --timeout=30s
-	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace oran-o2ims"
-	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &
+	oc wait --for=condition=Ready pod -l app=postgres-server -n $(OCLOUD_MANAGER_NAMESPACE) --timeout=30s
+	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace $(OCLOUD_MANAGER_NAMESPACE)"
+	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n $(OCLOUD_MANAGER_NAMESPACE) > pgproxy.log 2>&1 &
 
 .PHONY: connect-cluster-server
 connect-cluster-server: ##Connect to resource server svc
-	@echo "Starting port-forward in background on port 8001:8000 to cluster server svc in namespace oran-o2ims"
-	nohup oc port-forward --address localhost svc/cluster-server 8001:8000 -n oran-o2ims > pgproxy_resource.log 2>&1 &
+	@echo "Starting port-forward in background on port 8001:8000 to cluster server svc in namespace $(OCLOUD_MANAGER_NAMESPACE)"
+	nohup oc port-forward --address localhost svc/cluster-server 8001:8000 -n $(OCLOUD_MANAGER_NAMESPACE) > pgproxy_resource.log 2>&1 &
