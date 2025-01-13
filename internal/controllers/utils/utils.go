@@ -390,7 +390,7 @@ func addArgsForSMO(inventory *inventoryv1alpha1.Inventory, args []string) []stri
 				fmt.Sprintf("--oauth-token-url=%s%s", smo.OAuthConfig.URL, smo.OAuthConfig.TokenEndpoint))
 		}
 
-		if smo.TLS.ClientCertificateName != nil {
+		if smo.TLS != nil && smo.TLS.ClientCertificateName != nil {
 			args = append(args,
 				fmt.Sprintf("--tls-client-cert=%s/tls.crt", TLSClientMountPath),
 				fmt.Sprintf("--tls-client-key=%s/tls.key", TLSClientMountPath),
