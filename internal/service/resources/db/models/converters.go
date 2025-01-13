@@ -129,7 +129,7 @@ func ResourceToModel(record *Resource, elements []Resource) generated.Resource {
 }
 
 // getEventType determines the event type based on the object transition
-func getEventType(before, after *string) int {
+func getEventType(before, after map[string]interface{}) int {
 	switch {
 	case before == nil && after != nil:
 		return 0
@@ -169,8 +169,14 @@ func DataChangeEventToModel(record *models2.DataChangeEvent) generated.Inventory
 		NotificationEventType: generated.InventoryChangeNotificationNotificationEventType(eventType),
 		NotificationId:        *record.DataChangeID,
 		ObjectRef:             getObjectReference(record.ObjectType, record.ObjectID, record.ParentID),
-		PostObjectState:       record.AfterState,
-		PriorObjectState:      record.BeforeState,
+	}
+
+	if record.AfterState != nil {
+		object.PostObjectState = &record.AfterState
+	}
+
+	if record.BeforeState != nil {
+		object.PriorObjectState = &record.BeforeState
 	}
 
 	return object
