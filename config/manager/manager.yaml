@@ -68,6 +68,7 @@ spec:
       containers:
       - name: manager
         image: controller:latest
+        imagePullPolicy: IfNotPresent
         env:
           # Note that we have a kustomization replacement that copies the above `image` into this
           # environment variable.  It is used as a default value for the --image command line argument
@@ -86,6 +87,9 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: IMAGE_PULL_POLICY
+          # Default value which is overwritten by the replacement kustomization
+          value: IfNotPresent
         command:
           - /usr/bin/oran-o2ims
           -  start

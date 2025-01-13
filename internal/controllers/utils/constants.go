@@ -65,6 +65,7 @@ const (
 	DefaultInventoryCR      = "default"
 	DefaultNamespace        = "oran-o2ims"
 	DefaultNamespaceEnvName = "OCLOUD_MANAGER_NAMESPACE"
+	ImagePullPolicyEnvName  = "IMAGE_PULL_POLICY"
 )
 
 // Search API attributes

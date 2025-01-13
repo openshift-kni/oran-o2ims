@@ -1283,12 +1283,13 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 						VolumeMounts: deploymentVolumeMounts,
 					},
 					{
-						Name:         utils.ServerContainerName,
-						Image:        image,
-						VolumeMounts: deploymentVolumeMounts,
-						Command:      []string{"/usr/bin/oran-o2ims"},
-						Args:         deploymentContainerArgs,
-						Env:          envVars,
+						Name:            utils.ServerContainerName,
+						Image:           image,
+						ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
+						VolumeMounts:    deploymentVolumeMounts,
+						Command:         []string{"/usr/bin/oran-o2ims"},
+						Args:            deploymentContainerArgs,
+						Env:             envVars,
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          "api",
