@@ -230,7 +230,7 @@ func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfi
 		return fmt.Errorf("failed to create oauth client configuration for alarms subscribers: %w", err)
 	}
 
-	notificationsProvider := notifier_provider.NewNotificationStorageProvider(a.AlarmsRepository)
+	notificationsProvider := notifier_provider.NewNotificationStorageProvider(a.AlarmsRepository, a.GlobalCloudID)
 	subscriptionsProvider := notifier_provider.NewSubscriptionStorageProvider(a.AlarmsRepository)
 	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
 	newNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)

@@ -21,16 +21,17 @@ const CompletionChannelSize = 1
 type Notification struct {
 	NotificationID uuid.UUID
 	SequenceID     int
-	Payload        any
+	Payload        interface{}
 }
 
 // SubscriptionInfo defines a generic subscription object.  The intent is to abstract away the differences between the
 // alarm and resource server subscription models.
 type SubscriptionInfo struct {
-	SubscriptionID uuid.UUID
-	Callback       string
-	Filter         *string
-	EventCursor    int
+	SubscriptionID         uuid.UUID
+	ConsumerSubscriptionID *uuid.UUID
+	Callback               string
+	Filter                 *string
+	EventCursor            int
 }
 
 // NotificationProvider must be implemented by a domain specific model implementor so that the notifier can manage
@@ -46,6 +47,7 @@ type SubscriptionProvider interface {
 	GetSubscriptions(ctx context.Context) ([]SubscriptionInfo, error)
 	Matches(subscription *SubscriptionInfo, notification *Notification) bool
 	UpdateSubscription(ctx context.Context, subscription *SubscriptionInfo) error
+	Transform(subscription *SubscriptionInfo, notification *Notification) (*Notification, error)
 }
 
 // SubscriptionEvent defines the information sent to the notifier when a subscription is added/removed
@@ -212,7 +214,12 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 	count := 0
 	for _, worker := range n.workers {
 		if n.subscriptionProvider.Matches(worker.subscription, event) {
-			worker.NewNotification(event)
+			clone, err := n.subscriptionProvider.Transform(worker.subscription, event)
+			if err != nil {
+				slog.Error("failed to transform notification", "subscription", worker.subscription.SubscriptionID, "error", err)
+				continue
+			}
+			worker.NewNotification(clone)
 			count++
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	a "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -22,9 +23,10 @@ type NotificationStorageProvider struct {
 }
 
 // NewNotificationStorageProvider creates a new NotificationProvider
-func NewNotificationStorageProvider(repository *a.AlarmsRepository) notifier.NotificationProvider {
+func NewNotificationStorageProvider(repository *a.AlarmsRepository, globalCloudID uuid.UUID) notifier.NotificationProvider {
 	return &NotificationStorageProvider{
-		repository: repository,
+		repository:    repository,
+		globalCloudID: globalCloudID,
 	}
 }
 
@@ -46,33 +48,17 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 		return notifications, fmt.Errorf("failed to get alarms for subscription: %w", err)
 	}
 
-	// TODO: Refactor to use a callback interface for subscription-specific payload modifications
-	// rather than cloning notifications for each subscription. This would improve efficiency
-	// and make the notification system more generic.
-	// As workaround for now using notificationID as subscriberID to link them with Match interface.
-	for _, sub := range subscriptions {
-		var subNotification []notifier.Notification
-		for _, alarm := range alarms {
-			if alarm.AlarmSequenceNumber > sub.EventCursor {
-				if sub.Filter != nil && alarm.NotificationEventType == *sub.Filter {
-					continue
-				}
-				subNotification = append(subNotification, notifier.Notification{
-					NotificationID: sub.SubscriptionID,
-					SequenceID:     int(alarm.AlarmSequenceNumber),
-					Payload:        models.ConvertAlarmEventRecordModelToAlarmEventNotification(alarm, sub, n.globalCloudID),
-				})
-			}
-		}
-		if len(subNotification) > 0 {
-			slog.Info("Subscription will receive notifications", "subscriptionID", sub.SubscriptionID, "notification count", len(subNotification))
-		}
-
-		notifications = append(notifications, subNotification...)
+	for _, alarm := range alarms {
+		payload := models.ConvertAlarmEventRecordModelToAlarmEventNotification(alarm, n.globalCloudID)
+		notifications = append(notifications, notifier.Notification{
+			NotificationID: payload.AlarmEventRecordId,
+			SequenceID:     int(alarm.AlarmSequenceNumber),
+			Payload:        payload,
+		})
 	}
 
 	if len(notifications) == 0 {
-		slog.Info("No notifications for any of the subscriptions")
+		slog.Info("No notifications")
 	}
 
 	return notifications, nil

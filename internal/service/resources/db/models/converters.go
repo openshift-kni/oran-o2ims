@@ -188,9 +188,10 @@ func DataChangeEventToNotification(record *models2.DataChangeEvent) *notifier.No
 // SubscriptionToInfo converts a Subscription to a generic SubscriptionInfo
 func SubscriptionToInfo(record *models2.Subscription) *notifier.SubscriptionInfo {
 	return &notifier.SubscriptionInfo{
-		SubscriptionID: *record.SubscriptionID,
-		Callback:       record.Callback,
-		Filter:         record.Filter,
-		EventCursor:    record.EventCursor,
+		SubscriptionID:         *record.SubscriptionID,
+		ConsumerSubscriptionID: record.ConsumerSubscriptionID,
+		Callback:               record.Callback,
+		Filter:                 record.Filter,
+		EventCursor:            record.EventCursor,
 	}
 }

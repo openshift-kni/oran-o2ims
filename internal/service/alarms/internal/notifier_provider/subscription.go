@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	a "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -48,8 +49,16 @@ func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 }
 
 func (s *SubscriptionStorageProvider) Matches(subscription *notifier.SubscriptionInfo, notification *notifier.Notification) bool {
-	// TODO we to need somehow group notifications per subscriber in slight nicer way, see GetNotifications for more
-	return subscription.SubscriptionID == notification.NotificationID
+	payload, ok := notification.Payload.(generated.AlarmEventNotification)
+	if !ok {
+		slog.Warn("notification payload is not of type generated.AlarmEventNotification", "type", fmt.Sprintf("%T", notification.Payload))
+		return false
+	}
+	if subscription.Filter == nil {
+		return true
+	}
+	filter := generated.AlarmSubscriptionInfoFilter(*subscription.Filter)
+	return models.AlarmFilterToEventType(filter) != payload.NotificationEventType
 }
 
 func (s *SubscriptionStorageProvider) UpdateSubscription(ctx context.Context, subscription *notifier.SubscriptionInfo) error {
@@ -62,4 +71,23 @@ func (s *SubscriptionStorageProvider) UpdateSubscription(ctx context.Context, su
 
 	slog.Info("Subscription cursor updated", "to", subscription.EventCursor)
 	return nil
+}
+
+// Transform updates the notification with subscription-specific information.
+func (s *SubscriptionStorageProvider) Transform(subscription *notifier.SubscriptionInfo, notification *notifier.Notification) (*notifier.Notification, error) {
+	if subscription.ConsumerSubscriptionID == nil {
+		return notification, nil
+	}
+
+	payload, ok := notification.Payload.(generated.AlarmEventNotification)
+	if !ok {
+		return nil, fmt.Errorf("notification payload is not of type AlarmEventNotification")
+	}
+
+	// Shallow copy to ensure each subscriber gets a copy of the payload with its own id
+	clone := payload
+	clone.ConsumerSubscriptionId = subscription.ConsumerSubscriptionID
+	result := *notification
+	result.Payload = clone
+	return &result, nil
 }
