@@ -7,17 +7,20 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/clusterserver/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 )
 
 const (
+	Name = "Cluster"
+
 	clusterServerURLEnvName = "CLUSTER_SERVER_URL"
 	tokenPathEnvName        = "TOKEN_PATH"
 )
@@ -27,13 +30,20 @@ type NodeClusterType = generated.NodeClusterType
 
 type ClusterServer struct {
 	client                    *generated.ClientWithResponses
-	NodeClusters              *[]NodeCluster
-	NodeClusterTypes          *[]NodeClusterType
-	ClusterIDToResourceTypeID map[uuid.UUID]uuid.UUID
+	nodeClusters              *[]NodeCluster
+	nodeClusterTypes          *[]NodeClusterType
+	clusterIDToResourceTypeID map[uuid.UUID]uuid.UUID
+
+	sync.Mutex
 }
 
-// New creates a new cluster server object
-func New() (*ClusterServer, error) {
+// Name returns the name of the client
+func (r *ClusterServer) Name() string {
+	return Name
+}
+
+// Setup setups a new client for the cluster server
+func (r *ClusterServer) Setup() error {
 	slog.Info("Creating ClusterServer client")
 
 	url := utils.GetServiceURL(utils.InventoryClusterServerName)
@@ -47,7 +57,7 @@ func New() (*ClusterServer, error) {
 	// Set up transport
 	tr, err := utils.GetDefaultBackendTransport()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create http transport: %w", err)
+		return fmt.Errorf("failed to create http transport: %w", err)
 	}
 
 	hc := http.Client{Transport: tr}
@@ -63,29 +73,30 @@ func New() (*ClusterServer, error) {
 	// Read token
 	data, err := os.ReadFile(tokenPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read token file: %w", err)
+		return fmt.Errorf("failed to read token file: %w", err)
 	}
 
 	// Create Bearer token
 	token, err := securityprovider.NewSecurityProviderBearerToken(strings.TrimSpace(string(data)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Bearer token: %w", err)
+		return fmt.Errorf("failed to create Bearer token: %w", err)
 	}
 
 	c, err := generated.NewClientWithResponses(url, generated.WithHTTPClient(&hc), generated.WithRequestEditorFn(token.Intercept))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	return &ClusterServer{client: c}, nil
+	r.client = c
+	return nil
 }
 
-// GetAll fetches all necessary data from the cluster server
-func (r *ClusterServer) GetAll(ctx context.Context) error {
+// FetchAll fetches all necessary data from the cluster server
+func (r *ClusterServer) FetchAll(ctx context.Context) error {
 	slog.Info("Getting all objects from the cluster server")
 
 	// List node clusters
-	nodeClusters, err := r.GetNodeClusters(ctx)
+	nodeClusters, err := r.getNodeClusters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get node clusters: %w", err)
 	}
@@ -94,7 +105,7 @@ func (r *ClusterServer) GetAll(ctx context.Context) error {
 	}
 
 	// List node cluster types
-	nodeClusterTypes, err := r.GetNodeClusterTypes(ctx)
+	nodeClusterTypes, err := r.getNodeClusterTypes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get node cluster types: %w", err)
 	}
@@ -102,17 +113,19 @@ func (r *ClusterServer) GetAll(ctx context.Context) error {
 		return fmt.Errorf("no node cluster types found: %w", err)
 	}
 
-	r.NodeClusters = nodeClusters
-	r.NodeClusterTypes = nodeClusterTypes
+	r.Lock()
+	defer r.Unlock()
 
-	// Todo: not concurrency safe
-	r.ClusterResourceTypeMapping()
+	r.nodeClusters = nodeClusters
+	r.nodeClusterTypes = nodeClusterTypes
+
+	r.clusterResourceTypeMapping()
 
 	return nil
 }
 
-// GetNodeClusters lists all node clusters
-func (r *ClusterServer) GetNodeClusters(ctx context.Context) (*[]NodeCluster, error) {
+// getNodeClusters lists all node clusters
+func (r *ClusterServer) getNodeClusters(ctx context.Context) (*[]NodeCluster, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
 
@@ -130,8 +143,8 @@ func (r *ClusterServer) GetNodeClusters(ctx context.Context) (*[]NodeCluster, er
 	return resp.JSON200, nil
 }
 
-// GetNodeClusterTypes lists all node cluster types
-func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context) (*[]NodeClusterType, error) {
+// getNodeClusterTypes lists all node cluster types
+func (r *ClusterServer) getNodeClusterTypes(ctx context.Context) (*[]NodeClusterType, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
 
@@ -149,13 +162,41 @@ func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context) (*[]NodeCluster
 	return resp.JSON200, nil
 }
 
-// ClusterResourceTypeMapping map cluster ID with objectType ID for faster lookup during Caas alerts
-func (r *ClusterServer) ClusterResourceTypeMapping() {
+// clusterResourceTypeMapping map cluster ID with objectType ID for faster lookup during Caas alerts
+func (r *ClusterServer) clusterResourceTypeMapping() {
 	mapping := make(map[uuid.UUID]uuid.UUID)
-	for _, cluster := range *r.NodeClusters {
+	for _, cluster := range *r.nodeClusters {
 		mapping[cluster.NodeClusterId] = cluster.NodeClusterTypeId
 		slog.Info("Mapping cluster ID to resource type ID", "ClusterID", cluster.NodeClusterId, "NodeClusterTypeId", cluster.NodeClusterTypeId)
 	}
 
-	r.ClusterIDToResourceTypeID = mapping
+	r.clusterIDToResourceTypeID = mapping
+}
+
+// GetNodeClusterTypes returns a copy of the node cluster types
+func (r *ClusterServer) GetNodeClusterTypes() []NodeClusterType {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.nodeClusterTypes == nil {
+		return nil
+	}
+
+	nodeClusterTypesCopy := make([]NodeClusterType, len(*r.nodeClusterTypes))
+	copy(nodeClusterTypesCopy, *r.nodeClusterTypes)
+
+	return nodeClusterTypesCopy
+}
+
+// GetClusterIDToResourceTypeID returns a copy of the cluster ID to resource type ID mapping
+func (r *ClusterServer) GetClusterIDToResourceTypeID() map[uuid.UUID]uuid.UUID {
+	r.Lock()
+	defer r.Unlock()
+
+	c := make(map[uuid.UUID]uuid.UUID)
+	for k, v := range r.clusterIDToResourceTypeID {
+		c[k] = v
+	}
+
+	return c
 }
