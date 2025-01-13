@@ -98,10 +98,11 @@ func SubscriptionFromModel(object *generated.Subscription) *models.Subscription 
 // SubscriptionToInfo converts a Subscription to a generic SubscriptionInfo
 func SubscriptionToInfo(record *models.Subscription) *notifier.SubscriptionInfo {
 	return &notifier.SubscriptionInfo{
-		SubscriptionID: *record.SubscriptionID,
-		Callback:       record.Callback,
-		Filter:         record.Filter,
-		EventCursor:    record.EventCursor,
+		SubscriptionID:         *record.SubscriptionID,
+		ConsumerSubscriptionID: record.ConsumerSubscriptionID,
+		Callback:               record.Callback,
+		Filter:                 record.Filter,
+		EventCursor:            record.EventCursor,
 	}
 }
 

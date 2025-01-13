@@ -90,9 +90,9 @@ func Serve(config *api.ClusterServerConfig) error {
 		return fmt.Errorf("failed to create Kubernetes data source: %w", err)
 	}
 
-	// Create the notifier with our resource specific subscription and notification providers.
+	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
-	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository)
+	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository, collector.NewNotificationTransformer())
 	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
 	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 

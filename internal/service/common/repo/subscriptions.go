@@ -13,16 +13,24 @@ import (
 // Compile time check for interface compliance
 var _ notifier.SubscriptionProvider = (*SubscriptionStorageProvider)(nil)
 
+// NotificationTransformer defines a function provider by a domain-specific module that knows how to apply any last
+// minute transformations to a notification that are subscription-specific.
+type NotificationTransformer interface {
+	Transform(subscription *notifier.SubscriptionInfo, notification *notifier.Notification) (*notifier.Notification, error)
+}
+
 // SubscriptionStorageProvider implements the SubscriptionProvider interface as a means to abstract the concrete
 // subscription type out of the Notifier
 type SubscriptionStorageProvider struct {
-	repository *CommonRepository
+	repository  *CommonRepository
+	transformer NotificationTransformer
 }
 
 // NewSubscriptionStorageProvider creates a new SubscriptionProvider
-func NewSubscriptionStorageProvider(repository *CommonRepository) notifier.SubscriptionProvider {
+func NewSubscriptionStorageProvider(repository *CommonRepository, transformer NotificationTransformer) notifier.SubscriptionProvider {
 	return &SubscriptionStorageProvider{
-		repository: repository,
+		repository:  repository,
+		transformer: transformer,
 	}
 }
 
@@ -68,4 +76,13 @@ func (p *SubscriptionStorageProvider) Matches(subscription *notifier.Subscriptio
 	//  the same kind of filtering as on the API query parameters although may not make complete sense given that
 	//  different object types have different fields and a filter can only contain 1 description.
 	return true
+}
+
+// Transform updates the notification with subscription-specific information.
+func (p *SubscriptionStorageProvider) Transform(subscription *notifier.SubscriptionInfo, notification *notifier.Notification) (*notifier.Notification, error) {
+	result, err := p.transformer.Transform(subscription, notification)
+	if err != nil {
+		return nil, fmt.Errorf("failed to transform notification: %w", err)
+	}
+	return result, nil
 }
