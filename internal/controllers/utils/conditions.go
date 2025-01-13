@@ -98,24 +98,28 @@ func SetStatusCondition(existingConditions *[]metav1.Condition, conditionType Co
 func SetProvisioningStateInProgress(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
 	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateProgressing
 	cr.Status.ProvisioningStatus.ProvisioningDetails = message
+	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
 }
 
 // SetProvisioningStateFailed updates the provisioning state to failed with detailed message
 func SetProvisioningStateFailed(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
 	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateFailed
 	cr.Status.ProvisioningStatus.ProvisioningDetails = message
+	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
 }
 
 // SetProvisioningStateFulfilled updates the provisioning state to fulfilled with detailed message
 func SetProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) {
 	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateFulfilled
 	cr.Status.ProvisioningStatus.ProvisioningDetails = "Provisioning request has completed successfully"
+	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
 }
 
 // SetProvisioningStateDeleting updates the provisioning state to deleting with detailed message
 func SetProvisioningStateDeleting(cr *provisioningv1alpha1.ProvisioningRequest) {
 	cr.Status.ProvisioningStatus.ProvisioningState = provisioningv1alpha1.StateDeleting
 	cr.Status.ProvisioningStatus.ProvisioningDetails = "Deletion is in progress"
+	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
 }
 
 // IsProvisioningStateFulfilled checks if the provisioning status is fulfilled
