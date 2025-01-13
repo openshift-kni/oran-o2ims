@@ -93,7 +93,8 @@ func Serve(config *api.ClusterServerConfig) error {
 	// Create the notifier with our resource specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository)
-	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, oauthConfig)
+	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
+	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create the collector
 	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{k8s})

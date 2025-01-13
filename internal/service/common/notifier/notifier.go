@@ -7,8 +7,6 @@ import (
 	"sort"
 
 	"github.com/google/uuid"
-
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // DefaultBufferedChannelSize defines the default size for buffered channels used across the notifier.
@@ -67,7 +65,7 @@ type SubscriptionEventHandler interface {
 // Notifier represents the data required by the notification process
 type Notifier struct {
 	// oauthConfig defines the oauth related attributes used to establish connections to subscribers
-	oauthConfig *utils.OAuthClientConfig
+	clientProvider ClientProvider
 	// notificationChannel is used to receive notifications about new events from the collector
 	notificationChannel chan *Notification
 	// subscriptionChannel is used to receive notifications about new/deleted subscriptions
@@ -86,12 +84,12 @@ type Notifier struct {
 
 // NewNotifier creates a new instance of a Notifier
 func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider NotificationProvider,
-	oauthConfig *utils.OAuthClientConfig) *Notifier {
+	clientProvider ClientProvider) *Notifier {
 	eventChannel := make(chan *Notification, DefaultBufferedChannelSize)
 	subscriptionChannel := make(chan *SubscriptionEvent, DefaultBufferedChannelSize)
 	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, CompletionChannelSize)
 	return &Notifier{
-		oauthConfig:                    oauthConfig,
+		clientProvider:                 clientProvider,
 		subscriptionProvider:           subscriptionProvider,
 		notificationProvider:           notificationProvider,
 		notificationChannel:            eventChannel,
@@ -185,7 +183,7 @@ func (n *Notifier) loadSubscriptions(ctx context.Context) error {
 
 	for _, s := range subscriptions {
 		subscriptionID := s.SubscriptionID
-		n.workers[subscriptionID], err = NewSubscriptionWorker(ctx, n.oauthConfig, n.subscriptionJobCompleteChannel, &s)
+		n.workers[subscriptionID], err = NewSubscriptionWorker(ctx, n.clientProvider, n.subscriptionJobCompleteChannel, &s)
 		if err != nil {
 			return fmt.Errorf("failed to create subscription worker: %w", err)
 		}
@@ -293,7 +291,7 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 		// attempt to release any notifications that were queued by this worker.
 		n.releaseNotifications(ctx, worker.GetNotifications())
 	} else {
-		worker, err := NewSubscriptionWorker(ctx, n.oauthConfig, n.subscriptionJobCompleteChannel, event.Subscription)
+		worker, err := NewSubscriptionWorker(ctx, n.clientProvider, n.subscriptionJobCompleteChannel, event.Subscription)
 		if err != nil {
 			return fmt.Errorf("failed to create subscription worker: %w", err)
 		}
