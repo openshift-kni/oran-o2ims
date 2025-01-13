@@ -440,3 +440,87 @@ func (ar *AlarmsRepository) GetMaxAlarmSeq(ctx context.Context) (int64, error) {
 
 	return maxSeq, nil
 }
+
+// GetAlarmDefForProbableCause extract the PC details from alarms def for a given probableCauseID
+func (ar *AlarmsRepository) GetAlarmDefForProbableCause(ctx context.Context, probableCauseID uuid.UUID) ([]models.AlarmDefinition, error) {
+	m := models.AlarmDefinition{}
+	dbTags := utils.GetAllDBTagsFromStruct(m)
+
+	query := psql.Select(
+		sm.Columns(utils.GetColumnsAsAny(utils.GetColumns(m, []string{
+			"ProbableCauseID", "AlarmName", "AlarmDescription",
+		}))...),
+		sm.From(m.TableName()),
+		sm.Where(psql.Quote(dbTags["ProbableCauseID"]).EQ(psql.Arg(probableCauseID))),
+	)
+
+	sql, args, err := query.Build()
+	if err != nil {
+		return []models.AlarmDefinition{}, fmt.Errorf("failed to build GetAlarmForProbableCause query: %w", err)
+	}
+
+	rows, err := utils.ExecuteCollectRows[models.AlarmDefinition](ctx, ar.Db, sql, args)
+	if err != nil {
+		return []models.AlarmDefinition{}, err
+	}
+
+	return rows, nil
+}
+
+// GetAllAlarmDefForProbableCause get all the possible probable cause from current list of alarms and then retrieve info (name, description) for them from alarms def table
+func (ar *AlarmsRepository) GetAllAlarmDefForProbableCause(ctx context.Context) ([]models.AlarmDefinition, error) {
+	aEvent := models.AlarmEventRecord{}
+	dbTags := utils.GetAllDBTagsFromStruct(aEvent)
+
+	query := psql.Select(
+		sm.Columns(utils.GetColumnsAsAny(utils.GetColumns(aEvent, []string{
+			"ProbableCauseID",
+		}))...),
+		sm.From(aEvent.TableName()),
+		sm.Where(psql.Quote(dbTags["ProbableCauseID"]).IsNotNull()), // We collect all alerts regardless of being able to co-relate the event with a definitionID and probableCauseID.
+	)
+
+	sql, args, err := query.Build()
+	if err != nil {
+		return []models.AlarmDefinition{}, fmt.Errorf("failed to build query to list all probable cause IDs: %w", err)
+	}
+
+	aEventRows, err := utils.ExecuteCollectRows[models.AlarmEventRecord](ctx, ar.Db, sql, args)
+	if err != nil {
+		return []models.AlarmDefinition{}, fmt.Errorf("failed to execute query to list all probable cause IDs: %w", err)
+	}
+
+	if len(aEventRows) > 0 {
+		slog.Info("Found alarms with probable cause ID", "count", len(aEventRows))
+		aDef := models.AlarmDefinition{}
+
+		query = psql.Select(
+			sm.Columns(utils.GetColumnsAsAny(utils.GetColumns(aDef, []string{
+				"ProbableCauseID", "AlarmName", "AlarmDescription",
+			}))...),
+			sm.From(aDef.TableName()),
+			sm.Where(psql.Quote(dbTags["ProbableCauseID"]).In(psql.Arg(getProbableCauseIDs(aEventRows)...))),
+		)
+		sql, args, err := query.Build()
+		if err != nil {
+			return []models.AlarmDefinition{}, fmt.Errorf("failed to build get all probable cause query: %w", err)
+		}
+
+		rows, err := utils.ExecuteCollectRows[models.AlarmDefinition](ctx, ar.Db, sql, args)
+		if err != nil {
+			return []models.AlarmDefinition{}, fmt.Errorf("failed to execute get all probable cause query: %w", err)
+		}
+
+		return rows, nil
+	}
+
+	return []models.AlarmDefinition{}, nil
+}
+
+func getProbableCauseIDs(rows []models.AlarmEventRecord) []any {
+	ids := make([]any, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ProbableCauseID)
+	}
+	return ids
+}

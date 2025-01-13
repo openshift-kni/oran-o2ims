@@ -137,3 +137,12 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 	}
 	return &info
 }
+
+// ConvertDefToPC probableCause is subset of alarm definition
+func ConvertDefToPC(def AlarmDefinition) api.ProbableCause {
+	return api.ProbableCause{
+		Description:     def.AlarmDescription,
+		Name:            def.AlarmName,
+		ProbableCauseId: def.ProbableCauseID,
+	}
+}

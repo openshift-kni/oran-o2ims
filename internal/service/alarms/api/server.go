@@ -492,14 +492,41 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 
 }
 
-func (a *AlarmsServer) GetProbableCauses(ctx context.Context, request api.GetProbableCausesRequestObject) (api.GetProbableCausesResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+// GetProbableCauses list all the relevant probableCauses based on alarms that are currently in the events table
+func (a *AlarmsServer) GetProbableCauses(ctx context.Context, _ api.GetProbableCausesRequestObject) (api.GetProbableCausesResponseObject, error) {
+	defs, err := a.AlarmsRepository.GetAllAlarmDefForProbableCause(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alarm definitions for probableCauses: %w", err)
+	}
+
+	pcs := make([]api.ProbableCause, 0, len(defs))
+	for _, def := range defs {
+		pcs = append(pcs, models.ConvertDefToPC(def))
+	}
+
+	slog.Info("Successfully retrieved probableCauses of current events", "count", len(pcs))
+	return api.GetProbableCauses200JSONResponse(pcs), nil
 }
 
+// GetProbableCause retrieve a probable cause of alarm with UUID
 func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProbableCauseRequestObject) (api.GetProbableCauseResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
+	alarmDefs, err := a.AlarmsRepository.GetAlarmDefForProbableCause(ctx, request.ProbableCauseId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alarm definition for probableCause: %w", err)
+	}
+
+	if len(alarmDefs) == 0 {
+		return api.GetProbableCause404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{
+				"probableCauseID": request.ProbableCauseId.String(),
+			},
+			Detail: "could not find the probable cause for given probableCauseID",
+			Status: http.StatusNotFound,
+		}), nil
+	}
+
+	slog.Info("Successfully retrieved probable cause", "id", request.ProbableCauseId)
+	return api.GetProbableCause200JSONResponse(models.ConvertDefToPC(alarmDefs[0])), nil
 }
 
 // AmNotification handles an API request coming from AlertManager with CaaS alerts. This api is used internally.
