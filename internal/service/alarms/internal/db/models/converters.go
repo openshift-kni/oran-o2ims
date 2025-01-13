@@ -6,6 +6,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 
 	"github.com/google/uuid"
+
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 )
 
@@ -36,19 +37,18 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 }
 
 // ConvertAlarmEventRecordModelToAlarmEventNotification converts an AlarmEventRecord to api AlarmEventNotification
-func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, subModel AlarmSubscription, globalCloudID uuid.UUID) api.AlarmEventNotification {
+func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, globalCloudID uuid.UUID) api.AlarmEventNotification {
 	or := fmt.Sprintf("%s/alarms/%v", "/o2ims-infrastructureMonitoring/v1", aerModel.AlarmEventRecordID.String())
 	notification := api.AlarmEventNotification{
-		AlarmAcknowledgeTime:   aerModel.AlarmAcknowledgedTime,
-		AlarmAcknowledged:      aerModel.AlarmAcknowledged,
-		AlarmEventRecordId:     aerModel.AlarmEventRecordID,
-		AlarmRaisedTime:        aerModel.AlarmRaisedTime,
-		ConsumerSubscriptionId: subModel.ConsumerSubscriptionID,
-		Extensions:             aerModel.Extensions,
-		GlobalCloudID:          globalCloudID,
-		NotificationEventType:  AlarmFilterToEventType(aerModel.NotificationEventType),
-		ObjectRef:              &or,
-		PerceivedSeverity:      aerModel.PerceivedSeverity,
+		AlarmAcknowledgeTime:  aerModel.AlarmAcknowledgedTime,
+		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
+		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
+		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
+		Extensions:            aerModel.Extensions,
+		GlobalCloudID:         globalCloudID,
+		NotificationEventType: AlarmFilterToEventType(aerModel.NotificationEventType),
+		ObjectRef:             &or,
+		PerceivedSeverity:     aerModel.PerceivedSeverity,
 	}
 
 	// Handle all pointer fields together
@@ -127,9 +127,10 @@ func AlarmFilterToEventType(filter api.AlarmSubscriptionInfoFilter) api.AlarmEve
 // ConvertAlertSubToNotificationSub alarms subscription to generic subscription
 func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.SubscriptionInfo {
 	info := notifier.SubscriptionInfo{
-		SubscriptionID: as.SubscriptionID,
-		Callback:       as.Callback,
-		EventCursor:    int(as.EventCursor),
+		SubscriptionID:         as.SubscriptionID,
+		ConsumerSubscriptionID: as.ConsumerSubscriptionID,
+		Callback:               as.Callback,
+		EventCursor:            int(as.EventCursor),
 	}
 
 	if as.Filter != nil {

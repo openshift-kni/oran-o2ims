@@ -811,13 +811,13 @@ components:
             one of the following data types defined in clause 3.2.6 and the reference will match the type of objects
             supplied in priorObjectState and/or postObjectState.
         priorObjectState:
-          type: string
+          type: object
           description: |
             This is required if the notificationEventType is 1 (MODIFY) or 2 (DELETE) and is one of the following
             data types defined in clause 3.2.6 and will match the type of object in postObjectState and/or the type
             referred to in objectRef.
         postObjectState:
-          type: string
+          type: object
           description: |
             This is required if the notificationEventType is 0 (CREATE) or 1 (MODIFY) and is one of the following data
             types defined in clause 3.2.6 and will match the type of object in priorObjectState and/or the type

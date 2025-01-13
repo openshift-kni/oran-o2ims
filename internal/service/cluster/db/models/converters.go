@@ -107,7 +107,7 @@ func SubscriptionToInfo(record *models.Subscription) *notifier.SubscriptionInfo 
 }
 
 // getEventType determines the event type based on the object transition
-func getEventType(before, after *string) int {
+func getEventType(before, after map[string]interface{}) int {
 	switch {
 	case before == nil && after != nil:
 		return 0
@@ -147,8 +147,14 @@ func DataChangeEventToModel(record *models.DataChangeEvent) generated.ClusterCha
 		NotificationEventType: generated.ClusterChangeNotificationNotificationEventType(eventType),
 		NotificationId:        *record.DataChangeID,
 		ObjectRef:             getObjectReference(record.ObjectType, record.ObjectID),
-		PostObjectState:       record.AfterState,
-		PriorObjectState:      record.BeforeState,
+	}
+
+	if record.AfterState != nil {
+		object.PostObjectState = &record.AfterState
+	}
+
+	if record.BeforeState != nil {
+		object.PriorObjectState = &record.BeforeState
 	}
 
 	return object

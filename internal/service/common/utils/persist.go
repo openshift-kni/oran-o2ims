@@ -67,19 +67,34 @@ func PersistObject[T db.Model](ctx context.Context, tx pgx.Tx,
 	return before, after, nil
 }
 
+// serialize converts an object to a map of values so that it can be serialized as a json object to the database and
+// then to the subscriber.
+func serialize(object interface{}) (map[string]interface{}, error) {
+	text, err := json.Marshal(object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal object: %w", err)
+	}
+	var result = map[string]interface{}{}
+	err = json.Unmarshal(text, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal object: %w", err)
+	}
+	return result, nil
+}
+
 // PersistDataChangeEvent persists a data change object to its database table.  The before and
 // after model objects are marshaled to JSON prior to being stored.
 func PersistDataChangeEvent(ctx context.Context, tx pgx.Tx, tableName string, uuid uuid.UUID,
-	parentUUID *uuid.UUID, before, after any) (*models.DataChangeEvent, error) {
+	parentUUID *uuid.UUID, before, after interface{}) (*models.DataChangeEvent, error) {
 	var err error
-	var beforeJSON, afterJSON []byte
+	var beforeJSON, afterJSON map[string]interface{}
 	if before != nil {
-		if beforeJSON, err = json.Marshal(before); err != nil {
+		if beforeJSON, err = serialize(before); err != nil {
 			return nil, fmt.Errorf("failed to marshal before object: %w", err)
 		}
 	}
 	if after != nil {
-		if afterJSON, err = json.Marshal(after); err != nil {
+		if afterJSON, err = serialize(after); err != nil {
 			return nil, fmt.Errorf("failed to marshal after object: %w", err)
 		}
 	}
@@ -91,12 +106,10 @@ func PersistDataChangeEvent(ctx context.Context, tx pgx.Tx, tableName string, uu
 	}
 
 	if beforeJSON != nil {
-		value := string(beforeJSON)
-		dataChangeEvent.BeforeState = &value
+		dataChangeEvent.BeforeState = beforeJSON
 	}
 	if afterJSON != nil {
-		value := string(afterJSON)
-		dataChangeEvent.AfterState = &value
+		dataChangeEvent.AfterState = afterJSON
 	}
 
 	result, err := Create[models.DataChangeEvent](ctx, tx, dataChangeEvent)
