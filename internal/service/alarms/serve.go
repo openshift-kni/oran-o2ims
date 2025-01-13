@@ -232,7 +232,8 @@ func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfi
 
 	notificationsProvider := notifier_provider.NewNotificationStorageProvider(a.AlarmsRepository)
 	subscriptionsProvider := notifier_provider.NewSubscriptionStorageProvider(a.AlarmsRepository)
-	newNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, oauthConfig)
+	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
+	newNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	a.NotificationProvider = notificationsProvider
 	a.Notifier = newNotifier
