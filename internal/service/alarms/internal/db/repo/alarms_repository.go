@@ -441,8 +441,8 @@ func (ar *AlarmsRepository) GetMaxAlarmSeq(ctx context.Context) (int64, error) {
 	return maxSeq, nil
 }
 
-// GetAlarmDefForProbableCause extract the PC details from alarms def for a given probableCauseID
-func (ar *AlarmsRepository) GetAlarmDefForProbableCause(ctx context.Context, probableCauseID uuid.UUID) ([]models.AlarmDefinition, error) {
+// GetAlarmDefinitionForProbableCause extract the probableCause details (name, description) from alarms definition for a given probableCauseID
+func (ar *AlarmsRepository) GetAlarmDefinitionForProbableCause(ctx context.Context, probableCauseID uuid.UUID) ([]models.AlarmDefinition, error) {
 	m := models.AlarmDefinition{}
 	dbTags := utils.GetAllDBTagsFromStruct(m)
 
@@ -467,8 +467,8 @@ func (ar *AlarmsRepository) GetAlarmDefForProbableCause(ctx context.Context, pro
 	return rows, nil
 }
 
-// GetAllAlarmDefForProbableCause get all the possible probable cause from current list of alarms and then retrieve info (name, description) for them from alarms def table
-func (ar *AlarmsRepository) GetAllAlarmDefForProbableCause(ctx context.Context) ([]models.AlarmDefinition, error) {
+// GetAllAlarmDefinitionForProbableCause get all the possible probable cause from current list of alarms and then retrieve info (name, description) for them from alarms definition table
+func (ar *AlarmsRepository) GetAllAlarmDefinitionForProbableCause(ctx context.Context) ([]models.AlarmDefinition, error) {
 	aEvent := models.AlarmEventRecord{}
 	dbTags := utils.GetAllDBTagsFromStruct(aEvent)
 

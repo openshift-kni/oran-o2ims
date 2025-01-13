@@ -494,14 +494,14 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 
 // GetProbableCauses list all the relevant probableCauses based on alarms that are currently in the events table
 func (a *AlarmsServer) GetProbableCauses(ctx context.Context, _ api.GetProbableCausesRequestObject) (api.GetProbableCausesResponseObject, error) {
-	defs, err := a.AlarmsRepository.GetAllAlarmDefForProbableCause(ctx)
+	defs, err := a.AlarmsRepository.GetAllAlarmDefinitionForProbableCause(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get alarm definitions for probableCauses: %w", err)
 	}
 
 	pcs := make([]api.ProbableCause, 0, len(defs))
 	for _, def := range defs {
-		pcs = append(pcs, models.ConvertDefToPC(def))
+		pcs = append(pcs, models.ConvertAlarmDefinitionToProbableCause(def))
 	}
 
 	slog.Info("Successfully retrieved probableCauses of current events", "count", len(pcs))
@@ -510,7 +510,7 @@ func (a *AlarmsServer) GetProbableCauses(ctx context.Context, _ api.GetProbableC
 
 // GetProbableCause retrieve a probable cause of alarm with UUID
 func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProbableCauseRequestObject) (api.GetProbableCauseResponseObject, error) {
-	alarmDefs, err := a.AlarmsRepository.GetAlarmDefForProbableCause(ctx, request.ProbableCauseId)
+	alarmDefs, err := a.AlarmsRepository.GetAlarmDefinitionForProbableCause(ctx, request.ProbableCauseId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get alarm definition for probableCause: %w", err)
 	}
@@ -526,7 +526,7 @@ func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProb
 	}
 
 	slog.Info("Successfully retrieved probable cause", "id", request.ProbableCauseId)
-	return api.GetProbableCause200JSONResponse(models.ConvertDefToPC(alarmDefs[0])), nil
+	return api.GetProbableCause200JSONResponse(models.ConvertAlarmDefinitionToProbableCause(alarmDefs[0])), nil
 }
 
 // AmNotification handles an API request coming from AlertManager with CaaS alerts. This api is used internally.
