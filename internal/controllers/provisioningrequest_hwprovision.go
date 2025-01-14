@@ -8,8 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -460,6 +462,17 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 			}
 		}
 		return nil, err
+	}
+
+	hwmgr := &pluginv1alpha1.HardwareManager{}
+	if err := t.client.Get(ctx, types.NamespacedName{Namespace: utils.GetHwMgrPluginNS(), Name: hwTemplate.Spec.HwMgrId}, hwmgr); err != nil {
+		updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
+			provisioningv1alpha1.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse,
+			"Unable to find specified HardwareManager: "+hwTemplate.Spec.HwMgrId)
+		if updateErr != nil {
+			return nil, fmt.Errorf("failed to update hwtemplate %s status: %w", hwTemplateName, updateErr)
+		}
+		return nil, fmt.Errorf("could not find specified HardwareManager: %s/%s, err=%w", utils.GetHwMgrPluginNS(), hwTemplate.Spec.HwMgrId, err)
 	}
 
 	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed

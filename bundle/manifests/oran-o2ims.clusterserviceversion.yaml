@@ -1238,6 +1238,14 @@ spec:
           - list
           - watch
         - apiGroups:
+          - hwmgr-plugin.oran.openshift.io
+          resources:
+          - hardwaremanagers
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - internal.open-cluster-management.io
           resources:
           - managedclusterinfos
