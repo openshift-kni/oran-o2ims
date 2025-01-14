@@ -8,80 +8,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ConditionType is a string representing the condition's type
-type ConditionType string
-
-// The following constants define the different types of conditions that will be set for ClusterTemplate
-var CTconditionTypes = struct {
-	Validated ConditionType
-}{
-	Validated: "ClusterTemplateValidated",
-}
-
-// The following constants define the different types of conditions that will be set for ProvisioningRequest
-var PRconditionTypes = struct {
-	Validated                 ConditionType
-	HardwareTemplateRendered  ConditionType
-	HardwareProvisioned       ConditionType
-	HardwareNodeConfigApplied ConditionType
-	HardwareConfigured        ConditionType
-	ClusterInstanceRendered   ConditionType
-	ClusterResourcesCreated   ConditionType
-	ClusterInstanceProcessed  ConditionType
-	ClusterProvisioned        ConditionType
-	ConfigurationApplied      ConditionType
-	UpgradeCompleted          ConditionType
-}{
-	Validated:                 "ProvisioningRequestValidated",
-	HardwareTemplateRendered:  "HardwareTemplateRendered",
-	HardwareProvisioned:       "HardwareProvisioned",
-	HardwareNodeConfigApplied: "HardwareNodeConfigApplied",
-	HardwareConfigured:        "HardwareConfigured",
-	ClusterInstanceRendered:   "ClusterInstanceRendered",
-	ClusterResourcesCreated:   "ClusterResourcesCreated",
-	ClusterInstanceProcessed:  "ClusterInstanceProcessed",
-	ClusterProvisioned:        "ClusterProvisioned",
-	ConfigurationApplied:      "ConfigurationApplied",
-	UpgradeCompleted:          "UpgradeCompleted",
-}
-
-// ConditionReason is a string representing the condition's reason
-type ConditionReason string
-
-// The following constants define the different reasons that conditions will be set for ClusterTemplate
-var CTconditionReasons = struct {
-	Completed ConditionReason
-	Failed    ConditionReason
-}{
-	Completed: "Completed",
-	Failed:    "Failed",
-}
-
-// The following constants define the different reasons that conditions will be set for ProvisioningRequest
-var CRconditionReasons = struct {
-	NotApplied      ConditionReason
-	ClusterNotReady ConditionReason
-	Completed       ConditionReason
-	Failed          ConditionReason
-	InProgress      ConditionReason
-	Missing         ConditionReason
-	OutOfDate       ConditionReason
-	TimedOut        ConditionReason
-	Unknown         ConditionReason
-}{
-	NotApplied:      "NotApplied",
-	ClusterNotReady: "ClusterNotReady",
-	Completed:       "Completed",
-	Failed:          "Failed",
-	InProgress:      "InProgress",
-	Missing:         "Missing",
-	OutOfDate:       "OutOfDate",
-	TimedOut:        "TimedOut",
-	Unknown:         "Unknown",
-}
-
 // SetStatusCondition is a convenience wrapper for meta.SetStatusCondition that takes in the types defined here and converts them to strings
-func SetStatusCondition(existingConditions *[]metav1.Condition, conditionType ConditionType, conditionReason ConditionReason, conditionStatus metav1.ConditionStatus, message string) {
+func SetStatusCondition(
+	existingConditions *[]metav1.Condition,
+	conditionType provisioningv1alpha1.ConditionType,
+	conditionReason provisioningv1alpha1.ConditionReason,
+	conditionStatus metav1.ConditionStatus,
+	message string,
+) {
 	meta.SetStatusCondition(
 		existingConditions,
 		metav1.Condition{
@@ -125,7 +59,8 @@ func IsProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) 
 
 // IsClusterProvisionPresent checks if the cluster provision condition is present
 func IsClusterProvisionPresent(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.ClusterProvisioned)))
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
 	return condition != nil
 }
 
@@ -136,17 +71,21 @@ func IsClusterProvisionPresent(cr *provisioningv1alpha1.ProvisioningRequest) boo
 // but the status wasn't updated correctly. Therefore, we treat it as completed so that the provisioningStatus
 // be updated properly. This workaround can be removed after ACM 2.12 GA.
 func IsClusterProvisionCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.ClusterProvisioned)))
-	return condition != nil && (condition.Status == metav1.ConditionTrue || condition.Reason == string(siteconfigv1alpha1.StaleConditions))
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
+	return condition != nil &&
+		(condition.Status == metav1.ConditionTrue ||
+			condition.Reason == string(siteconfigv1alpha1.StaleConditions))
 }
 
 // IsClusterProvisionTimedOutOrFailed checks if the cluster provision condition status is timedout or failed
 func IsClusterProvisionTimedOutOrFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.ClusterProvisioned)))
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
 	if condition != nil {
 		if condition.Status == metav1.ConditionFalse &&
-			(condition.Reason == string(CRconditionReasons.Failed) ||
-				condition.Reason == string(CRconditionReasons.TimedOut)) {
+			(condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+				condition.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
 			return true
 		}
 	}
@@ -155,8 +94,9 @@ func IsClusterProvisionTimedOutOrFailed(cr *provisioningv1alpha1.ProvisioningReq
 
 // IsClusterProvisionFailed checks if the cluster provision condition status is failed
 func IsClusterProvisionFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.ClusterProvisioned)))
-	return condition != nil && condition.Reason == string(CRconditionReasons.Failed)
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
+	return condition != nil && condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed)
 }
 
 // IsSmoRegistrationCompleted checks if registration with SMO has been completed
@@ -168,9 +108,11 @@ func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
 
 // IsClusterUpgradeInProgress checks if the cluster upgrade condition status is in progress
 func IsClusterUpgradeInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.UpgradeCompleted)))
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 	if condition != nil {
-		if condition.Status == metav1.ConditionFalse && condition.Reason == string(CRconditionReasons.InProgress) {
+		if condition.Status == metav1.ConditionFalse &&
+			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress) {
 			return true
 		}
 	}
@@ -179,7 +121,8 @@ func IsClusterUpgradeInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bo
 
 // IsClusterUpgradeCompleted checks if the cluster upgrade is completed
 func IsClusterUpgradeCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.UpgradeCompleted)))
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 	if condition != nil {
 		if condition.Status == metav1.ConditionTrue {
 			return true
@@ -190,6 +133,7 @@ func IsClusterUpgradeCompleted(cr *provisioningv1alpha1.ProvisioningRequest) boo
 
 // IsClusterUpgradeInitiated checks if the cluster upgrade is initiated
 func IsClusterUpgradeInitiated(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions, (string(PRconditionTypes.UpgradeCompleted)))
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 	return condition != nil
 }

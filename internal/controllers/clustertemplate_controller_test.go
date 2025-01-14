@@ -132,9 +132,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(c.Get(ctx, req.NamespacedName, updatedCT)).To(Succeed())
 		conditions := updatedCT.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Completed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Completed)))
 		Expect(conditions[0].Message).To(Equal("The cluster template validation succeeded"))
 	})
 
@@ -156,9 +156,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(c.Get(ctx, req.NamespacedName, updatedCT)).To(Succeed())
 		conditions := updatedCT.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the ConfigMap '%s' is not found in the namespace '%s'", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
@@ -517,9 +517,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		// Check the status condition
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Completed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Completed)))
 		Expect(conditions[0].Message).To(Equal("The cluster template validation succeeded"))
 	})
 
@@ -532,9 +532,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		// Check the status condition
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the ConfigMap '%s' is not found in the namespace '%s'", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
@@ -555,9 +555,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		// Check the status condition
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
@@ -576,9 +576,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
 		errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string", hwtmpl.Name)
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(errMessage))
 
 		// Check the HardwareTemplate status condition

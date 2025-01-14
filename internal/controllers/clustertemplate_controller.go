@@ -588,15 +588,15 @@ func checkSchemaContains(actual, expected map[string]any, currentPath string) er
 func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx context.Context, errMsg string) error {
 	if errMsg != "" {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.CTconditionTypes.Validated,
-			utils.CTconditionReasons.Failed,
+			provisioningv1alpha1.CTconditionTypes.Validated,
+			provisioningv1alpha1.CTconditionReasons.Failed,
 			metav1.ConditionFalse,
 			errMsg,
 		)
 	} else {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.CTconditionTypes.Validated,
-			utils.CTconditionReasons.Completed,
+			provisioningv1alpha1.CTconditionTypes.Validated,
+			provisioningv1alpha1.CTconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"The cluster template validation succeeded",
 		)

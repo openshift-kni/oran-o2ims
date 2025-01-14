@@ -6,6 +6,7 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -89,8 +90,8 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 		)
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.UpgradeCompleted,
-			utils.CRconditionReasons.InProgress,
+			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"Upgrade is initiated",
 		)
@@ -106,8 +107,8 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 	if isIBGUProgressing(ibgu) {
 		utils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is in progress")
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.UpgradeCompleted,
-			utils.CRconditionReasons.InProgress,
+			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"Upgrade is in progress",
 		)
@@ -125,16 +126,16 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 			if failed, message := isIBGUFailed(ibgu); failed {
 				utils.SetProvisioningStateFailed(t.object, "Cluster upgrade is failed")
 				utils.SetStatusCondition(&t.object.Status.Conditions,
-					utils.PRconditionTypes.UpgradeCompleted,
-					utils.CRconditionReasons.Failed,
+					provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
 					message,
 				)
 			} else {
 				utils.SetProvisioningStateFulfilled(t.object)
 				utils.SetStatusCondition(&t.object.Status.Conditions,
-					utils.PRconditionTypes.UpgradeCompleted,
-					utils.CRconditionReasons.Completed,
+					provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Upgrade is completed",
 				)
@@ -158,7 +159,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 			if err != nil {
 				return requeueWithError(fmt.Errorf("failed to cleanup IBGU: %w", err))
 			}
-			meta.RemoveStatusCondition(&t.object.Status.Conditions, string(utils.PRconditionTypes.UpgradeCompleted))
+			meta.RemoveStatusCondition(&t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 			if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 				return requeueWithError(fmt.Errorf("failed to update ClusterRequest CR status: %w", err))
 			}

@@ -62,8 +62,8 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		// updates to immutable fields in the ClusterInstance spec are disallowed,
 		// with the exception of scaling up/down when Cluster provisioning is completed.
 		crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions,
-			string(utils.PRconditionTypes.ClusterProvisioned))
-		if crProvisionedCond != nil && crProvisionedCond.Reason != string(utils.CRconditionReasons.Unknown) {
+			string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
+		if crProvisionedCond != nil && crProvisionedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Unknown) {
 			existingClusterInstance := &unstructured.Unstructured{}
 			existingClusterInstance.SetGroupVersionKind(
 				renderedClusterInstanceUnstructure.GroupVersionKind())
@@ -96,7 +96,7 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 				for _, updatedField := range updatedFields {
 					// Suppress install manifests to prevent unnecessary updates
 					if updatedField == "clusterImageSetNameRef" &&
-						crProvisionedCond.Reason == string(utils.CRconditionReasons.Completed) {
+						crProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Completed) {
 						for _, crd := range utils.CRDsToBeSuppressedForUpgrade {
 							if !slices.Contains(suppressedManifests, crd) {
 								suppressedManifests = append(suppressedManifests, crd)
@@ -107,7 +107,7 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 					}
 				}
 				if len(scalingNodes) != 0 &&
-					crProvisionedCond.Reason != string(utils.CRconditionReasons.Completed) {
+					crProvisionedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Completed) {
 					// In-progress || Failed
 					disallowedChanges = append(disallowedChanges, scalingNodes...)
 				}
@@ -278,8 +278,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstanceProcessedStatus
 	if len(ci.Status.Conditions) == 0 {
 		message := fmt.Sprintf("Waiting for ClusterInstance (%s) to be processed", ci.Name)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterInstanceProcessed,
-			utils.CRconditionReasons.Unknown,
+			provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed,
+			provisioningv1alpha1.CRconditionReasons.Unknown,
 			metav1.ConditionUnknown,
 			message,
 		)
@@ -291,8 +291,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstanceProcessedStatus
 		ciCondition := meta.FindStatusCondition(ci.Status.Conditions, string(condType))
 		if ciCondition != nil && ciCondition.Status != metav1.ConditionTrue {
 			utils.SetStatusCondition(&t.object.Status.Conditions,
-				utils.PRconditionTypes.ClusterInstanceProcessed,
-				utils.ConditionReason(ciCondition.Reason),
+				provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed,
+				provisioningv1alpha1.ConditionReason(ciCondition.Reason),
 				ciCondition.Status,
 				ciCondition.Message,
 			)
@@ -302,8 +302,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstanceProcessedStatus
 	}
 
 	utils.SetStatusCondition(&t.object.Status.Conditions,
-		utils.PRconditionTypes.ClusterInstanceProcessed,
-		utils.CRconditionReasons.Completed,
+		provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed,
+		provisioningv1alpha1.CRconditionReasons.Completed,
 		metav1.ConditionTrue,
 		fmt.Sprintf("Applied and processed ClusterInstance (%s) successfully", ci.Name),
 	)
@@ -320,12 +320,12 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 
 	if ciProvisionedCondition == nil {
 		crClusterInstanceProcessedCond := meta.FindStatusCondition(
-			t.object.Status.Conditions, string(utils.PRconditionTypes.ClusterInstanceProcessed))
+			t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed))
 		if crClusterInstanceProcessedCond != nil && crClusterInstanceProcessedCond.Status == metav1.ConditionTrue {
 			message := "Waiting for cluster installation to start"
 			utils.SetStatusCondition(&t.object.Status.Conditions,
-				utils.PRconditionTypes.ClusterProvisioned,
-				utils.CRconditionReasons.Unknown,
+				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+				provisioningv1alpha1.CRconditionReasons.Unknown,
 				metav1.ConditionUnknown,
 				message,
 			)
@@ -333,8 +333,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		}
 	} else {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterProvisioned,
-			utils.ConditionReason(ciProvisionedCondition.Reason),
+			provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+			provisioningv1alpha1.ConditionReason(ciProvisionedCondition.Reason),
 			ciProvisionedCondition.Status,
 			ciProvisionedCondition.Message,
 		)
@@ -356,8 +356,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 				// timed out
 				message := "Cluster installation timed out"
 				utils.SetStatusCondition(&t.object.Status.Conditions,
-					utils.PRconditionTypes.ClusterProvisioned,
-					utils.CRconditionReasons.TimedOut,
+					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
 					metav1.ConditionFalse,
 					message,
 				)

@@ -67,8 +67,8 @@ var _ = Describe("policyManagement", func() {
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(utils.CTconditionTypes.Validated),
-							Reason: string(utils.CTconditionReasons.Completed),
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -173,7 +173,7 @@ defaultHugepagesSize: "1G"`,
 					// Fake the hw provision status
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+							Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -266,19 +266,19 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionTrue,
 			"Managed cluster is available",
 		)
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
 			"HubClusterAdminAccepted",
 			metav1.ConditionTrue,
 			"Accepted by hub cluster admin",
 		)
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionJoined),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionJoined),
 			"ManagedClusterJoined",
 			metav1.ConditionTrue,
 			"Managed cluster joined",
@@ -369,7 +369,7 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).To(BeNil())
 
 		// Add the ClusterProvisioned condition.
@@ -392,8 +392,8 @@ defaultHugepagesSize: "1G"`,
 		}
 
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterProvisioned,
-			utils.CRconditionReasons.InProgress,
+			provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"",
 		)
@@ -462,8 +462,8 @@ defaultHugepagesSize: "1G"`,
 
 		// Update the ProvisioningRequest ConfigurationApplied condition to TimedOut.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.TimedOut,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.TimedOut,
 			metav1.ConditionFalse,
 			"The configuration is still being applied, but it timed out",
 		)
@@ -535,11 +535,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Completed)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is up to date"))
 	})
 
@@ -640,11 +640,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -662,11 +662,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -688,11 +688,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.OutOfDate)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is out of date"))
 	})
@@ -788,11 +788,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 
 		// Step 2: Update the managed cluster to make it not ready.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -800,7 +800,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionFalse,
 			"Managed cluster is not available",
@@ -827,15 +827,15 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.ClusterNotReady)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady)))
 
 		// Step 3: Update the managed cluster to make it ready again.
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionTrue,
 			"Managed cluster is available",
@@ -862,11 +862,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 	})
 
 	It("It sets ClusterNotReady if the cluster is unstable/not ready", func() {
@@ -904,7 +904,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionFalse,
 			"Managed cluster is not available",
@@ -953,11 +953,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.ClusterNotReady)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady)))
 	})
 
 	It("Sets the NonCompliantAt timestamp and times out", func() {
@@ -1067,11 +1067,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.OutOfDate)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is out of date"))
 
 		// Enforce the NonCompliant policy.
@@ -1115,11 +1115,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -1137,11 +1137,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -1156,11 +1156,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 	})
@@ -1267,11 +1267,11 @@ defaultHugepagesSize: "1G"`,
 		// Verify that the ConfigurationApplied condition is set to InProgress.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -1290,11 +1290,11 @@ defaultHugepagesSize: "1G"`,
 		// Verify that the ConfigurationApplied condition is set to TimedOut.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -1309,11 +1309,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 	})
@@ -1361,11 +1361,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Missing)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Missing)))
 	})
 
 	It("It handles updated/deleted policies for matched clusters", func() {
@@ -1583,11 +1583,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Completed)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is up to date"))
 	})
 
@@ -1690,11 +1690,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 
@@ -1797,11 +1797,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 })
@@ -1885,8 +1885,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 	It("Returns false if the status is unexpected and NonCompliantAt is not set", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Unknown,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Unknown,
 			metav1.ConditionFalse,
 			"",
 		)
@@ -1901,8 +1901,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 	It("Returns false if the status is Completed and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"",
 		)
@@ -1917,8 +1917,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 	It("Returns false if the status is OutOfDate and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.OutOfDate,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.OutOfDate,
 			metav1.ConditionFalse,
 			"",
 		)
@@ -1933,8 +1933,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 	It("Returns false if the status is Missing and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Missing,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Missing,
 			metav1.ConditionFalse,
 			"",
 		)
@@ -1949,8 +1949,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 	It("Returns true if the status is InProgress and the timeout has passed", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.InProgress,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"",
 		)

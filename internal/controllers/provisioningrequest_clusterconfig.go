@@ -102,8 +102,8 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	if len(targetPolicies) == 0 {
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Missing,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Missing,
 			metav1.ConditionFalse,
 			"No configuration present",
 		)
@@ -114,8 +114,8 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	if allPoliciesCompliant {
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"The configuration is up to date",
 		)
@@ -140,8 +140,8 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 			),
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.ClusterNotReady,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.ClusterNotReady,
 			metav1.ConditionFalse,
 			"The Cluster is not yet ready",
 		)
@@ -157,8 +157,8 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		// No timeout is computed if all policies are in inform, just out of date.
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.OutOfDate,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.OutOfDate,
 			metav1.ConditionFalse,
 			"The configuration is out of date",
 		)
@@ -166,17 +166,17 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
 
 		message := "The configuration is still being applied"
-		reason := utils.CRconditionReasons.InProgress
+		reason := provisioningv1alpha1.CRconditionReasons.InProgress
 		utils.SetProvisioningStateInProgress(t.object,
 			"Cluster configuration is being applied")
 		if policyConfigTimedOut {
 			message += ", but it timed out"
-			reason = utils.CRconditionReasons.TimedOut
+			reason = provisioningv1alpha1.CRconditionReasons.TimedOut
 			utils.SetProvisioningStateFailed(t.object,
 				"Cluster configuration timed out")
 		}
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			reason,
 			metav1.ConditionFalse,
 			message,
@@ -189,7 +189,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 // updateZTPStatus updates status.ClusterDetails.ZtpStatus.
 func (t *provisioningRequestReconcilerTask) updateZTPStatus(ctx context.Context, allPoliciesCompliant bool) error {
 	// Check if the cluster provision has started.
-	crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(utils.PRconditionTypes.ClusterProvisioned))
+	crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
 	if crProvisionedCond != nil {
 		// If the provisioning has started, and the ZTP status is empty or not done.
 		if t.object.Status.Extensions.ClusterDetails.ZtpStatus != utils.ClusterZtpDone {
@@ -254,7 +254,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 	// Get the ConfigurationApplied condition.
 	configurationAppliedCondition := meta.FindStatusCondition(
 		t.object.Status.Conditions,
-		string(utils.PRconditionTypes.ConfigurationApplied))
+		string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 
 	// If the condition does not exist, set the non compliant timestamp since we
 	// get here just for policies that have a status different from Compliant.
@@ -266,7 +266,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 	// If the current status of the Condition is false.
 	if configurationAppliedCondition.Status == metav1.ConditionFalse {
 		switch configurationAppliedCondition.Reason {
-		case string(utils.CRconditionReasons.InProgress):
+		case string(provisioningv1alpha1.CRconditionReasons.InProgress):
 			// Check if the configuration application has timed out.
 			if t.object.Status.Extensions.ClusterDetails.NonCompliantAt.IsZero() {
 				t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
@@ -276,13 +276,13 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 					t.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time,
 					t.timeouts.clusterConfiguration)
 			}
-		case string(utils.CRconditionReasons.TimedOut):
+		case string(provisioningv1alpha1.CRconditionReasons.TimedOut):
 			policyTimedOut = true
-		case string(utils.CRconditionReasons.Missing):
+		case string(provisioningv1alpha1.CRconditionReasons.Missing):
 			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
-		case string(utils.CRconditionReasons.OutOfDate):
+		case string(provisioningv1alpha1.CRconditionReasons.OutOfDate):
 			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
-		case string(utils.CRconditionReasons.ClusterNotReady):
+		case string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady):
 			// The cluster might not be ready because its being initially provisioned or
 			// there are problems after provisionion, so it might be that NonCompliantAt
 			// has been previously set.
@@ -295,11 +295,11 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 		default:
 			t.logger.InfoContext(ctx,
 				fmt.Sprintf("Unexpected Reason for condition type %s",
-					utils.PRconditionTypes.ConfigurationApplied,
+					provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 				),
 			)
 		}
-	} else if configurationAppliedCondition.Reason == string(utils.CRconditionReasons.Completed) {
+	} else if configurationAppliedCondition.Reason == string(provisioningv1alpha1.CRconditionReasons.Completed) {
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
 	}
 
