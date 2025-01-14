@@ -419,7 +419,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	for _, param := range mandatoryParams {
 		expectedName := param[0]
 		expectedType := param[1]
-		aSubschema, err := utils.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
+		aSubschema, err := provisioningv1alpha1.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
 		if err != nil {
 			if strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema '%s' does not exist:", expectedName)) {
 				missingParameter = append(missingParameter, expectedName)

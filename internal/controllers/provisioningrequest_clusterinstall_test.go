@@ -106,7 +106,7 @@ nodes:
 			},
 		}
 
-		clusterInstanceInputParams, err := utils.ExtractMatchingInput(
+		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
 			cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		mergedClusterInstanceData, err := task.getMergedClusterInputData(

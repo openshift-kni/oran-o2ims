@@ -61,7 +61,6 @@ type clusterInput struct {
 // clusterTemplateDetails holds the details for the referenced ClusterTemplate
 type clusterTemplateDetails struct {
 	namespace string
-	release   string
 	templates provisioningv1alpha1.Templates
 }
 
@@ -555,41 +554,6 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 	}
 
 	return renderedNodePool, err
-}
-
-func (t *provisioningRequestReconcilerTask) getCrClusterTemplateRef(ctx context.Context) (*provisioningv1alpha1.ClusterTemplate, error) {
-	// Check the clusterTemplateRef references an existing template in the same namespace
-	// as the current provisioningRequest.
-	clusterTemplateRefName := getClusterTemplateRefName(
-		t.object.Spec.TemplateName, t.object.Spec.TemplateVersion)
-	clusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
-
-	// Get the one clusterTemplate that's valid.
-	err := t.client.List(ctx, clusterTemplates)
-	// If there was an error in trying to get the ClusterTemplate, return it.
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ClusterTemplate: %w", err)
-	}
-	for _, ct := range clusterTemplates.Items {
-		if ct.Name == clusterTemplateRefName {
-			validatedCond := meta.FindStatusCondition(
-				ct.Status.Conditions,
-				string(utils.CTconditionTypes.Validated))
-			if validatedCond != nil && validatedCond.Status == metav1.ConditionTrue {
-				t.ctDetails = &clusterTemplateDetails{
-					namespace: ct.Namespace,
-					release:   ct.Spec.Release,
-					templates: ct.Spec.Templates,
-				}
-				return &ct, nil
-			}
-		}
-	}
-
-	// If the referenced ClusterTemplate does not exist, log and return an appropriate error.
-	return nil, utils.NewInputError(
-		"a valid (%s) ClusterTemplate does not exist in any namespace",
-		clusterTemplateRefName)
 }
 
 func (r *ProvisioningRequestReconciler) handleFinalizer(

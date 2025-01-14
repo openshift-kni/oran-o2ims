@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
@@ -413,8 +414,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 	})
 
 	It("should return no updates when specs are identical", func() {
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(BeEmpty())
@@ -425,8 +428,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		spec := newClusterInstance.Object["spec"].(map[string]any)
 		spec["baseDomain"] = "newdomain.example.com"
 
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(ContainElement("baseDomain"))
 		Expect(scalingNodes).To(BeEmpty())
@@ -442,8 +447,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		// Change immutable field
 		spec["clusterName"] = "newName"
 
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(ContainElement("clusterName"))
 		Expect(len(updatedFields)).To(Equal(1))
@@ -457,8 +464,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
 		node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
 
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(ContainElement(
 			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
@@ -480,8 +489,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
 		node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
 
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(ContainElement(
 			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
@@ -499,8 +510,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		node0NetworkInterfaces := node0["nodeNetwork"].(map[string]any)["interfaces"].([]any)
 		node0NetworkInterfaces[0].(map[string]any)["macAddress"] = "00:00:5E:00:53:AF"
 
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(BeEmpty())
@@ -513,8 +526,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		nodes = append(nodes, map[string]any{"hostName": "worker2"})
 		spec["nodes"] = nodes
 
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(ContainElement("nodes.1"))
@@ -525,8 +540,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		spec := newClusterInstance.Object["spec"].(map[string]any)
 		spec["nodes"] = []any{}
 
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance, newClusterInstance)
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields)
 		Expect(err).To(BeNil())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(ContainElement("nodes.0"))
@@ -633,182 +650,6 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 		Expect(isReadyForConfig).To(BeTrue())
 	})
 })
-
-const testTemplate = `{
-	"properties": {
-	  "nodeClusterName": {
-		"type": "string"
-	  },
-	  "oCloudSiteId": {
-		"type": "string"
-	  },
-	  "policyTemplateParameters": {
-		"description": "policyTemplateParameters.",
-		"properties": {
-		  "sriov-network-vlan-1": {
-			"type": "string"
-		  },
-		  "install-plan-approval": {
-			"type": "string",
-			"default": "Automatic"
-		  }
-		}
-	  },
-	  "clusterInstanceParameters": {
-		"description": "clusterInstanceParameters.",
-		"properties": {
-		  "additionalNTPSources": {
-			"description": "AdditionalNTPSources.",
-			"items": {
-			  "type": "string"
-			},
-			"type": "array"
-		  }
-		}
-	  }
-	},
-	"required": [
-	  "nodeClusterName",
-	  "oCloudSiteId",
-	  "policyTemplateParameters",
-	  "clusterInstanceParameters"
-	],
-	"type": "object"
-  }`
-
-func TestExtractSubSchema(t *testing.T) {
-	type args struct {
-		mainSchema []byte
-		node       string
-	}
-	tests := []struct {
-		name          string
-		args          args
-		wantSubSchema map[string]any
-		wantErr       bool
-	}{
-		{
-			name: "ok",
-			args: args{
-				mainSchema: []byte(testTemplate),
-				node:       "clusterInstanceParameters",
-			},
-			wantSubSchema: map[string]any{
-				"description": "clusterInstanceParameters.",
-				"properties": map[string]any{
-					"additionalNTPSources": map[string]any{
-						"description": "AdditionalNTPSources.",
-						"items":       map[string]any{"type": "string"},
-						"type":        "array",
-					},
-				},
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotSubSchema, err := ExtractSubSchema(tt.args.mainSchema, tt.args.node)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ExtractSubSchema() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotSubSchema, tt.wantSubSchema) {
-				t.Errorf("ExtractSubSchema() = %v, want %v", gotSubSchema, tt.wantSubSchema)
-			}
-		})
-	}
-}
-
-func TestExtractMatchingInput(t *testing.T) {
-	type args struct {
-		input        []byte
-		subSchemaKey string
-	}
-	tests := []struct {
-		name              string
-		args              args
-		wantMatchingInput any
-		wantErr           bool
-	}{
-		{
-			name: "ok - valid map input",
-			args: args{
-				input: []byte(`{
-					  "clusterInstanceParameters": {
-						  "additionalNTPSources": ["1.1.1.1"]
-					  }
-				  }`),
-				subSchemaKey: "clusterInstanceParameters",
-			},
-			wantMatchingInput: map[string]any{
-				"additionalNTPSources": []any{"1.1.1.1"},
-			},
-			wantErr: false,
-		},
-		{
-			name: "ok - valid string input",
-			args: args{
-				input: []byte(`{
-	"required": [
-	  "nodeClusterName",
-	  "oCloudSiteId",
-	  "policyTemplateParameters",
-	  "clusterInstanceParameters"
-	]
-  }`),
-				subSchemaKey: "required",
-			},
-			wantMatchingInput: []any{"nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"},
-			wantErr:           false,
-		},
-		{
-			name: "ok - valid string input",
-			args: args{
-				input: []byte(`{
-					  "oCloudSiteId": "local-123"
-				  }`),
-				subSchemaKey: "oCloudSiteId",
-			},
-			wantMatchingInput: "local-123",
-			wantErr:           false,
-		},
-		{
-			name: "error - missing subSchemaKey",
-			args: args{
-				input: []byte(`{
-					  "clusterInstanceParameters": {
-						  "additionalNTPSources": ["1.1.1.1"]
-					  }
-				  }`),
-				subSchemaKey: "oCloudSiteId",
-			},
-			wantMatchingInput: nil,
-			wantErr:           true,
-		},
-		{
-			name: "error - invalid JSON",
-			args: args{
-				input:        []byte(`{invalid JSON}`),
-				subSchemaKey: "clusterInstance",
-			},
-			wantMatchingInput: nil,
-			wantErr:           true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotMatchingInput, err := ExtractMatchingInput(tt.args.input, tt.args.subSchemaKey)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ExtractMatchingInput() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotMatchingInput, tt.wantMatchingInput) {
-				t.Errorf("ExtractMatchingInput() = %s, want %s", gotMatchingInput, tt.wantMatchingInput)
-			}
-		})
-	}
-}
 
 func TestExtractSchemaRequired(t *testing.T) {
 	type args struct {

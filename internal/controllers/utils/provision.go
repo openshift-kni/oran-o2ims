@@ -3,7 +3,6 @@ package utils
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	sprig "github.com/go-task/slim-sprig/v3"
-	diff "github.com/r3labs/diff/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
@@ -68,55 +67,9 @@ required:
 - nodes
 `
 
-// ExtractSubSchema extracts a Sub schema indexed by subSchemaKey from a Main schema
-func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema map[string]any, err error) {
-	jsonObject := make(map[string]any)
-	if len(mainSchema) == 0 {
-		return subSchema, nil
-	}
-	err = json.Unmarshal(mainSchema, &jsonObject)
-	if err != nil {
-		return subSchema, fmt.Errorf("failed to UnMarshall Main Schema: %w", err)
-	}
-	if _, ok := jsonObject[PropertiesString]; !ok {
-		return subSchema, fmt.Errorf("non compliant Main Schema, missing 'properties' section: %w", err)
-	}
-	properties, ok := jsonObject[PropertiesString].(map[string]any)
-	if !ok {
-		return subSchema, fmt.Errorf("could not cast 'properties' section of schema as map[string]any: %w", err)
-	}
-
-	subSchemaValue, ok := properties[subSchemaKey]
-	if !ok {
-		return subSchema, fmt.Errorf("subSchema '%s' does not exist: %w", subSchemaKey, err)
-	}
-
-	subSchema, ok = subSchemaValue.(map[string]any)
-	if !ok {
-		return subSchema, fmt.Errorf("subSchema '%s' is not a valid map: %w", subSchemaKey, err)
-	}
-	return subSchema, nil
-}
-
-// ExtractMatchingInput extracts the portion of the input data that corresponds to a given subSchema key.
-func ExtractMatchingInput(parentSchema []byte, subSchemaKey string) (any, error) {
-	inputData := make(map[string]any)
-	err := json.Unmarshal(parentSchema, &inputData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal parent schema: %w", err)
-	}
-
-	// Check if the input contains the subSchema key
-	matchingInput, ok := inputData[subSchemaKey]
-	if !ok {
-		return nil, fmt.Errorf("parent schema does not contain key '%s': %w", subSchemaKey, err)
-	}
-	return matchingInput, nil
-}
-
 // ExtractSchemaRequired extracts the required field of a subschema
 func ExtractSchemaRequired(mainSchema []byte) (required []string, err error) {
-	requireListAny, err := ExtractMatchingInput(mainSchema, requiredString)
+	requireListAny, err := provisioningv1alpha1.ExtractMatchingInput(mainSchema, requiredString)
 	if err != nil {
 		return required, fmt.Errorf("could not extract the 'required' section of schema: %w", err)
 	}
@@ -234,103 +187,6 @@ func validateArrayType(fieldName string, input any) (any, error) {
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.
 func TimeoutExceeded(startTime time.Time, timeout time.Duration) bool {
 	return time.Since(startTime) > timeout
-}
-
-// FindClusterInstanceImmutableFieldUpdates identifies updates made to immutable fields
-// in the ClusterInstance spec. It returns two lists of paths: a list of updated fields
-// that are considered immutable and should not be modified and a list of fields related
-// to node scaling, indicating nodes that were added or removed.
-func FindClusterInstanceImmutableFieldUpdates(
-	oldClusterInstance, newClusterInstance *unstructured.Unstructured) ([]string, []string, error) {
-
-	oldClusterInstanceSpec := oldClusterInstance.Object["spec"].(map[string]any)
-	newClusterInstanceSpec := newClusterInstance.Object["spec"].(map[string]any)
-
-	diffs, err := diff.Diff(oldClusterInstanceSpec, newClusterInstanceSpec)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error comparing differences between existing "+
-			"and newly rendered ClusterInstance: %w", err)
-	}
-
-	var updatedFields []string
-	var scalingNodes []string
-	for _, diff := range diffs {
-		/* Examples of diff result in json format
-
-		Label added at the cluster-level
-		  {"type": "create", "path": ["extraLabels", "ManagedCluster", "newLabelKey"], "from": null, "to": "newLabelValue"}
-
-		Field updated at the cluster-level
-		  {"type": "update", "path": ["baseDomain"], "from": "domain.example.com", "to": "newdomain.example.com"}
-
-		New node added
-		  {"type": "create", "path": ["nodes", "1"], "from": null, "to": {"hostName": "worker2"}}
-
-		Existing node removed
-		  {"type": "delete", "path": ["nodes", "1"], "from": {"hostName": "worker2"}, "to": null}
-
-		Field updated at the node-level
-		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
-		*/
-
-		// Check if the path matches any ignored fields
-		if matchesAnyPattern(diff.Path, IgnoredClusterInstanceFields) {
-			// Ignored field; skip
-			continue
-		}
-
-		oranUtilsLog.Info(
-			fmt.Sprintf(
-				"Detected field change in the newly rendered ClusterInstance(%s) type: %s, path: %s, from: %+v, to: %+v",
-				oldClusterInstance.GetName(), diff.Type, strings.Join(diff.Path, "."), diff.From, diff.To,
-			),
-		)
-
-		// Check if the path matches any allowed fields
-		if matchesAnyPattern(diff.Path, AllowedClusterInstanceFields) {
-			// Allowed field; skip
-			continue
-		}
-
-		// Check if the change is adding or removing a node.
-		// Path like ["nodes", "1"], indicating node addition or removal.
-		if diff.Path[0] == "nodes" && len(diff.Path) == 2 {
-			scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
-			continue
-		}
-		updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
-	}
-
-	return updatedFields, scalingNodes, nil
-}
-
-// matchesPattern checks if the path matches the pattern
-func matchesPattern(path, pattern []string) bool {
-	if len(path) < len(pattern) {
-		return false
-	}
-
-	for i, p := range pattern {
-		if p == "*" {
-			// Wildcard matches any single element
-			continue
-		}
-		if path[i] != p {
-			return false
-		}
-	}
-
-	return true
-}
-
-// matchesAnyPattern checks if the given path matches any pattern in the provided list.
-func matchesAnyPattern(path []string, patterns [][]string) bool {
-	for _, pattern := range patterns {
-		if matchesPattern(path, pattern) {
-			return true
-		}
-	}
-	return false
 }
 
 // ClusterIsReadyForPolicyConfig checks if a cluster is ready for policy configuration

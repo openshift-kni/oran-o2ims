@@ -75,8 +75,10 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 					ciName, err)
 			}
 			if ciExists {
-				updatedFields, scalingNodes, err := utils.FindClusterInstanceImmutableFieldUpdates(
-					existingClusterInstance, renderedClusterInstanceUnstructure)
+				updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+					existingClusterInstance.Object["spec"].(map[string]any),
+					renderedClusterInstanceUnstructure.Object["spec"].(map[string]any),
+					utils.IgnoredClusterInstanceFields)
 				if err != nil {
 					return nil, fmt.Errorf(
 						"failed to find immutable field updates for ClusterInstance (%s): %w", ciName, err)

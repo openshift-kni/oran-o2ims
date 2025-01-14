@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
@@ -239,7 +240,7 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceBMCSecrets(
 	ctx context.Context, clusterName string) error {
 
 	// The BMC credential details are obtained from the ProvisioningRequest.
-	clusterInstanceMatchingInput, err := utils.ExtractMatchingInput(
+	clusterInstanceMatchingInput, err := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
 	if err != nil {
 		return utils.NewInputError(

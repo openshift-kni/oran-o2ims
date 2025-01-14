@@ -636,7 +636,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason: string(utils.CRconditionReasons.Failed),
 				Message: fmt.Sprintf(
 					"Failed to validate the ProvisioningRequest: failed to get the ClusterTemplate for "+
-						"ProvisioningRequest cluster-1: a valid (%s) ClusterTemplate does not exist in any namespace",
+						"ProvisioningRequest cluster-1: a valid ClusterTemplate (%s) does not exist in any namespace",
 					ct.Name),
 			})
 			// Verify provisioningState is failed when cr validation fails.
@@ -2390,117 +2390,5 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				provisioningv1alpha1.StateFailed, "Cluster upgrade is failed",
 				nil)
 		})
-	})
-})
-
-var _ = Describe("getCrClusterTemplateRef", func() {
-	var (
-		ctx          context.Context
-		c            client.Client
-		reconciler   *ProvisioningRequestReconciler
-		task         *provisioningRequestReconcilerTask
-		tName        = "clustertemplate-a"
-		tVersion     = "v1.0.0"
-		ctNamespace  = "clustertemplate-a-v4-16"
-		ciDefaultsCm = "clusterinstance-defaults-v1"
-		ptDefaultsCm = "policytemplate-defaults-v1"
-		crName       = "cluster-1"
-	)
-
-	BeforeEach(func() {
-		ctx = context.Background()
-
-		// Define the provisioning request.
-		cr := &provisioningv1alpha1.ProvisioningRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:       crName,
-				Finalizers: []string{provisioningRequestFinalizer},
-			},
-			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
-				TemplateName:    tName,
-				TemplateVersion: tVersion,
-			},
-		}
-
-		c = getFakeClientFromObjects([]client.Object{cr}...)
-		reconciler = &ProvisioningRequestReconciler{
-			Client: c,
-			Logger: logger,
-		}
-		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
-		}
-	})
-
-	It("returns error if the referred ClusterTemplate is missing", func() {
-		schema := []byte(testFullTemplateSchema)
-		// Define the cluster template.
-		ct := &provisioningv1alpha1.ClusterTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "other-cluster-template-name.v1.0.0",
-				Namespace: ctNamespace,
-			},
-			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:       "other-cluster-template-name",
-				Version:    "v1.0.0",
-				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: provisioningv1alpha1.Templates{
-					ClusterInstanceDefaults: ciDefaultsCm,
-					PolicyTemplateDefaults:  ptDefaultsCm,
-				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: schema},
-			},
-		}
-
-		Expect(c.Create(ctx, ct)).To(Succeed())
-
-		retCt, err := task.getCrClusterTemplateRef(context.TODO())
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(
-			fmt.Sprintf(
-				"a valid (%s) ClusterTemplate does not exist in any namespace",
-				getClusterTemplateRefName(tName, tVersion))))
-		Expect(retCt).To(Equal((*provisioningv1alpha1.ClusterTemplate)(nil)))
-	})
-
-	It("returns the referred ClusterTemplate if it exists", func() {
-		// Define the cluster template.
-		ctName := getClusterTemplateRefName(tName, tVersion)
-		ct := &provisioningv1alpha1.ClusterTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctName,
-				Namespace: ctNamespace,
-			},
-			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:       tName,
-				Version:    tVersion,
-				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: provisioningv1alpha1.Templates{
-					ClusterInstanceDefaults: ciDefaultsCm,
-					PolicyTemplateDefaults:  ptDefaultsCm,
-				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
-			},
-			Status: provisioningv1alpha1.ClusterTemplateStatus{
-				Conditions: []metav1.Condition{
-					{
-						Reason: string(utils.CTconditionReasons.Completed),
-						Type:   string(utils.CTconditionTypes.Validated),
-						Status: metav1.ConditionTrue,
-					},
-				},
-			},
-		}
-
-		Expect(c.Create(ctx, ct)).To(Succeed())
-
-		retCt, err := task.getCrClusterTemplateRef(context.TODO())
-		Expect(err).ToNot(HaveOccurred())
-		Expect(retCt.Name).To(Equal(ctName))
-		Expect(retCt.Namespace).To(Equal(ctNamespace))
-		Expect(retCt.Spec.Templates.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
-		Expect(retCt.Spec.Templates.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
 	})
 })

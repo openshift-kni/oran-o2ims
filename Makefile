@@ -404,7 +404,7 @@ go-generate:
 .PHONY: test tests
 test tests:
 	@echo "Run ginkgo"
-	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r $(ginkgo_flags)
+	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api $(ginkgo_flags)
 
 .PHONY: fmt
 fmt:

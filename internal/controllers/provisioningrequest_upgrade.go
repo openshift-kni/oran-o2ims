@@ -21,7 +21,7 @@ import (
 func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	ctx context.Context, managedClusterName string,
 ) (bool, error) {
-	template, err := t.getCrClusterTemplateRef(ctx)
+	template, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
 		return false, fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
@@ -60,7 +60,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 		ctx,
 		"Start handleUpgrade",
 	)
-	clusterTemplate, err := t.getCrClusterTemplateRef(ctx)
+	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
 		return requeueWithError(fmt.Errorf("failed to get clusterTemplate: %w", err))
 	}
