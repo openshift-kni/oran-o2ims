@@ -22,6 +22,14 @@ var alarmsServe = &cobra.Command{
 	Use:   "serve",
 	Short: "Start alarms server",
 	Run: func(cmd *cobra.Command, args []string) {
+		if err := config.LoadFromEnv(); err != nil {
+			slog.Error("failed to load environment variables", "err", err)
+			os.Exit(1)
+		}
+		if err := config.Validate(); err != nil {
+			slog.Error("failed to validate common server configuration", "err", err)
+			os.Exit(1)
+		}
 		if err := alarms.Serve(&config); err != nil {
 			slog.Error("failed to start alarms server", "err", err)
 			os.Exit(1)
