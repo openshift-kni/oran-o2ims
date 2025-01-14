@@ -39,11 +39,13 @@ type ProvisioningRequestSpec struct {
 
 	// TemplateName defines the base name of the referenced ClusterTemplate.
 	// The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+	// +kubebuilder:validation:MinLength=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	TemplateName string `json:"templateName"`
 
 	// TemplateVersion defines the version of the referenced ClusterTemplate.
 	// The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+	// +kubebuilder:validation:MinLength=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	TemplateVersion string `json:"templateVersion"`
 
@@ -144,6 +146,9 @@ type ProvisioningStatus struct {
 
 	// The resources that have been successfully provisioned as part of the provisioning process.
 	ProvisionedResources *ProvisionedResources `json:"provisionedResources,omitempty"`
+
+	// The timestamp of the last update to the provisioning status.
+	UpdateTime metav1.Time `json:"updateTime,omitempty"`
 }
 
 // ProvisioningRequestStatus defines the observed state of ProvisioningRequest

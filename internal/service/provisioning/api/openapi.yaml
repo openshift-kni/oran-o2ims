@@ -39,6 +39,64 @@ tags:
 
 paths:
 
+  /o2ims-infrastructureProvisioning/api_versions:
+    get:
+      operationId: getAllVersions
+      summary: Get API versions
+      description: |
+        Returns the complete list of API versions implemented by the service.
+      tags:
+      - metadata
+      responses:
+        '200':
+          description: |
+            Successfully obtained the complete list of versions.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureProvisioning/v1/api_versions:
+    get:
+      operationId: getMinorVersions
+      summary: Get minor API versions
+      description: |
+        Returns the list of minor API versions implemented for this major version of the API.
+      tags:
+      - metadata
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
   /o2ims-infrastructureProvisioning/v1/provisioningRequests:
     get:
       operationId: getProvisioningRequests
@@ -120,8 +178,6 @@ paths:
         Returns the details of a provisioning request.
       parameters:
       - $ref: "#/components/parameters/provisioningRequestId"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - provisioningRequests
       responses:
@@ -248,44 +304,29 @@ components:
           example: "123e4567-e89b-12d3-a456-426614174000"
         name:
           type: string
+          minLength: 1
           description: Human readable name of the provisioning request.
+          example: "sample-provisioning-request"
         description:
           type: string
           description: Human readable description of the provisioning request.
+          example: "this is an example provisioning request."
         templateName:
           type: string
+          minLength: 1
           description: Name of the template used for the provisioning request.
+          example: "sample-template"
         templateVersion:
           type: string
+          minLength: 1
           description: Version of the template used for the provisioning request.
+          example: "v4-17-3-1"
         templateParameters:
           type: object
           description: Input Parameters that conform to the OpenAPI V3 schema defined in the template.
+          example: "{}"
         status:
-          type: object
-          description: Status of the provisioning request.
-          properties:
-            provisioningStatus:
-              type: object
-              description: Details about the status of the provisioning request.
-              properties:
-                updateTime:
-                  type: string
-                  format: date-time
-                  description: |
-                    Timestamp indicating the last time the status of the provisioning request was updated.
-                  example: 2042-07-21T20:32:28Z
-                message:
-                  type: string
-                  description: Message describing the status of the provisioning request.
-                provisioningState:
-                  type: string
-                  description: Current state of the provisioning request.
-            nodeClusterId:
-              type: string
-              format: uuid
-              description: Identifier of the NodeCluster that has been provisioned.
-              example: "a1478db9-651f-4d30-96d6-8af13481d779"
+          $ref: "#/components/schemas/ProvisioningRequestStatus"
       required:
       - provisioningRequestId
       - name
@@ -293,3 +334,37 @@ components:
       - templateName
       - templateVersion
       - templateParameters
+
+    ProvisioningRequestStatus:
+      type: object
+      description: Status of the provisioning request.
+      properties:
+        provisioningStatus:
+          $ref: "#/components/schemas/ProvisioningStatus"
+        nodeClusterId:
+          type: string
+          format: uuid
+          description: Identifier of the NodeCluster that has been provisioned.
+          example: "a1478db9-651f-4d30-96d6-8af13481d779"
+      required:
+      - provisioningStatus
+
+    ProvisioningStatus:
+      type: object
+      description: Details about the status of the provisioning request.
+      properties:
+        updateTime:
+          type: string
+          description: |
+            Timestamp indicating the last time the status of the provisioning request was updated.
+          format: date-time
+          example: 2024-01-15T20:32:28Z
+        message:
+          type: string
+          description: Message describing the status of the provisioning request.
+          example: "Cluster installation is in progress"
+        provisioningState:
+          type: string
+          description: Current state of the provisioning request.
+          enum: [pending, progressing, fulfilled, failed, deleting]
+          example: "progressing"

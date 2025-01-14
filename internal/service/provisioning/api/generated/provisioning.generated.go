@@ -25,6 +25,15 @@ import (
 	externalRef0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
+// Defines values for ProvisioningStatusProvisioningState.
+const (
+	Deleting    ProvisioningStatusProvisioningState = "deleting"
+	Failed      ProvisioningStatusProvisioningState = "failed"
+	Fulfilled   ProvisioningStatusProvisioningState = "fulfilled"
+	Pending     ProvisioningStatusProvisioningState = "pending"
+	Progressing ProvisioningStatusProvisioningState = "progressing"
+)
+
 // ProvisioningRequest Information about a provisioning request.
 type ProvisioningRequest struct {
 	// Description Human readable description of the provisioning request.
@@ -37,22 +46,7 @@ type ProvisioningRequest struct {
 	ProvisioningRequestId openapi_types.UUID `json:"provisioningRequestId"`
 
 	// Status Status of the provisioning request.
-	Status *struct {
-		// NodeClusterId Identifier of the NodeCluster that has been provisioned.
-		NodeClusterId *openapi_types.UUID `json:"nodeClusterId,omitempty"`
-
-		// ProvisioningStatus Details about the status of the provisioning request.
-		ProvisioningStatus *struct {
-			// Message Message describing the status of the provisioning request.
-			Message *string `json:"message,omitempty"`
-
-			// ProvisioningState Current state of the provisioning request.
-			ProvisioningState *string `json:"provisioningState,omitempty"`
-
-			// UpdateTime Timestamp indicating the last time the status of the provisioning request was updated.
-			UpdateTime *time.Time `json:"updateTime,omitempty"`
-		} `json:"provisioningStatus,omitempty"`
-	} `json:"status,omitempty"`
+	Status *ProvisioningRequestStatus `json:"status,omitempty"`
 
 	// TemplateName Name of the template used for the provisioning request.
 	TemplateName string `json:"templateName"`
@@ -63,6 +57,30 @@ type ProvisioningRequest struct {
 	// TemplateVersion Version of the template used for the provisioning request.
 	TemplateVersion string `json:"templateVersion"`
 }
+
+// ProvisioningRequestStatus Status of the provisioning request.
+type ProvisioningRequestStatus struct {
+	// NodeClusterId Identifier of the NodeCluster that has been provisioned.
+	NodeClusterId *openapi_types.UUID `json:"nodeClusterId,omitempty"`
+
+	// ProvisioningStatus Details about the status of the provisioning request.
+	ProvisioningStatus ProvisioningStatus `json:"provisioningStatus"`
+}
+
+// ProvisioningStatus Details about the status of the provisioning request.
+type ProvisioningStatus struct {
+	// Message Message describing the status of the provisioning request.
+	Message *string `json:"message,omitempty"`
+
+	// ProvisioningState Current state of the provisioning request.
+	ProvisioningState *ProvisioningStatusProvisioningState `json:"provisioningState,omitempty"`
+
+	// UpdateTime Timestamp indicating the last time the status of the provisioning request was updated.
+	UpdateTime *time.Time `json:"updateTime,omitempty"`
+}
+
+// ProvisioningStatusProvisioningState Current state of the provisioning request.
+type ProvisioningStatusProvisioningState string
 
 // ProvisioningRequestId defines model for provisioningRequestId.
 type ProvisioningRequestId = openapi_types.UUID
@@ -152,36 +170,6 @@ type GetProvisioningRequestsParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
-// GetProvisioningRequestParams defines parameters for GetProvisioningRequest.
-type GetProvisioningRequestParams struct {
-	// ExcludeFields Comma separated list of field references to exclude from the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to exclude the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// exclude_fields=extensions/country
-	// ```
-	//
-	// When this parameter isn't used no field will be excluded.
-	//
-	// Fields in this list will be excluded even if they are explicitly included using the
-	// `fields` parameter.
-	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
-
-	// Fields Comma separated list of field references to include in the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to get the `name` field and the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// fields=name,extensions/country
-	// ```
-	//
-	// When this parameter isn't used all the fields will be returned.
-	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
-}
-
 // CreateProvisioningRequestJSONRequestBody defines body for CreateProvisioningRequest for application/json ContentType.
 type CreateProvisioningRequestJSONRequestBody = ProvisioningRequest
 
@@ -190,6 +178,12 @@ type UpdateProvisioningRequestJSONRequestBody = ProvisioningRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get API versions
+	// (GET /o2ims-infrastructureProvisioning/api_versions)
+	GetAllVersions(w http.ResponseWriter, r *http.Request)
+	// Get minor API versions
+	// (GET /o2ims-infrastructureProvisioning/v1/api_versions)
+	GetMinorVersions(w http.ResponseWriter, r *http.Request)
 	// Get provisioning requests
 	// (GET /o2ims-infrastructureProvisioning/v1/provisioningRequests)
 	GetProvisioningRequests(w http.ResponseWriter, r *http.Request, params GetProvisioningRequestsParams)
@@ -201,7 +195,7 @@ type ServerInterface interface {
 	DeleteProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId)
 	// Get the provisioning request
 	// (GET /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
-	GetProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId, params GetProvisioningRequestParams)
+	GetProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId)
 	// Update a provisioning request
 	// (PUT /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
 	UpdateProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId)
@@ -215,6 +209,34 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetAllVersions operation middleware
+func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAllVersions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMinorVersions operation middleware
+func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMinorVersions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetProvisioningRequests operation middleware
 func (siw *ServerInterfaceWrapper) GetProvisioningRequests(w http.ResponseWriter, r *http.Request) {
@@ -312,27 +334,8 @@ func (siw *ServerInterfaceWrapper) GetProvisioningRequest(w http.ResponseWriter,
 		return
 	}
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetProvisioningRequestParams
-
-	// ------------- Optional query parameter "exclude_fields" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "fields" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProvisioningRequest(w, r, provisioningRequestId, params)
+		siw.Handler.GetProvisioningRequest(w, r, provisioningRequestId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -487,6 +490,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureProvisioning/api_versions", wrapper.GetAllVersions)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/api_versions", wrapper.GetMinorVersions)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests", wrapper.GetProvisioningRequests)
 	m.HandleFunc("POST "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests", wrapper.CreateProvisioningRequest)
 	m.HandleFunc("DELETE "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.DeleteProvisioningRequest)
@@ -494,6 +499,74 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.UpdateProvisioningRequest)
 
 	return m
+}
+
+type GetAllVersionsRequestObject struct {
+}
+
+type GetAllVersionsResponseObject interface {
+	VisitGetAllVersionsResponse(w http.ResponseWriter) error
+}
+
+type GetAllVersions200JSONResponse externalRef0.APIVersions
+
+func (response GetAllVersions200JSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAllVersions400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions400ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAllVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions500ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersionsRequestObject struct {
+}
+
+type GetMinorVersionsResponseObject interface {
+	VisitGetMinorVersionsResponse(w http.ResponseWriter) error
+}
+
+type GetMinorVersions200JSONResponse externalRef0.APIVersions
+
+func (response GetMinorVersions200JSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions400ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions500ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type GetProvisioningRequestsRequestObject struct {
@@ -611,7 +684,6 @@ func (response DeleteProvisioningRequest500ApplicationProblemPlusJSONResponse) V
 
 type GetProvisioningRequestRequestObject struct {
 	ProvisioningRequestId ProvisioningRequestId `json:"provisioningRequestId"`
-	Params                GetProvisioningRequestParams
 }
 
 type GetProvisioningRequestResponseObject interface {
@@ -710,6 +782,12 @@ func (response UpdateProvisioningRequest500ApplicationProblemPlusJSONResponse) V
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Get API versions
+	// (GET /o2ims-infrastructureProvisioning/api_versions)
+	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
+	// Get minor API versions
+	// (GET /o2ims-infrastructureProvisioning/v1/api_versions)
+	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 	// Get provisioning requests
 	// (GET /o2ims-infrastructureProvisioning/v1/provisioningRequests)
 	GetProvisioningRequests(ctx context.Context, request GetProvisioningRequestsRequestObject) (GetProvisioningRequestsResponseObject, error)
@@ -754,6 +832,54 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetAllVersions operation middleware
+func (sh *strictHandler) GetAllVersions(w http.ResponseWriter, r *http.Request) {
+	var request GetAllVersionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAllVersions(ctx, request.(GetAllVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAllVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAllVersionsResponseObject); ok {
+		if err := validResponse.VisitGetAllVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMinorVersions operation middleware
+func (sh *strictHandler) GetMinorVersions(w http.ResponseWriter, r *http.Request) {
+	var request GetMinorVersionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMinorVersions(ctx, request.(GetMinorVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMinorVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMinorVersionsResponseObject); ok {
+		if err := validResponse.VisitGetMinorVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetProvisioningRequests operation middleware
@@ -840,11 +966,10 @@ func (sh *strictHandler) DeleteProvisioningRequest(w http.ResponseWriter, r *htt
 }
 
 // GetProvisioningRequest operation middleware
-func (sh *strictHandler) GetProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId, params GetProvisioningRequestParams) {
+func (sh *strictHandler) GetProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId) {
 	var request GetProvisioningRequestRequestObject
 
 	request.ProvisioningRequestId = provisioningRequestId
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetProvisioningRequest(ctx, request.(GetProvisioningRequestRequestObject))
@@ -902,52 +1027,57 @@ func (sh *strictHandler) UpdateProvisioningRequest(w http.ResponseWriter, r *htt
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
