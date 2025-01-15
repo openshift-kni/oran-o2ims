@@ -11,6 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
+
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -78,8 +82,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 		Db: pool,
 	}
 
-	// TODO: Launch k8s job for DB remove resolved data
-
 	// Load dictionary
 	alarmDictionaryCollector, err := dictionary_collector.New(alarmRepository, infrastructureClients)
 	if err != nil {
@@ -97,12 +99,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 			return fmt.Errorf("failed to parse global cloud id: %w", err)
 		}
 	}
-	// Add Alarm Service Configuration to the database
-	serviceConfig, err := alarmRepository.CreateServiceConfiguration(ctx, api.DefaultRetentionPeriod)
-	if err != nil {
-		return fmt.Errorf("failed to create alarm service configuration: %w", err)
-	}
-	slog.Info("Alarm Service configuration created/found", "retentionPeriod", serviceConfig.RetentionPeriod, "extensions", serviceConfig.Extensions)
 
 	// Init server
 	// Create the handler
@@ -112,9 +108,14 @@ func Serve(config *api.AlarmsServerConfig) error {
 		Infrastructure:   infrastructureClients,
 	}
 
-	// start a new notifier
+	// Start a new notifier
 	if err := startSubscriptionNotifier(ctx, *config, &alarmServer); err != nil {
 		return fmt.Errorf("error starting alarms notifier: %w", err)
+	}
+
+	// Configure server and start alarms cleanup cronjob
+	if err := ConfigAlarmServerCleanup(ctx, &alarmServer); err != nil {
+		return fmt.Errorf("failed configure and start cleanup cronjob: %w", err)
 	}
 
 	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,
@@ -243,6 +244,35 @@ func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfi
 			slog.Error("notifier error", "error", err)
 		}
 	}()
+
+	return nil
+}
+
+// ConfigAlarmServerCleanup configure server and launch the cleanup cronjob for resolved alarm events
+func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer) error {
+	// Add Alarm Service Configuration to the database
+	serviceConfig, err := alarmServer.AlarmsRepository.CreateServiceConfiguration(ctx, api.DefaultRetentionPeriod)
+	if err != nil {
+		return fmt.Errorf("failed to create alarm service configuration: %w", err)
+	}
+	slog.Info("Alarm Service configuration created/found", "retentionPeriod", serviceConfig.RetentionPeriod, "extensions", serviceConfig.Extensions)
+
+	// Init ServiceConfig and start cronjob
+	alarmServer.ServiceConfig, err = serviceconfig.LoadEnvConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load alarm service configuration: %w", err)
+	}
+	alarmServer.ServiceConfig.PgClient = alarmServer.AlarmsRepository.Db
+	clientForHub, err := k8s.NewClientForHub()
+	if err != nil {
+		return fmt.Errorf("failed to create k8s client for hub: %w", err)
+	}
+	alarmServer.ServiceConfig.HubClient = clientForHub
+
+	if err := alarmServer.ServiceConfig.EnsureCleanupCronJob(ctx, serviceConfig); err != nil {
+		return fmt.Errorf("failed to start alarms cleanup cron job: %w", err)
+	}
+	slog.Info("Successfully created initial set of cronjob and resources")
 
 	return nil
 }

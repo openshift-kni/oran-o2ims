@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,8 +29,8 @@ import (
 )
 
 const (
-	DefaultRetentionPeriod = 10
-	minRetentionPeriod     = 1
+	DefaultRetentionPeriod = 1 // Default retention of resolved alarms in days
+	minRetentionPeriod     = 1 // Minimum retention of resolved alarms in days
 )
 
 // AlarmsServerConfig defines the configuration attributes for the alarms server
@@ -51,6 +53,8 @@ type AlarmsServer struct {
 	NotificationProvider notifier.NotificationProvider
 	// Notifier to notify subscribers with new events
 	Notifier *notifier.Notifier
+	// ServiceConfig config needed to manage ServiceConfig
+	ServiceConfig serviceconfig.Config
 }
 
 // AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
@@ -446,8 +450,12 @@ func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, reque
 		return nil, fmt.Errorf("failed to patch Alarm Service Configuration: %w", err)
 	}
 
-	slog.Debug("Alarm Service Configuration patched", "retentionPeriod", patched.RetentionPeriod, "extensions", patched.Extensions)
+	// Update Cronjob
+	if err := a.ServiceConfig.EnsureCleanupCronJob(ctx, patched); err != nil {
+		return nil, fmt.Errorf("failed to start cleanup cronjob during AlarmServiceConfiguration patch: %w", err)
+	}
 
+	slog.Debug("Alarm Service Configuration patched", "retentionPeriod", patched.RetentionPeriod, "extensions", patched.Extensions)
 	return api.PatchAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*patched)), nil
 }
 
@@ -486,8 +494,12 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 		return nil, fmt.Errorf("failed to update Alarm Service Configuration: %w", err)
 	}
 
-	slog.Debug("Alarm Service Configuration updated", "retentionPeriod", updated.RetentionPeriod, "extensions", updated.Extensions)
+	// Update Cronjob
+	if err := a.ServiceConfig.EnsureCleanupCronJob(ctx, updated); err != nil {
+		return nil, fmt.Errorf("failed to start cleanup cronjob during AlarmServiceConfiguration update: %w", err)
+	}
 
+	slog.Debug("Alarm Service Configuration updated", "retentionPeriod", updated.RetentionPeriod, "extensions", updated.Extensions)
 	return api.UpdateAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*updated)), nil
 
 }
