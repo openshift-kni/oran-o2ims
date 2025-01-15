@@ -66,6 +66,8 @@ type ReflectorStore struct {
 	mutex sync.Mutex
 	// ready is used to signal that a new operation has been received from the Reflector
 	ready chan struct{}
+	// hwm is the high watermark of the queue length
+	hwm int
 }
 
 // NewReflectorStore creates a new ReflectorStore
@@ -86,8 +88,14 @@ func (c *ReflectorStore) enqueue(operation operation) {
 	if operation.eventType == SyncComplete {
 		c.hasSynced = true
 	}
-	if len(c.queue) == 1 {
+	count := len(c.queue)
+	if count == 1 {
 		c.ready <- struct{}{}
+	}
+	if count >= c.hwm+10 {
+		// We don't need a log every single time the high watermark is surpassed by 1, so log it when it surpasses by 10
+		slog.Debug("New reflector store queue high watermark", "new", count, "old", c.hwm)
+		c.hwm = count
 	}
 }
 
@@ -132,6 +140,7 @@ func (c *ReflectorStore) Receive(ctx context.Context, handler AsyncEventHandler)
 		select {
 		case <-ctx.Done():
 			slog.Info("stopping store adapter; context canceled")
+			close(c.ready)
 		case <-c.ready:
 			c.handleOperations(ctx, handler)
 		}

@@ -121,17 +121,8 @@ func PersistDataChangeEvent(ctx context.Context, tx pgx.Tx, tableName string, uu
 	return result, nil
 }
 
-// Rollback attempts to execute a Rollback on a transaction.  It is safe to invoke this as a
-// deferred function call even if the transaction has already been committed.
-func Rollback(ctx context.Context, tx pgx.Tx) {
-	err := tx.Rollback(ctx)
-	if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-		slog.Error("failed to rollback transaction", "error", err)
-	}
-}
-
-// PersistObjectWithChangeEvent persists an object to its database table and if the external API
-// model representation of the object has changed then a data change event is stored.  Persisting
+// PersistObjectWithChangeEvent persists an object to its database table, and if the external API
+// model representation of the object has changed, then a data change event is stored.  Persisting
 // of the object and its change event are captured under the same transaction to ensure we never
 // lose any change events.
 func PersistObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.Pool, record T,
@@ -139,74 +130,67 @@ func PersistObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.P
 	converter GenericModelConverter) (*models.DataChangeEvent, error) {
 	var dataChangeEvent *models.DataChangeEvent
 
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer Rollback(ctx, tx)
-
-	before, after, err := PersistObject(ctx, tx, record, uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to persist object: %w", err)
-	}
-
-	afterModel := converter(*after)
-	var beforeModel any = nil
-	if before != nil {
-		value := converter(*before)
-		beforeModel = value
-	}
-
-	if beforeModel == nil || !reflect.DeepEqual(beforeModel, afterModel) {
-		// Capture a change event if the data actually changed
-		dataChangeEvent, err = PersistDataChangeEvent(
-			ctx, tx, record.TableName(), uuid, parentUUID, beforeModel, afterModel)
+	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		before, after, err := PersistObject(ctx, tx, record, uuid)
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist data change object: %w", err)
+			return fmt.Errorf("failed to persist object: %w", err)
 		}
-	}
 
-	err = tx.Commit(ctx)
+		afterModel := converter(*after)
+		var beforeModel any = nil
+		if before != nil {
+			value := converter(*before)
+			beforeModel = value
+		}
+
+		if beforeModel == nil || !reflect.DeepEqual(beforeModel, afterModel) {
+			// Capture a change event if the data actually changed
+			dataChangeEvent, err = PersistDataChangeEvent(
+				ctx, tx, record.TableName(), uuid, parentUUID, beforeModel, afterModel)
+			if err != nil {
+				return fmt.Errorf("failed to persist data change object: %w", err)
+			}
+		}
+		return nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, fmt.Errorf("failed to execute transaction: %w", err)
 	}
 
 	return dataChangeEvent, nil
 }
 
+// DeleteObjectWithChangeEvent deletes an object from the database table, and if a row was actually
+// deleted, then a data change event is stored.  Deleting of the object and its change event are
+// both captured under the same transaction to ensure we never lose any change events.
 func DeleteObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.Pool, record T,
 	uuid uuid.UUID, parentUUID *uuid.UUID,
 	converter GenericModelConverter) (*models.DataChangeEvent, error) {
 	var dataChangeEvent *models.DataChangeEvent
 
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer Rollback(ctx, tx)
-
-	where := psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))
-	rowsAffected, err := Delete[T](ctx, tx, where)
-	if err != nil {
-		return nil, fmt.Errorf("failed to delete object: %w", err)
-	}
-
-	if rowsAffected != 0 {
-		beforeModel := converter(record)
-
-		// Capture a change event if the data actually changed
-		dataChangeEvent, err = PersistDataChangeEvent(
-			ctx, tx, record.TableName(), uuid, parentUUID, beforeModel, nil)
+	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		where := psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))
+		rowsAffected, err := Delete[T](ctx, tx, where)
 		if err != nil {
-			return nil, fmt.Errorf("failed to persist data change object: %w", err)
+			return fmt.Errorf("failed to delete object: %w", err)
 		}
-	}
 
-	err = tx.Commit(ctx)
+		if rowsAffected != 0 {
+			beforeModel := converter(record)
+
+			// Capture a change event if the data actually changed
+			dataChangeEvent, err = PersistDataChangeEvent(
+				ctx, tx, record.TableName(), uuid, parentUUID, beforeModel, nil)
+			if err != nil {
+				return fmt.Errorf("failed to persist data change object: %w", err)
+			}
+		}
+		return nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, fmt.Errorf("failed to execute transaction: %w", err)
 	}
 
 	return dataChangeEvent, nil
