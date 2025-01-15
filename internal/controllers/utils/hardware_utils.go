@@ -10,6 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -439,7 +440,8 @@ func SetNodePoolLabels(nodePool *hwv1alpha1.NodePool, label, value string) {
 
 // UpdateHardwareTemplateStatusCondition updates the status condition of the HardwareTemplate resource
 func UpdateHardwareTemplateStatusCondition(ctx context.Context, c client.Client, hardwareTemplate *hwv1alpha1.HardwareTemplate,
-	conditionType ConditionType, conditionReason ConditionReason, conditionStatus metav1.ConditionStatus, message string) error {
+	conditionType provisioningv1alpha1.ConditionType, conditionReason provisioningv1alpha1.ConditionReason,
+	conditionStatus metav1.ConditionStatus, message string) error {
 
 	SetStatusCondition(&hardwareTemplate.Status.Conditions,
 		conditionType,
@@ -469,8 +471,8 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 		if err != nil {
 			errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string: %v",
 				name, err)
-			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, ConditionType(hwv1alpha1.Validation),
-				ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, errMessage)
+			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
+				provisioningv1alpha1.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, errMessage)
 			if updateErr != nil {
 				// nolint: wrapcheck
 				return 0, updateErr

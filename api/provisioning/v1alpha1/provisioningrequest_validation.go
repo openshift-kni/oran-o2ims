@@ -244,7 +244,7 @@ func (r *ProvisioningRequest) GetClusterTemplateRef(ctx context.Context, client 
 		if ct.Name == clusterTemplateRefName {
 			validatedCond := meta.FindStatusCondition(
 				ct.Status.Conditions,
-				"ClusterTemplateValidated") // TODO: consider exposing the conditions in the API
+				string(CTconditionTypes.Validated))
 			if validatedCond != nil && validatedCond.Status == metav1.ConditionTrue {
 				return &ct, nil
 			}

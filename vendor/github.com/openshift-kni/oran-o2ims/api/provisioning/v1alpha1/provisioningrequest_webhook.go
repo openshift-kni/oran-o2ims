@@ -122,9 +122,9 @@ func (r *ProvisioningRequest) validateCreateOrUpdate(oldPr *ProvisioningRequest)
 	// Once provisioning has started or reached a final state (Completed or Failed),
 	// updates to immutable fields in the ClusterInstance input are disallowed,
 	// with the exception of scaling up/down when Cluster provisioning is completed.
-	// TODO: consider exposing the conditions in the API.
-	crProvisionedCond := meta.FindStatusCondition(r.Status.Conditions, "ClusterProvisioned")
-	if crProvisionedCond != nil && crProvisionedCond.Reason != "Unknown" {
+	crProvisionedCond := meta.FindStatusCondition(
+		r.Status.Conditions, string(PRconditionTypes.ClusterProvisioned))
+	if crProvisionedCond != nil && crProvisionedCond.Reason != string(CRconditionReasons.Unknown) {
 		oldPrClusterInstanceInput, err := ExtractMatchingInput(
 			oldPr.Spec.TemplateParameters.Raw, TemplateParamClusterInstance)
 		if err != nil {

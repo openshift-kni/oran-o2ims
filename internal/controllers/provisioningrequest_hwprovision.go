@@ -134,15 +134,15 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 	if configErr != nil {
 		msg := "Failed to apply node configuration to the rendered ClusterInstance: " + configErr.Error()
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.HardwareNodeConfigApplied,
-			utils.CRconditionReasons.NotApplied,
+			provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,
+			provisioningv1alpha1.CRconditionReasons.NotApplied,
 			metav1.ConditionFalse,
 			msg)
 		utils.SetProvisioningStateFailed(t.object, msg)
 	} else {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.HardwareNodeConfigApplied,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"Node configuration has been applied to the rendered ClusterInstance")
 	}
@@ -333,7 +333,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	default:
 		// Condition not found, set the status to unknown.
 		status = metav1.ConditionUnknown
-		reason = string(utils.CRconditionReasons.Unknown)
+		reason = string(provisioningv1alpha1.CRconditionReasons.Unknown)
 		message = "Unknown state of hardware provisioning"
 	}
 
@@ -355,15 +355,15 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		}
 	}
 
-	conditionType := utils.PRconditionTypes.HardwareProvisioned
+	conditionType := provisioningv1alpha1.PRconditionTypes.HardwareProvisioned
 	if condition == hwv1alpha1.Configured {
-		conditionType = utils.PRconditionTypes.HardwareConfigured
+		conditionType = provisioningv1alpha1.PRconditionTypes.HardwareConfigured
 	}
 
 	// Set the status condition for hardware status.
 	utils.SetStatusCondition(&t.object.Status.Conditions,
 		conditionType,
-		utils.ConditionReason(reason),
+		provisioningv1alpha1.ConditionReason(reason),
 		status,
 		message)
 
@@ -452,8 +452,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 
 	if err := t.checkExistingNodePool(ctx, clusterInstance, hwTemplate, nodePool); err != nil {
 		if utils.IsInputError(err) {
-			updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, utils.ConditionType(hwv1alpha1.Validation),
-				utils.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, err.Error())
+			updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
+				provisioningv1alpha1.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, err.Error())
 			if updateErr != nil {
 				// nolint: wrapcheck
 				return nil, updateErr
@@ -463,8 +463,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	}
 
 	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed
-	updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, utils.ConditionType(hwv1alpha1.Validation),
-		utils.ConditionReason(hwv1alpha1.Completed), metav1.ConditionTrue, "Validated")
+	updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
+		provisioningv1alpha1.ConditionReason(hwv1alpha1.Completed), metav1.ConditionTrue, "Validated")
 	if updateErr != nil {
 		// nolint: wrapcheck
 		return nil, updateErr

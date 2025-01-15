@@ -380,11 +380,11 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 // checkResourcePreparationStatus checks for validation and preparation failures, setting the
 // provisioningState to failed if no provisioning is currently in progress and issues are found.
 func (t *provisioningRequestReconcilerTask) checkResourcePreparationStatus(ctx context.Context) error {
-	conditionTypes := []utils.ConditionType{
-		utils.PRconditionTypes.Validated,
-		utils.PRconditionTypes.ClusterInstanceRendered,
-		utils.PRconditionTypes.ClusterResourcesCreated,
-		utils.PRconditionTypes.HardwareTemplateRendered,
+	conditionTypes := []provisioningv1alpha1.ConditionType{
+		provisioningv1alpha1.PRconditionTypes.Validated,
+		provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+		provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
+		provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 	}
 
 	for _, condType := range conditionTypes {
@@ -413,8 +413,8 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 			slog.String("error", err.Error()),
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.Validated,
-			utils.CRconditionReasons.Failed,
+			provisioningv1alpha1.PRconditionTypes.Validated,
+			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
 			"Failed to validate the ProvisioningRequest: "+err.Error(),
 		)
@@ -425,8 +425,8 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 			slog.String("name", t.object.Name),
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.Validated,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.Validated,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"The provisioning request validation succeeded",
 		)
@@ -450,8 +450,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 			slog.String("error", err.Error()),
 		)
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterInstanceRendered,
-			utils.CRconditionReasons.Failed,
+			provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
 			"Failed to render and validate ClusterInstance: "+err.Error(),
 		)
@@ -463,8 +463,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 		)
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterInstanceRendered,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"ClusterInstance rendered and passed dry-run validation",
 		)
@@ -491,8 +491,8 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 		)
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterResourcesCreated,
-			utils.CRconditionReasons.Failed,
+			provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
+			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
 			"Failed to apply the required cluster resource: "+err.Error(),
 		)
@@ -504,8 +504,8 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 		)
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterResourcesCreated,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"Cluster resources applied",
 		)
@@ -529,8 +529,8 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 		)
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.HardwareTemplateRendered,
-			utils.CRconditionReasons.Failed,
+			provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
 			"Failed to render the Hardware template: "+err.Error(),
 		)
@@ -542,8 +542,8 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 		)
 
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.PRconditionTypes.HardwareTemplateRendered,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"Rendered Hardware template successfully",
 		)

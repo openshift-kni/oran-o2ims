@@ -571,8 +571,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:   string(utils.CTconditionTypes.Validated),
-						Reason: string(utils.CTconditionReasons.Completed),
+						Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+						Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
 						Status: metav1.ConditionTrue,
 					},
 				},
@@ -613,9 +613,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		It("Verify status conditions if ProvisioningRequest validation fails", func() {
 			// Fail the ClusterTemplate validation
 			ctValidatedCond := meta.FindStatusCondition(
-				ct.Status.Conditions, string(utils.CTconditionTypes.Validated))
+				ct.Status.Conditions, string(provisioningv1alpha1.CTconditionTypes.Validated))
 			ctValidatedCond.Status = metav1.ConditionFalse
-			ctValidatedCond.Reason = string(utils.CTconditionReasons.Failed)
+			ctValidatedCond.Reason = string(provisioningv1alpha1.CTconditionReasons.Failed)
 			Expect(c.Status().Update(ctx, ct)).To(Succeed())
 
 			// Start reconciliation
@@ -631,9 +631,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(1))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.Validated),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.Failed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: fmt.Sprintf(
 					"Failed to validate the ProvisioningRequest: failed to get the ClusterTemplate for "+
 						"ProvisioningRequest cluster-1: a valid ClusterTemplate (%s) does not exist in any namespace",
@@ -661,14 +661,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(2))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.Validated),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[1], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "spec.nodes[0].templateRefs must be provided",
 			})
 
@@ -697,19 +697,19 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(3))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.Validated),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[1], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterInstanceRendered),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[2], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ClusterResourcesCreated),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "failed to create pull Secret for cluster cluster-1",
 			})
 
@@ -737,29 +737,29 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.Validated),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[1], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterInstanceRendered),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[2], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterResourcesCreated),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[3], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareTemplateRendered),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionUnknown,
-				Reason: string(utils.CRconditionReasons.Unknown),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Unknown),
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
 			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
@@ -813,9 +813,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.InProgress),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
 			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
@@ -851,19 +851,19 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(7))
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[5], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareNodeConfigApplied),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[6], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterInstanceProcessed),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
 				Status: metav1.ConditionUnknown,
-				Reason: string(utils.CRconditionReasons.Unknown),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Unknown),
 			})
 			// Verify provisioningState is still progressing when nodePool is provisioned and clusterInstance is created
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
@@ -892,9 +892,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.Failed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
 			})
 			// Verify the provisioningState moves to failed when HW provisioning fails
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
@@ -928,9 +928,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.TimedOut),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.TimedOut),
 			})
 
 			// Verify the provisioningState moves to failed when HW provisioning times out
@@ -970,15 +970,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// has changed to Completed
 			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.Validated),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "nodes.0: hostName is required",
 			})
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			// Verify the provisioningState moves to failed
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
@@ -1018,15 +1018,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// has changed to Completed
 			Expect(len(conditions)).To(Equal(5))
 			verifyStatusCondition(conditions[1], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "spec.nodes[0].templateRefs must be provided",
 			})
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			// Verify the provisioningState moves to failed
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
@@ -1126,20 +1126,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[6], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterInstanceProcessed),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "Provisioning cluster",
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
 
@@ -1184,14 +1184,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.TimedOut),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.TimedOut),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
@@ -1223,9 +1223,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(8))
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.Failed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
 			})
 			// Verify the provisioningState moves to failed when cluster provisioning is failed
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
@@ -1262,14 +1262,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
 
@@ -1316,14 +1316,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.CRconditionReasons.Completed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
 
@@ -1370,20 +1370,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// is also up-to-date with the current status timeout.
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.Validated),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "nodes.0: hostName is required",
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.InProgress),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
 			// Verify the provisioningState remains progressing to reflect the on-going provisioning process
@@ -1433,20 +1433,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// has changed to Completed.
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.Validated),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "nodes.0: hostName is required",
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
 
@@ -1489,20 +1489,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// is also up-to-date with the current status timeout.
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[0], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.Validated),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "nodes.0: hostName is required",
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionFalse,
-				Reason: string(utils.CRconditionReasons.TimedOut),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.TimedOut),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.ClusterNotReady),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
 			// Verify the provisioningState has changed to failed as on-going provisioning process has reached to
@@ -1554,20 +1554,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// has changed to Completed
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[1], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "spec.nodes[0].templateRefs must be provided",
 			})
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.CRconditionReasons.Completed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
 
@@ -1621,14 +1621,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[7], metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.CRconditionReasons.Completed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
 
@@ -1686,9 +1686,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			Expect(len(conditions)).To(Equal(9))
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
 
@@ -1797,7 +1797,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			createNodeResources(ctx, c, nodePool.Name)
 
 			provisionedCond := metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionFalse,
 			}
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
@@ -1821,9 +1821,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			conditions := reconciledCR.Status.Conditions
 			// Verify the ProvisioningRequest's status conditions
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
 		})
@@ -1834,7 +1834,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Status().Update(ctx, policy)).To(Succeed())
 			// Complete the cluster provisioning.
 			cr.Status.Conditions[0].Status = metav1.ConditionTrue
-			cr.Status.Conditions[0].Reason = string(utils.CRconditionReasons.Completed)
+			cr.Status.Conditions[0].Reason = string(provisioningv1alpha1.CRconditionReasons.Completed)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 			// Start reconciliation.
 			result, err := reconciler.Reconcile(ctx, req)
@@ -1847,9 +1847,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ProvisioningRequest's status conditions
 			conditions := reconciledCR.Status.Conditions
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.CRconditionReasons.Completed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
 				Message: "The configuration is up to date",
 			})
 		})
@@ -1872,9 +1872,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			conditions := reconciledCR.Status.Conditions
 			// Verify the ProvisioningRequest's status conditions
 			verifyStatusCondition(conditions[8], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.ConfigurationApplied),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "The configuration is still being applied",
 			})
 		})
@@ -2174,9 +2174,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			createNodeResources(ctx, c, nodePool.Name)
 
 			provisionedCond := metav1.Condition{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			}
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
@@ -2209,8 +2209,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(utils.CTconditionTypes.Validated),
-							Reason: string(utils.CTconditionReasons.Completed),
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -2229,9 +2229,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
 			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "Upgrade is in progress",
 			})
 
@@ -2274,9 +2274,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
 			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.InProgress),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "Upgrade is in progress",
 			})
 
@@ -2324,9 +2324,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
 			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.CRconditionReasons.Completed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
 				Message: "Upgrade is completed",
 			})
 
@@ -2380,9 +2380,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
 			verifyStatusCondition(reconciledCR.Status.Conditions[9], metav1.Condition{
-				Type:    string(utils.PRconditionTypes.UpgradeCompleted),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "Upgrade Failed: Action Prep failed: pre-cache failed",
 			})
 

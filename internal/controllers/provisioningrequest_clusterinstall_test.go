@@ -122,12 +122,12 @@ nodes:
 
 		// Check if status condition was updated correctly
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(utils.PRconditionTypes.ClusterInstanceRendered))
+			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
 		verifyStatusCondition(*cond, metav1.Condition{
-			Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionTrue,
-			Reason:  string(utils.CRconditionReasons.Completed),
+			Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
 			Message: "ClusterInstance rendered and passed dry-run validation",
 		})
 	})
@@ -140,12 +140,12 @@ nodes:
 
 		// Check if status condition was updated correctly
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(utils.PRconditionTypes.ClusterInstanceRendered))
+			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
 		verifyStatusCondition(*cond, metav1.Condition{
-			Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.CRconditionReasons.Failed),
+			Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 			Message: "spec.clusterName cannot be empty",
 		})
 	})
@@ -154,9 +154,9 @@ nodes:
 		// Simulate that the ClusterInstance has been provisioned
 		task.object.Status.Conditions = []metav1.Condition{
 			{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			},
 		}
 
@@ -191,12 +191,12 @@ nodes:
 		// does not go through the API server. As a result, fields with empty values like false or "" are
 		// stripped from the retrieved ClusterInstance CR (existing ClusterInstance) in the fakeclient.
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(utils.PRconditionTypes.ClusterInstanceRendered))
+			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
 		verifyStatusCondition(*cond, metav1.Condition{
-			Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.CRconditionReasons.Failed),
+			Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 			Message: "Failed to render and validate ClusterInstance: detected changes in immutable fields",
 		})
 	})

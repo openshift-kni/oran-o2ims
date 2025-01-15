@@ -115,8 +115,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:   string(utils.CTconditionTypes.Validated),
-						Reason: string(utils.CTconditionReasons.Completed),
+						Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+						Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
 						Status: metav1.ConditionTrue,
 					},
 				},
@@ -286,12 +286,12 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Message: "unallowed change detected",
 			})
 
-			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+			cond := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
 			verifyStatusCondition(*cond, metav1.Condition{
-				Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "Failed to render the Hardware template",
 			})
 		})
@@ -335,12 +335,12 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Message: "unallowed change detected",
 			})
 
-			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+			cond := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
 			verifyStatusCondition(*cond, metav1.Condition{
-				Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "Failed to render the Hardware template",
 			})
 		})
@@ -390,12 +390,12 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Message: errMessage,
 			})
 
-			cond := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareTemplateRendered))
+			cond := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
 			verifyStatusCondition(*cond, metav1.Condition{
-				Type:    string(utils.PRconditionTypes.HardwareTemplateRendered),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.CRconditionReasons.Failed),
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 				Message: "Failed to render the Hardware template",
 			})
 		})
@@ -483,7 +483,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // It should be failed
 		Expect(err).ToNot(HaveOccurred())
-		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareProvisioned))
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
 		Expect(condition.Reason).To(Equal(string(hwv1alpha1.Failed)))
@@ -513,7 +513,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
 		Expect(err).ToNot(HaveOccurred())
 
-		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareProvisioned))
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
 		Expect(condition.Reason).To(Equal(string(hwv1alpha1.TimedOut)))
@@ -531,7 +531,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
-		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareProvisioned))
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
 	})
@@ -547,7 +547,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(provisioned).To(Equal(true))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
-		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareProvisioned))
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
 	})
@@ -583,7 +583,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
 		Expect(err).ToNot(HaveOccurred())
 
-		condition := meta.FindStatusCondition(cr.Status.Conditions, string(utils.PRconditionTypes.HardwareConfigured))
+		condition := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
 		Expect(condition.Reason).To(Equal(string(hwv1alpha1.TimedOut)))

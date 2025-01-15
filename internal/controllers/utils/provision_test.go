@@ -592,19 +592,19 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		SetStatusCondition(&managedCluster1.Status.Conditions,
-			ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionFalse,
 			"Managed cluster is available",
 		)
 		SetStatusCondition(&managedCluster1.Status.Conditions,
-			ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
 			"HubClusterAdminAccepted",
 			metav1.ConditionTrue,
 			"Accepted by hub cluster admin",
 		)
 		SetStatusCondition(&managedCluster1.Status.Conditions,
-			ConditionType(clusterv1.ManagedClusterConditionJoined),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionJoined),
 			"ManagedClusterJoined",
 			metav1.ConditionTrue,
 			"Managed cluster joined",
@@ -625,19 +625,19 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		SetStatusCondition(&managedCluster1.Status.Conditions,
-			ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionTrue,
 			"Managed cluster is available",
 		)
 		SetStatusCondition(&managedCluster1.Status.Conditions,
-			ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
 			"HubClusterAdminAccepted",
 			metav1.ConditionTrue,
 			"Accepted by hub cluster admin",
 		)
 		SetStatusCondition(&managedCluster1.Status.Conditions,
-			ConditionType(clusterv1.ManagedClusterConditionJoined),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionJoined),
 			"ManagedClusterJoined",
 			metav1.ConditionTrue,
 			"Managed cluster joined",
