@@ -331,6 +331,8 @@ spec:
         path: deploymentStatus.deploymentServerStatus
       - displayName: Metadata Server Status
         path: deploymentStatus.metadataServerStatus
+      - displayName: Provisioning Server Status
+        path: deploymentStatus.provisioningServerStatus
       - displayName: Resource Server Status
         path: deploymentStatus.resourceServerStatus
       - description: |-

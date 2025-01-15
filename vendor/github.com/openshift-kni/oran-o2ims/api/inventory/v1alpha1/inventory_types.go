@@ -191,12 +191,15 @@ type DeploymentsStatus struct {
 	AlarmServerStatus string `json:"alarmServerStatus,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Artifacts Server Status"
 	ArtifactsServerStatus string `json:"artifactsServerStatus,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Provisioning Server Status"
+	ProvisioningServerStatus string `json:"provisioningServerStatus,omitempty"`
 }
 
 type UsedServerConfig struct {
-	ArtifactsServerUsedConfig []string `json:"artifactsServerUsedConfig,omitempty"`
-	MetadataServerUsedConfig  []string `json:"metadataServerUsedConfig,omitempty"`
-	ResourceServerUsedConfig  []string `json:"resourceServerUsedConfig,omitempty"`
+	ArtifactsServerUsedConfig    []string `json:"artifactsServerUsedConfig,omitempty"`
+	MetadataServerUsedConfig     []string `json:"metadataServerUsedConfig,omitempty"`
+	ResourceServerUsedConfig     []string `json:"resourceServerUsedConfig,omitempty"`
+	ProvisioningServerUsedConfig []string `json:"provisioningServerUsedConfig,omitempty"`
 }
 
 // InventoryStatus defines the observed state of Inventory

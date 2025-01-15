@@ -151,7 +151,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
-	err = t.createResourceServerClusterRoleBinding(ctx)
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -225,7 +225,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 		return
 	}
 
-	err = t.createClusterServerClusterRoleBinding(ctx)
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -298,7 +298,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 		)
 		return
 	}
-	err = t.createArtifactsServerClusterRoleBinding(ctx)
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -372,7 +372,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
-	err = t.createAlarmServerClusterRoleBinding(ctx)
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -431,6 +431,79 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 	}
 
 	return nextReconcile, err
+}
+
+func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createServiceAccount(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ServiceAccount for the Provisioning server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createProvisioningServerClusterRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create provisioning cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create provisioning cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
+	// API requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create Provisioning server RBAC proxy cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the provisioning server.
+	err = t.createService(ctx, utils.InventoryProvisioningServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for the provisioning server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the provisioning-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the provisioning server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return
 }
 
 // setupOAuthClient is a wrapper around the similarly named method in the utils package.  The purpose for this wrapper
@@ -752,6 +825,12 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
+	// Start the provisioning server
+	nextReconcile, err = t.setupProvisioningServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
+	}
+
 	err = t.updateInventoryDeploymentStatus(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -791,38 +870,6 @@ func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) e
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Artifacts server cluster role: %w", err)
-	}
-
-	return nil
-}
-
-func (t *reconcilerTask) createArtifactsServerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryArtifactsServerName,
-			),
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryArtifactsServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryArtifactsServerName,
-			},
-		},
-	}
-
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Artifacts Server cluster role binding: %w", err)
 	}
 
 	return nil
@@ -960,38 +1007,6 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 	return nil
 }
 
-func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryResourceServerName,
-			),
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryResourceServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryResourceServerName,
-			},
-		},
-	}
-
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Resource Server cluster role binding: %w", err)
-	}
-
-	return nil
-}
-
 func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1038,33 +1053,35 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 	return nil
 }
 
-func (t *reconcilerTask) createClusterServerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
+func (t *reconcilerTask) createProvisioningServerClusterRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryClusterServerName,
+				"%s-%s", t.object.Namespace, utils.InventoryProvisioningServerName,
 			),
 		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryClusterServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
+		Rules: []rbacv1.PolicyRule{
 			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryClusterServerName,
+				APIGroups: []string{
+					"o2ims.provisioning.oran.org",
+				},
+				Resources: []string{
+					"provisioningrequests",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"create",
+					"update",
+					"delete",
+				},
 			},
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Cluster Server cluster role binding: %w", err)
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Provisioning Server cluster role: %w", err)
 	}
 
 	return nil
@@ -1146,38 +1163,6 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Alarm Server cluster role: %w", err)
-	}
-
-	return nil
-}
-
-func (t *reconcilerTask) createAlarmServerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryAlarmServerName,
-			),
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryAlarmServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryAlarmServerName,
-			},
-		},
-	}
-
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Alarm Server cluster role binding: %w", err)
 	}
 
 	return nil
@@ -1275,6 +1260,41 @@ func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context,
 		return fmt.Errorf("failed to create RBAC Proxy cluster role binding: %w", err)
 	}
 
+	return nil
+}
+
+// createServerClusterRoleBinding creates a ClusterRoleBinding for the specified server,
+// associating the server's service account with the corresponding ClusterRole.
+// The ClusterRoleBinding ensures the server has the necessary permissions defined
+// by the ClusterRole.
+func (t *reconcilerTask) createServerClusterRoleBinding(ctx context.Context, serverName string) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, serverName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, serverName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: t.object.Namespace,
+				Name:      serverName,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create %s cluster role binding: %w", serverName, err)
+	}
 	return nil
 }
 
@@ -1602,6 +1622,21 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
+								Path: "/o2ims-infrastructureProvisioning",
+								PathType: func() *networkingv1.PathType {
+									pathType := networkingv1.PathTypePrefix
+									return &pathType
+								}(),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: utils.InventoryProvisioningServerName,
+										Port: networkingv1.ServiceBackendPort{
+											Name: utils.InventoryIngressName,
+										},
+									},
+								},
+							},
+							{
 								Path: "/o2ims-infrastructureMonitoring",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
@@ -1701,6 +1736,10 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 		t.object.Status.UsedServerConfig.ArtifactsServerUsedConfig = deploymentArgs
 	}
 
+	if serverName == utils.InventoryProvisioningServerName {
+		t.object.Status.UsedServerConfig.ProvisioningServerUsedConfig = deploymentArgs
+	}
+
 	// If there is an error passed, include it in the condition.
 	if err != nil {
 		meta.SetStatusCondition(
@@ -1740,7 +1779,16 @@ func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) er
 		t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
 	}
 
+	if t.object.Spec.ClusterServerConfig.Enabled {
+		t.updateInventoryStatusConditions(ctx, utils.InventoryClusterServerName)
+	}
+
+	if t.object.Spec.ArtifactsServerConfig.Enabled {
+		t.updateInventoryStatusConditions(ctx, utils.InventoryArtifactsServerName)
+	}
+
 	t.updateInventoryStatusConditions(ctx, utils.InventoryDatabaseServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryProvisioningServerName)
 
 	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update inventory deployment CR status: %w", err)
