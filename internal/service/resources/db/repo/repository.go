@@ -21,6 +21,13 @@ func (r *ResourcesRepository) GetDeploymentManagers(ctx context.Context) ([]mode
 	return utils.FindAll[models.DeploymentManager](ctx, r.Db)
 }
 
+// GetDeploymentManagersNotIn returns the list of DeploymentManager records not matching the list of keys provided, or
+// an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetDeploymentManagersNotIn(ctx context.Context, keys []any) ([]models.DeploymentManager, error) {
+	e := psql.Quote(models.DeploymentManager{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	return utils.Search[models.DeploymentManager](ctx, r.Db, e)
+}
+
 // GetDeploymentManager retrieves a specific DeploymentManager tuple or returns ErrNotFound if not found
 func (r *ResourcesRepository) GetDeploymentManager(ctx context.Context, id uuid.UUID) (*models.DeploymentManager, error) {
 	return utils.Find[models.DeploymentManager](ctx, r.Db, id)

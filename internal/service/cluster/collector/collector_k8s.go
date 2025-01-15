@@ -6,33 +6,45 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/openshift/assisted-service/api/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/tools/cache"
 	v1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
 // Interface compile enforcement
-var _ DataSource = (*K8SDataSource)(nil)
+var _ ClusterDataSource = (*K8SDataSource)(nil)
 
 // K8SDataSource defines an instance of a data source collector that interacts with the Kubernetes API
 type K8SDataSource struct {
-	dataSourceID uuid.UUID
-	cloudID      uuid.UUID
-	extensions   []string
-	hubClient    client.Client
-	generationID int
+	dataSourceID      uuid.UUID
+	cloudID           uuid.UUID
+	hubClient         client.WithWatch
+	generationID      int
+	asyncChangeEvents chan<- *async.AsyncChangeEvent
 }
 
 const (
 	NodeClusterTypeUUIDNamespace     = "b9b24e78-5764-461b-8a0b-55bbe189d3d9"
 	ClusterResourceUUIDNamespace     = "75d74e65-f51f-4195-94ea-e4495b940a8f"
 	ClusterResourceTypeUUIDNamespace = "be370c55-e9fc-4094-81c3-83d6be4a6a14"
+)
+
+const (
+	clusterReflectorName = "cluster-reflector"
+	agentReflectorName   = "agent-reflector"
 )
 
 // NewK8SDataSource creates a new instance of an K8S data source collector whose purpose is to collect data from the
@@ -48,7 +60,6 @@ func NewK8SDataSource(cloudID uuid.UUID, extensions []string) (DataSource, error
 	return &K8SDataSource{
 		generationID: 0,
 		cloudID:      cloudID,
-		extensions:   extensions,
 		hubClient:    hubClient,
 	}, nil
 }
@@ -58,15 +69,17 @@ func (d *K8SDataSource) Name() string {
 	return "K8S"
 }
 
-// SetID sets the unique identifier for this data source
-func (d *K8SDataSource) SetID(uuid uuid.UUID) {
-	d.dataSourceID = uuid
+// GetID returns the data source ID for this data source
+func (d *K8SDataSource) GetID() uuid.UUID {
+	return d.dataSourceID
 }
 
-// SetGenerationID sets the current generation id for this data source.  This value is expected to
-// be restored from persistent storage at initialization time.
-func (d *K8SDataSource) SetGenerationID(value int) {
-	d.generationID = value
+// Init initializes the data source with its configuration data; including the ID, the GenerationID, and its extension
+// values if provided.
+func (d *K8SDataSource) Init(uuid uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
+	d.dataSourceID = uuid
+	d.generationID = generationID
+	d.asyncChangeEvents = asyncEventChannel
 }
 
 // GetGenerationID retrieves the current generation id for this data source.
@@ -155,45 +168,7 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 	return &result, nil
 }
 
-// GetClusterResources returns the list of cluster resources available for this data source.  The cluster resources to
-// be retrieved can be scoped to a set of node clusters (currently not used by this data source)
-func (d *K8SDataSource) GetClusterResources(ctx context.Context, _ []models.NodeCluster) ([]models.ClusterResource, error) {
-	var agents v1beta1.AgentList
-	err := d.hubClient.List(ctx, &agents)
-	if err != nil {
-		return []models.ClusterResource{}, fmt.Errorf("failed to list install agents: %w", err)
-	}
-
-	var results []models.ClusterResource
-	for _, agent := range agents.Items {
-		results = append(results, d.convertAgentToClusterResource(&agent))
-	}
-
-	return results, nil
-}
-
-// GetNodeClusters returns the list of node clusters for this data source
-func (d *K8SDataSource) GetNodeClusters(ctx context.Context) ([]models.NodeCluster, error) {
-	var clusters v1.ManagedClusterList
-	err := d.hubClient.List(ctx, &clusters)
-	if err != nil {
-		return []models.NodeCluster{}, fmt.Errorf("failed to list clusters: %w", err)
-	}
-
-	var results []models.NodeCluster
-	for _, cluster := range clusters.Items {
-		if result, err := d.convertManagedClusterToNodeCluster(cluster); err != nil {
-			slog.Warn("failed to convert managed cluster to node cluster", "cluster", cluster, "error", err)
-			// Continue on conversion failures so that we don't exclude valid data just because of
-			// a single bad object.
-		} else {
-			results = append(results, result)
-		}
-	}
-
-	return results, nil
-}
-
+// convertAgentToClusterResource converts an Agent CR to a ClusterResource object
 func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) models.ClusterResource {
 	// Build a unique UUID value using the namespace and name.  Choosing not to tie ourselves to the agent UUID since
 	// we don't know if/when it can change and how we want to behave if the node gets deleted and re-installed.
@@ -259,7 +234,7 @@ func (d *K8SDataSource) getExtensionsFromLabels(labels map[string]string) map[st
 }
 
 // convertManagedClusterToNodeCluster converts a ManagedCluster to a ManagedCluster object
-func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster v1.ManagedCluster) (models.NodeCluster, error) {
+func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCluster) (models.NodeCluster, error) {
 	vendor, found := cluster.Labels[utils.ClusterVendorExtension]
 	if !found {
 		return models.NodeCluster{}, fmt.Errorf("no vendor label found on cluster %s", cluster.Name)
@@ -322,4 +297,169 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster v1.ManagedClu
 	}
 
 	return to, nil
+}
+
+// handleClusterWatchEvent handles an async event received from the managed cluster watcher
+func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
+	slog.Debug("handleWatchEvent received for managed cluster", "agent", cluster.Name, "type", eventType)
+
+	record, err := d.convertManagedClusterToNodeCluster(cluster)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to convert managed cluster to node cluster: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		slog.Info("context cancelled while writing to async event channel; aborting")
+		return uuid.Nil, fmt.Errorf("context cancelled; aborting")
+	case d.asyncChangeEvents <- &async.AsyncChangeEvent{
+		DataSourceID: d.dataSourceID,
+		EventType:    eventType,
+		Object:       record}:
+		return record.NodeClusterID, nil
+	}
+}
+
+// handleAgentWatchEvent handles an async event received from the agent watcher
+func (d *K8SDataSource) handleAgentWatchEvent(ctx context.Context, agent *v1beta1.Agent, eventType async.AsyncEventType) (uuid.UUID, error) {
+	slog.Debug("handleWatchEvent received for agent", "agent", agent.Name, "type", eventType)
+
+	record := d.convertAgentToClusterResource(agent)
+
+	select {
+	case <-ctx.Done():
+		slog.Info("context cancelled while writing to async event channel; aborting")
+		return uuid.Nil, fmt.Errorf("context cancelled; aborting")
+	case d.asyncChangeEvents <- &async.AsyncChangeEvent{
+		DataSourceID: d.dataSourceID,
+		EventType:    eventType,
+		Object:       record}:
+		return record.ClusterResourceID, nil
+	}
+}
+
+// HandleAsyncEvent handles an add/update/delete to an object received by from the Reflector.
+func (d *K8SDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
+	slog.Debug("handleWatchEvent received for store adapter", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	switch value := obj.(type) {
+	case *v1.ManagedCluster:
+		return d.handleClusterWatchEvent(ctx, value, eventType)
+	case *v1beta1.Agent:
+		return d.handleAgentWatchEvent(ctx, value, eventType)
+	default:
+		// We are only watching for specific event types so this should happen.
+		slog.Warn("Unknown object type", "type", fmt.Sprintf("%T", obj))
+		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
+	}
+}
+
+// HandleSyncComplete handles the end of a sync operation by sending an event down to the Collector.
+func (d *K8SDataSource) HandleSyncComplete(ctx context.Context, objectType runtime.Object, keys []uuid.UUID) error {
+	var object db.Model
+	switch objectType.(type) {
+	case *v1.ManagedCluster:
+		object = models.NodeCluster{}
+	case *v1beta1.Agent:
+		object = models.ClusterResource{}
+	default:
+		// This should never happen since we watch for specific types
+		slog.Warn("Unknown object type", "type", fmt.Sprintf("%T", objectType))
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		slog.Info("context cancelled while writing to async event channel; aborting")
+		return fmt.Errorf("context cancelled; aborting")
+	case d.asyncChangeEvents <- &async.AsyncChangeEvent{
+		DataSourceID: d.dataSourceID,
+		EventType:    async.SyncComplete,
+		Object:       object,
+		Keys:         keys}:
+		return nil
+	}
+}
+
+// Watch starts a watcher for each of the resources supported by this data source.
+// The watch is dispatched to a go routine.  If the context is canceled, then the watchers are stopped.
+func (d *K8SDataSource) Watch(ctx context.Context) error {
+
+	// The Reflector package uses a channel to signal stop events rather than a context, so use this go routine to
+	// bridge the two worlds.
+	stopCh := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		slog.Info("context canceled; stopping reflectors")
+		close(stopCh)
+	}()
+
+	// We run this next block in a go routing because we need to call WaitForNamedCacheSync which
+	// is a blocking operation that may not complete for an extended period of time if the API
+	// server is not reachable.
+	go func() {
+		// Create a Reflector to watch ManagedCluster objects
+		clusterLister := cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				var managedClusterList v1.ManagedClusterList
+				err := d.hubClient.List(ctx, &managedClusterList, &client.ListOptions{Raw: &options})
+				if err != nil {
+					return nil, fmt.Errorf("error listing managed clusters: %w", err)
+				}
+				return &managedClusterList, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				var managedClusterList v1.ManagedClusterList
+				w, err := d.hubClient.Watch(ctx, &managedClusterList, &client.ListOptions{Raw: &options})
+				if err != nil {
+					return nil, fmt.Errorf("error watching managed clusters: %w", err)
+				}
+				return w, nil
+			},
+			DisableChunking: false,
+		}
+
+		clusterStore := async.NewReflectorStore(&v1.ManagedCluster{})
+		clusterReflector := cache.NewNamedReflector(clusterReflectorName, &clusterLister, &v1.ManagedCluster{}, clusterStore, time.Duration(0))
+		slog.Info("starting cluster reflector")
+		go clusterReflector.Run(stopCh)
+
+		// Start monitoring the store to process incoming events
+		slog.Info("starting to receive from cluster reflector store")
+		go clusterStore.Receive(ctx, d)
+
+		// We need the clusters to be retrieved before we handle any agents since they are dependent.
+		cache.WaitForNamedCacheSync(clusterReflectorName, stopCh, clusterStore.HasSynced)
+
+		// Create a Reflector to watch Agent objects
+		agentLister := cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				var agentList v1beta1.AgentList
+				err := d.hubClient.List(ctx, &agentList, &client.ListOptions{Raw: &options})
+				if err != nil {
+					return nil, fmt.Errorf("error listing agents: %w", err)
+				}
+				return &agentList, nil
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				var agentList v1beta1.AgentList
+				w, err := d.hubClient.Watch(ctx, &agentList, &client.ListOptions{Raw: &options})
+				if err != nil {
+					return nil, fmt.Errorf("error watching agents: %w", err)
+				}
+				return w, nil
+			},
+			DisableChunking: false,
+		}
+
+		agentStore := async.NewReflectorStore(&v1beta1.Agent{})
+		agentReflector := cache.NewNamedReflector(agentReflectorName, &agentLister, &v1beta1.Agent{}, agentStore, time.Duration(0))
+		slog.Info("starting agent reflector")
+		go agentReflector.Run(stopCh)
+
+		// Start monitoring the store to process incoming events
+		slog.Info("starting to receive from agent reflector store")
+		go agentStore.Receive(ctx, d)
+	}()
+
+	return nil
 }

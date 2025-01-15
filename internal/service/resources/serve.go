@@ -100,6 +100,10 @@ func Serve(config *api.ResourceServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to create ACM data source: %w", err)
 	}
+	k8s, err := collector.NewK8SDataSource(cloudID, globalCloudID)
+	if err != nil {
+		return fmt.Errorf("failed to create K8S data source: %w", err)
+	}
 
 	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
@@ -108,7 +112,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create the collector
-	resourceCollector := collector.NewCollector(repository, resourceNotifier, []collector.DataSource{acm})
+	resourceCollector := collector.NewCollector(repository, resourceNotifier, []collector.DataSource{k8s, acm})
 
 	// Init server
 	// Create the handler
