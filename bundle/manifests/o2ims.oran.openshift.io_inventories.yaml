@@ -315,6 +315,8 @@ spec:
                     type: string
                   metadataServerStatus:
                     type: string
+                  provisioningServerStatus:
+                    type: string
                   resourceServerStatus:
                     type: string
                 type: object
@@ -335,6 +337,10 @@ spec:
                       type: string
                     type: array
                   metadataServerUsedConfig:
+                    items:
+                      type: string
+                    type: array
+                  provisioningServerUsedConfig:
                     items:
                       type: string
                     type: array

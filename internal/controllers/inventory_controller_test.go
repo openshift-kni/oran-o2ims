@@ -344,6 +344,17 @@ var _ = DescribeTable(
 				},
 				artifactsDeployment)
 			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the provisioning server exists.
+			provisioningDeployment := &appsv1.Deployment{}
+			err = reconciler.Client.Get(
+				context.TODO(),
+				types.NamespacedName{
+					Name:      utils.InventoryProvisioningServerName,
+					Namespace: utils.InventoryNamespace,
+				},
+				provisioningDeployment)
+			Expect(err).ToNot(HaveOccurred())
 		},
 	),
 	Entry(

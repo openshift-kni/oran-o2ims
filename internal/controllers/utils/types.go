@@ -12,25 +12,41 @@ var InventoryConditionTypes = struct {
 	NotReady                 InventoryConditionType
 	Error                    InventoryConditionType
 	Available                InventoryConditionType
-	ResourceServerAvailable  InventoryConditionType
-	AlarmServerError         InventoryConditionType
-	DatabaseServerError      InventoryConditionType
-	ResourceServerError      InventoryConditionType
 	SmoRegistrationCompleted InventoryConditionType
-	DatabaseServerAvailable  InventoryConditionType
-	AlarmServerAvailable     InventoryConditionType
+
+	AlarmServerError        InventoryConditionType
+	ArtifactsServerError    InventoryConditionType
+	ClusterServerError      InventoryConditionType
+	DatabaseServerError     InventoryConditionType
+	ResourceServerError     InventoryConditionType
+	ProvisioningServerError InventoryConditionType
+
+	AlarmServerAvailable        InventoryConditionType
+	ArtifactsServerAvailable    InventoryConditionType
+	ClusterServerAvailable      InventoryConditionType
+	DatabaseServerAvailable     InventoryConditionType
+	ResourceServerAvailable     InventoryConditionType
+	ProvisioningServerAvailable InventoryConditionType
 }{
 	Ready:                    "InventoryReady",
 	NotReady:                 "InventoryConditionType",
 	Error:                    "Error",
 	Available:                "Available",
-	ResourceServerAvailable:  "ResourceServerAvailable",
-	AlarmServerError:         "AlarmServerError",
-	DatabaseServerError:      "DatabaseServerError",
-	ResourceServerError:      "ResourceServerError",
 	SmoRegistrationCompleted: "SmoRegistrationCompleted",
-	DatabaseServerAvailable:  "DatabaseServerAvailable",
-	AlarmServerAvailable:     "AlarmServerAvailable",
+
+	AlarmServerError:        "AlarmServerError",
+	ArtifactsServerError:    "ArtifactsServerError",
+	ClusterServerError:      "ClusterServerError",
+	DatabaseServerError:     "DatabaseServerError",
+	ResourceServerError:     "ResourceServerError",
+	ProvisioningServerError: "ProvisioningServerError",
+
+	AlarmServerAvailable:        "AlarmServerAvailable",
+	ArtifactsServerAvailable:    "ArtifactsServerAvailable",
+	ClusterServerAvailable:      "ClusterServerAvailable",
+	DatabaseServerAvailable:     "DatabaseServerAvailable",
+	ResourceServerAvailable:     "ResourceServerAvailable",
+	ProvisioningServerAvailable: "ProvisioningServerAvailable",
 }
 
 type InventoryConditionReason string
@@ -56,15 +72,21 @@ var InventoryConditionReasons = struct {
 }
 
 var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{
-	InventoryAlarmServerName:    InventoryConditionTypes.AlarmServerAvailable,
-	InventoryDatabaseServerName: InventoryConditionTypes.DatabaseServerAvailable,
-	InventoryResourceServerName: InventoryConditionTypes.ResourceServerAvailable,
+	InventoryAlarmServerName:        InventoryConditionTypes.AlarmServerAvailable,
+	InventoryArtifactsServerName:    InventoryConditionTypes.ArtifactsServerAvailable,
+	InventoryClusterServerName:      InventoryConditionTypes.ClusterServerAvailable,
+	InventoryDatabaseServerName:     InventoryConditionTypes.DatabaseServerAvailable,
+	InventoryResourceServerName:     InventoryConditionTypes.ResourceServerAvailable,
+	InventoryProvisioningServerName: InventoryConditionTypes.ProvisioningServerAvailable,
 }
 
 var MapErrorDeploymentNameConditionType = map[string]InventoryConditionType{
-	InventoryAlarmServerName:    InventoryConditionTypes.AlarmServerError,
-	InventoryResourceServerName: InventoryConditionTypes.ResourceServerError,
-	InventoryDatabaseServerName: InventoryConditionTypes.DatabaseServerError,
+	InventoryAlarmServerName:        InventoryConditionTypes.AlarmServerError,
+	InventoryArtifactsServerName:    InventoryConditionTypes.ArtifactsServerError,
+	InventoryClusterServerName:      InventoryConditionTypes.ClusterServerError,
+	InventoryDatabaseServerName:     InventoryConditionTypes.DatabaseServerError,
+	InventoryResourceServerName:     InventoryConditionTypes.ResourceServerError,
+	InventoryProvisioningServerName: InventoryConditionTypes.ProvisioningServerError,
 }
 
 // AvailableNotification represents the data sent to the SMO once the O2IMS is ready to accept API calls.   This is

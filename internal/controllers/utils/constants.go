@@ -9,11 +9,12 @@ const (
 
 // Base resource names
 const (
-	InventoryDatabase  = "postgres"
-	InventoryResource  = "resource"
-	InventoryAlarms    = "alarms"
-	InventoryCluster   = "cluster"
-	InventoryArtifacts = "artifacts"
+	InventoryDatabase     = "postgres"
+	InventoryResource     = "resource"
+	InventoryAlarms       = "alarms"
+	InventoryCluster      = "cluster"
+	InventoryArtifacts    = "artifacts"
+	InventoryProvisioning = "provisioning"
 )
 
 // Suffix for server names
@@ -21,11 +22,12 @@ const serverSuffix = "-server"
 
 // Deployment names
 const (
-	InventoryDatabaseServerName  = InventoryDatabase + serverSuffix
-	InventoryResourceServerName  = InventoryResource + serverSuffix
-	InventoryAlarmServerName     = InventoryAlarms + serverSuffix
-	InventoryClusterServerName   = InventoryCluster + serverSuffix
-	InventoryArtifactsServerName = InventoryArtifacts + serverSuffix
+	InventoryDatabaseServerName     = InventoryDatabase + serverSuffix
+	InventoryResourceServerName     = InventoryResource + serverSuffix
+	InventoryAlarmServerName        = InventoryAlarms + serverSuffix
+	InventoryClusterServerName      = InventoryCluster + serverSuffix
+	InventoryArtifactsServerName    = InventoryArtifacts + serverSuffix
+	InventoryProvisioningServerName = InventoryProvisioning + serverSuffix
 )
 
 // InventoryIngressName the name of our Ingress controller instance
@@ -56,8 +58,15 @@ var (
 		"serve",
 		"--api-listener-address=127.0.0.1:8000",
 	}
+
 	ClusterServerArgs = []string{
 		"cluster-server",
+		"serve",
+		"--api-listener-address=127.0.0.1:8000",
+	}
+
+	ProvisioningServerArgs = []string{
+		"provisioning-server",
 		"serve",
 		"--api-listener-address=127.0.0.1:8000",
 	}
