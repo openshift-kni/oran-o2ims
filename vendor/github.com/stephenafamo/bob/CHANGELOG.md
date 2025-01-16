@@ -1,42 +1,161 @@
 # Changelog
 
-<!--toc:start-->
-
-- [Changelog](#changelog)
-  - [[v0.28.0] - 2024-06-25](#v0280-2024-06-25)
-  - [[v0.27.1] - 2024-06-05](#v0271-2024-06-05)
-  - [[v0.27.0] - 2024-06-05](#v0270-2024-06-05)
-  - [[v0.26.1] - 2024-05-26](#v0261-2024-05-26)
-  - [[v0.26.0] - 2024-05-21](#v0260-2024-05-21)
-  - [[v0.25.0] - 2024-01-20](#v0250-2024-01-20)
-  - [[v0.24.0] - 2024-01-20](#v0240-2024-01-20)
-  - [[v0.23.2] - 2024-01-04](#v0232-2024-01-04)
-  - [[v0.23.1] - 2024-01-03](#v0231-2024-01-03)
-  - [[v0.23.0] - 2024-01-03](#v0230-2024-01-03)
-  - [[v0.22.0] - 2023-08-18](#v0220-2023-08-18)
-  - [[v0.21.1] - 2023-05-22](#v0211-2023-05-22)
-  - [[v0.21.0] - 2023-05-09](#v0210-2023-05-09)
-  - [[v0.20.6] - 2023-04-25](#v0206-2023-04-25)
-  - [[v0.20.5] - 2023-04-14](#v0205-2023-04-14)
-  - [[v0.20.4] - 2023-04-07](#v0204-2023-04-07)
-  - [[v0.20.3] - 2023-04-06](#v0203-2023-04-06)
-  - [[v0.20.2] - 2023-04-05](#v0202-2023-04-05)
-  - [[v0.20.1] - 2023-04-04](#v0201-2023-04-04)
-  - [[v0.20.0] - 2023-04-03](#v0200-2023-04-03)
-  - [[v0.19.1] - 2023-03-21](#v0191-2023-03-21)
-  - [[v0.19.0] - 2023-03-19](#v0190-2023-03-19)
-  - [[v0.18.2] - 2023-03-18](#v0182-2023-03-18)
-  - [[v0.18.1] - 2023-03-16](#v0181-2023-03-16)
-  - [[v0.18.0] - 2023-03-12](#v0180-2023-03-12)
-  - [[v0.17.3] - 2023-03-11](#v0173-2023-03-11)
-  - [[v0.17.2] - 2023-03-09](#v0172-2023-03-09)
-
-<!--toc:end-->
-
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [v0.30.0] - 2025-01-16
+
+### Added
+
+- Added a new field `QueryFolders` to `gen/drivers.DBInfo` for drivers to be able to include information about parsed queries.
+- Added `gen/QueriesTemplates` which in the future will contain base templates for generating code for parsed qureries.
+- Added a `QueryTemplate` field to `bobgen_helpers.Templates` for drivers to include additional templates for queries.
+- Added a new reserved output key `queries`. This is handled specially for each query folder supplied by the driver.
+- Added new `wm` package to each dialect for mods that modify `Window` clauses.
+- Added a new method `Alias` for `View` struct, for each dialect. It returns the alias of the view. (thanks @Nitjsefni7)
+
+### Changed
+
+- Updated error constant generation to employ specific error types for making error matching easier. (thanks @mbezhanov)
+- Collation in `clause.OrderDef` is now a string not an expression and is always quoted
+- Calling `UpdateAll`, `DeleteAll` and `ReloadAll` on an empty model slice now returns nil without running any queries.
+- `UNION`, `INTERSECT` and `EXCEPT` mods now append to the query instead of replacing it.
+- Generated files now end with `.bob.go` instead of `.go` and are always cleaned up before generating new files. Singleton templates are now required to have a `.bob.go.tpl` extension.
+- The expected structure for templates have been changed:
+  - Previously, singleton templates should be kept in a `singleton` folder. Now, any template not inside a folder is considered a singleton template.
+  - Previoulsy, templates in the root folder are merged and run for each table. Now, this will happen to templates in the `table/` folder.
+  - Previoulsy, the entire file tree and every subdirectory is walked to find templates. Now only templates in the root folder and the `table/` folder are considered.
+- Change `From` in `clause.Window` to `BasedOn` to avoid confusion with `FromPreceding` and `FromFollowing`. Also change `SetFrom` to `SetBasedOn`.
+- Embed `clause.OrderBy` in `clause.Window` to make it possible to reuse `OrderBy` mods in window definitions.
+- Change the `Definition` field in `clause.NamedWindow` from `any` to `clause.Window` for extra type safety.
+- `sm.Window` now takes mods to modify the window clause.
+- `fm.Over` now takes mods to modify the window for the window function.
+
+### Deprecated
+
+- Deprecated the `wipe` option to delete all files in the output folder. Files are now generated with a `.bob.go` extension and are always cleaned up before generating new files.
+
+### Removed
+
+- Remove redundatnt type parameters from `orm.ExecQuery`.
+- Remove unnecessary interface in `orm.Query` and `orm.ExecQuery`.
+- Remove the redundant `clause.IWindow` interface.
+- Remove `dialect.WindowMod` and `dialect.WindowMods` which use chainable methods to modify `Window` clauses. This is now handled by the `wm` package which used mods.
+
+### Fixed
+
+- Fix random value generation for pq.Float64Array factory (thanks @felipeparaujo)
+- Using the `UpdateMod()` and `DeleteMod()` methods on an empty model slice now appends `WHERE primary_key IN NULL` which will return no results. Instead of `WHERE primary_key IN ()` which is a syntax error.
+- Ensure `net/netip` is imported for the `pgtypes.Inet` random expression (thanks @plunkettscott)
+- Fix a data race when adding enum types.
+- Fix missing schema in table alias in pkEQ and pkIN clauses (thanks @adatob).
+
+## [v0.29.0] - 2024-11-20
+
+### Added
+
+- Added error constants for matching against both specific and generic unique constraint errors raised by the underlying database driver. (thanks @mbezhanov)
+- Added support for regular expressions in the `only` and `except` table filters. (thanks @mbezhanov)
+- Added `ContextualMods` which are similar to regular mods but take a context argument. They are applied whenever the query is built.  
+  This makes it cleaner to do certain things, like populating the select columns of a model if none was explicitly added.  
+  The previous way this was done was unreliable since using `q.MustBuild()` would not add the columns while `bob.MustBuild(q)` will add them correctly.
+- `modelSlice.UpdateMod()` and `modelSlice.DeleteMod()` are new methods that returns a mod for update and delete queries on a slice of models.  
+  It adds `WHERE pk IN (pk1, pk2, pk3, ...)` to the query, and also schedule running the **hooks**.
+- Added `bob.ToMods` which a slice of structs that implement `bob.Mod[T]` to a Mod. This is useful since Go does not allow using a slice of structs as a slice of an interface the struct implements.
+- Added `bob.HookableQuery` interface. If a query implements this interface, the method `RunHooks(ctx, exec)` will be called before the query is executed.
+- Added `bob.HookableType` interface. If a type implements this interface, the method `AfterQueryHook(ctx, exec, bob.QueryType)` will be called after the query is executed.  
+  This is how `AfterSeleect/Insert/Update/DeleteHooks` hooks are now implemented.
+- Added `Type() QueryType` method to `bob.Query` to get the type of query it is. Available constants are `Unknown, Select, Insert, Update, Delete`.
+- Postgres and SQLite Update/Delete queries now refresh the models after the query is executed. This is enabled by the `RETURNING` clause, so it is not available in MySQL.
+- Added the `Case()` starter to all dialects to build `CASE` expressions. (thanks @k4n4ry)
+- Added `bob.Named()` which is used to add named arguments to the query and bind them later.
+- Added `bob.BindNamed` which takes an argument (struct, map, or a single value type) to be used to bind named arguments in a query. See changes to `bob.Prepare()` for details of which type can be used.
+- Indexes now include more information such as the type, unique and comment fields.
+- Constraints now include a comment field.
+- Added `Checks` field to DBConstraints so that drivers can also load check constraints. (not yet supported by the SQLite driver).
+- Added comments field to Table definitions.
+
+### Changed
+
+- `context.Context` is now passed to `Query.WriteQuery()` and `Expression.WriteSQL()` methods. This allows for more control over how the query is built and executed.  
+  This change made is possible to delete some hacks and simplify the codebase.
+  - The `Name()` and `NameAs()` methods of Views/Tables no longer need the context argument since the context will be passed when writing the expression. The API then becomes cleaner.
+  - Preloading mods no longer need to store a context internally. `SetLoadContext()` and `GetLoadContext()` have removed.
+  - The `ToExpr` field in `orm.RelSide` which was used for preloading is no longer needed and has been removed.
+- Moved `orm.Hooks` to `bob.Hooks` since it should not be limited to only ORM queries.
+- Moved `mods.QueryModFunc` to `bob.ModFunc` since it should be available to all packages.
+- The mod capability for `orm.Setter` is now reversed. It should now be a mod for Insert and have a method that returns a mod for Update.  
+   This makes more sense since one would at most use one setter during updates, but can use multiple setters in a bulk insert.
+- `table.InsertQ` has been renamed to `table.Insert`. The old implementation of `Insert` has been removed.  
+   The same functionality can be achieved in the following way:
+
+  ```go
+  //----------------------------------------------
+  // OLD WAY
+  //----------------------------------------------
+  user, err := models.Users.Insert(ctx, db, setter) // insert one
+  users, err := models.Users.InsertMany(ctx, db, setters...) // insert many
+
+  //----------------------------------------------
+  // NEW WAY
+  //----------------------------------------------
+  user, err := models.Users.Insert(setter).One(ctx, db) // insert one
+  users, err := models.Users.Insert(setters[0], setters[1]).All(ctx, db) // insert many
+
+  // For cases where you already have a slice of setters and you want to pass them all, you can use `bob.ToMods`
+  users, err := models.Users.Insert(bob.ToMods(setters)).All(ctx, db) // insert many
+  ```
+
+- `table.UpdateQ` has been renamed to `table.Update`. The old implementation of `Update` has been removed.  
+   The same functionality can be achieved by using `model.Update()` or `modelSlice.UpdateAll()`.
+- `table.DeleteQ` has been renamed to `table.Delete`. The old implementation of `Delete` has been removed.  
+   The same functionality can be achieved by using `modelSlice.DeleteAll()` or creating an `Delete` query using `table.Delete()`.
+- `BeforeInsertHooks` now only takes a single `ModelSetter` at a time.  
+   This is because it is not possible to know before executing the queries exactly how many setters are being used since additional rows can be inserted by applying another setter as a mod.
+- `bob.Cache()` now requires an `Executor`. This is used to run any query hooks.
+- `bob.Prepare()` now requires a type parameter to be used to bind named arguments. The type can either be:
+  - A struct with fields that match the named arguments in the query
+  - A map with string keys. When supplied, the values in the map will be used to bind the named arguments in the query.
+  - When there is only a single named argument, one of the following can be used:
+    - A primitive type (int, bool, string, etc)
+    - `time.Time`
+    - Any type that implements `driver.Valuer`.
+- `Index` columns are no longer just strings, but are a struct to include more information such as the sort order.
+
+### Removed
+
+- Remove MS SQL artifacts. (thanks @mbezhanov)
+- Remove redundant type parameter from `bob.Load`.
+- Removed `Before/AfterUpsertMods`. Upserts are really just inserts with a conflict clause and should be treated as such.
+- Removed `Insert/InsertMany/Upsert/UpsertMany` methods from `orm.Table` since they are not needed.  
+  It is possible to do the same thing, with similar effor using the the `InsertQ` method (which is now renamed to `Insert`).
+- Remove `Update` and `Delete` methods from `orm.Table` since they are not needed.  
+  It is possible to do the same thing, with similar effor using the the `UpdateQ` and `DeleteQ` methods (which are now renamed to `Update` and `Delete`).
+- `context.Context` and `bob.Executor` are no longer passed when creating a Table/ViewQuery. It is now passed at the point of execution with `Exec/One/All/Cursor`.
+- Remove `Prepare` methods from table and view qureries. Since `bob.Prepare()` now takes a type parameter, it is not possible to prepare from a method since Go does not allow additional type parameters in methods.
+- Removed the **Prisma** and **Atlas** code generation drivers. It is better for Bob to focus on being able to generate code from the database in the most robust and detailed way and if the user wants, they can use other tools (such as prisma and atlas) to manage migrations before the code generation.
+- Removed `Expressions` from Index definitions. It is now merged with the `Columns` field with an `IsExpression` field to indicate if the column is an expression.
+
+### Fixed
+
+- Removed unnecessary import of `strings` in `bobfactory_random.go`.
+- Fixed data races in unit tests. (thanks @mbezhanov)
+- Fixed invalid SQL statements generated by `sm.OrderBy().Collate()`. (thanks @mbezhanov)
+- Fixed a bug preventing specific columns from being excluded when generating models from SQLite. (thanks @mbezhanov)
+- Fixed an issue where invalid code is generated if a configured relationship has `from_where` or `to_where`.
+- Fixed `ModelSlice.ReloadAll()` method for models with multiple primary keys.
+
+## [v0.28.1] - 2024-06-28
+
+### Fixed
+
+- Also add the enum to the type array if an array of the enum is added. This is to prvent issues if the enum is only used in an array.
+- Handle null column names in expression indexes. (thanks @mbezhanov)
+- CROSS JOINS now allow aliases
 
 ## [v0.28.0] - 2024-06-25
 
