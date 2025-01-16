@@ -124,9 +124,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		},
 	)
 
-	r := http.NewServeMux()
-	// Register a default handler that replies with 404 so that we can override the response format
-	r.HandleFunc("/", common.NotFoundFunc())
+	r := common.NewErrorJsonifier(http.NewServeMux())
 
 	// This also validates the spec file
 	swagger, err := generated.GetSwagger()
