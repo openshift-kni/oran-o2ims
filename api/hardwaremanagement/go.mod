@@ -3,7 +3,7 @@ module github.com/openshift-kni/oran-o2ims/api/hardwaremanagement
 go 1.22.0
 
 require (
-	k8s.io/apimachinery v0.31.4
+	k8s.io/apimachinery v0.31.5
 	sigs.k8s.io/controller-runtime v0.19.4
 )
 
