@@ -101,15 +101,3 @@ func GetOranRespErrFunc() func(w http.ResponseWriter, r *http.Request, err error
 		problemDetails(w, string(out), http.StatusInternalServerError)
 	}
 }
-
-// NotFoundFunc is used to override the default 404 response which is a text only reply so that we can respond with the
-// required JSON body.
-func NotFoundFunc() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		out, _ := json.Marshal(common.ProblemDetails{
-			Detail: fmt.Sprintf("Path '%s' not found", r.RequestURI),
-			Status: http.StatusNotFound,
-		})
-		problemDetails(w, string(out), http.StatusNotFound)
-	}
-}

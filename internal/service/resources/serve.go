@@ -136,9 +136,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		},
 	)
 
-	router := http.NewServeMux()
-	// Register a default handler that replies with 404 so that we can override the response format
-	router.HandleFunc("/", common.NotFoundFunc())
+	router := common.NewErrorJsonifier(http.NewServeMux())
 
 	// Create a new logger to be passed to things that need a logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
