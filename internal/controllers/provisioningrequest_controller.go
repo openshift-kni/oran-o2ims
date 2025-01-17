@@ -601,7 +601,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 	ctx context.Context, provisioningRequest *provisioningv1alpha1.ProvisioningRequest) (bool, error) {
 	// Set the provisioningState to deleting
-	if provisioningRequest.Status.ProvisioningStatus.ProvisioningState != provisioningv1alpha1.StateDeleting {
+	if provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase != provisioningv1alpha1.StateDeleting {
 		utils.SetProvisioningStateDeleting(provisioningRequest)
 		if err := utils.UpdateK8sCRStatus(ctx, r.Client, provisioningRequest); err != nil {
 			return false, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", provisioningRequest.Name, err)

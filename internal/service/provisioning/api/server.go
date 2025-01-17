@@ -226,9 +226,9 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 // convertProvisioningRequestCRToApi converts a ProvisioningRequest CR to an API model
 func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisioningv1alpha1.ProvisioningRequest) (api.ProvisioningRequest, error) {
 	var status api.ProvisioningRequestStatus
-	if provisioningRequest.Status.ProvisioningStatus.ProvisioningState != "" {
-		provisioningState := api.ProvisioningStatusProvisioningState(provisioningRequest.Status.ProvisioningStatus.ProvisioningState)
-		status.ProvisioningStatus.ProvisioningState = &provisioningState
+	if provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase != "" {
+		provisioningPhase := api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
+		status.ProvisioningStatus.ProvisioningPhase = &provisioningPhase
 	}
 	if provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails != "" {
 		status.ProvisioningStatus.Message = &provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails
@@ -245,14 +245,26 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 			return api.ProvisioningRequest{}, fmt.Errorf("could not convert OCloudNodeClusterId (%s) to uuid: %w",
 				provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId, err)
 		}
-		status.NodeClusterId = &nodeClusterId
+		status.ProvisionedResourceSets = &api.ProvisionedResourceSets{
+			NodeClusterId: &nodeClusterId,
+		}
 	}
 
 	// Unmarshal the TemplateParameters bytes into a map
-	var templateParameters map[string]interface{}
+	var templateParameters = make(map[string]interface{})
 	err := json.Unmarshal(provisioningRequest.Spec.TemplateParameters.Raw, &templateParameters)
 	if err != nil {
 		return api.ProvisioningRequest{}, fmt.Errorf("failed to unmarshal TemplateParameters into a map: %w", err)
+	}
+
+	// Convert the CR's status.extensions to map[string]interface{}
+	var extensions = make(map[string]interface{})
+	extensionsBytes, err := json.Marshal(provisioningRequest.Status.Extensions)
+	if err != nil {
+		return api.ProvisioningRequest{}, fmt.Errorf("failed to marshal Extensions into bytes: %w", err)
+	}
+	if err := json.Unmarshal(extensionsBytes, &extensions); err != nil {
+		return api.ProvisioningRequest{}, fmt.Errorf("failed to unmarshal Extensions into a map: %w", err)
 	}
 
 	return api.ProvisioningRequest{
@@ -262,6 +274,7 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 		TemplateName:          provisioningRequest.Spec.TemplateName,
 		TemplateVersion:       provisioningRequest.Spec.TemplateVersion,
 		TemplateParameters:    templateParameters,
+		Extensions:            &extensions,
 		Status:                &status,
 	}, nil
 }

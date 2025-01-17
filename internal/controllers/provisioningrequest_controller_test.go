@@ -384,10 +384,10 @@ func verifyStatusCondition(actualCond, expectedCon metav1.Condition) {
 }
 
 func verifyProvisioningStatus(provStatus provisioningv1alpha1.ProvisioningStatus,
-	expectedState provisioningv1alpha1.ProvisioningState, expectedDetail string,
+	expectedPhase provisioningv1alpha1.ProvisioningPhase, expectedDetail string,
 	expectedResources *provisioningv1alpha1.ProvisionedResources) {
 
-	Expect(provStatus.ProvisioningState).To(Equal(expectedState))
+	Expect(provStatus.ProvisioningPhase).To(Equal(expectedPhase))
 	Expect(provStatus.ProvisioningDetails).To(ContainSubstring(expectedDetail))
 	Expect(provStatus.ProvisionedResources).To(Equal(expectedResources))
 }

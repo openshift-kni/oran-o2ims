@@ -108,26 +108,26 @@ type PolicyDetails struct {
 	RemediationAction string `json:"remediationAction,omitempty"`
 }
 
-// ProvisioningState defines the various states of the provisioning process.
-type ProvisioningState string
+// ProvisioningPhase defines the various phases of the provisioning process.
+type ProvisioningPhase string
 
 const (
 	// StateProgressing means the provisioning process is currently in progress.
 	// It could be in progress during hardware provisioning, cluster installation, or cluster configuration.
-	StateProgressing ProvisioningState = "progressing"
+	StateProgressing ProvisioningPhase = "progressing"
 
 	// StateFulfilled means the provisioning process has been successfully completed for all stages.
-	StateFulfilled ProvisioningState = "fulfilled"
+	StateFulfilled ProvisioningPhase = "fulfilled"
 
 	// StateFailed means the provisioning process has failed at any stage, including resource validation
 	// and preparation prior to provisioning, hardware provisioning, cluster installation, or cluster configuration.
-	StateFailed ProvisioningState = "failed"
+	StateFailed ProvisioningPhase = "failed"
 
 	// StateDeleting indicates that the provisioning resources are in the process of being deleted.
 	// This state is set when the deletion process for the ProvisioningRequest and its resources
 	// has started, ensuring that all dependent resources are removed before finalizing the
 	// ProvisioningRequest deletion.
-	StateDeleting ProvisioningState = "deleting"
+	StateDeleting ProvisioningPhase = "deleting"
 )
 
 // ProvisionedResources contains the resources that were provisioned as part of the provisioning process.
@@ -139,7 +139,7 @@ type ProvisionedResources struct {
 type ProvisioningStatus struct {
 	// The current state of the provisioning process.
 	// +kubebuilder:validation:Enum=progressing;fulfilled;failed;deleting
-	ProvisioningState ProvisioningState `json:"provisioningState,omitempty"`
+	ProvisioningPhase ProvisioningPhase `json:"provisioningPhase,omitempty"`
 
 	// The details about the current state of the provisioning process.
 	ProvisioningDetails string `json:"provisioningDetails,omitempty"`
@@ -170,7 +170,7 @@ type ProvisioningRequestStatus struct {
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster,shortName=oranpr
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-//+kubebuilder:printcolumn:name="ProvisionState",type="string",JSONPath=".status.provisioningStatus.provisioningState"
+//+kubebuilder:printcolumn:name="ProvisionPhase",type="string",JSONPath=".status.provisioningStatus.provisioningPhase"
 //+kubebuilder:printcolumn:name="ProvisionDetails",type="string",JSONPath=".status.provisioningStatus.provisioningDetails"
 
 // ProvisioningRequest is the Schema for the provisioningrequests API
