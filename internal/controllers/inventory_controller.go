@@ -73,6 +73,7 @@ import (
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes",verbs=get;list
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusters",verbs=get;list
+//+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -1140,12 +1141,15 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 				},
 				Resources: []string{
 					"secrets",
+					"configmaps",
 				},
 				Verbs: []string{
 					"get",
 					"list",
 					"watch",
 					"update",
+					"create",
+					"delete",
 				},
 			},
 			{
@@ -1159,6 +1163,36 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 					"get",
 					"list",
 					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"apps",
+				},
+				Resources: []string{
+					"deployments",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"batch",
+				},
+				Resources: []string{
+					"cronjobs",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"create",
+					"delete",
+					"update",
+					"patch",
 				},
 			},
 			{
@@ -1403,6 +1437,30 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				},
 			},
 		}...)
+	}
+
+	// Common evn for server deployments
+	envVars = append(envVars,
+		corev1.EnvVar{
+			Name: "POD_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		},
+	)
+
+	// Server specific env var
+	if serverName == utils.InventoryAlarmServerName {
+		postgresImage := os.Getenv(utils.PostgresImageName)
+		if postgresImage == "" {
+			return "", fmt.Errorf("missing %s environment variable value", utils.PostgresImageName)
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  utils.PostgresImageName,
+			Value: postgresImage,
+		})
 	}
 
 	// Build the deployment's spec.

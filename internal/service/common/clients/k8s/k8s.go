@@ -3,8 +3,13 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
+
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	agentv1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -54,6 +59,8 @@ func GetSchemeForHub() *runtime.Scheme {
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 	utilruntime.Must(agentv1beta1.AddToScheme(scheme))
 	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(appsv1.AddToScheme(scheme))
+	utilruntime.Must(batchv1.AddToScheme(scheme))
 
 	return scheme
 }
@@ -109,4 +116,30 @@ func GetSchemeForCluster() *runtime.Scheme {
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 
 	return scheme
+}
+
+// CreateOrUpdate attempts to update an existing Kubernetes object, or creates it if it doesn't exist.
+// This implements an "upsert" operation for Kubernetes resources.
+func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object) error {
+	// Try to get existing object
+	existing := obj.DeepCopyObject().(client.Object)
+	key := client.ObjectKey{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}
+
+	if err := c.Get(ctx, key, existing); err != nil {
+		if errors.IsNotFound(err) { // Create if not found, otherwise return error
+			slog.Info("Creating a new resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
+				"namespace", obj.GetNamespace(), "name", obj.GetName())
+			return c.Create(ctx, obj) //nolint:wrapcheck
+		}
+		return fmt.Errorf("failed to get existing object: %w", err)
+	}
+
+	// Update existing object
+	obj.SetResourceVersion(existing.GetResourceVersion())
+	slog.Info("Updating an existing resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
+		"namespace", obj.GetNamespace(), "name", obj.GetName())
+	return c.Update(ctx, obj) //nolint:wrapcheck
 }
