@@ -29,6 +29,9 @@ updates:
     # sig.k8s.io moved to go 1.23 in v0.20, so ignore major/minor updates until this repo is 1.23-based
     - dependency-name: "sig.k8s.io/*"
       update-types: ["version-update:semver-major","version-update:semver-minor"]
+    # github.com/stephenafamo/bob moved to go 1.23 in 0.20.0, so ignore major/minor updates until this repo is 1.23-based
+    - dependency-name: "github.com/stephenafamo/bob"
+      update-types: ["version-update:semver-major","version-update:semver-minor"]
   #ignore:
   #  - dependency-name: "*"
   #    update-types: ["version-update:semver-patch"]
