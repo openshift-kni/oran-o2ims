@@ -199,7 +199,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 
 	extensions, err := d.getDeploymentManagerExtensions(ctx, cluster.Name)
 	if err != nil {
-		return models.DeploymentManager{}, fmt.Errorf("failed to get extensions for cluster %s", cluster.Name)
+		return models.DeploymentManager{}, fmt.Errorf("failed to get extensions for cluster %s: %w", cluster.Name, err)
 	}
 
 	to := models.DeploymentManager{
