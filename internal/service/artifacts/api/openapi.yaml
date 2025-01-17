@@ -200,20 +200,50 @@ components:
         description:
           type: string
           description: Details about the current managed infrastructure template.
+          example: Defines the parameters allowed for cluster provisioning
         parameterSchema:
           type: object
           description: |
             Defines the parameters required for ClusterTemplate. The parameter definitions should follow the OpenAPI V3 schema and explicitly define required fields.
-          example:
+          example: |
+            {
+              "properties": {
+                "clusterInstanceParameters": {},
+                "nodeClusterName": {
+                  "type": "string"
+                },
+                "oCloudSiteId": {
+                  "type": "string"
+                },
+                "policyTemplateParameters": {},
+                "required": [
+                  "nodeClusterName",
+                  "oCloudSiteId",
+                  "policyTemplateParameters",
+                  "clusterInstanceParameters"
+                ]
+              }
+            }
         name:
           type: string
           description: Human readable description of managed infrastructure template
+          example: sno-ran-du
+        extensions:
+          type: object
+          additionalProperties:
+            type: string
+          description: | 
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or 
+            operator to extend the information provided about the Artifact Resource.
+          example: {"status": "ClusterTemplateValidated has Completed: The cluster template validation succeeded"}
       required:
       - artifactResourceId
       - version
       - description
       - parameterSchema
       - name
+      - extensions
+
 
         
         

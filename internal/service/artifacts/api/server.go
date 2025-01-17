@@ -11,6 +11,7 @@ import (
 	api "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api/generated"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -143,6 +144,19 @@ func clusterTemplateToManagedInfrastructureTemplate(clusterTemplate provisioning
 	if err := json.Unmarshal(clusterTemplate.Spec.TemplateParameterSchema.Raw, &parameterSchema); err != nil {
 		return api.ManagedInfrastructureTemplate{}, fmt.Errorf("could not get parameterSchema from ManagedInfrastructureTemplate: %w", err)
 	}
+
+	// ClusterTemplates have just one condition holding validation information.
+	// Include it as an extension.
+	var clusterTemplateExtensions = make(map[string]string)
+	validatedCond := meta.FindStatusCondition(
+		clusterTemplate.Status.Conditions,
+		string(provisioningv1alpha1.CTconditionTypes.Validated))
+
+	if validatedCond != nil {
+		clusterTemplateExtensions["status"] = fmt.Sprintf(
+			"%s has %s: %s", validatedCond.Type, validatedCond.Reason, validatedCond.Message)
+	}
+
 	// Convert the current ClusterTemplate to ManagedInfrastructureTemplate.
 	return api.ManagedInfrastructureTemplate{
 		ArtifactResourceId: uuid,
@@ -150,5 +164,6 @@ func clusterTemplateToManagedInfrastructureTemplate(clusterTemplate provisioning
 		Version:            clusterTemplate.Spec.Version,
 		Description:        clusterTemplate.Spec.Description,
 		ParameterSchema:    parameterSchema,
+		Extensions:         clusterTemplateExtensions,
 	}, nil
 }
