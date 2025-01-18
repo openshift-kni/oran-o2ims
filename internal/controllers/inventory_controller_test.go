@@ -233,7 +233,7 @@ var _ = DescribeTable(
 			err = reconciler.Client.Get(
 				context.TODO(),
 				types.NamespacedName{
-					Name:      utils.InventoryIngressName,
+					Name:      utils.IngressName,
 					Namespace: utils.InventoryNamespace,
 				},
 				ingress)
