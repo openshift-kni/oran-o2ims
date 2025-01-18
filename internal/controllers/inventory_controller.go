@@ -174,8 +174,17 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
+	internalPort := int32(0)
+	internalTargetPort := ""
+	if utils.IsOAuthEnabled(t.object) {
+		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
+		// service to service communication.
+		internalPort = utils.InternalServicePort
+		internalTargetPort = utils.InternalServiceTargetPort
+	}
+
 	// Create the Service needed for the Resource server.
-	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -248,8 +257,17 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 		return
 	}
 
+	internalPort := int32(0)
+	internalTargetPort := ""
+	if utils.IsOAuthEnabled(t.object) {
+		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
+		// service to service communication.
+		internalPort = utils.InternalServicePort
+		internalTargetPort = utils.InternalServiceTargetPort
+	}
+
 	// Create the Service needed for the cluster server.
-	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -322,7 +340,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 	}
 
 	// Create the Service needed for the Artifacts server.
-	err = t.createService(ctx, utils.InventoryArtifactsServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createService(ctx, utils.InventoryArtifactsServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, 0, "")
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -406,8 +424,17 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
+	internalPort := int32(0)
+	internalTargetPort := ""
+	if utils.IsOAuthEnabled(t.object) {
+		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
+		// service to service communication.
+		internalPort = utils.InternalServicePort
+		internalTargetPort = utils.InternalServiceTargetPort
+	}
+
 	// Create the Service needed for the alarm server.
-	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -480,7 +507,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 	}
 
 	// Create the Service needed for the provisioning server.
-	err = t.createService(ctx, utils.InventoryProvisioningServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createService(ctx, utils.InventoryProvisioningServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, 0, "")
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -1411,8 +1438,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		envVars = append(envVars, envVar)
 	}
 
-	if utils.HasConnectivityToSMO(serverName) &&
-		(t.object.Spec.SmoConfig != nil && t.object.Spec.SmoConfig.OAuthConfig != nil) {
+	if utils.NeedsOAuthAccess(serverName) && utils.IsOAuthEnabled(t.object) {
 		envVars = append(envVars, []corev1.EnvVar{
 			{
 				Name: utils.OAuthClientIDEnvName,
@@ -1439,9 +1465,44 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		}...)
 	}
 
-	// Common evn for server deployments
-	envVars = append(envVars,
-		corev1.EnvVar{
+	proxyArgs := []string{
+		fmt.Sprintf("--secure-listen-address=0.0.0.0:%d", utils.DefaultProxyPort),
+		fmt.Sprintf("--upstream=http://127.0.0.1:%d/", utils.DefaultContainerPort),
+		"--logtostderr=true",
+		"--tls-cert-file=/secrets/tls/tls.crt",
+		"--tls-private-key-file=/secrets/tls/tls.key",
+		"--tls-min-version=VersionTLS12",
+		"--v=10",
+	}
+
+	if utils.IsOAuthEnabled(t.object) {
+		// When OAuth is enabled, we need to add the OIDC arguments to the proxy arguments
+		oauthConfig := t.object.Spec.SmoConfig.OAuthConfig
+		clientSecrets, err := utils.GetSecret(ctx, t.client, oauthConfig.ClientSecretName, t.object.Namespace)
+		if err != nil {
+			return utils.InventoryConditionReasons.OAuthClientIDNotConfigured,
+				fmt.Errorf("failed to get client secret: %w", err)
+		}
+
+		clientID, err := utils.GetSecretField(clientSecrets, "client-id")
+		if err != nil {
+			return utils.InventoryConditionReasons.OAuthClientIDNotConfigured,
+				fmt.Errorf("failed to get client-id from secret: %s, %w", oauthConfig.ClientSecretName, err)
+		}
+
+		proxyArgs = utils.AddOAuthArgsForProxy(t.object, clientID, proxyArgs)
+	}
+
+	internalServicePort := utils.DefaultServicePort
+	if utils.IsOAuthEnabled(t.object) {
+		// When OAuth is enabled, we run a second proxy for server-to-server communication so that they can authenticate
+		// from Kubernetes rather than OAuth.
+		internalServicePort = utils.InternalServicePort
+	}
+
+	// Common env for server deployments
+	envVars = append(envVars, []corev1.EnvVar{
+		{
 			Name: "POD_NAMESPACE",
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
@@ -1449,6 +1510,10 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				},
 			},
 		},
+		{
+			Name:  utils.InternalServicePortName,
+			Value: fmt.Sprintf("%d", internalServicePort),
+		}}...,
 	)
 
 	// Server specific env var
@@ -1492,20 +1557,14 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 								Drop: []corev1.Capability{"ALL"},
 							},
 						},
-						Image: rbacProxyImage,
-						Args: []string{
-							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:8000/",
-							"--logtostderr=true",
-							"--tls-cert-file=/secrets/tls/tls.crt",
-							"--tls-private-key-file=/secrets/tls/tls.key",
-							"--tls-min-version=VersionTLS12",
-							"--v=0"},
+						Image:           os.Getenv(utils.KubeRbacProxyImageName),
+						ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
+						Args:            proxyArgs,
 						Ports: []corev1.ContainerPort{
 							{
-								Name:          "https",
+								Name:          utils.DefaultServiceTargetPort,
 								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: 8443,
+								ContainerPort: utils.DefaultProxyPort,
 							},
 						},
 						Resources: corev1.ResourceRequirements{
@@ -1532,7 +1591,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 							{
 								Name:          "api",
 								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: 8000,
+								ContainerPort: utils.DefaultContainerPort,
 							},
 						},
 						Resources: corev1.ResourceRequirements{
@@ -1545,6 +1604,47 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				},
 			},
 		},
+	}
+
+	if utils.IsOAuthEnabled(t.object) && utils.RequiresInternalProxy(serverName) {
+		deploymentSpec.Template.Spec.Containers = append(deploymentSpec.Template.Spec.Containers, corev1.Container{
+			Name: utils.InternalRbacContainerName,
+			SecurityContext: &corev1.SecurityContext{
+				AllowPrivilegeEscalation: &privilegeEscalation,
+				Capabilities: &corev1.Capabilities{
+					Drop: []corev1.Capability{"ALL"},
+				},
+			},
+			Image:           os.Getenv(utils.KubeRbacProxyImageName),
+			ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
+			Args: []string{
+				fmt.Sprintf("--secure-listen-address=0.0.0.0:%d", utils.InternalProxyPort),
+				fmt.Sprintf("--upstream=http://127.0.0.1:%d/", utils.DefaultContainerPort),
+				"--logtostderr=true",
+				"--tls-cert-file=/secrets/tls/tls.crt",
+				"--tls-private-key-file=/secrets/tls/tls.key",
+				"--tls-min-version=VersionTLS12",
+				"--v=10",
+			},
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          utils.InternalServiceTargetPort,
+					Protocol:      corev1.ProtocolTCP,
+					ContainerPort: utils.InternalProxyPort,
+				},
+			},
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("128Mi"),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("5m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+			},
+			VolumeMounts: deploymentVolumeMounts,
+		})
 	}
 
 	if utils.HasDatabase(serverName) {
@@ -1601,7 +1701,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 	return nil
 }
 
-func (t *reconcilerTask) createService(ctx context.Context, resourceName string, port int32, targetPort string) error {
+func (t *reconcilerTask) createService(ctx context.Context, resourceName string, port int32, targetPort string, internalPort int32, internalTargetPort string) error {
 	t.logger.InfoContext(ctx, "[createService]")
 	// Build the Service object.
 	serviceMeta := metav1.ObjectMeta{
@@ -1621,11 +1721,21 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 		},
 		Ports: []corev1.ServicePort{
 			{
-				Name:       "api",
+				Name:       utils.IngressPortName,
 				Port:       port,
 				TargetPort: intstr.FromString(targetPort),
 			},
 		},
+	}
+
+	if internalTargetPort != "" {
+		// If this is provided, then we are running with 2 proxies -- one for public OAuth authentication, and one
+		// for internal Kubernetes authentication (e.g., for service to service)
+		serviceSpec.Ports = append(serviceSpec.Ports, corev1.ServicePort{
+			Name:       "internal",
+			Port:       internalPort,
+			TargetPort: intstr.FromString(internalTargetPort),
+		})
 	}
 
 	newService := &corev1.Service{
@@ -1644,8 +1754,9 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	t.logger.InfoContext(ctx, "[createIngress]")
 	// Build the Ingress object.
+	className := utils.IngressClassName
 	ingressMeta := metav1.ObjectMeta{
-		Name:      utils.InventoryIngressName,
+		Name:      utils.IngressName,
 		Namespace: t.object.Namespace,
 		Annotations: map[string]string{
 			"route.openshift.io/termination": "reencrypt",
@@ -1653,6 +1764,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	}
 
 	ingressSpec := networkingv1.IngressSpec{
+		IngressClassName: &className,
 		Rules: []networkingv1.IngressRule{
 			{
 				Host: t.object.Status.IngressHost,
@@ -1669,7 +1781,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: utils.InventoryResourceServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
@@ -1684,7 +1796,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: utils.InventoryClusterServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
@@ -1699,7 +1811,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: utils.InventoryArtifactsServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
@@ -1714,7 +1826,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: utils.InventoryProvisioningServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
@@ -1729,7 +1841,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 									Service: &networkingv1.IngressServiceBackend{
 										Name: utils.InventoryAlarmServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
@@ -1746,7 +1858,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 		Spec:       ingressSpec,
 	}
 
-	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.InventoryIngressName)
+	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.IngressPortName)
 	if err := utils.CreateK8sCR(ctx, t.client, newIngress, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
 	}
