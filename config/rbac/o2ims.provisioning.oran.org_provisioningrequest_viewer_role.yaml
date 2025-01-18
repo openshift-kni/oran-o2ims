@@ -1,31 +1,27 @@
-# permissions for end users to edit orano2ims.
+# permissions for end users to view provisioningrequests.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: clusterrole
-    app.kubernetes.io/instance: orano2ims-editor-role
+    app.kubernetes.io/instance: provisioningrequest-viewer-role
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: oran-o2ims
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
-  name: orano2ims-editor-role
+  name: provisioningrequest-viewer-role
 rules:
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.provisioning.oran.org
   resources:
-  - orano2ims
+  - provisioningrequests
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
-  - oran.openshift.io
+  - o2ims.provisioning.oran.org
   resources:
-  - orano2ims/status
+  - provisioningrequests/status
   verbs:
   - get
