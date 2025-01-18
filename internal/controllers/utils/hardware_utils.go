@@ -293,8 +293,8 @@ OuterLoop:
 // HandleHardwareTimeout checks for provisioning or configuration timeout
 func HandleHardwareTimeout(
 	condition hwv1alpha1.ConditionType,
-	provisioningStartTime metav1.Time,
-	configurationStartTime metav1.Time,
+	provisioningStartTime *metav1.Time,
+	configurationStartTime *metav1.Time,
 	timeout time.Duration,
 	currentReason string,
 	currentMessage string) (bool, string, string) {

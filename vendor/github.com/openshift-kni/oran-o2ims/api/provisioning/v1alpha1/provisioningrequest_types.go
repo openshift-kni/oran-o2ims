@@ -65,9 +65,9 @@ type NodePoolRef struct {
 	// Contains the namespace of the created NodePool.
 	Namespace string `json:"namespace,omitempty"`
 	// Represents the timestamp of the first status check for hardware provisioning
-	HardwareProvisioningCheckStart metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
+	HardwareProvisioningCheckStart *metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
 	// Represents the timestamp of the first status check for hardware configuring
-	HardwareConfiguringCheckStart metav1.Time `json:"hardwareConfiguringCheckStart,omitempty"`
+	HardwareConfiguringCheckStart *metav1.Time `json:"hardwareConfiguringCheckStart,omitempty"`
 }
 
 type ClusterDetails struct {
@@ -78,10 +78,10 @@ type ClusterDetails struct {
 	ZtpStatus string `json:"ztpStatus,omitempty"`
 
 	// A timestamp indicating the cluster provisoning has started
-	ClusterProvisionStartedAt metav1.Time `json:"clusterProvisionStartedAt,omitempty"`
+	ClusterProvisionStartedAt *metav1.Time `json:"clusterProvisionStartedAt,omitempty"`
 
 	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
-	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
+	NonCompliantAt *metav1.Time `json:"nonCompliantAt,omitempty"`
 }
 
 type Extensions struct {

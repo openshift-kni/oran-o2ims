@@ -343,7 +343,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 	if utils.IsClusterProvisionPresent(t.object) {
 		// Set the start timestamp if it's not already set
 		if t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.IsZero() {
-			t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+			currentTime := metav1.Now()
+			t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
 		}
 
 		if utils.IsClusterProvisionFailed(t.object) {

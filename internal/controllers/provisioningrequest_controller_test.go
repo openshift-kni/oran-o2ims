@@ -1168,7 +1168,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			// Patch ClusterProvisionStartedAt timestamp to mock timeout
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
-			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: metav1.Now().Add(-2 * time.Minute)}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
 			// Start reconciliation again
@@ -1469,7 +1469,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt).ToNot(BeZero())
 			// Patch ClusterProvisionStartedAt timestamp to mock timeout
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{Name: "cluster-1"}
-			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time = metav1.Now().Add(-2 * time.Minute)
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: metav1.Now().Add(-2 * time.Minute)}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
 			// Remove required field hostname to fail ProvisioningRequest validation.
@@ -1803,7 +1803,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 			cr.Status.Extensions.ClusterDetails.Name = crName
-			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: time.Now()}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 		})
 
@@ -2181,7 +2181,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 			cr.Status.Extensions.ClusterDetails.Name = crName
-			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: time.Now()}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 			object := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, object)).To(Succeed())

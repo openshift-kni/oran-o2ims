@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,7 +101,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	}()
 
 	if len(targetPolicies) == 0 {
-		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
+		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.Missing,
@@ -112,7 +113,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 	// Update the ConfigurationApplied condition.
 	if allPoliciesCompliant {
-		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
+		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.Completed,
@@ -155,7 +156,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 	if allPoliciesInInform {
 		// No timeout is computed if all policies are in inform, just out of date.
-		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Time{}
+		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.OutOfDate,
@@ -259,7 +260,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 	// If the condition does not exist, set the non compliant timestamp since we
 	// get here just for policies that have a status different from Compliant.
 	if configurationAppliedCondition == nil {
-		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
+		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: time.Now()}
 		return policyTimedOut
 	}
 
@@ -269,7 +270,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 		case string(provisioningv1alpha1.CRconditionReasons.InProgress):
 			// Check if the configuration application has timed out.
 			if t.object.Status.Extensions.ClusterDetails.NonCompliantAt.IsZero() {
-				t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
+				t.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: time.Now()}
 			} else {
 				// If NonCompliantAt has been previously set, check for timeout.
 				policyTimedOut = utils.TimeoutExceeded(
@@ -279,9 +280,9 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 		case string(provisioningv1alpha1.CRconditionReasons.TimedOut):
 			policyTimedOut = true
 		case string(provisioningv1alpha1.CRconditionReasons.Missing):
-			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
+			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: time.Now()}
 		case string(provisioningv1alpha1.CRconditionReasons.OutOfDate):
-			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
+			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: time.Now()}
 		case string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady):
 			// The cluster might not be ready because its being initially provisioned or
 			// there are problems after provisionion, so it might be that NonCompliantAt
@@ -300,7 +301,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 			)
 		}
 	} else if configurationAppliedCondition.Reason == string(provisioningv1alpha1.CRconditionReasons.Completed) {
-		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = metav1.Now()
+		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: time.Now()}
 	}
 
 	return policyTimedOut

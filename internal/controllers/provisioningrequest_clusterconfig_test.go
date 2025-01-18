@@ -397,7 +397,8 @@ defaultHugepagesSize: "1G"`,
 			metav1.ConditionFalse,
 			"",
 		)
-		CRTask.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+		currentTime := metav1.Now()
+		CRTask.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
 		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
 
 		// Call the Reconciliation function.
@@ -1891,11 +1892,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 	})
 
 	It("Returns false if the status is Completed and sets NonCompliantAt", func() {
@@ -1907,11 +1908,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 
 	It("Returns false if the status is OutOfDate and sets NonCompliantAt", func() {
@@ -1923,11 +1924,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 
 	It("Returns false if the status is Missing and sets NonCompliantAt", func() {
@@ -1939,11 +1940,11 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 
 	It("Returns true if the status is InProgress and the timeout has passed", func() {
@@ -1956,7 +1957,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		)
 		// Set NonCompliantAt.
 		nonCompliantAt := metav1.Now().Add(-2 * time.Minute)
-		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time = nonCompliantAt
+		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: nonCompliantAt}
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt wasn't changed and that the return is true.
 		Expect(policyTimedOut).To(BeTrue())
