@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
@@ -24,7 +25,10 @@ func (r *ResourcesRepository) GetDeploymentManagers(ctx context.Context) ([]mode
 // GetDeploymentManagersNotIn returns the list of DeploymentManager records not matching the list of keys provided, or
 // an empty list if none exist; otherwise an error
 func (r *ResourcesRepository) GetDeploymentManagersNotIn(ctx context.Context, keys []any) ([]models.DeploymentManager, error) {
-	e := psql.Quote(models.DeploymentManager{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	var e bob.Expression = nil
+	if len(keys) > 0 {
+		e = psql.Quote(models.DeploymentManager{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
 	return utils.Search[models.DeploymentManager](ctx, r.Db, e)
 }
 
