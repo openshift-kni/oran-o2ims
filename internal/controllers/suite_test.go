@@ -28,6 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -37,9 +38,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 func TestControllers(t *testing.T) {
@@ -47,10 +50,25 @@ func TestControllers(t *testing.T) {
 	RunSpecs(t, "Controllers")
 }
 
+const testHwMgrPluginNameSpace = "hwmgr"
+const testHwMgrId = "hwmgr"
+
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
+	// Add fake hardwaremanager CR
+	hwmgr := &pluginv1alpha1.HardwareManager{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testHwMgrPluginNameSpace,
+			Name:      testHwMgrId,
+		},
+		Spec: pluginv1alpha1.HardwareManagerSpec{
+			AdaptorID: "loopback",
+		},
+	}
+
 	return fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
+		WithObjects([]client.Object{hwmgr}...).
 		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
 		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
@@ -63,6 +81,7 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
+		WithStatusSubresource(&pluginv1alpha1.HardwareManager{}).
 		Build()
 }
 
@@ -86,7 +105,7 @@ var _ = BeforeSuite(func() {
 	ctrl.SetLogger(adapter)
 	klog.SetLogger(adapter)
 
-	os.Setenv("HWMGR_PLUGIN_NAMESPACE", "hwmgr")
+	os.Setenv(utils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
 
 	// Add all the required types to the scheme used by the tests:
 	scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.Inventory{})
@@ -115,4 +134,5 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.ClusterVersion{})
 	scheme.AddKnownTypes(openshiftoperatorv1.SchemeGroupVersion, &openshiftoperatorv1.IngressController{})
 	scheme.AddKnownTypes(ibguv1alpha1.SchemeGroupVersion, &ibguv1alpha1.ImageBasedGroupUpgrade{})
+	scheme.AddKnownTypes(pluginv1alpha1.GroupVersion, &pluginv1alpha1.HardwareManager{})
 })

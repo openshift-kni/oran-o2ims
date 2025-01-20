@@ -35,6 +35,7 @@ import (
 
 	"github.com/go-logr/logr"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -122,6 +123,7 @@ func init() {
 	utilruntime.Must(openshiftv1.AddToScheme(scheme))
 	utilruntime.Must(openshiftoperatorv1.AddToScheme(scheme))
 	utilruntime.Must(ibguv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(pluginv1alpha1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.
