@@ -22,8 +22,6 @@ tags:
     description: Alarm Service Configuration
   - name: subscriptions
     description: Alarm subscription management
-  - name: probableCauses
-    description: Probable cause information
   - name: internal
     description: |
       Internal endpoints. This is tag is also useful generating client code.
@@ -464,68 +462,6 @@ paths:
       responses:
         '200':
           description: Successful deletion
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
-
-  /o2ims-infrastructureMonitoring/v1/probableCauses:
-    get:
-      operationId: GetProbableCauses
-      summary: Retrieve all probable causes
-      tags:
-        - probableCauses
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProbableCause'
-        '500':
-          description: Internal server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
-
-  /o2ims-infrastructureMonitoring/v1/probableCauses/{probableCauseId}:
-    get:
-      operationId: GetProbableCause
-      summary: Retrieve exactly one probable cause
-      tags:
-        - probableCauses
-      parameters:
-        - in: path
-          name: probableCauseId
-          required: true
-          schema:
-            type: string
-            format: uuid
-          example: 78081d85-5736-4215-afab-772461544e60
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProbableCause'
         '400':
           description: Bad request
           content:

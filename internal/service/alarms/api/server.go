@@ -504,16 +504,6 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 
 }
 
-func (a *AlarmsServer) GetProbableCauses(ctx context.Context, request api.GetProbableCausesRequestObject) (api.GetProbableCausesResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (a *AlarmsServer) GetProbableCause(ctx context.Context, request api.GetProbableCauseRequestObject) (api.GetProbableCauseResponseObject, error) {
-	// TODO implement me
-	return nil, fmt.Errorf("not implemented")
-}
-
 // AmNotification handles an API request coming from AlertManager with CaaS alerts. This api is used internally.
 // Note: the errors returned can also be view under alertmanager pod logs but also logging here for convenience
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
