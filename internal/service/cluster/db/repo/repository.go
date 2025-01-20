@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
@@ -36,7 +37,10 @@ func (r *ClusterRepository) GetNodeClusters(ctx context.Context) ([]models.NodeC
 // GetNodeClustersNotIn returns the list of NodeCluster records not matching the list of keys provided, or an empty list
 // if none exist; otherwise an error
 func (r *ClusterRepository) GetNodeClustersNotIn(ctx context.Context, keys []any) ([]models.NodeCluster, error) {
-	e := psql.Quote(models.NodeCluster{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	var e bob.Expression = nil
+	if len(keys) > 0 {
+		e = psql.Quote(models.NodeCluster{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
 	return utils.Search[models.NodeCluster](ctx, r.Db, e)
 }
 
@@ -110,7 +114,10 @@ func (r *ClusterRepository) GetClusterResources(ctx context.Context) ([]models.C
 // GetClusterResourcesNotIn returns the list of ClusterResource records not matching the list of keys provided, or an
 // empty list if none exist; otherwise an error
 func (r *ClusterRepository) GetClusterResourcesNotIn(ctx context.Context, keys []any) ([]models.ClusterResource, error) {
-	e := psql.Quote(models.ClusterResource{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	var e bob.Expression = nil
+	if len(keys) > 0 {
+		e = psql.Quote(models.ClusterResource{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
 	return utils.Search[models.ClusterResource](ctx, r.Db, e)
 }
 
