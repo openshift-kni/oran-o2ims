@@ -200,9 +200,9 @@ func (c *Config) generateCronJob(configMap corev1.ConfigMap) batchv1.CronJob {
 									Args:    []string{"-f", fmt.Sprintf("%s/%s", cleanScriptDir, cleanScriptName)},
 									Env:     pgEnv,
 									Resources: corev1.ResourceRequirements{
-										Limits: corev1.ResourceList{
-											corev1.ResourceCPU:    resource.MustParse("100m"),
-											corev1.ResourceMemory: resource.MustParse("128Mi"),
+										Requests: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("50m"),
+											corev1.ResourceMemory: resource.MustParse("64Mi"),
 										},
 									},
 									VolumeMounts: []corev1.VolumeMount{
