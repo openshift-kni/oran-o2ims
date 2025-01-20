@@ -505,7 +505,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 
 		// Simulate a timeout by moving the start time back
 		adjustedTime := cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart.Time.Add(-1 * time.Minute)
-		cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart = metav1.NewTime(adjustedTime)
+		cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart = &metav1.Time{Time: adjustedTime}
 
 		// Call checkNodePoolStatus again (after timeout)
 		provisioned, timedOutOrFailed, err = task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
@@ -575,7 +575,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 
 		// Simulate a timeout by moving the start time back
 		adjustedTime := cr.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart.Time.Add(-1 * time.Minute)
-		cr.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = metav1.NewTime(adjustedTime)
+		cr.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = &metav1.Time{Time: adjustedTime}
 
 		// Call checkNodePoolStatus again (after timeout)
 		status, timedOutOrFailed, err = task.checkNodePoolStatus(ctx, np, hwv1alpha1.Configured)

@@ -20,8 +20,8 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.provisioningStatus.provisioningState
-      name: ProvisionState
+    - jsonPath: .status.provisioningStatus.provisioningPhase
+      name: ProvisionPhase
       type: string
     - jsonPath: .status.provisioningStatus.provisioningDetails
       name: ProvisionDetails
@@ -243,7 +243,7 @@ spec:
                     description: The details about the current state of the provisioning
                       process.
                     type: string
-                  provisioningState:
+                  provisioningPhase:
                     description: The current state of the provisioning process.
                     enum:
                     - progressing

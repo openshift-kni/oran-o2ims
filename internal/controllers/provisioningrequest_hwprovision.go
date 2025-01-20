@@ -291,7 +291,8 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 
 	if condition == hwv1alpha1.Provisioned {
 		if t.object.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart.IsZero() {
-			t.object.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart = metav1.Now()
+			currentTime := metav1.Now()
+			t.object.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart = &currentTime
 		}
 	}
 
@@ -305,13 +306,14 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 
 		if condition == hwv1alpha1.Configured {
 			if t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart.IsZero() {
-				t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = metav1.Now()
+				currentTime := metav1.Now()
+				t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = &currentTime
 			}
 		}
 
 		// Reset the status check start time for the next configuration changes
 		if hwCondition.Type == string(hwv1alpha1.Configured) && hwCondition.Status == metav1.ConditionTrue {
-			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = metav1.Time{}
+			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = nil
 		}
 
 		if hwCondition.Status == metav1.ConditionFalse && reason == string(hwv1alpha1.Failed) {

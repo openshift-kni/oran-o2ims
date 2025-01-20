@@ -325,6 +325,12 @@ components:
           type: object
           description: Input Parameters that conform to the OpenAPI V3 schema defined in the template.
           example: "{}"
+        extensions:
+          type: object
+          description: | 
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or 
+            operator to extend the information provided about the O-Cloud Provisioning Request.
+          example: "{}"
         status:
           $ref: "#/components/schemas/ProvisioningRequestStatus"
       required:
@@ -341,11 +347,8 @@ components:
       properties:
         provisioningStatus:
           $ref: "#/components/schemas/ProvisioningStatus"
-        nodeClusterId:
-          type: string
-          format: uuid
-          description: Identifier of the NodeCluster that has been provisioned.
-          example: "a1478db9-651f-4d30-96d6-8af13481d779"
+        provisionedResourceSets:
+          $ref: "#/components/schemas/ProvisionedResourceSets"
       required:
       - provisioningStatus
 
@@ -363,8 +366,19 @@ components:
           type: string
           description: Message describing the status of the provisioning request.
           example: "Cluster installation is in progress"
-        provisioningState:
+        provisioningPhase:
           type: string
           description: Current state of the provisioning request.
           enum: [pending, progressing, fulfilled, failed, deleting]
           example: "progressing"
+
+    ProvisionedResourceSets:
+      type: object
+      description: |
+        The resources that have been successfully provisioned as part of the provisioning process.
+      properties:
+        nodeClusterId:
+          type: string
+          format: uuid
+          description: Identifier of the NodeCluster that has been provisioned.
+          example: "a1478db9-651f-4d30-96d6-8af13481d779"
