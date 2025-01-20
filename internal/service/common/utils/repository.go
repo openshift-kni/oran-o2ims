@@ -212,13 +212,11 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sq
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	slog.Debug("record found", "table", record.TableName())
 	return &record, nil
 }
 
 // ExecuteCollectRows executes a query and collects result using pgx.CollectRows.
 func ExecuteCollectRows[T db.Model](ctx context.Context, db DBQuery, sql string, args []any) ([]T, error) {
-	var record T
 	var err error
 
 	// Run query
@@ -228,6 +226,5 @@ func ExecuteCollectRows[T db.Model](ctx context.Context, db DBQuery, sql string,
 		return []T{}, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	slog.Debug("records found", "table", record.TableName(), "count", len(records))
 	return records, nil
 }
