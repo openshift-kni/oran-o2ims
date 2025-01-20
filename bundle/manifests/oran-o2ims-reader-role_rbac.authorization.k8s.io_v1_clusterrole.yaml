@@ -1,0 +1,41 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    role: reader-role
+  name: oran-o2ims-reader-role
+rules:
+- nonResourceURLs:
+  - /o2ims-infrastructureInventory/*
+  - /o2ims-infrastructureInventory/api_versions
+  - /o2ims-infrastructureMonitoring/*
+  - /o2ims-infrastructureMonitoring/api_versions
+  - /o2ims-infrastructureCluster/*
+  - /o2ims-infrastructureCluster/api_versions
+  - /o2ims-infrastructureArtifacts/*
+  - /o2ims-infrastructureArtifacts/api_versions
+  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates
+  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/*
+  - /o2ims-infrastructureProvisioning/*
+  - /o2ims-infrastructureProvisioning/api_versions
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
+  - /o2ims-infrastructureInventory/v1/subscriptions
+  - /o2ims-infrastructureCluster/v1/subscriptions
+  - /o2ims-infrastructureProvisioning/v1/provisioningRequests
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /o2ims-infrastructureInventory/v1/subscriptions/*
+  - /o2ims-infrastructureCluster/v1/subscriptions/*
+  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration
+  verbs:
+  - get
