@@ -38,7 +38,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
-	github.com/stephenafamo/bob v0.28.0
+	github.com/stephenafamo/bob v0.28.1
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 	github.com/thoas/go-funk v0.9.3
 	go.uber.org/mock v0.5.0
