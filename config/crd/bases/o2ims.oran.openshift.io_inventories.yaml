@@ -178,6 +178,14 @@ spec:
                           ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
                           client-secret values used by the OAuth client.
                         type: string
+                      groupsClaim:
+                        default: groups
+                        description: |-
+                          GroupsClaim represents the claim contained within the OAuth JWT token which holds the list of groups/roles. This
+                          must be a list/array and not a space separated list of names.  It must also be a top level attribute rather than
+                          a nested field in the JSON structure of the JWT object.
+                             i.e., {"roles": ["a", "b"]} rather than {"realm": {"roles": ["a", "b"}}.
+                        type: string
                       scopes:
                         description: |-
                           Scopes represents the OAuth scope values to request when acquiring a token.  Typically, this should be set to
@@ -195,11 +203,18 @@ spec:
                         description: URL represents the base URL of the authorization
                           server. (e.g., https://keycloak.example.com/realms/oran)
                         type: string
+                      usernameClaim:
+                        default: preferred_username
+                        description: UsernameClaim represents the claim contained
+                          within the OAuth JWT token which holds the username
+                        type: string
                     required:
                     - clientSecretName
+                    - groupsClaim
                     - scopes
                     - tokenEndpoint
                     - url
+                    - usernameClaim
                     type: object
                   registrationEndpoint:
                     description: RegistrationEndpoint represents the API endpoint

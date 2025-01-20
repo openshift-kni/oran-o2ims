@@ -42,6 +42,17 @@ type OAuthConfig struct {
 	// authorize our requests
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Scopes",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Scopes []string `json:"scopes"`
+	// UsernameClaim represents the claim contained within the OAuth JWT token which holds the username
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Username Claim",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	//+kubebuilder:default=preferred_username
+	UsernameClaim string `json:"usernameClaim"`
+	// GroupsClaim represents the claim contained within the OAuth JWT token which holds the list of groups/roles. This
+	// must be a list/array and not a space separated list of names.  It must also be a top level attribute rather than
+	// a nested field in the JSON structure of the JWT object.
+	//    i.e., {"roles": ["a", "b"]} rather than {"realm": {"roles": ["a", "b"}}.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Groups Claim",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	//+kubebuilder:default=groups
+	GroupsClaim string `json:"groupsClaim"`
 }
 
 // TLSConfig defines the TLS specific attributes specific to the SMO and OAuth servers
