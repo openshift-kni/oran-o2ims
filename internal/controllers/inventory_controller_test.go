@@ -47,6 +47,26 @@ import (
 
 var ServerTestImage = "controller-manager:test"
 
+func makePod(namespace, serverName string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serverName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app": serverName,
+			},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+}
+
 var _ = DescribeTable(
 	"Reconciler",
 	func(objs []client.Object, request reconcile.Request, validate func(result ctrl.Result, reconciler Reconciler)) {
@@ -81,6 +101,15 @@ var _ = DescribeTable(
 			},
 		}
 
+		pods := []client.Object{
+			makePod(ns.Name, utils.InventoryDatabaseServerName),
+			makePod(ns.Name, utils.InventoryResourceServerName),
+			makePod(ns.Name, utils.InventoryClusterServerName),
+			makePod(ns.Name, utils.InventoryAlarmServerName),
+			makePod(ns.Name, utils.InventoryArtifactsServerName),
+			makePod(ns.Name, utils.InventoryProvisioningServerName),
+		}
+
 		cv := &openshiftv1.ClusterVersion{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "version",
@@ -95,6 +124,7 @@ var _ = DescribeTable(
 
 		// Update the testcase objects to include the Namespace.
 		objs = append(objs, ns, ingress, search, cv)
+		objs = append(objs, pods...)
 
 		// Get the fake client.
 		fakeClient := getFakeClientFromObjects(objs...)

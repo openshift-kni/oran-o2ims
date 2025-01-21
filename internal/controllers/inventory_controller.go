@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sptr "k8s.io/utils/ptr"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
@@ -68,6 +69,7 @@ import (
 //+kubebuilder:rbac:groups="cluster.open-cluster-management.io",resources=managedclusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch;update
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
@@ -721,6 +723,44 @@ func (t *reconcilerTask) storeSearchURL(ctx context.Context) error {
 	return nil
 }
 
+// checkForPodReadyStatus checks for all server pods to be ready.  If any pod is not yet ready, the reconciler timer is
+// set to a short value so that we can try again quickly; otherwise either an error is returned without a reconciler
+// timer to indicate that an exponential backoff is required
+func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Result, error) {
+	servers := []string{utils.InventoryResourceServerName,
+		utils.InventoryClusterServerName,
+		utils.InventoryAlarmServerName,
+		utils.InventoryArtifactsServerName,
+		utils.InventoryProvisioningServerName,
+		utils.InventoryDatabaseServerName}
+
+	var list corev1.PodList
+	err := t.client.List(ctx, &list, client.InNamespace(t.object.Namespace))
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to list pods: %w", err)
+	}
+
+	for _, pod := range list.Items {
+		name, ok := pod.Labels["app"]
+		if !ok {
+			slog.Warn("Pod without an 'app' label in our namespace", "name", pod.Name)
+			continue
+		}
+		if !slices.Contains(servers, name) {
+			continue
+		}
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status != corev1.ConditionTrue {
+				slog.Warn("Pod is not yet ready", "name", pod.Name, "reason", condition.Reason, "message", condition.Message)
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
+		}
+	}
+
+	// No reconcile required, and no error
+	return ctrl.Result{}, nil
+}
+
 func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
@@ -738,12 +778,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 
 	err = t.storeSearchURL(ctx)
-	if err != nil {
-		return
-	}
-
-	// Register with SMO (if necessary)
-	err = t.setupSmo(ctx)
 	if err != nil {
 		return
 	}
@@ -831,6 +865,26 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	if err != nil {
 		return
 	}
+
+	// Wait for pods to become ready
+	nextReconcile, err = t.checkForPodReadyStatus(ctx)
+	if err != nil {
+		return
+	}
+
+	if !nextReconcile.IsZero() {
+		// The pods are not ready and we are going to retry
+		return
+	}
+
+	// Register with SMO (if necessary)
+	err = t.setupSmo(ctx)
+	if err != nil {
+		return
+	}
+
+	// Reset the next reconcile back to our default of 5 minutes
+	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
 	err = t.updateInventoryDeploymentStatus(ctx)
 	if err != nil {
