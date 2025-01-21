@@ -92,3 +92,21 @@ func (r *ResourcesRepository) CreateResource(ctx context.Context, resource *mode
 func (r *ResourcesRepository) UpdateResource(ctx context.Context, resource *models.Resource) (*models.Resource, error) {
 	return utils.Update[models.Resource](ctx, r.Db, resource.ResourceID, *resource)
 }
+
+// FindStaleResources returns any Resource objects that have a generation less than the specific generation
+func (r *ResourcesRepository) FindStaleResources(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.Resource, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return utils.Search[models.Resource](ctx, r.Db, e)
+}
+
+// FindStaleResourcePools returns any ResourcePool objects that have a generation less than the specific generation
+func (r *ResourcesRepository) FindStaleResourcePools(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.ResourcePool, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return utils.Search[models.ResourcePool](ctx, r.Db, e)
+}
+
+// FindStaleResourceTypes returns any ResourceType objects that have a generation less than the specific generation
+func (r *ResourcesRepository) FindStaleResourceTypes(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.ResourceType, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return utils.Search[models.ResourceType](ctx, r.Db, e)
+}
