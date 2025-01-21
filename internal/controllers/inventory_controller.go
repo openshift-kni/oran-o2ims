@@ -128,6 +128,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 	return
 }
 
+// getInternalServicePorts calculates the port values for the internal proxy depending on whether OAuth is enabled
+func (t *reconcilerTask) getInternalServicePorts() (int32, string) {
+	internalPort := int32(0)
+	internalTargetPort := ""
+	if utils.IsOAuthEnabled(t.object) {
+		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
+		// service to service communication.
+		internalPort = utils.InternalServicePort
+		internalTargetPort = utils.InternalServiceTargetPort
+	}
+
+	return internalPort, internalTargetPort
+}
+
 // setupResourceServerConfig creates the resources necessary to start the Resource Server.
 func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
@@ -174,16 +188,8 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
-	internalPort := int32(0)
-	internalTargetPort := ""
-	if utils.IsOAuthEnabled(t.object) {
-		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
-		// service to service communication.
-		internalPort = utils.InternalServicePort
-		internalTargetPort = utils.InternalServiceTargetPort
-	}
-
 	// Create the Service needed for the Resource server.
+	internalPort, internalTargetPort := t.getInternalServicePorts()
 	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -257,16 +263,8 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 		return
 	}
 
-	internalPort := int32(0)
-	internalTargetPort := ""
-	if utils.IsOAuthEnabled(t.object) {
-		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
-		// service to service communication.
-		internalPort = utils.InternalServicePort
-		internalTargetPort = utils.InternalServiceTargetPort
-	}
-
 	// Create the Service needed for the cluster server.
+	internalPort, internalTargetPort := t.getInternalServicePorts()
 	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -424,16 +422,8 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
-	internalPort := int32(0)
-	internalTargetPort := ""
-	if utils.IsOAuthEnabled(t.object) {
-		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
-		// service to service communication.
-		internalPort = utils.InternalServicePort
-		internalTargetPort = utils.InternalServiceTargetPort
-	}
-
 	// Create the Service needed for the alarm server.
+	internalPort, internalTargetPort := t.getInternalServicePorts()
 	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -1471,23 +1461,15 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		"--logtostderr=true",
 		"--tls-cert-file=/secrets/tls/tls.crt",
 		"--tls-private-key-file=/secrets/tls/tls.key",
-		"--tls-min-version=VersionTLS12",
-		"--v=10",
+		fmt.Sprintf("--tls-min-version=%s", utils.MinimumProxyTLSVersion),
+		fmt.Sprintf("--v=%d", utils.MinimumProxyLogLevel),
 	}
 
 	if utils.IsOAuthEnabled(t.object) {
 		// When OAuth is enabled, we need to add the OIDC arguments to the proxy arguments
-		oauthConfig := t.object.Spec.SmoConfig.OAuthConfig
-		clientSecrets, err := utils.GetSecret(ctx, t.client, oauthConfig.ClientSecretName, t.object.Namespace)
+		clientID, reason, err := t.getOAuthClientID(ctx)
 		if err != nil {
-			return utils.InventoryConditionReasons.OAuthClientIDNotConfigured,
-				fmt.Errorf("failed to get client secret: %w", err)
-		}
-
-		clientID, err := utils.GetSecretField(clientSecrets, "client-id")
-		if err != nil {
-			return utils.InventoryConditionReasons.OAuthClientIDNotConfigured,
-				fmt.Errorf("failed to get client-id from secret: %s, %w", oauthConfig.ClientSecretName, err)
+			return reason, err
 		}
 
 		proxyArgs = utils.AddOAuthArgsForProxy(t.object, clientID, proxyArgs)
@@ -1567,6 +1549,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 								ContainerPort: utils.DefaultProxyPort,
 							},
 						},
+						// These values are somewhat arbitrary but come from the RBAC proxy scaffolded for the manager
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
 								corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -1607,44 +1590,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	if utils.IsOAuthEnabled(t.object) && utils.RequiresInternalProxy(serverName) {
-		deploymentSpec.Template.Spec.Containers = append(deploymentSpec.Template.Spec.Containers, corev1.Container{
-			Name: utils.InternalRbacContainerName,
-			SecurityContext: &corev1.SecurityContext{
-				AllowPrivilegeEscalation: &privilegeEscalation,
-				Capabilities: &corev1.Capabilities{
-					Drop: []corev1.Capability{"ALL"},
-				},
-			},
-			Image:           os.Getenv(utils.KubeRbacProxyImageName),
-			ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
-			Args: []string{
-				fmt.Sprintf("--secure-listen-address=0.0.0.0:%d", utils.InternalProxyPort),
-				fmt.Sprintf("--upstream=http://127.0.0.1:%d/", utils.DefaultContainerPort),
-				"--logtostderr=true",
-				"--tls-cert-file=/secrets/tls/tls.crt",
-				"--tls-private-key-file=/secrets/tls/tls.key",
-				"--tls-min-version=VersionTLS12",
-				"--v=10",
-			},
-			Ports: []corev1.ContainerPort{
-				{
-					Name:          utils.InternalServiceTargetPort,
-					Protocol:      corev1.ProtocolTCP,
-					ContainerPort: utils.InternalProxyPort,
-				},
-			},
-			Resources: corev1.ResourceRequirements{
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("500m"),
-					corev1.ResourceMemory: resource.MustParse("128Mi"),
-				},
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("5m"),
-					corev1.ResourceMemory: resource.MustParse("64Mi"),
-				},
-			},
-			VolumeMounts: deploymentVolumeMounts,
-		})
+		deploymentSpec.Template.Spec.Containers = append(deploymentSpec.Template.Spec.Containers, t.createInternalProxy(privilegeEscalation, deploymentVolumeMounts))
 	}
 
 	if utils.HasDatabase(serverName) {
@@ -1677,6 +1623,65 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	return "", nil
+}
+
+// getOAuthClientID retrieves the OAuth client-id value from the configured secret
+func (t *reconcilerTask) getOAuthClientID(ctx context.Context) (string, utils.InventoryConditionReason, error) {
+	oauthConfig := t.object.Spec.SmoConfig.OAuthConfig
+	clientSecrets, err := utils.GetSecret(ctx, t.client, oauthConfig.ClientSecretName, t.object.Namespace)
+	if err != nil {
+		return "", utils.InventoryConditionReasons.OAuthClientIDNotConfigured, fmt.Errorf("failed to get client secret: %w", err)
+	}
+
+	clientID, err := utils.GetSecretField(clientSecrets, "client-id")
+	if err != nil {
+		return "", utils.InventoryConditionReasons.OAuthClientIDNotConfigured, fmt.Errorf("failed to get client-id from secret: %s, %w", oauthConfig.ClientSecretName, err)
+	}
+	return clientID, "", nil
+}
+
+// createInternalProxy sets up another instance of a kube-rbac-proxy to handle inter-service communication in the
+// event that OAuth is enabled.
+func (t *reconcilerTask) createInternalProxy(privilegeEscalation bool, deploymentVolumeMounts []corev1.VolumeMount) corev1.Container {
+	return corev1.Container{
+		Name: utils.InternalRbacContainerName,
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: &privilegeEscalation,
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
+		},
+		Image:           os.Getenv(utils.KubeRbacProxyImageName),
+		ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
+		Args: []string{
+			fmt.Sprintf("--secure-listen-address=0.0.0.0:%d", utils.InternalProxyPort),
+			fmt.Sprintf("--upstream=http://127.0.0.1:%d/", utils.DefaultContainerPort),
+			"--logtostderr=true",
+			"--tls-cert-file=/secrets/tls/tls.crt",
+			"--tls-private-key-file=/secrets/tls/tls.key",
+			fmt.Sprintf("--tls-min-version=%s", utils.MinimumProxyTLSVersion),
+			fmt.Sprintf("--v=%d", utils.MinimumProxyLogLevel),
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          utils.InternalServiceTargetPort,
+				Protocol:      corev1.ProtocolTCP,
+				ContainerPort: utils.InternalProxyPort,
+			},
+		},
+		// These values are somewhat arbitrary but come from the RBAC proxy scaffolded for the manager
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+		},
+		VolumeMounts: deploymentVolumeMounts,
+	}
 }
 
 func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName string) error {

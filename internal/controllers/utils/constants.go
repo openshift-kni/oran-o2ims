@@ -231,6 +231,12 @@ const (
 	DatabaseTargetPort  = "database"
 )
 
+// MinimumProxyTLSVersion defines the minimum value we accept for incoming TLS connections to the proxies
+const MinimumProxyTLSVersion = "VersionTLS12"
+
+// MinimumProxyLogLevel defines the minimum log-level set on the proxies
+const MinimumProxyLogLevel = 10
+
 // Environment values
 const (
 	ServerImageName         = "IMAGE"
