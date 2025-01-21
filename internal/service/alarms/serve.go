@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
+
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
@@ -43,6 +45,22 @@ const (
 // Serve start alarms server
 func Serve(config *api.AlarmsServerConfig) error {
 	slog.Info("Starting Alarm server")
+
+	// Get and validate the openapi spec file
+	swagger, err := generated.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("failed to get swagger: %w", err)
+	}
+	if err := swagger.Validate(context.Background(),
+		openapi3.EnableSchemaDefaultsValidation(), // Validate default values
+		openapi3.EnableSchemaFormatValidation(),   // Validate standard formats
+		openapi3.EnableSchemaPatternValidation(),  // Validate regex patterns
+		openapi3.EnableExamplesValidation(),       // Validate examples
+		openapi3.ProhibitExtensionsWithRef(),      // Prevent x- extension fields
+	); err != nil {
+		return fmt.Errorf("failed validate swagger: %w", err)
+	}
+
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -126,12 +144,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 	)
 
 	r := common.NewErrorJsonifier(http.NewServeMux())
-
-	// This also validates the spec file
-	swagger, err := generated.GetSwagger()
-	if err != nil {
-		return fmt.Errorf("failed to get swagger: %w", err)
-	}
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
