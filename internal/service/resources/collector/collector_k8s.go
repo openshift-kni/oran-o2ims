@@ -212,7 +212,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 		Locations:           []string{}, // TODO: populate with locations from all pools
 		Capabilities:        nil,
 		CapacityInfo:        d.makeCapacityInfo(cluster),
-		Extensions:          &extensions,
+		Extensions:          extensions,
 		DataSourceID:        d.dataSourceID,
 		GenerationID:        d.generationID,
 		ExternalID:          "",

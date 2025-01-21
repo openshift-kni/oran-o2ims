@@ -376,8 +376,10 @@ github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241213003211-a
 github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241213003211-a57a58a5c4f2/go.mod h1:TYB+3zGmMhqOmyZ6FCbtNZSndvRDcfh16U7wgYGpe/8=
 github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512 h1:d9tPPozmTLCTa+++FvoTheard+HnCqOTvnnJ3d8umx8=
 github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512/go.mod h1:7IjuhnQT3L4C4gruAKvTCA/+KCBrLLiAm56C3FpaMO4=
-github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250117165412-cf3a6bb431bf h1:qJrV9BSCoy8Y1ekQculmKJesZp0wNpr03167ZXQmUU0=
-github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250117165412-cf3a6bb431bf/go.mod h1:d83Yzbz8ZJYLYSadekFGtRj30lKtFMLu2hmTac/ubu0=
+github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250122185709-926aa2a18752 h1:6SfB7Xsfhi06FaKRMPLIQBFRIrZSpknDBqp+6EsQ5ec=
+github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250122185709-926aa2a18752/go.mod h1:d83Yzbz8ZJYLYSadekFGtRj30lKtFMLu2hmTac/ubu0=
+github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client v0.0.0-20250122185709-926aa2a18752 h1:9zMgPv+WkyHTBhQ/bumrSBRjrlLyfiL/7IJjjBICjiw=
+github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client v0.0.0-20250122185709-926aa2a18752/go.mod h1:FAtCrU3Y2MAFktWo3vWVucTED3NltM0evmt7hX3f6nA=
 github.com/openshift/api v0.0.0-20240423014330-2cb60a113ad1 h1:qo6vX1xwLILWL69tCgGW/ow7gOnBsVnTt3CZheqjB74=
 github.com/openshift/api v0.0.0-20240423014330-2cb60a113ad1/go.mod h1:CxgbWAlvu2iQB0UmKTtRu1YfepRg1/vJ64n2DlIEVz4=
 github.com/openshift/assisted-service/api v0.0.0-20240405132132-484ec5c683c6 h1:kGb1so4CDjacpOkGWN7i2QsTgYWB/oJxZblU9C1+4os=

@@ -114,10 +114,6 @@ func Serve(config *api.ResourceServerConfig) error {
 	}
 
 	// Create the built-in data sources
-	acm, err := collector.NewACMDataSource(cloudID, globalCloudID, config.BackendURL, config.Extensions)
-	if err != nil {
-		return fmt.Errorf("failed to create ACM data source: %w", err)
-	}
 	k8s, err := collector.NewK8SDataSource(cloudID, globalCloudID)
 	if err != nil {
 		return fmt.Errorf("failed to create K8S data source: %w", err)
@@ -129,8 +125,13 @@ func Serve(config *api.ResourceServerConfig) error {
 	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
 	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
+	hwMgrDataSourceLoader, err := collector.NewHwMgrDataSourceLoader(cloudID, globalCloudID)
+	if err != nil {
+		return fmt.Errorf("failed to create hardware manager data source: %w", err)
+	}
+
 	// Create the collector
-	resourceCollector := collector.NewCollector(repository, resourceNotifier, []collector.DataSource{k8s, acm})
+	resourceCollector := collector.NewCollector(repository, resourceNotifier, hwMgrDataSourceLoader, []collector.DataSource{k8s})
 
 	// Init server
 	// Create the handler

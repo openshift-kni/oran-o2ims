@@ -56,17 +56,20 @@ while :; do
     esac
 done
 
-cmd="go get github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin@${BRANCH}"
+MODULES=("api/hwmgr-plugin" "pkg/inventory-client")
 
-if [ -n "${DEVELOPER}" ]; then
-    cmd="go mod edit -replace github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin=github.com/${DEVELOPER}/oran-hwmgr-plugin/api/hwmgr-plugin@${BRANCH}"
-fi
+for MODULE in "${MODULES[@]}"; do
+    CMD="go get github.com/openshift-kni/oran-hwmgr-plugin/${MODULE}@${BRANCH}"
 
-echo "Running command: ${cmd}"
-if ! bash -c "${cmd}"; then
-    echo "Command failed" >&2
-    exit 1
-fi
+    if [ -n "${DEVELOPER}" ]; then
+        CMD="go mod edit -replace github.com/openshift-kni/oran-hwmgr-plugin/${MODULE}=github.com/${DEVELOPER}/oran-hwmgr-plugin/${MODULE}@${BRANCH}"
+    fi
 
-go mod tidy && go mod vendor
+    echo "Re-syncing ${MODULE} with: ${CMD}"
+    if ! bash -c "${CMD}"; then
+        echo "Command failed" >&2
+        exit 1
+    fi
 
+    go mod tidy && go mod vendor
+done
