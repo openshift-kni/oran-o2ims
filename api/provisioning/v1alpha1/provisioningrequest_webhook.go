@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,16 +34,11 @@ import (
 // log is for logging in this package.
 var provisioningrequestlog = logf.Log.WithName("provisioningrequest-webhook")
 
-var webhookClient client.Client
-
 // SetupWebhookWithManager will setup the manager to manage the webhooks
 func (r *ProvisioningRequest) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	if webhookClient == nil {
-		webhookClient = mgr.GetClient()
-	}
-
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+		For(&ProvisioningRequest{}).
+		WithValidator(&provisioningRequestValidator{Client: mgr.GetClient()}).
 		Complete()
 }
 
@@ -51,13 +47,27 @@ func (r *ProvisioningRequest) SetupWebhookWithManager(mgr ctrl.Manager) error {
 // Modifying the path for an invalid path can cause API server errors; failing to locate the webhook.
 //+kubebuilder:webhook:path=/validate-o2ims-provisioning-oran-org-v1alpha1-provisioningrequest,mutating=false,failurePolicy=fail,sideEffects=None,groups=o2ims.provisioning.oran.org,resources=provisioningrequests,verbs=create;update,versions=v1alpha1,name=provisioningrequests.o2ims.provisioning.oran.org,admissionReviewVersions=v1
 
-var _ webhook.Validator = &ProvisioningRequest{}
+// provisioningRequestValidator is a webhook validator for ProvisioningRequest
+type provisioningRequestValidator struct {
+	client.Client
+}
+
+var _ webhook.CustomValidator = &provisioningRequestValidator{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *ProvisioningRequest) ValidateCreate() (admission.Warnings, error) {
-	provisioningrequestlog.Info("validate create", "name", r.Spec.Name)
+func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	pr, casted := obj.(*ProvisioningRequest)
+	if !casted {
+		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", obj)
+	}
+	provisioningrequestlog.Info("validate create", "name", pr.Spec.Name)
 
-	if err := r.validateCreateOrUpdate(nil); err != nil {
+	// Validate that metadata.name is a valid UUID
+	if _, err := uuid.Parse(pr.Name); err != nil {
+		return nil, fmt.Errorf("metadata.name must be a valid UUID: %v", err)
+	}
+
+	if err := v.validateCreateOrUpdate(ctx, nil, pr); err != nil {
 		provisioningrequestlog.Error(err, "failed to validate the ProvisioningRequest")
 		return nil, err
 	}
@@ -66,21 +76,23 @@ func (r *ProvisioningRequest) ValidateCreate() (admission.Warnings, error) {
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *ProvisioningRequest) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	provisioningrequestlog.Info("validate update", "name", r.Name)
+func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldObj runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+	oldPr, casted := oldObj.(*ProvisioningRequest)
+	if !casted {
+		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", oldObj)
+	}
+	newPr, casted := newObj.(*ProvisioningRequest)
+	if !casted {
+		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", newObj)
+	}
+	provisioningrequestlog.Info("validate update", "name", oldPr.Name)
 
-	if !r.DeletionTimestamp.IsZero() {
+	if !newPr.DeletionTimestamp.IsZero() {
 		// ProvisioningRequest is being deleted, this update is triggered by finalizer removal
 		return nil, nil
 	}
 
-	oldPr, casted := old.(*ProvisioningRequest)
-	if !casted {
-		provisioningrequestlog.Error(fmt.Errorf("old object conversion error for ProvisioningRequest"), "validate update error")
-		return nil, nil
-	}
-
-	if err := r.validateCreateOrUpdate(oldPr); err != nil {
+	if err := v.validateCreateOrUpdate(ctx, oldPr, newPr); err != nil {
 		provisioningrequestlog.Error(err, "failed to validate the ProvisioningRequest")
 		return nil, err
 	}
@@ -89,26 +101,25 @@ func (r *ProvisioningRequest) ValidateUpdate(old runtime.Object) (admission.Warn
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *ProvisioningRequest) ValidateDelete() (admission.Warnings, error) {
-	provisioningrequestlog.Info("validate delete", "name", r.Name)
+func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil
 }
 
-func (r *ProvisioningRequest) validateCreateOrUpdate(oldPr *ProvisioningRequest) error {
-	clusterTemplate, err := r.GetClusterTemplateRef(context.TODO(), webhookClient)
+func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Context, oldPr *ProvisioningRequest, newPr *ProvisioningRequest) error {
+	clusterTemplate, err := newPr.GetClusterTemplateRef(ctx, v.Client)
 	if err != nil {
 		return err
 	}
 
-	if err = r.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
+	if err = newPr.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
 		return err
 	}
 
 	// We only validate the ClusterInstance input here, not the PolicyTemplate input since
 	// its schema is not just for ProvisioningRequest.
-	newPrClusterInstanceInput, err := r.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)
+	newPrClusterInstanceInput, err := newPr.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)
 	if err != nil {
 		return err
 	}
@@ -123,7 +134,7 @@ func (r *ProvisioningRequest) validateCreateOrUpdate(oldPr *ProvisioningRequest)
 	// updates to immutable fields in the ClusterInstance input are disallowed,
 	// with the exception of scaling up/down when Cluster provisioning is completed.
 	crProvisionedCond := meta.FindStatusCondition(
-		r.Status.Conditions, string(PRconditionTypes.ClusterProvisioned))
+		newPr.Status.Conditions, string(PRconditionTypes.ClusterProvisioned))
 	if crProvisionedCond != nil && crProvisionedCond.Reason != string(CRconditionReasons.Unknown) {
 		oldPrClusterInstanceInput, err := ExtractMatchingInput(
 			oldPr.Spec.TemplateParameters.Raw, TemplateParamClusterInstance)
@@ -135,7 +146,7 @@ func (r *ProvisioningRequest) validateCreateOrUpdate(oldPr *ProvisioningRequest)
 		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
 			oldPrClusterInstanceInput.(map[string]any), newPrClusterInstanceInput.(map[string]any), [][]string{})
 		if err != nil {
-			return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", r.Name, err)
+			return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", newPr.Name, err)
 		}
 
 		if len(scalingNodes) != 0 && crProvisionedCond.Reason != "Completed" {
