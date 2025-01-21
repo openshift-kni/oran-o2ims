@@ -167,6 +167,7 @@ metadata:
             "smo": {
               "oauth": {
                 "clientSecretName": "oauth-client-secrets",
+                "groupsClaim": "roles",
                 "scopes": [
                   "openid",
                   "profile",
@@ -174,7 +175,8 @@ metadata:
                   "smo-audience"
                 ],
                 "tokenEndpoint": "/protocol/openid-connect/token",
-                "url": "https://oauth.example.com:8443/realms/oran"
+                "url": "https://oauth.example.com:8443/realms/oran",
+                "usernameClaim": "preferred_username"
               },
               "registrationEndpoint": "/smo/v1/registration",
               "tls": {
@@ -865,6 +867,15 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
+          GroupsClaim represents the claim contained within the OAuth JWT token which holds the list of groups/roles. This
+          must be a list/array and not a space separated list of names.  It must also be a top level attribute rather than
+          a nested field in the JSON structure of the JWT object.
+             i.e., {"roles": ["a", "b"]} rather than {"realm": {"roles": ["a", "b"}}.
+        displayName: OAuth Groups Claim
+        path: smo.oauth.groupsClaim
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
           Scopes represents the OAuth scope values to request when acquiring a token.  Typically, this should be set to
           "openid" in addition to any other scopes that the SMO specifically requires (e.g., "roles", "groups", etc...) to
           authorize our requests
@@ -883,6 +894,12 @@ spec:
           https://keycloak.example.com/realms/oran)
         displayName: OAuth URL
         path: smo.oauth.url
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: UsernameClaim represents the claim contained within the OAuth
+          JWT token which holds the username
+        displayName: OAuth Username Claim
+        path: smo.oauth.usernameClaim
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: RegistrationEndpoint represents the API endpoint used to register

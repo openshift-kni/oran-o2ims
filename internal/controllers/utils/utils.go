@@ -171,11 +171,29 @@ func HasDatabase(serverName string) bool {
 		serverName == InventoryAlarmServerName
 }
 
-// HasConnectivityToSMO determines whether a server requires reachability to the SMO for notifications
-func HasConnectivityToSMO(serverName string) bool {
+// RequiresInternalProxy determines whether a server expects its API to be accessed by another server.  If this
+// is the case, then in an OAuth configuration we run a second RBAC proxy for that server which handles authenticating
+// using a Kubernetes service account token rather than an OAuth token.
+func RequiresInternalProxy(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName
+}
+
+// IsOAuthEnabled determines if the Inventory CR has OAuth attributes provided.
+func IsOAuthEnabled(inventory *inventoryv1alpha1.Inventory) bool {
+	return inventory.Spec.SmoConfig != nil && inventory.Spec.SmoConfig.OAuthConfig != nil
+}
+
+// NeedsOAuthAccess determines whether a server requires access to the Authorization server.  This can be either
+// because it needs to get a token to communicate with the SMO or to validate a token against the authorization server
+// directly.
+func NeedsOAuthAccess(serverName string) bool {
+	return serverName == InventoryResourceServerName ||
+		serverName == InventoryClusterServerName ||
+		serverName == InventoryAlarmServerName ||
+		serverName == InventoryArtifactsServerName ||
+		serverName == InventoryProvisioningServerName
 }
 
 // getTLSClientCertificateSecret determines which TLS secret to use for the specified server.  If a specific TLS config
@@ -225,7 +243,7 @@ func GetDeploymentVolumes(serverName string, inventory *inventoryv1alpha1.Invent
 		}...)
 	}
 
-	if HasConnectivityToSMO(serverName) {
+	if NeedsOAuthAccess(serverName) {
 		if inventory.Spec.SmoConfig != nil {
 			clientSecretName := getTLSClientCertificateSecret(serverName, inventory)
 			if clientSecretName != nil {
@@ -269,7 +287,7 @@ func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.I
 		}...)
 	}
 
-	if HasConnectivityToSMO(serverName) {
+	if NeedsOAuthAccess(serverName) {
 		if inventory.Spec.SmoConfig != nil {
 			clientSecretName := getTLSClientCertificateSecret(serverName, inventory)
 			if clientSecretName != nil {
@@ -404,6 +422,39 @@ func addArgsForSMO(inventory *inventoryv1alpha1.Inventory, args []string) []stri
 		args = append(args,
 			fmt.Sprintf("--ca-bundle-file=%s/ca-bundle.pem", CABundleMountPath),
 		)
+	}
+
+	return args
+}
+
+// AddOAuthArgsForProxy adds the OAuth specific arguments to the kube-rbac-proxy command line args
+func AddOAuthArgsForProxy(inventory *inventoryv1alpha1.Inventory, clientID string, args []string) []string {
+	if inventory.Spec.SmoConfig != nil {
+		smo := inventory.Spec.SmoConfig
+
+		if smo.OAuthConfig != nil {
+			args = append(args,
+				fmt.Sprintf("--oidc-issuer=%s", smo.OAuthConfig.URL),
+				fmt.Sprintf("--oidc-clientID=%s", clientID),
+				fmt.Sprintf("--oidc-username-claim=%s", smo.OAuthConfig.UsernameClaim),
+				fmt.Sprintf("--oidc-groups-claim=%s", smo.OAuthConfig.GroupsClaim),
+			)
+		}
+
+		// TODO: enable this once we've upstreamed changes to kube-rbac-proxy to add mTLS support to the OIDC issuer
+		//
+		// if smo.TLS != nil && smo.TLS.ClientCertificateName != nil {
+		//   args = append(args,
+		// 		fmt.Sprintf("--oidc-client-cert-file=%s/tls.crt", TLSClientMountPath),
+		// 		fmt.Sprintf("--oidc-client-key-file=%s/tls.key", TLSClientMountPath),
+		// 	 )
+		// }
+
+		if inventory.Spec.CaBundleName != nil {
+			args = append(args,
+				fmt.Sprintf("--oidc-ca-file=%s/ca-bundle.pem", CABundleMountPath),
+			)
+		}
 	}
 
 	return args
@@ -835,7 +886,7 @@ func GetPasswordOrRandom(envName string) string {
 
 // GetServiceURL constructs the default service URL for a server
 func GetServiceURL(serverName string) string {
-	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), DefaultServicePort)
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%s", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), os.Getenv(InternalServicePortName))
 }
 
 // MakeUUIDFromName generates a namespaced uuid value from the specified namespace and name values.  The values are

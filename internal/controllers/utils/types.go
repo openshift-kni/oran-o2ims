@@ -60,6 +60,7 @@ var InventoryConditionReasons = struct {
 	SmoRegistrationSuccessful         InventoryConditionReason
 	SmoRegistrationFailed             InventoryConditionReason
 	SmoNotConfigured                  InventoryConditionReason
+	OAuthClientIDNotConfigured        InventoryConditionReason
 }{
 	DatabaseDeploymentFailed:          "DatabaseDeploymentFailed",
 	DeploymentsReady:                  "AllDeploymentsReady",
@@ -69,6 +70,7 @@ var InventoryConditionReasons = struct {
 	SmoRegistrationSuccessful:         "SmoRegistrationSuccessful",
 	SmoRegistrationFailed:             "SmoRegistrationFailed",
 	SmoNotConfigured:                  "SmoNotConfigured",
+	OAuthClientIDNotConfigured:        "OAuthClientIDNotConfigured",
 }
 
 var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{

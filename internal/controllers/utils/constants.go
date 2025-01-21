@@ -30,8 +30,14 @@ const (
 	InventoryProvisioningServerName = InventoryProvisioning + serverSuffix
 )
 
-// InventoryIngressName the name of our Ingress controller instance
-const InventoryIngressName = "api"
+// IngressName defines the name of our ingress controller
+const IngressName = "oran-o2ims-ingress"
+
+// IngressClassName defines the ingress controller class to be used
+const IngressClassName = "openshift-default"
+
+// IngressPortName defines the name of service port to which our ingress controller directs traffic to
+const IngressPortName = "api"
 
 // Resource operations
 const (
@@ -204,27 +210,40 @@ const (
 
 // POD Container Names
 const (
-	MigrationContainerName = "migration"
-	RbacContainerName      = "rbac"
-	ServerContainerName    = "server"
+	MigrationContainerName    = "migration"
+	RbacContainerName         = "rbac"
+	ServerContainerName       = "server"
+	InternalRbacContainerName = "internal-rbac"
 )
 
 // POD Port Values
 const (
-	DefaultServicePort   = 8000
-	DefaultTargetPort    = "https"
-	DefaultContainerPort = 8000
+	DefaultServicePort       = 8000
+	DefaultServiceTargetPort = "https"
+	DefaultContainerPort     = 8000
+	DefaultProxyPort         = 8443
+
+	InternalServicePort       = 9000
+	InternalServiceTargetPort = "internal-https"
+	InternalProxyPort         = 6443
 
 	DatabaseServicePort = 5432
 	DatabaseTargetPort  = "database"
 )
 
+// MinimumProxyTLSVersion defines the minimum value we accept for incoming TLS connections to the proxies
+const MinimumProxyTLSVersion = "VersionTLS12"
+
+// MinimumProxyLogLevel defines the minimum log-level set on the proxies
+const MinimumProxyLogLevel = 10
+
 // Environment values
 const (
-	ServerImageName        = "IMAGE"
-	KubeRbacProxyImageName = "KUBE_RBAC_PROXY_IMAGE"
-	PostgresImageName      = "POSTGRES_IMAGE"
-	HwMgrPluginNameSpace   = "HWMGR_PLUGIN_NAMESPACE"
+	ServerImageName         = "IMAGE"
+	KubeRbacProxyImageName  = "KUBE_RBAC_PROXY_IMAGE"
+	PostgresImageName       = "POSTGRES_IMAGE"
+	HwMgrPluginNameSpace    = "HWMGR_PLUGIN_NAMESPACE"
+	InternalServicePortName = "INTERNAL_SERVICE_PORT"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
