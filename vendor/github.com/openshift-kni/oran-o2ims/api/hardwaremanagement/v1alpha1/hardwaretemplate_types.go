@@ -26,8 +26,11 @@ type NodePoolData struct {
 	Role string `json:"role"`
 	// +kubebuilder:validation:MinLength=1
 	HwProfile string `json:"hwProfile"`
-	// +kubebuilder:validation:MinLength=1
-	ResourcePoolId string `json:"resourcePoolId"`
+	// ResourcePoolId is the identifier for the Resource Pool in the hardware manager instance.
+	// +optional
+	ResourcePoolId string `json:"resourcePoolId,omitempty"`
+	// +optional
+	ResourceSelector string `json:"resourceSelector,omitempty"`
 }
 
 // HardwareTemplateSpec defines the desired state of HardwareTemplate
