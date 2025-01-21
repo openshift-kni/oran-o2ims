@@ -754,8 +754,6 @@ components:
           example: "http://localhost:8000"
         extensions:
           type: object
-          additionalProperties:
-            type: string
           example:
             hub: "hub0"
             country: "ES"
@@ -814,8 +812,6 @@ components:
           example: "COMPUTE"
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
         alarmDictionary:
           # TODO: should define this as a model
@@ -880,8 +876,6 @@ components:
           example: "EU"
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
       required:
       - resourcePoolId
@@ -935,8 +929,6 @@ components:
             type: string
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource.
       required:
       - resourceId

@@ -50,9 +50,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+//+kubebuilder:rbac:groups=hwmgr-plugin.oran.openshift.io,resources=hardwaremanagers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
-//+kubebuilder:rbac:groups=view.open-cluster-management.io,resources=managedclusterviews,verbs=create
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
@@ -68,13 +68,12 @@ import (
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="cluster.open-cluster-management.io",resources=managedclusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch;update
-//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
-//+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes",verbs=get;list
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusters",verbs=get;list
+//+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
 //+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 
 // Reconciler reconciles a Inventory object
@@ -1017,43 +1016,15 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"view.open-cluster-management.io",
+					"hwmgr-plugin.oran.openshift.io",
 				},
 				Resources: []string{
-					"managedclusterviews",
-				},
-				Verbs: []string{
-					"create",
-				},
-			},
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"nodes",
+					"hardwaremanagers",
 				},
 				Verbs: []string{
 					"get",
 					"list",
 					"watch",
-				},
-			},
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"configmaps",
-				},
-				Verbs: []string{
-					"get",
-					"list",
-					"watch",
-					"create",
-					"update",
-					"patch",
-					"delete",
 				},
 			},
 			{
@@ -1070,16 +1041,12 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 				},
 			},
 			{
-				APIGroups: []string{
-					"internal.open-cluster-management.io",
-				},
-				Resources: []string{
-					"managedclusterinfos",
+				NonResourceURLs: []string{
+					"/hardware-manager/inventory/*",
 				},
 				Verbs: []string{
 					"get",
 					"list",
-					"watch",
 				},
 			},
 		},
@@ -1549,8 +1516,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		{
 			Name:  utils.InternalServicePortName,
 			Value: fmt.Sprintf("%d", internalServicePort),
-		}}...,
-	)
+		},
+		{
+			Name:  utils.HwMgrPluginNameSpace,
+			Value: os.Getenv(utils.HwMgrPluginNameSpace),
+		},
+	}...)
 
 	// Server specific env var
 	if serverName == utils.InventoryAlarmServerName {

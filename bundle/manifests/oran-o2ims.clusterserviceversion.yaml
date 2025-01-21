@@ -1125,6 +1125,11 @@ spec:
       clusterPermissions:
       - rules:
         - nonResourceURLs:
+          - /hardware-manager/inventory/*
+          verbs:
+          - get
+          - list
+        - nonResourceURLs:
           - /internal/v1/caas-alerts/alertmanager
           verbs:
           - create
@@ -1162,14 +1167,6 @@ spec:
           - list
           - patch
           - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - nodes
-          verbs:
-          - get
-          - list
           - watch
         - apiGroups:
           - ""
@@ -1279,14 +1276,6 @@ spec:
           - hwmgr-plugin.oran.openshift.io
           resources:
           - hardwaremanagers
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - internal.open-cluster-management.io
-          resources:
-          - managedclusterinfos
           verbs:
           - get
           - list
@@ -1518,12 +1507,6 @@ spec:
           - patch
           - update
           - watch
-        - apiGroups:
-          - view.open-cluster-management.io
-          resources:
-          - managedclusterviews
-          verbs:
-          - create
         - apiGroups:
           - authentication.k8s.io
           resources:

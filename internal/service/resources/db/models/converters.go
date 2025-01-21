@@ -19,7 +19,7 @@ func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentMan
 		Capacity:            map[string]string{},
 		DeploymentManagerId: record.DeploymentManagerID,
 		Description:         record.Description,
-		Extensions:          record.Extensions,
+		Extensions:          &record.Extensions,
 		Name:                record.Name,
 		OCloudId:            record.OCloudID,
 		ServiceUri:          record.URL,
@@ -86,7 +86,7 @@ func SubscriptionFromModel(object *generated.Subscription) *models2.Subscription
 func ResourcePoolToModel(record *ResourcePool) generated.ResourcePool {
 	object := generated.ResourcePool{
 		Description:      record.Description,
-		Extensions:       record.Extensions,
+		Extensions:       &record.Extensions,
 		GlobalLocationId: record.GlobalLocationID,
 		Location:         record.Location,
 		Name:             record.Name,

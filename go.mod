@@ -28,7 +28,8 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241213003211-a57a58a5c4f2
 	github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512
-	github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250117165412-cf3a6bb431bf
+	github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250122185709-926aa2a18752
+	github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client v0.0.0-20250122185709-926aa2a18752
 	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241001130125-a052f08603f7
 	github.com/openshift-kni/oran-o2ims/api/inventory v0.0.0-00010101000000-000000000000
 	github.com/openshift-kni/oran-o2ims/api/provisioning v0.0.0-00010101000000-000000000000
