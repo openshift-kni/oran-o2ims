@@ -222,7 +222,7 @@ func (r *ProvisioningRequest) ValidateClusterInstanceInputMatchesSchema(
 	if err != nil {
 		return nil, fmt.Errorf(
 			"spec.templateParameters.%s does not match the schema defined in ClusterTemplate (%s) spec.templateParameterSchema.%s: %w",
-			TemplateParamClusterInstance, TemplateParamClusterInstance, clusterTemplate.Name, err)
+			TemplateParamClusterInstance, clusterTemplate.Name, TemplateParamClusterInstance, err)
 	}
 
 	return clusterInstanceMatchingInput, nil
