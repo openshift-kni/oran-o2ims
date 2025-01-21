@@ -23,7 +23,6 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/data"
-	"github.com/openshift-kni/oran-o2ims/internal/files"
 	"github.com/openshift-kni/oran-o2ims/internal/model"
 )
 
@@ -286,59 +285,6 @@ func (h *ResourceTypeHandler) getGraphqlVars() (graphqlVars *model.SearchInput) 
 	return
 }
 
-func (h *ResourceTypeHandler) getAlarmDictionary(ctx context.Context, resourceClass string) (result data.Object, err error) {
-	handler, err := NewAlarmDefinitionHandler().
-		SetLogger(h.logger).
-		Build()
-	if err != nil {
-		h.logger.ErrorContext(
-			ctx,
-			"Failed to create handler",
-			"error", err,
-		)
-		return
-	}
-
-	response, err := handler.List(ctx, nil)
-	if err != nil {
-		return
-	}
-
-	// Filter by 'resourceClass'
-	definitions := data.Select(
-		response.Items,
-		func(ctx context.Context, item data.Object) (result bool, err error) {
-			itemResourceClass, err := data.GetString(item, "alarmAdditionalFields.resourceClass")
-			if err != nil {
-				// Missing optional 'resourceClass' property in item
-				return false, nil
-			}
-			result = itemResourceClass == resourceClass
-
-			return
-		},
-	)
-
-	alarmDefinitions, err := data.Collect(ctx, definitions)
-	if err != nil {
-		return
-	}
-
-	result = data.Object{
-		"alarmDefinition":        alarmDefinitions,
-		"pkNotificationField":    "alarmDefinitionID",
-		"managementInterfaceId":  "O2IMS",
-		"alarmDictionaryVersion": files.AlarmDictionaryVersion,
-		// Constant string value - not yet defined by O2IMS spec
-		"alarmDictionarySchemaVersion": "",
-		// TODO: no direct mapping
-		"entityType": "",
-		"vendor":     "",
-	}
-
-	return
-}
-
 // Map an item to an O2 Resource object.
 func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 	from data.Object) (to data.Object, err error) {
@@ -358,17 +304,11 @@ func (h *ResourceTypeHandler) mapItem(ctx context.Context,
 		}
 	}
 
-	alarmDictionary, err := h.getAlarmDictionary(ctx, resourceClass)
-	if err != nil {
-		return
-	}
-
 	to = data.Object{
-		"resourceTypeId":  resourceTypeId,
-		"name":            resourceTypeId,
-		"resourceKind":    resourceKind,
-		"resourceClass":   resourceClass,
-		"alarmDictionary": alarmDictionary,
+		"resourceTypeId": resourceTypeId,
+		"name":           resourceTypeId,
+		"resourceKind":   resourceKind,
+		"resourceClass":  resourceClass,
 		// TODO: no direct mapping
 		"description": "",
 		"extensions":  data.Object{},
