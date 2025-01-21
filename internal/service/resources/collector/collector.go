@@ -184,6 +184,124 @@ func (c *Collector) execute(ctx context.Context) {
 	slog.Debug("collector loop complete", "sources", len(c.dataSources))
 }
 
+func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSource) (int, error) {
+	resources, err := c.repository.FindStaleResources(ctx, dataSource.GetID(), dataSource.GetGenerationID())
+	if err != nil {
+		return 0, fmt.Errorf("failed to find stale resources: %w", err)
+	}
+
+	count := 0
+	for _, resource := range resources {
+		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, resource, resource.ResourceID,
+			&resource.ResourcePoolID, func(object interface{}) any {
+				r, _ := object.(models.Resource)
+				return models.ResourceToModel(&r, nil)
+			})
+		if err != nil {
+			return count, fmt.Errorf("failed to delete stale resource: %w", err)
+		}
+		if dataChangeEvent != nil {
+			count++
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Purged stale resources", "count", count)
+	}
+
+	return count, nil
+}
+
+func (c *Collector) purgeStaleResourcePools(ctx context.Context, dataSource DataSource) (int, error) {
+	pools, err := c.repository.FindStaleResourcePools(ctx, dataSource.GetID(), dataSource.GetGenerationID())
+	if err != nil {
+		return 0, fmt.Errorf("failed to find stale resources: %w", err)
+	}
+
+	count := 0
+	for _, pool := range pools {
+		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
+			nil, func(object interface{}) any {
+				r, _ := object.(models.ResourcePool)
+				return models.ResourcePoolToModel(&r)
+			})
+		if err == nil {
+			return count, fmt.Errorf("failed to delete stale resource pool: %w", err)
+		}
+		if dataChangeEvent != nil {
+			count++
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Purged stale resource pool", "count", count)
+	}
+
+	return count, nil
+}
+
+func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource DataSource) (int, error) {
+	pools, err := c.repository.FindStaleResourcePools(ctx, dataSource.GetID(), dataSource.GetGenerationID())
+	if err != nil {
+		return 0, fmt.Errorf("failed to find stale resource types: %w", err)
+	}
+
+	count := 0
+	for _, pool := range pools {
+		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
+			nil, func(object interface{}) any {
+				r, _ := object.(models.ResourcePool)
+				return models.ResourcePoolToModel(&r)
+			})
+		if err == nil {
+			return count, fmt.Errorf("failed to delete stale resource type: %w", err)
+		}
+		if dataChangeEvent != nil {
+			count++
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Purged stale resource types", "count", count)
+	}
+
+	return count, nil
+}
+
+// purgeStaleData removes any records that have a generation id older than the generation id of the data source which
+// created it.
+func (c *Collector) purgeStaleData(ctx context.Context, dataSource DataSource) error {
+	slog.Info("Purging stale data", "source", dataSource.Name())
+
+	total := 0
+	count := 0
+
+	count, err := c.purgeStaleResources(ctx, dataSource)
+	if err != nil {
+		return fmt.Errorf("failed to purge stale resources': %w", err)
+	}
+	total += count
+
+	count, err = c.purgeStaleResourcePools(ctx, dataSource)
+	if err != nil {
+		return fmt.Errorf("failed to purge stale resource pools: %w", err)
+	}
+	total += count
+
+	count, err = c.purgeStaleResourceTypes(ctx, dataSource)
+	if err != nil {
+		return fmt.Errorf("failed to purge stale resource types: %w", err)
+	}
+	total += count
+
+	slog.Info("Purged stale data", "source", dataSource.Name(), "count", total)
+
+	return nil
+}
+
 // executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
 func (c *Collector) executeOneDataSource(ctx context.Context, dataSource ResourceDataSource) (err error) {
 	// TODO: Add code to retrieve alarm dictionaries
@@ -211,7 +329,10 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource Resourc
 		return fmt.Errorf("failed to update data source %q: %w", dataSource.Name(), err)
 	}
 
-	// TODO: purge stale record
+	err = c.purgeStaleData(ctx, dataSource)
+	if err != nil {
+		return fmt.Errorf("failed to purge stale data from '%s': %w", dataSource.Name(), err)
+	}
 
 	return nil
 }
