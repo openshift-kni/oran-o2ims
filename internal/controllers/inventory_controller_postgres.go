@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sptr "k8s.io/utils/ptr"
@@ -142,6 +143,12 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 							},
 						},
 						VolumeMounts: deploymentVolumeMounts,
+						Resources: corev1.ResourceRequirements{ // Values here are derived from current PG tuning (update postgresql.conf and then these values as needed)
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
+							},
+						},
 					},
 				},
 			},

@@ -1535,6 +1535,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 								ContainerPort: 8000,
 							},
 						},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("200m"),
+								corev1.ResourceMemory: resource.MustParse("256Mi"),
+							},
+						},
 					},
 				},
 			},
@@ -1549,6 +1555,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				Command: []string{"/usr/bin/oran-o2ims"},
 				Args:    []string{serverName, "migrate"},
 				Env:     envVars,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("100m"),
+						corev1.ResourceMemory: resource.MustParse("128Mi"),
+					},
+				},
 			},
 		}
 	}
