@@ -205,25 +205,28 @@ components:
           type: object
           description: |
             Defines the parameters required for ClusterTemplate. The parameter definitions should follow the OpenAPI V3 schema and explicitly define required fields.
-          example: |
-            {
-              "properties": {
-                "clusterInstanceParameters": {},
-                "nodeClusterName": {
-                  "type": "string"
-                },
-                "oCloudSiteId": {
-                  "type": "string"
-                },
-                "policyTemplateParameters": {},
-                "required": [
-                  "nodeClusterName",
-                  "oCloudSiteId",
-                  "policyTemplateParameters",
-                  "clusterInstanceParameters"
-                ]
+          example: {
+            "properties": {
+              "clusterInstanceParameters": {
+                "type": "object"
+              },
+              "nodeClusterName": {
+                "type": "string"
+              },
+              "oCloudSiteId": {
+                "type": "string"
+              },
+              "policyTemplateParameters": {
+                "type": "object"
               }
-            }
+            },
+            "required": [
+              "nodeClusterName",
+              "oCloudSiteId",
+              "policyTemplateParameters",
+              "clusterInstanceParameters"
+            ]
+          }
         name:
           type: string
           description: Human readable description of managed infrastructure template

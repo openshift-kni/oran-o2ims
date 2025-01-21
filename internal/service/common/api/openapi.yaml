@@ -174,7 +174,6 @@ components:
             except for purposes of localization. If type is given and other than "about:blank", this attribute shall also be provided.
         status:
           type: integer
-          format: int
           description: The HTTP status code for this occurrence of the problem.
         detail:
           type: string

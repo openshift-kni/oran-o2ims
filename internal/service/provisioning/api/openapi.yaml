@@ -324,13 +324,13 @@ components:
         templateParameters:
           type: object
           description: Input Parameters that conform to the OpenAPI V3 schema defined in the template.
-          example: "{}"
+          example: {}
         extensions:
           type: object
           description: | 
             These are unspecified (not standardized) properties (keys) which are tailored by the vendor or 
             operator to extend the information provided about the O-Cloud Provisioning Request.
-          example: "{}"
+          example: {}
         status:
           $ref: "#/components/schemas/ProvisioningRequestStatus"
       required:

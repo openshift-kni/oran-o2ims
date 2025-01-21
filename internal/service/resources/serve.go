@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
+
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -37,6 +39,22 @@ const (
 // Serve start alarms server
 func Serve(config *api.ResourceServerConfig) error {
 	slog.Info("Starting resource server")
+
+	// Get and validate the openapi spec file
+	swagger, err := generated.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("failed to get swagger: %w", err)
+	}
+	if err := swagger.Validate(context.Background(),
+		openapi3.EnableSchemaDefaultsValidation(), // Validate default values
+		openapi3.EnableSchemaFormatValidation(),   // Validate standard formats
+		openapi3.EnableSchemaPatternValidation(),  // Validate regex patterns
+		openapi3.EnableExamplesValidation(),       // Validate examples
+		openapi3.ProhibitExtensionsWithRef(),      // Prevent x- extension fields
+	); err != nil {
+		return fmt.Errorf("failed validate swagger: %w", err)
+	}
+
 	// Channel for shutdown signals
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -143,12 +161,6 @@ func Serve(config *api.ResourceServerConfig) error {
 		AddSource: true,
 		Level:     slog.LevelDebug, // TODO: set with server args
 	}))
-
-	// This also validates the spec file
-	swagger, err := generated.GetSwagger()
-	if err != nil {
-		return fmt.Errorf("failed to get swagger: %w", err)
-	}
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
 	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
