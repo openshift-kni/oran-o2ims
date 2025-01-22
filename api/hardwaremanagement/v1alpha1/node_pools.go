@@ -24,6 +24,7 @@ type LocationSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Location string `json:"location,omitempty"`
 	// Site
+	// +kubebuilder:validation:Required
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Site",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Site string `json:"site"`
 }

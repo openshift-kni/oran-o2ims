@@ -22,13 +22,14 @@ metadata:
               {
                 "hwProfile": "profile-spr-single-processor-64G",
                 "name": "controller",
-                "resourcePoolID": "master-pool",
+                "resourcePoolId": "master-pool",
+                "resourceSelector": "selector-here",
                 "role": "master"
               },
               {
                 "hwProfile": "profile-spr-dual-processor-128G",
                 "name": "worker",
-                "resourcePoolID": "worker-pool",
+                "resourcePoolId": "worker-pool",
                 "role": "worker"
               }
             ]
