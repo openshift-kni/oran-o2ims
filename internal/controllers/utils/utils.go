@@ -26,6 +26,7 @@ import (
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -50,6 +51,11 @@ var (
 )
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
+	cr, ok := object.(*provisioningv1alpha1.ProvisioningRequest)
+	if ok {
+		cr.Status.ObservedGeneration = cr.Generation
+	}
+
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := c.Status().Update(ctx, object); err != nil {
 			return fmt.Errorf("failed to update status: %w", err)

@@ -28,6 +28,13 @@ func SetStatusCondition(
 	)
 }
 
+// SetProvisioningStatePending updates the provisioning state to pending with detailed message
+func SetProvisioningStatePending(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
+	cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StatePending
+	cr.Status.ProvisioningStatus.ProvisioningDetails = message
+	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+}
+
 // SetProvisioningStateInProgress updates the provisioning state to progressing with detailed message
 func SetProvisioningStateInProgress(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
 	cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing

@@ -231,6 +231,11 @@ spec:
                       type: object
                     type: array
                 type: object
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller.
+                format: int64
+                type: integer
               provisioningStatus:
                 properties:
                   provisionedResources:
@@ -249,6 +254,7 @@ spec:
                   provisioningPhase:
                     description: The current state of the provisioning process.
                     enum:
+                    - pending
                     - progressing
                     - fulfilled
                     - failed
