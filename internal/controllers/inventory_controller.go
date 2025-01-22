@@ -575,12 +575,12 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 
 	if t.object.Spec.SmoConfig.TLS != nil && t.object.Spec.SmoConfig.TLS.ClientCertificateName != nil {
 		secretName := *t.object.Spec.SmoConfig.TLS.ClientCertificateName
-		cert, err := utils.GetCertFromSecret(ctx, t.client, secretName, t.object.Namespace)
+		cert, key, err := utils.GetKeyPairFromSecret(ctx, t.client, secretName, t.object.Namespace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get client certificate from secret: %w", err)
+			return nil, fmt.Errorf("failed to get certificate and key from secret: %w", err)
 		}
 
-		config.TLSConfig.ClientCert = cert
+		config.TLSConfig.ClientCert = utils.NewStaticKeyPairLoader(cert, key)
 	}
 
 	httpClient, err := utils.SetupOAuthClient(ctx, &config)

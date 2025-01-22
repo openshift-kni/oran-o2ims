@@ -1,13 +1,14 @@
 package utils
 
 import (
-	"crypto/tls"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/spf13/cobra"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -130,7 +131,7 @@ func (c *CommonServerConfig) Validate() error {
 }
 
 // CreateOAuthConfig builds an OAuthClientConfig from the specified parameters
-func (c *CommonServerConfig) CreateOAuthConfig() (*utils.OAuthClientConfig, error) {
+func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*utils.OAuthClientConfig, error) {
 	config := utils.OAuthClientConfig{}
 	if c.TLS.CABundleFile != "" {
 		// Load the bundle
@@ -143,16 +144,19 @@ func (c *CommonServerConfig) CreateOAuthConfig() (*utils.OAuthClientConfig, erro
 	}
 
 	if c.TLS.CertFile != "" && c.TLS.KeyFile != "" {
-		// Load the mTLS client cert/key
-		cert, err := tls.LoadX509KeyPair(c.TLS.CertFile, c.TLS.KeyFile)
+		// Load the mTLS client cert/key dynamic to support certificate renewals
+		dynamicClientCert, err := dynamiccertificates.NewDynamicServingContentFromFiles("client-oauth", c.TLS.CertFile, c.TLS.KeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load client certificate and key pair: %w", err)
+			return nil, fmt.Errorf("failed to create dynamic client certificate loader: %w", err)
 		}
 		if config.TLSConfig == nil {
 			config.TLSConfig = &utils.TLSConfig{}
 		}
-		config.TLSConfig.ClientCert = &cert
+		config.TLSConfig.ClientCert = dynamicClientCert
 		slog.Debug("using TLS client config", "cert", c.TLS.CertFile, ",key", c.TLS.KeyFile)
+
+		// Run the controller so that it monitors for file changes
+		go dynamicClientCert.Run(ctx, 1)
 	}
 
 	config.OAuthConfig = &utils.OAuthConfig{
