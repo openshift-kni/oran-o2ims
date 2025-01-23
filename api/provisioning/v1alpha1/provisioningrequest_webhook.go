@@ -92,6 +92,13 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldOb
 		return nil, nil
 	}
 
+	// Check if spec.templateName or spec.templateVersion is changed
+	if oldPr.Spec.TemplateName != newPr.Spec.TemplateName || oldPr.Spec.TemplateVersion != newPr.Spec.TemplateVersion {
+		if newPr.Status.ProvisioningStatus.ProvisioningPhase != StateFulfilled {
+			return nil, fmt.Errorf("updates to spec.templateName or spec.templateVersion are not allowed if the ProvisioningRequest is not fulfilled")
+		}
+	}
+
 	if err := v.validateCreateOrUpdate(ctx, oldPr, newPr); err != nil {
 		provisioningrequestlog.Error(err, "failed to validate the ProvisioningRequest")
 		return nil, err
