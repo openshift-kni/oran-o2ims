@@ -617,7 +617,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 		return fmt.Errorf("failed to send registration request to '%s': %s", url, err.Error())
 	}
 
-	if result.StatusCode != http.StatusOK {
+	if result.StatusCode > http.StatusNoContent {
 		return fmt.Errorf("registration request failed to '%s', HTTP code=%s", url, result.Status)
 	}
 
