@@ -44,7 +44,7 @@ type AlarmsServer struct {
 	// GlobalCloudID is the global O-Cloud identifier. Create subscription requests are blocked if the global O-Cloud identifier is not set
 	GlobalCloudID uuid.UUID
 	// AlarmsRepository is the repository for the alarms
-	AlarmsRepository *repo.AlarmsRepository
+	AlarmsRepository repo.AlarmRepositoryInterface
 	// Infrastructure clients
 	Infrastructure *infrastructure.Infrastructure
 	// Wg to allow alarm server level background tasks to finish before graceful exit

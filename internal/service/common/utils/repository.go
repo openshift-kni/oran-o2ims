@@ -26,7 +26,9 @@ var ErrNotFound = errors.New("record not found")
 // Following functions are meant to fulfill basic CRUD operations on the database. More complex queries or bulk operations
 // for Insert or Update should be built in the repository files of the specific service and called one of the Execute helper functions.
 
-// DBQuery is an abstraction to allow passing either a pool or a transaction query function to any of the utilities.
+// DBQuery is an abstraction to allow passing either a pool or a transaction query function to any of the utilities
+// and allowing for production (pgxpool) and test (mock) implementations.
+// Additional pgxpool methods can be added to this interface as they are needed in the codebase e.g SendBatch
 type DBQuery interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (commandTag pgconn.CommandTag, err error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
@@ -220,7 +222,10 @@ func ExecuteCollectRows[T db.Model](ctx context.Context, db DBQuery, sql string,
 	var err error
 
 	// Run query
-	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	rows, err := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err) // Fake error from mocking gets stored here
+	}
 	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		return []T{}, fmt.Errorf("failed to execute query: %w", err)
