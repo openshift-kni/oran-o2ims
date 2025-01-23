@@ -42,6 +42,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	"github.com/spf13/cobra"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -124,6 +125,7 @@ func init() {
 	utilruntime.Must(openshiftoperatorv1.AddToScheme(scheme))
 	utilruntime.Must(ibguv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(pluginv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(assistedservicev1beta1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.
