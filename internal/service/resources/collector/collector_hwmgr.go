@@ -6,15 +6,15 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/google/uuid"
-	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
 	inventoryclient "github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client/generated"
+	"k8s.io/client-go/transport"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
@@ -82,23 +82,13 @@ func setupInventoryClient(name string) (*inventoryclient.ClientWithResponses, er
 
 	hc := http.Client{Transport: tr}
 
-	tokenPath := utils.DefaultBackendTokenFile
-
-	// Read token
-	data, err := os.ReadFile(tokenPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read token file: %w", err)
+	// Create a request editor that uses a cached token source capable of re-reading from file to pickup changes
+	// as our token is renewed.
+	editor := clients.AuthorizationEditor{
+		Source: transport.NewCachedFileTokenSource(utils.DefaultBackendTokenFile),
 	}
 
-	// TODO: need to re-read this token if it has been expired/refreshed
-
-	// Create Bearer token
-	token, err := securityprovider.NewSecurityProviderBearerToken(strings.TrimSpace(string(data)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Bearer token: %w", err)
-	}
-
-	c, err := inventoryclient.NewClientWithResponses(url, inventoryclient.WithHTTPClient(&hc), inventoryclient.WithRequestEditorFn(token.Intercept))
+	c, err := inventoryclient.NewClientWithResponses(url, inventoryclient.WithHTTPClient(&hc), inventoryclient.WithRequestEditorFn(editor.Editor))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}

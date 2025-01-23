@@ -6,12 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/google/uuid"
-
-	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
+	"k8s.io/client-go/transport"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
@@ -70,19 +68,12 @@ func (r *ClusterServer) Setup() error {
 		tokenPath = path
 	}
 
-	// Read token
-	data, err := os.ReadFile(tokenPath)
-	if err != nil {
-		return fmt.Errorf("failed to read token file: %w", err)
+	// Create a request editor that uses a cached token source capable of re-reading from file to pickup changes
+	// as our token is renewed.
+	editor := clients.AuthorizationEditor{
+		Source: transport.NewCachedFileTokenSource(tokenPath),
 	}
-
-	// Create Bearer token
-	token, err := securityprovider.NewSecurityProviderBearerToken(strings.TrimSpace(string(data)))
-	if err != nil {
-		return fmt.Errorf("failed to create Bearer token: %w", err)
-	}
-
-	c, err := generated.NewClientWithResponses(url, generated.WithHTTPClient(&hc), generated.WithRequestEditorFn(token.Intercept))
+	c, err := generated.NewClientWithResponses(url, generated.WithHTTPClient(&hc), generated.WithRequestEditorFn(editor.Editor))
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
