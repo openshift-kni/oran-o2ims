@@ -65,6 +65,9 @@ for MODULE in "${MODULES[@]}"; do
         CMD="go mod edit -replace github.com/openshift-kni/oran-hwmgr-plugin/${MODULE}=github.com/${DEVELOPER}/oran-hwmgr-plugin/${MODULE}@${BRANCH}"
     fi
 
+    # Remove stale -replace, if any
+    go mod edit -dropreplace github.com/openshift-kni/oran-hwmgr-plugin/${MODULE}
+
     echo "Re-syncing ${MODULE} with: ${CMD}"
     if ! bash -c "${CMD}"; then
         echo "Command failed" >&2
