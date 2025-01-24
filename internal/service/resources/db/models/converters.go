@@ -51,7 +51,7 @@ func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentMan
 func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 	object := generated.ResourceType{
 		// TODO: fill-in a proper alarm dictionary when we can get it from the hardware manager
-		AlarmDictionary: generated.AlarmDictionary{
+		AlarmDictionary: &generated.AlarmDictionary{
 			AlarmDefinition: []generated.AlarmDefinition{
 				{
 					AlarmAdditionalFields: nil,
@@ -74,7 +74,7 @@ func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 			Vendor:                 record.Vendor,
 		},
 		Description:    record.Description,
-		Extensions:     record.Extensions,
+		Extensions:     &record.Extensions,
 		Model:          record.Model,
 		Name:           record.Name,
 		ResourceClass:  generated.ResourceTypeResourceClass(record.ResourceClass),

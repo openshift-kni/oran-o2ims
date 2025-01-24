@@ -822,10 +822,8 @@ components:
       - vendor
       - model
       - version
-      - alarmDictionary
       - resourceKind
       - resourceClass
-      - extensions
 
     ResourcePool:
       description: |
