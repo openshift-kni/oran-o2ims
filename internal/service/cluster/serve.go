@@ -108,6 +108,11 @@ func Serve(config *api.ClusterServerConfig) error {
 		return fmt.Errorf("failed to create Kubernetes data source: %w", err)
 	}
 
+	alarms, err := collector.NewAlarmsDataSource()
+	if err != nil {
+		return fmt.Errorf("failed to create Alarms data source: %w", err)
+	}
+
 	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository, collector.NewNotificationTransformer())
@@ -115,7 +120,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create the collector
-	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{k8s})
+	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{k8s, alarms})
 
 	// Init server
 	// Create the handler

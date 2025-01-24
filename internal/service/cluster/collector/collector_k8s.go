@@ -145,15 +145,17 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 
 	resourceTypeName := d.makeNodeClusterTypeName(clusterType, vendor, version)
 	resourceTypeID := utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, resourceTypeName)
+	alarmDictionaryID := utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, fmt.Sprintf("%s-%s", resourceTypeName, "alarms"))
 
 	// We expect that the standard will eventually evolve to contain more attributes to align more
 	// closely with how ResourceType was defined, but for now we'll add some additional info as
 	// extensions so that they are known to clients.  These will be used by the alarm code to build
 	// the dictionary.
 	typeExtensions := map[string]interface{}{
-		utils.ClusterVendorExtension:  vendor,
-		utils.ClusterVersionExtension: version,
-		utils.ClusterModelExtension:   clusterType,
+		utils.ClusterVendorExtension:            vendor,
+		utils.ClusterVersionExtension:           version,
+		utils.ClusterModelExtension:             clusterType,
+		utils.ClusterAlarmDictionaryIDExtension: alarmDictionaryID,
 	}
 
 	result := models.NodeClusterType{

@@ -8,6 +8,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
@@ -167,4 +168,47 @@ func DataChangeEventToNotification(record *models.DataChangeEvent) *notifier.Not
 		SequenceID:     *record.SequenceID,
 		Payload:        DataChangeEventToModel(record),
 	}
+}
+
+func AlarmDictionaryToModel(record *models.AlarmDictionary, alarmDefinitionRecords []models.AlarmDefinition) common.AlarmDictionary {
+	alarmDictionary := common.AlarmDictionary{
+		AlarmDictionaryId:            record.AlarmDictionaryID,
+		AlarmDictionaryVersion:       record.AlarmDictionaryVersion,
+		AlarmDictionarySchemaVersion: record.AlarmDictionarySchemaVersion,
+		EntityType:                   record.EntityType,
+		Vendor:                       record.Vendor,
+		PkNotificationField:          record.PKNotificationField,
+	}
+
+	for _, interfaceID := range record.ManagementInterfaceID {
+		alarmDictionary.ManagementInterfaceId = append(alarmDictionary.ManagementInterfaceId, common.AlarmDictionaryManagementInterfaceId(interfaceID))
+	}
+
+	// If there are no alarm definitions, return the dictionary with an empty slice
+	if len(alarmDefinitionRecords) == 0 {
+		alarmDictionary.AlarmDefinition = []common.AlarmDefinition{}
+		return alarmDictionary
+	}
+
+	for _, alarmDefinitionRecord := range alarmDefinitionRecords {
+		alarmDefinition := common.AlarmDefinition{
+			AlarmDefinitionId:     alarmDefinitionRecord.AlarmDefinitionID,
+			AlarmName:             alarmDefinitionRecord.AlarmName,
+			AlarmLastChange:       alarmDefinitionRecord.AlarmLastChange,
+			AlarmChangeType:       common.AlarmDefinitionAlarmChangeType(alarmDefinitionRecord.AlarmChangeType),
+			AlarmDescription:      alarmDefinitionRecord.AlarmDescription,
+			ProposedRepairActions: alarmDefinitionRecord.ProposedRepairActions,
+			ClearingType:          common.AlarmDefinitionClearingType(alarmDefinitionRecord.ClearingType),
+			PkNotificationField:   alarmDefinitionRecord.PKNotificationField,
+			AlarmAdditionalFields: alarmDefinitionRecord.AlarmAdditionalFields,
+		}
+
+		for _, interfaceID := range alarmDefinitionRecord.ManagementInterfaceID {
+			alarmDefinition.ManagementInterfaceId = append(alarmDefinition.ManagementInterfaceId, common.AlarmDefinitionManagementInterfaceId(interfaceID))
+		}
+
+		alarmDictionary.AlarmDefinition = append(alarmDictionary.AlarmDefinition, alarmDefinition)
+	}
+
+	return alarmDictionary
 }

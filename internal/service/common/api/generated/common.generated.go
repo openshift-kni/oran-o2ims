@@ -13,6 +13,30 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+)
+
+// Defines values for AlarmDefinitionAlarmChangeType.
+const (
+	ADDED    AlarmDefinitionAlarmChangeType = "ADDED"
+	DELETED  AlarmDefinitionAlarmChangeType = "DELETED"
+	MODIFIED AlarmDefinitionAlarmChangeType = "MODIFIED"
+)
+
+// Defines values for AlarmDefinitionClearingType.
+const (
+	AUTOMATIC AlarmDefinitionClearingType = "AUTOMATIC"
+	MANUAL    AlarmDefinitionClearingType = "MANUAL"
+)
+
+// Defines values for AlarmDefinitionManagementInterfaceId.
+const (
+	AlarmDefinitionManagementInterfaceIdO2IMS AlarmDefinitionManagementInterfaceId = "O2IMS"
+)
+
+// Defines values for AlarmDictionaryManagementInterfaceId.
+const (
+	AlarmDictionaryManagementInterfaceIdO2IMS AlarmDictionaryManagementInterfaceId = "O2IMS"
 )
 
 // APIVersion Information about a version of the API.
@@ -25,6 +49,86 @@ type APIVersions struct {
 	ApiVersions *[]APIVersion `json:"apiVersions,omitempty"`
 	UriPrefix   *string       `json:"uriPrefix,omitempty"`
 }
+
+// AlarmDefinition Information about an alarm definition.
+type AlarmDefinition struct {
+	// AlarmAdditionalFields List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
+	AlarmAdditionalFields *map[string]interface{} `json:"alarmAdditionalFields,omitempty"`
+
+	// AlarmChangeType Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
+	AlarmChangeType AlarmDefinitionAlarmChangeType `json:"alarmChangeType"`
+
+	// AlarmDefinitionId Provides a unique identifier of the alarm being raised. This is the Primary Key into the Alarm Dictionary
+	AlarmDefinitionId openapi_types.UUID `json:"alarmDefinitionId"`
+
+	// AlarmDescription Provides a longer descriptive meaning of the alarm condition and a description of the consequences of the
+	// alarm condition. This is intended to be read by an operator to give an idea of what happened and a sense of
+	// the effects, consequences, and other impacted areas of the system.
+	AlarmDescription string `json:"alarmDescription"`
+
+	// AlarmLastChange Indicates the Alarm Dictionary Version in which this alarm last changed.
+	AlarmLastChange string `json:"alarmLastChange"`
+
+	// AlarmName Provides short name for the alarm
+	AlarmName string `json:"alarmName"`
+
+	// ClearingType Identifies whether alarm is cleared automatically or manually.
+	ClearingType AlarmDefinitionClearingType `json:"clearingType"`
+
+	// ManagementInterfaceId List of management interface over which alarms are transmitted for this Entity Type.
+	// RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
+	ManagementInterfaceId []AlarmDefinitionManagementInterfaceId `json:"managementInterfaceId"`
+
+	// PkNotificationField Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
+	// Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
+	PkNotificationField []string `json:"pkNotificationField"`
+
+	// ProposedRepairActions Provides guidance for proposed repair actions.
+	ProposedRepairActions string `json:"proposedRepairActions"`
+}
+
+// AlarmDefinitionAlarmChangeType Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
+type AlarmDefinitionAlarmChangeType string
+
+// AlarmDefinitionClearingType Identifies whether alarm is cleared automatically or manually.
+type AlarmDefinitionClearingType string
+
+// AlarmDefinitionManagementInterfaceId defines model for AlarmDefinition.ManagementInterfaceId.
+type AlarmDefinitionManagementInterfaceId string
+
+// AlarmDictionary Information about an alarm dictionary.
+type AlarmDictionary struct {
+	AlarmDefinition []AlarmDefinition `json:"alarmDefinition"`
+
+	// AlarmDictionaryId The Identifier of the Alarm Dictionary. The Identifier is unique within an O-Cloud.
+	AlarmDictionaryId openapi_types.UUID `json:"alarmDictionaryId"`
+
+	// AlarmDictionarySchemaVersion Version of the Alarm Dictionary Schema to which this alarm dictionary conforms.
+	AlarmDictionarySchemaVersion string `json:"alarmDictionarySchemaVersion"`
+
+	// AlarmDictionaryVersion Version of the Alarm Dictionary. Version is vendor defined such that the version of the dictionary can be
+	// associated with a specific version of the software delivery of this product.
+	AlarmDictionaryVersion string `json:"alarmDictionaryVersion"`
+
+	// EntityType O-RAN entity type emitting the alarm: This shall be unique per vendor ResourceType.model and
+	// ResourceType.version
+	EntityType string `json:"entityType"`
+
+	// ManagementInterfaceId List of management interface over which alarms are transmitted for this Entity Type.
+	// RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
+	ManagementInterfaceId []AlarmDictionaryManagementInterfaceId `json:"managementInterfaceId"`
+
+	// PkNotificationField Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
+	// Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
+	PkNotificationField []string `json:"pkNotificationField"`
+
+	// Vendor Vendor of the Entity Type to whom this Alarm Dictionary applies. This should be the same value as in the
+	// ResourceType.vendor attribute
+	Vendor string `json:"vendor"`
+}
+
+// AlarmDictionaryManagementInterfaceId defines model for AlarmDictionary.ManagementInterfaceId.
+type AlarmDictionaryManagementInterfaceId string
 
 // ProblemDetails defines model for ProblemDetails.
 type ProblemDetails struct {
@@ -51,6 +155,9 @@ type ProblemDetails struct {
 	Type *string `json:"type,omitempty"`
 }
 
+// AlarmDictionaryId defines model for alarmDictionaryId.
+type AlarmDictionaryId = openapi_types.UUID
+
 // ExcludeFields defines model for excludeFields.
 type ExcludeFields = string
 
@@ -63,36 +170,54 @@ type Filter = string
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"/xqqBO9zJgAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

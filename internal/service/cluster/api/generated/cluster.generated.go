@@ -187,6 +187,91 @@ type NodeClusterTypeId = openapi_types.UUID
 // SubscriptionId defines model for subscriptionId.
 type SubscriptionId = openapi_types.UUID
 
+// GetAlarmDictionariesParams defines parameters for GetAlarmDictionaries.
+type GetAlarmDictionariesParams struct {
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
+}
+
 // GetClusterResourceTypesParams defines parameters for GetClusterResourceTypes.
 type GetClusterResourceTypesParams struct {
 	// ExcludeFields Comma separated list of field references to exclude from the result.
@@ -650,6 +735,12 @@ type ServerInterface interface {
 	// Get API versions
 	// (GET /o2ims-infrastructureCluster/api_versions)
 	GetAllVersions(w http.ResponseWriter, r *http.Request)
+	// Get alarm dictionaries
+	// (GET /o2ims-infrastructureCluster/v1/alarmDictionaries)
+	GetAlarmDictionaries(w http.ResponseWriter, r *http.Request, params GetAlarmDictionariesParams)
+	// Get an alarm dictionary
+	// (GET /o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId})
+	GetAlarmDictionary(w http.ResponseWriter, r *http.Request, alarmDictionaryId externalRef0.AlarmDictionaryId)
 	// Get minor API versions
 	// (GET /o2ims-infrastructureCluster/v1/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request)
@@ -671,6 +762,9 @@ type ServerInterface interface {
 	// Get a node cluster type
 	// (GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId})
 	GetNodeClusterType(w http.ResponseWriter, r *http.Request, nodeClusterTypeId NodeClusterTypeId)
+	// Get an alarm dictionary for a node cluster type
+	// (GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary)
+	GetNodeClusterTypeAlarmDictionary(w http.ResponseWriter, r *http.Request, nodeClusterTypeId NodeClusterTypeId)
 	// Get node clusters
 	// (GET /o2ims-infrastructureCluster/v1/nodeClusters)
 	GetNodeClusters(w http.ResponseWriter, r *http.Request, params GetNodeClustersParams)
@@ -705,6 +799,74 @@ func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAllVersions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAlarmDictionaries operation middleware
+func (siw *ServerInterfaceWrapper) GetAlarmDictionaries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAlarmDictionariesParams
+
+	// ------------- Optional query parameter "exclude_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "filter" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "filter", r.URL.Query(), &params.Filter)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAlarmDictionaries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAlarmDictionary operation middleware
+func (siw *ServerInterfaceWrapper) GetAlarmDictionary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "alarmDictionaryId" -------------
+	var alarmDictionaryId externalRef0.AlarmDictionaryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "alarmDictionaryId", r.PathValue("alarmDictionaryId"), &alarmDictionaryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "alarmDictionaryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAlarmDictionary(w, r, alarmDictionaryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -923,6 +1085,31 @@ func (siw *ServerInterfaceWrapper) GetNodeClusterType(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetNodeClusterType(w, r, nodeClusterTypeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNodeClusterTypeAlarmDictionary operation middleware
+func (siw *ServerInterfaceWrapper) GetNodeClusterTypeAlarmDictionary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "nodeClusterTypeId" -------------
+	var nodeClusterTypeId NodeClusterTypeId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "nodeClusterTypeId", r.PathValue("nodeClusterTypeId"), &nodeClusterTypeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "nodeClusterTypeId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNodeClusterTypeAlarmDictionary(w, r, nodeClusterTypeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1247,6 +1434,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/api_versions", wrapper.GetAllVersions)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/alarmDictionaries", wrapper.GetAlarmDictionaries)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId}", wrapper.GetAlarmDictionary)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/api_versions", wrapper.GetMinorVersions)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/clusterResourceTypes", wrapper.GetClusterResourceTypes)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId}", wrapper.GetClusterResourceType)
@@ -1254,6 +1443,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/clusterResources/{clusterResourceId}", wrapper.GetClusterResource)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/nodeClusterTypes", wrapper.GetNodeClusterTypes)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}", wrapper.GetNodeClusterType)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary", wrapper.GetNodeClusterTypeAlarmDictionary)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/nodeClusters", wrapper.GetNodeClusters)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/nodeClusters/{nodeClusterId}", wrapper.GetNodeCluster)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureCluster/v1/subscriptions", wrapper.GetSubscriptions)
@@ -1292,6 +1482,85 @@ func (response GetAllVersions400ApplicationProblemPlusJSONResponse) VisitGetAllV
 type GetAllVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAllVersions500ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionariesRequestObject struct {
+	Params GetAlarmDictionariesParams
+}
+
+type GetAlarmDictionariesResponseObject interface {
+	VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error
+}
+
+type GetAlarmDictionaries200JSONResponse []externalRef0.AlarmDictionary
+
+func (response GetAlarmDictionaries200JSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaries400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionaries400ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaries500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionaries500ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaryRequestObject struct {
+	AlarmDictionaryId externalRef0.AlarmDictionaryId `json:"alarmDictionaryId"`
+}
+
+type GetAlarmDictionaryResponseObject interface {
+	VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error
+}
+
+type GetAlarmDictionary200JSONResponse externalRef0.AlarmDictionary
+
+func (response GetAlarmDictionary200JSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary400ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary404ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary500ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(500)
 
@@ -1569,6 +1838,50 @@ func (response GetNodeClusterType500ApplicationProblemPlusJSONResponse) VisitGet
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetNodeClusterTypeAlarmDictionaryRequestObject struct {
+	NodeClusterTypeId NodeClusterTypeId `json:"nodeClusterTypeId"`
+}
+
+type GetNodeClusterTypeAlarmDictionaryResponseObject interface {
+	VisitGetNodeClusterTypeAlarmDictionaryResponse(w http.ResponseWriter) error
+}
+
+type GetNodeClusterTypeAlarmDictionary200JSONResponse externalRef0.AlarmDictionary
+
+func (response GetNodeClusterTypeAlarmDictionary200JSONResponse) VisitGetNodeClusterTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNodeClusterTypeAlarmDictionary400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetNodeClusterTypeAlarmDictionary400ApplicationProblemPlusJSONResponse) VisitGetNodeClusterTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNodeClusterTypeAlarmDictionary404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetNodeClusterTypeAlarmDictionary404ApplicationProblemPlusJSONResponse) VisitGetNodeClusterTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse) VisitGetNodeClusterTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetNodeClustersRequestObject struct {
 	Params GetNodeClustersParams
 }
@@ -1802,6 +2115,12 @@ type StrictServerInterface interface {
 	// Get API versions
 	// (GET /o2ims-infrastructureCluster/api_versions)
 	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
+	// Get alarm dictionaries
+	// (GET /o2ims-infrastructureCluster/v1/alarmDictionaries)
+	GetAlarmDictionaries(ctx context.Context, request GetAlarmDictionariesRequestObject) (GetAlarmDictionariesResponseObject, error)
+	// Get an alarm dictionary
+	// (GET /o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId})
+	GetAlarmDictionary(ctx context.Context, request GetAlarmDictionaryRequestObject) (GetAlarmDictionaryResponseObject, error)
 	// Get minor API versions
 	// (GET /o2ims-infrastructureCluster/v1/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
@@ -1823,6 +2142,9 @@ type StrictServerInterface interface {
 	// Get a node cluster type
 	// (GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId})
 	GetNodeClusterType(ctx context.Context, request GetNodeClusterTypeRequestObject) (GetNodeClusterTypeResponseObject, error)
+	// Get an alarm dictionary for a node cluster type
+	// (GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary)
+	GetNodeClusterTypeAlarmDictionary(ctx context.Context, request GetNodeClusterTypeAlarmDictionaryRequestObject) (GetNodeClusterTypeAlarmDictionaryResponseObject, error)
 	// Get node clusters
 	// (GET /o2ims-infrastructureCluster/v1/nodeClusters)
 	GetNodeClusters(ctx context.Context, request GetNodeClustersRequestObject) (GetNodeClustersResponseObject, error)
@@ -1889,6 +2211,58 @@ func (sh *strictHandler) GetAllVersions(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetAllVersionsResponseObject); ok {
 		if err := validResponse.VisitGetAllVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAlarmDictionaries operation middleware
+func (sh *strictHandler) GetAlarmDictionaries(w http.ResponseWriter, r *http.Request, params GetAlarmDictionariesParams) {
+	var request GetAlarmDictionariesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAlarmDictionaries(ctx, request.(GetAlarmDictionariesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAlarmDictionaries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAlarmDictionariesResponseObject); ok {
+		if err := validResponse.VisitGetAlarmDictionariesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAlarmDictionary operation middleware
+func (sh *strictHandler) GetAlarmDictionary(w http.ResponseWriter, r *http.Request, alarmDictionaryId externalRef0.AlarmDictionaryId) {
+	var request GetAlarmDictionaryRequestObject
+
+	request.AlarmDictionaryId = alarmDictionaryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAlarmDictionary(ctx, request.(GetAlarmDictionaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAlarmDictionary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAlarmDictionaryResponseObject); ok {
+		if err := validResponse.VisitGetAlarmDictionaryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2076,6 +2450,32 @@ func (sh *strictHandler) GetNodeClusterType(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// GetNodeClusterTypeAlarmDictionary operation middleware
+func (sh *strictHandler) GetNodeClusterTypeAlarmDictionary(w http.ResponseWriter, r *http.Request, nodeClusterTypeId NodeClusterTypeId) {
+	var request GetNodeClusterTypeAlarmDictionaryRequestObject
+
+	request.NodeClusterTypeId = nodeClusterTypeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNodeClusterTypeAlarmDictionary(ctx, request.(GetNodeClusterTypeAlarmDictionaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNodeClusterTypeAlarmDictionary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNodeClusterTypeAlarmDictionaryResponseObject); ok {
+		if err := validResponse.VisitGetNodeClusterTypeAlarmDictionaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetNodeClusters operation middleware
 func (sh *strictHandler) GetNodeClusters(w http.ResponseWriter, r *http.Request, params GetNodeClustersParams) {
 	var request GetNodeClustersRequestObject
@@ -2241,76 +2641,94 @@ func (sh *strictHandler) GetSubscription(w http.ResponseWriter, r *http.Request,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"fl8WC9bj/wcAAP//X0nVYaNoAAA=",
+	"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",
+	"Pf9/AAAA//+nUGuNRYUAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -7,8 +7,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
+	"github.com/stephenafamo/bob/dialect/psql/dialect"
+	"github.com/stephenafamo/bob/dialect/psql/im"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
+	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -125,4 +128,65 @@ func (r *ClusterRepository) GetClusterResourcesNotIn(ctx context.Context, keys [
 // otherwise an error
 func (r *ClusterRepository) GetClusterResource(ctx context.Context, id uuid.UUID) (*models.ClusterResource, error) {
 	return utils.Find[models.ClusterResource](ctx, r.Db, id)
+}
+
+// UpsertAlarmDefinitions inserts or updates alarm definition records
+func (r *ClusterRepository) UpsertAlarmDefinitions(ctx context.Context, records []commonmodels.AlarmDefinition) ([]commonmodels.AlarmDefinition, error) {
+	dbModel := commonmodels.AlarmDefinition{}
+
+	if len(records) == 0 {
+		return []commonmodels.AlarmDefinition{}, nil
+	}
+
+	columns := utils.GetColumns(records[0], []string{
+		"AlarmName", "AlarmLastChange", "AlarmChangeType", "AlarmDescription",
+		"ProposedRepairActions", "ClearingType", "AlarmAdditionalFields",
+		"AlarmDictionaryID", "Severity"},
+	)
+
+	modInsert := []bob.Mod[*dialect.InsertQuery]{
+		im.Into(dbModel.TableName(), columns...),
+		im.OnConflictOnConstraint(dbModel.OnConflict()).DoUpdate(
+			im.SetExcluded(columns...)),
+		im.Returning(dbModel.PrimaryKey()),
+	}
+
+	for _, record := range records {
+		modInsert = append(modInsert, im.Values(psql.Arg(record.AlarmName, record.AlarmLastChange, record.AlarmChangeType,
+			record.AlarmDescription, record.ProposedRepairActions, record.ClearingType, record.AlarmAdditionalFields,
+			record.AlarmDictionaryID, record.Severity)))
+	}
+
+	query := psql.Insert(
+		modInsert...,
+	)
+
+	sql, args, err := query.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	return utils.ExecuteCollectRows[commonmodels.AlarmDefinition](ctx, r.Db, sql, args)
+}
+
+// DeleteAlarmDefinitionsNotIn deletes all alarm definitions identified by the primary key that are not in the list of IDs.
+// The Where expression also uses the column "alarm_dictionary_id" to filter the records
+func (r *ClusterRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, alarmDictionaryID uuid.UUID) (int64, error) {
+	tags := utils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "AlarmDictionaryID")
+
+	expr := psql.Quote(commonmodels.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["AlarmDictionaryID"]).EQ(psql.Arg(alarmDictionaryID)))
+	count, err := utils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
+	return count, err
+}
+
+// GetAlarmDefinitionsByAlarmDictionaryID returns the list of AlarmDefinition records that have a matching "alarm_dictionary_id"
+func (r *ClusterRepository) GetAlarmDefinitionsByAlarmDictionaryID(ctx context.Context, alarmDictionaryID uuid.UUID) ([]commonmodels.AlarmDefinition, error) {
+	e := psql.Quote("alarm_dictionary_id").EQ(psql.Arg(alarmDictionaryID))
+	return utils.Search[commonmodels.AlarmDefinition](ctx, r.Db, e)
+}
+
+// FindStaleAlarmDictionaries returns the list of AlarmDictionary records that have a matching "data_source_id" and a "generation_id"
+func (r *ClusterRepository) FindStaleAlarmDictionaries(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]commonmodels.AlarmDictionary, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return utils.Search[commonmodels.AlarmDictionary](ctx, r.Db, e)
 }

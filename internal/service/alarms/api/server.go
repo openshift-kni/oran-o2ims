@@ -25,7 +25,6 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
-	apiresources "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 )
 
 const (
@@ -321,7 +320,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 			}), nil
 		}
 
-		if alarmDefinition.ClearingType != string(apiresources.MANUAL) {
+		if alarmDefinition.ClearingType != string(common.MANUAL) {
 			return api.PatchAlarm409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				AdditionalAttributes: &map[string]string{
 					"alarmEventRecordId": request.AlarmEventRecordId.String(),

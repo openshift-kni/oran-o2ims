@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
@@ -51,27 +52,27 @@ func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentMan
 func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 	object := generated.ResourceType{
 		// TODO: fill-in a proper alarm dictionary when we can get it from the hardware manager
-		AlarmDictionary: &generated.AlarmDictionary{
-			AlarmDefinition: []generated.AlarmDefinition{
+		AlarmDictionary: &common.AlarmDictionary{
+			AlarmDefinition: []common.AlarmDefinition{
 				{
 					AlarmAdditionalFields: nil,
-					AlarmChangeType:       generated.ADDED,
+					AlarmChangeType:       common.ADDED,
 					AlarmDefinitionId:     uuid.MustParse(dummyDefinitionID),
 					AlarmDescription:      "Sample alarm definition",
 					AlarmLastChange:       dummyVersion,
 					AlarmName:             "Sample alarm name",
-					ClearingType:          generated.MANUAL,
-					ManagementInterfaceId: []generated.AlarmDefinitionManagementInterfaceId{managementInterfaceID},
+					ClearingType:          common.MANUAL,
+					ManagementInterfaceId: []common.AlarmDefinitionManagementInterfaceId{managementInterfaceID},
 					PkNotificationField:   []string{"alarmDefinitionID"},
 					ProposedRepairActions: "Please consult the documentation",
 				},
 			},
-			AlarmDictionarySchema:  dummyVersion,
-			AlarmDictionaryVersion: dummyVersion,
-			EntityType:             fmt.Sprintf("%s/%s", record.Model, record.Version),
-			ManagementInterfaceId:  []generated.AlarmDictionaryManagementInterfaceId{"O2IMS"},
-			PkNotificationField:    []string{"alarmDictionaryID"},
-			Vendor:                 record.Vendor,
+			AlarmDictionarySchemaVersion: dummyVersion,
+			AlarmDictionaryVersion:       dummyVersion,
+			EntityType:                   fmt.Sprintf("%s/%s", record.Model, record.Version),
+			ManagementInterfaceId:        []common.AlarmDictionaryManagementInterfaceId{"O2IMS"},
+			PkNotificationField:          []string{"alarmDictionaryID"},
+			Vendor:                       record.Vendor,
 		},
 		Description:    record.Description,
 		Extensions:     &record.Extensions,

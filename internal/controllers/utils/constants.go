@@ -274,9 +274,10 @@ const (
 
 // NodeCluster/ClusterResource extensions
 const (
-	ClusterModelExtension   = "model"
-	ClusterVersionExtension = "version"
-	ClusterVendorExtension  = "vendor"
+	ClusterModelExtension             = "model"
+	ClusterVersionExtension           = "version"
+	ClusterVendorExtension            = "vendor"
+	ClusterAlarmDictionaryIDExtension = "alarmDictionaryID"
 
 	ClusterModelHubCluster     = "hub-cluster"
 	ClusterModelManagedCluster = "managed-cluster"
