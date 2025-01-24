@@ -53,7 +53,7 @@ kind: ProvisioningRequest
 metadata:
   finalizers:
     - provisioningrequest.o2ims.provisioning.oran.org/finalizer
-  name: sno-ran-du-1
+  name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
   name: Dev-main-SNO-Provisioning-sno-ran-du-1
@@ -79,7 +79,7 @@ kind: ProvisioningRequest
 metadata:
   finalizers:
     - provisioningrequest.o2ims.provisioning.oran.org/finalizer
-  name: sno-ran-du-1
+  name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
   name: Dev-main-SNO-Provisioning-sno-ran-du-1
@@ -116,7 +116,7 @@ kind: ProvisioningRequest
 metadata:
   finalizers:
     - provisioningrequest.o2ims.provisioning.oran.org/finalizer
-  name: sno-ran-du-1
+  name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
   name: Dev-main-SNO-Provisioning-sno-ran-du-1
