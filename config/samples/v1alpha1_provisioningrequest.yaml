@@ -7,9 +7,9 @@ metadata:
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: oran-o2ims
-  name: provisioningrequest-sample
+  name: 123e4567-e89b-12d3-a456-426614174000
 spec:
-  name: "TestEnv-SNO-Provisioning"
+  name: "TestEnv-SNO-Provisioning-site-sno-du-1"
   description: "Provisioning request for setting up a Single Node OpenShift (SNO) in the test environment."
   templateName: clustertemplate-sample
   templateVersion: v1.0.0

@@ -16,10 +16,16 @@ The operator leverages several key components to achieve this:
 
 Ensure the following operators are installed on the hub cluster:
 
-- Advanced Cluster Management (ACM)
+- Advanced Cluster Management (ACM) v2.12+
 - Red Hat OpenShift GitOps Operator
-- SiteConfig Operator
 - ORAN Hardware Manager Plugin
+- SiteConfig Operator
+
+  Enable it in ACM by running the following command:
+
+  ```console
+  oc patch multiclusterhubs.operator.open-cluster-management.io multiclusterhub -n <ACM_NAMESPACE> --type json --patch '[{"op": "add", "path":"/spec/overrides/components/-", "value": {"name":"siteconfig","enabled": true}}]'
+  ```
 
 ### Git Respository Setup
 
@@ -76,6 +82,8 @@ status:
 ## ProvisioningRequest CR
 
 A cluster-scoped CR managed by the O-Cloud Manager, providing all neccessary parameters for provisioning a cluster. An example of ProvisioningRequest can be found [here](../config/samples/v1alpha1_provisioningrequest.yaml).
+
+The `metadata.name` of a ProvisioningRequest CR must be a valid UUID. Any attempt to create a ProvisioningRequest with an invalid `metadata.name` will be rejected by the webhook.
 
 The [CRD](../config/crd/bases/o2ims.provisioning.oran.org_provisioningrequests.yaml)'s `spec` fields include:
 
@@ -359,9 +367,9 @@ data:
 Deleting the ProvisioningRequest CR initiates the deletion of a provisioned cluster. O-Cloud manager sets the ProvisioningState to `deleting`, ensuring that all dependent resources are fully cleaned up before completing the deletion.
 
 ```console
-oc get oranpr sno1
-NAME      AGE   PROVISIONSTATE   PROVISIONDETAILS
-sno1      71m   deleting         Deletion is in progress
+oc get oranpr 123e4567-e89b-12d3-a456-426614174000
+NAME                                   DISPLAYNAME       AGE     PROVISIONPHASE   PROVISIONDETAILS
+123e4567-e89b-12d3-a456-426614174000   sno1-request      71m     deleting         Deletion is in progress
 ```
 
 ## Monitoring Process

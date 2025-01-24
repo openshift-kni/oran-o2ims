@@ -433,11 +433,11 @@ metadata:
               "app.kubernetes.io/name": "provisioningrequest",
               "app.kubernetes.io/part-of": "oran-o2ims"
             },
-            "name": "provisioningrequest-sample"
+            "name": "123e4567-e89b-12d3-a456-426614174000"
           },
           "spec": {
             "description": "Provisioning request for setting up a Single Node OpenShift (SNO) in the test environment.",
-            "name": "TestEnv-SNO-Provisioning",
+            "name": "TestEnv-SNO-Provisioning-site-sno-du-1",
             "templateName": "clustertemplate-sample",
             "templateParameters": {
               "clusterInstanceParameters": {
