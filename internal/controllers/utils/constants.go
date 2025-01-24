@@ -283,6 +283,8 @@ const (
 	OpenshiftVersionLabelName = "openshiftVersion"
 	ClusterIDLabelName        = "clusterID"
 	LocalClusterLabelName     = "local-cluster"
+
+	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
 )
 
 // Alertmanager values

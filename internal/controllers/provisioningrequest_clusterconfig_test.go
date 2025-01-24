@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -18,6 +19,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -1968,5 +1970,237 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		Expect(policyTimedOut).To(BeFalse())
 		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+	})
+})
+
+var _ = Describe("addClusterTemplateLabels", func() {
+	var (
+		c                 client.Client
+		ctx               context.Context
+		ctNamespace       = "clustertemplate-a-v4-16"
+		ciDefaultsCm      = "clusterinstance-defaults-v1"
+		ptDefaultsCm      = "policytemplate-defaults-v1"
+		mclName           = "cluster-1"
+		AgentName         = "agent-for-cluster-1"
+		ProvReqReconciler *ProvisioningRequestReconciler
+		ProvReqTask       *provisioningRequestReconcilerTask
+		hwTemplate        = "hwTemplate-v1"
+		managedCluster    = &clusterv1.ManagedCluster{}
+	)
+
+	BeforeEach(func() {
+		// Define the needed resources.
+		provisioningRequest := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       mclName,
+				Finalizers: []string{provisioningRequestFinalizer},
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testFullTemplateParameters),
+				},
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				// Fake the hw provision status
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		}
+
+		managedCluster = &clusterv1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mclName,
+			},
+			Spec: clusterv1.ManagedClusterSpec{
+				HubAcceptsClient: true,
+			},
+		}
+
+		crs := []client.Object{
+			// Cluster Template Namespace.
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: ctNamespace,
+				},
+			},
+			// ManagedCluster Namespace.
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: mclName,
+				},
+			},
+			// Cluster Template.
+			&provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      getClusterTemplateRefName(tName, tVersion),
+					Namespace: ctNamespace,
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:       tName,
+					Version:    tVersion,
+					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+					Templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: ciDefaultsCm,
+						PolicyTemplateDefaults:  ptDefaultsCm,
+						HwTemplate:              hwTemplate,
+					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			provisioningRequest,
+			// Managed clusters
+			managedCluster,
+		}
+
+		c = getFakeClientFromObjects(crs...)
+
+		// Get the ProvisioningRequest Task.
+		ProvReqReconciler = &ProvisioningRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		ProvReqTask = &provisioningRequestReconcilerTask{
+			logger: ProvReqReconciler.Logger,
+			client: ProvReqReconciler.Client,
+			object: provisioningRequest,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
+		}
+	})
+
+	It("Updates Agent and ManagedCluster labels as expected", func() {
+		// Create an Agent CR with the expected label.
+		agent := &assistedservicev1beta1.Agent{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      AgentName,
+				Namespace: mclName,
+				Labels: map[string]string{
+					"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+				},
+			},
+			Spec: assistedservicev1beta1.AgentSpec{
+				Approved: true,
+				ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+					Name:      mclName,
+					Namespace: mclName,
+				},
+			},
+		}
+		Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+		// Run the function.
+		err := ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check that the new label was added for the ManagedCluster CR.
+		mclUpdated := &clusterv1.ManagedCluster{}
+		err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: mclName}, mclUpdated)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(mclUpdated.GetLabels()).To(Equal(map[string]string{
+			utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+		}))
+
+		// Check that the new label was added and the old label was kept for the Agent CR.
+		err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(agent.GetLabels()).To(Equal(map[string]string{
+			utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+			"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+		}))
+	})
+
+	It("Fails to get a ClusterTemplate", func() {
+		// Update the ClusterTemplate to be invalid.
+		oranct := &provisioningv1alpha1.ClusterTemplate{}
+
+		err := ProvReqTask.client.Get(
+			ctx,
+			types.NamespacedName{Name: getClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
+			oranct,
+		)
+		Expect(err).ToNot(HaveOccurred())
+		oranct.Status.Conditions[0].Status = "False"
+		Expect(ProvReqTask.client.Status().Update(ctx, oranct)).To(Succeed())
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			"failed to get ClusterTemplate: a valid ClusterTemplate (%s) does not exist in any namespace",
+			fmt.Sprintf("%s.%s", tName, tVersion)))
+	})
+
+	It("Fails for multiple Agents", func() {
+		// Create 2 Agents in the expected namespace
+		agent := &assistedservicev1beta1.Agent{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      AgentName,
+				Namespace: mclName,
+				Labels: map[string]string{
+					"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+				},
+			},
+			Spec: assistedservicev1beta1.AgentSpec{
+				Approved: true,
+				ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+					Name:      mclName,
+					Namespace: mclName,
+				},
+			},
+		}
+		agent2 := agent.DeepCopy()
+		agent2.Name = "some-other-agent"
+		Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+		Expect(ProvReqTask.client.Create(ctx, agent2)).To(Succeed())
+
+		// Run the function.
+		err := ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			fmt.Sprintf("more than one Agent in the %s namespace", mclName)))
+	})
+
+	It("Fails for multiple Agents with unexpected labels", func() {
+		// Create 2 Agents in the expected namespace
+		agent := &assistedservicev1beta1.Agent{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      AgentName,
+				Namespace: mclName,
+				Labels: map[string]string{
+					"agent-install.openshift.io/clusterdeployment-namespace": "some-other-cluster",
+				},
+			},
+			Spec: assistedservicev1beta1.AgentSpec{
+				Approved: true,
+				ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+					Name:      mclName,
+					Namespace: mclName,
+				},
+			},
+		}
+		Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+
+		// Run the function.
+		err := ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			fmt.Sprintf("the expected Agent was not found in the %s namespace", mclName)))
 	})
 })

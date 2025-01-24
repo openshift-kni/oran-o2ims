@@ -16,6 +16,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -451,6 +452,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		ptDefaultsCm = "policytemplate-defaults-v1"
 		hwTemplate   = "hwTemplate-v1"
 		crName       = "cluster-1"
+		agentName    = "agent-cluster-1"
 	)
 
 	BeforeEach(func() {
@@ -1083,6 +1085,24 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 			}
 			Expect(c.Create(ctx, managedCluster)).To(Succeed())
+			// Create the agent.
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: crName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": crName,
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      crName,
+						Namespace: crName,
+					},
+				},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
 			// Create Non-compliant enforce policy
 			policy = &policiesv1.Policy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1280,6 +1300,19 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the provisioningState remains progressing when cluster configuration is in-progress
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Cluster configuration is being applied", nil)
+
+			// Check that the templateId label was not added for the ManagedCluster and the Agent CRs at
+			// this point.
+			mcl := &clusterv1.ManagedCluster{}
+			err = c.Get(ctx, types.NamespacedName{Name: crName}, mcl)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(mcl.GetLabels()).To(Not(HaveKey(utils.ClusterTemplateArtifactsLabel)))
+
+			// Check that the new label was added and the old label was kept for the Agent CR.
+			agent := &assistedservicev1beta1.Agent{}
+			err = c.Get(ctx, types.NamespacedName{Name: agentName, Namespace: crName}, agent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(agent.GetLabels()).To(Not(HaveKey(utils.ClusterTemplateArtifactsLabel)))
 		})
 
 		It("Verify status when ClusterInstance provision has completed, ManagedCluster becomes ready and configuration policy becomes compliant", func() {
@@ -1338,6 +1371,22 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateFulfilled, "Provisioning request has completed successfully",
 				&provisioningv1alpha1.ProvisionedResources{OCloudNodeClusterId: "76b8cbad-9928-48a0-bcf0-bb16a777b5f7"})
+
+			// Check that the templateId label was added for the ManagedCluster and the Agent CRs at this point.
+			mcl := &clusterv1.ManagedCluster{}
+			err = c.Get(ctx, types.NamespacedName{Name: crName}, mcl)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(mcl.GetLabels()).To(HaveKeyWithValue(
+				utils.ClusterTemplateArtifactsLabel, "57b39bda-ac56-4143-9b10-d1a71517d04f"))
+
+			// Check that the new label was added and the old label was kept for the Agent CR.
+			agent := &assistedservicev1beta1.Agent{}
+			err = c.Get(ctx, types.NamespacedName{Name: agentName, Namespace: crName}, agent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(agent.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				"agent-install.openshift.io/clusterdeployment-namespace": crName,
+			}))
 		})
 
 		It("Verify status when configuration change causes ProvisioningRequest validation to fail but ClusterInstall is still in progress", func() {
@@ -1753,6 +1802,24 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			}
 			Expect(c.Create(ctx, managedCluster)).To(Succeed())
 
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "agent-for-cluster-1",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": "cluster-1",
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      "cluster-1",
+						Namespace: "cluster-1",
+					},
+				},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
+
 			nodePool := &hwv1alpha1.NodePool{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
@@ -1917,6 +1984,24 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 			}
 			Expect(c.Create(ctx, managedCluster)).To(Succeed())
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "agent-for-cluster-1",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": "cluster-1",
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      "cluster-1",
+						Namespace: "cluster-1",
+					},
+				},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
+
 			networkConfig := &v1beta1.NMStateConfigSpec{
 				NetConfig: v1beta1.NetConfig{
 					Raw: []byte(

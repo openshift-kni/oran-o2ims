@@ -12,6 +12,7 @@ import (
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 )
@@ -210,12 +211,12 @@ func (t *provisioningRequestReconcilerTask) updateZTPStatus(ctx context.Context,
 }
 
 // updateOCloudNodeClusterId stores the clusterID in the provisionedResources status if it exists.
-func (t *provisioningRequestReconcilerTask) updateOCloudNodeClusterId(ctx context.Context) error {
+func (t *provisioningRequestReconcilerTask) updateOCloudNodeClusterId(ctx context.Context) (*clusterv1.ManagedCluster, error) {
 	managedCluster := &clusterv1.ManagedCluster{}
 	managedClusterExists, err := utils.DoesK8SResourceExist(
 		ctx, t.client, t.object.Status.Extensions.ClusterDetails.Name, "", managedCluster)
 	if err != nil {
-		return fmt.Errorf("failed to check if managed cluster exists: %w", err)
+		return managedCluster, fmt.Errorf("failed to check if managed cluster exists: %w", err)
 	}
 
 	if managedClusterExists {
@@ -228,7 +229,7 @@ func (t *provisioningRequestReconcilerTask) updateOCloudNodeClusterId(ctx contex
 			t.object.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId = clusterID
 		}
 	}
-	return nil
+	return managedCluster, nil
 }
 
 // finalizeProvisioningIfComplete checks if the provisioning process is completed.
@@ -237,7 +238,14 @@ func (t *provisioningRequestReconcilerTask) updateOCloudNodeClusterId(ctx contex
 func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx context.Context, allPoliciesCompliant bool) error {
 	if utils.IsClusterProvisionCompleted(t.object) && allPoliciesCompliant {
 		utils.SetProvisioningStateFulfilled(t.object)
-		if err := t.updateOCloudNodeClusterId(ctx); err != nil {
+		mcl, err := t.updateOCloudNodeClusterId(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Make sure the ClusterTemplate templateId is added as a label to the needed CRs.
+		err = t.addClusterTemplateLabels(ctx, mcl)
+		if err != nil {
 			return err
 		}
 	}
@@ -245,6 +253,72 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
 	}
+	return nil
+}
+
+// addClusterTemplateLabels adds the clustertemplates.o2ims.provisioning.oran.org/templateId on the
+// ManagedCluster and Agent objects that are associated to the current ProvisioningRequest.
+func (t *provisioningRequestReconcilerTask) addClusterTemplateLabels(ctx context.Context, mcl *clusterv1.ManagedCluster) error {
+	// Get the ClusterTemplate used by the current ProvisioningRequest.
+	oranct, err := t.object.GetClusterTemplateRef(ctx, t.client)
+	if err != nil {
+		return fmt.Errorf("failed to get ClusterTemplate: %w", err)
+	}
+
+	// Add the clustertemplates.o2ims.provisioning.oran.org/templateId label to the ManagedCluster
+	// associated to the current ProvisioningRequest.
+	err = t.setLabelValue(ctx, mcl, utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
+	if err != nil {
+		return err
+	}
+
+	// Add the clustertemplates.o2ims.provisioning.oran.org/templateIds label to the Agent
+	// associated to the current ProvisioningRequest.
+	agents := &assistedservicev1beta1.AgentList{}
+	listOpts := []client.ListOption{
+		client.MatchingLabels{
+			"agent-install.openshift.io/clusterdeployment-namespace": mcl.Name,
+		},
+		client.InNamespace(mcl.Name),
+	}
+
+	err = t.client.List(ctx, agents, listOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to list Agents in the %s namespace: %w", mcl.Name, err)
+	}
+
+	if len(agents.Items) > 1 {
+		return fmt.Errorf("more than one Agent in the %s namespace", mcl.Name)
+	}
+
+	if len(agents.Items) == 0 {
+		return fmt.Errorf("the expected Agent was not found in the %s namespace", mcl.Name)
+	}
+
+	err = t.setLabelValue(ctx, &agents.Items[0], utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setLabelValue sets a desired label on a K8S Object.
+func (t *provisioningRequestReconcilerTask) setLabelValue(
+	ctx context.Context, object client.Object, labelKey string, labelValue string) error {
+	allLabels := object.GetLabels()
+	value, exists := allLabels[labelKey]
+	if !exists || (exists && value != labelValue) {
+		if len(allLabels) == 0 {
+			allLabels = make(map[string]string)
+		}
+		allLabels[labelKey] = labelValue
+		object.SetLabels(allLabels)
+		if err := t.client.Update(ctx, object); err != nil {
+			return fmt.Errorf("failed to update status for %s %s: %w", object.GetObjectKind(), object.GetName(), err)
+		}
+	}
+
 	return nil
 }
 
