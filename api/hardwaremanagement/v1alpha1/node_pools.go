@@ -84,6 +84,9 @@ type NodePoolStatus struct {
 
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	HwMgrPlugin GenerationStatus `json:"hwMgrPlugin,omitempty"`
+
+	//+operator-sdk:csv:customresourcedefinitions:type=status
+	SelectedPools map[string]string `json:"selectedPools,omitempty"`
 }
 
 // NodePool is the schema for an allocation request of nodes

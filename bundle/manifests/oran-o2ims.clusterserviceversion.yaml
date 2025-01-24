@@ -1003,6 +1003,8 @@ spec:
       - description: Properties represent the node properties in the pool
         displayName: Properties
         path: properties
+      - displayName: Selected Pools
+        path: selectedPools
       version: v1alpha1
     - description: Node is the schema for an allocated node
       displayName: Node
