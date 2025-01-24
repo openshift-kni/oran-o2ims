@@ -40,7 +40,7 @@ func sendNotification(ctx context.Context, client *http.Client, url string, even
 		}
 	}(response.Body)
 
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode > http.StatusNoContent {
 		return fmt.Errorf("notification failed: %v", response.StatusCode)
 	}
 
