@@ -236,7 +236,7 @@ func gracefulShutdownWithTasks(srv *http.Server, alarmsServer *api.AlarmsServer)
 // startSubscriptionNotifier set a new startSubscriptionNotifier for alarms server
 func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfig, a *api.AlarmsServer) error {
 	// Create the OAuth client config
-	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig()
+	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create oauth client configuration for alarms subscribers: %w", err)
 	}

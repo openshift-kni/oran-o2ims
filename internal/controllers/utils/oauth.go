@@ -11,12 +11,41 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 )
+
+// StaticKeyPairLoader provides a means by which we can use a static certificate as input into the dynamic content
+// provider interface.  We limit the use of this to clients that are a one-shot implementation that would get re-created
+// periodically and wouldn't need to worry about certificates getting renewed as part of a long lived client.
+type StaticKeyPairLoader struct {
+	cert []byte
+	key  []byte
+}
+
+// AddListener is a no-op for static providers.
+func (s *StaticKeyPairLoader) AddListener(_ dynamiccertificates.Listener) {
+	// NOOP
+}
+
+// Name is a simple name to identify this provider
+func (s *StaticKeyPairLoader) Name() string {
+	return "StaticKeyPairLoader"
+}
+
+// CurrentCertKeyContent loads the key pair from the dynamic source.  In this case it is static data so we always load
+// the same data.
+func (s *StaticKeyPairLoader) CurrentCertKeyContent() ([]byte, []byte) {
+	return s.cert, s.key
+}
+
+func NewStaticKeyPairLoader(cert, key []byte) *StaticKeyPairLoader {
+	return &StaticKeyPairLoader{cert: cert, key: key}
+}
 
 // TLSConfig defines the TLS config attributes related to a OAuth client configuration
 type TLSConfig struct {
 	// The client certificate to be used when initiating connection to the server.
-	ClientCert *tls.Certificate
+	ClientCert dynamiccertificates.CertKeyContentProvider
 	// Defines a PEM encoded set of CA certificates used to validate server certificates.  If not provided then the
 	// default root CA bundle will be used.
 	CaBundle []byte
@@ -92,7 +121,15 @@ func SetupOAuthClient(ctx context.Context, config *OAuthClientConfig) (*http.Cli
 func setupTLSConfig(config *TLSConfig, tlsConfig *tls.Config) error {
 	if config.ClientCert != nil {
 		// Enable mTLS if a client certificate was provided.  The client CA is expected to be recognized by the server.
-		tlsConfig.Certificates = []tls.Certificate{*config.ClientCert}
+		// We are using a dynamic client certificate approach so that we can support renewing our certificate without
+		// restarting the server.
+		tlsConfig.GetClientCertificate = func(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			cert, err := tls.X509KeyPair(config.ClientCert.CurrentCertKeyContent())
+			if err != nil {
+				return nil, fmt.Errorf("failed to load client certificate: %w", err)
+			}
+			return &cert, nil
+		}
 	}
 
 	if len(config.CaBundle) != 0 {

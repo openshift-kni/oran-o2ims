@@ -97,7 +97,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	}
 
 	// Create the OAuth client config
-	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig()
+	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create oauth client configuration: %w", err)
 	}
