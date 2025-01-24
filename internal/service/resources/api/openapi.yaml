@@ -814,24 +814,7 @@ components:
           type: object
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
         alarmDictionary:
-          # TODO: should define this as a model
-          type: object
-          example:
-            alarmDictionaryVersion: "v1"
-            managementInterfaceId: "O2IMS"
-            alarmDefinition: [
-              {
-                "alarmName": "Host is running out of memory.",
-                "alarmDescription": "Memory is filling up, has been above memory high utilization threshold for the last 15 minutes",
-                "proposedRepairActions": "",
-                "managementInterfaceId": "O2IMS",
-                "pkNotificationField": "alarmDefinitionID",
-                "alarmAdditionalFields": {
-                  "resourceClass": "COMPUTE"
-                },
-                "alarmDefinitionId": "NodeMemoryHighUtilization"
-              }
-            ]
+          $ref: "#/components/schemas/AlarmDictionary"
       required:
       - resourceTypeId
       - name
@@ -839,10 +822,8 @@ components:
       - vendor
       - model
       - version
-      - alarmDictionary
       - resourceKind
       - resourceClass
-      - extensions
 
     ResourcePool:
       description: |
