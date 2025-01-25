@@ -50,6 +50,7 @@ const (
 	adminStateExtension       = "adminState"
 	operationalStateExtension = "operationalState"
 	usageStateExtension       = "usageState"
+	hwProfileExtension        = "hwProfile"
 )
 
 // NewHwMgrDataSource creates a new instance of an ACM data source collector whose purpose is to collect data from the
@@ -238,6 +239,7 @@ func (d *HwMgrDataSource) convertResource(resource *inventoryclient.ResourceInfo
 			adminStateExtension:       string(resource.AdminState),
 			operationalStateExtension: string(resource.OperationalState),
 			usageStateExtension:       string(resource.UsageState),
+			hwProfileExtension:        resource.HwProfile,
 		},
 		Groups:       resource.Groups,
 		Tags:         resource.Tags,

@@ -305,10 +305,10 @@ github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroup
 # github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512
 ## explicit; go 1.21
 github.com/openshift-kni/lifecycle-agent/api/imagebasedupgrade/v1
-# github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250122185709-926aa2a18752
+# github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250125003258-ee379f966a62
 ## explicit; go 1.22.0
 github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1
-# github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client v0.0.0-20250122185709-926aa2a18752
+# github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client v0.0.0-20250125003258-ee379f966a62
 ## explicit; go 1.22
 github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client/generated
 # github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20241001130125-a052f08603f7 => ./api/hardwaremanagement
