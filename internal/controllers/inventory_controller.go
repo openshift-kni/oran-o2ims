@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -87,10 +88,11 @@ type Reconciler struct {
 // task. This reduces the need to pass things like the current state of the object as function
 // parameters.
 type reconcilerTask struct {
-	logger *slog.Logger
-	image  string
-	client client.Client
-	object *inventoryv1alpha1.Inventory
+	registerOnRestart bool
+	logger            *slog.Logger
+	image             string
+	client            client.Client
+	object            *inventoryv1alpha1.Inventory
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -118,12 +120,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 		)
 	}
 
+	registerOnRestart, err := strconv.ParseBool(os.Getenv(utils.RegisterOnRestartsEnvName))
+	if err != nil {
+		registerOnRestart = false
+	}
+
 	// Create and run the task:
 	task := &reconcilerTask{
-		logger: r.Logger,
-		client: r.Client,
-		image:  r.Image,
-		object: object,
+		registerOnRestart: registerOnRestart,
+		logger:            r.Logger,
+		client:            r.Client,
+		image:             r.Image,
+		object:            object,
 	}
 	result, err = task.run(ctx)
 	return
@@ -639,7 +647,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		return nil
 	}
 
-	if !utils.IsSmoRegistrationCompleted(t.object) {
+	if !utils.IsSmoRegistrationCompleted(t.object) || t.registerOnRestart {
 		err = t.registerWithSmo(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -672,6 +680,8 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		t.logger.InfoContext(
 			ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
 		)
+
+		t.registerOnRestart = false // this is a one-time registration on restarts for development/debug
 	} else {
 		t.logger.InfoContext(
 			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
