@@ -239,11 +239,12 @@ const MinimumProxyLogLevel = 10
 
 // Environment values
 const (
-	ServerImageName         = "IMAGE"
-	KubeRbacProxyImageName  = "KUBE_RBAC_PROXY_IMAGE"
-	PostgresImageName       = "POSTGRES_IMAGE"
-	HwMgrPluginNameSpace    = "HWMGR_PLUGIN_NAMESPACE"
-	InternalServicePortName = "INTERNAL_SERVICE_PORT"
+	ServerImageName           = "IMAGE"
+	KubeRbacProxyImageName    = "KUBE_RBAC_PROXY_IMAGE"
+	PostgresImageName         = "POSTGRES_IMAGE"
+	HwMgrPluginNameSpace      = "HWMGR_PLUGIN_NAMESPACE"
+	InternalServicePortName   = "INTERNAL_SERVICE_PORT"
+	RegisterOnRestartsEnvName = "REGISTER_ON_RESTART"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
