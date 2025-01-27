@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
@@ -167,7 +169,10 @@ func (c *Collector) watchForChanges(ctx context.Context) error {
 func (c *Collector) execute(ctx context.Context) {
 	slog.Debug("collector loop running", "sources", len(c.dataSources))
 	for _, d := range c.dataSources {
-		// TODO: only run this loop for alarm data sources
+		// Skip K8S data source since it is handled by the reflector
+		if _, ok := d.(*K8SDataSource); ok {
+			continue
+		}
 
 		d.IncrGenerationID()
 		slog.Debug("collecting data from data source", "source", d.Name(), "generationID", d.GetGenerationID())
@@ -181,8 +186,37 @@ func (c *Collector) execute(ctx context.Context) {
 }
 
 // executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
-func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSource) (err error) {
-	// TODO: Add code to retrieve alarm dictionaries
+func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSource) error {
+	// Only the Alarms data source is supported for now
+	ds, ok := dataSource.(*AlarmsDataSource)
+	if !ok {
+		return fmt.Errorf("data source '%s' is not an Alarms data source", dataSource.Name())
+	}
+
+	nodeClusterTypes, err := c.repository.GetNodeClusterTypes(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get node cluster types: %w", err)
+	}
+
+	// TODO: add filter to query once the alarm dictionary ID is out of the extension
+	nodeClusterTypes = nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes)
+
+	if len(nodeClusterTypes) == 0 {
+		slog.Info("no node cluster types to process")
+		return nil
+	}
+
+	// Fetch prometheus rules and sync alarm definitions
+	err = c.syncAlarmDefinitions(ctx, ds, nodeClusterTypes)
+	if err != nil {
+		return fmt.Errorf("failed to sync alarm definitions: %w", err)
+	}
+
+	// Sync alarm dictionaries
+	err = c.syncAlarmDictionaries(ctx, ds, nodeClusterTypes)
+	if err != nil {
+		return fmt.Errorf("failed to sync alarm dictionaries: %w", err)
+	}
 
 	// Persist data source info
 	id := dataSource.GetID()
@@ -195,8 +229,12 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 		return fmt.Errorf("failed to update data source %q: %w", dataSource.Name(), err)
 	}
 
-	// TODO: purge stale record
+	err = c.purgeStaleAlarmDictionaries(ctx, ds)
+	if err != nil {
+		return fmt.Errorf("failed to purge stale alarm dictionaries: %w", err)
+	}
 
+	slog.Info("Alarm dictionaries synced", "generationID", ds.GetGenerationID())
 	return nil
 }
 
@@ -241,29 +279,35 @@ func (c *Collector) persistClusterResource(ctx context.Context, dataSource Clust
 }
 
 // persistNodeCluster persists a NodeCluster to the database.  This may be an add or an update.
-func (c *Collector) persistNodeCluster(ctx context.Context, dataSource ClusterDataSource, cluster models.NodeCluster, seen map[uuid.UUID]bool) error {
+func (c *Collector) persistNodeCluster(ctx context.Context, dataSource ClusterDataSource, cluster models.NodeCluster) error {
 	resourceType, err := dataSource.MakeNodeClusterType(&cluster)
 	if err != nil {
 		return fmt.Errorf("failed to make node cluster type from '%s': %w", cluster.Name, err)
 	}
 
-	if !seen[resourceType.NodeClusterTypeID] {
-		seen[resourceType.NodeClusterTypeID] = true
-		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, *resourceType, resourceType.NodeClusterTypeID, nil, func(object interface{}) any {
-				record, _ := object.(models.NodeClusterType)
-				return models.NodeClusterTypeToModel(&record)
-			})
-		if err != nil {
-			return fmt.Errorf("failed to persist node cluster type': %w", err)
-		}
+	// Persist Node Cluster Type
+	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+		ctx, c.repository.Db, *resourceType, resourceType.NodeClusterTypeID, nil, func(object interface{}) any {
+			record, _ := object.(models.NodeClusterType)
+			return models.NodeClusterTypeToModel(&record)
+		})
+	if err != nil {
+		return fmt.Errorf("failed to persist node cluster type': %w", err)
+	}
 
-		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+
+		// This is done only when the node cluster type is created
+		// TODO: evaluate performance impact during initialization. It is expected to have a few node cluster types,
+		// however, if the number of node cluster types increases, this should be moved to a separate process
+		if dataChangeEvent.BeforeState == nil {
+			c.handleAsyncAlarmDictionaryAndDefinitionsCreation(ctx, resourceType)
 		}
 	}
 
-	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+	// Persist Node Cluster
+	dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, cluster, cluster.NodeClusterID, nil, func(object interface{}) any {
 			record, _ := object.(models.NodeCluster)
 			return models.NodeClusterToModel(&record, nil)
@@ -456,7 +500,7 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 		return nil
 	}
 
-	err := c.persistNodeCluster(ctx, dataSource, nodeCluster, map[uuid.UUID]bool{})
+	err := c.persistNodeCluster(ctx, dataSource, nodeCluster)
 	if err != nil {
 		return fmt.Errorf("failed to update node cluster '%s'': %w", nodeCluster.NodeClusterID, err)
 	}
@@ -508,4 +552,197 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 	}
 
 	return nil
+}
+
+// syncAlarmDefinitions fetches Prometheus rules and syncs alarm definitions to the database
+func (c *Collector) syncAlarmDefinitions(ctx context.Context, ds *AlarmsDataSource, nodeClusterTypes []models.NodeClusterType) error {
+	slog.Info("Syncing alarm definitions", "nodeClusterTypes", len(nodeClusterTypes))
+
+	// Fetch prometheus rules and build a map of alarm definitions
+	alarmDictionaryIDToAlarmDefinitions, err := ds.makeAlarmDictionaryIDToAlarmDefinitions(ctx, nodeClusterTypes)
+	if err != nil {
+		return fmt.Errorf("failed to make alarm dictionary ID to alarm definitions map: %w", err)
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(5) // Limit concurrent operations to avoid overwhelming the database
+
+	// Sync alarm definitions to the database
+	for key := range alarmDictionaryIDToAlarmDefinitions {
+		alarmDictionaryID := key
+
+		// Do not return errors from the goroutines, just log them
+		g.Go(func() error {
+			alarmDefinitionRecords, err := c.repository.UpsertAlarmDefinitions(ctx, alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID])
+			if err != nil {
+				slog.Error("failed to upsert alarm definitions", "alarmDictionaryID", alarmDictionaryID, "error", err)
+				return nil
+			}
+
+			// Delete Alarm Definitions that were not upserted
+			alarmDefinitionIDs := make([]any, 0, len(alarmDefinitionRecords))
+			for _, record := range alarmDefinitionRecords {
+				alarmDefinitionIDs = append(alarmDefinitionIDs, record.AlarmDefinitionID)
+			}
+
+			count, err := c.repository.DeleteAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs, alarmDictionaryID)
+			if err != nil {
+				slog.Error("failed to delete non-valid alarm definitions", "alarmDictionaryID", alarmDictionaryID, "error", err)
+				return nil
+			}
+
+			slog.Info("Alarm definitions synced", "alarmDictionaryID", alarmDictionaryID, "upserted count", len(alarmDefinitionRecords), "deleted count", count)
+			return nil
+		})
+	}
+
+	slog.Info("Waiting for all alarm definitions to be processed")
+
+	_ = g.Wait()
+
+	return nil
+}
+
+// syncAlarmDictionaries syncs alarm dictionaries to the database
+func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSource, nodeClusterTypes []models.NodeClusterType) error {
+	slog.Info("Syncing alarm dictionaries", "nodeClusterTypes", len(nodeClusterTypes))
+
+	alarmDictionaries := ds.makeAlarmDictionaries(nodeClusterTypes)
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(5) // Limit concurrent operations to avoid overwhelming the database
+
+	var counter atomic.Uint32
+
+	for _, value := range alarmDictionaries {
+		alarmDictionary := value
+
+		// Do not return errors from the goroutines, just log them
+		g.Go(func() error {
+			alarmDefinitions, err := c.repository.GetAlarmDefinitionsByAlarmDictionaryID(ctx, alarmDictionary.AlarmDictionaryID)
+			if err != nil {
+				slog.Error("failed to get alarm definitions", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
+				return nil
+			}
+
+			// Persist Alarm Dictionary
+			dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+				ctx, c.repository.Db, alarmDictionary, alarmDictionary.AlarmDictionaryID, nil, func(object interface{}) any {
+					record, _ := object.(models2.AlarmDictionary)
+					return models.AlarmDictionaryToModel(&record, alarmDefinitions)
+				})
+			if err != nil {
+				slog.Error("failed to persist node cluster type'", "error", err)
+				return nil
+			}
+
+			if dataChangeEvent != nil {
+				c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			}
+
+			counter.Add(1)
+
+			return nil
+		})
+	}
+
+	slog.Info("Waiting for all alarm dictionaries to be processed")
+
+	_ = g.Wait()
+
+	// Check if at least one alarm dictionary was processed
+	if counter.Load() == 0 {
+		return fmt.Errorf("no alarm dictionaries were processed")
+	}
+
+	return nil
+}
+
+func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsDataSource) error {
+	slog.Info("Purging stale alarm dictionaries")
+
+	// Purge alarm dictionaries that have missed more than 2 generations
+	staleAlarmDictionaries, err := c.repository.FindStaleAlarmDictionaries(ctx, ds.GetID(), ds.GetGenerationID()-1)
+	if err != nil {
+		return fmt.Errorf("failed to find stale alarm dictionaries: %w", err)
+	}
+
+	if len(staleAlarmDictionaries) == 0 {
+		slog.Info("No stale alarm dictionaries found")
+		return nil
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(5) // Limit concurrent operations to avoid overwhelming the database
+
+	for _, value := range staleAlarmDictionaries {
+		alarmDictionary := value
+
+		// Do not return errors from the goroutines, just log them
+		g.Go(func() error {
+			alarmDefinitions, err := c.repository.GetAlarmDefinitionsByAlarmDictionaryID(ctx, alarmDictionary.AlarmDictionaryID)
+			if err != nil {
+				slog.Error("failed to get alarm definitions", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
+				return nil
+			}
+
+			dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, alarmDictionary, alarmDictionary.AlarmDictionaryID, nil, func(object interface{}) any {
+				record, _ := object.(models2.AlarmDictionary)
+				return models.AlarmDictionaryToModel(&record, alarmDefinitions)
+			})
+			if err != nil {
+				slog.Error("failed to delete stale alarm dictionary", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
+				return nil
+			}
+
+			if dataChangeEvent != nil {
+				c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			}
+
+			slog.Info("Stale alarm dictionary purged", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID)
+			return nil
+		})
+	}
+
+	slog.Info("Waiting for all stale alarm dictionaries to be processed")
+
+	_ = g.Wait()
+
+	return nil
+}
+
+// handleAsyncAlarmDictionaryAndDefinitionsCreation handles the creation of alarm dictionary and definitions triggered by a new node cluster type
+func (c *Collector) handleAsyncAlarmDictionaryAndDefinitionsCreation(ctx context.Context, nodeClusterType *models.NodeClusterType) {
+	slog.Info("Creating alarm dictionary and definitions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+
+	var alarmsDataSource *AlarmsDataSource
+	for i := range c.dataSources {
+		if dataSource, ok := c.dataSources[i].(*AlarmsDataSource); ok {
+			alarmsDataSource = dataSource
+			break
+		}
+	}
+
+	// Create and persist Alarm Dictionary without Alarm Definitions
+	err := c.syncAlarmDictionaries(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
+	if err != nil {
+		slog.Error("failed to create alarm dictionary", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+		return
+	}
+
+	// Collect and persist Alarm Definitions
+	err = c.syncAlarmDefinitions(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
+	if err != nil {
+		slog.Error("failed to create alarm definitions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+		return
+	}
+
+	// Sync Alarm Dictionary to include Alarm Definitions
+	err = c.syncAlarmDictionaries(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
+	if err != nil {
+		slog.Error("failed to update alarm dictionary", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+		return
+	}
+
+	slog.Info("Alarm dictionary and definitions created", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
 }

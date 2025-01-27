@@ -1105,6 +1105,30 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 					"watch",
 				},
 			},
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"secrets",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+				},
+			},
+			{
+				APIGroups: []string{
+					"monitoring.coreos.com",
+				},
+				Resources: []string{
+					"prometheusrules",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+				},
+			},
 		},
 	}
 

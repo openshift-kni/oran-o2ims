@@ -179,6 +179,43 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
+  /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary:
+    get:
+      operationId: getNodeClusterTypeAlarmDictionary
+      summary: Get an alarm dictionary for a node cluster type
+      description: |
+        Returns the alarm dictionary for a node cluster type.
+      parameters:
+        - $ref: "#/components/parameters/nodeClusterTypeId"
+      tags:
+        - resourceTypes
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the alarm dictionary.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
   /o2ims-infrastructureCluster/v1/nodeClusters:
     get:
       operationId: getNodeClusters
@@ -514,6 +551,78 @@ paths:
         '200':
           description: |
             Successfully deleted the subscription.
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureCluster/v1/alarmDictionaries:
+    get:
+      operationId: getAlarmDictionaries
+      summary: Get alarm dictionaries
+      description: |
+        Returns the list of alarm dictionaries.
+      parameters:
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+        - dictionaries
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of alarm dictionaries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId}:
+    get:
+      operationId: getAlarmDictionary
+      summary: Get an alarm dictionary
+      description: |
+        Returns the details of an alarm dictionary.
+      parameters:
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/alarmDictionaryId"
+      tags:
+        - dictionaries
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of an alarm dictionary.
+          content:
+            application/json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified entity was not found.
           content:

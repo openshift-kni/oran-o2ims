@@ -160,6 +160,10 @@ func (r *ClusterServer) GetNodeClusterType(ctx context.Context, request api.GetN
 	return api.GetNodeClusterType200JSONResponse(object), nil
 }
 
+func (r *ClusterServer) GetNodeClusterTypeAlarmDictionary(ctx context.Context, request api.GetNodeClusterTypeAlarmDictionaryRequestObject) (api.GetNodeClusterTypeAlarmDictionaryResponseObject, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 // GetNodeClusters receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusters(ctx context.Context, request api.GetNodeClustersRequestObject) (api.GetNodeClustersResponseObject, error) {
 	records, err := r.Repo.GetNodeClusters(ctx)
@@ -411,4 +415,12 @@ func (r *ClusterServer) DeleteSubscription(ctx context.Context, request api.Dele
 	})
 
 	return api.DeleteSubscription200Response{}, nil
+}
+
+func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, request api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (r *ClusterServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
+	return nil, fmt.Errorf("not implemented")
 }
