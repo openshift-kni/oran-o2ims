@@ -190,3 +190,15 @@ func (r *ClusterRepository) FindStaleAlarmDictionaries(ctx context.Context, data
 	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
 	return utils.Search[commonmodels.AlarmDictionary](ctx, r.Db, e)
 }
+
+// SetNodeClusterID sets the nodeClusterID value on cluster resources that may have arrived out of order
+func (r *ClusterRepository) SetNodeClusterID(ctx context.Context, nodeClusterName string, nodeClusterID uuid.UUID) (int, error) {
+	updates := models.ClusterResource{NodeClusterID: &nodeClusterID}
+	e := psql.Quote("node_cluster_name").EQ(psql.Arg(nodeClusterName)).And(psql.Quote("node_cluster_id").IsNull())
+	results, err := utils.UpdateAll[models.ClusterResource](ctx, r.Db, e, updates, "NodeClusterID")
+	if err != nil {
+		return 0, fmt.Errorf("failed to update cluster resources: %w", err)
+	}
+
+	return len(results), nil
+}

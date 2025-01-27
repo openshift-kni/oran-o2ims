@@ -22,12 +22,6 @@ import (
 
 const pollingDelay = 10 * time.Minute
 
-// clusterNameExtension represents a mandatory extension that data sources must add to ClusterResource objects to
-// identify their parent NodeCluster.  The term "mandatory" here doesn't refer to the definition of the spec; only that
-// internally we rely on it being present to find the node cluster ID value using its name value. We actually delete
-// this extension and do not expose it to the API.
-const clusterNameExtension = "clusterName"
-
 // asyncEventBufferSize defines the number of buffered entries in the async handleWatchEvent channel
 const asyncEventBufferSize = 10
 
@@ -239,30 +233,28 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 }
 
 // persistClusterResource persists a ClusterResource to the database.  This may be an add or an update.
-func (c *Collector) persistClusterResource(ctx context.Context, dataSource ClusterDataSource, resource models.ClusterResource, seen map[uuid.UUID]bool) error {
+func (c *Collector) persistClusterResource(ctx context.Context, dataSource ClusterDataSource, resource models.ClusterResource) error {
 	resourceType, err := dataSource.MakeClusterResourceType(&resource)
 	if err != nil {
 		return fmt.Errorf("failed to make cluster resource type from '%v': %w", resource, err)
 	}
 
-	if !seen[resourceType.ClusterResourceTypeID] {
-		seen[resourceType.ClusterResourceTypeID] = true
-
-		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, *resourceType, resourceType.ClusterResourceTypeID, nil, func(object interface{}) any {
-				record, _ := object.(models.ClusterResourceType)
-				return models.ClusterResourceTypeToModel(&record)
-			})
-		if err != nil {
-			return fmt.Errorf("failed to persist cluster resource type': %w", err)
-		}
-
-		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-		}
+	// Persist Cluster Resource Type
+	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+		ctx, c.repository.Db, *resourceType, resourceType.ClusterResourceTypeID, nil, func(object interface{}) any {
+			record, _ := object.(models.ClusterResourceType)
+			return models.ClusterResourceTypeToModel(&record)
+		})
+	if err != nil {
+		return fmt.Errorf("failed to persist cluster resource type': %w", err)
 	}
 
-	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	// Persist Cluster Resource
+	dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, resource, resource.ClusterResourceID, nil, func(object interface{}) any {
 			record, _ := object.(models.ClusterResource)
 			return models.ClusterResourceToModel(&record)
@@ -275,6 +267,15 @@ func (c *Collector) persistClusterResource(ctx context.Context, dataSource Clust
 		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
 	}
 
+	return nil
+}
+
+func (c *Collector) linkClusterResources(ctx context.Context, nodeCluster *models.NodeCluster) error {
+	count, err := c.repository.SetNodeClusterID(ctx, nodeCluster.Name, nodeCluster.NodeClusterID)
+	if err != nil {
+		return fmt.Errorf("failed to set node cluster ID: %w", err)
+	}
+	slog.Info("set node cluster id value on cluster resources", "name", nodeCluster.Name, "count", count)
 	return nil
 }
 
@@ -375,7 +376,7 @@ func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids
 
 	count := 0
 	for _, record := range records {
-		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.NodeClusterID, nil, func(object interface{}) any {
+		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.ClusterResourceID, nil, func(object interface{}) any {
 			r, _ := object.(models.ClusterResource)
 			return models.ClusterResourceToModel(&r)
 		})
@@ -490,7 +491,7 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 			})
 
 		if err != nil {
-			return fmt.Errorf("failed to delete node cluster '%s'': %w", nodeCluster.NodeClusterID, err)
+			return fmt.Errorf("failed to delete node cluster '%s': %w", nodeCluster.NodeClusterID, err)
 		}
 
 		if dataChangeEvent != nil {
@@ -502,32 +503,20 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 
 	err := c.persistNodeCluster(ctx, dataSource, nodeCluster)
 	if err != nil {
-		return fmt.Errorf("failed to update node cluster '%s'': %w", nodeCluster.NodeClusterID, err)
+		return fmt.Errorf("failed to update node cluster '%s': %w", nodeCluster.NodeClusterID, err)
 	}
 
+	// ClusterResources may arrive before the managed cluster.  In that case the "nodeClusterID" field is not set in the
+	// database, so we link them after the fact here.
+	err = c.linkClusterResources(ctx, &nodeCluster)
+	if err != nil {
+		return fmt.Errorf("failed to link cluster resources to node cluster '%s': %w", nodeCluster.NodeClusterID, err)
+	}
 	return err
 }
 
 // handleAsyncClusterResourceEvent handles an async handleWatchEvent received for a ClusterResource object.
 func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSource ClusterDataSource, clusterResource models.ClusterResource, deleted bool) error {
-	// The ClusterResource object has a link to its parent object via the NodeClusterID attribute, but unfortunately, that
-	// piece of data does not appear in the backing data, so we need to augment it ourselves.
-	if clusterResource.Extensions != nil {
-		clusterName := (*clusterResource.Extensions)[clusterNameExtension].(string)
-		nodeCluster, err := c.repository.GetNodeClusterByName(ctx, clusterName)
-		if errors.Is(err, utils.ErrNotFound) {
-			slog.Warn("no node cluster found", "name", clusterName)
-			// This is likely a race condition in which we are processing a cluster resource object for which the cluster
-			// has already been deleted or is not yet present.
-			return nil
-		}
-		clusterResource.NodeClusterID = nodeCluster.NodeClusterID
-		// The name extension was added for the sole purpose of allowing us to find the matching cluster ID value
-		// since it is not possible for the data source to do this directly.  Removing it since it is not required
-		// by the spec and seems redundant since the full NodeCluster can be retrieved with the ID value.
-		delete(*clusterResource.Extensions, clusterNameExtension)
-	}
-
 	if deleted {
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, clusterResource, clusterResource.ClusterResourceID, nil, func(object interface{}) any {
@@ -546,7 +535,16 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 		return nil
 	}
 
-	err := c.persistClusterResource(ctx, dataSource, clusterResource, map[uuid.UUID]bool{})
+	nodeCluster, err := c.repository.GetNodeClusterByName(ctx, clusterResource.NodeClusterName)
+	if errors.Is(err, utils.ErrNotFound) {
+		// Agents will finish being installed before the Managed Cluster is completely provisioned therefore we have to
+		// link them after the fact so here we just skip them.
+		slog.Warn("no node cluster found", "name", clusterResource.NodeClusterName, "resource", clusterResource.Name)
+	} else {
+		clusterResource.NodeClusterID = &nodeCluster.NodeClusterID
+	}
+
+	err = c.persistClusterResource(ctx, dataSource, clusterResource)
 	if err != nil {
 		return fmt.Errorf("failed to update cluster resource '%s'': %w", clusterResource.ResourceID, err)
 	}

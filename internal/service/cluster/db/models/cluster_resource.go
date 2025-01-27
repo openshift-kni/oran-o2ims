@@ -16,7 +16,8 @@ type ClusterResource struct {
 	ClusterResourceID     uuid.UUID               `db:"cluster_resource_id"` // Non-nil because we always set this from named values
 	ClusterResourceTypeID uuid.UUID               `db:"cluster_resource_type_id"`
 	Name                  string                  `db:"name"`
-	NodeClusterID         uuid.UUID               `db:"node_cluster_id"`
+	NodeClusterID         *uuid.UUID              `db:"node_cluster_id"`
+	NodeClusterName       string                  `db:"node_cluster_name"`
 	Description           string                  `db:"description"`
 	Extensions            *map[string]interface{} `db:"extensions"`
 	ArtifactResourceIDs   *[]uuid.UUID            `db:"artifact_resource_ids"`
