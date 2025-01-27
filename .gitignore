@@ -13,3 +13,6 @@
 
 # ginkgo generated binary
 *.test
+
+# ginkgo code coverage
+coverprofile.out
