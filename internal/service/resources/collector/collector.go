@@ -42,11 +42,6 @@ type ResourceDataSource interface {
 	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
 }
 
-// DeploymentManagerDataSource defines an interface of a data source capable of getting DeploymentManager resources.
-type DeploymentManagerDataSource interface {
-	GetDeploymentManagers(ctx context.Context) ([]models.DeploymentManager, error)
-}
-
 // WatchableDataSource defines an interface of a data source capable of watching for async events.
 type WatchableDataSource interface {
 	Watch(ctx context.Context) error

@@ -116,14 +116,17 @@ func (c *ReflectorStore) handleOperations(ctx context.Context, handler AsyncEven
 				slog.Warn("Failed to handle event", "event", o.eventType, "error", err)
 			}
 		case SyncComplete:
-			var keys []uuid.UUID
+			keys := make([]uuid.UUID, 0)
 			for _, obj := range o.objects {
 				key, err := handler.HandleAsyncEvent(ctx, obj, Updated)
 				if err != nil {
 					slog.Warn("Failed to handle event", "error", err)
 					continue
 				}
-				keys = append(keys, key)
+				if key != uuid.Nil {
+					// Some may have been filtered out.  No need to track those.
+					keys = append(keys, key)
+				}
 			}
 			err := handler.HandleSyncComplete(ctx, c.ObjectType, keys)
 			if err != nil {
