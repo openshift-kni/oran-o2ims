@@ -172,6 +172,41 @@ func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record 
 	return ExecuteCollectExactlyOneRow[T](ctx, db, sql, args)
 }
 
+// UpdateAll attempts to update matching records of the requested model type.
+// The `whereExpr` argument is the where clause to use as a filter
+// The `record` argument is the record which contains the updated columns to update in the database.
+// The `fields` argument is a list of columns to update. If no fields are specified only non-nil fields are updated.
+// The updated records are returned on success; otherwise an error is returned.
+func UpdateAll[T db.Model](ctx context.Context, db DBQuery, whereExpr bob.Expression, record T, fields ...string) ([]T, error) {
+	all := GetAllDBTagsFromStruct(record)
+	tags := all
+	if len(fields) > 0 {
+		tags = GetDBTagsFromStructFields(record, fields...)
+	}
+
+	// Set up the arguments to the call to psql.Update(...) by using an array because there's no obvious way to add
+	// multiple Set(..) operation without having to add them one at a time separately.
+	mods := []bob.Mod[*dialect.UpdateQuery]{
+		um.Table(record.TableName()),
+		um.Where(whereExpr),
+		um.Returning(all.Columns()...)}
+
+	// Add the individual column sets
+	columns, values := GetColumnsAndValues(record, tags)
+	for i, column := range columns {
+		mods = append(mods, um.SetCol(column).ToArg(values[i]))
+	}
+
+	// Build the query
+	query := psql.Update(mods...)
+	sql, args, err := query.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create update expression: %w", err)
+	}
+
+	return ExecuteCollectRows[T](ctx, db, sql, args)
+}
+
 // Exists checks whether a record exists in the database table specified.
 // The `uuid` argument is the primary key of the record to check.
 func Exists[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (bool, error) {

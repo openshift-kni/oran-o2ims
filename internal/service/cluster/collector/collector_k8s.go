@@ -185,7 +185,6 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 	resourceTypeID := d.makeClusterResourceTypeID(architecture, strconv.FormatInt(cores, 10))
 
 	extensions := map[string]interface{}{
-		clusterNameExtension: agent.Spec.ClusterDeploymentName.Name,
 		"cpu": map[string]string{
 			"cores":        strconv.FormatInt(cores, 10),
 			"architecture": architecture,
@@ -209,6 +208,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 		ClusterResourceTypeID: resourceTypeID,
 		Name:                  agent.Spec.Hostname,
 		Description:           agent.Spec.Hostname,
+		NodeClusterName:       agent.Spec.ClusterDeploymentName.Name,
 		Extensions:            &extensions,
 		ArtifactResourceIDs:   nil,         // TODO: need to link this to template?
 		ResourceID:            uuid.UUID{}, // TODO: need to link this to h/w resource
