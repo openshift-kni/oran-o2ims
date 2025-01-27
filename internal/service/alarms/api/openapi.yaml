@@ -12,8 +12,8 @@ externalDocs:
   url: https://specifications.o-ran.org/download?id=674
 
 servers:
-- url: http://localhost:8000
-  description: O-RAN Alarms Server
+  - url: http://localhost:8000
+    description: O-RAN Alarms Server
 
 tags:
   - name: alarms
@@ -34,7 +34,7 @@ paths:
       description: |
         Returns the complete list of API versions implemented by the service.
       tags:
-      - metadata
+        - metadata
       responses:
         '200':
           description: |
@@ -42,7 +42,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+                $ref: '../../common/api/openapi.yaml#/components/schemas/APIVersions'
         '400':
           description: Bad request
           content:
@@ -63,7 +63,7 @@ paths:
       description: |
         Returns the list of minor API versions implemented for this major version of the API.
       tags:
-      - metadata
+        - metadata
       responses:
         '200':
           description: |
@@ -71,7 +71,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "../../common/api/openapi.yaml#/components/schemas/APIVersions"
+                $ref: '../../common/api/openapi.yaml#/components/schemas/APIVersions'
         '400':
           description: Bad request
           content:
@@ -85,7 +85,6 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-
   /o2ims-infrastructureMonitoring/v1/alarms:
     get:
       operationId: GetAlarms
@@ -93,9 +92,9 @@ paths:
       tags:
         - alarms
       parameters:
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+        - $ref: '../../common/api/openapi.yaml#/components/parameters/excludeFields'
+        - $ref: '../../common/api/openapi.yaml#/components/parameters/fields'
+        - $ref: '../../common/api/openapi.yaml#/components/parameters/filter'
       responses:
         '200':
           description: Successful response
@@ -328,9 +327,9 @@ paths:
       tags:
         - subscriptions
       parameters:
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+        - $ref: '../../common/api/openapi.yaml#/components/parameters/excludeFields'
+        - $ref: '../../common/api/openapi.yaml#/components/parameters/fields'
+        - $ref: '../../common/api/openapi.yaml#/components/parameters/filter'
       responses:
         '200':
           description: Successful response
@@ -536,8 +535,8 @@ components:
         alarmEventRecordId:
           type: string
           format: uuid
-          description: | 
-            Identifier of an entry in the AlarmEventRecord. 
+          description: |
+            Identifier of an entry in the AlarmEventRecord.
             Locally unique within the scope of an O-Cloud instance.
           example: 752c4e22-057d-4162-997b-ca3e2fd4ff53
         alarmDefinitionId:
@@ -559,14 +558,14 @@ components:
         alarmChangedTime:
           type: string
           format: date-time
-          description: | 
-            This field is populated with a Date/Time stamp value when any value 
+          description: |
+            This field is populated with a Date/Time stamp value when any value
             of the AlarmEventRecord is modified.
           example: 2042-07-21T19:32:28Z
         alarmClearedTime:
           type: string
           format: date-time
-          description: | 
+          description: |
             This field is populated with a Date/Time stamp value when the alarm condition is cleared.
           example: 2042-07-21T20:32:28Z
         alarmAcknowledgedTime:
@@ -576,7 +575,7 @@ components:
           example: 2042-07-21T18:32:28Z
         alarmAcknowledged:
           type: boolean
-          description: | 
+          description: |
             When a system acknowledges an alarm, it is then set to TRUE.
           example: true
         resourceTypeID:
@@ -590,8 +589,8 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: | 
-            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or 
+          description: |
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or
             operator to extend the information provided about the O-Cloud Alarm.
       required:
         - alarmEventRecordId
@@ -603,7 +602,6 @@ components:
         - extensions
         - resourceTypeID
 
-
     AlarmEventRecordModifications:
       type: object
       properties:
@@ -612,14 +610,14 @@ components:
           description: Acknowledge an alarm.
           example: false
         perceivedSeverity:
-            $ref: '#/components/schemas/PerceivedSeverity'
+          $ref: '#/components/schemas/PerceivedSeverity'
 
     AlarmServiceConfiguration:
       type: object
       properties:
         retentionPeriod:
           type: integer
-          description: | 
+          description: |
             Number of days for alarm history to be retained.
             This value has cannot be set lower than 1 (day).
           example: 30
@@ -647,9 +645,9 @@ components:
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         filter:
           type: string
-          enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
+          enum: [NEW, CHANGE, CLEAR, ACKNOWLEDGE]
           description: |
-            Criteria for events which do not need to be reported or will be filtered by the subscription 
+            Criteria for events which do not need to be reported or will be filtered by the subscription
             notification service. Therefore, if a filter is not provided then all events are reported.
             It can be filtered by criteria based on the type of notification of fields of the
             AlarmEventRecord.
@@ -700,10 +698,36 @@ components:
       enum: [resolved, firing]
       description: Alertmanager notification status
 
+    Alert:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/AlertmanagerNotificationStatus'
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        annotations:
+          type: object
+          additionalProperties:
+            type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        generatorURL:
+          type: string
+          format: uri
+          description: Identifies the entity that caused the alert
+        fingerprint:
+          type: string
+          description: Fingerprint to identify the alert
+
     AlertmanagerNotification:
       type: object
-      description: |
-        Alertmanager notification payload as described here https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
+      description: Alertmanager notification payload as described here https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
       properties:
         version:
           type: string
@@ -736,31 +760,7 @@ components:
         alerts:
           type: array
           items:
-            type: object
-            properties:
-              status:
-                $ref: '#/components/schemas/AlertmanagerNotificationStatus'
-              labels:
-                type: object
-                additionalProperties:
-                  type: string
-              annotations:
-                type: object
-                additionalProperties:
-                  type: string
-              startsAt:
-                type: string
-                format: date-time
-              endsAt:
-                type: string
-                format: date-time
-              generatorURL:
-                type: string
-                format: uri
-                description: Identifies the entity that caused the alert
-              fingerprint:
-                type: string
-                description: Fingerprint to identify the alert
+            $ref: '#/components/schemas/Alert'
         subscriber:
           type: object
           description: Optional subscriber information, if a subscriber is found
@@ -855,7 +855,7 @@ components:
           additionalProperties:
             type: string
           description: |
-            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or 
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor or
             operator to extend the information provided about the O-Cloud Alarm.
       required:
         - globalCloudID
