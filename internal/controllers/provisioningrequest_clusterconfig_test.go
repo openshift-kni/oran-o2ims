@@ -2147,8 +2147,9 @@ var _ = Describe("addClusterTemplateLabels", func() {
 			fmt.Sprintf("%s.%s", tName, tVersion)))
 	})
 
-	It("Fails for multiple Agents", func() {
+	It("Sets the label for MNO when there are multiple Agents", func() {
 		// Create 2 Agents in the expected namespace
+		agent2Name := "agent-2-for-cluster-1"
 		agent := &assistedservicev1beta1.Agent{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      AgentName,
@@ -2166,15 +2167,33 @@ var _ = Describe("addClusterTemplateLabels", func() {
 			},
 		}
 		agent2 := agent.DeepCopy()
-		agent2.Name = "some-other-agent"
+		agent2.Name = agent2Name
 		Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
 		Expect(ProvReqTask.client.Create(ctx, agent2)).To(Succeed())
 
 		// Run the function.
 		err := ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(
-			fmt.Sprintf("more than one Agent in the %s namespace", mclName)))
+		Expect(err).To(Not(HaveOccurred()))
+		// Check that both agents have the expected labels.
+		listOpts := []client.ListOption{
+			client.MatchingLabels{
+				"agent-install.openshift.io/clusterdeployment-namespace": managedCluster.Name,
+			},
+			client.InNamespace(managedCluster.Name),
+		}
+		agents := &assistedservicev1beta1.AgentList{}
+		err = ProvReqTask.client.List(ctx, agents, listOpts...)
+		Expect(err).To(Not(HaveOccurred()))
+		Expect(len(agents.Items)).To(Equal(2))
+		Expect(agents.Items[0].Labels).To(Equal(map[string]string{
+			utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+			"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+		}))
+		Expect(agents.Items[1].Labels).To(Equal(map[string]string{
+			utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+			"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+		}))
+
 	})
 
 	It("Fails for multiple Agents with unexpected labels", func() {

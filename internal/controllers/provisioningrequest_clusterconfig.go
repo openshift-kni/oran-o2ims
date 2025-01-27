@@ -272,7 +272,7 @@ func (t *provisioningRequestReconcilerTask) addClusterTemplateLabels(ctx context
 		return err
 	}
 
-	// Add the clustertemplates.o2ims.provisioning.oran.org/templateIds label to the Agent
+	// Add the clustertemplates.o2ims.provisioning.oran.org/templateIds label to the Agent(s)
 	// associated to the current ProvisioningRequest.
 	agents := &assistedservicev1beta1.AgentList{}
 	listOpts := []client.ListOption{
@@ -287,17 +287,15 @@ func (t *provisioningRequestReconcilerTask) addClusterTemplateLabels(ctx context
 		return fmt.Errorf("failed to list Agents in the %s namespace: %w", mcl.Name, err)
 	}
 
-	if len(agents.Items) > 1 {
-		return fmt.Errorf("more than one Agent in the %s namespace", mcl.Name)
-	}
-
 	if len(agents.Items) == 0 {
 		return fmt.Errorf("the expected Agent was not found in the %s namespace", mcl.Name)
 	}
 
-	err = t.setLabelValue(ctx, &agents.Items[0], utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
-	if err != nil {
-		return err
+	for _, agent := range agents.Items {
+		err = t.setLabelValue(ctx, &agent, utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
