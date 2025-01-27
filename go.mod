@@ -35,6 +35,7 @@ require (
 	github.com/openshift-kni/oran-o2ims/api/provisioning v0.0.0-00010101000000-000000000000
 	github.com/openshift/api v0.0.0-20240423014330-2cb60a113ad1
 	github.com/openshift/assisted-service/api v0.0.0-20240405132132-484ec5c683c6
+	github.com/pashagolub/pgxmock/v4 v4.4.0
 	github.com/peterhellberg/link v1.2.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.76.2
 	github.com/prometheus/client_golang v1.20.5

@@ -80,7 +80,8 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 
 	// Init DB client
-	pool, err := db.NewPgxPool(ctx, db.GetPgConfig(username, password, database))
+	pgConfig := db.GetPgConfig(username, password, database)
+	pool, err := db.NewPgxPool(ctx, pgConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connected to DB: %w", err)
 	}
@@ -132,7 +133,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 
 	// Configure server and start alarms cleanup cronjob
-	if err := ConfigAlarmServerCleanup(ctx, &alarmServer); err != nil {
+	if err := ConfigAlarmServerCleanup(ctx, &alarmServer, pgConfig); err != nil {
 		return fmt.Errorf("failed configure and start cleanup cronjob: %w", err)
 	}
 
@@ -261,7 +262,7 @@ func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfi
 }
 
 // ConfigAlarmServerCleanup configure server and launch the cleanup cronjob for resolved alarm events
-func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer) error {
+func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer, pgConfig db.PgConfig) error {
 	// Add Alarm Service Configuration to the database
 	serviceConfig, err := alarmServer.AlarmsRepository.CreateServiceConfiguration(ctx, api.DefaultRetentionPeriod)
 	if err != nil {
@@ -274,7 +275,7 @@ func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer
 	if err != nil {
 		return fmt.Errorf("failed to load alarm service configuration: %w", err)
 	}
-	alarmServer.ServiceConfig.PgClient = alarmServer.AlarmsRepository.Db
+	alarmServer.ServiceConfig.PgConnConfig = pgConfig
 	clientForHub, err := k8s.NewClientForHub()
 	if err != nil {
 		return fmt.Errorf("failed to create k8s client for hub: %w", err)

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/stephenafamo/bob"
@@ -21,11 +20,12 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
-// All DB interaction code goes here
-
 type AlarmsRepository struct {
-	Db *pgxpool.Pool
+	Db utils.DBQuery
 }
+
+// Compile time check for interface implementation
+var _ AlarmRepositoryInterface = (*AlarmsRepository)(nil)
 
 // GetAlarmEventRecords grabs all rows of alarm_event_record
 func (ar *AlarmsRepository) GetAlarmEventRecords(ctx context.Context) ([]models.AlarmEventRecord, error) {

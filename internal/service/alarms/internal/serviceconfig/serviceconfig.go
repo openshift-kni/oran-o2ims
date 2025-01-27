@@ -6,11 +6,12 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
@@ -47,7 +48,7 @@ var (
 type Config struct {
 	PostgresImage string        `envconfig:"POSTGRES_IMAGE" required:"true"` // PG image to use psql from
 	PodNamespace  string        `envconfig:"POD_NAMESPACE" required:"true"`  // Dynamically check the current ns
-	PgClient      *pgxpool.Pool // Postgres client to get current PG config
+	PgConnConfig  db.PgConfig   // Postgres config
 	HubClient     client.Client // HubClient to manage cronjob resources
 }
 
@@ -156,10 +157,10 @@ func getCleanUpPgSQL(sc *models.ServiceConfiguration) (string, error) {
 // generateCronJob generates a new CR for cronjob that use our current PG to run psql commands
 func (c *Config) generateCronJob(configMap corev1.ConfigMap) batchv1.CronJob {
 	pgEnv := []corev1.EnvVar{
-		{Name: "PGHOST", Value: c.PgClient.Config().ConnConfig.Host},
-		{Name: "PGPORT", Value: strconv.Itoa(int(c.PgClient.Config().ConnConfig.Port))},
-		{Name: "PGDATABASE", Value: c.PgClient.Config().ConnConfig.Database},
-		{Name: "PGUSER", Value: c.PgClient.Config().ConnConfig.User},
+		{Name: "PGHOST", Value: c.PgConnConfig.Host},
+		{Name: "PGPORT", Value: c.PgConnConfig.Port},
+		{Name: "PGDATABASE", Value: c.PgConnConfig.Database},
+		{Name: "PGUSER", Value: c.PgConnConfig.User},
 		{
 			Name: "PGPASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
