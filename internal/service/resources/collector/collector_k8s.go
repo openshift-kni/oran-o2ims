@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -16,6 +17,7 @@ import (
 	v1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
@@ -24,8 +26,23 @@ import (
 
 const clusterReflectorName = "cluster-reflector"
 
-// Interface compile enforcement
-var _ DeploymentManagerDataSource = (*K8SDataSource)(nil)
+// Extensions
+const (
+	artifactResourceIDExtension = "artifactResourceId"
+	profileNameExtension        = "profileName"
+	profileDataExtension        = "profileData"
+	adminClientCertExtension    = "admin_client_cert"
+	adminClientKeyExtension     = "admin_client_key"
+	adminUsernameExtension      = "admin_user"
+	clusterCACertExtension      = "cluster_ca_cert"
+	clusterAPIEndpointExtension = "cluster_api_endpoint"
+)
+
+// Values
+const (
+	adminAuthName  = "admin"
+	k8sProfileName = "k8s"
+)
 
 // K8SDataSource defines an instance of a data source collector that interacts with the ACM search-api
 type K8SDataSource struct {
@@ -89,28 +106,6 @@ func (d *K8SDataSource) IncrGenerationID() int {
 	return d.generationID
 }
 
-// GetDeploymentManagers returns the list of deployment managers for this data source
-func (d *K8SDataSource) GetDeploymentManagers(ctx context.Context) ([]models.DeploymentManager, error) {
-	var clusters v1.ManagedClusterList
-	err := d.hubClient.List(ctx, &clusters)
-	if err != nil {
-		return []models.DeploymentManager{}, fmt.Errorf("failed to list clusters: %w", err)
-	}
-
-	var results []models.DeploymentManager
-	for _, cluster := range clusters.Items {
-		if dm, err := d.convertManagedClusterToDeploymentManager(ctx, &cluster); err != nil {
-			slog.Warn("failed to convert managed cluster to deployment manager", "cluster", cluster, "error", err)
-			// Continue on conversion failures so that we don't exclude valid data just because of
-			// a single bad object.
-		} else {
-			results = append(results, dm)
-		}
-	}
-
-	return results, nil
-}
-
 // makeCapacityInfo creates a map of strings of capacity attributes for the cluster
 func (d *K8SDataSource) makeCapacityInfo(cluster *v1.ManagedCluster) map[string]string {
 	results := make(map[string]string)
@@ -139,14 +134,14 @@ func (d *K8SDataSource) getClusterClientConfig(ctx context.Context, clusterName 
 	return config, nil
 }
 
-// getDeploymentManagerExtensions builds the extensions required for the deployment manager
-func (d *K8SDataSource) getDeploymentManagerExtensions(ctx context.Context, clusterName string) (map[string]interface{}, error) {
+// getKubeconfig builds the extensions required for the deployment manager
+func (d *K8SDataSource) getKubeconfig(ctx context.Context, clusterName string, extensions map[string]interface{}) error {
 	// Fetch the kubeconfig for this cluster and provide the info as extensions to the returned object. This
 	// is anticipated as a temporary measure since eventually SMO will require accessing the API using an OAuth token
 	// acquired from an OAuth server.
 	config, err := d.getClusterClientConfig(ctx, clusterName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster config: %w", err)
+		return fmt.Errorf("failed to get cluster config: %w", err)
 	}
 
 	var caData, url string
@@ -156,22 +151,24 @@ func (d *K8SDataSource) getDeploymentManagerExtensions(ctx context.Context, clus
 	}
 
 	var adminUser, adminCert, adminKey string
-	if authInfo, found := config.AuthInfos["admin"]; found {
-		adminUser = "admin"
+	if authInfo, found := config.AuthInfos[adminAuthName]; found {
+		adminUser = adminAuthName
 		adminCert = string(authInfo.ClientCertificateData)
 		adminKey = string(authInfo.ClientKeyData)
+	} else {
+		return fmt.Errorf("admin auth info not found")
 	}
 
-	return map[string]interface{}{
-		"profileName": "k8s",
-		"profileData": map[string]interface{}{
-			"admin_client_cert":    adminCert,
-			"admin_client_key":     adminKey,
-			"admin_user":           adminUser,
-			"cluster_ca_cert":      caData,
-			"cluster_api_endpoint": url,
-		},
-	}, nil
+	extensions[profileNameExtension] = k8sProfileName
+	extensions[profileDataExtension] = map[string]interface{}{
+		adminClientCertExtension:    adminCert,
+		adminClientKeyExtension:     adminKey,
+		adminUsernameExtension:      adminUser,
+		clusterCACertExtension:      caData,
+		clusterAPIEndpointExtension: url,
+	}
+
+	return nil
 }
 
 // convertManagedClusterToDeploymentManager converts a ManagedCluster to a DeploymentManager object
@@ -197,10 +194,16 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 		return models.DeploymentManager{}, fmt.Errorf("failed to find URL for cluster %s", cluster.Name)
 	}
 
-	extensions, err := d.getDeploymentManagerExtensions(ctx, cluster.Name)
+	extensions := map[string]interface{}{}
+
+	if templateID, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; found {
+		extensions[artifactResourceIDExtension] = templateID
+	}
+
+	err = d.getKubeconfig(ctx, cluster.Name, extensions)
 	if err != nil {
+		// TODO: turn this back into an error once we fix getting the Kubeconfig for the local-cluster
 		slog.Warn("failed to get deployment manager extensions", "cluster", cluster.Name, "error", err)
-		extensions = map[string]interface{}{}
 	}
 
 	to := models.DeploymentManager{
@@ -224,6 +227,21 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 // handleClusterWatchEvent handles an async event received from the managed cluster watcher
 func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleWatchEvent received for managed cluster", "agent", cluster.Name, "type", eventType)
+
+	if eventType != async.Deleted {
+		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
+		if condition == nil || condition.Status == metav1.ConditionFalse {
+			// This cluster is not yet available, so filter it out.
+			slog.Warn("Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
+			return uuid.Nil, nil
+		}
+
+		if _, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
+			// The provisioning request which is managing the installation of this cluster is not yet fulfilled
+			slog.Warn("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
+			return uuid.Nil, nil
+		}
+	}
 
 	record, err := d.convertManagedClusterToDeploymentManager(ctx, cluster)
 	if err != nil {

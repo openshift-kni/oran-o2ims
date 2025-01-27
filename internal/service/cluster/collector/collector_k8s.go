@@ -10,6 +10,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/openshift/assisted-service/api/v1beta1"
+	conditionsv1 "github.com/openshift/custom-resource-status/conditions/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -171,7 +174,7 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 }
 
 // convertAgentToClusterResource converts an Agent CR to a ClusterResource object
-func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) models.ClusterResource {
+func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (models.ClusterResource, error) {
 	// Build a unique UUID value using the namespace and name.  Choosing not to tie ourselves to the agent UUID since
 	// we don't know if/when it can change and how we want to behave if the node gets deleted and re-installed.
 	name := fmt.Sprintf("%s/%s", agent.Namespace, agent.Name)
@@ -201,7 +204,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) mode
 	}
 
 	// NodeClusterID is filled in by the caller since it has to convert the cluster name to an id.
-	return models.ClusterResource{
+	to := models.ClusterResource{
 		ClusterResourceID:     resourceID,
 		ClusterResourceTypeID: resourceTypeID,
 		Name:                  agent.Spec.Hostname,
@@ -213,6 +216,17 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) mode
 		DataSourceID:          d.dataSourceID,
 		GenerationID:          d.generationID,
 	}
+
+	if templateID, found := agent.Labels[utils.ClusterTemplateArtifactsLabel]; found {
+		value, err := uuid.Parse(templateID)
+		if err != nil {
+			return models.ClusterResource{}, fmt.Errorf("failed to parse template ID value '%s' into UUID", templateID)
+		}
+		values := []uuid.UUID{value}
+		to.ArtifactResourceIDs = &values
+	}
+
+	return to, nil
 }
 
 // makeNodeClusterTypeName builds a descriptive string to represent the node cluster type
@@ -290,12 +304,19 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 		Name:                           cluster.Name,
 		Description:                    cluster.Name,
 		Extensions:                     &extensions,
-		ClusterDistributionDescription: "",          // TODO: not sure where to get this from
-		ArtifactResourceID:             uuid.UUID{}, // TODO: need to get this from template?
-		ClusterResourceGroups:          nil,         // TODO: not sure where to get this from
+		ClusterDistributionDescription: "",  // TODO: not sure where to get this from
+		ClusterResourceGroups:          nil, // TODO: not sure where to get this from
 		ExternalID:                     cluster.Name,
 		DataSourceID:                   d.dataSourceID,
 		GenerationID:                   d.generationID,
+	}
+
+	if templateID, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; found {
+		value, err := uuid.Parse(templateID)
+		if err != nil {
+			return models.NodeCluster{}, fmt.Errorf("failed to parse template ID value '%s' into UUID", templateID)
+		}
+		to.ArtifactResourceID = value
 	}
 
 	return to, nil
@@ -304,6 +325,21 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 // handleClusterWatchEvent handles an async event received from the managed cluster watcher
 func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleWatchEvent received for managed cluster", "agent", cluster.Name, "type", eventType)
+
+	if eventType != async.Deleted {
+		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
+		if condition == nil || condition.Status == metav1.ConditionFalse {
+			// This cluster is not yet available, so filter it out.
+			slog.Warn("Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
+			return uuid.Nil, nil
+		}
+
+		if _, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
+			// The provisioning request which is managing the installation of this cluster is not yet fulfilled
+			slog.Warn("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
+			return uuid.Nil, nil
+		}
+	}
 
 	record, err := d.convertManagedClusterToNodeCluster(cluster)
 	if err != nil {
@@ -326,7 +362,25 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 func (d *K8SDataSource) handleAgentWatchEvent(ctx context.Context, agent *v1beta1.Agent, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleWatchEvent received for agent", "agent", agent.Name, "type", eventType)
 
-	record := d.convertAgentToClusterResource(agent)
+	if eventType != async.Deleted {
+		condition := conditionsv1.FindStatusCondition(agent.Status.Conditions, "Installed")
+		if condition == nil || condition.Status == corev1.ConditionFalse {
+			// This cluster is not yet available, so filter it out.
+			slog.Warn("Agent installation is not yet completed; skipping", "agent", agent.Name, "condition", condition)
+			return uuid.Nil, nil
+		}
+
+		if _, found := agent.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
+			// The provisioning request which is managing the installation of this agent is not yet fulfilled
+			slog.Warn("Cluster provisioning request is not yet fulfilled; skipping", "agent", agent.Name)
+			return uuid.Nil, nil
+		}
+	}
+
+	record, err := d.convertAgentToClusterResource(agent)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to convert agent to cluster resource: %w", err)
+	}
 
 	select {
 	case <-ctx.Done():
