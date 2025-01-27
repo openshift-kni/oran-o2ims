@@ -12,7 +12,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/go-task/slim-sprig/v3 v3.0.0
 	github.com/golang-jwt/jwt/v4 v4.5.1
-	github.com/golang-migrate/migrate/v4 v4.18.1
+	github.com/golang-migrate/migrate/v4 v4.18.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/imdario/mergo v1.0.0
