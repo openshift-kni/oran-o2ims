@@ -166,6 +166,17 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 }
 
 func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, error) {
+	// Set the provisioning state to pending if spec changes are observed
+	if t.object.Status.ObservedGeneration != t.object.Generation {
+		utils.SetProvisioningStatePending(t.object, "Validating and preparing resources")
+		if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			return requeueWithError(fmt.Errorf(
+				"failed to update status for ProvisioningRequest %s: %w",
+				t.object.Name, updateErr,
+			))
+		}
+	}
+
 	// Validate the ProvisioningRequest
 	err := t.handleValidation(ctx)
 	if err != nil {

@@ -112,6 +112,12 @@ type PolicyDetails struct {
 type ProvisioningPhase string
 
 const (
+	// StatePending indicates that the provisioning process is either waiting to start
+	// or is preparing to apply new changes. This state is set when the ProvisioningRequest
+	// is observed with new spec changes, during validation and resource preparation,
+	// before the actual provisioning begins.
+	StatePending ProvisioningPhase = "pending"
+
 	// StateProgressing means the provisioning process is currently in progress.
 	// It could be in progress during hardware provisioning, cluster installation, or cluster configuration.
 	StateProgressing ProvisioningPhase = "progressing"
@@ -138,7 +144,7 @@ type ProvisionedResources struct {
 
 type ProvisioningStatus struct {
 	// The current state of the provisioning process.
-	// +kubebuilder:validation:Enum=progressing;fulfilled;failed;deleting
+	// +kubebuilder:validation:Enum=pending;progressing;fulfilled;failed;deleting
 	ProvisioningPhase ProvisioningPhase `json:"provisioningPhase,omitempty"`
 
 	// The details about the current state of the provisioning process.
@@ -164,6 +170,9 @@ type ProvisioningRequestStatus struct {
 	Extensions Extensions `json:"extensions,omitempty"`
 
 	ProvisioningStatus ProvisioningStatus `json:"provisioningStatus,omitempty"`
+
+	// ObservedGeneration is the most recent generation observed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true
