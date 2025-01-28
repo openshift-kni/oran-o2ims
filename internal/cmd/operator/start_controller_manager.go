@@ -15,6 +15,8 @@ License.
 package operator
 
 import (
+	"crypto/tls"
+	"flag"
 	"log/slog"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -32,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/go-logr/logr"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
@@ -71,6 +74,11 @@ func ControllerManager() *cobra.Command {
 		":8081",
 		"The address the probe endpoint binds to.",
 	)
+	flag.BoolVar(
+		&c.enableHTTP2,
+		"enable-http2", false,
+		"If set, HTTP/2 will be enabled for the metrics and webhook servers",
+	)
 	flags.BoolVar(
 		&c.enableLeaderElection,
 		"leader-elect",
@@ -97,6 +105,7 @@ func ControllerManager() *cobra.Command {
 // command.
 type ControllerManagerCommand struct {
 	metricsAddr          string
+	enableHTTP2          bool
 	enableLeaderElection bool
 	enableWebhooks       bool
 	probeAddr            string
@@ -151,27 +160,34 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	// Restrict to the following namespaces - subject to change.
-	// nolint: gocritic
-	//namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
-	//defaultNamespaces := make(map[string]cache.Config)
-
-	// nolint: gocritic
-	//for _, ns := range namespaces {
-	//	defaultNamespaces[ns] = cache.Config{}
-	//}
+	// Set the TLS options.
+	// If the enable-http2 flag is false (the default), http/2 will be disabled due to its vulnerabilities.
+	// More specifically, disabling http/2 will prevent from being vulnerable to the HTTP/2 Stream
+	// Cancelation and Rapid Reset CVEs. For more information see:
+	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
+	// - https://github.com/advisories/GHSA-4374-p667-p6c8
+	tlsOpts := []func(*tls.Config){}
+	if !c.enableHTTP2 {
+		tlsOpts = append(tlsOpts, func(c *tls.Config) {
+			logger.InfoContext(ctx, "disabling http/2")
+			c.NextProtos = []string{"http/1.1"}
+		})
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: c.metricsAddr},
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: c.metricsAddr,
+			TLSOpts:     tlsOpts,
+		},
 		HealthProbeBindAddress: c.probeAddr,
 		LeaderElection:         c.enableLeaderElection,
 		LeaderElectionID:       "a73bc4d2.openshift.io",
-
-		// nolint: gocritic
-		//Cache: cache.Options{
-		//	DefaultNamespaces: defaultNamespaces,
-		//},
+		WebhookServer: webhook.NewServer(
+			webhook.Options{
+				TLSOpts: tlsOpts,
+			},
+		),
 
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
@@ -258,6 +274,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			)
 			return exit.Error(1)
 		}
+
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

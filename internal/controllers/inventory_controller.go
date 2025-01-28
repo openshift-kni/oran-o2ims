@@ -1516,6 +1516,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		"--logtostderr=true",
 		"--tls-cert-file=/secrets/tls/tls.crt",
 		"--tls-private-key-file=/secrets/tls/tls.key",
+		"--http2-disable=true",
 		fmt.Sprintf("--tls-min-version=%s", utils.MinimumProxyTLSVersion),
 		fmt.Sprintf("--v=%d", utils.MinimumProxyLogLevel),
 	}
@@ -1718,6 +1719,7 @@ func (t *reconcilerTask) createInternalProxy(privilegeEscalation bool, deploymen
 			"--logtostderr=true",
 			"--tls-cert-file=/secrets/tls/tls.crt",
 			"--tls-private-key-file=/secrets/tls/tls.key",
+			"--http2-disable=true",
 			fmt.Sprintf("--tls-min-version=%s", utils.MinimumProxyTLSVersion),
 			fmt.Sprintf("--v=%d", utils.MinimumProxyLogLevel),
 		},
