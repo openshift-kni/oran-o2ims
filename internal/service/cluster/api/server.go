@@ -160,8 +160,46 @@ func (r *ClusterServer) GetNodeClusterType(ctx context.Context, request api.GetN
 	return api.GetNodeClusterType200JSONResponse(object), nil
 }
 
+// GetNodeClusterTypeAlarmDictionary receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusterTypeAlarmDictionary(ctx context.Context, request api.GetNodeClusterTypeAlarmDictionaryRequestObject) (api.GetNodeClusterTypeAlarmDictionaryResponseObject, error) {
-	return nil, fmt.Errorf("not implemented")
+	records, err := r.Repo.GetNodeClusterTypeAlarmDictionary(ctx, request.NodeClusterTypeId)
+	if err != nil {
+		return api.GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"NodeClusterTypeId": request.NodeClusterTypeId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	if len(records) == 0 {
+		return api.GetNodeClusterTypeAlarmDictionary404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"NodeClusterTypeId": request.NodeClusterTypeId.String(),
+			},
+			Detail: "requested NodeClusterType not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+
+	// Safe to assume there is a single record since node_cluster_type_id is unique in the db
+	dictionary := records[0]
+
+	// Get alarm definitions
+	definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictionary.AlarmDictionaryID)
+	if err != nil {
+		return api.GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"NodeClusterTypeId": request.NodeClusterTypeId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.AlarmDictionaryToModel(&dictionary, definitions)
+	return api.GetNodeClusterTypeAlarmDictionary200JSONResponse(object), nil
 }
 
 // GetNodeClusters receives the API request to this endpoint, executes the request, and responds appropriately
@@ -417,10 +455,66 @@ func (r *ClusterServer) DeleteSubscription(ctx context.Context, request api.Dele
 	return api.DeleteSubscription200Response{}, nil
 }
 
-func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, request api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
-	return nil, fmt.Errorf("not implemented")
+// GetAlarmDictionaries receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, _ api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
+	records, err := r.Repo.GetAlarmDictionaries(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)
+	}
+
+	objects := make([]generated.AlarmDictionary, len(records))
+	for i, record := range records {
+		definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
+		if err != nil {
+			return api.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{
+				AdditionalAttributes: &map[string]string{
+					"alarmDictionaryId": record.AlarmDictionaryID.String(),
+				},
+				Detail: err.Error(),
+				Status: http.StatusInternalServerError,
+			}, nil
+		}
+
+		objects[i] = models.AlarmDictionaryToModel(&record, definitions)
+	}
+
+	return api.GetAlarmDictionaries200JSONResponse(objects), nil
 }
 
+// GetAlarmDictionary receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
-	return nil, fmt.Errorf("not implemented")
+	record, err := r.Repo.GetAlarmDictionary(ctx, request.AlarmDictionaryId)
+	if errors.Is(err, utils.ErrNotFound) {
+		return api.GetAlarmDictionary404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: "requested AlarmDictionary not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+	if err != nil {
+		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
+	if err != nil {
+		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.AlarmDictionaryToModel(record, definitions)
+
+	return api.GetAlarmDictionary200JSONResponse(object), nil
 }
