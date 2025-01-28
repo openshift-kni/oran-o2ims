@@ -191,6 +191,22 @@ func (r *ClusterRepository) FindStaleAlarmDictionaries(ctx context.Context, data
 	return utils.Search[commonmodels.AlarmDictionary](ctx, r.Db, e)
 }
 
+// GetNodeClusterTypeAlarmDictionary returns the list of AlarmDictionary records that have a matching "node_cluster_type_id"
+func (r *ClusterRepository) GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClusterTypeID uuid.UUID) ([]commonmodels.AlarmDictionary, error) {
+	e := psql.Quote("node_cluster_type_id").EQ(psql.Arg(nodeClusterTypeID))
+	return utils.Search[commonmodels.AlarmDictionary](ctx, r.Db, e)
+}
+
+// GetAlarmDictionaries returns the list of AlarmDictionary records or an empty list if none exist; otherwise an error
+func (r *ClusterRepository) GetAlarmDictionaries(ctx context.Context) ([]commonmodels.AlarmDictionary, error) {
+	return utils.FindAll[commonmodels.AlarmDictionary](ctx, r.Db)
+}
+
+// GetAlarmDictionary returns an AlarmDictionary record matching the specified UUID value or ErrNotFound if no record matched;
+func (r *ClusterRepository) GetAlarmDictionary(ctx context.Context, id uuid.UUID) (*commonmodels.AlarmDictionary, error) {
+	return utils.Find[commonmodels.AlarmDictionary](ctx, r.Db, id)
+}
+
 // SetNodeClusterID sets the nodeClusterID value on cluster resources that may have arrived out of order
 func (r *ClusterRepository) SetNodeClusterID(ctx context.Context, nodeClusterName string, nodeClusterID uuid.UUID) (int, error) {
 	updates := models.ClusterResource{NodeClusterID: &nodeClusterID}
