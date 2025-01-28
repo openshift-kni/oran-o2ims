@@ -21,13 +21,7 @@ type AlarmRepositoryInterface interface {
 	DeleteAlarmSubscription(ctx context.Context, id uuid.UUID) (int64, error)
 	CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error)
 	GetAlarmSubscription(ctx context.Context, id uuid.UUID) (*models.AlarmSubscription, error)
-	DeleteAlarmDictionariesNotIn(ctx context.Context, ids []any) error
-	GetAlarmDefinition(ctx context.Context, id uuid.UUID) (*models.AlarmDefinition, error)
-	DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, objectTypeID uuid.UUID) (int64, error)
-	UpsertAlarmDictionary(ctx context.Context, record models.AlarmDictionary) ([]models.AlarmDictionary, error)
-	UpsertAlarmDefinitions(ctx context.Context, records []models.AlarmDefinition) ([]models.AlarmDefinition, error)
 	UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord) error
-	GetAlarmDefinitions(ctx context.Context, am *api.AlertmanagerNotification, clusterMap map[uuid.UUID]uuid.UUID) ([]models.AlarmDefinition, error)
 	ResolveNotificationIfNotInCurrent(ctx context.Context, am *api.AlertmanagerNotification) error
 	GetAlarmsForSubscription(ctx context.Context, subscription models.AlarmSubscription) ([]models.AlarmEventRecord, error)
 	UpdateSubscriptionEventCursor(ctx context.Context, subscription models.AlarmSubscription) error

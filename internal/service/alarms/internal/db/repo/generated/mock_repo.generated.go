@@ -71,35 +71,6 @@ func (mr *MockAlarmRepositoryInterfaceMockRecorder) CreateServiceConfiguration(c
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateServiceConfiguration", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).CreateServiceConfiguration), ctx, defaultRetentionPeriod)
 }
 
-// DeleteAlarmDefinitionsNotIn mocks base method.
-func (m *MockAlarmRepositoryInterface) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, objectTypeID uuid.UUID) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteAlarmDefinitionsNotIn", ctx, ids, objectTypeID)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// DeleteAlarmDefinitionsNotIn indicates an expected call of DeleteAlarmDefinitionsNotIn.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) DeleteAlarmDefinitionsNotIn(ctx, ids, objectTypeID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAlarmDefinitionsNotIn", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).DeleteAlarmDefinitionsNotIn), ctx, ids, objectTypeID)
-}
-
-// DeleteAlarmDictionariesNotIn mocks base method.
-func (m *MockAlarmRepositoryInterface) DeleteAlarmDictionariesNotIn(ctx context.Context, ids []any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteAlarmDictionariesNotIn", ctx, ids)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteAlarmDictionariesNotIn indicates an expected call of DeleteAlarmDictionariesNotIn.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) DeleteAlarmDictionariesNotIn(ctx, ids any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAlarmDictionariesNotIn", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).DeleteAlarmDictionariesNotIn), ctx, ids)
-}
-
 // DeleteAlarmSubscription mocks base method.
 func (m *MockAlarmRepositoryInterface) DeleteAlarmSubscription(ctx context.Context, id uuid.UUID) (int64, error) {
 	m.ctrl.T.Helper()
@@ -113,36 +84,6 @@ func (m *MockAlarmRepositoryInterface) DeleteAlarmSubscription(ctx context.Conte
 func (mr *MockAlarmRepositoryInterfaceMockRecorder) DeleteAlarmSubscription(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAlarmSubscription", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).DeleteAlarmSubscription), ctx, id)
-}
-
-// GetAlarmDefinition mocks base method.
-func (m *MockAlarmRepositoryInterface) GetAlarmDefinition(ctx context.Context, id uuid.UUID) (*models.AlarmDefinition, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAlarmDefinition", ctx, id)
-	ret0, _ := ret[0].(*models.AlarmDefinition)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAlarmDefinition indicates an expected call of GetAlarmDefinition.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) GetAlarmDefinition(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlarmDefinition", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).GetAlarmDefinition), ctx, id)
-}
-
-// GetAlarmDefinitions mocks base method.
-func (m *MockAlarmRepositoryInterface) GetAlarmDefinitions(ctx context.Context, am *generated.AlertmanagerNotification, clusterMap map[uuid.UUID]uuid.UUID) ([]models.AlarmDefinition, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAlarmDefinitions", ctx, am, clusterMap)
-	ret0, _ := ret[0].([]models.AlarmDefinition)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAlarmDefinitions indicates an expected call of GetAlarmDefinitions.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) GetAlarmDefinitions(ctx, am, clusterMap any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlarmDefinitions", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).GetAlarmDefinitions), ctx, am, clusterMap)
 }
 
 // GetAlarmEventRecord mocks base method.
@@ -306,36 +247,6 @@ func (m *MockAlarmRepositoryInterface) UpdateSubscriptionEventCursor(ctx context
 func (mr *MockAlarmRepositoryInterfaceMockRecorder) UpdateSubscriptionEventCursor(ctx, subscription any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSubscriptionEventCursor", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).UpdateSubscriptionEventCursor), ctx, subscription)
-}
-
-// UpsertAlarmDefinitions mocks base method.
-func (m *MockAlarmRepositoryInterface) UpsertAlarmDefinitions(ctx context.Context, records []models.AlarmDefinition) ([]models.AlarmDefinition, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpsertAlarmDefinitions", ctx, records)
-	ret0, _ := ret[0].([]models.AlarmDefinition)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpsertAlarmDefinitions indicates an expected call of UpsertAlarmDefinitions.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) UpsertAlarmDefinitions(ctx, records any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertAlarmDefinitions", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).UpsertAlarmDefinitions), ctx, records)
-}
-
-// UpsertAlarmDictionary mocks base method.
-func (m *MockAlarmRepositoryInterface) UpsertAlarmDictionary(ctx context.Context, record models.AlarmDictionary) ([]models.AlarmDictionary, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpsertAlarmDictionary", ctx, record)
-	ret0, _ := ret[0].([]models.AlarmDictionary)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpsertAlarmDictionary indicates an expected call of UpsertAlarmDictionary.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) UpsertAlarmDictionary(ctx, record any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertAlarmDictionary", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).UpsertAlarmDictionary), ctx, record)
 }
 
 // UpsertAlarmEventRecord mocks base method.

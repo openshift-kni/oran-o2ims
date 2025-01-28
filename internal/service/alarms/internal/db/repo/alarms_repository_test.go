@@ -139,55 +139,6 @@ var _ = Describe("AlarmsRepository", func() {
 		})
 	})
 
-	Describe("DeleteAlarmDefinitionsNotIn", func() {
-		When("deleting alarm definitions with a list of IDs to keep", func() {
-			It("deletes alarm definitions not in provided IDs with correct object type ID", func() {
-				ids := []any{uuid.New(), uuid.New()}
-				objectTypeID := uuid.New()
-
-				mock.ExpectExec(fmt.Sprintf("DELETE FROM %s WHERE", models.AlarmDefinition{}.TableName())).
-					WithArgs(ids[0], ids[1], objectTypeID).
-					WillReturnResult(pgxmock.NewResult("DELETE", 2))
-
-				count, err := repo.DeleteAlarmDefinitionsNotIn(ctx, ids, objectTypeID)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(count).To(Equal(int64(2)))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-
-		When("the database operation fails", func() {
-			It("returns an error for deletion fail", func() {
-				ids := []any{uuid.New()}
-				objectTypeID := uuid.New()
-
-				mock.ExpectExec(fmt.Sprintf("DELETE FROM %s WHERE", models.AlarmDefinition{}.TableName())).
-					WithArgs(ids[0], objectTypeID).
-					WillReturnError(fmt.Errorf("database error"))
-
-				count, err := repo.DeleteAlarmDefinitionsNotIn(ctx, ids, objectTypeID)
-				Expect(err).To(HaveOccurred())
-				Expect(count).To(Equal(int64(0)))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-
-		Context("when provided with an empty ID list", func() {
-			It("should execute successfully with no deletions", func() {
-				var ids []any
-				objectTypeID := uuid.New()
-
-				mock.ExpectExec(fmt.Sprintf("DELETE FROM %s WHERE", models.AlarmDefinition{}.TableName())).
-					WithArgs(objectTypeID).
-					WillReturnResult(pgxmock.NewResult("DELETE", 0))
-
-				count, err := repo.DeleteAlarmDefinitionsNotIn(ctx, ids, objectTypeID)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(count).To(Equal(int64(0)))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-	})
 	Describe("GetAlarmEventRecords", func() {
 		When("records exist", func() {
 			It("returns all alarm event records", func() {
@@ -384,44 +335,6 @@ var _ = Describe("AlarmsRepository", func() {
 		})
 	})
 
-	Describe("UpsertAlarmDefinitions", func() {
-		When("upserting valid definitions", func() {
-			It("successfully upserts alarm definitions", func() {
-				defs := []models.AlarmDefinition{
-					{
-						AlarmName:         "test-alarm",
-						AlarmLastChange:   "test",
-						Severity:          string(api.AlarmSubscriptionInfoFilterNEW),
-						AlarmDictionaryID: uuid.New(),
-					},
-				}
-
-				mock.ExpectQuery(fmt.Sprintf("INSERT INTO %s", models.AlarmDefinition{}.TableName())).
-					WithArgs(
-						defs[0].AlarmName, defs[0].AlarmLastChange,
-						defs[0].AlarmDescription, defs[0].ProposedRepairActions,
-						defs[0].AlarmAdditionalFields, defs[0].AlarmDictionaryID,
-						defs[0].Severity,
-					).
-					WillReturnRows(pgxmock.NewRows([]string{"alarm_definition_id"}).AddRow(uuid.New()))
-
-				results, err := repo.UpsertAlarmDefinitions(ctx, defs)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(results).To(HaveLen(1))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-
-		When("upserting empty input", func() {
-			It("handles empty input gracefully", func() {
-				results, err := repo.UpsertAlarmDefinitions(ctx, []models.AlarmDefinition{})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(results).To(HaveLen(0))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-	})
-
 	Describe("GetAlarmsForSubscription", func() {
 		It("retrieves alarms based on subscription criteria", func() {
 			f := api.AlarmSubscriptionInfoFilterNEW
@@ -515,22 +428,6 @@ var _ = Describe("AlarmsRepository", func() {
 
 	})
 
-	Describe("DeleteAlarmDictionariesNotIn", func() {
-		When("there are dictionaries to delete", func() {
-			It("deletes alarm dictionaries not in provided IDs", func() {
-				ids := []any{uuid.New(), uuid.New()}
-
-				mock.ExpectExec(fmt.Sprintf("DELETE FROM %s WHERE", models.AlarmDictionary{}.TableName())).
-					WithArgs(ids[0], ids[1]).
-					WillReturnResult(pgxmock.NewResult("DELETE", 1))
-
-				err := repo.DeleteAlarmDictionariesNotIn(ctx, ids)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-	})
-
 	Describe("UpdateSubscriptionEventCursor", func() {
 		When("update is successful", func() {
 			It("updates subscription event cursor successfully", func() {
@@ -567,33 +464,6 @@ var _ = Describe("AlarmsRepository", func() {
 		})
 	})
 
-	Describe("UpsertAlarmDictionary", func() {
-		When("upserting a new dictionary", func() {
-			It("successfully upserts alarm dictionary", func() {
-				record := models.AlarmDictionary{
-					AlarmDictionaryVersion: "1.0",
-					EntityType:             "TestEntity",
-					Vendor:                 "TestVendor",
-					ObjectTypeID:           uuid.New(),
-				}
-
-				mock.ExpectQuery(fmt.Sprintf("INSERT INTO %s", models.AlarmDictionary{}.TableName())).
-					WithArgs(
-						record.AlarmDictionaryVersion,
-						record.EntityType,
-						record.Vendor,
-						record.ObjectTypeID,
-					).
-					WillReturnRows(pgxmock.NewRows([]string{"alarm_dictionary_id"}).AddRow(uuid.New()))
-
-				results, err := repo.UpsertAlarmDictionary(ctx, record)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(results).To(HaveLen(1))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-	})
-
 	Describe("ResolveNotificationIfNotInCurrent", func() {
 		When("resolving notifications", func() {
 			It("resolves notifications not in current payload", func() {
@@ -622,103 +492,6 @@ var _ = Describe("AlarmsRepository", func() {
 		})
 	})
 
-	Describe("GetAlarmDefinition", func() {
-		When("patch is requested", func() {
-			It("retrieves alarm definition with ID", func() {
-				alertname := "CollectorNodeDown" //nolint:goconst
-				severity := "info"               //nolint:goconst
-
-				id := uuid.New()
-				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmDefinition{}.TableName())).
-					WithArgs(id).
-					WillReturnRows(pgxmock.NewRows([]string{
-						"alarm_name", "alarm_definition_id", "probable_cause_id",
-						"object_type_id", "severity",
-					}).AddRow(
-						alertname, uuid.New(), uuid.New(),
-						uuid.New(), severity,
-					))
-
-				result, err := repo.GetAlarmDefinition(ctx, id)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result.AlarmName).To(Equal(alertname))
-				Expect(result.Severity).To(Equal(severity))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-	})
-
-	Describe("GetAlarmDefinitions", func() {
-		When("valid alertmanager notification is provided", func() {
-			It("retrieves alarm definitions for alertmanager notification", func() {
-				fp := "9a9e2d82a78cf2b9"
-				clusterID := uuid.New()
-				alertname := "CollectorNodeDown"
-				severity := "info"
-				am := &api.AlertmanagerNotification{
-					Alerts: []api.Alert{
-						{
-							Annotations: nil,
-							Fingerprint: &fp,
-							Labels: &map[string]string{
-								"alertname":       alertname,
-								"severity":        severity,
-								"managed_cluster": clusterID.String(),
-							},
-						},
-					},
-				}
-
-				objectTypeID := uuid.New()
-				clusterMap := map[uuid.UUID]uuid.UUID{clusterID: objectTypeID}
-
-				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmDefinition{}.TableName())).
-					WithArgs(alertname, objectTypeID, severity).
-					WillReturnRows(pgxmock.NewRows([]string{
-						"alarm_name", "alarm_definition_id", "probable_cause_id",
-						"object_type_id", "severity",
-					}).AddRow(
-						alertname, uuid.New(), uuid.New(),
-						objectTypeID, severity,
-					))
-
-				results, err := repo.GetAlarmDefinitions(ctx, am, clusterMap)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(results).To(HaveLen(1))
-				Expect(results[0].AlarmName).To(Equal(alertname))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-		When("an invalid alertmanager notification is provided", func() {
-			It("it returns an empty list of definition", func() {
-				fp := "9a9e2d82a78cf2b9"
-				clusterID := uuid.New()
-				alertname := "CollectorNodeDown"
-				severity := "info"
-				am := &api.AlertmanagerNotification{
-					Alerts: []api.Alert{
-						{
-							Annotations: nil,
-							Fingerprint: &fp,
-							Labels: &map[string]string{
-								"alertname":       alertname,
-								"severity":        severity,
-								"managed_cluster": clusterID.String(),
-							},
-						},
-					},
-				}
-
-				// force objectID not found
-				clusterMap := map[uuid.UUID]uuid.UUID{}
-
-				results, err := repo.GetAlarmDefinitions(ctx, am, clusterMap)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(results).To(HaveLen(0))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-	})
 	Describe("GetServiceConfigurations", func() {
 		When("records exist", func() {
 			It("returns all service configurations", func() {

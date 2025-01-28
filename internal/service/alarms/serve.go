@@ -24,7 +24,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/dictionary_collector"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/notifier_provider"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
@@ -100,15 +99,6 @@ func Serve(config *api.AlarmsServerConfig) error {
 	alarmRepository := &repo.AlarmsRepository{
 		Db: pool,
 	}
-
-	// Load dictionary
-	alarmDictionaryCollector, err := dictionary_collector.New(alarmRepository, infrastructureClients)
-	if err != nil {
-		return fmt.Errorf("error creating alarm dictionary collector: %w", err)
-	}
-
-	// Run dictionary collector
-	alarmDictionaryCollector.Run(ctx)
 
 	// Parse global cloud id
 	var globalCloudID uuid.UUID

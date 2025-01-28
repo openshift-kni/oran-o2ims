@@ -75,6 +75,10 @@ import (
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes",verbs=get;list
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusters",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/alarmDictionaries",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes/*",verbs=get
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusters/*",verbs=get
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/alarmDictionaries/*",verbs=get
 //+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
 //+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 
@@ -1248,10 +1252,21 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 				NonResourceURLs: []string{
 					"/o2ims-infrastructureCluster/v1/nodeClusterTypes",
 					"/o2ims-infrastructureCluster/v1/nodeClusters",
+					"/o2ims-infrastructureCluster/v1/alarmDictionaries",
 				},
 				Verbs: []string{
 					"get",
 					"list",
+				},
+			},
+			{
+				NonResourceURLs: []string{
+					"/o2ims-infrastructureCluster/v1/nodeClusterTypes/*",
+					"/o2ims-infrastructureCluster/v1/nodeClusters/*",
+					"/o2ims-infrastructureCluster/v1/alarmDictionaries/*",
+				},
+				Verbs: []string{
+					"get",
 				},
 			},
 		},

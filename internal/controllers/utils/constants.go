@@ -289,6 +289,9 @@ const (
 	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
 )
 
+// AlarmDefinitionSeverityField severity field within additional fields of alarm definition
+const AlarmDefinitionSeverityField = "severity"
+
 // Alertmanager values
 const (
 	AlertmanagerObjectName = "alertmanager"

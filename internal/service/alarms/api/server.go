@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -20,7 +18,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
 	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -308,44 +306,16 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 			}), nil
 		}
 
-		// Check if associated alarm definition has clearing type "manual". If not, return 409.
-		alarmDefinition, err := a.AlarmsRepository.GetAlarmDefinition(ctx, *record.AlarmDefinitionID)
-		if errors.Is(err, utils.ErrNotFound) {
-			return api.PatchAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
-				AdditionalAttributes: &map[string]string{
-					"alarmEventRecordId": request.AlarmEventRecordId.String(),
-				},
-				Detail: "associated Alarm Definition not found",
-				Status: http.StatusNotFound,
-			}), nil
-		}
+		// All our alarms have AUTOMATIC clearing type
+		// TODO: support clearing type MANUAL alarms
 
-		if alarmDefinition.ClearingType != string(common.MANUAL) {
-			return api.PatchAlarm409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
-				AdditionalAttributes: &map[string]string{
-					"alarmEventRecordId": request.AlarmEventRecordId.String(),
-				},
-				Detail: "cannot clear an alarm with clearing type other than MANUAL",
-				Status: http.StatusConflict,
-			}), nil
-		}
-
-		// Check if the Alarm Event Record has already been cleared
-		if record.PerceivedSeverity == perceivedSeverity {
-			// Nothing to patch
-			return api.PatchAlarm409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
-				AdditionalAttributes: &map[string]string{
-					"alarmEventRecordId": request.AlarmEventRecordId.String(),
-				},
-				Detail: "Alarm record is already cleared",
-				Status: http.StatusConflict,
-			}), nil
-		}
-
-		// Patch the Alarm Event Record
-		record.PerceivedSeverity = perceivedSeverity
-		currentTime := time.Now()
-		record.AlarmClearedTime = &currentTime
+		return api.PatchAlarm409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{
+				"alarmEventRecordId": request.AlarmEventRecordId.String(),
+			},
+			Detail: "cannot clear an alarm with clearing type other than MANUAL",
+			Status: http.StatusConflict,
+		}), nil
 	}
 
 	// Patch alarmAcknowledged
@@ -515,25 +485,16 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
-	// Get NodeCluster NodeClusterType mapping
-	var clusterIDToNodeClusterTypeID map[uuid.UUID]uuid.UUID
+	// Get cached cluster server data
+	var clusterServer infrastructure.Client
 	for i := range a.Infrastructure.Clients {
-		if a.Infrastructure.Clients[i].Name() == clusterserver.Name {
-			clusterIDToNodeClusterTypeID = a.Infrastructure.Clients[i].(*clusterserver.ClusterServer).GetClusterIDToResourceTypeID()
-			break
+		if a.Infrastructure.Clients[i].Name() == infrastructure.Name {
+			clusterServer = a.Infrastructure.Clients[i]
 		}
 	}
 
-	// Get the definition data based on current set of Alert names and managed cluster ID
-	alarmDefinitions, err := a.AlarmsRepository.GetAlarmDefinitions(ctx, request.Body, clusterIDToNodeClusterTypeID)
-	if err != nil {
-		msg := "failed to get AlarmDefinitions"
-		slog.Error(msg, "error", err)
-		return nil, fmt.Errorf("%s: %w", msg, err)
-	}
-
 	// Combine possible definitions with events
-	aerModels := alertmanager.ConvertAmToAlarmEventRecordModels(request.Body, alarmDefinitions, clusterIDToNodeClusterTypeID)
+	aerModels := alertmanager.ConvertAmToAlarmEventRecordModels(request.Body, clusterServer)
 
 	// Insert and update AlarmEventRecord
 	if err := a.AlarmsRepository.UpsertAlarmEventRecord(ctx, aerModels); err != nil {
