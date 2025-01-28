@@ -63,7 +63,7 @@ func (ar *AlarmsRepository) CreateServiceConfiguration(ctx context.Context, defa
 			ids = append(ids, records[i].ID)
 		}
 
-		_, err = utils.Delete[models.AlarmDefinition](ctx, ar.Db, psql.Quote(models.AlarmDefinition{}.PrimaryKey()).In(psql.Arg(ids...)))
+		_, err = utils.Delete[models.ServiceConfiguration](ctx, ar.Db, psql.Quote(models.ServiceConfiguration{}.PrimaryKey()).In(psql.Arg(ids...)))
 		if err != nil {
 			return nil, fmt.Errorf("failed to delete additional service configurations: %w", err)
 		}

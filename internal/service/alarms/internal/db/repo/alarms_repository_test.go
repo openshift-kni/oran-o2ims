@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock/v4"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	alarmsrepo "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 )
 
@@ -36,12 +37,14 @@ var _ = Describe("AlarmsRepository", func() {
 	})
 
 	Describe("CreateServiceConfiguration", func() {
+		dataModel := models.ServiceConfiguration{}
+
 		When("no configuration exists", func() {
 			It("creates a new configuration", func() {
-				mock.ExpectQuery("SELECT (.+) FROM alarm_service_configuration").
+				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s", dataModel.TableName())).
 					WillReturnRows(pgxmock.NewRows([]string{"id", "retention_period", "created_at", "updated_at"}))
 
-				mock.ExpectQuery("INSERT INTO alarm_service_configuration").
+				mock.ExpectQuery(fmt.Sprintf("INSERT INTO %s", dataModel.TableName())).
 					WithArgs(30).
 					WillReturnRows(
 						pgxmock.NewRows([]string{"id", "retention_period", "created_at", "updated_at"}).
@@ -59,7 +62,7 @@ var _ = Describe("AlarmsRepository", func() {
 		When("one configuration exists", func() {
 			It("returns the existing configuration as CreateServiceConfiguration is only called during init)", func() {
 				existingID := uuid.New()
-				mock.ExpectQuery("SELECT (.+) FROM alarm_service_configuration").
+				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s", dataModel.TableName())).
 					WillReturnRows(
 						pgxmock.NewRows([]string{"id", "retention_period", "created_at", "updated_at"}).
 							AddRow(existingID, 45, time.Now(), time.Now()),
@@ -77,7 +80,7 @@ var _ = Describe("AlarmsRepository", func() {
 				now := time.Now()
 				id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 
-				mock.ExpectQuery("SELECT (.+) FROM alarm_service_configuration").
+				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s", dataModel.TableName())).
 					WillReturnRows(
 						pgxmock.NewRows([]string{"id", "retention_period", "created_at", "updated_at"}).
 							AddRow(id1, 45, now, now).
@@ -86,7 +89,7 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				// Expect deletion of extra configurations (IDs 2 and 3)
-				mock.ExpectExec("DELETE FROM alarm_definition WHERE").
+				mock.ExpectExec(fmt.Sprintf("DELETE FROM %s WHERE", dataModel.TableName())).
 					WithArgs(id2, id3).
 					WillReturnResult(pgxmock.NewResult("DELETE", 2))
 
@@ -102,7 +105,7 @@ var _ = Describe("AlarmsRepository", func() {
 				now := time.Now()
 				id1, id2 := uuid.New(), uuid.New()
 
-				mock.ExpectQuery("SELECT (.+) FROM alarm_service_configuration").
+				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s", dataModel.TableName())).
 					WillReturnRows(
 						pgxmock.NewRows([]string{"id", "retention_period", "created_at", "updated_at"}).
 							AddRow(id1, 45, now, now).
@@ -110,7 +113,7 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				// Simulate delete operation failure
-				mock.ExpectExec("DELETE FROM alarm_definition WHERE").
+				mock.ExpectExec(fmt.Sprintf("DELETE FROM %s WHERE", dataModel.TableName())).
 					WithArgs(id2).
 					WillReturnError(fmt.Errorf("database error"))
 
@@ -124,7 +127,7 @@ var _ = Describe("AlarmsRepository", func() {
 
 		When("initial query fails", func() {
 			It("returns an error", func() {
-				mock.ExpectQuery("SELECT (.+) FROM alarm_service_configuration").
+				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s", dataModel.TableName())).
 					WillReturnError(fmt.Errorf("database error"))
 
 				config, err := repo.CreateServiceConfiguration(ctx, 30)
