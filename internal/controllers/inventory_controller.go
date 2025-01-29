@@ -1567,7 +1567,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		},
 		{
 			Name:  utils.HwMgrPluginNameSpace,
-			Value: os.Getenv(utils.HwMgrPluginNameSpace),
+			Value: utils.GetHwMgrPluginNS(),
 		},
 	}...)
 
