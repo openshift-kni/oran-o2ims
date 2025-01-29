@@ -1555,6 +1555,7 @@ spec:
                 - --upstream=http://127.0.0.1:8080/
                 - --logtostderr=true
                 - --v=0
+                - --http2-disable=true
                 image: quay.io/openshift/origin-kube-rbac-proxy:4.18
                 name: kube-rbac-proxy
                 ports:
