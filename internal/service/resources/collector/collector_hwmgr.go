@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/google/uuid"
 	inventoryclient "github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client/generated"
@@ -73,7 +72,7 @@ func NewHwMgrDataSource(name string, cloudID, globalCloudID uuid.UUID) (DataSour
 func setupInventoryClient(name string) (*inventoryclient.ClientWithResponses, error) {
 	slog.Info("Creating inventory API client", "name", name)
 
-	url := fmt.Sprintf("https://oran-hwmgr-plugin-controller-manager.%s.svc.cluster.local:6443", os.Getenv(utils.HwMgrPluginNameSpace))
+	url := fmt.Sprintf("https://oran-hwmgr-plugin-controller-manager.%s.svc.cluster.local:6443", utils.GetHwMgrPluginNS())
 
 	// Set up transport
 	tr, err := utils.GetDefaultBackendTransport()
