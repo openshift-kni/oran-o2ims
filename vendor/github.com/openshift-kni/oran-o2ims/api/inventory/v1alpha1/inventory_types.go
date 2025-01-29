@@ -86,65 +86,29 @@ type SmoConfig struct {
 }
 
 type ServerConfig struct {
-	// Enabled indicates if the server should be started.
-	//
-	//+kubebuilder:default=true
-	Enabled bool `json:"enabled"`
-}
-
-// ArtifactsServerConfig contains the configuration for the artifacts server.
-type ArtifactsServerConfig struct {
-	//+kubebuilder:default:={enabled:true}
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:bool"}
-	ServerConfig `json:",inline"`
+	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
+	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
+	// present a client TLS certificate to the OAuth server or SMO.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // ResourceServerConfig contains the configuration for the resource server.
 type ResourceServerConfig struct {
-	//+kubebuilder:default:={enabled:true}
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:bool"}
 	ServerConfig `json:",inline"`
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backend URL",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	BackendURL string `json:"backendURL,omitempty"`
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backend Token",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	BackendToken string `json:"backendToken,omitempty"`
-	// This field allows the addition of extra O-Cloud information for the resource server.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Extensions",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Extensions []string `json:"extensions,omitempty"`
-	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-	// establish an mTLS connection to the OAuth server or SMO.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // ClusterServerConfig contains the configuration for the cluster server.
 type ClusterServerConfig struct {
-	//+kubebuilder:default:={enabled:true}
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:bool"}
 	ServerConfig `json:",inline"`
-	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-	// establish an mTLS connection to the OAuth server or SMO.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // AlarmServerConfig contains the configuration for the alarm server.
 type AlarmServerConfig struct {
-	//+kubebuilder:default:={enabled:true}
 	ServerConfig `json:",inline"`
-	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-	// establish an mTLS connection to the OAuth server or SMO.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // InventorySpec defines the desired state of Inventory
@@ -159,10 +123,6 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	CloudID *string `json:"cloudID"`
-	// ArtifactsServerConfig contains the configuration for the artifacts server.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Artifacts Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ArtifactsServerConfig ArtifactsServerConfig `json:"artifactsServerConfig,omitempty"`
 	// ResourceServerConfig contains the configuration for the resource server.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -191,24 +151,10 @@ type InventorySpec struct {
 	CaBundleName *string `json:"caBundleName,omitempty"`
 }
 
-type DeploymentsStatus struct {
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployment Server Status"
-	DeploymentServerStatus string `json:"deploymentServerStatus,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Metadata Server Status"
-	MetadataServerStatus string `json:"metadataServerStatus,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Resource Server Status"
-	ResourceServerStatus string `json:"resourceServerStatus,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Alarm Server Status"
-	AlarmServerStatus string `json:"alarmServerStatus,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Artifacts Server Status"
-	ArtifactsServerStatus string `json:"artifactsServerStatus,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Provisioning Server Status"
-	ProvisioningServerStatus string `json:"provisioningServerStatus,omitempty"`
-}
-
 type UsedServerConfig struct {
 	ArtifactsServerUsedConfig    []string `json:"artifactsServerUsedConfig,omitempty"`
-	MetadataServerUsedConfig     []string `json:"metadataServerUsedConfig,omitempty"`
+	AlarmsServerUsedConfig       []string `json:"alarmsServerUsedConfig,omitempty"`
+	ClusterServerUsedConfig      []string `json:"clusterServerUsedConfig,omitempty"`
 	ResourceServerUsedConfig     []string `json:"resourceServerUsedConfig,omitempty"`
 	ProvisioningServerUsedConfig []string `json:"provisioningServerUsedConfig,omitempty"`
 }
@@ -219,9 +165,7 @@ type InventoryStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployments Status"
-	DeploymentsStatus DeploymentsStatus `json:"deploymentStatus,omitempty"`
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployments Status"
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Deployed Server Configurations"
 	UsedServerConfig UsedServerConfig `json:"usedServerConfig,omitempty"`
 	// Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
 	// the default ingress controller.
@@ -230,9 +174,6 @@ type InventoryStatus struct {
 	// Stores the local cluster ID used as the local Cloud ID value.
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Local Cluster ID"
 	ClusterID string `json:"clusterID,omitempty"`
-	// Stores the Search API URL resolved at runtime; either from a user override or automatically computed from the
-	// Search API service.
-	SearchURL string `json:"searchURL,omitempty"`
 }
 
 // +kubebuilder:object:root=true

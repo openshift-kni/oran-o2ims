@@ -49,12 +49,6 @@ func setServerFlags(cmd *cobra.Command) error {
 		"",
 		"The local O-Cloud identifier.",
 	)
-	flags.StringVar(
-		&config.BackendURL,
-		server.BackendURLFlagName,
-		"",
-		"URL of the backend search-api component.",
-	)
 	flags.StringArrayVar(
 		&config.Extensions,
 		server.ExtensionsFlagName,

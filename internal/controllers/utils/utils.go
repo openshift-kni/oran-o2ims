@@ -150,16 +150,6 @@ func DoesK8SResourceExist(ctx context.Context, c client.Client, name, namespace 
 	}
 }
 
-func extensionsToExtensionArgs(extensions []string) []string {
-	var extensionsArgsArray []string
-	for _, crtExt := range extensions {
-		newExtensionFlag := "--extensions=" + crtExt
-		extensionsArgsArray = append(extensionsArgsArray, newExtensionFlag)
-	}
-
-	return extensionsArgsArray
-}
-
 // HasApiEndpoints determines whether a server exposes a set of API endpoints
 func HasApiEndpoints(serverName string) bool {
 	return serverName == InventoryDatabaseServerName ||
@@ -499,13 +489,8 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		result = append(
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
-			fmt.Sprintf("--backend-url=%s", inventory.Status.SearchURL),
 			fmt.Sprintf("--global-cloud-id=%s", cloudId),
 			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
-
-		// Add the extensions:
-		extensionsArgsArray := extensionsToExtensionArgs(inventory.Spec.ResourceServerConfig.Extensions)
-		result = append(result, extensionsArgsArray...)
 
 		// Add SMO/OAuth command line arguments
 		result = addArgsForSMO(inventory, result)
@@ -519,10 +504,6 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		result = append(
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID))
-
-		// Add the extensions:
-		extensionsArgsArray := extensionsToExtensionArgs(inventory.Spec.ResourceServerConfig.Extensions)
-		result = append(result, extensionsArgsArray...)
 
 		// Add SMO/OAuth command line arguments
 		result = addArgsForSMO(inventory, result)
@@ -841,26 +822,6 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DefaultInventoryCR,
 			Namespace: GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace),
-		},
-		Spec: inventoryv1alpha1.InventorySpec{
-			AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true},
-			},
-			ArtifactsServerConfig: inventoryv1alpha1.ArtifactsServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true},
-			},
-			ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true,
-				},
-			},
-			ClusterServerConfig: inventoryv1alpha1.ClusterServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true,
-				},
-			},
 		},
 	}
 

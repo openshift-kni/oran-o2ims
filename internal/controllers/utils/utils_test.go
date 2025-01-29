@@ -61,29 +61,7 @@ var _ = Describe("ExtensionUtils", func() {
 				Name:      "oran-o2ims-sample-1",
 				Namespace: InventoryNamespace,
 			},
-			Spec: inventoryv1alpha1.InventorySpec{
-				ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
-					// The below extension matches the following CRD extensions entry:
-					//
-					// extensions:
-					// - "{\"my\": {memory: .status.capacity.memory, k8s_version: .status.version.kubernetes}}"
-					// - |
-					//     .metadata.labels["name"] as $name |
-					// 	   {
-					// 	     name: $name,
-					// 	     alias: $name
-					// 	   }
-					Extensions: []string{
-						fmt.Sprintf(
-							".metadata.labels[\"name\"] as $name |\n" +
-								"{\n" +
-								"  name: $name,\n" +
-								"  alias: $name\n" +
-								"}\n"),
-						"{\"my\": {memory: .status.capacity.memory, k8s_version: .status.version.kubernetes}}",
-					},
-				},
-			},
+			Spec: inventoryv1alpha1.InventorySpec{},
 		}
 
 		actualArgs, err := GetServerArgs(Inventory, InventoryResourceServerName)
@@ -91,13 +69,9 @@ var _ = Describe("ExtensionUtils", func() {
 		expectedArgs := ResourceServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
-			fmt.Sprintf("--backend-url=%s", Inventory.Status.SearchURL),
 			"--global-cloud-id=undefined",
 			fmt.Sprintf("--external-address=https://%s", Inventory.Status.IngressHost),
 		)
-		expectedArgs = append(expectedArgs,
-			"--extensions=.metadata.labels[\"name\"] as $name |\n{\n  name: $name,\n  alias: $name\n}\n",
-			"--extensions={\"my\": {memory: .status.capacity.memory, k8s_version: .status.version.kubernetes}}")
 		Expect(actualArgs).To(Equal(expectedArgs))
 	})
 
@@ -117,7 +91,6 @@ var _ = Describe("ExtensionUtils", func() {
 		expectedArgs := ResourceServerArgs
 		expectedArgs = append(expectedArgs,
 			fmt.Sprintf("--cloud-id=%s", Inventory.Status.ClusterID),
-			fmt.Sprintf("--backend-url=%s", Inventory.Status.SearchURL),
 			"--global-cloud-id=undefined",
 			fmt.Sprintf("--external-address=https://%s", Inventory.Status.IngressHost),
 		)

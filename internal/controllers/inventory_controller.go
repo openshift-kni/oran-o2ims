@@ -743,25 +743,6 @@ func (t *reconcilerTask) storeClusterID(ctx context.Context) error {
 	return nil
 }
 
-// storeSearchURL stores the Search API URL onto the object status for later retrieval.
-func (t *reconcilerTask) storeSearchURL(ctx context.Context) error {
-	if t.object.Spec.ResourceServerConfig.BackendURL == "" {
-		searchURL, err := utils.GetSearchURL(ctx, t.client)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to get Search API URL.",
-				slog.String("error", err.Error()))
-			return fmt.Errorf("failed to get Search API URL: %s", err.Error())
-		}
-		t.object.Status.SearchURL = searchURL
-	} else {
-		t.object.Status.SearchURL = t.object.Spec.ResourceServerConfig.BackendURL
-	}
-
-	return nil
-}
-
 // checkForPodReadyStatus checks for all server pods to be ready.  If any pod is not yet ready, the reconciler timer is
 // set to a short value so that we can try again quickly; otherwise either an error is returned without a reconciler
 // timer to indicate that an exponential backoff is required
@@ -816,11 +797,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
-	err = t.storeSearchURL(ctx)
-	if err != nil {
-		return
-	}
-
 	// Create the database
 	err = t.createDatabase(ctx)
 	if updateError := t.updateInventoryUsedConfigStatus(ctx, utils.InventoryDatabaseServerName,
@@ -838,65 +814,53 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		return
 	}
 
-	// Create the needed Ingress if at least one server is required by the Spec.
-	if t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmServerConfig.Enabled ||
-		t.object.Spec.ArtifactsServerConfig.Enabled {
-		err = t.createIngress(ctx)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy Ingress.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the shared cluster role for the kube-rbac-proxy
-		err = t.createSharedRbacProxyRole(ctx)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy RBAC Proxy cluster role.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
+	err = t.createIngress(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Ingress.",
+			slog.String("error", err.Error()),
+		)
+		return
 	}
 
-	// Start the resource server if required by the Spec.
-	if t.object.Spec.ResourceServerConfig.Enabled {
-		// Create the resources required by the resource server
-		nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Create the shared cluster role for the kube-rbac-proxy
+	err = t.createSharedRbacProxyRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy RBAC Proxy cluster role.",
+			slog.String("error", err.Error()),
+		)
+		return
 	}
 
-	// Start the cluster server if required by the Spec.
-	if t.object.Spec.ClusterServerConfig.Enabled {
-		// Create the resources required by the cluster server
-		nextReconcile, err = t.setupClusterServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Start the resource server
+	// Create the resources required by the resource server
+	nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
 	}
 
-	// Start the alarm server if required by the Spec.
-	if t.object.Spec.AlarmServerConfig.Enabled {
-		// Create the alarm server.
-		nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Start the cluster server
+	// Create the resources required by the cluster server
+	nextReconcile, err = t.setupClusterServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
 	}
 
-	// Start the artifacts server if required by the Spec.
-	if t.object.Spec.ArtifactsServerConfig.Enabled {
-		// Create the artifacts server.
-		nextReconcile, err = t.setupArtifactsServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Start the alarm server
+	// Create the alarm server.
+	nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
+	}
+
+	// Start the artifacts server
+	// Create the artifacts server.
+	nextReconcile, err = t.setupArtifactsServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
 	}
 
 	// Start the provisioning server
@@ -2006,6 +1970,14 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
 	}
 
+	if serverName == utils.InventoryClusterServerName {
+		t.object.Status.UsedServerConfig.ClusterServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.InventoryAlarmServerName {
+		t.object.Status.UsedServerConfig.AlarmsServerUsedConfig = deploymentArgs
+	}
+
 	if serverName == utils.InventoryArtifactsServerName {
 		t.object.Status.UsedServerConfig.ArtifactsServerUsedConfig = deploymentArgs
 	}
@@ -2045,22 +2017,10 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) error {
 
 	t.logger.InfoContext(ctx, "[updateInventoryDeploymentStatus]")
-	if t.object.Spec.AlarmServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
-	}
-
-	if t.object.Spec.ResourceServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
-	}
-
-	if t.object.Spec.ClusterServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryClusterServerName)
-	}
-
-	if t.object.Spec.ArtifactsServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryArtifactsServerName)
-	}
-
+	t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryClusterServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryArtifactsServerName)
 	t.updateInventoryStatusConditions(ctx, utils.InventoryDatabaseServerName)
 	t.updateInventoryStatusConditions(ctx, utils.InventoryProvisioningServerName)
 
