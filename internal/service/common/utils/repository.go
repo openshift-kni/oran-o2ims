@@ -239,7 +239,10 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sq
 	var err error
 
 	// Run query
-	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	rows, err := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err) // Fake error from mocking gets stored here
+	}
 	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

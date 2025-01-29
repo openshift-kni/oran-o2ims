@@ -2,6 +2,7 @@ package utils
 
 import (
 	"reflect"
+	"sort"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
@@ -78,6 +79,12 @@ func GetColumnsAndValues[T db.Model](s T, tags DBTag) ([]string, []any) {
 	columns := make([]string, 0, len(tags))
 	values := make([]any, 0, len(tags))
 
+	fieldNames := make([]string, 0, len(tags))
+	for fieldName := range tags {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames) // Sort to ensure consistent order
+
 	st := reflect.TypeOf(s)
 	sv := reflect.ValueOf(s)
 	if st.Kind() != reflect.Struct {
@@ -85,7 +92,8 @@ func GetColumnsAndValues[T db.Model](s T, tags DBTag) ([]string, []any) {
 		sv = sv.Elem()
 	}
 
-	for fieldName, columnName := range tags {
+	for _, fieldName := range fieldNames {
+		columnName := tags[fieldName]
 		if field, ok := st.FieldByName(fieldName); ok {
 			if field.Type.Kind() != reflect.Pointer {
 				columns = append(columns, columnName)

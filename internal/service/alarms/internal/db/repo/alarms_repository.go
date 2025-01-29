@@ -197,6 +197,11 @@ func (ar *AlarmsRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 
 // UpsertAlarmEventRecord insert and updating an AlarmEventRecord.
 func (ar *AlarmsRepository) UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord) error {
+	if len(records) == 0 {
+		slog.Warn("No records for events upsert")
+		return nil // this should never happen but handling it gracefully for tests
+	}
+
 	// Build queries for each record
 	sql, params, err := buildAlarmEventRecordUpsertQuery(records)
 	if err != nil {
@@ -256,6 +261,23 @@ func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string
 
 // GetAlarmDefinitions needed to build out aer
 func (ar *AlarmsRepository) GetAlarmDefinitions(ctx context.Context, am *api.AlertmanagerNotification, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) ([]models.AlarmDefinition, error) {
+	if len(am.Alerts) == 0 {
+		slog.Warn("No events to retrieve corresponding definitions")
+		return []models.AlarmDefinition{}, nil // this should never happen
+	}
+
+	// find all the keys needed to find corresponding definitions
+	keys := getGetAlertNameObjectTypeIDAndSeverity(am, clusterIDToObjectTypeID)
+	if len(keys) == 0 {
+		slog.Warn("No key found to retrieve definitions")
+		return []models.AlarmDefinition{}, nil
+	}
+
+	if len(am.Alerts) != len(keys) {
+		slog.Warn("Could not find enough info from alerts to retrieve all corresponding definitions",
+			"missing_count", len(am.Alerts)-len(keys))
+	}
+
 	m := models.AlarmDefinition{}
 	dbTags := utils.GetAllDBTagsFromStruct(m)
 	query := psql.Select(
@@ -271,7 +293,7 @@ func (ar *AlarmsRepository) GetAlarmDefinitions(ctx context.Context, am *api.Ale
 				psql.Quote(dbTags["ObjectTypeID"]),
 				psql.Quote(dbTags["Severity"]),
 			).
-				In(getGetAlertNameObjectTypeIDAndSeverity(am, clusterIDToObjectTypeID)...), // Dynamically pass the pairs
+				In(keys...),
 		),
 	)
 
@@ -286,23 +308,41 @@ func (ar *AlarmsRepository) GetAlarmDefinitions(ctx context.Context, am *api.Ale
 func getGetAlertNameObjectTypeIDAndSeverity(am *api.AlertmanagerNotification, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) []bob.Expression {
 	var b []bob.Expression
 	for _, alert := range am.Alerts {
-		labels := *alert.Labels
-		if id := alertmanager.GetClusterID(labels); id != nil {
-			if objectTypeId, ok := clusterIDToObjectTypeID[*id]; ok {
-				_, severity := alertmanager.GetPerceivedSeverity(labels)
-				b = append(b, psql.ArgGroup(
-					alertmanager.GetAlertName(labels),
-					objectTypeId,
-					severity,
-				))
-			}
+		if alert.Labels == nil {
+			continue
 		}
+
+		labels := *alert.Labels
+		id := alertmanager.GetClusterID(labels)
+		if id == nil {
+			continue
+		}
+
+		objectTypeId, ok := clusterIDToObjectTypeID[*id]
+		if !ok {
+			continue
+		}
+
+		_, severity := alertmanager.GetPerceivedSeverity(labels)
+		b = append(b, psql.ArgGroup(
+			alertmanager.GetAlertName(labels),
+			objectTypeId,
+			severity,
+		))
 	}
 	return b
 }
 
+// TimeNow allows test to override time.Now
+var TimeNow = time.Now
+
 // ResolveNotificationIfNotInCurrent find and only keep the alerts that are available in the current payload
 func (ar *AlarmsRepository) ResolveNotificationIfNotInCurrent(ctx context.Context, am *api.AlertmanagerNotification) error {
+	if len(am.Alerts) == 0 {
+		slog.Warn("No events to resolve")
+		return nil // this should never happen
+	}
+
 	m := models.AlarmEventRecord{}
 	dbTags := utils.GetAllDBTagsFromStruct(m)
 	var (
@@ -323,7 +363,7 @@ func (ar *AlarmsRepository) ResolveNotificationIfNotInCurrent(ctx context.Contex
 	query := psql.Update(
 		um.Table(tableName),
 		um.SetCol(alarmStatus).ToArg(api.Resolved),
-		um.Set(psql.Raw(updateClearedTimeCase, time.Now())),
+		um.Set(psql.Raw(updateClearedTimeCase, TimeNow())),
 		um.SetCol(perceivedSeverity).ToArg(api.CLEARED),
 		um.Where(
 			psql.Group(psql.Quote(fingerprint), psql.Quote(raisedTime)).
