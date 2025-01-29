@@ -12,7 +12,6 @@ import (
 	"k8s.io/client-go/transport"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
@@ -146,8 +145,8 @@ func (d *HwMgrDataSource) MakeResourceType(resource *models.Resource) (*models.R
 		Vendor:         vendor,
 		Model:          model,
 		Version:        "",
-		ResourceKind:   models.ResourceKind(service.ResourceKindPhysical),
-		ResourceClass:  models.ResourceClass(service.ResourceClassCompute),
+		ResourceKind:   models.ResourceKindPhysical,
+		ResourceClass:  models.ResourceClassCompute,
 		Extensions:     nil,
 		DataSourceID:   d.dataSourceID,
 		GenerationID:   d.generationID,

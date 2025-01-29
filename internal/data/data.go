@@ -15,15 +15,6 @@ License.
 package data
 
 import (
-	"fmt"
-	"strings"
-
-	"github.com/PaesslerAG/jsonpath"
-	"github.com/imdario/mergo"
-	"github.com/itchyny/gojq"
-	"github.com/thoas/go-funk"
-
-	"github.com/openshift-kni/oran-o2ims/internal/jq"
 	"github.com/openshift-kni/oran-o2ims/internal/streaming"
 )
 
@@ -32,105 +23,6 @@ type Object = map[string]any
 
 // Array represents a list of objecs.
 type Array = []any
-
-func GetString(o Object, path string) (result string, err error) {
-	value, err := jsonpath.Get(path, o)
-	if err != nil {
-		return
-	}
-	result, ok := value.(string)
-	if !ok {
-		err = fmt.Errorf("value of path '%s' isn't a string", path)
-	}
-	return
-}
-
-func JQString(o Object, source string) (result string, err error) {
-	query, err := gojq.Parse(source)
-	if err != nil {
-		return
-	}
-	code, err := gojq.Compile(query)
-	if err != nil {
-		return
-	}
-	iter := code.Run(o)
-	value, ok := iter.Next()
-	if !ok {
-		err = fmt.Errorf("query '%s' didn't return a value", source)
-		return
-	}
-	text, ok := value.(string)
-	if !ok {
-		err = fmt.Errorf(
-			"query '%s' returned a value of type '%T' instead of a string",
-			source, value,
-		)
-		return
-	}
-	result = text
-	return
-}
-
-func GetArray(o Object, path string) (result []any, err error) {
-	value, err := jsonpath.Get(path, o)
-	if err != nil {
-		return
-	}
-	result, ok := value.([]any)
-	if !ok {
-		err = fmt.Errorf("value of path '%s' isn't an array", value)
-	}
-	return
-}
-
-func GetObj(o Object, path string) (result Object, err error) {
-	value, err := jsonpath.Get(path, o)
-	if err != nil {
-		return
-	}
-	result, ok := value.(Object)
-	if !ok {
-		err = fmt.Errorf("value of path '%s' isn't an object", value)
-	}
-	return
-}
-
-func GetLabelsMap(labels string) (labelsMap Object) {
-	labelsArr := strings.Split(labels, "; ")
-	labelsMap = Object{}
-	for _, label := range labelsArr {
-		keyValue := strings.Split(label, "=")
-		labelsMap[keyValue[0]] = keyValue[1]
-	}
-	return
-}
-
-func GetExtensions(input Object, extensions []string, jqTool *jq.Tool) (output Object, err error) {
-	for _, extension := range extensions {
-		var value Object
-		err = jqTool.Evaluate(extension, input, &value)
-		if err != nil {
-			continue
-		}
-		if value != nil {
-			if funk.Contains(funk.Values(value), nil) {
-				// Ignore 'nil' values
-				continue
-			}
-			// Append value to output
-			err = mergo.Merge(
-				&output,
-				value,
-				mergo.WithOverride,
-			)
-			if err != nil {
-				continue
-			}
-		}
-	}
-	return
-}
 
 // Stream is a stream of objects.
 type Stream = streaming.Stream[Object]
