@@ -18,7 +18,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/operator"
-	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 )
 
 // Create creates and returns the `start` command.
@@ -28,9 +27,6 @@ func Start() *cobra.Command {
 		Short: "Starts components",
 		Args:  cobra.NoArgs,
 	}
-	result.AddCommand(server.DeploymentManagerServer())
-	result.AddCommand(server.MetadataServer())
-	result.AddCommand(server.ResourceServer())
 	result.AddCommand(operator.ControllerManager())
 	return result
 }

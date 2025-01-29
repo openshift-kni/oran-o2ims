@@ -14,6 +14,19 @@ var _ db.Model = (*ResourceType)(nil)
 type ResourceKind string
 type ResourceClass string
 
+const (
+	ResourceClassCompute    ResourceClass = "COMPUTE"
+	ResourceClassNetworking ResourceClass = "NETWORKING"
+	ResourceClassStorage    ResourceClass = "STORAGE"
+	ResourceClassUndefined  ResourceClass = "UNDEFINED"
+)
+
+const (
+	ResourceKindPhysical  ResourceKind = "PHYSICAL"
+	ResourceKindLogical   ResourceKind = "LOGICAL"
+	ResourcekindUndefined ResourceKind = "UNDEFINED"
+)
+
 // ResourceType represents a record in the resource_type table.
 type ResourceType struct {
 	ResourceTypeID uuid.UUID              `db:"resource_type_id"` // Non-nil because we always set this from named values
