@@ -1,8 +1,8 @@
 # Build the manager binary
-FROM registry.hub.docker.com/library/golang:1.22 as dlvbuilder
+FROM registry.hub.docker.com/library/golang:1.22 AS dlvbuilder
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
-FROM dlvbuilder as builder
+FROM dlvbuilder AS builder
 ARG GOBUILD_GCFLAGS=""
 
 ARG TARGETOS
@@ -31,14 +31,14 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -gcflags
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot as production
+FROM gcr.io/distroless/static:nonroot AS production
 WORKDIR /
 COPY --from=builder /workspace/oran-o2ims /usr/bin
 USER 65532:65532
 
 ENTRYPOINT ["/usr/bin/oran-o2ims"]
 
-FROM registry.access.redhat.com/ubi9/ubi:9.2 as debug
+FROM registry.access.redhat.com/ubi9/ubi:9.2 AS debug
 
 COPY --from=dlvbuilder /go/bin/dlv /usr/bin
 COPY --from=builder /workspace/oran-o2ims /usr/bin
