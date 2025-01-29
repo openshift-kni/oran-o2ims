@@ -27,7 +27,6 @@ type ResourceServerConfig struct {
 	utils.CommonServerConfig
 	CloudID         string
 	GlobalCloudID   string
-	BackendURL      string
 	Extensions      []string
 	ExternalAddress string
 }

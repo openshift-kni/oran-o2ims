@@ -149,7 +149,7 @@ spec:
       - description: |-
           ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
           then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          establish an mTLS connection to the OAuth server or SMO.
+          present a client TLS certificate to the OAuth server or SMO.
         displayName: Client TLS Config
         path: alarmServerConfig.clientTLS
         x-descriptors:
@@ -162,12 +162,6 @@ spec:
           being first and the root CA being last.
         displayName: TLS client certificate
         path: alarmServerConfig.clientTLS.clientCertificateName
-      - description: ArtifactsServerConfig contains the configuration for the artifacts
-          server.
-        displayName: Artifacts Server Configuration
-        path: artifactsServerConfig
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
           with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
@@ -191,7 +185,7 @@ spec:
       - description: |-
           ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
           then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          establish an mTLS connection to the OAuth server or SMO.
+          present a client TLS certificate to the OAuth server or SMO.
         displayName: Client TLS Config
         path: clusterServerConfig.clientTLS
         x-descriptors:
@@ -223,18 +217,10 @@ spec:
         path: resourceServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Backend Token
-        path: resourceServerConfig.backendToken
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Backend URL
-        path: resourceServerConfig.backendURL
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
           then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          establish an mTLS connection to the OAuth server or SMO.
+          present a client TLS certificate to the OAuth server or SMO.
         displayName: Client TLS Config
         path: resourceServerConfig.clientTLS
         x-descriptors:
@@ -247,12 +233,6 @@ spec:
           being first and the root CA being last.
         displayName: TLS client certificate
         path: resourceServerConfig.clientTLS.clientCertificateName
-      - description: This field allows the addition of extra O-Cloud information for
-          the resource server.
-        displayName: Extensions
-        path: resourceServerConfig.extensions
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: SmoConfig defines the configurable attributes to represent the
           SMO instance
         displayName: SMO Configuration
@@ -336,26 +316,12 @@ spec:
           Important: Run "make" to regenerate code after modifying this file
         displayName: Conditions
         path: conditions
-      - displayName: Deployments Status
-        path: deploymentStatus
-      - displayName: Alarm Server Status
-        path: deploymentStatus.alarmServerStatus
-      - displayName: Artifacts Server Status
-        path: deploymentStatus.artifactsServerStatus
-      - displayName: Deployment Server Status
-        path: deploymentStatus.deploymentServerStatus
-      - displayName: Metadata Server Status
-        path: deploymentStatus.metadataServerStatus
-      - displayName: Provisioning Server Status
-        path: deploymentStatus.provisioningServerStatus
-      - displayName: Resource Server Status
-        path: deploymentStatus.resourceServerStatus
       - description: |-
           Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
           the default ingress controller.
         displayName: Resolved Ingress Host Address
         path: ingressHost
-      - displayName: Deployments Status
+      - displayName: Deployed Server Configurations
         path: usedServerConfig
       version: v1alpha1
     - description: NodePool is the schema for an allocation request of nodes

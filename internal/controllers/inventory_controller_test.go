@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -29,7 +28,6 @@ import (
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -152,16 +150,6 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image: &ServerTestImage,
-					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: true,
-						},
-					},
-					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: false,
-						},
-					},
 				},
 			},
 		},
@@ -215,97 +203,7 @@ var _ = DescribeTable(
 		},
 	),
 	Entry(
-		"Only the resource server is required",
-		[]client.Object{
-			&inventoryv1alpha1.Inventory{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "oran-o2ims-sample-1",
-					Namespace:         utils.InventoryNamespace,
-					CreationTimestamp: metav1.Now(),
-				},
-				Spec: inventoryv1alpha1.InventorySpec{
-					Image: &ServerTestImage,
-					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: true,
-						},
-					},
-					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: false,
-						},
-					},
-				},
-			},
-		},
-		reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Namespace: utils.InventoryNamespace,
-				Name:      "oran-o2ims-sample-1",
-			},
-		},
-		func(result ctrl.Result, reconciler *Reconciler) {
-			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
-
-			// Check the metadata server deployment exists.
-			resourceDeployment := &appsv1.Deployment{}
-			err := reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      utils.InventoryResourceServerName,
-					Namespace: utils.InventoryNamespace,
-				},
-				resourceDeployment)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Check that the Ingress exists.
-			ingress := &networkingv1.Ingress{}
-			err = reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      utils.IngressName,
-					Namespace: utils.InventoryNamespace,
-				},
-				ingress)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Check that the ServiceAccount exists.
-			serviceAccount := &corev1.ServiceAccount{}
-			err = reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      utils.InventoryResourceServerName,
-					Namespace: utils.InventoryNamespace,
-				},
-				serviceAccount)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Check that the Service exists.
-			service := &corev1.Service{}
-			err = reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      utils.InventoryResourceServerName,
-					Namespace: utils.InventoryNamespace,
-				},
-				service)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Check the deployment manager server does not exist.
-			alarmsDeployment := &appsv1.Deployment{}
-			err = reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      utils.InventoryAlarmServerName,
-					Namespace: utils.InventoryNamespace,
-				},
-				alarmsDeployment)
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryAlarmServerName)))
-		},
-	),
-	Entry(
-		"Resource, alarms and artifacts servers required",
+		"Check for presence of all servers",
 		[]client.Object{
 			&inventoryv1alpha1.Inventory{
 				ObjectMeta: metav1.ObjectMeta{
@@ -315,21 +213,6 @@ var _ = DescribeTable(
 				},
 				Spec: inventoryv1alpha1.InventorySpec{
 					Image: &ServerTestImage,
-					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: true,
-						},
-					},
-					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: true,
-						},
-					},
-					ArtifactsServerConfig: inventoryv1alpha1.ArtifactsServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: true,
-						},
-					},
 				},
 			},
 		},
@@ -351,6 +234,17 @@ var _ = DescribeTable(
 					Namespace: utils.InventoryNamespace,
 				},
 				resourceDeployment)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the cluster server exists.
+			clusterDeployment := &appsv1.Deployment{}
+			err = reconciler.Client.Get(
+				context.TODO(),
+				types.NamespacedName{
+					Name:      utils.InventoryClusterServerName,
+					Namespace: utils.InventoryNamespace,
+				},
+				clusterDeployment)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check that the alarms server exists.
@@ -385,63 +279,6 @@ var _ = DescribeTable(
 				},
 				provisioningDeployment)
 			Expect(err).ToNot(HaveOccurred())
-		},
-	),
-	Entry(
-		"No O-RAN O2IMS server required",
-		[]client.Object{
-			&inventoryv1alpha1.Inventory{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "oran-o2ims-sample-1",
-					Namespace:         "oran-o2ims",
-					CreationTimestamp: metav1.Now(),
-				},
-				Spec: inventoryv1alpha1.InventorySpec{
-					Image: &ServerTestImage,
-					ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: false,
-						},
-					},
-					AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
-						ServerConfig: inventoryv1alpha1.ServerConfig{
-							Enabled: false,
-						},
-					},
-				},
-			},
-		},
-		reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Namespace: utils.InventoryNamespace,
-				Name:      "oran-o2ims-sample-1",
-			},
-		},
-		func(result ctrl.Result, reconciler *Reconciler) {
-			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
-			// Check the metadata server deployment does not exist.
-			resourceDeployment := &appsv1.Deployment{}
-			err := reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      utils.InventoryResourceServerName,
-					Namespace: utils.InventoryNamespace,
-				},
-				resourceDeployment)
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryResourceServerName)))
-
-			// Check the deployment manager server does not exist.
-			alarmsDeployment := &appsv1.Deployment{}
-			err = reconciler.Client.Get(
-				context.TODO(),
-				types.NamespacedName{
-					Name:      utils.InventoryAlarmServerName,
-					Namespace: utils.InventoryNamespace,
-				},
-				alarmsDeployment)
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(MatchError(fmt.Sprintf("deployments.apps \"%s\" not found", utils.InventoryAlarmServerName)))
 		},
 	),
 )

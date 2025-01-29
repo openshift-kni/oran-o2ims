@@ -165,14 +165,9 @@ items:
     resourceVersion: "116847464"
     uid: e296aede-6309-478b-be10-6fd8f7904324
   spec:
-    alarmServerConfig:
-      enabled: true
-    artifactsServerConfig:
-      enabled: true
-    clusterServerConfig:
-      enabled: true
-    resourceServerConfig:
-      enabled: true
+    alarmServerConfig: {}
+    clusterServerConfig: {}
+    resourceServerConfig: {}
 ```
 
 ### Deploying operator from catalog

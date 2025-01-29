@@ -40,8 +40,6 @@ spec:
             description: InventorySpec defines the desired state of Inventory
             properties:
               alarmServerConfig:
-                default:
-                  enabled: true
                 description: AlarmServerConfig contains the configuration for the
                   alarm server.
                 properties:
@@ -49,7 +47,7 @@ spec:
                     description: |-
                       ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
                       then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      establish an mTLS connection to the OAuth server or SMO.
+                      present a client TLS certificate to the OAuth server or SMO.
                     properties:
                       clientCertificateName:
                         description: |-
@@ -60,25 +58,6 @@ spec:
                           being first and the root CA being last.
                         type: string
                     type: object
-                  enabled:
-                    default: true
-                    description: Enabled indicates if the server should be started.
-                    type: boolean
-                required:
-                - enabled
-                type: object
-              artifactsServerConfig:
-                default:
-                  enabled: true
-                description: ArtifactsServerConfig contains the configuration for
-                  the artifacts server.
-                properties:
-                  enabled:
-                    default: true
-                    description: Enabled indicates if the server should be started.
-                    type: boolean
-                required:
-                - enabled
                 type: object
               caBundleName:
                 description: |-
@@ -91,8 +70,6 @@ spec:
                   the SMO inventory record with the deployed cloud instance.
                 type: string
               clusterServerConfig:
-                default:
-                  enabled: true
                 description: ClusterServerConfig contains the configuration for the
                   resource server.
                 properties:
@@ -100,7 +77,7 @@ spec:
                     description: |-
                       ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
                       then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      establish an mTLS connection to the OAuth server or SMO.
+                      present a client TLS certificate to the OAuth server or SMO.
                     properties:
                       clientCertificateName:
                         description: |-
@@ -111,12 +88,6 @@ spec:
                           being first and the root CA being last.
                         type: string
                     type: object
-                  enabled:
-                    default: true
-                    description: Enabled indicates if the server should be started.
-                    type: boolean
-                required:
-                - enabled
                 type: object
               image:
                 description: |-
@@ -128,20 +99,14 @@ spec:
                 description: IngressHost defines the FQDN for the IMS endpoints.
                 type: string
               resourceServerConfig:
-                default:
-                  enabled: true
                 description: ResourceServerConfig contains the configuration for the
                   resource server.
                 properties:
-                  backendToken:
-                    type: string
-                  backendURL:
-                    type: string
                   clientTLS:
                     description: |-
                       ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
                       then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      establish an mTLS connection to the OAuth server or SMO.
+                      present a client TLS certificate to the OAuth server or SMO.
                     properties:
                       clientCertificateName:
                         description: |-
@@ -152,18 +117,6 @@ spec:
                           being first and the root CA being last.
                         type: string
                     type: object
-                  enabled:
-                    default: true
-                    description: Enabled indicates if the server should be started.
-                    type: boolean
-                  extensions:
-                    description: This field allows the addition of extra O-Cloud information
-                      for the resource server.
-                    items:
-                      type: string
-                    type: array
-                required:
-                - enabled
                 type: object
               smo:
                 description: SmoConfig defines the configurable attributes to represent
@@ -320,38 +273,22 @@ spec:
                   - type
                   type: object
                 type: array
-              deploymentStatus:
-                properties:
-                  alarmServerStatus:
-                    type: string
-                  artifactsServerStatus:
-                    type: string
-                  deploymentServerStatus:
-                    type: string
-                  metadataServerStatus:
-                    type: string
-                  provisioningServerStatus:
-                    type: string
-                  resourceServerStatus:
-                    type: string
-                type: object
               ingressHost:
                 description: |-
                   Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
                   the default ingress controller.
                 type: string
-              searchURL:
-                description: |-
-                  Stores the Search API URL resolved at runtime; either from a user override or automatically computed from the
-                  Search API service.
-                type: string
               usedServerConfig:
                 properties:
+                  alarmsServerUsedConfig:
+                    items:
+                      type: string
+                    type: array
                   artifactsServerUsedConfig:
                     items:
                       type: string
                     type: array
-                  metadataServerUsedConfig:
+                  clusterServerUsedConfig:
                     items:
                       type: string
                     type: array
