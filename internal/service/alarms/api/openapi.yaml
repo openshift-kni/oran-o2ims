@@ -179,7 +179,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          application/merge-patch+json:
             schema:
               $ref: '#/components/schemas/AlarmEventRecordModifications'
       responses:
@@ -291,7 +291,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          application/merge-patch+json:
             schema:
               $ref: '#/components/schemas/AlarmServiceConfiguration'
       responses:

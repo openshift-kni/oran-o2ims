@@ -36,6 +36,9 @@ func OpenAPIValidation(swagger *openapi3.T) Middleware {
 	// that server names match. We don't know how this thing will be run.
 	swagger.Servers = nil
 
+	// explicitly register `merge-patch+json` needed for validation during patch requests
+	openapi3filter.RegisterBodyDecoder("application/merge-patch+json", openapi3filter.JSONBodyDecoder)
+
 	return oapimiddleware.OapiRequestValidatorWithOptions(swagger, &oapimiddleware.Options{
 		Options: openapi3filter.Options{
 			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc, // No auth needed even when we have something in spec
