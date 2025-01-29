@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -80,19 +81,33 @@ import (
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
 	client.Client
-	Logger *slog.Logger
-	Image  string
+	Logger    *slog.Logger
+	Image     string
+	setupOnce sync.Once
 }
 
 // reconcilerTask contains the information and logic needed to perform a single reconciliation
 // task. This reduces the need to pass things like the current state of the object as function
 // parameters.
 type reconcilerTask struct {
-	registerOnRestart bool
-	logger            *slog.Logger
-	image             string
-	client            client.Client
-	object            *inventoryv1alpha1.Inventory
+	logger *slog.Logger
+	image  string
+	client client.Client
+	object *inventoryv1alpha1.Inventory
+}
+
+const registerOnRestartAnnotation = "o2ims.oran.openshift.io/register-on-restart"
+
+var registerOnRestart = false
+
+// setRegisterOnRestart initializes the `registerOnRestart` value from an annotation.
+func setRegisterOnRestart(object *inventoryv1alpha1.Inventory) {
+	if annotation, ok := object.Annotations[registerOnRestartAnnotation]; ok {
+		if value, err := strconv.ParseBool(annotation); err == nil {
+			registerOnRestart = value
+			slog.Warn("SMO registration will be repeated on all subsequent restarts")
+		}
+	}
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -120,18 +135,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 		)
 	}
 
-	registerOnRestart, err := strconv.ParseBool(os.Getenv(utils.RegisterOnRestartsEnvName))
-	if err != nil {
-		registerOnRestart = false
-	}
+	// On the first reconcile, we set the `registerOnRestart` value from an annotation.  This is a one-time operation
+	// since we don't want to repeat the registration on every reconcile loop if it was previously successful.
+	r.setupOnce.Do(func() { setRegisterOnRestart(object) })
 
 	// Create and run the task:
 	task := &reconcilerTask{
-		registerOnRestart: registerOnRestart,
-		logger:            r.Logger,
-		client:            r.Client,
-		image:             r.Image,
-		object:            object,
+		logger: r.Logger,
+		client: r.Client,
+		image:  r.Image,
+		object: object,
 	}
 	result, err = task.run(ctx)
 	return
@@ -647,7 +660,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		return nil
 	}
 
-	if !utils.IsSmoRegistrationCompleted(t.object) || t.registerOnRestart {
+	if !utils.IsSmoRegistrationCompleted(t.object) || registerOnRestart {
 		err = t.registerWithSmo(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -681,7 +694,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 			ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
 		)
 
-		t.registerOnRestart = false // this is a one-time registration on restarts for development/debug
+		registerOnRestart = false // this is a one-time registration on restarts for development/debug
 	} else {
 		t.logger.InfoContext(
 			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),

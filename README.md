@@ -273,7 +273,15 @@ spec:
 
 Once the hub cluster is set up and the O-Cloud Manager is started, the end user must update the Inventory CR to
 configure the SMO attributes so that the application can register with the SMO. The user must provide the Global
-O-Cloud ID value which is provided by the SMO.
+O-Cloud ID value, which is provided by the SMO. This registration is a one-time operation. Once it succeeds, it will
+not be repeated.
+
+> :exclamation: For development/debug purposes, if repeating the registration is necessary, the following annotation can
+> be applied to the Inventory CR.
+>
+>```bash
+> oc annotate -n oran-o2ims inventories default o2ims.oran.openshift.io/register-on-restart=true
+>```
 
 In a production environment, this requires that an OAuth2 authorization server be available and configured with the
 appropriate client configurations for both the SMO and the O-Cloud Manager. In debug/test environments, the OAuth2

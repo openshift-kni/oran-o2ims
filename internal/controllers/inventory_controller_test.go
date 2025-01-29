@@ -69,7 +69,7 @@ func makePod(namespace, serverName string) *corev1.Pod {
 
 var _ = DescribeTable(
 	"Reconciler",
-	func(objs []client.Object, request reconcile.Request, validate func(result ctrl.Result, reconciler Reconciler)) {
+	func(objs []client.Object, request reconcile.Request, validate func(result ctrl.Result, reconciler *Reconciler)) {
 		// Declare the Namespace for the O-RAN O2IMS resource.
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -139,7 +139,7 @@ var _ = DescribeTable(
 		result, err := r.Reconcile(context.TODO(), request)
 		Expect(err).ToNot(HaveOccurred())
 
-		validate(result, *r)
+		validate(result, r)
 	},
 	Entry(
 		"Resource server deployment is updated after edit",
@@ -171,7 +171,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler Reconciler) {
+		func(result ctrl.Result, reconciler *Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check that the metadata server deployment exists.
@@ -244,7 +244,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler Reconciler) {
+		func(result ctrl.Result, reconciler *Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check the metadata server deployment exists.
@@ -339,7 +339,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler Reconciler) {
+		func(result ctrl.Result, reconciler *Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 
 			// Check that the resource server exists.
@@ -417,7 +417,7 @@ var _ = DescribeTable(
 				Name:      "oran-o2ims-sample-1",
 			},
 		},
-		func(result ctrl.Result, reconciler Reconciler) {
+		func(result ctrl.Result, reconciler *Reconciler) {
 			Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
 			// Check the metadata server deployment does not exist.
 			resourceDeployment := &appsv1.Deployment{}
