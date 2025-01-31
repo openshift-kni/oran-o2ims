@@ -114,6 +114,7 @@ paths:
       description: |
         Returns the list of node cluster types.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -223,6 +224,7 @@ paths:
       description: |
         Returns the list of node clusters.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -295,6 +297,7 @@ paths:
       description: |
         Returns the list of cluster resource types.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -367,6 +370,7 @@ paths:
       description: |
         Returns the list of cluster resources.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -439,6 +443,7 @@ paths:
       description: |
         Returns the list of cluster subscriptions.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -508,8 +513,6 @@ paths:
         Returns the details of a subscription.
       parameters:
       - $ref: "#/components/parameters/subscriptionId"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - subscriptions
       responses:
@@ -571,6 +574,7 @@ paths:
       description: |
         Returns the list of alarm dictionaries.
       parameters:
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
         - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
         - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
         - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"

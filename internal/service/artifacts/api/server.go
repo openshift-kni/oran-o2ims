@@ -8,11 +8,13 @@ import (
 
 	"github.com/google/uuid"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	api "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api/generated"
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	api "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api/generated"
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 type ArtifactsServerConfig struct {
@@ -64,6 +66,13 @@ func (a *ArtifactsServer) GetMinorVersions(ctx context.Context, request api.GetM
 func (r *ArtifactsServer) GetManagedInfrastructureTemplates(
 	ctx context.Context,
 	request api.GetManagedInfrastructureTemplatesRequestObject) (api.GetManagedInfrastructureTemplatesResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.ManagedInfrastructureTemplate{}); err != nil {
+		return api.GetManagedInfrastructureTemplates400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
 
 	// Get all the ClusterTemplates from the hub cluster.
 	var allClusterTemplates provisioningv1alpha1.ClusterTemplateList
@@ -76,7 +85,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplates(
 	objects := make([]api.ManagedInfrastructureTemplate, 0, len(allClusterTemplates.Items))
 	for _, clusterTemplate := range allClusterTemplates.Items {
 		// Convert the current ClusterTemplate to ManagedInfrastructureTemplate.
-		managedInfrastructureTemplate, err := clusterTemplateToManagedInfrastructureTemplate(clusterTemplate)
+		managedInfrastructureTemplate, err := clusterTemplateToManagedInfrastructureTemplate(clusterTemplate, options)
 		if err != nil {
 			return nil, err
 		}
@@ -124,14 +133,14 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplate(
 	}
 
 	// Convert the ClusterTemplate to the ManagedInfrastructureTemplate format.
-	object, err := clusterTemplateToManagedInfrastructureTemplate(clusterTemplates.Items[0])
+	object, err := clusterTemplateToManagedInfrastructureTemplate(clusterTemplates.Items[0], commonapi.NewDefaultFieldOptions())
 	if err != nil {
 		return nil, err
 	}
 	return api.GetManagedInfrastructureTemplate200JSONResponse(object), nil
 }
 
-func clusterTemplateToManagedInfrastructureTemplate(clusterTemplate provisioningv1alpha1.ClusterTemplate) (
+func clusterTemplateToManagedInfrastructureTemplate(clusterTemplate provisioningv1alpha1.ClusterTemplate, options *commonapi.FieldOptions) (
 	api.ManagedInfrastructureTemplate, error) {
 
 	// Validate and transform the string to UUID.
@@ -158,12 +167,17 @@ func clusterTemplateToManagedInfrastructureTemplate(clusterTemplate provisioning
 	}
 
 	// Convert the current ClusterTemplate to ManagedInfrastructureTemplate.
-	return api.ManagedInfrastructureTemplate{
+	result := api.ManagedInfrastructureTemplate{
 		ArtifactResourceId: uuid,
 		Name:               clusterTemplate.Spec.Name,
 		Version:            clusterTemplate.Spec.Version,
 		Description:        clusterTemplate.Spec.Description,
 		ParameterSchema:    parameterSchema,
-		Extensions:         clusterTemplateExtensions,
-	}, nil
+	}
+
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		result.Extensions = &clusterTemplateExtensions
+	}
+
+	return result, nil
 }

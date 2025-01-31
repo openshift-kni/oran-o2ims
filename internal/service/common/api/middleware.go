@@ -30,7 +30,7 @@ func LogDuration() Middleware {
 	}
 }
 
-// OpenAPIValidation to validate all incoming requests as specified in the spec
+// OpenAPIValidation to findFieldByName all incoming requests as specified in the spec
 func OpenAPIValidation(swagger *openapi3.T) Middleware {
 	// Clear out the servers array in the swagger spec, that skips validating
 	// that server names match. We don't know how this thing will be run.

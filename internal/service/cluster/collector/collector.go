@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -243,7 +244,7 @@ func (c *Collector) persistClusterResource(ctx context.Context, dataSource Clust
 	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, *resourceType, resourceType.ClusterResourceTypeID, nil, func(object interface{}) any {
 			record, _ := object.(models.ClusterResourceType)
-			return models.ClusterResourceTypeToModel(&record)
+			return models.ClusterResourceTypeToModel(&record, commonapi.NewDefaultFieldOptions())
 		})
 	if err != nil {
 		return fmt.Errorf("failed to persist cluster resource type': %w", err)
@@ -257,7 +258,7 @@ func (c *Collector) persistClusterResource(ctx context.Context, dataSource Clust
 	dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, resource, resource.ClusterResourceID, nil, func(object interface{}) any {
 			record, _ := object.(models.ClusterResource)
-			return models.ClusterResourceToModel(&record)
+			return models.ClusterResourceToModel(&record, commonapi.NewDefaultFieldOptions())
 		})
 	if err != nil {
 		return fmt.Errorf("failed to persist cluster resource: %w", err)
@@ -290,7 +291,7 @@ func (c *Collector) persistNodeCluster(ctx context.Context, dataSource ClusterDa
 	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, *resourceType, resourceType.NodeClusterTypeID, nil, func(object interface{}) any {
 			record, _ := object.(models.NodeClusterType)
-			return models.NodeClusterTypeToModel(&record)
+			return models.NodeClusterTypeToModel(&record, commonapi.NewDefaultFieldOptions())
 		})
 	if err != nil {
 		return fmt.Errorf("failed to persist node cluster type': %w", err)
@@ -311,7 +312,7 @@ func (c *Collector) persistNodeCluster(ctx context.Context, dataSource ClusterDa
 	dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, cluster, cluster.NodeClusterID, nil, func(object interface{}) any {
 			record, _ := object.(models.NodeCluster)
-			return models.NodeClusterToModel(&record, nil)
+			return models.NodeClusterToModel(&record, nil, commonapi.NewDefaultFieldOptions())
 		})
 	if err != nil {
 		return fmt.Errorf("failed to persist node cluster: %w", err)
@@ -346,7 +347,7 @@ func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []a
 	for _, record := range records {
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.NodeClusterID, nil, func(object interface{}) any {
 			r, _ := object.(models.NodeCluster)
-			return models.NodeClusterToModel(&r, nil)
+			return models.NodeClusterToModel(&r, nil, commonapi.NewDefaultFieldOptions())
 		})
 
 		if err != nil {
@@ -378,7 +379,7 @@ func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids
 	for _, record := range records {
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.ClusterResourceID, nil, func(object interface{}) any {
 			r, _ := object.(models.ClusterResource)
-			return models.ClusterResourceToModel(&r)
+			return models.ClusterResourceToModel(&r, commonapi.NewDefaultFieldOptions())
 		})
 
 		if err != nil {
@@ -461,7 +462,7 @@ func (c *Collector) deleteRelatedClusterResources(ctx context.Context, nodeClust
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, resource, resource.ClusterResourceID, &nodeCluster.NodeClusterID, func(object interface{}) any {
 				record, _ := object.(models.ClusterResource)
-				return models.ClusterResourceToModel(&record)
+				return models.ClusterResourceToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
 
 		if err != nil {
@@ -487,7 +488,7 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, nodeCluster, nodeCluster.NodeClusterID, nil, func(object interface{}) any {
 				record, _ := object.(models.NodeCluster)
-				return models.NodeClusterToModel(&record, nil)
+				return models.NodeClusterToModel(&record, nil, commonapi.NewDefaultFieldOptions())
 			})
 
 		if err != nil {
@@ -521,7 +522,7 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, clusterResource, clusterResource.ClusterResourceID, nil, func(object interface{}) any {
 				record, _ := object.(models.NodeCluster)
-				return models.NodeClusterToModel(&record, nil)
+				return models.NodeClusterToModel(&record, nil, commonapi.NewDefaultFieldOptions())
 			})
 
 		if err != nil {

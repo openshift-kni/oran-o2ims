@@ -92,6 +92,7 @@ paths:
       tags:
         - alarms
       parameters:
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
         - $ref: '../../common/api/openapi.yaml#/components/parameters/excludeFields'
         - $ref: '../../common/api/openapi.yaml#/components/parameters/fields'
         - $ref: '../../common/api/openapi.yaml#/components/parameters/filter'
@@ -327,6 +328,7 @@ paths:
       tags:
         - subscriptions
       parameters:
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
         - $ref: '../../common/api/openapi.yaml#/components/parameters/excludeFields'
         - $ref: '../../common/api/openapi.yaml#/components/parameters/fields'
         - $ref: '../../common/api/openapi.yaml#/components/parameters/filter'

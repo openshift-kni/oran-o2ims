@@ -8,37 +8,63 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
 // ClusterResourceToModel converts a DB tuple to an API model
-func ClusterResourceToModel(record *ClusterResource) generated.ClusterResource {
-	return generated.ClusterResource{
+func ClusterResourceToModel(record *ClusterResource, options *commonapi.FieldOptions) generated.ClusterResource {
+	result := generated.ClusterResource{
 		ArtifactResourceIds:   record.ArtifactResourceIDs,
 		ClusterResourceId:     record.ClusterResourceID,
 		ClusterResourceTypeId: record.ClusterResourceTypeID,
 		Description:           record.Description,
-		Extensions:            record.Extensions,
-		MemberOf:              nil, // TODO
 		Name:                  record.Name,
 		ResourceId:            record.ResourceID,
 	}
+
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			result.Extensions = &extensions
+		} else {
+			result.Extensions = record.Extensions
+		}
+	}
+
+	if options.IsIncluded(commonapi.MemberOfAttribute) {
+		// TODO
+		value := make([]string, 0)
+		result.MemberOf = &value
+	}
+
+	return result
 }
 
 // ClusterResourceTypeToModel converts a DB tuple to an API model
-func ClusterResourceTypeToModel(record *ClusterResourceType) generated.ClusterResourceType {
-	return generated.ClusterResourceType{
+func ClusterResourceTypeToModel(record *ClusterResourceType, options *commonapi.FieldOptions) generated.ClusterResourceType {
+	result := generated.ClusterResourceType{
 		ClusterResourceTypeId: record.ClusterResourceTypeID,
 		Description:           record.Description,
-		Extensions:            record.Extensions,
 		Name:                  record.Name,
 	}
+
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			result.Extensions = &extensions
+		} else {
+			result.Extensions = record.Extensions
+		}
+	}
+
+	return result
 }
 
 // NodeClusterToModel converts a DB tuple to an API model
-func NodeClusterToModel(record *NodeCluster, clusterResourceIDs []uuid.UUID) generated.NodeCluster {
+func NodeClusterToModel(record *NodeCluster, clusterResourceIDs []uuid.UUID, options *commonapi.FieldOptions) generated.NodeCluster {
 	object := generated.NodeCluster{
 		NodeClusterId:                  record.NodeClusterID,
 		NodeClusterTypeId:              record.NodeClusterTypeID,
@@ -47,7 +73,6 @@ func NodeClusterToModel(record *NodeCluster, clusterResourceIDs []uuid.UUID) gen
 		ClusterDistributionDescription: record.ClusterDistributionDescription,
 		ClusterResourceGroups:          record.ClusterResourceGroups,
 		Description:                    record.Description,
-		Extensions:                     record.Extensions,
 		Name:                           record.Name,
 	}
 
@@ -56,17 +81,36 @@ func NodeClusterToModel(record *NodeCluster, clusterResourceIDs []uuid.UUID) gen
 		object.ClusterResourceIds = []uuid.UUID{}
 	}
 
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			object.Extensions = &extensions
+		} else {
+			object.Extensions = record.Extensions
+		}
+	}
+
 	return object
 }
 
 // NodeClusterTypeToModel converts a DB tuple to an API model
-func NodeClusterTypeToModel(record *NodeClusterType) generated.NodeClusterType {
-	return generated.NodeClusterType{
+func NodeClusterTypeToModel(record *NodeClusterType, options *commonapi.FieldOptions) generated.NodeClusterType {
+	result := generated.NodeClusterType{
 		Description:       record.Description,
-		Extensions:        record.Extensions,
 		Name:              record.Name,
 		NodeClusterTypeId: record.NodeClusterTypeID,
 	}
+
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			result.Extensions = &extensions
+		} else {
+			result.Extensions = record.Extensions
+		}
+	}
+
+	return result
 }
 
 // SubscriptionToModel converts a DB tuple to an API Model
