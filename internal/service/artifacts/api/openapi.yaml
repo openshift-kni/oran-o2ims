@@ -170,6 +170,43 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
+  /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults:
+    get:
+      operationId: getManagedInfrastructureTemplateDefaults
+      summary: Get managed infrastructure template defaults
+      description: |
+        Returns the defaults values used by a managed infrastructure template.
+      parameters:
+      - $ref: "#/components/parameters/managedInfrastructureTemplateId"
+      tags:
+      - defaults
+      responses:
+        '200':
+          description: |
+            Successfully obtained the defaults of the managed infrastructure template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedInfrastructureTemplateDefaults"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
 components:
   parameters:
     managedInfrastructureTemplateId:
@@ -183,6 +220,17 @@ components:
       example: name.version
 
   schemas:
+    ManagedInfrastructureTemplateDefaults:
+      description: |
+        Default values used for cluster provisioning by a ManagedInfrastructureTemplate
+      type: object
+      properties:
+        clusterInstanceDefaults:
+          type: object
+          description: Defines the default values used for cluster installation
+        policyTemplateDefaults:
+          type: object
+          description: Defines the default values used for cluster configuration
     ManagedInfrastructureTemplate:
       description: |
         Information about a managed infrastructure template.
@@ -244,6 +292,3 @@ components:
       - description
       - parameterSchema
       - name
-
-
-
