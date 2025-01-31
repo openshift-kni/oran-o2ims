@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // SelectorEvaluatorBuilder contains the logic and data needed to create filter expression
@@ -226,7 +228,11 @@ func (e *SelectorEvaluator) evaluateEq(value any, args []any) (result bool,
 	switch value := value.(type) {
 	case string:
 		arg := arg.(string)
-		result = value == arg
+		if _, err2 := uuid.Parse(arg); err2 == nil {
+			result = strings.EqualFold(value, arg)
+		} else {
+			result = value == arg
+		}
 	case int:
 		arg := arg.(int)
 		result = value == arg
