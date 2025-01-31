@@ -34,7 +34,7 @@ require (
 	github.com/pashagolub/pgxmock/v4 v4.4.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.76.2
 	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
+	github.com/spf13/pflag v1.0.6
 	github.com/stephenafamo/bob v0.28.1
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 	go.uber.org/mock v0.5.0
