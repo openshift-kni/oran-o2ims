@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
-
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
@@ -79,7 +79,7 @@ func Setup(ctx context.Context) error {
 }
 
 // ConvertAmToAlarmEventRecordModels get alarmEventRecords based on the alertmanager notification and AlarmDefinition
-func ConvertAmToAlarmEventRecordModels(am *api.AlertmanagerNotification, aDefinitionRecords []models.AlarmDefinition, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) []models.AlarmEventRecord {
+func ConvertAmToAlarmEventRecordModels(am *api.AlertmanagerNotification, infrastructureClient infrastructure.Client) []models.AlarmEventRecord {
 	records := make([]models.AlarmEventRecord, 0, len(am.Alerts))
 	for _, alert := range am.Alerts {
 		record := models.AlarmEventRecord{
@@ -87,16 +87,6 @@ func ConvertAmToAlarmEventRecordModels(am *api.AlertmanagerNotification, aDefini
 			AlarmClearedTime: setTime(*alert.EndsAt),
 			AlarmStatus:      string(*alert.Status),
 			Fingerprint:      *alert.Fingerprint,
-		}
-
-		// for caas alerts object is the cluster ID
-		record.ObjectID = GetClusterID(*alert.Labels)
-
-		// derive ObjectTypeID from ObjectID
-		if id := record.ObjectID; id != nil {
-			if typeID, exists := clusterIDToObjectTypeID[*id]; exists {
-				record.ObjectTypeID = &typeID
-			}
 		}
 
 		// Make sure the current payload has the right severity
@@ -110,11 +100,27 @@ func ConvertAmToAlarmEventRecordModels(am *api.AlertmanagerNotification, aDefini
 		// Update Extensions with things we didn't really process
 		record.Extensions = getExtensions(*alert.Labels, *alert.Annotations)
 
+		// for caas alerts object is the cluster ID
+		record.ObjectID = GetClusterID(*alert.Labels)
+
+		// derive ObjectTypeID from ObjectID
+		if record.ObjectID != nil {
+			objectTypeID, err := infrastructureClient.GetObjectTypeID(*record.ObjectID)
+			if err != nil {
+				slog.Warn("Could not get object type ID", "objectID", record.ObjectID, "err", err.Error())
+			} else {
+				record.ObjectTypeID = &objectTypeID
+			}
+		}
+
 		// See if possible to pick up additional info from its definition
-		for _, def := range aDefinitionRecords {
-			if def.AlarmName == GetAlertName(*alert.Labels) && def.ObjectTypeID == *record.ObjectTypeID && severityToPerceivedSeverity(def.Severity) == record.PerceivedSeverity {
-				record.AlarmDefinitionID = &def.AlarmDefinitionID
-				record.ProbableCauseID = &def.ProbableCauseID
+		if record.ObjectTypeID != nil {
+			_, severity := GetPerceivedSeverity(*alert.Labels)
+			alarmDefinitionID, err := infrastructureClient.GetAlarmDefinitionID(*record.ObjectTypeID, GetAlertName(*alert.Labels), severity)
+			if err != nil {
+				slog.Warn("Could not get alarm definition ID", "objectTypeID", *record.ObjectTypeID, "name", GetAlertName(*alert.Labels), "severity", severity, "err", err.Error())
+			} else {
+				record.AlarmDefinitionID = &alarmDefinitionID
 			}
 		}
 

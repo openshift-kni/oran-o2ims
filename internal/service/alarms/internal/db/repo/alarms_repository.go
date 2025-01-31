@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dialect"
@@ -16,6 +14,7 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"github.com/stephenafamo/bob/dialect/psql/um"
 
+	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -111,90 +110,6 @@ func (ar *AlarmsRepository) GetAlarmSubscription(ctx context.Context, id uuid.UU
 	return utils.Find[models.AlarmSubscription](ctx, ar.Db, id)
 }
 
-// DeleteAlarmDictionariesNotIn deletes all alarm dictionaries that are not in the list of object type IDs
-func (ar *AlarmsRepository) DeleteAlarmDictionariesNotIn(ctx context.Context, ids []any) error {
-	tags := utils.GetDBTagsFromStructFields(models.AlarmDictionary{}, "ObjectTypeID")
-
-	expr := psql.Quote(tags["ObjectTypeID"]).NotIn(psql.Arg(ids...))
-	_, err := utils.Delete[models.AlarmDictionary](ctx, ar.Db, expr)
-	return err
-}
-
-// GetAlarmDefinition grabs a row of alarm_definition using a primary key
-func (ar *AlarmsRepository) GetAlarmDefinition(ctx context.Context, id uuid.UUID) (*models.AlarmDefinition, error) {
-	return utils.Find[models.AlarmDefinition](ctx, ar.Db, id)
-}
-
-// DeleteAlarmDefinitionsNotIn deletes all alarm definitions identified by the primary key that are not in the list of IDs.
-// The Where expression also uses the column "object_type_id" to filter the records
-func (ar *AlarmsRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, objectTypeID uuid.UUID) (int64, error) {
-	tags := utils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "ObjectTypeID")
-
-	expr := psql.Quote(models.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["ObjectTypeID"]).EQ(psql.Arg(objectTypeID)))
-	count, err := utils.Delete[models.AlarmDefinition](ctx, ar.Db, expr)
-	return count, err
-}
-
-// UpsertAlarmDictionary inserts or updates an alarm dictionary record
-func (ar *AlarmsRepository) UpsertAlarmDictionary(ctx context.Context, record models.AlarmDictionary) ([]models.AlarmDictionary, error) {
-	dbModel := models.AlarmDictionary{}
-	columns := utils.GetColumns(dbModel, []string{"AlarmDictionaryVersion", "EntityType", "Vendor", "ObjectTypeID"})
-
-	query := psql.Insert(
-		im.Into(record.TableName(), columns...),
-		im.Values(psql.Arg(record.AlarmDictionaryVersion, record.EntityType, record.Vendor, record.ObjectTypeID)),
-		im.OnConflict(record.OnConflict()).DoUpdate(
-			im.SetExcluded(columns...)),
-		im.Returning(record.PrimaryKey()),
-	)
-
-	sql, args, err := query.Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build query: %w", err)
-	}
-
-	return utils.ExecuteCollectRows[models.AlarmDictionary](ctx, ar.Db, sql, args)
-}
-
-// UpsertAlarmDefinitions inserts or updates alarm definition records
-func (ar *AlarmsRepository) UpsertAlarmDefinitions(ctx context.Context, records []models.AlarmDefinition) ([]models.AlarmDefinition, error) {
-	dbModel := models.AlarmDefinition{}
-
-	if len(records) == 0 {
-		return []models.AlarmDefinition{}, nil
-	}
-
-	columns := utils.GetColumns(records[0], []string{
-		"AlarmName", "AlarmLastChange", "AlarmDescription",
-		"ProposedRepairActions", "AlarmAdditionalFields", "AlarmDictionaryID",
-		"Severity"},
-	)
-
-	modInsert := []bob.Mod[*dialect.InsertQuery]{
-		im.Into(dbModel.TableName(), columns...),
-		im.OnConflictOnConstraint(dbModel.OnConflict()).DoUpdate(
-			im.SetExcluded(columns...)),
-		im.Returning(dbModel.PrimaryKey()),
-	}
-
-	for _, record := range records {
-		modInsert = append(modInsert, im.Values(psql.Arg(record.AlarmName, record.AlarmLastChange, record.AlarmDescription,
-			record.ProposedRepairActions, record.AlarmAdditionalFields, record.AlarmDictionaryID,
-			record.Severity)))
-	}
-
-	query := psql.Insert(
-		modInsert...,
-	)
-
-	sql, args, err := query.Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build query: %w", err)
-	}
-
-	return utils.ExecuteCollectRows[models.AlarmDefinition](ctx, ar.Db, sql, args)
-}
-
 // UpsertAlarmEventRecord insert and updating an AlarmEventRecord.
 func (ar *AlarmsRepository) UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord) error {
 	if len(records) == 0 {
@@ -257,80 +172,6 @@ func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string
 	))
 
 	return query.Build() //nolint:wrapcheck
-}
-
-// GetAlarmDefinitions needed to build out aer
-func (ar *AlarmsRepository) GetAlarmDefinitions(ctx context.Context, am *api.AlertmanagerNotification, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) ([]models.AlarmDefinition, error) {
-	if len(am.Alerts) == 0 {
-		slog.Warn("No events to retrieve corresponding definitions")
-		return []models.AlarmDefinition{}, nil // this should never happen
-	}
-
-	// find all the keys needed to find corresponding definitions
-	keys := getGetAlertNameObjectTypeIDAndSeverity(am, clusterIDToObjectTypeID)
-	if len(keys) == 0 {
-		slog.Warn("No key found to retrieve definitions")
-		return []models.AlarmDefinition{}, nil
-	}
-
-	if len(am.Alerts) != len(keys) {
-		slog.Warn("Could not find enough info from alerts to retrieve all corresponding definitions",
-			"missing_count", len(am.Alerts)-len(keys))
-	}
-
-	m := models.AlarmDefinition{}
-	dbTags := utils.GetAllDBTagsFromStruct(m)
-	query := psql.Select(
-		sm.Columns(
-			utils.GetColumnsAsAny(utils.GetColumns(m, []string{
-				"AlarmName", "AlarmDefinitionID", "ProbableCauseID",
-				"ObjectTypeID", "Severity",
-			}))...),
-		sm.From(m.TableName()),
-		sm.Where(
-			psql.Group(
-				psql.Quote(dbTags["AlarmName"]),
-				psql.Quote(dbTags["ObjectTypeID"]),
-				psql.Quote(dbTags["Severity"]),
-			).
-				In(keys...),
-		),
-	)
-
-	sql, params, err := query.Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build alarm definitions query when processing AM notification: %w", err)
-	}
-
-	return utils.ExecuteCollectRows[models.AlarmDefinition](ctx, ar.Db, sql, params)
-}
-
-func getGetAlertNameObjectTypeIDAndSeverity(am *api.AlertmanagerNotification, clusterIDToObjectTypeID map[uuid.UUID]uuid.UUID) []bob.Expression {
-	var b []bob.Expression
-	for _, alert := range am.Alerts {
-		if alert.Labels == nil {
-			continue
-		}
-
-		labels := *alert.Labels
-		id := alertmanager.GetClusterID(labels)
-		if id == nil {
-			continue
-		}
-
-		objectTypeId, ok := clusterIDToObjectTypeID[*id]
-		if !ok {
-			continue
-		}
-
-		_, severity := alertmanager.GetPerceivedSeverity(labels)
-		b = append(b, psql.ArgGroup(
-			alertmanager.GetAlertName(labels),
-			objectTypeId,
-			severity,
-		))
-	}
-	return b
 }
 
 // TimeNow allows test to override time.Now

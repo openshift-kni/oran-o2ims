@@ -15,15 +15,32 @@ rules:
   - create
   - post
 - nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/alarmDictionaries
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
+  verbs:
+  - get
+- nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes
   verbs:
   - get
   - list
 - nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
+  verbs:
+  - get
+- nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/nodeClusters
   verbs:
   - get
   - list
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusters/*
+  verbs:
+  - get
 - apiGroups:
   - ""
   resources:

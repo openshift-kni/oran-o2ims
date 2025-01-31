@@ -348,6 +348,9 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 			additionalFields["KeepFiringFor"] = string(*rule.KeepFiringFor)
 		}
 
+		// Add severity to additional fields
+		additionalFields[utils.AlarmDefinitionSeverityField] = rule.Labels["severity"]
+
 		//TODO: Add info from prometheus rules containing the rule such as the namespace
 
 		summary := rule.Annotations["summary"]
