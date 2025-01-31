@@ -103,6 +103,19 @@ var _ = Describe("Selector evaluator", func() {
 			true,
 		),
 		Entry(
+			"Eq string case insensitive for UUID values",
+			"(eq,MyField,B8F14332-0331-45D9-8C0D-D24C25CC1F2E)",
+			func() any {
+				type MyObject struct {
+					MyField string
+				}
+				return MyObject{
+					MyField: "b8f14332-0331-45d9-8c0d-d24c25cc1f2e",
+				}
+			},
+			true,
+		),
+		Entry(
 			"Eq string is false",
 			"(eq,MyField,yourvalue)",
 			func() any {
