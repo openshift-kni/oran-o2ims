@@ -174,6 +174,21 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 	return &result, nil
 }
 
+// getInventoryResourceID calculates the Inventory Resource ID value based on the labels on the Agent.  If the labels
+// are not yet present, then we simply return a zero UUID value.
+func (d *K8SDataSource) getInventoryResourceID(agent *v1beta1.Agent) uuid.UUID {
+	var hwMgrID, hwMgrNodeID string
+	var found bool
+	if hwMgrID, found = agent.Labels[utils.HardwareManagerIdLabel]; !found {
+		return uuid.Nil
+	}
+	if hwMgrNodeID, found = agent.Labels[utils.HardwareManagerNodeIdLabel]; !found {
+		return uuid.Nil
+	}
+
+	return collector.MakeResourceID(d.cloudID, hwMgrID, hwMgrNodeID)
+}
+
 // convertAgentToClusterResource converts an Agent CR to a ClusterResource object
 func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (models.ClusterResource, error) {
 	// Build a unique UUID value using the namespace and name.  Choosing not to tie ourselves to the agent UUID since
@@ -211,8 +226,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 		Description:           agent.Spec.Hostname,
 		NodeClusterName:       agent.Spec.ClusterDeploymentName.Name,
 		Extensions:            &extensions,
-		ArtifactResourceIDs:   nil,         // TODO: need to link this to template?
-		ResourceID:            uuid.UUID{}, // TODO: need to link this to h/w resource
+		ResourceID:            d.getInventoryResourceID(agent),
 		ExternalID:            name,
 		DataSourceID:          d.dataSourceID,
 		GenerationID:          d.generationID,
