@@ -25,6 +25,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
 )
 
 // Interface compile enforcement
@@ -104,7 +105,7 @@ func (d *K8SDataSource) makeClusterResourceTypeName(architecture, cores string) 
 // makeClusterResourceTypeID builds a UUID value for this resource type based on its name so that it has
 // a consistent value each time it is created.
 func (d *K8SDataSource) makeClusterResourceTypeID(architecture, cores string) uuid.UUID {
-	return utils.MakeUUIDFromName(ClusterResourceTypeUUIDNamespace, d.cloudID, d.makeClusterResourceTypeName(architecture, cores))
+	return utils.MakeUUIDFromNames(ClusterResourceTypeUUIDNamespace, d.cloudID, d.makeClusterResourceTypeName(architecture, cores))
 }
 
 // MakeClusterResourceType creates an instance of a ResourceType from a Resource object.
@@ -120,7 +121,7 @@ func (d *K8SDataSource) MakeClusterResourceType(resource *models.ClusterResource
 	cores := cpu["cores"]
 
 	resourceTypeName := d.makeClusterResourceTypeName(architecture, cores)
-	resourceTypeID := utils.MakeUUIDFromName(ClusterResourceTypeUUIDNamespace, d.cloudID, resourceTypeName)
+	resourceTypeID := utils.MakeUUIDFromNames(ClusterResourceTypeUUIDNamespace, d.cloudID, resourceTypeName)
 
 	result := models.ClusterResourceType{
 		ClusterResourceTypeID: resourceTypeID,
@@ -147,8 +148,8 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 	clusterType := (*extensions)[utils.ClusterModelExtension].(string)
 
 	resourceTypeName := d.makeNodeClusterTypeName(clusterType, vendor, version)
-	resourceTypeID := utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, resourceTypeName)
-	alarmDictionaryID := utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, fmt.Sprintf("%s-%s", resourceTypeName, "alarms"))
+	resourceTypeID := utils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, resourceTypeName)
+	alarmDictionaryID := utils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, fmt.Sprintf("%s-%s", resourceTypeName, "alarms"))
 
 	// We expect that the standard will eventually evolve to contain more attributes to align more
 	// closely with how ResourceType was defined, but for now we'll add some additional info as
@@ -178,7 +179,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 	// Build a unique UUID value using the namespace and name.  Choosing not to tie ourselves to the agent UUID since
 	// we don't know if/when it can change and how we want to behave if the node gets deleted and re-installed.
 	name := fmt.Sprintf("%s/%s", agent.Namespace, agent.Name)
-	resourceID := utils.MakeUUIDFromName(ClusterResourceUUIDNamespace, d.cloudID, name)
+	resourceID := utils.MakeUUIDFromNames(ClusterResourceUUIDNamespace, d.cloudID, name)
 
 	architecture := agent.Status.Inventory.Cpu.Architecture
 	cores := agent.Status.Inventory.Cpu.Count
@@ -237,7 +238,7 @@ func (d *K8SDataSource) makeNodeClusterTypeName(clusterType, vendor, version str
 // makeClusterResourceTypeID builds a UUID value for this resource type based on its name so that it has
 // a consistent value each time it is created.
 func (d *K8SDataSource) makeNodeClusterTypeID(clusterType, vendor, version string) uuid.UUID {
-	return utils.MakeUUIDFromName(NodeClusterTypeUUIDNamespace, d.cloudID, d.makeNodeClusterTypeName(clusterType, vendor, version))
+	return utils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, d.makeNodeClusterTypeName(clusterType, vendor, version))
 }
 
 // getExtensionsFromLabels converts a label map to an extensions map

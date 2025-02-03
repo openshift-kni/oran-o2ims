@@ -134,7 +134,7 @@ func (d *HwMgrDataSource) MakeResourceType(resource *models.Resource) (*models.R
 	vendor := resource.Extensions[vendorExtension].(string)
 	model := resource.Extensions[modelExtension].(string)
 	name := fmt.Sprintf("%s/%s", vendor, model)
-	resourceTypeID := utils.MakeUUIDFromName(ResourceTypeUUIDNamespace, d.cloudID, name)
+	resourceTypeID := utils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.name, name)
 
 	// TODO: finish filling this in with data
 	result := models.ResourceType{
@@ -203,7 +203,7 @@ func (d *HwMgrDataSource) GetResourcePools(ctx context.Context) ([]models.Resour
 
 func (d *HwMgrDataSource) convertResourcePool(pool *inventoryclient.ResourcePoolInfo) *models.ResourcePool {
 	return &models.ResourcePool{
-		ResourcePoolID:   utils.MakeUUIDFromName(ResourcePoolUUIDNamespace, d.cloudID, pool.ResourcePoolId),
+		ResourcePoolID:   utils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.name, pool.ResourcePoolId),
 		GlobalLocationID: d.globalCloudID, // TODO: spec wording is unclear about what this value should be.
 		Name:             pool.Name,
 		Description:      pool.Description,
@@ -216,17 +216,24 @@ func (d *HwMgrDataSource) convertResourcePool(pool *inventoryclient.ResourcePool
 	}
 }
 
+// MakeResourceID calculates a UUID value to be used as the ResourceID.  The cloudID and HwMgrID are added to the node
+// id value to ensure we get a globally unique value.
+func MakeResourceID(cloudID uuid.UUID, hwMgrID, hwMgrNodeID string) uuid.UUID {
+	return utils.MakeUUIDFromNames(ResourceUUIDNamespace, cloudID, hwMgrID, hwMgrNodeID)
+}
+
 func (d *HwMgrDataSource) convertResource(resource *inventoryclient.ResourceInfo) *models.Resource {
-	resourceID := utils.MakeUUIDFromName(ResourceUUIDNamespace, d.cloudID, resource.ResourceId)
+	// The resourceID computed here must
+	resourceID := MakeResourceID(d.cloudID, d.name, resource.ResourceId)
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
-	resourceTypeID := utils.MakeUUIDFromName(ResourceTypeUUIDNamespace, d.cloudID, name)
+	resourceTypeID := utils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.name, name)
 
 	result := &models.Resource{
 		ResourceID:     resourceID,
 		Description:    resource.Description,
 		ResourceTypeID: resourceTypeID,
 		GlobalAssetID:  resource.GlobalAssetId,
-		ResourcePoolID: utils.MakeUUIDFromName(ResourcePoolUUIDNamespace, d.cloudID, resource.ResourcePoolId),
+		ResourcePoolID: utils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.name, resource.ResourcePoolId),
 		Extensions: map[string]interface{}{
 			modelExtension:            resource.Model,
 			vendorExtension:           resource.Vendor,

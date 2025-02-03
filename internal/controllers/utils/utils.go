@@ -856,10 +856,10 @@ func GetServiceURL(serverName string) string {
 	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%s", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), os.Getenv(InternalServicePortName))
 }
 
-// MakeUUIDFromName generates a namespaced uuid value from the specified namespace and name values.  The values are
+// MakeUUIDFromNames generates a namespaced uuid value from the specified namespace and name values.  The values are
 // scoped to a `cloudID` to avoid conflicts with other systems.
-func MakeUUIDFromName(namespace string, cloudID uuid.UUID, name string) uuid.UUID {
-	value := fmt.Sprintf("%s/%s", cloudID.String(), name)
+func MakeUUIDFromNames(namespace string, cloudID uuid.UUID, names ...string) uuid.UUID {
+	value := fmt.Sprintf("%s/%s", cloudID.String(), strings.Join(names, "/"))
 	namespaceUUID := uuid.MustParse(namespace)
 	return uuid.NewSHA1(namespaceUUID, []byte(value))
 }
