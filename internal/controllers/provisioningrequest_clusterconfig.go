@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
@@ -243,8 +244,8 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 			return err
 		}
 
-		// Make sure the ClusterTemplate templateId is added as a label to the needed CRs.
-		err = t.addClusterTemplateLabels(ctx, mcl)
+		// Make sure extra labels are added to the needed CRs.
+		err = t.addPostProvisioningLabels(ctx, mcl)
 		if err != nil {
 			return err
 		}
@@ -256,9 +257,10 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 	return nil
 }
 
-// addClusterTemplateLabels adds the clustertemplates.o2ims.provisioning.oran.org/templateId on the
-// ManagedCluster and Agent objects that are associated to the current ProvisioningRequest.
-func (t *provisioningRequestReconcilerTask) addClusterTemplateLabels(ctx context.Context, mcl *clusterv1.ManagedCluster) error {
+// addPostProvisioningLabels adds multiple labels on the ManagedCluster and Agent objects that
+// are associated to the current ProvisioningRequest.
+// These labels are useful in the proper functioning of the resource server.
+func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx context.Context, mcl *clusterv1.ManagedCluster) error {
 	// Get the ClusterTemplate used by the current ProvisioningRequest.
 	oranct, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
@@ -272,10 +274,47 @@ func (t *provisioningRequestReconcilerTask) addClusterTemplateLabels(ctx context
 		return err
 	}
 
-	// Add the clustertemplates.o2ims.provisioning.oran.org/templateIds label to the Agent(s)
-	// associated to the current ProvisioningRequest.
-	agents := &assistedservicev1beta1.AgentList{}
+	// Get the NodePool associated to the current ProvisioningRequest.
+	nodePool := &hwv1alpha1.NodePool{}
+	// The NodePool was created in the HW Manager Plugin Namespace.
+	nodePoolNs := utils.GetHwMgrPluginNS()
+	// The NodePool, ClusterInstance, ClusterDeployment and ManagedCluster share the same name.
+	nodePoolName := mcl.Name
+
+	exist, err := utils.DoesK8SResourceExist(ctx, t.client, nodePoolName, nodePoolNs, nodePool)
+	if err != nil {
+		return fmt.Errorf("failed to get NodePool %s in namespace %s: %w", nodePoolName, nodePool.GetNamespace(), err)
+	}
+	if !exist {
+		return fmt.Errorf("expected NodePool %s not found in the %s namespace", nodePoolName, nodePoolNs)
+	}
+
+	// Get the o2ims-hardwaremanagement Nodes corresponding to the above NodePool.
+	nodes := &hwv1alpha1.NodeList{}
 	listOpts := []client.ListOption{
+		client.MatchingFields{"spec.nodePool": nodePoolName},
+		client.InNamespace(nodePoolNs),
+	}
+	err = t.client.List(ctx, nodes, listOpts...)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to list o2ims-hardwaremanagement.oran.openshift.io Nodes in the %s namespace: %w",
+			nodePoolNs, err,
+		)
+	}
+	if len(nodes.Items) == 0 {
+		return fmt.Errorf(
+			"the expected o2ims-hardwaremanagement.oran.openshift.io Nodes were not found in the %s namespace",
+			nodePoolNs,
+		)
+	}
+
+	// Add the needed label to the Agent(s) associated to the current ProvisioningRequest:
+	//   clustertemplates.o2ims.provisioning.oran.org/templateIds
+	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId
+	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId
+	agents := &assistedservicev1beta1.AgentList{}
+	listOpts = []client.ListOption{
 		client.MatchingLabels{
 			"agent-install.openshift.io/clusterdeployment-namespace": mcl.Name,
 		},
@@ -288,13 +327,45 @@ func (t *provisioningRequestReconcilerTask) addClusterTemplateLabels(ctx context
 	}
 
 	if len(agents.Items) == 0 {
-		return fmt.Errorf("the expected Agent was not found in the %s namespace", mcl.Name)
+		return fmt.Errorf("the expected Agents were not found in the %s namespace", mcl.Name)
 	}
 
+	// Go through all the obtained agents and apply the above labels.
 	for _, agent := range agents.Items {
 		err = t.setLabelValue(ctx, &agent, utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
 		if err != nil {
 			return err
+		}
+		// Get the corresponding o2ims-hardwaremanagement.oran.openshift.io and add the needed labels.
+		// Map by hostname.
+		foundNode := false
+		for _, node := range nodes.Items {
+			// Skip the Node if its hostname status is empty.
+			if node.Status.Hostname == "" {
+				continue
+			}
+			if node.Status.Hostname == agent.Spec.Hostname {
+				foundNode = true
+
+				err = t.setLabelValue(ctx, &agent, utils.HardwareManagerIdLabel, node.Spec.HwMgrId)
+				if err != nil {
+					return err
+				}
+
+				err = t.setLabelValue(ctx, &agent, utils.HardwareManagerNodeIdLabel, node.Spec.HwMgrNodeId)
+				if err != nil {
+					return err
+				}
+
+				break
+			}
+		}
+		if !foundNode {
+			t.logger.WarnContext(
+				ctx,
+				"The corresponding o2ims-hardwaremanagement.oran.openshift.io Node not found for the %s/%s Agent",
+				agent.Name, agent.Namespace,
+			)
 		}
 	}
 

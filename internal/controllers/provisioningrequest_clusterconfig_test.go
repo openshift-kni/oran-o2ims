@@ -2022,11 +2022,59 @@ var _ = Describe("addClusterTemplateLabels", func() {
 			},
 		}
 
+		hwPluginNs := &corev1.Namespace{}
+		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+
+		nodePool := &hwv1alpha1.NodePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      mclName,
+				Namespace: utils.UnitTestHwmgrNamespace,
+				Annotations: map[string]string{
+					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+				},
+			},
+			Spec: hwv1alpha1.NodePoolSpec{
+				HwMgrId: utils.UnitTestHwmgrID,
+				NodeGroup: []hwv1alpha1.NodeGroup{
+					{
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name:      "controller",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+						Size: 1,
+					},
+					{
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name:      "worker",
+							HwProfile: "profile-spr-dual-processor-128G",
+						},
+						Size: 0,
+					},
+				},
+			},
+			Status: hwv1alpha1.NodePoolStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(hwv1alpha1.Provisioned),
+						Status: metav1.ConditionTrue,
+						Reason: string(hwv1alpha1.Completed),
+					},
+				},
+				Properties: hwv1alpha1.Properties{
+					NodeNames: []string{masterNodeName},
+				},
+			},
+		}
 		crs := []client.Object{
 			// Cluster Template Namespace.
 			&corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: ctNamespace,
+				},
+			},
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: utils.UnitTestHwmgrNamespace,
 				},
 			},
 			// ManagedCluster Namespace.
@@ -2065,9 +2113,11 @@ var _ = Describe("addClusterTemplateLabels", func() {
 			provisioningRequest,
 			// Managed clusters
 			managedCluster,
+			nodePool,
 		}
 
 		c = getFakeClientFromObjects(crs...)
+		createNodeResources(ctx, c, nodePool.Name)
 
 		// Get the ProvisioningRequest Task.
 		ProvReqReconciler = &ProvisioningRequestReconciler{
@@ -2106,7 +2156,7 @@ var _ = Describe("addClusterTemplateLabels", func() {
 		}
 		Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
 		// Run the function.
-		err := ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check that the new label was added for the ManagedCluster CR.
@@ -2140,7 +2190,7 @@ var _ = Describe("addClusterTemplateLabels", func() {
 		Expect(ProvReqTask.client.Status().Update(ctx, oranct)).To(Succeed())
 		Expect(err).ToNot(HaveOccurred())
 
-		err = ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		err = ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"failed to get ClusterTemplate: a valid ClusterTemplate (%s) does not exist in any namespace",
@@ -2172,7 +2222,7 @@ var _ = Describe("addClusterTemplateLabels", func() {
 		Expect(ProvReqTask.client.Create(ctx, agent2)).To(Succeed())
 
 		// Run the function.
-		err := ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 		Expect(err).To(Not(HaveOccurred()))
 		// Check that both agents have the expected labels.
 		listOpts := []client.ListOption{
@@ -2212,14 +2262,26 @@ var _ = Describe("addClusterTemplateLabels", func() {
 					Name:      mclName,
 					Namespace: mclName,
 				},
+				Hostname: "some-other-cluster.lab.example.com",
 			},
 		}
 		Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
 
+		// Create the corresponding Node.
+		masterNodeName2 := "master-node-2"
+		// #nosec G101
+		bmcSecretName2 := "bmc-secret-2"
+		node := createNode(
+			masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
+			"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
+		node.Status.Hostname = "some-other-cluster.lab.example.com"
+		secrets := createSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+		createResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+
 		// Run the function.
-		err := ProvReqTask.addClusterTemplateLabels(ctx, managedCluster)
+		err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
-			fmt.Sprintf("the expected Agent was not found in the %s namespace", mclName)))
+			fmt.Sprintf("the expected Agents were not found in the %s namespace", mclName)))
 	})
 })

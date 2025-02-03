@@ -287,6 +287,8 @@ const (
 	LocalClusterLabelName     = "local-cluster"
 
 	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
+	HardwareManagerIdLabel        = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId"
+	HardwareManagerNodeIdLabel    = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId"
 )
 
 // AlarmDefinitionSeverityField severity field within additional fields of alarm definition
