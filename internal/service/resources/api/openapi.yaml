@@ -732,7 +732,7 @@ components:
           format: uuid
           description: Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
-        globalCloudId:
+        globalcloudId:
           type: string
           format: uuid
           description: | 
@@ -759,7 +759,7 @@ components:
             country: "ES"
       required:
       - oCloudId
-      - globalCloudId
+      - globalcloudId
       - name
       - description
       - serviceUri
