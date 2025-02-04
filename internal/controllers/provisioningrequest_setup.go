@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -28,6 +29,14 @@ import (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Setup Node CRD indexer. This field indexer allows us to query a list of Node CRs, filtered by the spec.nodePool field.
+	nodeIndexFunc := func(obj client.Object) []string {
+		return []string{obj.(*hwv1alpha1.Node).Spec.NodePool}
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &hwv1alpha1.Node{}, "spec.nodePool", nodeIndexFunc); err != nil {
+		return fmt.Errorf("failed to setup indexer for o2ims-hardwaremanagement.oran.openshift.io/v1alpha Node: %w", err)
+	}
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("o2ims-cluster-request").

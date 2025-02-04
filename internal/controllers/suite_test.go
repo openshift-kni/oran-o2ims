@@ -83,6 +83,9 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&policiesv1.Policy{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		WithStatusSubresource(&pluginv1alpha1.HardwareManager{}).
+		WithIndex(&hwv1alpha1.Node{}, "spec.nodePool", func(obj client.Object) []string {
+			return []string{obj.(*hwv1alpha1.Node).Spec.NodePool}
+		}).
 		Build()
 }
 
@@ -128,6 +131,7 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.HardwareTemplate{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.NodePool{})
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.Node{})
+	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.NodeList{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})

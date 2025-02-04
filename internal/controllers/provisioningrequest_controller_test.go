@@ -8,7 +8,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
@@ -16,6 +15,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift/assisted-service/api/v1beta1"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -2002,8 +2002,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			}
 			Expect(c.Create(ctx, agent)).To(Succeed())
 
-			networkConfig := &v1beta1.NMStateConfigSpec{
-				NetConfig: v1beta1.NetConfig{
+			networkConfig := &assistedservicev1beta1.NMStateConfigSpec{
+				NetConfig: assistedservicev1beta1.NetConfig{
 					Raw: []byte(
 						`
       dns-resolver:
