@@ -11,9 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
+
 	"github.com/getkin/kin-openapi/openapi3"
 
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api/generated"
@@ -71,12 +73,10 @@ func Serve(config *api.ProvisioningServerConfig) error {
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
 		generated.StrictHTTPServerOptions{
-			RequestErrorHandlerFunc:  common.GetOranReqErrFunc(),
-			ResponseErrorHandlerFunc: common.GetOranRespErrFunc(),
+			RequestErrorHandlerFunc:  middleware.GetOranReqErrFunc(),
+			ResponseErrorHandlerFunc: middleware.GetOranRespErrFunc(),
 		},
 	)
-
-	router := common.NewErrorJsonifier(http.NewServeMux())
 
 	// Create a new logger to be passed where a logger is needed.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -85,27 +85,34 @@ func Serve(config *api.ProvisioningServerConfig) error {
 	}))
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters.
-	filterAdapter, err := common.NewFilterAdapter(logger)
+	filterAdapter, err := middleware.NewFilterAdapter(logger)
 	if err != nil {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
+	baseRouter := http.NewServeMux()
 	opt := generated.StdHTTPServerOptions{
-		BaseRouter: router,
+		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
-			common.OpenAPIValidation(swagger),
-			common.ResponseFilter(filterAdapter),
-			common.LogDuration(),
+			middleware.OpenAPIValidation(swagger),
+			middleware.ResponseFilter(filterAdapter),
+			middleware.LogDuration(),
 		},
-		ErrorHandlerFunc: common.GetOranReqErrFunc(),
+		ErrorHandlerFunc: middleware.GetOranReqErrFunc(),
 	}
 
 	// Register the handler
 	generated.HandlerWithOptions(serverStrictHandler, opt)
 
 	// Server config
+	// Wrap base router with additional middlewares
+	handler := middleware.ChainHandlers(baseRouter,
+		middleware.ErrorJsonifier(),
+		middleware.TrailingSlashStripper(),
+	)
+
 	srv := &http.Server{
-		Handler:      router,
+		Handler:      handler,
 		Addr:         config.Listener.Address,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,

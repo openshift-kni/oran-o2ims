@@ -1,4 +1,4 @@
-package api
+package middleware
 
 import (
 	"encoding/json"
