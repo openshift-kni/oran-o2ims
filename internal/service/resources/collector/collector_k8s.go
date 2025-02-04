@@ -26,6 +26,8 @@ import (
 
 const clusterReflectorName = "cluster-reflector"
 
+const DeploymentManagerUUIDNamespace = "ed51737b-7f7f-4696-a465-9b44e41e3f47"
+
 // Extensions
 const (
 	artifactResourceIDExtension = "artifactResourceId"
@@ -177,10 +179,6 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 	if !found {
 		return models.DeploymentManager{}, fmt.Errorf("clusterID label not found in cluster %s", cluster.Name)
 	}
-	deploymentManagerID, err := uuid.Parse(clusterID)
-	if err != nil {
-		return models.DeploymentManager{}, fmt.Errorf("failed to parse from clusterID '%s' from %s", clusterID, cluster.Name)
-	}
 
 	url := ""
 	for _, clientConfig := range cluster.Spec.ManagedClusterClientConfigs {
@@ -200,12 +198,15 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 		extensions[artifactResourceIDExtension] = templateID
 	}
 
-	err = d.getKubeconfig(ctx, cluster.Name, extensions)
+	err := d.getKubeconfig(ctx, cluster.Name, extensions)
 	if err != nil {
 		// TODO: turn this back into an error once we fix getting the Kubeconfig for the local-cluster
 		slog.Warn("failed to get deployment manager extensions", "cluster", cluster.Name, "error", err)
 	}
 
+	// Generate a unique UUID scoped to a different namespace so that it does not collide with the NodeCluster which
+	// uses the raw clusterID to facilitate mapping to incoming alarms which have the clusterID as a key.
+	deploymentManagerID := utils.MakeUUIDFromNames(DeploymentManagerUUIDNamespace, d.cloudID, clusterID)
 	to := models.DeploymentManager{
 		DeploymentManagerID: deploymentManagerID,
 		Name:                cluster.Name,
@@ -218,7 +219,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 		Extensions:          extensions,
 		DataSourceID:        d.dataSourceID,
 		GenerationID:        d.generationID,
-		ExternalID:          "",
+		ExternalID:          fmt.Sprintf("managedcluster/label[clusterID]=%s", clusterID),
 	}
 
 	return to, nil
