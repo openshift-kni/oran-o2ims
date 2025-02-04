@@ -857,8 +857,10 @@ func createNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string
 			Namespace: namespace,
 		},
 		Spec: hwv1alpha1.NodeSpec{
-			NodePool:  npName,
-			GroupName: groupName,
+			NodePool:    npName,
+			GroupName:   groupName,
+			HwMgrId:     utils.UnitTestHwmgrID,
+			HwMgrNodeId: name,
 		},
 		Status: hwv1alpha1.NodeStatus{
 			BMC: &hwv1alpha1.BMC{
