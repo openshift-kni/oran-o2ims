@@ -632,7 +632,7 @@ components:
     AlarmSubscriptionInfo:
       type: object
       properties:
-        subscriptionID:
+        alarmSubscriptionId:
           type: string
           format: uuid
           readOnly: true

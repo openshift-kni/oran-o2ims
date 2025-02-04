@@ -87,7 +87,7 @@ func ConvertServiceConfigurationToAPI(config ServiceConfiguration) api.AlarmServ
 // ConvertSubscriptionModelToApi converts an AlarmSubscription DB model to an API model
 func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.AlarmSubscriptionInfo {
 	apiModel := api.AlarmSubscriptionInfo{
-		SubscriptionID:         &subscriptionModel.SubscriptionID,
+		AlarmSubscriptionId:    &subscriptionModel.SubscriptionID,
 		Callback:               subscriptionModel.Callback,
 		ConsumerSubscriptionId: subscriptionModel.ConsumerSubscriptionID,
 	}
