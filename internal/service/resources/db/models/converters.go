@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -24,25 +25,41 @@ const dummyDefinitionID = "46a600ca-bb4d-470d-b8ca-0f95989518e4"
 const dummyVersion = "0.0.0"
 
 // DeploymentManagerToModel converts a DB tuple to an API Model
-func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentManager {
+func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.FieldOptions) generated.DeploymentManager {
 	object := generated.DeploymentManager{
 		Capabilities:        map[string]string{},
 		Capacity:            map[string]string{},
 		DeploymentManagerId: record.DeploymentManagerID,
 		Description:         record.Description,
-		Extensions:          &record.Extensions,
 		Name:                record.Name,
 		OCloudId:            record.OCloudID,
 		ServiceUri:          record.URL,
 		SupportedLocations:  record.Locations,
 	}
 
-	if record.CapacityInfo != nil {
-		object.Capacity = record.CapacityInfo
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			object.Extensions = &extensions
+		} else {
+			object.Extensions = &record.Extensions
+		}
 	}
 
-	if record.Capabilities != nil {
-		object.Capabilities = record.Capabilities
+	if options.IsIncluded(commonapi.CapacityAttribute) {
+		if record.CapacityInfo != nil {
+			object.Capacity = record.CapacityInfo
+		} else {
+			object.Capacity = map[string]string{}
+		}
+	}
+
+	if options.IsIncluded(commonapi.CapabilitiesAttribute) {
+		if record.Capabilities != nil {
+			object.Capabilities = record.Capabilities
+		} else {
+			object.Capabilities = map[string]string{}
+		}
 	}
 
 	return object
@@ -50,12 +67,13 @@ func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentMan
 
 // ResourceTypeToModel converts a DB tuple to an API Model
 func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
+	alarmAdditionalFields := map[string]interface{}{}
 	object := generated.ResourceType{
 		// TODO: fill-in a proper alarm dictionary when we can get it from the hardware manager
 		AlarmDictionary: &common.AlarmDictionary{
 			AlarmDefinition: []common.AlarmDefinition{
 				{
-					AlarmAdditionalFields: nil,
+					AlarmAdditionalFields: &alarmAdditionalFields,
 					AlarmChangeType:       common.ADDED,
 					AlarmDefinitionId:     uuid.MustParse(dummyDefinitionID),
 					AlarmDescription:      "Sample alarm definition",
@@ -75,7 +93,7 @@ func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
 			Vendor:                       record.Vendor,
 		},
 		Description:    record.Description,
-		Extensions:     &record.Extensions,
+		Extensions:     record.Extensions,
 		Model:          record.Model,
 		Name:           record.Name,
 		ResourceClass:  generated.ResourceTypeResourceClass(record.ResourceClass),
@@ -116,15 +134,23 @@ func SubscriptionFromModel(object *generated.Subscription) *models2.Subscription
 }
 
 // ResourcePoolToModel converts a DB tuple to an API model
-func ResourcePoolToModel(record *ResourcePool) generated.ResourcePool {
+func ResourcePoolToModel(record *ResourcePool, options *commonapi.FieldOptions) generated.ResourcePool {
 	object := generated.ResourcePool{
 		Description:      record.Description,
-		Extensions:       &record.Extensions,
 		GlobalLocationId: record.GlobalLocationID,
 		Location:         record.Location,
 		Name:             record.Name,
 		OCloudId:         record.OCloudID,
 		ResourcePoolId:   record.ResourcePoolID,
+	}
+
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			object.Extensions = &extensions
+		} else {
+			object.Extensions = &record.Extensions
+		}
 	}
 
 	return object

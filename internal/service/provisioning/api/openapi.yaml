@@ -104,6 +104,7 @@ paths:
       description: |
         Returns the list of provisioning requests.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"

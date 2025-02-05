@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -275,7 +276,7 @@ func (c *Collector) purgeStaleResourcePools(ctx context.Context, dataSource Data
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
 			nil, func(object interface{}) any {
 				r, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&r)
+				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
 			})
 		if err == nil {
 			return count, fmt.Errorf("failed to delete stale resource pool: %w", err)
@@ -304,7 +305,7 @@ func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource Data
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
 			nil, func(object interface{}) any {
 				r, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&r)
+				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
 			})
 		if err == nil {
 			return count, fmt.Errorf("failed to delete stale resource type: %w", err)
@@ -461,7 +462,7 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource Resourc
 		dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
 			ctx, c.repository.Db, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
 				record, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&record)
+				return models.ResourcePoolToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
 		if err != nil {
 			return nil, fmt.Errorf("failed to persist resource pool: %w", err)
@@ -487,7 +488,7 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 	for _, record := range records {
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.DeploymentManagerID, nil, func(object interface{}) any {
 			r, _ := object.(models.DeploymentManager)
-			return models.DeploymentManagerToModel(&r)
+			return models.DeploymentManagerToModel(&r, commonapi.NewDefaultFieldOptions())
 		})
 
 		if err != nil {
@@ -549,7 +550,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 		dataChangeEvent, err = utils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
-				return models.DeploymentManagerToModel(&record)
+				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
 
 		if err != nil {
@@ -559,7 +560,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 		dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
 			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
-				return models.DeploymentManagerToModel(&record)
+				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
 
 		if err != nil {

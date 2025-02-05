@@ -100,10 +100,11 @@ paths:
   /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates:
     get:
       operationId: getManagedInfrastructureTemplates
-      summary: Get managed infrastructure templates 
+      summary: Get managed infrastructure templates
       description: |
         Returns the list of managed infrastructure templatess.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -140,8 +141,6 @@ paths:
         Returns the details of a managed infrastructure template.
       parameters:
       - $ref: "#/components/parameters/managedInfrastructureTemplateId"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - managedInfrastructureTemplates
       responses:
@@ -245,8 +244,6 @@ components:
       - description
       - parameterSchema
       - name
-      - extensions
 
 
-        
-        
+

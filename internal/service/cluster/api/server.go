@@ -14,7 +14,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
 	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
-	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -42,6 +42,14 @@ type ClusterServer struct {
 
 // GetClusterResourceTypes receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetClusterResourceTypes(ctx context.Context, request api.GetClusterResourceTypesRequestObject) (api.GetClusterResourceTypesResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.ClusterResourceType{}); err != nil {
+		return api.GetClusterResourceTypes400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetClusterResourceTypes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resource types: %w", err)
@@ -49,7 +57,7 @@ func (r *ClusterServer) GetClusterResourceTypes(ctx context.Context, request api
 
 	objects := make([]api.ClusterResourceType, len(records))
 	for i, record := range records {
-		objects[i] = models.ClusterResourceTypeToModel(&record)
+		objects[i] = models.ClusterResourceTypeToModel(&record, options)
 	}
 
 	return api.GetClusterResourceTypes200JSONResponse(objects), nil
@@ -76,12 +84,20 @@ func (r *ClusterServer) GetClusterResourceType(ctx context.Context, request api.
 		}, nil
 	}
 
-	object := models.ClusterResourceTypeToModel(record)
+	object := models.ClusterResourceTypeToModel(record, commonapi.NewDefaultFieldOptions())
 	return api.GetClusterResourceType200JSONResponse(object), nil
 }
 
 // GetClusterResources receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetClusterResources(ctx context.Context, request api.GetClusterResourcesRequestObject) (api.GetClusterResourcesResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.ClusterResource{}); err != nil {
+		return api.GetClusterResources400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetClusterResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
@@ -89,7 +105,7 @@ func (r *ClusterServer) GetClusterResources(ctx context.Context, request api.Get
 
 	objects := make([]api.ClusterResource, len(records))
 	for i, record := range records {
-		objects[i] = models.ClusterResourceToModel(&record)
+		objects[i] = models.ClusterResourceToModel(&record, options)
 	}
 
 	return api.GetClusterResources200JSONResponse(objects), nil
@@ -116,12 +132,20 @@ func (r *ClusterServer) GetClusterResource(ctx context.Context, request api.GetC
 		}, nil
 	}
 
-	object := models.ClusterResourceToModel(record)
+	object := models.ClusterResourceToModel(record, commonapi.NewDefaultFieldOptions())
 	return api.GetClusterResource200JSONResponse(object), nil
 }
 
 // GetNodeClusterTypes receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context, request api.GetNodeClusterTypesRequestObject) (api.GetNodeClusterTypesResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.NodeClusterType{}); err != nil {
+		return api.GetNodeClusterTypes400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetNodeClusterTypes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resource types: %w", err)
@@ -129,7 +153,7 @@ func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context, request api.Get
 
 	objects := make([]api.NodeClusterType, len(records))
 	for i, record := range records {
-		objects[i] = models.NodeClusterTypeToModel(&record)
+		objects[i] = models.NodeClusterTypeToModel(&record, options)
 	}
 
 	return api.GetNodeClusterTypes200JSONResponse(objects), nil
@@ -156,7 +180,7 @@ func (r *ClusterServer) GetNodeClusterType(ctx context.Context, request api.GetN
 		}, nil
 	}
 
-	object := models.NodeClusterTypeToModel(record)
+	object := models.NodeClusterTypeToModel(record, commonapi.NewDefaultFieldOptions())
 	return api.GetNodeClusterType200JSONResponse(object), nil
 }
 
@@ -204,6 +228,14 @@ func (r *ClusterServer) GetNodeClusterTypeAlarmDictionary(ctx context.Context, r
 
 // GetNodeClusters receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusters(ctx context.Context, request api.GetNodeClustersRequestObject) (api.GetNodeClustersResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.NodeCluster{}); err != nil {
+		return api.GetNodeClusters400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetNodeClusters(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get node clusters: %w", err)
@@ -224,7 +256,7 @@ func (r *ClusterServer) GetNodeClusters(ctx context.Context, request api.GetNode
 
 	objects := make([]api.NodeCluster, len(records))
 	for i, record := range records {
-		objects[i] = models.NodeClusterToModel(&record, mapper[record.NodeClusterID])
+		objects[i] = models.NodeClusterToModel(&record, mapper[record.NodeClusterID], options)
 	}
 
 	return api.GetNodeClusters200JSONResponse(objects), nil
@@ -269,7 +301,7 @@ func (r *ClusterServer) GetNodeCluster(ctx context.Context, request api.GetNodeC
 		}, nil
 	}
 
-	object := models.NodeClusterToModel(record, ids)
+	object := models.NodeClusterToModel(record, ids, commonapi.NewDefaultFieldOptions())
 	return api.GetNodeCluster200JSONResponse(object), nil
 }
 
@@ -309,6 +341,14 @@ func (r *ClusterServer) GetMinorVersions(ctx context.Context, request api.GetMin
 
 // GetSubscriptions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetSubscriptions(ctx context.Context, request api.GetSubscriptionsRequestObject) (api.GetSubscriptionsResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.Subscription{}); err != nil {
+		return api.GetSubscriptions400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetSubscriptions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subscriptions: %w", err)
@@ -324,7 +364,7 @@ func (r *ClusterServer) GetSubscriptions(ctx context.Context, request api.GetSub
 
 // validateSubscription validates a subscription before accepting the request
 func (r *ClusterServer) validateSubscription(request api.CreateSubscriptionRequestObject) error {
-	err := api2.ValidateCallbackURL(request.Body.Callback)
+	err := commonapi.ValidateCallbackURL(request.Body.Callback)
 	if err != nil {
 		return fmt.Errorf("invalid callback url: %w", err)
 	}
@@ -456,7 +496,7 @@ func (r *ClusterServer) DeleteSubscription(ctx context.Context, request api.Dele
 }
 
 // GetAlarmDictionaries receives the API request to this endpoint, executes the request, and responds appropriately
-func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, _ api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
+func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, request api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
 	records, err := r.Repo.GetAlarmDictionaries(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)

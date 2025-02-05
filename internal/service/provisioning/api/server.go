@@ -10,14 +10,16 @@ import (
 	"github.com/google/uuid"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
-	api "github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api/generated"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	api "github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api/generated"
 )
 
 type ProvisioningServer struct {
@@ -65,6 +67,14 @@ func (r *ProvisioningServer) GetMinorVersions(ctx context.Context, request api.G
 
 // GetProvisioningRequests handles an API request to fetch provisioning requests
 func (r *ProvisioningServer) GetProvisioningRequests(ctx context.Context, request api.GetProvisioningRequestsRequestObject) (api.GetProvisioningRequestsResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.ProvisioningRequest{}); err != nil {
+		return api.GetProvisioningRequests400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	provisioningRequests := provisioningv1alpha1.ProvisioningRequestList{}
 	err := r.HubClient.List(ctx, &provisioningRequests)
 	if err != nil {
@@ -80,7 +90,7 @@ func (r *ProvisioningServer) GetProvisioningRequests(ctx context.Context, reques
 				provisioningRequest.Name, err)
 		}
 
-		object, err := convertProvisioningRequestCRToApi(provisioningRequestId, provisioningRequest)
+		object, err := convertProvisioningRequestCRToApi(provisioningRequestId, provisioningRequest, options)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +117,7 @@ func (r *ProvisioningServer) GetProvisioningRequest(ctx context.Context, request
 		return nil, fmt.Errorf("failed to get ProvisioningRequest: %w", err)
 	}
 
-	object, err := convertProvisioningRequestCRToApi(request.ProvisioningRequestId, provisioningRequest)
+	object, err := convertProvisioningRequestCRToApi(request.ProvisioningRequestId, provisioningRequest, commonapi.NewDefaultFieldOptions())
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +234,7 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 }
 
 // convertProvisioningRequestCRToApi converts a ProvisioningRequest CR to an API model
-func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisioningv1alpha1.ProvisioningRequest) (api.ProvisioningRequest, error) {
+func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisioningv1alpha1.ProvisioningRequest, options *commonapi.FieldOptions) (api.ProvisioningRequest, error) {
 	var status api.ProvisioningRequestStatus
 	if provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase != "" {
 		provisioningPhase := api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
@@ -257,26 +267,31 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 		return api.ProvisioningRequest{}, fmt.Errorf("failed to unmarshal TemplateParameters into a map: %w", err)
 	}
 
-	// Convert the CR's status.extensions to map[string]interface{}
-	var extensions = make(map[string]interface{})
-	extensionsBytes, err := json.Marshal(provisioningRequest.Status.Extensions)
-	if err != nil {
-		return api.ProvisioningRequest{}, fmt.Errorf("failed to marshal Extensions into bytes: %w", err)
-	}
-	if err := json.Unmarshal(extensionsBytes, &extensions); err != nil {
-		return api.ProvisioningRequest{}, fmt.Errorf("failed to unmarshal Extensions into a map: %w", err)
-	}
-
-	return api.ProvisioningRequest{
+	result := api.ProvisioningRequest{
 		ProvisioningRequestId: id,
 		Name:                  provisioningRequest.Spec.Name,
 		Description:           provisioningRequest.Spec.Description,
 		TemplateName:          provisioningRequest.Spec.TemplateName,
 		TemplateVersion:       provisioningRequest.Spec.TemplateVersion,
 		TemplateParameters:    templateParameters,
-		Extensions:            &extensions,
 		Status:                &status,
-	}, nil
+	}
+
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		// Convert the CR's status.extensions to map[string]interface{}
+		var extensions = make(map[string]interface{})
+		extensionsBytes, err := json.Marshal(provisioningRequest.Status.Extensions)
+		if err != nil {
+			return api.ProvisioningRequest{}, fmt.Errorf("failed to marshal Extensions into bytes: %w", err)
+		}
+		if err := json.Unmarshal(extensionsBytes, &extensions); err != nil {
+			return api.ProvisioningRequest{}, fmt.Errorf("failed to unmarshal Extensions into a map: %w", err)
+		}
+
+		result.Extensions = &extensions
+	}
+
+	return result, nil
 }
 
 // convertProvisioningRequestApiToCR converts an API model to a ProvisioningRequest CR

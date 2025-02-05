@@ -19,7 +19,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
-	api2 "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -92,7 +92,15 @@ func (a *AlarmsServer) GetMinorVersions(ctx context.Context, request api.GetMino
 }
 
 // GetSubscriptions handles an API request to fetch Alarm Subscriptions
-func (a *AlarmsServer) GetSubscriptions(ctx context.Context, _ api.GetSubscriptionsRequestObject) (api.GetSubscriptionsResponseObject, error) {
+func (a *AlarmsServer) GetSubscriptions(ctx context.Context, request api.GetSubscriptionsRequestObject) (api.GetSubscriptionsResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.AlarmSubscriptionInfo{}); err != nil {
+		return api.GetSubscriptions400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := a.AlarmsRepository.GetAlarmSubscriptions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Alarm Subscriptions: %w", err)
@@ -117,7 +125,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 	}
 
 	// Validate the subscription
-	if err := api2.ValidateCallbackURL(request.Body.Callback); err != nil {
+	if err := commonapi.ValidateCallbackURL(request.Body.Callback); err != nil {
 		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"callback": request.Body.Callback,
@@ -215,7 +223,15 @@ func (a *AlarmsServer) GetSubscription(ctx context.Context, request api.GetSubsc
 }
 
 // GetAlarms handles an API request to fetch Alarm Event Records
-func (a *AlarmsServer) GetAlarms(ctx context.Context, _ api.GetAlarmsRequestObject) (api.GetAlarmsResponseObject, error) {
+func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsRequestObject) (api.GetAlarmsResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.AlarmEventRecord{}); err != nil {
+		return api.GetAlarms400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := a.AlarmsRepository.GetAlarmEventRecords(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Alarm Event Records: %w", err)

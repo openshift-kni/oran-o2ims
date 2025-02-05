@@ -88,6 +88,7 @@ paths:
       description: |
         Returns the details of the O-Cloud instance.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
@@ -149,6 +150,7 @@ paths:
       description: |
         Returns the list of deployment managers.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -185,8 +187,6 @@ paths:
         Returns the details of a deployment manager.
       parameters:
       - $ref: "#/components/parameters/deploymentManagerId"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - deploymentManagers
       responses:
@@ -224,6 +224,7 @@ paths:
         Returns the list of inventory subscriptions.
       parameters:
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
       tags:
@@ -292,8 +293,6 @@ paths:
         Returns the details of a subscription.
       parameters:
       - $ref: "#/components/parameters/subscriptionId"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - subscriptions
       responses:
@@ -355,6 +354,7 @@ paths:
       description: |
         Returns the list of resource types.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -428,6 +428,7 @@ paths:
       description: |
         Returns the list of resource pools.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -502,6 +503,7 @@ paths:
         Returns the details of resources in a resource pool.
       parameters:
       - $ref: "#/components/parameters/resourcePoolId"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -824,6 +826,7 @@ components:
       - version
       - resourceKind
       - resourceClass
+      - extensions
 
     ResourcePool:
       description: |

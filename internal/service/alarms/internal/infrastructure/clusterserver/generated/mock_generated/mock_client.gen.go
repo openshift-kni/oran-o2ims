@@ -401,9 +401,9 @@ func (mr *MockClientInterfaceMockRecorder) GetNodeClusters(ctx, params any, reqE
 }
 
 // GetSubscription mocks base method.
-func (m *MockClientInterface) GetSubscription(ctx context.Context, subscriptionId generated.SubscriptionId, params *generated.GetSubscriptionParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetSubscription(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{ctx, subscriptionId, params}
+	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
@@ -414,9 +414,9 @@ func (m *MockClientInterface) GetSubscription(ctx context.Context, subscriptionI
 }
 
 // GetSubscription indicates an expected call of GetSubscription.
-func (mr *MockClientInterfaceMockRecorder) GetSubscription(ctx, subscriptionId, params any, reqEditors ...any) *gomock.Call {
+func (mr *MockClientInterfaceMockRecorder) GetSubscription(ctx, subscriptionId any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, subscriptionId, params}, reqEditors...)
+	varargs := append([]any{ctx, subscriptionId}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubscription", reflect.TypeOf((*MockClientInterface)(nil).GetSubscription), varargs...)
 }
 
@@ -784,9 +784,9 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetNodeClustersWithRespo
 }
 
 // GetSubscriptionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetSubscriptionWithResponse(ctx context.Context, subscriptionId generated.SubscriptionId, params *generated.GetSubscriptionParams, reqEditors ...generated.RequestEditorFn) (*generated.GetSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) GetSubscriptionWithResponse(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*generated.GetSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{ctx, subscriptionId, params}
+	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
@@ -797,9 +797,9 @@ func (m *MockClientWithResponsesInterface) GetSubscriptionWithResponse(ctx conte
 }
 
 // GetSubscriptionWithResponse indicates an expected call of GetSubscriptionWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) GetSubscriptionWithResponse(ctx, subscriptionId, params any, reqEditors ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetSubscriptionWithResponse(ctx, subscriptionId any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, subscriptionId, params}, reqEditors...)
+	varargs := append([]any{ctx, subscriptionId}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubscriptionWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetSubscriptionWithResponse), varargs...)
 }
 

@@ -27,6 +27,21 @@ paths: {}
 
 components:
   parameters:
+    allFields:
+      name: all_fields
+      description: |
+        This URI query parameter requests that all complex attributes are included in the response.
+
+        ```
+        all_fields
+        ```
+      in: query
+      required: false
+      schema:
+        type: string
+        nullable: true
+        default: "false"
+
     fields:
       name: fields
       description: |
