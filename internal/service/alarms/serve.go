@@ -141,7 +141,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		AddSource: true,
 		Level:     slog.LevelDebug,
 	}))
-	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
+	filterAdapter, err := common.NewFilterAdapter(logger)
 	if err != nil {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
