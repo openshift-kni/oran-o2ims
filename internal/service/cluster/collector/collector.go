@@ -460,7 +460,7 @@ func (c *Collector) deleteRelatedClusterResources(ctx context.Context, nodeClust
 
 	for _, resource := range resources {
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
-			ctx, c.repository.Db, resource, resource.ClusterResourceID, &nodeCluster.NodeClusterID, func(object interface{}) any {
+			ctx, c.repository.Db, resource, resource.ClusterResourceID, nil, func(object interface{}) any {
 				record, _ := object.(models.ClusterResource)
 				return models.ClusterResourceToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -521,12 +521,12 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 	if deleted {
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, clusterResource, clusterResource.ClusterResourceID, nil, func(object interface{}) any {
-				record, _ := object.(models.NodeCluster)
-				return models.NodeClusterToModel(&record, nil, commonapi.NewDefaultFieldOptions())
+				record, _ := object.(models.ClusterResource)
+				return models.ClusterResourceToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
 
 		if err != nil {
-			return fmt.Errorf("failed to delete cluster resource '%s'': %w", clusterResource.ResourceID, err)
+			return fmt.Errorf("failed to delete cluster resource '%s': %w", clusterResource.ResourceID, err)
 		}
 
 		if dataChangeEvent != nil {
@@ -538,16 +538,17 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 
 	nodeCluster, err := c.repository.GetNodeClusterByName(ctx, clusterResource.NodeClusterName)
 	if errors.Is(err, utils.ErrNotFound) {
-		// Agents will finish being installed before the Managed Cluster is completely provisioned therefore we have to
-		// link them after the fact so here we just skip them.
+		// Agents will finish being installed before the Managed Cluster is completely provisioned, therefore, we have to
+		// link them after the fact, so here we just skip them.
 		slog.Warn("no node cluster found", "name", clusterResource.NodeClusterName, "resource", clusterResource.Name)
-	} else {
-		clusterResource.NodeClusterID = &nodeCluster.NodeClusterID
+	} else if err != nil {
+		return fmt.Errorf("failed to get node cluster '%s': %w", clusterResource.NodeClusterName, err)
 	}
 
+	clusterResource.NodeClusterID = &nodeCluster.NodeClusterID
 	err = c.persistClusterResource(ctx, dataSource, clusterResource)
 	if err != nil {
-		return fmt.Errorf("failed to update cluster resource '%s'': %w", clusterResource.ResourceID, err)
+		return fmt.Errorf("failed to update cluster resource '%s': %w", clusterResource.ResourceID, err)
 	}
 
 	return nil
