@@ -85,7 +85,7 @@ func Serve(config *api.ProvisioningServerConfig) error {
 	}))
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters.
-	filterAdapter, err := common.NewFilterAdapter(logger, swagger)
+	filterAdapter, err := common.NewFilterAdapter(logger)
 	if err != nil {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}

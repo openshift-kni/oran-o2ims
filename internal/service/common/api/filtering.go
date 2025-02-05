@@ -9,10 +9,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/getkin/kin-openapi/routers"
-	"github.com/getkin/kin-openapi/routers/gorillamux"
-
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -29,15 +25,13 @@ const (
 // these objects can be created once at server initialization time and re-used in the ResponseFilter
 // middleware.
 type FilterAdapter struct {
-	swagger           *openapi3.T
-	router            routers.Router
 	pathsParser       *search.PathsParser
 	selectorEvaluator *search.SelectorEvaluator
 	selectorParser    *search.SelectorParser
 }
 
 // NewFilterAdapter creates a new filter adapter to be passed to a ResponseFilter
-func NewFilterAdapter(logger *slog.Logger, swagger *openapi3.T) (*FilterAdapter, error) {
+func NewFilterAdapter(logger *slog.Logger) (*FilterAdapter, error) {
 	pathsParser, err := search.NewPathsParser().SetLogger(logger).Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build paths parser: %w", err)
@@ -63,29 +57,11 @@ func NewFilterAdapter(logger *slog.Logger, swagger *openapi3.T) (*FilterAdapter,
 		return nil, fmt.Errorf("failed to build selector evaluator: %w", err)
 	}
 
-	// We don't want the host to be considered
-	swagger.Servers = nil
-	router, err := gorillamux.NewRouter(swagger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create router: %w", err)
-	}
-
 	return &FilterAdapter{
-		swagger:           swagger,
-		router:            router,
 		pathsParser:       pathsParser,
 		selectorEvaluator: selectorEvaluator,
 		selectorParser:    selectorParser,
 	}, nil
-}
-
-// ParseFields delegates the function of parsing the include/exclude fields to the path parser.
-func (a *FilterAdapter) ParseFields(fields ...string) ([]search.Path, error) {
-	paths, err := a.pathsParser.Parse(fields...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse fields: %w", err)
-	}
-	return paths, nil
 }
 
 // ParseFilter delegates the function of parsing the filter fields to the selector parser.
@@ -178,7 +154,7 @@ func (i *FilterResponseInterceptor) Flush(r *http.Request) error {
 	content := i.buf.Bytes()
 	var objectResult data.Object
 	// We don't have any context about whether this is a List or Get request so we have to look at
-	// the response and try to guess.  Here we attempt to unmarshall as an object and if that
+	// the response and try to guess.  Here we attempt to unmarshal as an object and if that
 	// doesn't work then we try again as a list.  One of these two attempts should succeed.
 	if err := json.Unmarshal(content, &objectResult); err != nil {
 		var listResult []data.Object
@@ -187,20 +163,16 @@ func (i *FilterResponseInterceptor) Flush(r *http.Request) error {
 		}
 
 		items := make([]data.Object, 0)
-		if len(i.selector.Terms) > 0 {
-			// Apply the selector to reduce the list of items down to only those of interest to the caller.
-			for _, item := range listResult {
-				ok, err := i.adapter.EvaluateSelector(i.selector, item)
-				if err != nil {
-					// Not likely a 500 error so send a 400 and return nil instead
-					return i.adapter.Error(i.original, err.Error(), http.StatusBadRequest)
-				}
-				if ok {
-					items = append(items, item)
-				}
+		// Apply the selector to reduce the list of items down to only those of interest to the caller.
+		for _, item := range listResult {
+			ok, err := i.adapter.EvaluateSelector(i.selector, item)
+			if err != nil {
+				// Not likely a 500 error so send a 400 and return nil instead
+				return i.adapter.Error(i.original, err.Error(), http.StatusBadRequest)
 			}
-		} else {
-			items = listResult
+			if ok {
+				items = append(items, item)
+			}
 		}
 
 		i.original.WriteHeader(i.statusCode)
@@ -251,15 +223,15 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 			}
 
 			// Override the response writer with an FilterResponseInterceptor so we can capture the output
-			interceptor := &FilterResponseInterceptor{
+			i := &FilterResponseInterceptor{
 				original: w,
 				adapter:  adapter,
 				selector: &selector,
 			}
 
-			next.ServeHTTP(interceptor, r)
+			next.ServeHTTP(i, r)
 
-			if err = interceptor.Flush(r); err != nil {
+			if err = i.Flush(r); err != nil {
 				text := fmt.Sprintf("failed to flush interceptor: %s", err.Error())
 				_ = adapter.Error(w, text, http.StatusInternalServerError)
 			}

@@ -236,6 +236,9 @@ func (e *SelectorEvaluator) evaluateEq(value any, args []any) (result bool,
 	case int:
 		arg := arg.(int)
 		result = value == arg
+	case float64:
+		arg := arg.(float64)
+		result = value == arg
 	default:
 		err = fmt.Errorf(
 			"the 'eq' operator supports attributes containing strings, numbers, "+
@@ -267,6 +270,9 @@ func (e *SelectorEvaluator) evaluateGt(value any, args []any) (result bool,
 	case int:
 		arg := arg.(int)
 		result = value > arg
+	case float64:
+		arg := arg.(float64)
+		result = value > arg
 	default:
 		err = fmt.Errorf(
 			"the 'gt' operator supports attributes containing strings, numbers, "+
@@ -297,6 +303,9 @@ func (e *SelectorEvaluator) evaluateGte(value any, args []any) (result bool,
 		result = strings.Compare(value, arg) >= 0
 	case int:
 		arg := arg.(int)
+		result = value >= arg
+	case float64:
+		arg := arg.(float64)
 		result = value >= arg
 	default:
 		err = fmt.Errorf(
@@ -345,6 +354,9 @@ func (e *SelectorEvaluator) evaluateLt(value any, args []any) (result bool,
 	case int:
 		arg := arg.(int)
 		result = value < arg
+	case float64:
+		arg := arg.(float64)
+		result = value < arg
 	default:
 		err = fmt.Errorf(
 			"the 'lt' operator supports attributes containing strings, numbers, "+
@@ -375,6 +387,9 @@ func (e *SelectorEvaluator) evaluateLte(value any, args []any) (result bool,
 		result = strings.Compare(value, arg) <= 0
 	case int:
 		arg := arg.(int)
+		result = value <= arg
+	case float64:
+		arg := arg.(float64)
 		result = value <= arg
 	default:
 		err = fmt.Errorf(
@@ -432,6 +447,9 @@ func (e *SelectorEvaluator) evaluateNeq(value any, args []any) (result bool,
 	case int:
 		arg := arg.(int)
 		result = value != arg
+	case float64:
+		arg := arg.(float64)
+		result = value != arg
 	default:
 		err = fmt.Errorf(
 			"the 'neq' operator supports attributes containing strings, numbers, "+
@@ -465,6 +483,8 @@ func (e *SelectorEvaluator) convertArgs(value any, args []any) (result []any, er
 		result, err = e.convertStrings(args)
 	case int:
 		result, err = e.convertInts(args)
+	case float64:
+		result, err = e.convertFloats(args)
 	default:
 		err = fmt.Errorf(
 			"don't know how to convert values to type %T",
@@ -482,6 +502,8 @@ func (e *SelectorEvaluator) convertStrings(args []any) (result []any, err error)
 			converted[i] = arg
 		case int:
 			converted[i] = strconv.Itoa(arg)
+		case float64:
+			converted[i] = strconv.FormatFloat(arg, 'f', -1, 64)
 		default:
 			err = fmt.Errorf(
 				"don't know how to convert value of type %T to string",
@@ -506,6 +528,35 @@ func (e *SelectorEvaluator) convertInts(args []any) (result []any, err error) {
 			}
 			converted[i] = value
 		case int:
+			converted[i] = arg
+		case float64:
+			converted[i] = int(arg)
+		default:
+			err = fmt.Errorf(
+				"don't know how to convert value of type %T to integer",
+				arg,
+			)
+			return
+		}
+	}
+	result = converted
+	return
+}
+
+func (e *SelectorEvaluator) convertFloats(args []any) (result []any, err error) {
+	converted := make([]any, len(args))
+	for i, arg := range args {
+		switch arg := arg.(type) {
+		case string:
+			var value float64
+			value, err = strconv.ParseFloat(arg, 64)
+			if err != nil {
+				return
+			}
+			converted[i] = value
+		case int:
+			converted[i] = float64(arg)
+		case float64:
 			converted[i] = arg
 		default:
 			err = fmt.Errorf(

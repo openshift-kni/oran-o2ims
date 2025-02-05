@@ -155,6 +155,32 @@ var _ = Describe("Selector evaluator", func() {
 			false,
 		),
 		Entry(
+			"Eq float64 is true",
+			"(eq,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Eq float64 is false",
+			"(eq,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 456,
+				}
+			},
+			false,
+		),
+		Entry(
 			"Cont is true",
 			"(cont,MyField,my)",
 			func() any {
@@ -259,6 +285,19 @@ var _ = Describe("Selector evaluator", func() {
 			false,
 		),
 		Entry(
+			"Gte float64 is false",
+			"(gte,MyField,456)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			false,
+		),
+		Entry(
 			"Gte same string is true",
 			"(gte,MyField,a)",
 			func() any {
@@ -277,6 +316,19 @@ var _ = Describe("Selector evaluator", func() {
 			func() any {
 				type MyObject struct {
 					MyField int
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Gte same float64 is true",
+			"(gte,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
 				}
 				return MyObject{
 					MyField: 123,
@@ -363,6 +415,45 @@ var _ = Describe("Selector evaluator", func() {
 			false,
 		),
 		Entry(
+			"Lt float64 is true",
+			"(lt,MyField,456)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Lt float64 is false",
+			"(lt,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 456,
+				}
+			},
+			false,
+		),
+		Entry(
+			"Lt same float64 is false",
+			"(lt,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			false,
+		),
+		Entry(
 			"Lte string is true",
 			"(lte,MyField,b)",
 			func() any {
@@ -433,6 +524,45 @@ var _ = Describe("Selector evaluator", func() {
 			func() any {
 				type MyObject struct {
 					MyField int
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Lte float64 is true",
+			"(lte,MyField,456)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Lte float64 is false",
+			"(lte,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 456,
+				}
+			},
+			false,
+		),
+		Entry(
+			"Lte same float64 is true",
+			"(lte,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
 				}
 				return MyObject{
 					MyField: 123,
@@ -615,6 +745,32 @@ var _ = Describe("Selector evaluator", func() {
 			func() any {
 				type MyObject struct {
 					MyField int
+				}
+				return MyObject{
+					MyField: 123,
+				}
+			},
+			false,
+		),
+		Entry(
+			"Neq float64 is true",
+			"(neq,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
+				}
+				return MyObject{
+					MyField: 456,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Neq float64 is false",
+			"(neq,MyField,123)",
+			func() any {
+				type MyObject struct {
+					MyField float64
 				}
 				return MyObject{
 					MyField: 123,
