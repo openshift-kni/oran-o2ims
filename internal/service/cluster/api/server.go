@@ -36,7 +36,7 @@ type ClusterServerConfig struct {
 // ClusterServer defines the instance attributes for an instance of a cluster server
 type ClusterServer struct {
 	Config                   *ClusterServerConfig
-	Repo                     *repo.ClusterRepository
+	Repo                     repo.RepositoryInterface
 	SubscriptionEventHandler notifier.SubscriptionEventHandler
 }
 
