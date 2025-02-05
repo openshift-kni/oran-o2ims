@@ -345,6 +345,11 @@ func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []a
 
 	count := 0
 	for _, record := range records {
+		// Handle the NodeCluster deletion, but first delete all subtending ClusterResources
+		if err := c.deleteRelatedClusterResources(ctx, record); err != nil {
+			return err
+		}
+
 		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.NodeClusterID, nil, func(object interface{}) any {
 			r, _ := object.(models.NodeCluster)
 			return models.NodeClusterToModel(&r, nil, commonapi.NewDefaultFieldOptions())
