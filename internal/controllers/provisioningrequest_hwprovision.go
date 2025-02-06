@@ -389,12 +389,9 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodePool(ctx context.Co
 	}
 
 	if exist {
-		changed, err := utils.CompareHardwareTemplateWithNodePool(hwTemplate, nodePool)
+		_, err := utils.CompareHardwareTemplateWithNodePool(hwTemplate, nodePool)
 		if err != nil {
 			return utils.NewInputError("%w", err)
-		}
-		if changed && !utils.IsProvisioningStateFulfilled(t.object) {
-			return utils.NewInputError("hardware template changes are not allowed until the cluster provisioning is fulfilled")
 		}
 	}
 
