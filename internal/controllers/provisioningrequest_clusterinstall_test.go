@@ -120,6 +120,42 @@ nodes:
 		Expect(err).ToNot(HaveOccurred())
 		Expect(renderedClusterInstance).ToNot(BeNil())
 
+		// Verify the disable-auto-import annotation is added to the ManagedCluster
+		// when cluster provisioning has not started yet.
+		Expect(renderedClusterInstance.Spec.ExtraAnnotations).To(HaveKey("ManagedCluster"))
+		Expect(renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"]).To(HaveKey(disableAutoImportAnnotation))
+
+		// Check if status condition was updated correctly
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		verifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
+			Message: "ClusterInstance rendered and passed dry-run validation",
+		})
+	})
+
+	It("should not contain disable-auto-import annotation for ManagedCluster in the "+
+		"rendered ClusterInstance if cluster provisioning has started", func() {
+		// Simulate that the ClusterInstance has started provisioning
+		task.object.Status.Conditions = []metav1.Condition{
+			{
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				Message: "Provisioning cluster",
+			},
+		}
+		renderedClusterInstance, err := task.handleRenderClusterInstance(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(renderedClusterInstance).ToNot(BeNil())
+
+		// Verify the disable-auto-import annotation is not added to the ManagedCluster
+		// when cluster provisioning has started.
+		Expect(renderedClusterInstance.Spec.ExtraAnnotations).ToNot(HaveKey("ManagedCluster"))
+
 		// Check if status condition was updated correctly
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
