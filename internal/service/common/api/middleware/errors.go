@@ -1,4 +1,4 @@
-package api
+package middleware
 
 import (
 	"encoding/json"
@@ -54,26 +54,11 @@ func (e *interceptor) Write(data []byte) (int, error) {
 	return e.original.Write(out) //nolint:wrapcheck
 }
 
-// ErrorJsonifier wraps a http.ServeMux so that we can override plain text error responses to JSON
-type ErrorJsonifier struct {
-	mux *http.ServeMux
-}
-
-// NewErrorJsonifier creates a new instance of an ErrorJsonifier
-func NewErrorJsonifier(router *http.ServeMux) *ErrorJsonifier {
-	return &ErrorJsonifier{mux: router}
-}
-
-// HandleFunc calls the HandleFunc method on the original http.ServeMux
-func (e *ErrorJsonifier) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	e.mux.HandleFunc(pattern, handler)
-}
-
-// ServeHTTP calls the ServeHTTP method on the original http.ServeMux by substituting the
-// ResponseWriter with an implementation that can intercept plain text error responses and convert
-// them to JSON.
-func (e *ErrorJsonifier) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	e.mux.ServeHTTP(&interceptor{
-		original: writer,
-	}, request)
+// ErrorJsonifier return oran json structure instead of the default plain text
+func ErrorJsonifier() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(&interceptor{original: w}, r)
+		})
+	}
 }

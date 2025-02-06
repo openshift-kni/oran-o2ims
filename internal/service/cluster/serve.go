@@ -11,6 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
+
 	"github.com/getkin/kin-openapi/openapi3"
 
 	"github.com/google/uuid"
@@ -20,7 +23,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/collector"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
@@ -132,12 +134,10 @@ func Serve(config *api.ClusterServerConfig) error {
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
 		generated.StrictHTTPServerOptions{
-			RequestErrorHandlerFunc:  common.GetOranReqErrFunc(),
-			ResponseErrorHandlerFunc: common.GetOranRespErrFunc(),
+			RequestErrorHandlerFunc:  middleware.GetOranReqErrFunc(),
+			ResponseErrorHandlerFunc: middleware.GetOranRespErrFunc(),
 		},
 	)
-
-	router := common.NewErrorJsonifier(http.NewServeMux())
 
 	// Create a new logger to be passed to things that need a logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -146,27 +146,34 @@ func Serve(config *api.ClusterServerConfig) error {
 	}))
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
-	filterAdapter, err := common.NewFilterAdapter(logger)
+	filterAdapter, err := middleware.NewFilterAdapter(logger)
 	if err != nil {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
+	baseRouter := http.NewServeMux()
 	opt := generated.StdHTTPServerOptions{
-		BaseRouter: router,
+		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
-			common.OpenAPIValidation(swagger),
-			common.ResponseFilter(filterAdapter),
-			common.LogDuration(),
+			middleware.OpenAPIValidation(swagger),
+			middleware.ResponseFilter(filterAdapter),
+			middleware.LogDuration(),
 		},
-		ErrorHandlerFunc: common.GetOranReqErrFunc(),
+		ErrorHandlerFunc: middleware.GetOranReqErrFunc(),
 	}
 
 	// Register the handler
 	generated.HandlerWithOptions(serverStrictHandler, opt)
 
 	// Server config
+	// Wrap base router with additional middlewares
+	handler := middleware.ChainHandlers(baseRouter,
+		middleware.ErrorJsonifier(),
+		middleware.TrailingSlashStripper(),
+	)
+
 	srv := &http.Server{
-		Handler:      router,
+		Handler:      handler,
 		Addr:         config.Listener.Address,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,

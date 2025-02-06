@@ -1,11 +1,11 @@
-package api
+package middleware
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -16,6 +16,15 @@ import (
 )
 
 type Middleware = func(http.Handler) http.Handler
+
+// ChainHandlers applies each middleware in order to the base router.
+func ChainHandlers(base http.Handler, wrappers ...Middleware) http.Handler {
+	h := base
+	for _, wrap := range wrappers {
+		h = wrap(h)
+	}
+	return h
+}
 
 // LogDuration log time taken to complete a request.
 // TODO: This is just get started with middleware but should be replaced with something that's more suitable for production i.e OpenTelemetry
@@ -47,6 +56,18 @@ func OpenAPIValidation(swagger *openapi3.T) Middleware {
 	})
 }
 
+// TrailingSlashStripper allow API calls with trailing "/"
+func TrailingSlashStripper() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/" {
+				r.URL.Path = strings.TrimSuffix(r.URL.Path, "/")
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // problemDetails writes an error message using the appropriate header for an ORAN error response
 func problemDetails(w http.ResponseWriter, body string, code int) {
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
@@ -66,21 +87,6 @@ func getOranErrHandler() func(w http.ResponseWriter, message string, statusCode 
 		})
 		problemDetails(w, string(out), statusCode)
 	}
-}
-
-// GracefulShutdown allow graceful shutdown with timeout
-func GracefulShutdown(srv *http.Server) error {
-	// Create shutdown context with 10 second timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Attempt graceful shutdown
-	if err := srv.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed graceful shutdown: %w", err)
-	}
-
-	slog.Info("Server gracefully stopped")
-	return nil
 }
 
 // GetOranReqErrFunc override default validation errors to allow for O-RAN specific struct
