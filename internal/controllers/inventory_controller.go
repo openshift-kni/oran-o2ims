@@ -628,7 +628,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 	data := utils.AvailableNotification{
 		GlobalCloudId: *t.object.Spec.CloudID,
 		OCloudId:      t.object.Status.ClusterID,
-		ImsEndpoint:   fmt.Sprintf("https://%s/o2ims-infrastructureInventory/v1", t.object.Status.IngressHost),
+		ImsEndpoint:   fmt.Sprintf("https://%s", t.object.Status.IngressHost),
 	}
 
 	body, err := json.Marshal(data)
