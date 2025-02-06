@@ -30,37 +30,50 @@ func SetStatusCondition(
 
 // SetProvisioningStatePending updates the provisioning state to pending with detailed message
 func SetProvisioningStatePending(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
-	cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StatePending
-	cr.Status.ProvisioningStatus.ProvisioningDetails = message
-	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	if cr.Status.ProvisioningStatus.ProvisioningPhase != provisioningv1alpha1.StatePending ||
+		cr.Status.ProvisioningStatus.ProvisioningDetails != message {
+		cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StatePending
+		cr.Status.ProvisioningStatus.ProvisioningDetails = message
+		cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	}
 }
 
 // SetProvisioningStateInProgress updates the provisioning state to progressing with detailed message
 func SetProvisioningStateInProgress(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
-	cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
-	cr.Status.ProvisioningStatus.ProvisioningDetails = message
-	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	if cr.Status.ProvisioningStatus.ProvisioningPhase != provisioningv1alpha1.StateProgressing ||
+		cr.Status.ProvisioningStatus.ProvisioningDetails != message {
+		cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
+		cr.Status.ProvisioningStatus.ProvisioningDetails = message
+		cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	}
 }
 
 // SetProvisioningStateFailed updates the provisioning state to failed with detailed message
 func SetProvisioningStateFailed(cr *provisioningv1alpha1.ProvisioningRequest, message string) {
-	cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateFailed
-	cr.Status.ProvisioningStatus.ProvisioningDetails = message
-	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	if cr.Status.ProvisioningStatus.ProvisioningPhase != provisioningv1alpha1.StateFailed ||
+		cr.Status.ProvisioningStatus.ProvisioningDetails != message {
+		cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateFailed
+		cr.Status.ProvisioningStatus.ProvisioningDetails = message
+		cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	}
 }
 
 // SetProvisioningStateFulfilled updates the provisioning state to fulfilled with detailed message
 func SetProvisioningStateFulfilled(cr *provisioningv1alpha1.ProvisioningRequest) {
-	cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateFulfilled
-	cr.Status.ProvisioningStatus.ProvisioningDetails = "Provisioning request has completed successfully"
-	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	if cr.Status.ProvisioningStatus.ProvisioningPhase != provisioningv1alpha1.StateFulfilled {
+		cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateFulfilled
+		cr.Status.ProvisioningStatus.ProvisioningDetails = "Provisioning request has completed successfully"
+		cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	}
 }
 
 // SetProvisioningStateDeleting updates the provisioning state to deleting with detailed message
 func SetProvisioningStateDeleting(cr *provisioningv1alpha1.ProvisioningRequest) {
-	cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateDeleting
-	cr.Status.ProvisioningStatus.ProvisioningDetails = "Deletion is in progress"
-	cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	if cr.Status.ProvisioningStatus.ProvisioningPhase != provisioningv1alpha1.StateDeleting {
+		cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateDeleting
+		cr.Status.ProvisioningStatus.ProvisioningDetails = "Deletion is in progress"
+		cr.Status.ProvisioningStatus.UpdateTime = metav1.Now()
+	}
 }
 
 // IsProvisioningStateFulfilled checks if the provisioning status is fulfilled
@@ -73,6 +86,15 @@ func IsClusterProvisionPresent(cr *provisioningv1alpha1.ProvisioningRequest) boo
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
 		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
 	return condition != nil
+}
+
+// IsClusterProvisionInProgress checks if the cluster provision condition status is in progress.
+func IsClusterProvisionInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
+	return condition != nil &&
+		(condition.Status == metav1.ConditionFalse ||
+			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress))
 }
 
 // IsClusterProvisionCompleted checks if the cluster provision condition status is completed.

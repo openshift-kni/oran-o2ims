@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -21,6 +22,10 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+const (
+	disableAutoImportAnnotation = "import.open-cluster-management.io/disable-auto-import"
 )
 
 func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
@@ -37,6 +42,7 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		"Cluster": t.clusterInput.clusterInstanceData,
 	}
 
+	disableAutoImport := true
 	suppressedManifests := []string{}
 
 	renderedClusterInstance := &siteconfig.ClusterInstance{}
@@ -64,6 +70,8 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
 		if crProvisionedCond != nil && crProvisionedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Unknown) {
+			disableAutoImport = false
+
 			existingClusterInstance := &unstructured.Unstructured{}
 			existingClusterInstance.SetGroupVersionKind(
 				renderedClusterInstanceUnstructure.GroupVersionKind())
@@ -133,6 +141,22 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 			return nil, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
 		}
 		renderedClusterInstance.Spec.SuppressedManifests = append(renderedClusterInstance.Spec.SuppressedManifests, suppressedManifests...)
+
+		if disableAutoImport {
+			// Disable ManagedCluster auto-import by adding annotation import.open-cluster-management.io/disable-auto-import
+			// through the ClusterInstance.
+			// This workaround addresses a race condition during server reboot caused by hardware provisioning.
+			// During this period, stale clusters may be re-imported because timing issues (e.g., delayed leader election
+			// or incomplete container restarts) cause ACM to mistakenly identify an old cluster as ready.
+			// This annotation will be removed from ManagedCluster once the cluster installation starts.
+			if renderedClusterInstance.Spec.ExtraAnnotations == nil {
+				renderedClusterInstance.Spec.ExtraAnnotations = make(map[string]map[string]string)
+			}
+			if _, exists := renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"]; !exists {
+				renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"] = make(map[string]string)
+			}
+			renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"][disableAutoImportAnnotation] = "true"
+		}
 	}
 
 	return renderedClusterInstance, nil
@@ -156,6 +180,38 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 	// Continue checking the existing ClusterInstance provision status
 	if err := t.checkClusterProvisionStatus(ctx, clusterInstance.Name); err != nil {
 		return err
+	}
+
+	// Remove the disable-auto-import annotation for the managed cluster
+	// if the cluster provisioning is in progress.
+	if utils.IsClusterProvisionInProgress(t.object) {
+		return t.removeDisableAutoImportAnnotation(ctx, clusterInstance)
+	}
+
+	return nil
+}
+
+// removeDisableAutoImportAnnotation removes the disable-auto-import annotation
+// from the ManagedCluster if it exists.
+func (t *provisioningRequestReconcilerTask) removeDisableAutoImportAnnotation(
+	ctx context.Context, ci *siteconfig.ClusterInstance) error {
+
+	managedCluster := &clusterv1.ManagedCluster{}
+	exists, err := utils.DoesK8SResourceExist(
+		ctx, t.client, ci.Name, "", managedCluster)
+	if err != nil {
+		return fmt.Errorf("failed to check if ManagedCluster exists: %w", err)
+	}
+	if exists {
+		if _, ok := managedCluster.GetAnnotations()[disableAutoImportAnnotation]; ok {
+			delete(managedCluster.GetAnnotations(), disableAutoImportAnnotation)
+			err = t.client.Update(ctx, managedCluster)
+			if err != nil {
+				return fmt.Errorf("failed to update managed cluster: %w", err)
+			}
+			t.logger.InfoContext(ctx,
+				fmt.Sprintf("disable-auto-import annotation is removed for ManagedCluster: %s", t.object.Name))
+		}
 	}
 	return nil
 }
@@ -314,6 +370,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		return
 	}
 
+	var message string
+
 	// Search for ClusterInstance Provisioned condition
 	ciProvisionedCondition := meta.FindStatusCondition(
 		ci.Status.Conditions, string(hwv1alpha1.Provisioned))
@@ -322,7 +380,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		crClusterInstanceProcessedCond := meta.FindStatusCondition(
 			t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed))
 		if crClusterInstanceProcessedCond != nil && crClusterInstanceProcessedCond.Status == metav1.ConditionTrue {
-			message := "Waiting for cluster installation to start"
+			message = "Waiting for cluster installation to start"
 			utils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 				provisioningv1alpha1.CRconditionReasons.Unknown,
@@ -332,11 +390,12 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 			utils.SetProvisioningStateInProgress(t.object, message)
 		}
 	} else {
+		message = ciProvisionedCondition.Message
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 			provisioningv1alpha1.ConditionReason(ciProvisionedCondition.Reason),
 			ciProvisionedCondition.Status,
-			ciProvisionedCondition.Message,
+			message,
 		)
 	}
 
@@ -348,14 +407,15 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		}
 
 		if utils.IsClusterProvisionFailed(t.object) {
-			utils.SetProvisioningStateFailed(t.object, "Cluster installation failed")
+			message = "Cluster installation failed"
+			utils.SetProvisioningStateFailed(t.object, message)
 		} else if !utils.IsClusterProvisionCompleted(t.object) {
 			// If it's not failed or completed, check if it has timed out
 			if utils.TimeoutExceeded(
 				t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time,
 				t.timeouts.clusterProvisioning) {
 				// timed out
-				message := "Cluster installation timed out"
+				message = "Cluster installation timed out"
 				utils.SetStatusCondition(&t.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 					provisioningv1alpha1.CRconditionReasons.TimedOut,
@@ -364,8 +424,13 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 				)
 				utils.SetProvisioningStateFailed(t.object, message)
 			} else {
-				utils.SetProvisioningStateInProgress(t.object, "Cluster installation is in progress")
+				message = "Cluster installation is in progress"
+				utils.SetProvisioningStateInProgress(t.object, message)
 			}
 		}
 	}
+
+	t.logger.Info(
+		fmt.Sprintf("ClusterInstance (%s) installation status: %s", ci.Name, message),
+	)
 }
