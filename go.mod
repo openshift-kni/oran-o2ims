@@ -1,6 +1,9 @@
 module github.com/openshift-kni/oran-o2ims
 
-go 1.22.0
+go 1.22.5
+
+toolchain go1.22.7
+
 // Needed for importing the siteconfig operator, taken from the siteconfig operator repo.
 replace github.com/openshift/assisted-service/models => github.com/openshift/assisted-service/models v0.0.0-20230831114549-1922eda29cf8
 
