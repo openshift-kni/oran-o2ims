@@ -101,11 +101,12 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 
 		alarmDictionaryIDString := (*nodeClusterType.Extensions)[utils.ClusterAlarmDictionaryIDExtension]
 		if alarmDictionaryIDString != nil {
-			_, err := uuid.Parse(alarmDictionaryIDString.(string))
+			id, err := uuid.Parse(alarmDictionaryIDString.(string))
 			if err != nil {
 				slog.Error("error parsing alarm dictionary ID", "NodeClusterType ID", nodeClusterType.NodeClusterTypeID, "error", err)
 				continue
 			}
+			(*nodeClusterType.Extensions)[utils.ClusterAlarmDictionaryIDExtension] = id
 
 			filteredNodeClusterTypes = append(filteredNodeClusterTypes, nodeClusterType)
 		}
