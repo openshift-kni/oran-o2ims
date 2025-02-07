@@ -416,7 +416,7 @@ func addArgsForSMO(inventory *inventoryv1alpha1.Inventory, args []string) []stri
 
 	if inventory.Spec.CaBundleName != nil {
 		args = append(args,
-			fmt.Sprintf("--ca-bundle-file=%s/ca-bundle.pem", CABundleMountPath),
+			fmt.Sprintf("--ca-bundle-file=%s/%s", CABundleMountPath, CABundleFilename),
 		)
 	}
 
@@ -448,7 +448,7 @@ func AddOAuthArgsForProxy(inventory *inventoryv1alpha1.Inventory, clientID strin
 
 		if inventory.Spec.CaBundleName != nil {
 			args = append(args,
-				fmt.Sprintf("--oidc-ca-file=%s/ca-bundle.pem", CABundleMountPath),
+				fmt.Sprintf("--oidc-ca-file=%s/%s", CABundleMountPath, CABundleFilename),
 			)
 		}
 	}

@@ -145,7 +145,8 @@ type InventorySpec struct {
 	SmoConfig *SmoConfig `json:"smo,omitempty"`
 	// CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
 	// with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
-	// a non-public CA certificate.
+	// a non-public CA certificate.  The config map is expected to contain a single file called 'ca-bundle.crt'
+	// containing all trusted CA certificates in PEM format.
 	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Custom CA Certificates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	CaBundleName *string `json:"caBundleName,omitempty"`

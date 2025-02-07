@@ -287,11 +287,33 @@ configuration requirements.
    certificates are signed by a non-public CA certificate. This is optional. If not required, then the 'caBundle'
    attribute can be omitted from the Inventory CR.
 
+   > :warning: Do this only if the cluster proxy isn't currently pointing to some other custom CA bundle. If it is
+   > pointing to an existing bundle, then the new private certificates need to be appended to the existing set. Refer to
+   > the OpenShift documentation for more
+   details [here](https://docs.openshift.com/container-platform/4.17/networking/configuring-a-custom-pki.html).
+
    ```console
-   oc create configmap -n oran-o2ims o2ims-custom-ca-certs --from-file=ca-bundle.pem=/some/path/to/ca-bundle.pem
+   oc create configmap -n openshift-config custom-ca-certs --from-file=ca-bundle.crt=/some/path/to/ca-bundle.crt
+   oc patch proxy/cluster --type=merge --patch='{"spec":{"trustedCA":{"name": "custom-ca-certs"}}}'
    ```
 
-2. Create a Secret that contains the OAuth client-id and client-secret for the O-Cloud Manager. These values should
+2. Create a new empty config map that includes the trust bundle injection label so that we end up with a config
+   map that includes the private CA certificates *plus* the full set of public CA certificates.
+
+   ```console
+   cat << EOF > o2ims-trusted-ca-bundle.yaml 
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     labels:
+       config.openshift.io/inject-trusted-cabundle: "true"
+     name: o2ims-trusted-ca-bundle
+     namespace: oran-o2ims
+   EOF
+   oc apply -f o2ims-trusted-ca-bundle.yaml
+   ```
+
+3. Create a Secret that contains the OAuth client-id and client-secret for the O-Cloud Manager. These values should
    be obtained from the administrator of the OAuth server that set up the client credentials. The client secrets must
    not be stored locally once the secret is created. The values used here are for example purposes only, your values may
    differ for the client-id and will definitely differ for the client-secret.
@@ -300,19 +322,18 @@ configuration requirements.
    oc create secret generic -n oran-o2ims oauth-client-secrets --from-literal=client-id=o2ims-client --from-literal=client-secret=SFuwTyqfWK5vSwaCPSLuFzW57HyyQPHg
    ```
 
-3. Create a Secret that contains a TLS client certificate and key to be used to enable mTLS to the SMO and OAuth2
+4. Create a Secret that contains a TLS client certificate and key to be used to enable mTLS to the SMO and OAuth2
    authorization servers. The Secret is expected to have the 'tls.crt' and 'tls.key' attributes. The 'tls.crt'
    attribute must contain the full certificate chain having the device certificate first and the root certificate being
    last. In a production environment, it is expected that this certificate should be renewed periodically and managed
    by cert-manager. In a development environment, if mTLS is not required, then this can be skipped and the
-   corresponding
-   attribute can be omitted from the Inventory CR.
+   corresponding attribute can be omitted from the Inventory CR.
 
    ```console
    oc create secret tls -n oran-o2ims o2ims-client-tls-certificate --cert /some/path/to/tls.crt --key /some/path/to/tls.key
    ```
 
-4. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
+5. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
    on the domain names used in your environment and by the type of OAuth2 server deployed. Check the configuration
    documentation for the actual server being used.
 
@@ -335,10 +356,10 @@ configuration requirements.
              groupsClaim: roles
           tls:
              clientCertificateName: o2ims-client-tls-certificate
-       caBundleName: o2ims-custom-ca-certs
+       caBundleName: o2ims-trusted-ca-bundle
    ```
 
-5. Once the Inventory CR is updated, the following condition will be updated to reflect the status of the SMO
+6. Once the Inventory CR is updated, the following condition will be updated to reflect the status of the SMO
    registration. If an error occurred that prevented registration from completing, then the error will be noted here.
 
    ```console
@@ -442,7 +463,7 @@ Inventory CR. To manually acquire a token from the authorization server, a comma
 This method may vary depending on the type of authorization server used. This example is for a Keycloak server.
 
 ```console
-export MY_TOKEN=$(curl -s --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.pem \
+export MY_TOKEN=$(curl -s --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.crt \
   -XPOST https://keycloak.example.com/realms/oran/protocol/openid-connect/token \
   -d grant_type=client_credentials -d client_id=${SMO_CLIENT_ID} \
   -d client_secret=${SMO_CLIENT_SECRET} \
@@ -478,7 +499,7 @@ environment, in which case it can be replaced with `-k`.
 
    ```console
    MY_CLUSTER=your.domain.com
-   curl --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.pem -q \
+   curl --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.crt -q \
      https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v1/api_version \
      -H "Authorization: Bearer ${MY_TOKEN}"
    ```
