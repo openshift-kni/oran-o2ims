@@ -33,7 +33,7 @@ data:
       - 1.pool.ntp.org
     templateRefs:
       - name: ai-cluster-templates-v1
-        namespace: siteconfig-operator
+        namespace: open-cluster-management
     cpuPartitioningMode: AllNodes
     extraManifestsRefs:
       - name: clustertemplate-sample.v1.0.0-extramanifests
@@ -60,4 +60,4 @@ data:
                 type: ethernet
         templateRefs:
           - name: ai-node-templates-v1
-            namespace: siteconfig-operator
+            namespace: open-cluster-management
