@@ -18,6 +18,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/notifier_provider"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -335,6 +336,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 	}
 
 	// Patch alarmAcknowledged
+	notifyAlarmAcknowledged := false
 	if request.Body.AlarmAcknowledged != nil {
 		alarmAcknowledged := *request.Body.AlarmAcknowledged
 
@@ -366,12 +368,21 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		record.AlarmAcknowledged = alarmAcknowledged
 		currentTime := time.Now()
 		record.AlarmAcknowledgedTime = &currentTime
+
+		// Good to notify
+		notifyAlarmAcknowledged = true
 	}
 
 	// Update the Alarm Event Record
 	updated, err := a.AlarmsRepository.PatchAlarmEventRecordACK(ctx, request.AlarmEventRecordId, record)
 	if err != nil {
 		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
+	}
+
+	// Send a notification since we have now an ack event
+	if notifyAlarmAcknowledged && updated != nil {
+		n := notifier_provider.GetNotifierNotificationFromAer(*updated, a.GlobalCloudID)
+		a.Notifier.Notify(ctx, &n)
 	}
 
 	slog.Debug("Alarm acknowledged/cleared", "alarmEventRecordId", updated.AlarmEventRecordID, "alarmAcknowledged", updated.AlarmAcknowledged, "alarmAcknowledgedTime", updated.AlarmAcknowledgedTime,

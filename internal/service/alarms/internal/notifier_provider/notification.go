@@ -49,12 +49,7 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 	}
 
 	for _, alarm := range alarms {
-		payload := models.ConvertAlarmEventRecordModelToAlarmEventNotification(alarm, n.globalCloudID)
-		notifications = append(notifications, notifier.Notification{
-			NotificationID: payload.AlarmEventRecordId,
-			SequenceID:     int(alarm.AlarmSequenceNumber),
-			Payload:        payload,
-		})
+		notifications = append(notifications, GetNotifierNotificationFromAer(alarm, n.globalCloudID))
 	}
 
 	if len(notifications) == 0 {
@@ -62,6 +57,16 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 	}
 
 	return notifications, nil
+}
+
+// GetNotifierNotificationFromAer convert alarmEventRecord to a notification type
+func GetNotifierNotificationFromAer(alarmEventRecord models.AlarmEventRecord, globalCloudID uuid.UUID) notifier.Notification {
+	payload := models.ConvertAlarmEventRecordModelToAlarmEventNotification(alarmEventRecord, globalCloudID)
+	return notifier.Notification{
+		NotificationID: payload.AlarmEventRecordId,
+		SequenceID:     int(alarmEventRecord.AlarmSequenceNumber),
+		Payload:        payload,
+	}
 }
 
 // getMinSubscription get the min cursor and set filer to nil - this will retrieve the alarms that are greater and ignoring the filter
