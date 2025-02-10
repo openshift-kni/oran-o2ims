@@ -175,7 +175,7 @@ paths:
       operationId: getManagedInfrastructureTemplateDefaults
       summary: Get managed infrastructure template defaults
       description: |
-        Returns the defaults values used by a managed infrastructure template.
+        Returns the default values used by a managed infrastructure template.
       parameters:
       - $ref: "#/components/parameters/managedInfrastructureTemplateId"
       tags:

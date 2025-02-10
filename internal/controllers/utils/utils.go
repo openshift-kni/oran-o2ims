@@ -663,6 +663,139 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	return result, nil
 }
 
+// GetDefaultsFromConfigMap returns the data of a defaults ConfigMap with its content
+// separated in 2 sections:
+//   - immutable: the values for configuration that is not exposed through the ClusterTemplate.
+//   - editable : the values for configuration is exposed through the ClusterTemplate and
+//     can later be changed through the ProvisioningRequest.
+//
+// If any error is encountered, the default data is returned as it is in the ConfigMap, without
+// any further separation.
+func GetDefaultsFromConfigMap(ctx context.Context, c client.Client, configMapName string, configMapNamespace string,
+	configMapKey string, schema []byte, schemaKey string) (map[string]interface{}, error) {
+
+	// Retrieve the configmap that holds the default data.
+	defaultConfigMap, err := GetConfigmap(ctx, c, configMapName, configMapNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ConfigMap %s/%s: %w", configMapName, configMapNamespace, err)
+	}
+	defaultValues, err := ExtractTemplateDataFromConfigMap[map[string]any](defaultConfigMap, configMapKey)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"could not obtain the requested field from default ConfigMap: %w", err,
+		)
+	}
+	// Get the schema to check the default values against it.
+	subSchema, err := provisioningv1alpha1.ExtractSubSchema(schema, schemaKey)
+	if err != nil {
+		return nil, fmt.Errorf("could not extract subSchema: %w", err)
+	}
+	// Get the immutable and editable values from the defaults.
+	editableValues, immutableValues, err := GetDefaultsFromMaps(
+		defaultValues, subSchema["properties"].(map[string]any))
+	// Build the final response. If an error occurred, return all the default ConfigMap, without separating
+	// the immutable and editable values.
+	resultMap := defaultValues
+	if err == nil {
+		resultMap = map[string]interface{}{"editable": editableValues, "immutable": immutableValues}
+	}
+	return resultMap, nil
+}
+
+// GetDefaultsFromMaps separates the values from a map
+// into 2 maps: one with elements that match the passed schema and one with the
+// elements that do not match the schema.
+func GetDefaultsFromMaps[K comparable, V any](
+	mapDefaults map[K]V, mapSchema map[K]V) (map[K]V, map[K]V, error) {
+	editable := make(map[K]V)
+	immutable := make(map[K]V)
+	// Go through all the default values and check which keys are present in the schema.
+	for key, defaultValue := range mapDefaults {
+		if schemaValue, exists := mapSchema[key]; exists {
+			switch valueType := any(defaultValue).(type) {
+			case map[K]V:
+				newSchema := any(schemaValue).(map[string]interface{})["properties"]
+				// If no "properties" are found, consider the whole object editable.
+				if newSchema == nil {
+					editable[key] = defaultValue
+					continue
+				}
+				schemaValueType := newSchema.(map[K]V)
+				newEditable, newImmutable, err := GetDefaultsFromMaps(valueType, schemaValueType)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(newEditable) != 0 {
+					editable[key] = any(newEditable).(V)
+				}
+				if len(newImmutable) != 0 {
+					immutable[key] = any(newImmutable).(V)
+				}
+			case []V:
+				newSchemaItems, ok := any(schemaValue).(map[string]interface{})["items"]
+				if !ok {
+					return nil, nil, fmt.Errorf("array type schema is missing its expected \"items\" component")
+				}
+				// We will be missing the "properties" component for an array of simple objects:
+				//   apiVIPs:
+				//     items:
+				//       type: string
+				//     maxItems: 2
+				//     type: array
+				newSchema := newSchemaItems.(map[string]interface{})["properties"]
+				schemaValueType := newSchemaItems.(map[K]V)
+				if newSchema != nil {
+					schemaValueType = newSchema.(map[K]V)
+				}
+				newEditable, newImmutable, err := GetDefaultsFromSlices[K](valueType, schemaValueType)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(newEditable) != 0 {
+					editable[key] = any(newEditable).(V)
+				}
+				if len(newImmutable) != 0 {
+					immutable[key] = any(newImmutable).(V)
+				}
+			default:
+				editable[key] = defaultValue
+			}
+		} else {
+			immutable[key] = defaultValue
+		}
+	}
+	return editable, immutable, nil
+}
+
+// GetDefaultsFromSlices separates the values from a slice
+// into 2 lists: one with elements that match the passed schema and one with the
+// elements that do not match the schema.
+func GetDefaultsFromSlices[K comparable, V any](
+	sliceDefaults []V, mapSchema map[K]V) ([]V, []V, error) {
+	editable := make([]V, 0, len(sliceDefaults))
+	immutable := make([]V, 0, len(sliceDefaults))
+	// Ensure that each value of the slice matches the schema.
+	for _, defaultValue := range sliceDefaults {
+		switch valueType := any(defaultValue).(type) {
+		case map[K]V:
+			schemaValueType := any(mapSchema).(map[K]V)
+			newEditable, newImmutable, err := GetDefaultsFromMaps(valueType, schemaValueType)
+			if err != nil {
+				return nil, nil, err
+			}
+			if len(newEditable) != 0 {
+				editable = append(editable, any(newEditable).(V))
+			}
+			if len(newImmutable) != 0 {
+				immutable = append(immutable, any(newImmutable).(V))
+			}
+		default:
+			editable = append(editable, defaultValue)
+		}
+	}
+	return editable, immutable, nil
+}
+
 // GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting
 func GetTLSSkipVerify() bool {
 	value, ok := os.LookupEnv(TLSSkipVerifyEnvName)
