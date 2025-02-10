@@ -44,6 +44,15 @@ type ManagedInfrastructureTemplate struct {
 	Version         string                 `json:"version"`
 }
 
+// ManagedInfrastructureTemplateDefaults Default values used for cluster provisioning by a ManagedInfrastructureTemplate
+type ManagedInfrastructureTemplateDefaults struct {
+	// ClusterInstanceDefaults Defines the default values used for cluster installation
+	ClusterInstanceDefaults *map[string]interface{} `json:"clusterInstanceDefaults,omitempty"`
+
+	// PolicyTemplateDefaults Defines the default values used for cluster configuration
+	PolicyTemplateDefaults *map[string]interface{} `json:"policyTemplateDefaults,omitempty"`
+}
+
 // ManagedInfrastructureTemplateId defines model for managedInfrastructureTemplateId.
 type ManagedInfrastructureTemplateId = string
 
@@ -153,6 +162,9 @@ type ServerInterface interface {
 	// Get managed infrastructure templates
 	// (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId})
 	GetManagedInfrastructureTemplate(w http.ResponseWriter, r *http.Request, managedInfrastructureTemplateId ManagedInfrastructureTemplateId)
+	// Get managed infrastructure template defaults
+	// (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults)
+	GetManagedInfrastructureTemplateDefaults(w http.ResponseWriter, r *http.Request, managedInfrastructureTemplateId ManagedInfrastructureTemplateId)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -259,6 +271,31 @@ func (siw *ServerInterfaceWrapper) GetManagedInfrastructureTemplate(w http.Respo
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetManagedInfrastructureTemplate(w, r, managedInfrastructureTemplateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedInfrastructureTemplateDefaults operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedInfrastructureTemplateDefaults(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "managedInfrastructureTemplateId" -------------
+	var managedInfrastructureTemplateId ManagedInfrastructureTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "managedInfrastructureTemplateId", r.PathValue("managedInfrastructureTemplateId"), &managedInfrastructureTemplateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "managedInfrastructureTemplateId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedInfrastructureTemplateDefaults(w, r, managedInfrastructureTemplateId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -392,6 +429,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureArtifacts/v1/api_versions", wrapper.GetMinorVersions)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates", wrapper.GetManagedInfrastructureTemplates)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}", wrapper.GetManagedInfrastructureTemplate)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults", wrapper.GetManagedInfrastructureTemplateDefaults)
 
 	return m
 }
@@ -543,6 +581,50 @@ func (response GetManagedInfrastructureTemplate500ApplicationProblemPlusJSONResp
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetManagedInfrastructureTemplateDefaultsRequestObject struct {
+	ManagedInfrastructureTemplateId ManagedInfrastructureTemplateId `json:"managedInfrastructureTemplateId"`
+}
+
+type GetManagedInfrastructureTemplateDefaultsResponseObject interface {
+	VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error
+}
+
+type GetManagedInfrastructureTemplateDefaults200JSONResponse ManagedInfrastructureTemplateDefaults
+
+func (response GetManagedInfrastructureTemplateDefaults200JSONResponse) VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplateDefaults400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplateDefaults400ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplateDefaults404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplateDefaults404ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplateDefaults500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplateDefaults500ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Get API versions
@@ -557,6 +639,9 @@ type StrictServerInterface interface {
 	// Get managed infrastructure templates
 	// (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId})
 	GetManagedInfrastructureTemplate(ctx context.Context, request GetManagedInfrastructureTemplateRequestObject) (GetManagedInfrastructureTemplateResponseObject, error)
+	// Get managed infrastructure template defaults
+	// (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults)
+	GetManagedInfrastructureTemplateDefaults(ctx context.Context, request GetManagedInfrastructureTemplateDefaultsRequestObject) (GetManagedInfrastructureTemplateDefaultsResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -688,57 +773,85 @@ func (sh *strictHandler) GetManagedInfrastructureTemplate(w http.ResponseWriter,
 	}
 }
 
+// GetManagedInfrastructureTemplateDefaults operation middleware
+func (sh *strictHandler) GetManagedInfrastructureTemplateDefaults(w http.ResponseWriter, r *http.Request, managedInfrastructureTemplateId ManagedInfrastructureTemplateId) {
+	var request GetManagedInfrastructureTemplateDefaultsRequestObject
+
+	request.ManagedInfrastructureTemplateId = managedInfrastructureTemplateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetManagedInfrastructureTemplateDefaults(ctx, request.(GetManagedInfrastructureTemplateDefaultsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetManagedInfrastructureTemplateDefaults")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetManagedInfrastructureTemplateDefaultsResponseObject); ok {
+		if err := validResponse.VisitGetManagedInfrastructureTemplateDefaultsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

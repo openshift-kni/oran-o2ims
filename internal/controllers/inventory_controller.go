@@ -913,13 +913,26 @@ func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) e
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
-			// We need to read ClusterTemplates.
+			// We need to read ClusterTemplates and ConfigMaps.
 			{
 				APIGroups: []string{
 					"o2ims.provisioning.oran.org",
 				},
 				Resources: []string{
 					"clustertemplates",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"configmaps",
 				},
 				Verbs: []string{
 					"get",
