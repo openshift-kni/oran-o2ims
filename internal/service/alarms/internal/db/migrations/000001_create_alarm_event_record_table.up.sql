@@ -54,12 +54,14 @@ For new alarms (INSERT):
 - Uses auto-incremented alarm_sequence_number
 
 State transition priority (UPDATE):
-1. Alarm State Change (CLEAR) - When status becomes 'resolved'
-2. Acknowledgment (ACKNOWLEDGE) - On first acknowledgment
-3. Attribute Changes (CHANGE) - For unacknowledged alarms only
+1. Alarm State Change (NEW) - When status becomes 'firing' (from 'resolved')
+2. Alarm State Change (CLEAR) - When status becomes 'resolved' (from 'new')
+3. Acknowledgment (ACKNOWLEDGE) - On first acknowledgment
+4. Attribute Changes (CHANGE) - For unacknowledged alarms only
 
 alarm_sequence_number incremented when any of these changes occur:
-- Alarm status changes to resolved
+- Alarms status moves from resolved to firing
+- Alarm status changes firing to resolved
 - First acknowledgment
 - Changes to key attributes (if not acknowledged)
 
@@ -85,17 +87,20 @@ BEGIN
 
     -- Handle updates to existing alarms
     ELSIF TG_OP = 'UPDATE' THEN
-        -- 1. Alarm status handling (highest priority)
-        IF NEW.alarm_status = 'resolved' THEN
+        -- 1. Transition from resolved to firing
+        IF OLD.alarm_status = 'resolved' AND NEW.alarm_status = 'firing' THEN
+            NEW.notification_event_type := 'NEW';
+            NEW.alarm_changed_time := CURRENT_TIMESTAMP;
+            NEW.alarm_cleared_time := NULL;
+            NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+
+        -- 2. Transition from firing to resolved.
+        ELSIF OLD.alarm_status = 'firing' AND NEW.alarm_status = 'resolved' THEN
             NEW.notification_event_type := 'CLEAR';
+            NEW.alarm_changed_time = NEW.alarm_cleared_time;
+            NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
 
-            -- Only update change time to cleared time and sequence number if transitioning from a non-resolved state
-            IF OLD.alarm_status IS DISTINCT FROM 'resolved' THEN
-                NEW.alarm_changed_time = NEW.alarm_cleared_time;
-                NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
-             END IF;
-
-        -- 2. Handling alarm_acknowledged. Set alarm_changed_time to alarm_acknowledged_time
+        -- 3. Handling alarm_acknowledged. Set alarm_changed_time to alarm_acknowledged_time
         ELSIF NEW.alarm_acknowledged THEN
             NEW.notification_event_type := 'ACKNOWLEDGE';
 
@@ -105,7 +110,7 @@ BEGIN
                 NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
             END IF;
 
-        -- 3. Other changes (only if not acknowledged)
+        -- 4. Other changes (only if not acknowledged)
         ELSIF NOT NEW.alarm_acknowledged THEN
             IF (NEW.object_id IS DISTINCT FROM OLD.object_id OR
                 NEW.object_type_id IS DISTINCT FROM OLD.object_type_id OR
