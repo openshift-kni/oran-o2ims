@@ -585,6 +585,11 @@ components:
           format: uuid
           description: A reference to the type of resource which caused the alarm.
           example: 91d5d140-ef52-4167-b6dc-975ad1897f23
+        resourceID:
+          type: string
+          format: uuid
+          description: A reference to the resource which caused the alarm.
+          example: 91d5d140-ef52-4167-b6dc-975ad1897f23
         perceivedSeverity:
           $ref: '#/components/schemas/PerceivedSeverity'
         extensions:
@@ -603,6 +608,7 @@ components:
         - perceivedSeverity
         - extensions
         - resourceTypeID
+        - resourceID
 
     AlarmEventRecordModifications:
       type: object
