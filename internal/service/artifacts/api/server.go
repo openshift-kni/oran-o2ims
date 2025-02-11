@@ -148,42 +148,38 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	}
 
 	oranct := clusterTemplatesItems[0]
+
 	// Get the response for the ClusterInstance default values.
-	configMap, err := orano2imsutils.GetConfigmap(
-		ctx, r.HubClient, oranct.Spec.Templates.ClusterInstanceDefaults, oranct.Namespace)
+	clusterInstanceResults, err := orano2imsutils.GetDefaultsFromConfigMap(
+		ctx, r.HubClient,
+		oranct.Spec.Templates.ClusterInstanceDefaults,
+		oranct.Namespace,
+		orano2imsutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+		oranct.Spec.TemplateParameterSchema.Raw,
+		provisioningv1alpha1.TemplateParamClusterInstance,
+	)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to get ConfigMap %s/%s: %w", oranct.Spec.Templates.ClusterInstanceDefaults, oranct.Namespace, err)
-	}
-	clusterInstanceDefaults, err := orano2imsutils.ExtractTemplateDataFromConfigMap[map[string]any](
-		configMap, orano2imsutils.ClusterInstanceTemplateDefaultsConfigmapKey)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to extract the default values from the %s/%s ConfigMap: %w",
-			oranct.Spec.Templates.ClusterInstanceDefaults, oranct.Namespace, err)
+		return nil, fmt.Errorf("could not get the clusterInstance default values: %w", err)
 	}
 
 	// Get the response for the Policy default values.
-	configMap, err = orano2imsutils.GetConfigmap(
-		ctx, r.HubClient, oranct.Spec.Templates.PolicyTemplateDefaults, oranct.Namespace)
+	policyTemplateResults, err := orano2imsutils.GetDefaultsFromConfigMap(
+		ctx, r.HubClient,
+		oranct.Spec.Templates.PolicyTemplateDefaults,
+		oranct.Namespace,
+		orano2imsutils.PolicyTemplateDefaultsConfigmapKey,
+		oranct.Spec.TemplateParameterSchema.Raw,
+		provisioningv1alpha1.TemplateParamPolicyConfig,
+	)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to get ConfigMap %s/%s: %w", oranct.Spec.Templates.PolicyTemplateDefaults, oranct.Namespace, err)
-	}
-	policyTemplateDefaults, err := orano2imsutils.ExtractTemplateDataFromConfigMap[map[string]any](
-		configMap, orano2imsutils.PolicyTemplateDefaultsConfigmapKey)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to extract the default values from the %s/%s ConfigMap: %w",
-			oranct.Spec.Templates.PolicyTemplateDefaults, oranct.Namespace, err)
+		return nil, fmt.Errorf("could not get the policy configuration default values: %w", err)
 	}
 
 	// Build the final response object.
 	object := api.ManagedInfrastructureTemplateDefaults{
-		PolicyTemplateDefaults:  &policyTemplateDefaults,
-		ClusterInstanceDefaults: &clusterInstanceDefaults,
+		PolicyTemplateDefaults:  &policyTemplateResults,
+		ClusterInstanceDefaults: &clusterInstanceResults,
 	}
-
 	// Convert the current ClusterTemplate to ManagedInfrastructureTemplate.
 	return api.GetManagedInfrastructureTemplateDefaults200JSONResponse(object), nil
 }

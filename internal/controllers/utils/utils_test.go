@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	openshiftv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +32,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/yaml"
 )
 
 // Scheme used for the tests:
@@ -652,3 +654,548 @@ func Test_mapKeysToSlice(t *testing.T) {
 		})
 	}
 }
+
+var _ = Describe("GetDefaultsFromConfigMap", func() {
+	var (
+		c                        client.Client
+		ctx                      context.Context
+		configMapNamespace       = "sno-ran-du"
+		configMapName            = "defaults"
+		configMapKey             string
+		clusterInstanceConfigMap = &corev1.ConfigMap{}
+		schemaKey                string
+	)
+	const schema = `{
+		"properties": {
+		  "policyTemplateParameters": {
+			"properties": {
+			  "sriov-network-vlan-1": {
+				"type": "string"
+			  },
+			  "install-plan-approval": {
+				"type": "string",
+				"default": "Automatic"
+			  }
+			}
+		  },
+		  "clusterInstanceParameters": {
+			"properties": {
+			  "additionalNTPSources": {
+				"items": {
+				  "type": "string"
+				},
+				"type": "array"
+			  }
+			}
+		  }
+		},
+		"type": "object"
+	  }`
+	BeforeEach(func() {
+		// Define the namespace.
+		objs := []client.Object{
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "",
+				},
+			},
+		}
+		// Get a fake client.
+		c = getFakeClientFromObjects(objs...)
+		clusterInstanceConfigMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configMapName,
+				Namespace: configMapNamespace,
+			},
+			Data: map[string]string{
+				ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.15"
+additionalNTPSources:
+- 192.168.1.1
+- 192.168.1.2
+templateRefs:
+- name: "ai-node-templates-v1"
+`,
+			},
+		}
+	})
+	It("fails when the ConfigMap is missing", func() {
+		configMapKey = ClusterInstanceTemplateDefaultsConfigmapKey
+		schemaKey = provisioningv1alpha1.TemplateParamClusterInstance
+		result, err := GetDefaultsFromConfigMap(
+			ctx, c, configMapName, configMapNamespace, configMapKey, []byte(schema), schemaKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get ConfigMap"))
+		Expect(result).To(BeNil())
+	})
+	It("fails when it cannot obtain the expected data from the ConfigMap", func() {
+		configMapKey = "other-configmap-key-than-expected"
+		schemaKey = provisioningv1alpha1.TemplateParamClusterInstance
+		// Create the ConfigMap.
+		Expect(c.Create(ctx, clusterInstanceConfigMap)).To(Succeed())
+		result, err := GetDefaultsFromConfigMap(
+			ctx, c, configMapName, configMapNamespace, configMapKey, []byte(schema), schemaKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("could not obtain the requested field from default ConfigMap"))
+		Expect(result).To(BeNil())
+	})
+	It("fails when it cannot obtain the expected subschema", func() {
+		configMapKey = ClusterInstanceTemplateDefaultsConfigmapKey
+		schemaKey = "other-subschema-key-than-expected"
+		// Create the ConfigMap.
+		Expect(c.Create(ctx, clusterInstanceConfigMap)).To(Succeed())
+		result, err := GetDefaultsFromConfigMap(
+			ctx, c, configMapName, configMapNamespace, configMapKey, []byte(schema), schemaKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(
+			fmt.Sprintf("could not extract subSchema: subSchema '%s' does not exist", schemaKey)))
+		Expect(result).To(BeNil())
+	})
+	It("return the editable and immutable fields when no errors happen", func() {
+		configMapKey = ClusterInstanceTemplateDefaultsConfigmapKey
+		schemaKey = provisioningv1alpha1.TemplateParamClusterInstance
+		// Create the ConfigMap.
+		Expect(c.Create(ctx, clusterInstanceConfigMap)).To(Succeed())
+		result, err := GetDefaultsFromConfigMap(
+			ctx, c, configMapName, configMapNamespace, configMapKey, []byte(schema), schemaKey)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).ToNot(BeNil())
+		Expect(result).To(Equal(
+			map[string]interface{}{
+				"editable": map[string]interface{}{
+					"additionalNTPSources": []interface{}{
+						"192.168.1.1",
+						"192.168.1.2",
+					},
+				},
+				"immutable": map[string]interface{}{
+					"clusterImageSetNameRef": "4.15",
+					"templateRefs": []interface{}{
+						map[string]interface{}{
+							"name": "ai-node-templates-v1",
+						},
+					},
+				},
+			}))
+	})
+})
+var _ = Describe("GetDefaultsFromMaps and GetDefaultsFromSlices", func() {
+	var schema string
+	const basicSchema = `
+properties:
+  cluster-logfwd-output-url:
+    type: string
+  cpu-isolated:
+    type: string
+  cpu-reserved:
+    type: string
+`
+	It("handles simple maps", func() {
+		schema = basicSchema
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"cpu-isolated":         "0-1,64-65",
+			"sriov-network-vlan-2": "111",
+		}
+		editableExpected := map[string]interface{}{
+			"cpu-isolated": "0-1,64-65",
+		}
+		immutableExpected := map[string]interface{}{
+			"sriov-network-vlan-2": "111",
+		}
+		editableResult, immutableResult, err := GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(editableResult).To(Equal(editableExpected))
+		Expect(immutableResult).To(Equal(immutableExpected))
+	})
+	It("handles arrays in editable", func() {
+		schema = `
+properties:
+  cluster-logfwd-output-url:
+    type: string
+  cpu-isolated:
+    type: string
+  cpu-reserved:
+    type: string
+  additionalNTPSources:
+    items:
+      type: string
+    type: array
+`
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"cpu-isolated":         "0-1,64-65",
+			"sriov-network-vlan-2": "111",
+			"additionalNTPSources": []interface{}{
+				"192.168.10.10",
+				"192.168.10.12",
+			},
+		}
+		editableExpected := map[string]interface{}{
+			"cpu-isolated": "0-1,64-65",
+			"additionalNTPSources": []interface{}{
+				"192.168.10.10",
+				"192.168.10.12",
+			},
+		}
+		immutableExpected := map[string]interface{}{
+			"sriov-network-vlan-2": "111",
+		}
+		editableResult, immutableResult, err := GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(editableResult).To(Equal(editableExpected))
+		Expect(immutableResult).To(Equal(immutableExpected))
+	})
+	It("handles arrays in immutable", func() {
+		schema = basicSchema
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"cpu-isolated":         "0-1,64-65",
+			"sriov-network-vlan-2": "111",
+			"additionalNTPSources": []interface{}{
+				"192.168.10.10",
+				"192.168.10.12",
+			},
+		}
+		editableExpected := map[string]interface{}{
+			"cpu-isolated": "0-1,64-65",
+		}
+		immutableExpected := map[string]interface{}{
+			"sriov-network-vlan-2": "111",
+			"additionalNTPSources": []interface{}{
+				"192.168.10.10",
+				"192.168.10.12",
+			},
+		}
+		editableResult, immutableResult, err := GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(editableResult).To(Equal(editableExpected))
+		Expect(immutableResult).To(Equal(immutableExpected))
+	})
+	It("handles arrays in bad format", func() {
+		schema = `
+properties:
+  cluster-logfwd-output-url:
+    type: string
+  cpu-isolated:
+    type: string
+  cpu-reserved:
+    type: string
+  additionalNTPSources:
+    type: array
+`
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"additionalNTPSources": []interface{}{
+				"192.168.10.10",
+				"192.168.10.12",
+			},
+		}
+		_, _, err = GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("array type schema is missing its expected \"items\" component"))
+	})
+	It("handles array of maps for editable", func() {
+		schema = `
+properties:
+  cluster-logfwd-output-url:
+    type: string
+  cpu-isolated:
+    type: string
+  cpu-reserved:
+    type: string
+  serviceNetwork:
+    items:
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+`
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"cpu-isolated":         "0-1,64-65",
+			"sriov-network-vlan-2": "111",
+			"serviceNetwork": []interface{}{
+				map[string]interface{}{
+					"cidr": "172.30.0.0/1",
+				},
+			},
+		}
+		editableExpected := map[string]interface{}{
+			"cpu-isolated": "0-1,64-65",
+			"serviceNetwork": []interface{}{
+				map[string]interface{}{
+					"cidr": "172.30.0.0/1",
+				},
+			},
+		}
+		immutableExpected := map[string]interface{}{
+			"sriov-network-vlan-2": "111",
+		}
+		editableResult, immutableResult, err := GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(editableResult).To(Equal(editableExpected))
+		Expect(immutableResult).To(Equal(immutableExpected))
+	})
+	It("handles array of maps for immutable", func() {
+		schema = basicSchema
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"cpu-isolated":         "0-1,64-65",
+			"sriov-network-vlan-2": "111",
+			"serviceNetwork": []interface{}{
+				map[string]interface{}{
+					"cidr": "172.30.0.0/1",
+				},
+			},
+		}
+		editableExpected := map[string]interface{}{
+			"cpu-isolated": "0-1,64-65",
+		}
+		immutableExpected := map[string]interface{}{
+			"sriov-network-vlan-2": "111",
+			"serviceNetwork": []interface{}{
+				map[string]interface{}{
+					"cidr": "172.30.0.0/1",
+				},
+			},
+		}
+		editableResult, immutableResult, err := GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(editableResult).To(Equal(editableExpected))
+		Expect(immutableResult).To(Equal(immutableExpected))
+	})
+	It("splits the same map in immutable and editable", func() {
+		schema = `
+properties:
+  cluster-logfwd-output-url:
+    type: string
+  cpu-isolated:
+    type: string
+  cpu-reserved:
+    type: string
+  nodes:
+    items:
+      nodeNetwork:
+        properties:
+          interfaces:
+            items:
+              properties:
+                macAddress:
+                  type: string
+                name:
+                  type: string
+              required:
+              - macAddress
+              type: object
+            minItems: 1
+            type: array
+        type: object
+`
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"cpu-isolated":         "0-1,64-65",
+			"sriov-network-vlan-2": "111",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": map[string]interface{}{
+						"interfaces": []interface{}{
+							map[string]interface{}{
+								"name":       "eth0",
+								"label":      "bootable-interface",
+								"macAddress": "aa:aa:aa:aa:aa:aa",
+							},
+							map[string]interface{}{
+								"name":       "eth1",
+								"label":      "data-interface",
+								"macAddress": "bb:aa:aa:aa:aa:aa",
+							},
+						},
+					},
+				},
+			},
+		}
+		editableExpected := map[string]interface{}{
+			"cpu-isolated": "0-1,64-65",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": map[string]interface{}{
+						"interfaces": []interface{}{
+							map[string]interface{}{
+								"name":       "eth0",
+								"macAddress": "aa:aa:aa:aa:aa:aa",
+							},
+							map[string]interface{}{
+								"name":       "eth1",
+								"macAddress": "bb:aa:aa:aa:aa:aa",
+							},
+						},
+					},
+				},
+			},
+		}
+		immutableExpected := map[string]interface{}{
+			"sriov-network-vlan-2": "111",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": map[string]interface{}{
+						"interfaces": []interface{}{
+							map[string]interface{}{
+								"label": "bootable-interface",
+							},
+							map[string]interface{}{
+								"label": "data-interface",
+							},
+						},
+					},
+				},
+			},
+		}
+		editableResult, immutableResult, err := GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(editableResult).To(Equal(editableExpected))
+		Expect(immutableResult).To(Equal(immutableExpected))
+	})
+	It("handles objects that do no have the properties key", func() {
+		schema = `
+properties:
+  cluster-logfwd-output-url:
+    type: string
+  cpu-isolated:
+    type: string
+  cpu-reserved:
+    type: string
+  nodes:
+    items:
+      nodeNetwork:
+        properties:
+          config:
+            type: object
+          interfaces:
+            items:
+              properties:
+                macAddress:
+                  type: string
+                name:
+                  type: string
+              required:
+              - macAddress
+              type: object
+            minItems: 1
+            type: array
+        type: object
+`
+		yamlSchema := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(schema), &yamlSchema)
+		Expect(err).ToNot(HaveOccurred())
+		defaultValues := map[string]interface{}{
+			"cpu-isolated":         "0-1,64-65",
+			"sriov-network-vlan-2": "111",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": map[string]interface{}{
+						"config": map[string]interface{}{
+							"routes": map[string]interface{}{
+								"config": []interface{}{
+									map[string]interface{}{
+										"destination":        "0.0.0.0/0",
+										"next-hop-interface": "eth0",
+									},
+								},
+							},
+							"interface": []interface{}{
+								map[string]interface{}{
+									"name": "eth0",
+								},
+							},
+						},
+						"interfaces": []interface{}{
+							map[string]interface{}{
+								"name":       "eth0",
+								"label":      "bootable-interface",
+								"macAddress": "aa:aa:aa:aa:aa:aa",
+							},
+							map[string]interface{}{
+								"name":       "eth1",
+								"label":      "data-interface",
+								"macAddress": "bb:aa:aa:aa:aa:aa",
+							},
+						},
+					},
+				},
+			},
+		}
+		editableExpected := map[string]interface{}{
+			"cpu-isolated": "0-1,64-65",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": map[string]interface{}{
+						"config": map[string]interface{}{
+							"routes": map[string]interface{}{
+								"config": []interface{}{
+									map[string]interface{}{
+										"destination":        "0.0.0.0/0",
+										"next-hop-interface": "eth0",
+									},
+								},
+							},
+							"interface": []interface{}{
+								map[string]interface{}{
+									"name": "eth0",
+								},
+							},
+						},
+						"interfaces": []interface{}{
+							map[string]interface{}{
+								"name":       "eth0",
+								"macAddress": "aa:aa:aa:aa:aa:aa",
+							},
+							map[string]interface{}{
+								"name":       "eth1",
+								"macAddress": "bb:aa:aa:aa:aa:aa",
+							},
+						},
+					},
+				},
+			},
+		}
+		immutableExpected := map[string]interface{}{
+			"sriov-network-vlan-2": "111",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": map[string]interface{}{
+						"interfaces": []interface{}{
+							map[string]interface{}{
+								"label": "bootable-interface",
+							},
+							map[string]interface{}{
+								"label": "data-interface",
+							},
+						},
+					},
+				},
+			},
+		}
+		editableResult, immutableResult, err := GetDefaultsFromMaps(defaultValues, yamlSchema["properties"].(map[string]any))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(editableResult).To(Equal(editableExpected))
+		Expect(immutableResult).To(Equal(immutableExpected))
+	})
+})
