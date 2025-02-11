@@ -22,7 +22,8 @@ type Client interface {
 	GetObjectTypeID(objectID uuid.UUID) (uuid.UUID, error)
 	GetAlarmDefinitionID(ObjectTypeID uuid.UUID, name, severity string) (uuid.UUID, error)
 
-	ReSync(ctx context.Context)
+	// Sync starts a background process to populate and keep up-to-date a local cache with data from the infrastructure servers
+	Sync(ctx context.Context)
 }
 
 // Infrastructure represents the infrastructure clients
@@ -48,11 +49,7 @@ func Init(ctx context.Context) (*Infrastructure, error) {
 			return nil, fmt.Errorf("failed to setup %s: %w", server.Name(), err)
 		}
 
-		if err := server.FetchAll(ctx); err != nil {
-			return nil, fmt.Errorf("failed to fetch all data for %s: %w", server.Name(), err)
-		}
-
-		server.ReSync(ctx)
+		server.Sync(ctx)
 	}
 
 	return &Infrastructure{Clients: clients}, nil
