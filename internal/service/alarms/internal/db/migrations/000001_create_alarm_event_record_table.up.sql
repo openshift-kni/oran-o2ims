@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     alarm_cleared_time TIMESTAMPTZ, -- From current alert notification
     alarm_acknowledged_time TIMESTAMPTZ, -- From current alert notification
     alarm_acknowledged BOOLEAN NOT NULL DEFAULT FALSE, -- From PATCH api request but default to false
-    perceived_severity INT NOT NULL, -- We will need to map the current alert with this from code
+    perceived_severity TEXT NOT NULL, -- We will need to map the current alert with this from code
     extensions JSONB, -- Additional data for extensibility
 
     -- O-RAN additional data to create AlarmEventNotification
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
 
     CONSTRAINT unique_fingerprint_alarm_raised_time UNIQUE (fingerprint, alarm_raised_time), -- Unique constraint to prevent duplicate caas alert with the same fingerprint and time
     CONSTRAINT chk_status CHECK (alarm_status IN ('firing', 'resolved')), -- Check constraint to enforce status as either 'firing' or 'resolved'
-    CONSTRAINT chk_perceived_severity CHECK (perceived_severity IN (0, 1, 2, 3, 4, 5)),  -- Check constraint to restrict perceived_severity to valid integer values. See generated ENUMs in server for more.
+    CONSTRAINT chk_perceived_severity CHECK (perceived_severity IN ('CRITICAL', 'MAJOR', 'MINOR', 'WARNING', 'INDETERMINATE', 'CLEARED')),  -- Check constraint to restrict perceived_severity to valid string values. See generated ENUMs in server for more.
     CONSTRAINT chk_notification_event_type CHECK (notification_event_type IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')) -- Validate notification_event_type (same as alarm_subscription_info.filter)
 );
 

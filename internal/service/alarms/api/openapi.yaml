@@ -689,17 +689,10 @@ components:
         - description
 
     PerceivedSeverity:
-      type: integer
+      type: string
       description: This is an enumerated set of values which identify the perceived severity of the alarm.
-      enum: [0, 1, 2, 3, 4, 5]
-      x-enum-varnames:
-        - CRITICAL
-        - MAJOR
-        - MINOR
-        - WARNING
-        - INDETERMINATE
-        - CLEARED
-      example: 1
+      enum: [CRITICAL, MAJOR, MINOR, WARNING, INDETERMINATE, CLEARED]
+      example: CLEARED
 
     AlertmanagerNotificationStatus:
       type: string

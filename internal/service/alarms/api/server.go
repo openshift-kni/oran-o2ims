@@ -312,13 +312,13 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 	// Patch perceivedSeverity
 	if request.Body.PerceivedSeverity != nil {
 		perceivedSeverity := *request.Body.PerceivedSeverity
-		// Only the value "5" for "CLEARED" is permitted in a request message content
+		// Only "CLEARED" is permitted in a request message content
 		if perceivedSeverity != api.CLEARED {
 			return api.PatchAlarm400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				AdditionalAttributes: &map[string]string{
 					"alarmEventRecordId": request.AlarmEventRecordId.String(),
 				},
-				Detail: fmt.Sprintf("only the value %d for CLEARED is permitted in the perceivedSeverity field", api.CLEARED),
+				Detail: fmt.Sprintf("only the value %s is permitted in the perceivedSeverity field", api.CLEARED),
 				Status: http.StatusBadRequest,
 			}), nil
 		}
