@@ -767,7 +767,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 			// Verify provisioningState is progressing when nodePool has been created
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Hardware provisioning is in progress", nil)
+				provisioningv1alpha1.StateProgressing, "Waiting for NodePool (cluster-1) to be processed", nil)
 		})
 	})
 
@@ -779,13 +779,25 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool = &hwv1alpha1.NodePool{}
 			nodePool.SetName(crName)
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
-			nodePool.Spec.HwMgrId = "hwmgr"
+			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
+			// Ensure that the NodeGroup matches the data in the hwTemplate
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
 				{NodePoolData: hwv1alpha1.NodePoolData{
-					Name: "controller", HwProfile: "profile-spr-single-processor-64G"},
-					Size: 1},
+					Name:           "controller",
+					Role:           "master",
+					HwProfile:      "profile-spr-single-processor-64G",
+					ResourcePoolId: "xyz",
+				},
+					Size: 1,
+				},
 				{NodePoolData: hwv1alpha1.NodePoolData{
-					Name: "worker", HwProfile: "profile-spr-dual-processor-128G"}, Size: 0},
+					Name:           "worker",
+					Role:           "worker",
+					HwProfile:      "profile-spr-dual-processor-128G",
+					ResourcePoolId: "xyz",
+				},
+					Size: 0,
+				},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
@@ -794,6 +806,13 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			createNodeResources(ctx, c, nodePool.Name)
+
+			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
+				Name:                           nodePool.Name,
+				Namespace:                      nodePool.Namespace,
+				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+			}
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 		})
 
 		It("Verify ClusterInstance should not be created when NodePool provision is in-progress", func() {
@@ -1048,14 +1067,25 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool = &hwv1alpha1.NodePool{}
 			nodePool.SetName(crName)
 			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
-			nodePool.Spec.HwMgrId = "hwmgr"
+			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
+			// Ensure that the NodeGroup matches the data in the hwTemplate
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
 				{NodePoolData: hwv1alpha1.NodePoolData{
-					Name: "controller", HwProfile: "profile-spr-single-processor-64G"},
-					Size: 1},
+					Name:           "controller",
+					Role:           "master",
+					HwProfile:      "profile-spr-single-processor-64G",
+					ResourcePoolId: "xyz",
+				},
+					Size: 1,
+				},
 				{NodePoolData: hwv1alpha1.NodePoolData{
-					Name: "worker", HwProfile: "profile-spr-dual-processor-128G"},
-					Size: 0},
+					Name:           "worker",
+					Role:           "worker",
+					HwProfile:      "profile-spr-dual-processor-128G",
+					ResourcePoolId: "xyz",
+				},
+					Size: 0,
+				},
 			}
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
@@ -1064,6 +1094,14 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			createNodeResources(ctx, c, nodePool.Name)
+			// Set the provisioningRequest extensions.nodePoolRef
+			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
+				Name:                           nodePool.Name,
+				Namespace:                      nodePool.Namespace,
+				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+			}
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
 			// Create ClusterInstance resource
 			clusterInstance = &siteconfig.ClusterInstance{}
 			clusterInstance.SetName(crName)
@@ -1750,6 +1788,204 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		})
 	})
 
+	Context("When hw template is updated", func() {
+		var (
+			hwTemplateName = "hw-template-updated"
+			hwTemplate     *hwv1alpha1.HardwareTemplate
+			nodePool       *hwv1alpha1.NodePool
+			tVersion       = "v1.0.0-1"
+		)
+
+		BeforeEach(func() {
+			hwTemplate = &hwv1alpha1.HardwareTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwTemplateName,
+					Namespace: utils.InventoryNamespace,
+				},
+				Spec: hwv1alpha1.HardwareTemplateSpec{
+					HwMgrId:                     utils.UnitTestHwmgrID,
+					BootInterfaceLabel:          "bootable-interface",
+					HardwareProvisioningTimeout: "1m",
+					NodePoolData: []hwv1alpha1.NodePoolData{
+						{
+							Name:           "controller",
+							Role:           "master",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-single-processor-64G-v2", // updated hw profile
+						},
+						{
+							Name:           "worker",
+							Role:           "worker",
+							ResourcePoolId: "xyz",
+							HwProfile:      "profile-spr-dual-processor-128G",
+						},
+					},
+					Extensions: map[string]string{
+						"resourceTypeId": "ResourceGroup~2.1.1",
+					},
+				},
+			}
+			Expect(c.Create(ctx, hwTemplate)).To(Succeed())
+
+			// Create a new ClusterTemplate with the updated hw template
+			ct := &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      getClusterTemplateRefName(tName, tVersion),
+					Namespace: ctNamespace,
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:       tName,
+					Version:    tVersion,
+					TemplateID: "58b39bda-ac56-4143-9b10-d1a71517d04f",
+					Templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: ciDefaultsCm,
+						PolicyTemplateDefaults:  ptDefaultsCm,
+						HwTemplate:              hwTemplateName,
+					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, ct)).To(Succeed())
+
+			// Create NodePool resource that has provisioned
+			nodePool = &hwv1alpha1.NodePool{}
+			nodePool.SetName(crName)
+			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
+			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
+			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{NodePoolData: hwv1alpha1.NodePoolData{
+					Name:           "controller",
+					Role:           "master",
+					HwProfile:      "profile-spr-single-processor-64G",
+					ResourcePoolId: "xyz",
+				},
+					Size: 1,
+				},
+				{NodePoolData: hwv1alpha1.NodePoolData{
+					Name:           "worker",
+					Role:           "worker",
+					HwProfile:      "profile-spr-dual-processor-128G",
+					ResourcePoolId: "xyz",
+				},
+					Size: 0,
+				},
+			}
+			nodePool.Status.Conditions = []metav1.Condition{
+				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
+			}
+			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{masterNodeName}}
+			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
+			createNodeResources(ctx, c, nodePool.Name)
+			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
+				Name:                           nodePool.Name,
+				Namespace:                      nodePool.Namespace,
+				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+			}
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			// Update the provisioningRequest to the new ClusterTemplate
+			cr.Spec.TemplateVersion = tVersion
+			Expect(c.Update(ctx, cr)).To(Succeed())
+		})
+
+		It("should update the status to unknown when nodePool does not have configured condition", func() {
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(requeueWithMediumInterval()))
+
+			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			// Verify the nodePool change is detected and configuration check start time is set
+			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart).ToNot(BeNil())
+			hwConfiguredCond := meta.FindStatusCondition(
+				reconciledCR.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+			Expect(hwConfiguredCond).ToNot(BeNil())
+			verifyStatusCondition(*hwConfiguredCond, metav1.Condition{
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
+				Status:  metav1.ConditionUnknown,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Unknown),
+				Message: "Waiting for NodePool (cluster-1) to be processed",
+			})
+		})
+
+		It("should update the status to InProgress when nodePool has configured condition in progress", func() {
+			// Set the configured condition to in progress
+			nodePool.Status.Conditions = append(nodePool.Status.Conditions, metav1.Condition{
+				Type:    string(hwv1alpha1.Configured),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(hwv1alpha1.InProgress),
+				Message: "Hardware configuring is in progress",
+			})
+			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(requeueWithMediumInterval()))
+
+			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			// Verify the nodePool change is detected and configuration check start time is set
+			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart).ToNot(BeNil())
+			hwConfiguredCond := meta.FindStatusCondition(
+				reconciledCR.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+			Expect(hwConfiguredCond).ToNot(BeNil())
+			verifyStatusCondition(*hwConfiguredCond, metav1.Condition{
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				Message: "Hardware configuring is in progress",
+			})
+		})
+
+		It("should update the status to completed when nodePool has configured condition completed", func() {
+			// Set the configured condition to completed
+			nodePool.Status.Conditions = append(nodePool.Status.Conditions, metav1.Condition{
+				Type:    string(hwv1alpha1.Configured),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(hwv1alpha1.ConfigApplied),
+				Message: "Configuration has been applied successfully",
+			})
+			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+
+			// Start reconciliation
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
+
+			// Verify configuration check start time is reset
+			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart).To(BeNil())
+			hwConfiguredCond := meta.FindStatusCondition(
+				reconciledCR.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+			Expect(hwConfiguredCond).ToNot(BeNil())
+			verifyStatusCondition(*hwConfiguredCond, metav1.Condition{
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(hwv1alpha1.ConfigApplied),
+				Message: "Configuration has been applied successfully",
+			})
+		})
+	})
+
 	Context("When evaluating ZTP Done", func() {
 		var (
 			policy         *policiesv1.Policy
@@ -1830,18 +2066,23 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 				Spec: hwv1alpha1.NodePoolSpec{
 					HwMgrId: utils.UnitTestHwmgrID,
+					// Ensure that the NodeGroup matches the data in the hwTemplate
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
 							NodePoolData: hwv1alpha1.NodePoolData{
-								Name:      "controller",
-								HwProfile: "profile-spr-single-processor-64G",
+								Name:           "controller",
+								Role:           "master",
+								HwProfile:      "profile-spr-single-processor-64G",
+								ResourcePoolId: "xyz",
 							},
 							Size: 1,
 						},
 						{
 							NodePoolData: hwv1alpha1.NodePoolData{
-								Name:      "worker",
-								HwProfile: "profile-spr-dual-processor-128G",
+								Name:           "worker",
+								Role:           "worker",
+								HwProfile:      "profile-spr-dual-processor-128G",
+								ResourcePoolId: "xyz",
 							},
 							Size: 0,
 						},
@@ -1868,6 +2109,11 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: metav1.ConditionFalse,
 			}
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
+			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
+				Name:                           nodePool.Name,
+				Namespace:                      nodePool.Namespace,
+				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now().Add(-time.Minute)},
+			}
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 			cr.Status.Extensions.ClusterDetails.Name = crName
 			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: time.Now()}
@@ -2223,20 +2469,23 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 				Spec: hwv1alpha1.NodePoolSpec{
 					HwMgrId: utils.UnitTestHwmgrID,
+					// Ensure that the NodeGroup matches the data in the hwTemplate
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
 							NodePoolData: hwv1alpha1.NodePoolData{
-								Name:      "controller",
-								Role:      "master",
-								HwProfile: "profile-spr-single-processor-64G",
+								Name:           "controller",
+								Role:           "master",
+								HwProfile:      "profile-spr-single-processor-64G",
+								ResourcePoolId: "xyz",
 							},
 							Size: 1,
 						},
 						{
 							NodePoolData: hwv1alpha1.NodePoolData{
-								Name:      "worker",
-								Role:      "worker",
-								HwProfile: "profile-spr-dual-processor-128G",
+								Name:           "worker",
+								Role:           "worker",
+								HwProfile:      "profile-spr-dual-processor-128G",
+								ResourcePoolId: "xyz",
 							},
 							Size: 0,
 						},
@@ -2267,6 +2516,11 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 			cr.Status.Extensions.ClusterDetails.Name = crName
 			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: time.Now()}
+			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
+				Name:                           nodePool.Name,
+				Namespace:                      nodePool.Namespace,
+				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now().Add(-time.Minute)},
+			}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 			object := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, object)).To(Succeed())

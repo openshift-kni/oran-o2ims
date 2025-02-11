@@ -436,6 +436,15 @@ var _ = Describe("waitForNodePoolProvision", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crName,
 			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					NodePoolRef: &provisioningv1alpha1.NodePoolRef{
+						Name:                           crName,
+						Namespace:                      ctNamespace,
+						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
 		}
 
 		// Define the node pool.
@@ -553,6 +562,10 @@ var _ = Describe("waitForNodePoolProvision", func() {
 	})
 
 	It("returns timeout when NodePool configuring timed out", func() {
+		// Set the configuration start time.
+		cr.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = &metav1.Time{Time: time.Now()}
+		Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
 		provisionedCondition := metav1.Condition{
 			Type:   "Provisioned",
 			Status: metav1.ConditionTrue,

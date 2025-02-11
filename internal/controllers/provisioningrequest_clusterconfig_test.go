@@ -179,6 +179,12 @@ defaultHugepagesSize: "1G"`,
 							Status: metav1.ConditionTrue,
 						},
 					},
+					Extensions: provisioningv1alpha1.Extensions{
+						NodePoolRef: &provisioningv1alpha1.NodePoolRef{
+							Name:      "cluster-1",
+							Namespace: utils.UnitTestHwmgrNamespace,
+						},
+					},
 				},
 			},
 			// Managed clusters
@@ -231,15 +237,19 @@ defaultHugepagesSize: "1G"`,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
 						NodePoolData: hwv1alpha1.NodePoolData{
-							Name:      "controller",
-							HwProfile: "profile-spr-single-processor-64G",
+							Name:           "controller",
+							Role:           "master",
+							HwProfile:      "profile-spr-single-processor-64G",
+							ResourcePoolId: "xyz",
 						},
 						Size: 1,
 					},
 					{
 						NodePoolData: hwv1alpha1.NodePoolData{
-							Name:      "worker",
-							HwProfile: "profile-spr-dual-processor-128G",
+							Name:           "worker",
+							Role:           "worker",
+							HwProfile:      "profile-spr-dual-processor-128G",
+							ResourcePoolId: "xyz",
 						},
 						Size: 0,
 					},
@@ -2092,15 +2102,19 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
 						NodePoolData: hwv1alpha1.NodePoolData{
-							Name:      "controller",
-							HwProfile: "profile-spr-single-processor-64G",
+							Name:           "controller",
+							Role:           "master",
+							HwProfile:      "profile-spr-single-processor-64G",
+							ResourcePoolId: "xyz",
 						},
 						Size: 1,
 					},
 					{
 						NodePoolData: hwv1alpha1.NodePoolData{
-							Name:      "worker",
-							HwProfile: "profile-spr-dual-processor-128G",
+							Name:           "worker",
+							Role:           "worker",
+							HwProfile:      "profile-spr-dual-processor-128G",
+							ResourcePoolId: "xyz",
 						},
 						Size: 0,
 					},
