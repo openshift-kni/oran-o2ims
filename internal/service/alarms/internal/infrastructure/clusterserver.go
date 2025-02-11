@@ -217,25 +217,29 @@ func (r *ClusterServer) GetAlarmDefinitionID(nodeClusterTypeID uuid.UUID, name, 
 	return alarmDefinitionID, nil
 }
 
-// ReSync starts a resync for the cluster server
-func (r *ClusterServer) ReSync(ctx context.Context) {
-	slog.Info("Starting resync for ClusterServer")
+// Sync starts the sync process for the cluster server objects
+func (r *ClusterServer) Sync(ctx context.Context) {
+	slog.Info("Starting sync process for cluster server objects")
 
 	go func() {
+		// First fetch of all objects
+		if err := r.FetchAll(ctx); err != nil {
+			slog.Error("Failed to run initial sync for cluster server objects", "error", err)
+		}
+
 		for {
 			select {
 			case <-ctx.Done():
-				slog.Info("Stopping resync for ClusterServer")
+				slog.Info("Stopping sync process for cluster server objects")
 				return
 			case <-time.After(resyncInterval):
-				slog.Info("Resyncing ClusterServer")
+				slog.Info("Syncing ClusterServer objects")
 				if err := r.FetchAll(ctx); err != nil {
-					slog.Error("Failed to resync ClusterServer", "error", err)
+					slog.Error("Failed to sync cluster server objects", "error", err)
 				}
 			}
 		}
 	}()
-
 }
 
 // getNodeClusters lists all node clusters
