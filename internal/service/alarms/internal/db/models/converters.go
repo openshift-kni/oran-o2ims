@@ -1,11 +1,14 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
-
 	"github.com/google/uuid"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 )
@@ -140,4 +143,32 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 		info.Filter = (*string)(as.Filter)
 	}
 	return &info
+}
+
+// DataChangeEventToNotification converts a DataChangeEvent to a generic Notification.
+// AlarmEventRecord is converted to AlarmEventNotification which becomes the final notification payload.
+func DataChangeEventToNotification(record *models.DataChangeEvent, globalCloudID uuid.UUID) (*notifier.Notification, error) {
+	if record == nil {
+		return nil, fmt.Errorf("cannot convert nil record")
+	}
+
+	if record.AfterState == nil {
+		return nil, fmt.Errorf("after_state is nil")
+	}
+
+	data, err := json.Marshal(record.AfterState)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal after_state: %w", err)
+	}
+
+	var alarm AlarmEventRecord
+	if err := json.Unmarshal(data, &alarm); err != nil {
+		return nil, fmt.Errorf("error unmarshalling alarm event: %w", err)
+	}
+
+	return &notifier.Notification{
+		NotificationID: *record.DataChangeID,
+		SequenceID:     *record.SequenceID,
+		Payload:        ConvertAlarmEventRecordModelToAlarmEventNotification(alarm, globalCloudID),
+	}, nil
 }

@@ -15,6 +15,7 @@ import (
 	uuid "github.com/google/uuid"
 	generated "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	models "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
+	models0 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -86,6 +87,20 @@ func (mr *MockAlarmRepositoryInterfaceMockRecorder) DeleteAlarmSubscription(ctx,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAlarmSubscription", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).DeleteAlarmSubscription), ctx, id)
 }
 
+// DeleteAlarmsDataChange mocks base method.
+func (m *MockAlarmRepositoryInterface) DeleteAlarmsDataChange(ctx context.Context, dataChangeId uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAlarmsDataChange", ctx, dataChangeId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAlarmsDataChange indicates an expected call of DeleteAlarmsDataChange.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) DeleteAlarmsDataChange(ctx, dataChangeId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAlarmsDataChange", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).DeleteAlarmsDataChange), ctx, dataChangeId)
+}
+
 // GetAlarmEventRecord mocks base method.
 func (m *MockAlarmRepositoryInterface) GetAlarmEventRecord(ctx context.Context, id uuid.UUID) (*models.AlarmEventRecord, error) {
 	m.ctrl.T.Helper()
@@ -146,34 +161,19 @@ func (mr *MockAlarmRepositoryInterfaceMockRecorder) GetAlarmSubscriptions(ctx an
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlarmSubscriptions", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).GetAlarmSubscriptions), ctx)
 }
 
-// GetAlarmsForSubscription mocks base method.
-func (m *MockAlarmRepositoryInterface) GetAlarmsForSubscription(ctx context.Context, subscription models.AlarmSubscription) ([]models.AlarmEventRecord, error) {
+// GetAllAlarmsDataChange mocks base method.
+func (m *MockAlarmRepositoryInterface) GetAllAlarmsDataChange(ctx context.Context) ([]models0.DataChangeEvent, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAlarmsForSubscription", ctx, subscription)
-	ret0, _ := ret[0].([]models.AlarmEventRecord)
+	ret := m.ctrl.Call(m, "GetAllAlarmsDataChange", ctx)
+	ret0, _ := ret[0].([]models0.DataChangeEvent)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetAlarmsForSubscription indicates an expected call of GetAlarmsForSubscription.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) GetAlarmsForSubscription(ctx, subscription any) *gomock.Call {
+// GetAllAlarmsDataChange indicates an expected call of GetAllAlarmsDataChange.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) GetAllAlarmsDataChange(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlarmsForSubscription", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).GetAlarmsForSubscription), ctx, subscription)
-}
-
-// GetMaxAlarmSeq mocks base method.
-func (m *MockAlarmRepositoryInterface) GetMaxAlarmSeq(ctx context.Context) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaxAlarmSeq", ctx)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMaxAlarmSeq indicates an expected call of GetMaxAlarmSeq.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) GetMaxAlarmSeq(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxAlarmSeq", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).GetMaxAlarmSeq), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllAlarmsDataChange", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).GetAllAlarmsDataChange), ctx)
 }
 
 // GetServiceConfigurations mocks base method.

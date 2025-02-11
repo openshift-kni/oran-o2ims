@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
+	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 )
 
 //go:generate mockgen -source=alarms_repository_interface.go -destination=generated/mock_repo.generated.go -package=generated
@@ -23,7 +24,7 @@ type AlarmRepositoryInterface interface {
 	GetAlarmSubscription(ctx context.Context, id uuid.UUID) (*models.AlarmSubscription, error)
 	UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord) error
 	ResolveNotificationIfNotInCurrent(ctx context.Context, am *api.AlertmanagerNotification) error
-	GetAlarmsForSubscription(ctx context.Context, subscription models.AlarmSubscription) ([]models.AlarmEventRecord, error)
 	UpdateSubscriptionEventCursor(ctx context.Context, subscription models.AlarmSubscription) error
-	GetMaxAlarmSeq(ctx context.Context) (int64, error)
+	GetAllAlarmsDataChange(ctx context.Context) ([]commonmodels.DataChangeEvent, error)
+	DeleteAlarmsDataChange(ctx context.Context, dataChangeId uuid.UUID) error
 }

@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"time"
 
+	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
+	"github.com/stephenafamo/bob/dialect/psql/dm"
+
 	"github.com/google/uuid"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dialect"
 	"github.com/stephenafamo/bob/dialect/psql/im"
-	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"github.com/stephenafamo/bob/dialect/psql/um"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
@@ -237,56 +239,6 @@ func getGetAlertFingerPrintAndStartAt(am *api.AlertmanagerNotification) []bob.Ex
 	return b
 }
 
-// GetAlarmsForSubscription for a given subscription get all alarms based on the sequence number and filter
-func (ar *AlarmsRepository) GetAlarmsForSubscription(ctx context.Context, subscription models.AlarmSubscription) ([]models.AlarmEventRecord, error) {
-	m := models.AlarmEventRecord{}
-	dbTags := utils.GetAllDBTagsFromStruct(m)
-	queryMods := []bob.Mod[*dialect.SelectQuery]{
-		sm.Columns(utils.GetColumnsAsAny(utils.GetColumns(m, []string{
-			"AlarmEventRecordID", "AlarmDefinitionID", "ProbableCauseID",
-			"AlarmRaisedTime", "AlarmChangedTime", "AlarmClearedTime",
-			"AlarmAcknowledgedTime", "AlarmAcknowledged", "PerceivedSeverity",
-			"Extensions", "ObjectID", "ObjectTypeID",
-			"NotificationEventType", "AlarmSequenceNumber",
-		}))...),
-		sm.From(m.TableName()),
-	}
-
-	// Start with the base condition
-	// Collect all events that haven't been sent to the subscriber yet
-	whereClause := psql.Quote(dbTags["AlarmSequenceNumber"]).GT(psql.Arg(subscription.EventCursor))
-	// If we have a filter, add it to the WHERE clause to reduce further
-	if subscription.Filter != nil {
-		whereClause = psql.And(
-			whereClause,
-			psql.Quote(dbTags["NotificationEventType"]).NE(psql.Arg(subscription.Filter)),
-		)
-	}
-	// Add WHERE and ORDER BY clauses
-	queryMods = append(queryMods,
-		sm.Where(whereClause),
-		sm.OrderBy(dbTags["AlarmSequenceNumber"]).Asc(),
-	)
-
-	// Build final query
-	query := psql.Select(queryMods...)
-
-	sql, params, err := query.Build()
-	if err != nil {
-		return []models.AlarmEventRecord{}, fmt.Errorf("failed to build GetAlarmsForSubscription query: %w", err)
-	}
-
-	records, err := utils.ExecuteCollectRows[models.AlarmEventRecord](ctx, ar.Db, sql, params)
-	if err != nil {
-		return []models.AlarmEventRecord{}, fmt.Errorf("failed to execute GetAlarmsForSubscription query: %w", err)
-	}
-
-	if len(records) > 0 {
-		slog.Info("Successfully got alarms for subscription", "alarm count", len(records), "Subscription", subscription.SubscriptionID)
-	}
-	return records, nil
-}
-
 // UpdateSubscriptionEventCursor update a given subscription event cursor with a alarm sequence value
 func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, subscription models.AlarmSubscription) error {
 	_, err := utils.Update[models.AlarmSubscription](ctx, ar.Db, subscription.SubscriptionID, subscription, "EventCursor")
@@ -297,27 +249,29 @@ func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, s
 	return nil
 }
 
-// GetMaxAlarmSeq get the max seq value from alarms, if no alarms return 0
-func (ar *AlarmsRepository) GetMaxAlarmSeq(ctx context.Context) (int64, error) {
-	m := models.AlarmEventRecord{}
-	dbTags := utils.GetAllDBTagsFromStruct(m)
+// GetAllAlarmsDataChange get all outbox entries
+func (ar *AlarmsRepository) GetAllAlarmsDataChange(ctx context.Context) ([]commonmodels.DataChangeEvent, error) {
+	return utils.FindAll[commonmodels.DataChangeEvent](ctx, ar.Db)
+}
 
-	// Create the MAX function with COALESCE to handle NULL (defaults to 0)
-	maxFunc := psql.F("COALESCE", psql.F("MAX", psql.Raw(dbTags["AlarmSequenceNumber"])), 0)
-	query := psql.Select(
-		sm.Columns(maxFunc),
-		sm.From(psql.Quote(m.TableName())),
+// DeleteAlarmsDataChange delete outbox entry with given dataChangeID
+func (ar *AlarmsRepository) DeleteAlarmsDataChange(ctx context.Context, dataChangeId uuid.UUID) error {
+	dataChangeModel := commonmodels.DataChangeEvent{}
+	dbTags := utils.GetAllDBTagsFromStruct(dataChangeModel)
+
+	q := psql.Delete(
+		dm.From(dataChangeModel.TableName()),
+		dm.Where(psql.Quote(dbTags["DataChangeID"]).EQ(psql.Arg(dataChangeId))),
 	)
-
-	sql, args, err := query.Build()
+	sql, params, err := q.Build()
 	if err != nil {
-		return 0, fmt.Errorf("failed to build query to get max sequence: %w", err)
+		return fmt.Errorf("failed to build AlarmsDataChangeEvent delete query: %w", err)
 	}
 
-	var maxSeq int64
-	if err := ar.Db.QueryRow(ctx, sql, args...).Scan(&maxSeq); err != nil {
-		return 0, fmt.Errorf("failed to get max alarm seq: %w", err)
+	_, err = ar.Db.Exec(ctx, sql, params...)
+	if err != nil {
+		return fmt.Errorf("failed to execute DeleteAlarmsDataChange: %w", err)
 	}
 
-	return maxSeq, nil
+	return nil
 }

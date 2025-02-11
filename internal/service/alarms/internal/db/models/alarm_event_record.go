@@ -9,22 +9,21 @@ import (
 
 // AlarmEventRecord represents a record in the alarm_event_record table.
 type AlarmEventRecord struct {
-	AlarmEventRecordID    uuid.UUID                             `db:"alarm_event_record_id"`
-	AlarmDefinitionID     *uuid.UUID                            `db:"alarm_definition_id"` // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
-	ProbableCauseID       *uuid.UUID                            `db:"probable_cause_id"`   // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
-	AlarmRaisedTime       time.Time                             `db:"alarm_raised_time"`
-	AlarmChangedTime      *time.Time                            `db:"alarm_changed_time"`
-	AlarmClearedTime      *time.Time                            `db:"alarm_cleared_time"`
-	AlarmAcknowledgedTime *time.Time                            `db:"alarm_acknowledged_time"`
-	AlarmAcknowledged     bool                                  `db:"alarm_acknowledged"`
-	PerceivedSeverity     generated.PerceivedSeverity           `db:"perceived_severity"`
-	Extensions            map[string]string                     `db:"extensions"`
-	ObjectID              *uuid.UUID                            `db:"object_id"`      // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
-	ObjectTypeID          *uuid.UUID                            `db:"object_type_id"` // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
-	NotificationEventType generated.AlarmSubscriptionInfoFilter `db:"notification_event_type"`
-	AlarmStatus           string                                `db:"alarm_status"`
-	Fingerprint           string                                `db:"fingerprint"`
-	AlarmSequenceNumber   int64                                 `db:"alarm_sequence_number"`
+	AlarmEventRecordID    uuid.UUID                             `db:"alarm_event_record_id" json:"alarm_event_record_id"`
+	AlarmDefinitionID     *uuid.UUID                            `db:"alarm_definition_id" json:"alarm_definition_id,omitempty"` // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
+	ProbableCauseID       *uuid.UUID                            `db:"probable_cause_id" json:"probable_cause_id,omitempty"`     // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
+	AlarmRaisedTime       time.Time                             `db:"alarm_raised_time" json:"alarm_raised_time"`
+	AlarmChangedTime      *time.Time                            `db:"alarm_changed_time" json:"alarm_changed_time,omitempty"`
+	AlarmClearedTime      *time.Time                            `db:"alarm_cleared_time" json:"alarm_cleared_time,omitempty"`
+	AlarmAcknowledgedTime *time.Time                            `db:"alarm_acknowledged_time" json:"alarm_acknowledged_time,omitempty"`
+	AlarmAcknowledged     bool                                  `db:"alarm_acknowledged" json:"alarm_acknowledged"`
+	PerceivedSeverity     generated.PerceivedSeverity           `db:"perceived_severity" json:"perceived_severity"`
+	Extensions            map[string]string                     `db:"extensions" json:"extensions"`
+	ObjectID              *uuid.UUID                            `db:"object_id" json:"object_id,omitempty"`           // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
+	ObjectTypeID          *uuid.UUID                            `db:"object_type_id" json:"object_type_id,omitempty"` // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
+	NotificationEventType generated.AlarmSubscriptionInfoFilter `db:"notification_event_type" json:"notification_event_type"`
+	AlarmStatus           string                                `db:"alarm_status" json:"alarm_status"`
+	Fingerprint           string                                `db:"fingerprint" json:"fingerprint"`
 }
 
 // TableName returns the name of the table in the database

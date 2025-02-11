@@ -1,11 +1,3 @@
--- Counter to keep track of the latest events, used to notify only the latest event.
-CREATE SEQUENCE IF NOT EXISTS alarm_sequence_seq
-    START WITH 1
-    INCREMENT BY 1
-    MINVALUE 1
-    NO MAXVALUE
-    CACHE 1;
-
 -- Logs individual alarm events. alarm_event_record also contains all the data needed for generating AlarmEventNotification
 CREATE TABLE IF NOT EXISTS alarm_event_record (
     -- O-RAN
@@ -28,7 +20,7 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     -- Internal
     alarm_status VARCHAR(20) DEFAULT 'firing' NOT NULL, -- Status of the alarm (either 'firing' or 'resolved'). This is also used to archive it later.
     fingerprint TEXT NOT NULL, -- Unique identifier of caas alerts
-    alarm_sequence_number BIGINT DEFAULT nextval('alarm_sequence_seq'), -- Sequential number for ordering events. This is used to notify subsriber
+    should_create_data_change_event BOOLEAN DEFAULT TRUE NOT NULL, -- This flag is transient and is re-evaluated with each change to the alarm event row which potentially results a new entry in outbox using AFTER trigger.
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record creation timestamp
 
     CONSTRAINT unique_fingerprint_alarm_raised_time UNIQUE (fingerprint, alarm_raised_time), -- Unique constraint to prevent duplicate caas alert with the same fingerprint and time
@@ -37,8 +29,6 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     CONSTRAINT chk_notification_event_type CHECK (notification_event_type IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')) -- Validate notification_event_type (same as alarm_subscription_info.filter)
 );
 
--- Set ownership of the alarm_sequence_seq sequence to alarm_event_record.alarm_sequence_number
-ALTER SEQUENCE alarm_sequence_seq OWNED BY alarm_event_record.alarm_sequence_number;
 
 /*
 Manages alarm lifecycle of alarm events.
@@ -46,12 +36,12 @@ Manages alarm lifecycle of alarm events.
 The trigger manage_alarm_event is called BEFORE INSERT OR UPDATE to manage:
 - alarm_changed_time: Tracks when alarm state or attributes last changed
 - notification_event_type: Indicates type of change (CLEAR/ACKNOWLEDGE/CHANGE)
-- alarm_sequence_number: Increments on state changes or updates
+- should_create_data_change_event: determines if outbox entry can be created
 
 For new alarms (INSERT):
 - Sets alarm_changed_time to alarm_raised_time
 - Sets CLEAR notification if initially resolved and alarm_changed_time to alarm_cleared_time
-- Uses auto-incremented alarm_sequence_number
+- should_create_data_change_event set to true
 
 State transition priority (UPDATE):
 1. Alarm State Change (NEW) - When status becomes 'firing' (from 'resolved')
@@ -59,7 +49,8 @@ State transition priority (UPDATE):
 3. Acknowledgment (ACKNOWLEDGE) - On first acknowledgment
 4. Attribute Changes (CHANGE) - For unacknowledged alarms only
 
-alarm_sequence_number incremented when any of these changes occur:
+should_create_data_change_event is set to true to indicate an outbox entry can be created for the following conditions:
+- Brand new event
 - Alarms status moves from resolved to firing
 - Alarm status changes firing to resolved
 - First acknowledgment
@@ -69,45 +60,52 @@ alarm_changed_time updates:
 - On change to resolved status from non-resolved, with alarm_cleared_time
 - On changes to key attributes, with current time (if not acknowledged)
 - On first time acknowledged, with alarm_acknowledged_time
+
+AFTER INSERT OR UPDATE is called to insert to outbox if should_create_data_change_event is true.
+
 */
+
+-- BEFORE trigger function: Compute state changes based on OLD and NEW values.
 CREATE OR REPLACE FUNCTION manage_alarm_event()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Handle new alarms
     IF TG_OP = 'INSERT' THEN
         NEW.alarm_changed_time := NEW.alarm_raised_time;
+        NEW.should_create_data_change_event := TRUE;
+
         -- Set CLEAR and alarm_changed_time to alarm_cleared_time if alarm is initially resolved
         IF NEW.alarm_status = 'resolved' THEN
             NEW.alarm_changed_time = NEW.alarm_cleared_time;
             NEW.notification_event_type := 'CLEAR';
         END IF;
 
-        -- alarm_sequence_number is auto-incremented
         RETURN NEW;
 
     -- Handle updates to existing alarms
     ELSIF TG_OP = 'UPDATE' THEN
+        -- Reset should_create_data_change_event flag for any significant change
+        NEW.should_create_data_change_event := FALSE;
         -- 1. Transition from resolved to firing
         IF OLD.alarm_status = 'resolved' AND NEW.alarm_status = 'firing' THEN
             NEW.notification_event_type := 'NEW';
             NEW.alarm_changed_time := CURRENT_TIMESTAMP;
             NEW.alarm_cleared_time := NULL;
-            NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+            NEW.should_create_data_change_event := TRUE;
 
         -- 2. Transition from firing to resolved.
         ELSIF OLD.alarm_status = 'firing' AND NEW.alarm_status = 'resolved' THEN
             NEW.notification_event_type := 'CLEAR';
             NEW.alarm_changed_time = NEW.alarm_cleared_time;
-            NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+            NEW.should_create_data_change_event := TRUE;
 
         -- 3. Handling alarm_acknowledged. Set alarm_changed_time to alarm_acknowledged_time
         ELSIF NEW.alarm_acknowledged THEN
             NEW.notification_event_type := 'ACKNOWLEDGE';
-
              -- Update sequence only on first acknowledgment
             IF NEW.alarm_acknowledged IS DISTINCT FROM OLD.alarm_acknowledged THEN
                 NEW.alarm_changed_time = NEW.alarm_acknowledged_time;
-                NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+                NEW.should_create_data_change_event := TRUE;
             END IF;
 
         -- 4. Other changes (only if not acknowledged)
@@ -119,7 +117,7 @@ BEGIN
             THEN
                 NEW.notification_event_type := 'CHANGE';
                 NEW.alarm_changed_time := CURRENT_TIMESTAMP;
-                NEW.alarm_sequence_number := nextval('alarm_sequence_seq');
+                NEW.should_create_data_change_event := TRUE;
             END IF;
         END IF;
 
@@ -137,3 +135,38 @@ CREATE TRIGGER manage_alarm_event
     ON alarm_event_record
     FOR EACH ROW
     EXECUTE FUNCTION manage_alarm_event();
+
+-- AFTER trigger function: Insert into outbox if should_create_data_change_event
+CREATE OR REPLACE FUNCTION manage_alarm_event_after()
+RETURNS TRIGGER AS $$
+BEGIN
+   IF NEW.should_create_data_change_event THEN
+       INSERT INTO data_change_event (
+           object_type,
+           object_id,
+           before_state,
+           after_state
+       )
+       VALUES (
+           'alarm_event_record',
+           NEW.alarm_event_record_id,
+           CASE WHEN TG_OP = 'UPDATE' THEN row_to_json(OLD) ELSE NULL END,
+           row_to_json(NEW)
+       );
+
+       -- Multiple identical payloads in same transaction collapse to one notification
+       -- So with one notification we are able to serially forward the call using high watermark in code
+       PERFORM pg_notify('alarm_event_record_outbox_queued', json_build_object(
+           'batch_update', true
+       )::text);
+   END IF;
+
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER alarm_event_after_trigger
+AFTER INSERT OR UPDATE ON alarm_event_record
+FOR EACH ROW
+EXECUTE FUNCTION manage_alarm_event_after();
