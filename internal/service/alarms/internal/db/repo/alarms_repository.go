@@ -6,7 +6,11 @@ import (
 	"log/slog"
 	"time"
 
+	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
+	"github.com/stephenafamo/bob/dialect/psql/dm"
+
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dialect"
@@ -111,14 +115,14 @@ func (ar *AlarmsRepository) GetAlarmSubscription(ctx context.Context, id uuid.UU
 }
 
 // UpsertAlarmEventRecord insert and updating an AlarmEventRecord.
-func (ar *AlarmsRepository) UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord) error {
+func (ar *AlarmsRepository) UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord, globalCloudId uuid.UUID) error {
 	if len(records) == 0 {
 		slog.Warn("No records for events upsert")
 		return nil // this should never happen but handling it gracefully for tests
 	}
 
 	// Build queries for each record
-	sql, params, err := buildAlarmEventRecordUpsertQuery(records)
+	sql, params, err := buildAlarmEventRecordUpsertQuery(records, globalCloudId)
 	if err != nil {
 		return fmt.Errorf("failed to build query for event upsert: %w", err)
 	}
@@ -133,7 +137,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventRecord(ctx context.Context, records 
 }
 
 // buildAlarmEventRecordUpsertQuery builds the query for insert and updating an AlarmEventRecord
-func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string, []any, error) {
+func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord, globalCloudId uuid.UUID) (string, []any, error) {
 	m := models.AlarmEventRecord{}
 	query := psql.Insert(im.Into(m.TableName()))
 
@@ -142,7 +146,7 @@ func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string
 		"AlarmRaisedTime", "AlarmClearedTime", "AlarmAcknowledgedTime",
 		"AlarmAcknowledged", "PerceivedSeverity", "Extensions",
 		"ObjectID", "ObjectTypeID", "AlarmStatus",
-		"Fingerprint", "AlarmDefinitionID", "ProbableCauseID",
+		"Fingerprint", "AlarmDefinitionID", "ProbableCauseID", "GlobalCloudID",
 	})
 
 	// Set values
@@ -152,7 +156,7 @@ func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string
 			record.AlarmRaisedTime, record.AlarmClearedTime, record.AlarmAcknowledgedTime,
 			record.AlarmAcknowledged, record.PerceivedSeverity, record.Extensions,
 			record.ObjectID, record.ObjectTypeID, record.AlarmStatus,
-			record.Fingerprint, record.AlarmDefinitionID, record.ProbableCauseID,
+			record.Fingerprint, record.AlarmDefinitionID, record.ProbableCauseID, globalCloudId,
 		)))
 	}
 	query.Apply(values...)
@@ -169,6 +173,7 @@ func buildAlarmEventRecordUpsertQuery(records []models.AlarmEventRecord) (string
 		im.SetExcluded(dbTags["ObjectTypeID"]),
 		im.SetExcluded(dbTags["AlarmDefinitionID"]),
 		im.SetExcluded(dbTags["ProbableCauseID"]),
+		im.SetExcluded(dbTags["GlobalCloudID"]),
 	))
 
 	return query.Build() //nolint:wrapcheck
@@ -237,56 +242,6 @@ func getGetAlertFingerPrintAndStartAt(am *api.AlertmanagerNotification) []bob.Ex
 	return b
 }
 
-// GetAlarmsForSubscription for a given subscription get all alarms based on the sequence number and filter
-func (ar *AlarmsRepository) GetAlarmsForSubscription(ctx context.Context, subscription models.AlarmSubscription) ([]models.AlarmEventRecord, error) {
-	m := models.AlarmEventRecord{}
-	dbTags := utils.GetAllDBTagsFromStruct(m)
-	queryMods := []bob.Mod[*dialect.SelectQuery]{
-		sm.Columns(utils.GetColumnsAsAny(utils.GetColumns(m, []string{
-			"AlarmEventRecordID", "AlarmDefinitionID", "ProbableCauseID",
-			"AlarmRaisedTime", "AlarmChangedTime", "AlarmClearedTime",
-			"AlarmAcknowledgedTime", "AlarmAcknowledged", "PerceivedSeverity",
-			"Extensions", "ObjectID", "ObjectTypeID",
-			"NotificationEventType", "AlarmSequenceNumber",
-		}))...),
-		sm.From(m.TableName()),
-	}
-
-	// Start with the base condition
-	// Collect all events that haven't been sent to the subscriber yet
-	whereClause := psql.Quote(dbTags["AlarmSequenceNumber"]).GT(psql.Arg(subscription.EventCursor))
-	// If we have a filter, add it to the WHERE clause to reduce further
-	if subscription.Filter != nil {
-		whereClause = psql.And(
-			whereClause,
-			psql.Quote(dbTags["NotificationEventType"]).NE(psql.Arg(subscription.Filter)),
-		)
-	}
-	// Add WHERE and ORDER BY clauses
-	queryMods = append(queryMods,
-		sm.Where(whereClause),
-		sm.OrderBy(dbTags["AlarmSequenceNumber"]).Asc(),
-	)
-
-	// Build final query
-	query := psql.Select(queryMods...)
-
-	sql, params, err := query.Build()
-	if err != nil {
-		return []models.AlarmEventRecord{}, fmt.Errorf("failed to build GetAlarmsForSubscription query: %w", err)
-	}
-
-	records, err := utils.ExecuteCollectRows[models.AlarmEventRecord](ctx, ar.Db, sql, params)
-	if err != nil {
-		return []models.AlarmEventRecord{}, fmt.Errorf("failed to execute GetAlarmsForSubscription query: %w", err)
-	}
-
-	if len(records) > 0 {
-		slog.Info("Successfully got alarms for subscription", "alarm count", len(records), "Subscription", subscription.SubscriptionID)
-	}
-	return records, nil
-}
-
 // UpdateSubscriptionEventCursor update a given subscription event cursor with a alarm sequence value
 func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, subscription models.AlarmSubscription) error {
 	_, err := utils.Update[models.AlarmSubscription](ctx, ar.Db, subscription.SubscriptionID, subscription, "EventCursor")
@@ -297,27 +252,137 @@ func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, s
 	return nil
 }
 
-// GetMaxAlarmSeq get the max seq value from alarms, if no alarms return 0
-func (ar *AlarmsRepository) GetMaxAlarmSeq(ctx context.Context) (int64, error) {
-	m := models.AlarmEventRecord{}
-	dbTags := utils.GetAllDBTagsFromStruct(m)
+// GetAllAlarmsDataChange get all outbox entries
+func (ar *AlarmsRepository) GetAllAlarmsDataChange(ctx context.Context) ([]commonmodels.DataChangeEvent, error) {
+	return utils.FindAll[commonmodels.DataChangeEvent](ctx, ar.Db)
+}
 
-	// Create the MAX function with COALESCE to handle NULL (defaults to 0)
-	maxFunc := psql.F("COALESCE", psql.F("MAX", psql.Raw(dbTags["AlarmSequenceNumber"])), 0)
-	query := psql.Select(
-		sm.Columns(maxFunc),
-		sm.From(psql.Quote(m.TableName())),
+// DeleteAlarmsDataChange delete outbox entry with given dataChangeID
+func (ar *AlarmsRepository) DeleteAlarmsDataChange(ctx context.Context, dataChangeId uuid.UUID) error {
+	dataChangeModel := commonmodels.DataChangeEvent{}
+	dbTags := utils.GetAllDBTagsFromStruct(dataChangeModel)
+
+	q := psql.Delete(
+		dm.From(dataChangeModel.TableName()),
+		dm.Where(psql.Quote(dbTags["DataChangeID"]).EQ(psql.Arg(dataChangeId))),
+	)
+	sql, params, err := q.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build AlarmsDataChangeEvent delete query: %w", err)
+	}
+
+	_, err = ar.Db.Exec(ctx, sql, params...)
+	if err != nil {
+		return fmt.Errorf("failed to execute DeleteAlarmsDataChange: %w", err)
+	}
+
+	return nil
+}
+
+// ClaimDataChangeEvent claims a batch of DataChangeEvent and updates the high-water mark.
+func (ar *AlarmsRepository) ClaimDataChangeEvent(ctx context.Context) ([]commonmodels.DataChangeEvent, error) {
+	dataChangeEvents := make([]commonmodels.DataChangeEvent, 0)
+	if err := pgx.BeginFunc(ctx, ar.Db, func(tx pgx.Tx) error {
+		// Retrieve the current high watermark.
+		highWatermark, err := getHighWatermark(ctx, tx)
+		if err != nil {
+			return fmt.Errorf("failed to get high watermark: %w", err)
+		}
+
+		// Claim new outbox events (use FOR UPDATE SKIP LOCKED to avoid duplicate claims).
+		dataChangeEvents, err = getLatestDataChangeEvent(ctx, tx, highWatermark)
+		if err != nil {
+			return fmt.Errorf("failed to get latest data change events: %w", err)
+		}
+
+		// Update the high watermark if there are new events
+		if err := updateHighWatermark(ctx, tx, dataChangeEvents, highWatermark); err != nil {
+			return fmt.Errorf("failed to update high watermark: %w", err)
+		}
+
+		return nil
+	}); err != nil {
+		return dataChangeEvents, fmt.Errorf("failed transaction to claim notifications: %w", err)
+	}
+
+	return dataChangeEvents, nil
+}
+
+func getLatestDataChangeEvent(ctx context.Context, tx pgx.Tx, highWatermark int) ([]commonmodels.DataChangeEvent, error) {
+	m := commonmodels.DataChangeEvent{}
+	all := utils.GetAllDBTagsFromStruct(m)
+
+	queryGetLatestEvents := psql.Select(
+		sm.Columns(all.Columns()...),
+		sm.From(m.TableName()),
+		sm.Where(psql.Quote(all["SequenceID"]).GT(psql.Arg(highWatermark))),
+		sm.OrderBy(all["SequenceID"]).Asc(),
+		sm.ForUpdate(m.TableName()).SkipLocked(),
 	)
 
-	sql, args, err := query.Build()
+	sql, params, err := queryGetLatestEvents.Build()
 	if err != nil {
-		return 0, fmt.Errorf("failed to build query to get max sequence: %w", err)
+		return nil, fmt.Errorf("failed to build queryGetLatestEvents query: %w", err)
 	}
 
-	var maxSeq int64
-	if err := ar.Db.QueryRow(ctx, sql, args...).Scan(&maxSeq); err != nil {
-		return 0, fmt.Errorf("failed to get max alarm seq: %w", err)
+	dataChangeEvents, err := utils.ExecuteCollectRows[commonmodels.DataChangeEvent](ctx, tx, sql, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute queryGetLatestEvents: %w", err)
+	}
+	return dataChangeEvents, nil
+}
+
+// getHighWatermark from notification_cursor get last_event_id to get the highwatermark
+func getHighWatermark(ctx context.Context, tx pgx.Tx) (int, error) {
+	m := models.NotificationCursor{}
+	all := utils.GetAllDBTagsFromStruct(m)
+
+	queryGetHighWater := psql.Select(
+		sm.Columns(all["LastEventID"]),
+		sm.From(m.TableName()),
+		sm.Where(psql.Quote(all["ID"]).EQ(psql.Arg(1))),
+	)
+
+	sql, params, err := queryGetHighWater.Build()
+	if err != nil {
+		return 0, fmt.Errorf("failed to build queryGetHighWater query: %w", err)
 	}
 
-	return maxSeq, nil
+	highWatermark, err := utils.ExecuteCollectExactlyOneRow[models.NotificationCursor](ctx, tx, sql, params)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute queryGetHighWater: %w", err)
+	}
+
+	return highWatermark.LastEventID, nil
+}
+
+// updateHighWatermark update notification cursor with the highest datachange event
+func updateHighWatermark(ctx context.Context, tx pgx.Tx, dataChangeEvents []commonmodels.DataChangeEvent, highWatermark int) error {
+	if len(dataChangeEvents) > 0 {
+		m := models.NotificationCursor{}
+		all := utils.GetAllDBTagsFromStruct(m)
+
+		lastSeqProcessed := dataChangeEvents[len(dataChangeEvents)-1].SequenceID // The DataChangeEvent should come in sorted in ascending order
+		queryUpdateHighWater := psql.Update(
+			um.Table(m.TableName()),
+			um.SetCol(all["LastEventID"]).ToArg(lastSeqProcessed),
+			um.Where(psql.Quote(all["ID"]).EQ(psql.Arg(1))),                         // This is always be same since we only expect one row to be present
+			um.Where(psql.Quote(all["LastEventID"]).LT(psql.Arg(lastSeqProcessed))), // Make sure high is always the highest
+			um.Returning(all["LastEventID"]),
+		)
+
+		sql, params, err := queryUpdateHighWater.Build()
+		if err != nil {
+			return fmt.Errorf("failed to build queryUpdateHighWater query: %w", err)
+		}
+
+		updateHighWatermark, err := utils.ExecuteCollectExactlyOneRow[models.NotificationCursor](ctx, tx, sql, params)
+		if err != nil {
+			return fmt.Errorf("failed to execute queryUpdateHighWater: %w", err)
+		}
+
+		slog.Debug("high-watermark", "from", highWatermark, "to", updateHighWatermark.LastEventID)
+	}
+
+	return nil
 }

@@ -1,11 +1,12 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 
-	"github.com/google/uuid"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 )
@@ -40,7 +41,7 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 }
 
 // ConvertAlarmEventRecordModelToAlarmEventNotification converts an AlarmEventRecord to api AlarmEventNotification
-func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, globalCloudID uuid.UUID) api.AlarmEventNotification {
+func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord) api.AlarmEventNotification {
 	or := fmt.Sprintf("%s/alarms/%v", "/o2ims-infrastructureMonitoring/v1", aerModel.AlarmEventRecordID.String())
 	notification := api.AlarmEventNotification{
 		AlarmAcknowledgeTime:  aerModel.AlarmAcknowledgedTime,
@@ -48,7 +49,7 @@ func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRec
 		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
 		Extensions:            aerModel.Extensions,
-		GlobalCloudID:         globalCloudID,
+		GlobalCloudID:         aerModel.GlobalCloudID,
 		NotificationEventType: AlarmFilterToEventType(aerModel.NotificationEventType),
 		ObjectRef:             &or,
 		PerceivedSeverity:     aerModel.PerceivedSeverity,
@@ -140,4 +141,36 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 		info.Filter = (*string)(as.Filter)
 	}
 	return &info
+}
+
+// DataChangeEventToNotification converts a DataChangeEvent to a generic Notification.
+// AlarmEventRecord is converted to AlarmEventNotification which becomes the final notification payload.
+func DataChangeEventToNotification(record *models.DataChangeEvent) (*notifier.Notification, error) {
+	if record.AfterState == nil {
+		return nil, fmt.Errorf("after_state is nil")
+	}
+
+	data, err := json.Marshal(record.AfterState)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal after_state: %w", err)
+	}
+
+	var alarm AlarmEventRecord
+	err = json.Unmarshal(data, &alarm)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling alarm event: %w", err)
+	}
+
+	// Print the result
+	var rawData map[string]interface{}
+	json.Unmarshal(data, &rawData)
+	fmt.Printf("alarm_event_record_id type: %T\n", rawData["alarm_event_record_id"])
+	fmt.Printf("alarm_raised_time type: %T\n", rawData["alarm_raised_time"])
+	fmt.Printf("perceived_severity type: %T\n", rawData["perceived_severity"])
+
+	return &notifier.Notification{
+		NotificationID: *record.DataChangeID,
+		SequenceID:     *record.SequenceID,
+		Payload:        ConvertAlarmEventRecordModelToAlarmEventNotification(alarm),
+	}, nil
 }
