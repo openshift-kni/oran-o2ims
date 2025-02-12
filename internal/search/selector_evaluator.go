@@ -239,6 +239,9 @@ func (e *SelectorEvaluator) evaluateEq(value any, args []any) (result bool,
 	case float64:
 		arg := arg.(float64)
 		result = value == arg
+	case bool:
+		arg := arg.(bool)
+		result = value == arg
 	default:
 		err = fmt.Errorf(
 			"the 'eq' operator supports attributes containing strings, numbers, "+
@@ -450,6 +453,9 @@ func (e *SelectorEvaluator) evaluateNeq(value any, args []any) (result bool,
 	case float64:
 		arg := arg.(float64)
 		result = value != arg
+	case bool:
+		arg := arg.(bool)
+		result = value != arg
 	default:
 		err = fmt.Errorf(
 			"the 'neq' operator supports attributes containing strings, numbers, "+
@@ -485,6 +491,8 @@ func (e *SelectorEvaluator) convertArgs(value any, args []any) (result []any, er
 		result, err = e.convertInts(args)
 	case float64:
 		result, err = e.convertFloats(args)
+	case bool:
+		result, err = e.convertBools(args)
 	default:
 		err = fmt.Errorf(
 			"don't know how to convert values to type %T",
@@ -504,6 +512,8 @@ func (e *SelectorEvaluator) convertStrings(args []any) (result []any, err error)
 			converted[i] = strconv.Itoa(arg)
 		case float64:
 			converted[i] = strconv.FormatFloat(arg, 'f', -1, 64)
+		case bool:
+			converted[i] = strconv.FormatBool(arg)
 		default:
 			err = fmt.Errorf(
 				"don't know how to convert value of type %T to string",
@@ -531,6 +541,8 @@ func (e *SelectorEvaluator) convertInts(args []any) (result []any, err error) {
 			converted[i] = arg
 		case float64:
 			converted[i] = int(arg)
+		case bool:
+			converted[i] = arg
 		default:
 			err = fmt.Errorf(
 				"don't know how to convert value of type %T to integer",
@@ -558,9 +570,42 @@ func (e *SelectorEvaluator) convertFloats(args []any) (result []any, err error) 
 			converted[i] = float64(arg)
 		case float64:
 			converted[i] = arg
+		case bool:
+			if arg {
+				converted[i] = 1.0
+			} else {
+				converted[i] = 0.0
+			}
 		default:
 			err = fmt.Errorf(
 				"don't know how to convert value of type %T to integer",
+				arg,
+			)
+			return
+		}
+	}
+	result = converted
+	return
+}
+
+func (e *SelectorEvaluator) convertBools(args []any) (result []any, err error) {
+	converted := make([]any, len(args))
+	for i, arg := range args {
+		switch arg := arg.(type) {
+		case string:
+			var value bool
+			value, err = strconv.ParseBool(arg)
+			if err != nil {
+				return
+			}
+			converted[i] = value
+		case int, float64:
+			converted[i] = arg != 0
+		case bool:
+			converted[i] = arg
+		default:
+			err = fmt.Errorf(
+				"don't know how to convert value of type %T to boolean",
 				arg,
 			)
 			return
