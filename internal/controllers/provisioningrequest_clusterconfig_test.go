@@ -2137,7 +2137,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		}
 	})
 
-	Context("When the HW CRs do not exist", func() {
+	Context("When the HW template is provided and the HW CRs do not exist", func() {
 		It("Returns error for the NodePool missing", func() {
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
@@ -2159,7 +2159,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		})
 	})
 
-	Context("When the expected HW CRs exist", func() {
+	Context("When the HW template is provided and the expected HW CRs exist", func() {
 		BeforeEach(func() {
 			hwPluginNs := &corev1.Namespace{}
 			hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
@@ -2341,6 +2341,63 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
 				fmt.Sprintf("the expected Agents were not found in the %s namespace", mclName)))
+		})
+	})
+
+	Context("When the HW template is not provided", func() {
+		BeforeEach(func() {
+			// Remove the HW template from the ClusterTemplate.
+			ct := &provisioningv1alpha1.ClusterTemplate{}
+			Expect(c.Get(ctx, types.NamespacedName{
+				Name:      getClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			}, ct)).To(Succeed())
+			ct.Spec.Templates.HwTemplate = ""
+			Expect(c.Update(ctx, ct)).To(Succeed())
+		})
+
+		It("Does not add hwMgrId and hwMgrNodeId labels to the Agents", func() {
+			// Create an Agent CR with the expected label.
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      AgentName,
+					Namespace: mclName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      mclName,
+						Namespace: mclName,
+					},
+					Hostname: fmt.Sprintf("%s.lab.example.com", mclName),
+				},
+			}
+			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+
+			// Run the function.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the new label was added for the ManagedCluster CR.
+			mclUpdated := &clusterv1.ManagedCluster{}
+			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: mclName}, mclUpdated)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(mclUpdated.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+			}))
+
+			// Check that the templateArtifacts label is present and hwMgrId and hwMgrNodeId labels are not present.
+			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(agent.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+			}))
+			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId")))
+			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId")))
 		})
 	})
 })
