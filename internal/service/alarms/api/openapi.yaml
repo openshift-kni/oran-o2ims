@@ -541,13 +541,13 @@ components:
             Identifier of an entry in the AlarmEventRecord.
             Locally unique within the scope of an O-Cloud instance.
           example: 752c4e22-057d-4162-997b-ca3e2fd4ff53
-        alarmDefinitionId:
+        alarmDefinitionID:
           type: string
           format: uuid
           description: |
             A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
           example: 5369fe06-adeb-4966-b8ff-47a6f4d4cec5
-        probableCauseId:
+        probableCauseID:
           type: string
           format: uuid
           description: A reference to the ProbableCause of the Alarm.
@@ -601,8 +601,8 @@ components:
             operator to extend the information provided about the O-Cloud Alarm.
       required:
         - alarmEventRecordId
-        - alarmDefinitionId
-        - probableCauseId
+        - alarmDefinitionID
+        - probableCauseID
         - alarmRaisedTime
         - alarmAcknowledged
         - perceivedSeverity

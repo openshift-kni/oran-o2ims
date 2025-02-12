@@ -24,10 +24,10 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 	}
 
 	if aerModel.AlarmDefinitionID != nil {
-		record.AlarmDefinitionId = *aerModel.AlarmDefinitionID
+		record.AlarmDefinitionID = *aerModel.AlarmDefinitionID
 	}
 	if aerModel.ProbableCauseID != nil {
-		record.ProbableCauseId = *aerModel.ProbableCauseID
+		record.ProbableCauseID = *aerModel.ProbableCauseID
 	}
 	if aerModel.ObjectTypeID != nil {
 		record.ResourceTypeID = *aerModel.ObjectTypeID
