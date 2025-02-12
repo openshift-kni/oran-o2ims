@@ -764,7 +764,8 @@ spec:
       - description: |-
           CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
           with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
-          a non-public CA certificate.
+          a non-public CA certificate.  The config map is expected to contain a single file called 'ca-bundle.crt'
+          containing all trusted CA certificates in PEM format.
         displayName: Custom CA Certificates
         path: caBundleName
         x-descriptors:

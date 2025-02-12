@@ -305,6 +305,7 @@ const (
 const (
 	TLSClientMountPath = "/secrets/smo/tls"
 	CABundleMountPath  = "/secrets/smo/certs"
+	CABundleFilename   = "ca-bundle.crt"
 )
 
 // SMO OAuth specific environment variables.  These values are stored in environment variables to

@@ -562,7 +562,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get configmap: %s", err.Error())
 		}
 
-		caBundle, err = utils.GetConfigMapField(cm, "ca-bundle.pem")
+		caBundle, err = utils.GetConfigMapField(cm, utils.CABundleFilename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get certificate bundle from configmap: %s", err.Error())
 		}
