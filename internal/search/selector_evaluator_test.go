@@ -181,6 +181,32 @@ var _ = Describe("Selector evaluator", func() {
 			false,
 		),
 		Entry(
+			"Eq bool is true",
+			"(eq,MyField,true)",
+			func() any {
+				type MyObject struct {
+					MyField bool
+				}
+				return MyObject{
+					MyField: true,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Eq bool is false",
+			"(eq,MyField,false)",
+			func() any {
+				type MyObject struct {
+					MyField bool
+				}
+				return MyObject{
+					MyField: true,
+				}
+			},
+			false,
+		),
+		Entry(
 			"Cont is true",
 			"(cont,MyField,my)",
 			func() any {
@@ -774,6 +800,32 @@ var _ = Describe("Selector evaluator", func() {
 				}
 				return MyObject{
 					MyField: 123,
+				}
+			},
+			false,
+		),
+		Entry(
+			"Neq bool is true",
+			"(neq,MyField,false)",
+			func() any {
+				type MyObject struct {
+					MyField bool
+				}
+				return MyObject{
+					MyField: true,
+				}
+			},
+			true,
+		),
+		Entry(
+			"Neq bool is false",
+			"(neq,MyField,true)",
+			func() any {
+				type MyObject struct {
+					MyField bool
+				}
+				return MyObject{
+					MyField: true,
 				}
 			},
 			false,
