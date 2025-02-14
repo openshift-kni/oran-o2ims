@@ -233,13 +233,13 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
 		if condition == nil || condition.Status == metav1.ConditionFalse {
 			// This cluster is not yet available, so filter it out.
-			slog.Warn("Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
+			slog.Debug("Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
 			return uuid.Nil, nil
 		}
 
 		if _, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
 			// The provisioning request which is managing the installation of this cluster is not yet fulfilled
-			slog.Warn("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
+			slog.Debug("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
 			return uuid.Nil, nil
 		}
 	}
