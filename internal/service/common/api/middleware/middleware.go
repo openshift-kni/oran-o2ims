@@ -26,6 +26,16 @@ func ChainHandlers(base http.Handler, wrappers ...Middleware) http.Handler {
 	return h
 }
 
+type durationLogger struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (d *durationLogger) WriteHeader(statusCode int) {
+	d.statusCode = statusCode
+	d.ResponseWriter.WriteHeader(statusCode)
+}
+
 // LogDuration log time taken to complete a request.
 // TODO: This is just get started with middleware but should be replaced with something that's more suitable for production i.e OpenTelemetry
 // https://github.com/open-telemetry/opentelemetry-go-contrib/blob/main/examples/prometheus/main.go
@@ -33,8 +43,11 @@ func LogDuration() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			startTime := time.Now()
-			next.ServeHTTP(w, r)
-			slog.Debug(fmt.Sprintf("%s took %s", r.RequestURI, time.Since(startTime)))
+			d := durationLogger{
+				ResponseWriter: w,
+			}
+			next.ServeHTTP(&d, r)
+			slog.Debug("Request completed", "method", r.Method, "url", r.RequestURI, "status", d.statusCode, "duration", time.Since(startTime).String())
 		})
 	}
 }
