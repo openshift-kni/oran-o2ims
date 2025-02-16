@@ -350,8 +350,7 @@ configuration requirements.
              scopes:
                 - profile
                 - openid
-                - smo-audience
-                - roles
+                - role:ocloud-manager
              usernameClaim: preferred_username
              groupsClaim: roles
           tls:

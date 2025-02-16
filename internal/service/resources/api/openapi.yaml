@@ -50,12 +50,19 @@ tags:
   description: |
     Information about resources.
 
-paths:
+security:
+- oauth2:
+  - role:o2ims-admin
 
+paths:
   /o2ims-infrastructureInventory/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the complete list of API versions implemented by the service.
       tags:
@@ -74,6 +81,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -85,6 +104,10 @@ paths:
     get:
       operationId: getCloudInfo
       summary: Get O-Cloud info
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of the O-Cloud instance.
       parameters:
@@ -107,6 +130,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -118,6 +153,10 @@ paths:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of minor API versions implemented for this major version of the API.
       tags:
@@ -136,6 +175,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -147,6 +198,10 @@ paths:
     get:
       operationId: getDeploymentManagers
       summary: Get deployment managers
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of deployment managers.
       parameters:
@@ -172,6 +227,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -183,6 +250,10 @@ paths:
     get:
       operationId: getDeploymentManager
       summary: Get deployment manager
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a deployment manager.
       parameters:
@@ -199,6 +270,18 @@ paths:
                 $ref: "#/components/schemas/DeploymentManager"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -220,6 +303,11 @@ paths:
     get:
       operationId: getSubscriptions
       summary: Get subscriptions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+        - role:o2ims-subscriber
       description: |
         Returns the list of inventory subscriptions.
       parameters:
@@ -245,6 +333,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -254,6 +354,10 @@ paths:
     post:
       operationId: createSubscription
       summary: Create subscriptions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-subscriber
       description: |
         Creates an inventory subscriptions.
       tags:
@@ -278,6 +382,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -289,6 +405,11 @@ paths:
     get:
       operationId: getSubscription
       summary: Get subscription
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+        - role:o2ims-subscriber
       description: |
         Returns the details of a subscription.
       parameters:
@@ -309,6 +430,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified entity was not found.
           content:
@@ -324,6 +457,10 @@ paths:
     delete:
       operationId: deleteSubscription
       summary: Delete subscription
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-subscriber
       description: |
         Deletes a subscription.
       parameters:
@@ -334,6 +471,18 @@ paths:
         '200':
           description: |
             Successfully deleted the subscription.
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified entity was not found.
           content:
@@ -351,6 +500,10 @@ paths:
     get:
       operationId: getResourceTypes
       summary: Get resource types
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of resource types.
       parameters:
@@ -376,6 +529,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error
           content:
@@ -387,6 +552,10 @@ paths:
     get:
       operationId: getResourceType
       summary: Get a resource type
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a resource type.
       parameters:
@@ -403,6 +572,18 @@ paths:
                 $ref: "#/components/schemas/ResourceType"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -425,6 +606,10 @@ paths:
     get:
       operationId: getResourcePools
       summary: Get resource pools
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of resource pools.
       parameters:
@@ -450,6 +635,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -461,6 +658,10 @@ paths:
     get:
       operationId: getResourcePool
       summary: Get a resource pool
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a resource pool.
       parameters:
@@ -477,6 +678,18 @@ paths:
                 $ref: "#/components/schemas/ResourcePool"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -499,6 +712,10 @@ paths:
     get:
       operationId: getResources
       summary: Get resources in a resource pool
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of resources in a resource pool.
       parameters:
@@ -525,6 +742,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified entity was not found.
           content:
@@ -543,6 +772,10 @@ paths:
     get:
       operationId: getResource
       summary: Get a resource in a resource pool
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a resource in a resource pool.
       parameters:
@@ -564,6 +797,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified entity was not found.
           content:
@@ -578,6 +823,18 @@ paths:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
 components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: This API uses OAuth 2 with the client credentials flow.
+      flows:
+        clientCredentials:
+          tokenUrl: https://keycloak.example.com/realms/oran/protocol/openid-connect/token
+          scopes:
+            role:o2ims-admin: O2IMS Admin Role
+            role:o2ims-reader: O2IMS Reader Role
+            role:o2ims-subscriber: O2IMS Subscriber Role
+
   parameters:
     deploymentManagerId:
       name: deploymentManagerId
