@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -221,12 +222,18 @@ func (t *provisioningRequestReconcilerTask) checkClusterProvisionStatus(
 	ctx context.Context, clusterInstanceName string) error {
 
 	clusterInstance := &siteconfig.ClusterInstance{}
-	exists, err := utils.DoesK8SResourceExist(ctx, t.client, clusterInstanceName, clusterInstanceName, clusterInstance)
-	if err != nil {
-		return fmt.Errorf("failed to get ClusterInstance %s: %w", clusterInstanceName, err)
-	}
-	if !exists {
+	if err := utils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		exists, err := utils.DoesK8SResourceExist(ctx, t.client, clusterInstanceName, clusterInstanceName, clusterInstance)
+		if err != nil {
+			return fmt.Errorf("failed to get ClusterInstance %s: %w", clusterInstanceName, err)
+		}
+		if !exists {
+			return fmt.Errorf("clusterInstance %s does not exist", clusterInstanceName)
+		}
 		return nil
+	}); err != nil {
+		// nolint: wrapcheck
+		return err
 	}
 	// Check ClusterInstance status and update the corresponding ProvisioningRequest status conditions.
 	t.updateClusterInstanceProcessedStatus(clusterInstance)

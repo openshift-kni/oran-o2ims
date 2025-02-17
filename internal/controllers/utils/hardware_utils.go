@@ -15,6 +15,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -154,18 +155,21 @@ func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]N
 
 // UpdateNodeStatusWithHostname updates the Node status with the hostname after BMC information has been assigned.
 func UpdateNodeStatusWithHostname(ctx context.Context, c client.Client, nodeName, hostname, namespace string) error {
-	node := &hwv1alpha1.Node{}
-	exists, err := DoesK8SResourceExist(ctx, c, nodeName, namespace, node)
-	if err != nil || !exists {
-		return fmt.Errorf("failed to get the Node object %s in namespace %s: %w, exists %v", nodeName, namespace, err, exists)
-	}
+	err := RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		node := &hwv1alpha1.Node{}
+		exists, err := DoesK8SResourceExist(ctx, c, nodeName, namespace, node)
+		if err != nil || !exists {
+			return fmt.Errorf("failed to get the Node object %s in namespace %s: %w, exists %v", nodeName, namespace, err, exists)
+		}
 
-	node.Status.Hostname = hostname
-	err = c.Status().Update(ctx, node)
-	if err != nil {
-		return fmt.Errorf("failed to update the Node object %s in namespace %s: %w", nodeName, namespace, err)
-	}
-	return nil
+		node.Status.Hostname = hostname
+		err = c.Status().Update(ctx, node)
+		if err != nil {
+			return fmt.Errorf("failed to update the Node object %s in namespace %s: %w", nodeName, namespace, err)
+		}
+		return nil
+	})
+	return err
 }
 
 // CreateHwMgrPluginNamespace creates the namespace of the hardware manager plugin

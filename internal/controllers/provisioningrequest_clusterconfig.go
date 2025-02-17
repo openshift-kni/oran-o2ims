@@ -115,6 +115,13 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 	// Update the ConfigurationApplied condition.
 	if allPoliciesCompliant {
+		t.logger.InfoContext(
+			ctx,
+			fmt.Sprintf(
+				"Cluster (%s) configuration is up to date",
+				t.object.Status.Extensions.ClusterDetails.Name,
+			),
+		)
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
@@ -137,8 +144,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		t.logger.InfoContext(
 			ctx,
 			fmt.Sprintf(
-				"Cluster %s (%s) is not ready for policy configuration",
-				t.object.Status.Extensions.ClusterDetails.Name,
+				"Cluster (%s) is not ready for policy configuration",
 				t.object.Status.Extensions.ClusterDetails.Name,
 			),
 		)
@@ -156,19 +162,21 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		return
 	}
 
+	var message string
 	if allPoliciesInInform {
 		// No timeout is computed if all policies are in inform, just out of date.
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
+		message = "The configuration is out of date"
 		utils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.OutOfDate,
 			metav1.ConditionFalse,
-			"The configuration is out of date",
+			message,
 		)
 	} else {
 		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
 
-		message := "The configuration is still being applied"
+		message = "The configuration is still being applied"
 		reason := provisioningv1alpha1.CRconditionReasons.InProgress
 		utils.SetProvisioningStateInProgress(t.object,
 			"Cluster configuration is being applied")
@@ -185,6 +193,14 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 			message,
 		)
 	}
+	t.logger.InfoContext(
+		ctx,
+		fmt.Sprintf(
+			"Cluster (%s) configuration status: %s",
+			t.object.Status.Extensions.ClusterDetails.Name,
+			message,
+		),
+	)
 
 	return
 }

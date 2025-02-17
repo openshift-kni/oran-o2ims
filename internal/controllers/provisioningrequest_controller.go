@@ -280,21 +280,18 @@ func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx conte
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return res, false, err
 		}
-		res, requeueErr := requeueWithError(err)
-		return res, false, requeueErr
+		return doNotRequeue(), false, err
 	}
 
 	// Create/Update the NodePool
 	if err := t.createOrUpdateNodePool(ctx, renderedNodePool); err != nil {
-		res, requeueErr := requeueWithError(err)
-		return res, false, requeueErr
+		return doNotRequeue(), false, err
 	}
 
 	// Wait for the NodePool to be provisioned and update BMC details if necessary
 	provisioned, configured, timedOutOrFailed, err := t.waitForHardwareData(ctx, renderedClusterInstance, renderedNodePool)
 	if err != nil {
-		res, requeueErr := requeueWithError(err)
-		return res, false, requeueErr
+		return doNotRequeue(), false, err
 	}
 	if timedOutOrFailed {
 		return doNotRequeue(), false, nil
@@ -311,9 +308,11 @@ func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx conte
 		return requeueWithMediumInterval(), false, nil
 	}
 
-	// If configuration is not yet complete, wait for it to complete
-	// If configuration is not set, do nothing
-	if configured != nil && !*configured {
+	// If the NodePool was updated but the configuration hasn’t been set yet,
+	// or if the configuration is not yet complete, requeue and wait for completion.
+	// If configuration is not set and no configuration update is requested, do nothing.
+	configuringStarted := t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart
+	if (configured == nil && !configuringStarted.IsZero()) || (configured != nil && !*configured) {
 		t.logger.InfoContext(
 			ctx,
 			fmt.Sprintf(
