@@ -338,6 +338,7 @@ func (c *Collector) findDataSource(dataSourceID uuid.UUID) DataSource {
 // handleNodeClusterSyncCompletion handles the end of sync for NodeCluster objects.  It deletes any NodeCluster objects
 // not included in the set of keys received during the sync operation.
 func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for NodeCluster instances", "count", len(ids))
 	records, err := c.repository.GetNodeClustersNotIn(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to get stale node clusters: %w", err)
@@ -375,6 +376,7 @@ func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []a
 // handleClusterResourceSyncCompletion handles the end of sync for ClusterResource objects.  It deletes any
 // ClusterResource objects not included in the set of keys received during the sync operation.
 func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for ClusterResource instances", "count", len(ids))
 	records, err := c.repository.GetClusterResourcesNotIn(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to get stale cluster resources: %w", err)

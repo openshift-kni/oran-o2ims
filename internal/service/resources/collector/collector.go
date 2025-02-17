@@ -479,6 +479,7 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource Resourc
 // handleDeploymentManagerSyncCompletion handles the end of sync for DeploymentManager objects.  It deletes any
 // DeploymentManager objects not included in the set of keys received during the sync operation.
 func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for DeploymentManager instances", "count", len(ids))
 	records, err := c.repository.GetDeploymentManagersNotIn(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to get stale deployment managers: %w", err)

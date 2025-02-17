@@ -287,14 +287,8 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 
 	// Determine the cluster type so we can differentiate between a hub and a managed cluster
 	clusterType := utils.ClusterModelManagedCluster
-	if value, found := cluster.Labels[utils.LocalClusterLabelName]; found {
-		localCluster, err := strconv.ParseBool(value)
-		if err != nil {
-			return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' value as boolean: %w", utils.LocalClusterLabelName, err)
-		}
-		if localCluster {
-			clusterType = utils.ClusterModelHubCluster
-		}
+	if isLocalCluster(cluster) {
+		clusterType = utils.ClusterModelHubCluster
 	}
 
 	// Use the cluster ID label to facilitate mapping to alarms and possibly other entities
@@ -337,6 +331,18 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 	return to, nil
 }
 
+// isLocalCluster determines if a cluster is a local-cluster
+func isLocalCluster(cluster *v1.ManagedCluster) bool {
+	if value, found := cluster.Labels[utils.LocalClusterLabelName]; found {
+		localCluster, err := strconv.ParseBool(value)
+		if err == nil {
+			return localCluster
+		}
+		slog.Warn("failed to parse local-cluster label as boolean", "cluster", cluster.Name, "value", value, "error", err)
+	}
+	return false
+}
+
 // handleClusterWatchEvent handles an async event received from the managed cluster watcher
 func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleWatchEvent received for managed cluster", "agent", cluster.Name, "type", eventType)
@@ -345,14 +351,18 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
 		if condition == nil || condition.Status == metav1.ConditionFalse {
 			// This cluster is not yet available, so filter it out.
-			slog.Warn("Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
+			slog.Debug("Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
 			return uuid.Nil, nil
 		}
 
-		if _, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
-			// The provisioning request which is managing the installation of this cluster is not yet fulfilled
-			slog.Warn("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
-			return uuid.Nil, nil
+		if !isLocalCluster(cluster) {
+			// Require an additional label for regular managed clusters so we don't include it until the related
+			// provisioning request has completed, but the local-cluster will never have this, so we continue without it.
+			if _, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
+				// The provisioning request which is managing the installation of this cluster is not yet fulfilled
+				slog.Debug("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
+				return uuid.Nil, nil
+			}
 		}
 	}
 
@@ -381,13 +391,13 @@ func (d *K8SDataSource) handleAgentWatchEvent(ctx context.Context, agent *v1beta
 		condition := conditionsv1.FindStatusCondition(agent.Status.Conditions, "Installed")
 		if condition == nil || condition.Status == corev1.ConditionFalse {
 			// This cluster is not yet available, so filter it out.
-			slog.Warn("Agent installation is not yet completed; skipping", "agent", agent.Name, "condition", condition)
+			slog.Debug("Agent installation is not yet completed; skipping", "agent", agent.Name, "condition", condition)
 			return uuid.Nil, nil
 		}
 
 		if _, found := agent.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
 			// The provisioning request which is managing the installation of this agent is not yet fulfilled
-			slog.Warn("Cluster provisioning request is not yet fulfilled; skipping", "agent", agent.Name)
+			slog.Debug("Cluster provisioning request is not yet fulfilled; skipping", "agent", agent.Name)
 			return uuid.Nil, nil
 		}
 	}
