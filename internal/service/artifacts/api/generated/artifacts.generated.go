@@ -24,6 +24,10 @@ import (
 	externalRef0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
+const (
+	Oauth2Scopes = "oauth2.Scopes"
+)
+
 // ManagedInfrastructureTemplate Information about a managed infrastructure template.
 type ManagedInfrastructureTemplate struct {
 	// ArtifactResourceId Identifier for the managed infrastructure template. This identifier is allocated by the O-Cloud.
@@ -179,6 +183,12 @@ type MiddlewareFunc func(http.Handler) http.Handler
 // GetAllVersions operation middleware
 func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAllVersions(w, r)
 	}))
@@ -192,6 +202,12 @@ func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http
 
 // GetMinorVersions operation middleware
 func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMinorVersions(w, r)
@@ -208,6 +224,12 @@ func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *ht
 func (siw *ServerInterfaceWrapper) GetManagedInfrastructureTemplates(w http.ResponseWriter, r *http.Request) {
 
 	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader", "role:o2ims-provisioner"})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetManagedInfrastructureTemplatesParams
@@ -269,6 +291,12 @@ func (siw *ServerInterfaceWrapper) GetManagedInfrastructureTemplate(w http.Respo
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader", "role:o2ims-provisioner"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetManagedInfrastructureTemplate(w, r, managedInfrastructureTemplateId)
 	}))
@@ -293,6 +321,12 @@ func (siw *ServerInterfaceWrapper) GetManagedInfrastructureTemplateDefaults(w ht
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "managedInfrastructureTemplateId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader", "role:o2ims-provisioner"})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetManagedInfrastructureTemplateDefaults(w, r, managedInfrastructureTemplateId)
@@ -459,6 +493,24 @@ func (response GetAllVersions400ApplicationProblemPlusJSONResponse) VisitGetAllV
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetAllVersions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions401ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAllVersions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions403ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetAllVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAllVersions500ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
@@ -489,6 +541,24 @@ type GetMinorVersions400ApplicationProblemPlusJSONResponse externalRef0.ProblemD
 func (response GetMinorVersions400ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions401ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions403ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -528,6 +598,24 @@ func (response GetManagedInfrastructureTemplates400ApplicationProblemPlusJSONRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetManagedInfrastructureTemplates401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplates401ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplates403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplates403ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetManagedInfrastructureTemplates500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetManagedInfrastructureTemplates500ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplatesResponse(w http.ResponseWriter) error {
@@ -559,6 +647,24 @@ type GetManagedInfrastructureTemplate400ApplicationProblemPlusJSONResponse exter
 func (response GetManagedInfrastructureTemplate400ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplate401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplate401ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplate403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplate403ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -603,6 +709,24 @@ type GetManagedInfrastructureTemplateDefaults400ApplicationProblemPlusJSONRespon
 func (response GetManagedInfrastructureTemplateDefaults400ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplateDefaults401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplateDefaults401ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetManagedInfrastructureTemplateDefaults403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetManagedInfrastructureTemplateDefaults403ApplicationProblemPlusJSONResponse) VisitGetManagedInfrastructureTemplateDefaultsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -802,56 +926,60 @@ func (sh *strictHandler) GetManagedInfrastructureTemplateDefaults(w http.Respons
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"7pu0bR3u3X64ZKLby9v/BgAA//8M8h6jjDQAAA==",
+	"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",
+	"AAD//82v+QmEPQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

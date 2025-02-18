@@ -172,8 +172,7 @@ metadata:
                 "scopes": [
                   "openid",
                   "profile",
-                  "roles",
-                  "smo-audience"
+                  "role:ocloud-manager"
                 ],
                 "tokenEndpoint": "/protocol/openid-connect/token",
                 "url": "https://oauth.example.com:8443/realms/oran",

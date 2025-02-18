@@ -37,12 +37,19 @@ tags:
   description: |
     Information about provisioning requests.
 
-paths:
+security:
+- oauth2:
+  - role:o2ims-admin
 
+paths:
   /o2ims-infrastructureProvisioning/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the complete list of API versions implemented by the service.
       tags:
@@ -61,6 +68,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -72,6 +91,10 @@ paths:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of minor API versions implemented for this major version of the API.
       tags:
@@ -90,6 +113,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -101,6 +136,11 @@ paths:
     get:
       operationId: getProvisioningRequests
       summary: Get provisioning requests
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+        - role:o2ims-provisioner
       description: |
         Returns the list of provisioning requests.
       parameters:
@@ -126,6 +166,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -135,6 +187,10 @@ paths:
     post:
       operationId: createProvisioningRequest
       summary: Create a provisioning request
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-provisioner
       description: |
         Creates a new provisioning request.
       tags:
@@ -158,6 +214,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '409':
           description: Conflict
           content:
@@ -175,6 +243,11 @@ paths:
     get:
       operationId: getProvisioningRequest
       summary: Get the provisioning request
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+        - role:o2ims-provisioner
       description: |
         Returns the details of a provisioning request.
       parameters:
@@ -195,6 +268,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified provisioning request was not found.
           content:
@@ -210,6 +295,10 @@ paths:
     put:
       operationId: updateProvisioningRequest
       summary: Update a provisioning request
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-provisioner
       description: |
         Replaces an existing provisioning request.
       parameters:
@@ -235,6 +324,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified provisioning request was not found.
           content:
@@ -256,6 +357,10 @@ paths:
     delete:
       operationId: deleteProvisioningRequest
       summary: Delete a provisioning request
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-provisioner
       description: |
         Deletes a provisioning request.
       parameters:
@@ -265,6 +370,18 @@ paths:
       responses:
         '200':
           description: Successfully deleted the provisioning request.
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified provisioning request was not found.
           content:
@@ -279,6 +396,17 @@ paths:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
 
 components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: This API uses OAuth 2 with the client credentials flow.
+      flows:
+        clientCredentials:
+          tokenUrl: https://keycloak.example.com/realms/oran/protocol/openid-connect/token
+          scopes:
+            role:o2ims-reader: O2IMS Reader Role
+            role:o2ims-provisioner: O2IMS Provisioner Role
+
   parameters:
     provisioningRequestId:
       name: provisioningRequestId
