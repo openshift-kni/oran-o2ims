@@ -959,7 +959,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				provisioningv1alpha1.StateFailed, "Hardware provisioning timed out", nil)
 		})
 
-		It("Verify status when configuration change causes ProvisioningRequest validation to fail but NodePool becomes provisioned ", func() {
+		It("Verify status when configuration change causes ProvisioningRequest validation to fail but NodePool is also failed", func() {
 			// Initial reconciliation
 			_, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
@@ -970,8 +970,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			npProvisionedCond := meta.FindStatusCondition(
 				currentNp.Status.Conditions, string(hwv1alpha1.Provisioned),
 			)
-			npProvisionedCond.Status = metav1.ConditionTrue
-			npProvisionedCond.Reason = string(hwv1alpha1.Completed)
+			npProvisionedCond.Status = metav1.ConditionFalse
+			npProvisionedCond.Reason = string(hwv1alpha1.Failed)
+			npProvisionedCond.Message = "NodePool failed"
 			Expect(c.Status().Update(ctx, currentNp)).To(Succeed())
 
 			// Remove required field hostname to fail ProvisioningRequest validation
@@ -997,14 +998,18 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Message: "nodes.0: hostName is required",
 			})
 			verifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
-				Status: metav1.ConditionTrue,
-				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
+				Message: "Hardware provisioning failed",
 			})
-			// Verify the provisioningState moves to failed
+			// Verify the provisioningPhase has changed to failed with the reason
+			// hardware provisioning failed as on-going provisioning process is failed.
+			// Although new changes cause validation to fail as well, the provisioningPhase
+			// should remain failed with the on-going provisioning failed reason.
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateFailed,
-				"Failed to validate the ProvisioningRequest: failed to validate ClusterInstance input", nil)
+				"Hardware provisioning failed", nil)
 		})
 
 		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodePool becomes provisioned", func() {
@@ -1592,10 +1597,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason:  string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady),
 				Message: "The Cluster is not yet ready",
 			})
-			// Verify the provisioningState has changed to failed as on-going provisioning process has reached to
-			// a final state timedout and new changes cause validation to fail
+			// Verify the provisioningPhase has changed to failed with the reason timeout
+			// as on-going provisioning process is timedout.
+			// Although new changes cause validation to fail as well, the provisioningPhase
+			// should remain failed with the on-going provisioning failed reason.
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateFailed, "Failed to validate the ProvisioningRequest", nil)
+				provisioningv1alpha1.StateFailed, "Cluster installation timed out", nil)
 		})
 
 		It("Verify status when configuration change causes ClusterInstance rendering to fail but configuration policy becomes compliant", func() {
@@ -1661,8 +1668,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the ztpStatus is set to ZTP done
 			Expect(reconciledCR.Status.Extensions.ClusterDetails.ZtpStatus).To(Equal(utils.ClusterZtpDone))
 			// Verify the oCloudNodeClusterId is stored and the provisioningState has changed to failed,
-			// as on-going provisioning process has reached to a final state completed and new changes
-			// cause rendering to fail.
+			// as on-going provisioning process has fulfilled and new changes cause rendering to fail.
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateFailed, "Failed to render and validate ClusterInstance",
 				&provisioningv1alpha1.ProvisionedResources{OCloudNodeClusterId: "76b8cbad-9928-48a0-bcf0-bb16a777b5f7"})
@@ -1724,8 +1730,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			// Verify the oCloudNodeClusterId is still stored
 			Expect(reconciledCR.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId).To(Equal("76b8cbad-9928-48a0-bcf0-bb16a777b5f7"))
 			// Verify the oCloudNodeClusterId is stored and the provisioningState has changed to failed,
-			// as on-going provisioning process has reached to a final state completed and new changes
-			// cause validation to fail.
+			// as on-going provisioning process has fulfilled and new changes cause validation to fail.
 			verifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateFailed, "Failed to validate the ProvisioningRequest",
 				&provisioningv1alpha1.ProvisionedResources{OCloudNodeClusterId: "76b8cbad-9928-48a0-bcf0-bb16a777b5f7"})
