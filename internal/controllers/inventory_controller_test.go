@@ -115,9 +115,7 @@ var _ = DescribeTable(
 		}
 
 		// Set up necessary env variables
-		err := os.Setenv(utils.KubeRbacProxyImageName, "kube-rbac-proxy:test")
-		Expect(err).NotTo(HaveOccurred())
-		err = os.Setenv(utils.PostgresImageName, "postgres:test")
+		err := os.Setenv(utils.PostgresImageName, "postgres:test")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Update the testcase objects to include the Namespace.

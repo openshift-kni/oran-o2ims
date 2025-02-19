@@ -154,20 +154,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 	return
 }
 
-// getInternalServicePorts calculates the port values for the internal proxy depending on whether OAuth is enabled
-func (t *reconcilerTask) getInternalServicePorts() (int32, string) {
-	internalPort := int32(0)
-	internalTargetPort := ""
-	if utils.IsOAuthEnabled(t.object) {
-		// Configure the service to point to the internal RBAC proxy which uses regular Kubernetes authentication for
-		// service to service communication.
-		internalPort = utils.InternalServicePort
-		internalTargetPort = utils.InternalServiceTargetPort
-	}
-
-	return internalPort, internalTargetPort
-}
-
 // setupResourceServerConfig creates the resources necessary to start the Resource Server.
 func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
@@ -202,21 +188,20 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
 	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create resource server RBAC proxy cluster role binding",
+			"Failed to create resource server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
 	// Create the Service needed for the Resource server.
-	internalPort, internalTargetPort := t.getInternalServicePorts()
-	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
+	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -277,21 +262,20 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
 	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create cluster server RBAC proxy cluster role binding",
+			"Failed to create cluster server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
 	// Create the Service needed for the cluster server.
-	internalPort, internalTargetPort := t.getInternalServicePorts()
-	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
+	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -351,20 +335,20 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
 	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create Artifacts server RBAC proxy cluster role binding",
+			"Failed to create Artifacts server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
 	// Create the Service needed for the Artifacts server.
-	err = t.createService(ctx, utils.InventoryArtifactsServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, 0, "")
+	err = t.createService(ctx, utils.InventoryArtifactsServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -436,21 +420,20 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
 	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create alarm server RBAC proxy cluster role binding",
+			"Failed to create alarm server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
 	// Create the Service needed for the alarm server.
-	internalPort, internalTargetPort := t.getInternalServicePorts()
-	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, internalPort, internalTargetPort)
+	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -510,20 +493,20 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
 	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryProvisioningServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create Provisioning server RBAC proxy cluster role binding",
+			"Failed to create Provisioning server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
 	// Create the Service needed for the provisioning server.
-	err = t.createService(ctx, utils.InventoryProvisioningServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort, 0, "")
+	err = t.createService(ctx, utils.InventoryProvisioningServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -828,12 +811,12 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		return
 	}
 
-	// Create the shared cluster role for the kube-rbac-proxy
-	err = t.createSharedRbacProxyRole(ctx)
+	// Create the shared cluster role for each of the servers
+	err = t.createSharedRbacRole(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy RBAC Proxy cluster role.",
+			"Failed to deploy RBAC cluster role.",
 			slog.String("error", err.Error()),
 		)
 		return
@@ -950,19 +933,19 @@ func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) e
 	return nil
 }
 
-// createSharedRbacProxyRole creates a cluster role that is used by the kube-rbac-proxy to access the authentication and
+// createSharedRbacRole creates a cluster role that is used by each server to access the authentication and
 // authorization parts of the kubernetes API so that incoming API requests can be validated.  This same cluster role is
-// attached to each of the server service accounts since each of them has its own kube-rbac-proxy that all share the
-// exact same configuration.
-func (t *reconcilerTask) createSharedRbacProxyRole(ctx context.Context) error {
+// attached to each of the server service accounts since each of them needs to validate its own incoming tokens.
+func (t *reconcilerTask) createSharedRbacRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, "kube-rbac-proxy",
+				"%s-%s",
+				t.object.Namespace, "subject-access-reviewer",
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
-			// The kube-rbac-proxy needs access to the authentication API to validate tokens and access authorization.
+			// The servers needs access to the authentication API to validate tokens and access authorization.
 			{
 				APIGroups: []string{
 					"authentication.k8s.io",
@@ -989,7 +972,7 @@ func (t *reconcilerTask) createSharedRbacProxyRole(ctx context.Context) error {
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create RBAC Proxy cluster role: %w", err)
+		return fmt.Errorf("failed to create RBAC cluster role: %w", err)
 	}
 
 	return nil
@@ -1353,14 +1336,14 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 	return nil
 }
 
-// createServerRbacClusterRoleBinding attaches the kube-rbac-proxy cluster role to the server's service account so that
-// its instance of the kube-rbac-proxy can access the kubernetes API via the service account credentials.
+// createServerRbacClusterRoleBinding attaches the subject-access-reviewer cluster role to the server's service account
+// so that it can access the kubernetes API via the service account credentials.
 func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context, serverName string) error {
 	binding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, serverName+"-kube-rbac-proxy",
+				t.object.Namespace, serverName+"-subject-access-reviewer-binding",
 			),
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -1368,7 +1351,7 @@ func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context,
 			Kind:     "ClusterRole",
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, "kube-rbac-proxy",
+				t.object.Namespace, "subject-access-reviewer",
 			),
 		},
 		Subjects: []rbacv1.Subject{
@@ -1381,7 +1364,7 @@ func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context,
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create RBAC Proxy cluster role binding: %w", err)
+		return fmt.Errorf("failed to create RBAC cluster role binding: %w", err)
 	}
 
 	return nil
@@ -1460,14 +1443,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		image = *t.object.Spec.Image
 	}
 
-	rbacProxyImage := os.Getenv(utils.KubeRbacProxyImageName)
-	if rbacProxyImage == "" {
-		return "", fmt.Errorf("missing %s environment variable value", utils.KubeRbacProxyImageName)
-	}
-
-	// Disable privilege escalation for the RBAC proxy
-	privilegeEscalation := false
-
 	var envVars []corev1.EnvVar
 	if utils.HasDatabase(serverName) {
 		envVarName, err := utils.GetServerDatabasePasswordName(serverName)
@@ -1515,34 +1490,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		}...)
 	}
 
-	proxyArgs := []string{
-		fmt.Sprintf("--secure-listen-address=0.0.0.0:%d", utils.DefaultProxyPort),
-		fmt.Sprintf("--upstream=http://127.0.0.1:%d/", utils.DefaultContainerPort),
-		"--logtostderr=true",
-		"--tls-cert-file=/secrets/tls/tls.crt",
-		"--tls-private-key-file=/secrets/tls/tls.key",
-		"--http2-disable=true",
-		fmt.Sprintf("--tls-min-version=%s", utils.MinimumProxyTLSVersion),
-		fmt.Sprintf("--v=%d", utils.MinimumProxyLogLevel),
-	}
-
-	if utils.IsOAuthEnabled(t.object) {
-		// When OAuth is enabled, we need to add the OIDC arguments to the proxy arguments
-		clientID, reason, err := t.getOAuthClientID(ctx)
-		if err != nil {
-			return reason, err
-		}
-
-		proxyArgs = utils.AddOAuthArgsForProxy(t.object, clientID, proxyArgs)
-	}
-
-	internalServicePort := utils.DefaultServicePort
-	if utils.IsOAuthEnabled(t.object) {
-		// When OAuth is enabled, we run a second proxy for server-to-server communication so that they can authenticate
-		// from Kubernetes rather than OAuth.
-		internalServicePort = utils.InternalServicePort
-	}
-
 	// Common env for server deployments
 	envVars = append(envVars, []corev1.EnvVar{
 		{
@@ -1555,7 +1502,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		},
 		{
 			Name:  utils.InternalServicePortName,
-			Value: fmt.Sprintf("%d", internalServicePort),
+			Value: fmt.Sprintf("%d", utils.DefaultServicePort),
 		},
 		{
 			Name:  utils.HwMgrPluginNameSpace,
@@ -1597,37 +1544,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				Volumes:            deploymentVolumes,
 				Containers: []corev1.Container{
 					{
-						Name: utils.RbacContainerName,
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: &privilegeEscalation,
-							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{"ALL"},
-							},
-						},
-						Image:           os.Getenv(utils.KubeRbacProxyImageName),
-						ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
-						Args:            proxyArgs,
-						Ports: []corev1.ContainerPort{
-							{
-								Name:          utils.DefaultServiceTargetPort,
-								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: utils.DefaultProxyPort,
-							},
-						},
-						// These values are somewhat arbitrary but come from the RBAC proxy scaffolded for the manager
-						Resources: corev1.ResourceRequirements{
-							Limits: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("500m"),
-								corev1.ResourceMemory: resource.MustParse("128Mi"),
-							},
-							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("5m"),
-								corev1.ResourceMemory: resource.MustParse("64Mi"),
-							},
-						},
-						VolumeMounts: deploymentVolumeMounts,
-					},
-					{
 						Name:            utils.ServerContainerName,
 						Image:           image,
 						ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
@@ -1637,7 +1553,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 						Env:             envVars,
 						Ports: []corev1.ContainerPort{
 							{
-								Name:          "api",
+								Name:          utils.DefaultServiceTargetPort,
 								Protocol:      corev1.ProtocolTCP,
 								ContainerPort: utils.DefaultContainerPort,
 							},
@@ -1652,10 +1568,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				},
 			},
 		},
-	}
-
-	if utils.IsOAuthEnabled(t.object) && utils.RequiresInternalProxy(serverName) {
-		deploymentSpec.Template.Spec.Containers = append(deploymentSpec.Template.Spec.Containers, t.createInternalProxy(privilegeEscalation, deploymentVolumeMounts))
 	}
 
 	if utils.HasDatabase(serverName) {
@@ -1690,66 +1602,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	return "", nil
 }
 
-// getOAuthClientID retrieves the OAuth client-id value from the configured secret
-func (t *reconcilerTask) getOAuthClientID(ctx context.Context) (string, utils.InventoryConditionReason, error) {
-	oauthConfig := t.object.Spec.SmoConfig.OAuthConfig
-	clientSecrets, err := utils.GetSecret(ctx, t.client, oauthConfig.ClientSecretName, t.object.Namespace)
-	if err != nil {
-		return "", utils.InventoryConditionReasons.OAuthClientIDNotConfigured, fmt.Errorf("failed to get client secret: %w", err)
-	}
-
-	clientID, err := utils.GetSecretField(clientSecrets, "client-id")
-	if err != nil {
-		return "", utils.InventoryConditionReasons.OAuthClientIDNotConfigured, fmt.Errorf("failed to get client-id from secret: %s, %w", oauthConfig.ClientSecretName, err)
-	}
-	return clientID, "", nil
-}
-
-// createInternalProxy sets up another instance of a kube-rbac-proxy to handle inter-service communication in the
-// event that OAuth is enabled.
-func (t *reconcilerTask) createInternalProxy(privilegeEscalation bool, deploymentVolumeMounts []corev1.VolumeMount) corev1.Container {
-	return corev1.Container{
-		Name: utils.InternalRbacContainerName,
-		SecurityContext: &corev1.SecurityContext{
-			AllowPrivilegeEscalation: &privilegeEscalation,
-			Capabilities: &corev1.Capabilities{
-				Drop: []corev1.Capability{"ALL"},
-			},
-		},
-		Image:           os.Getenv(utils.KubeRbacProxyImageName),
-		ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
-		Args: []string{
-			fmt.Sprintf("--secure-listen-address=0.0.0.0:%d", utils.InternalProxyPort),
-			fmt.Sprintf("--upstream=http://127.0.0.1:%d/", utils.DefaultContainerPort),
-			"--logtostderr=true",
-			"--tls-cert-file=/secrets/tls/tls.crt",
-			"--tls-private-key-file=/secrets/tls/tls.key",
-			"--http2-disable=true",
-			fmt.Sprintf("--tls-min-version=%s", utils.MinimumProxyTLSVersion),
-			fmt.Sprintf("--v=%d", utils.MinimumProxyLogLevel),
-		},
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          utils.InternalServiceTargetPort,
-				Protocol:      corev1.ProtocolTCP,
-				ContainerPort: utils.InternalProxyPort,
-			},
-		},
-		// These values are somewhat arbitrary but come from the RBAC proxy scaffolded for the manager
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("500m"),
-				corev1.ResourceMemory: resource.MustParse("128Mi"),
-			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("5m"),
-				corev1.ResourceMemory: resource.MustParse("64Mi"),
-			},
-		},
-		VolumeMounts: deploymentVolumeMounts,
-	}
-}
-
 func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName string) error {
 	t.logger.InfoContext(ctx, "[createServiceAccount]")
 	// Build the ServiceAccount object.
@@ -1772,7 +1624,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 	return nil
 }
 
-func (t *reconcilerTask) createService(ctx context.Context, resourceName string, port int32, targetPort string, internalPort int32, internalTargetPort string) error {
+func (t *reconcilerTask) createService(ctx context.Context, resourceName string, port int32, targetPort string) error {
 	t.logger.InfoContext(ctx, "[createService]")
 	// Build the Service object.
 	serviceMeta := metav1.ObjectMeta{
@@ -1797,16 +1649,6 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 				TargetPort: intstr.FromString(targetPort),
 			},
 		},
-	}
-
-	if internalTargetPort != "" {
-		// If this is provided, then we are running with 2 proxies -- one for public OAuth authentication, and one
-		// for internal Kubernetes authentication (e.g., for service to service)
-		serviceSpec.Ports = append(serviceSpec.Ports, corev1.ServicePort{
-			Name:       "internal",
-			Port:       internalPort,
-			TargetPort: intstr.FromString(internalTargetPort),
-		})
 	}
 
 	newService := &corev1.Service{

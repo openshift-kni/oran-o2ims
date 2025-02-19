@@ -19,6 +19,14 @@ var provisioningServe = &cobra.Command{
 	Use:   "serve",
 	Short: "Start provisioning server",
 	Run: func(cmd *cobra.Command, args []string) {
+		if err := config.LoadFromEnv(); err != nil {
+			slog.Error("failed to load environment variables", "err", err)
+			os.Exit(1)
+		}
+		if err := config.Validate(); err != nil {
+			slog.Error("failed to validate common server configuration", "err", err)
+			os.Exit(1)
+		}
 		if err := provisioning.Serve(&config); err != nil {
 			slog.Error("failed to start provisioning server", "err", err)
 			os.Exit(1)

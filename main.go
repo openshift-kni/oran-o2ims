@@ -12,6 +12,8 @@ implied. See the License for the specific language governing permissions and lim
 License.
 */
 
+//go:debug http2server=0
+
 package main
 
 import (

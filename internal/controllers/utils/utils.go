@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -167,10 +168,10 @@ func HasDatabase(serverName string) bool {
 		serverName == InventoryAlarmServerName
 }
 
-// RequiresInternalProxy determines whether a server expects its API to be accessed by another server.  If this
-// is the case, then in an OAuth configuration we run a second RBAC proxy for that server which handles authenticating
+// RequiresInternalListener determines whether a server expects its API to be accessed by another server.  If this
+// is the case, then in an OAuth configuration we run a second listener for that server which handles authenticating
 // using a Kubernetes service account token rather than an OAuth token.
-func RequiresInternalProxy(serverName string) bool {
+func RequiresInternalListener(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName
@@ -288,7 +289,7 @@ func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.I
 		mounts = append(mounts, []corev1.VolumeMount{
 			{
 				Name:      "tls",
-				MountPath: "/secrets/tls",
+				MountPath: TLSServerMountPath,
 			},
 		}...)
 	}
@@ -405,15 +406,18 @@ func GetServerDatabasePasswordName(serverName string) (string, error) {
 	}
 }
 
-// addArgsForSMO sets up the command line arguments related to enabling communication to the SMO and OAuth server
-func addArgsForSMO(inventory *inventoryv1alpha1.Inventory, args []string) []string {
+// addArgsForOAuth sets up the command line arguments related to enabling communication to the SMO and OAuth server
+func addArgsForOAuth(inventory *inventoryv1alpha1.Inventory, args []string) []string {
 	if inventory.Spec.SmoConfig != nil {
 		smo := inventory.Spec.SmoConfig
 
 		if smo.OAuthConfig != nil {
 			args = append(args,
 				fmt.Sprintf("--oauth-scopes=%s", strings.Join(smo.OAuthConfig.Scopes, ",")),
-				fmt.Sprintf("--oauth-token-url=%s%s", smo.OAuthConfig.URL, smo.OAuthConfig.TokenEndpoint))
+				fmt.Sprintf("--oauth-issuer-url=%s", smo.OAuthConfig.URL),
+				fmt.Sprintf("--oauth-token-endpoint=%s", smo.OAuthConfig.TokenEndpoint),
+				fmt.Sprintf("--oauth-username-claim=%s", smo.OAuthConfig.UsernameClaim),
+				fmt.Sprintf("--oauth-groups-claim=%s", smo.OAuthConfig.GroupsClaim))
 		}
 
 		if smo.TLS != nil && smo.TLS.ClientCertificateName != nil {
@@ -433,39 +437,6 @@ func addArgsForSMO(inventory *inventoryv1alpha1.Inventory, args []string) []stri
 	return args
 }
 
-// AddOAuthArgsForProxy adds the OAuth specific arguments to the kube-rbac-proxy command line args
-func AddOAuthArgsForProxy(inventory *inventoryv1alpha1.Inventory, clientID string, args []string) []string {
-	if inventory.Spec.SmoConfig != nil {
-		smo := inventory.Spec.SmoConfig
-
-		if smo.OAuthConfig != nil {
-			args = append(args,
-				fmt.Sprintf("--oidc-issuer=%s", smo.OAuthConfig.URL),
-				fmt.Sprintf("--oidc-clientID=%s", clientID),
-				fmt.Sprintf("--oidc-username-claim=%s", smo.OAuthConfig.UsernameClaim),
-				fmt.Sprintf("--oidc-groups-claim=%s", smo.OAuthConfig.GroupsClaim),
-			)
-		}
-
-		// TODO: enable this once we've upstreamed changes to kube-rbac-proxy to add mTLS support to the OIDC issuer
-		//
-		// if smo.TLS != nil && smo.TLS.ClientCertificateName != nil {
-		//   args = append(args,
-		// 		fmt.Sprintf("--oidc-client-cert-file=%s/tls.crt", TLSClientMountPath),
-		// 		fmt.Sprintf("--oidc-client-key-file=%s/tls.key", TLSClientMountPath),
-		// 	 )
-		// }
-
-		if inventory.Spec.CaBundleName != nil {
-			args = append(args,
-				fmt.Sprintf("--oidc-ca-file=%s/%s", CABundleMountPath, CABundleFilename),
-			)
-		}
-	}
-
-	return args
-}
-
 func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
 	cloudId := DefaultOCloudID
 	if inventory.Spec.CloudID != nil {
@@ -479,15 +450,16 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			result,
 			fmt.Sprintf("--global-cloud-id=%s", cloudId))
 
-		// Add SMO/OAuth command line arguments
-		result = addArgsForSMO(inventory, result)
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 		return
 	}
 
 	if serverName == InventoryArtifactsServerName {
 		result = slices.Clone(ArtifactsServerArgs)
 
-		// TODO: Add SMO/OAuth command line arguments when notifications are added.
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 		return
 	}
 
@@ -502,8 +474,8 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			fmt.Sprintf("--global-cloud-id=%s", cloudId),
 			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
 
-		// Add SMO/OAuth command line arguments
-		result = addArgsForSMO(inventory, result)
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 
 		return result, nil
 	}
@@ -515,8 +487,8 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID))
 
-		// Add SMO/OAuth command line arguments
-		result = addArgsForSMO(inventory, result)
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 
 		return
 	}
@@ -525,7 +497,8 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 	if serverName == InventoryProvisioningServerName {
 		result = slices.Clone(ProvisioningServerArgs)
 
-		// TODO: Add SMO/OAuth command line arguments when notifications are added.
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 		return
 	}
 
@@ -868,6 +841,87 @@ func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
 	}
 
 	return config, nil
+}
+
+// AddCABundle to an existing TLS configuration
+func AddCABundle(config *tls.Config, caBundle string) error {
+	data, err := os.ReadFile(caBundle)
+	if err != nil {
+		return fmt.Errorf("failed to read CA bundle '%s': %w", caBundle, err)
+	}
+
+	if config.RootCAs == nil {
+		config.RootCAs = x509.NewCertPool()
+	}
+	config.RootCAs.AppendCertsFromPEM(data)
+
+	return nil
+}
+
+// GetInternalClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+func GetInternalClientTLSConfig(ctx context.Context) (*tls.Config, error) {
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	err := AddCABundle(tlsConfig, DefaultServiceCAFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return tlsConfig, nil
+}
+
+// GetClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	if caFile != "" {
+		err := AddCABundle(tlsConfig, caFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add ca bundle: %w", err)
+		}
+	}
+
+	if certFile != "" {
+		loader, err := dynamiccertificates.NewDynamicServingContentFromFiles("tls-client", certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup certificate loader: %w", err)
+		}
+		go loader.Run(ctx, 1)
+
+		tlsConfig.GetClientCertificate = func(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			cert, key := loader.CurrentCertKeyContent()
+			result, err := tls.X509KeyPair(cert, key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create client certificate: %w", err)
+			}
+			return &result, nil
+		}
+	}
+
+	return tlsConfig, nil
+}
+
+// GetServerTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Config, error) {
+	loader, err := dynamiccertificates.NewDynamicServingContentFromFiles("tls-server", certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup certificate loader: %w", err)
+	}
+	go loader.Run(ctx, 1)
+
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			certBytes, keyBytes := loader.CurrentCertKeyContent()
+			cert, err := tls.X509KeyPair(certBytes, keyBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create server certificate: %w", err)
+			}
+			return &cert, nil
+		},
+	}
+
+	return tlsConfig, nil
 }
 
 // GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
