@@ -1,6 +1,9 @@
 package utils
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Default namespace
 const (
@@ -50,31 +53,41 @@ var (
 	AlarmServerArgs = []string{
 		"alarms-server",
 		"serve",
-		"--api-listener-address=127.0.0.1:8000",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
 
 	ArtifactsServerArgs = []string{
 		"artifacts-server",
 		"serve",
-		"--api-listener-address=127.0.0.1:8000",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
 
 	ResourceServerArgs = []string{
 		"resource-server",
 		"serve",
-		"--api-listener-address=127.0.0.1:8000",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
 
 	ClusterServerArgs = []string{
 		"cluster-server",
 		"serve",
-		"--api-listener-address=127.0.0.1:8000",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
 
 	ProvisioningServerArgs = []string{
 		"provisioning-server",
 		"serve",
-		"--api-listener-address=127.0.0.1:8000",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
 )
 
@@ -210,41 +223,26 @@ const (
 
 // POD Container Names
 const (
-	MigrationContainerName    = "migration"
-	RbacContainerName         = "rbac"
-	ServerContainerName       = "server"
-	InternalRbacContainerName = "internal-rbac"
+	MigrationContainerName = "migration"
+	ServerContainerName    = "server"
 )
 
 // POD Port Values
 const (
-	DefaultServicePort       = 8000
+	DefaultServicePort       = 8443
 	DefaultServiceTargetPort = "https"
-	DefaultContainerPort     = 8000
-	DefaultProxyPort         = 8443
-
-	InternalServicePort       = 9000
-	InternalServiceTargetPort = "internal-https"
-	InternalProxyPort         = 6443
+	DefaultContainerPort     = 8443
 
 	DatabaseServicePort = 5432
 	DatabaseTargetPort  = "database"
 )
 
-// MinimumProxyTLSVersion defines the minimum value we accept for incoming TLS connections to the proxies
-const MinimumProxyTLSVersion = "VersionTLS12"
-
-// MinimumProxyLogLevel defines the minimum log-level set on the proxies
-const MinimumProxyLogLevel = 10
-
 // Environment values
 const (
-	ServerImageName           = "IMAGE"
-	KubeRbacProxyImageName    = "KUBE_RBAC_PROXY_IMAGE"
-	PostgresImageName         = "POSTGRES_IMAGE"
-	HwMgrPluginNameSpace      = "HWMGR_PLUGIN_NAMESPACE"
-	InternalServicePortName   = "INTERNAL_SERVICE_PORT"
-	RegisterOnRestartsEnvName = "REGISTER_ON_RESTART"
+	ServerImageName         = "IMAGE"
+	PostgresImageName       = "POSTGRES_IMAGE"
+	HwMgrPluginNameSpace    = "HWMGR_PLUGIN_NAMESPACE"
+	InternalServicePortName = "INTERNAL_SERVICE_PORT"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
@@ -301,8 +299,9 @@ const (
 	AlertmanagerSA         = "alertmanager"
 )
 
-// SMO TLS Mount Paths
+// TLS Mount Paths
 const (
+	TLSServerMountPath = "/secrets/tls"
 	TLSClientMountPath = "/secrets/smo/tls"
 	CABundleMountPath  = "/secrets/smo/certs"
 	CABundleFilename   = "ca-bundle.crt"

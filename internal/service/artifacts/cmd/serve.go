@@ -5,10 +5,11 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	artifacts "github.com/openshift-kni/oran-o2ims/internal/service/artifacts"
 	"github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api"
 	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
-	"github.com/spf13/cobra"
 )
 
 var config api.ArtifactsServerConfig
@@ -18,7 +19,15 @@ var artifactsServer = &cobra.Command{
 	Use:   "serve",
 	Short: "Start artifacts server",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := artifacts.Serve(); err != nil {
+		if err := config.LoadFromEnv(); err != nil {
+			slog.Error("failed to load environment variables", "err", err)
+			os.Exit(1)
+		}
+		if err := config.Validate(); err != nil {
+			slog.Error("failed to validate common server configuration", "err", err)
+			os.Exit(1)
+		}
+		if err := artifacts.Serve(&config); err != nil {
 			slog.Error("failed to start artifacts server", "err", err)
 			os.Exit(1)
 		}

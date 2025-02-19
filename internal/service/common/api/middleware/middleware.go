@@ -11,8 +11,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
-
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client/generated"
 )
 
 type Middleware = func(http.Handler) http.Handler
@@ -81,11 +80,15 @@ func TrailingSlashStripper() Middleware {
 	}
 }
 
-// problemDetails writes an error message using the appropriate header for an ORAN error response
-func problemDetails(w http.ResponseWriter, body string, code int) {
+// ProblemDetails writes an error message using the appropriate header for an ORAN error response
+func ProblemDetails(w http.ResponseWriter, body string, code int) {
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.WriteHeader(code)
-	_, err := fmt.Fprintln(w, body)
+	out, _ := json.Marshal(generated.ProblemDetails{
+		Detail: body,
+		Status: code,
+	})
+	_, err := fmt.Fprintln(w, string(out))
 	if err != nil {
 		panic(err)
 	}
@@ -94,32 +97,20 @@ func problemDetails(w http.ResponseWriter, body string, code int) {
 // getOranErrHandler override default validation error to allow for O-RAN specific error
 func getOranErrHandler() func(w http.ResponseWriter, message string, statusCode int) {
 	return func(w http.ResponseWriter, message string, statusCode int) {
-		out, _ := json.Marshal(common.ProblemDetails{
-			Detail: message,
-			Status: statusCode,
-		})
-		problemDetails(w, string(out), statusCode)
+		ProblemDetails(w, message, statusCode)
 	}
 }
 
 // GetOranReqErrFunc override default validation errors to allow for O-RAN specific struct
 func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		out, _ := json.Marshal(common.ProblemDetails{
-			Detail: err.Error(),
-			Status: http.StatusBadRequest,
-		})
-		problemDetails(w, string(out), http.StatusBadRequest)
+		ProblemDetails(w, err.Error(), http.StatusBadRequest)
 	}
 }
 
 // GetOranRespErrFunc override default internal server error to allow for O-RAN specific struct
 func GetOranRespErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		out, _ := json.Marshal(common.ProblemDetails{
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		})
-		problemDetails(w, string(out), http.StatusInternalServerError)
+		ProblemDetails(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -234,7 +234,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		return
 	}
 
-	err = t.createService(ctx, utils.InventoryDatabaseServerName, utils.DatabaseServicePort, utils.DatabaseTargetPort, 0, "")
+	err = t.createService(ctx, utils.InventoryDatabaseServerName, utils.DatabaseServicePort, utils.DatabaseTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,

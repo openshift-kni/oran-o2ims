@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
-
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
@@ -168,12 +168,25 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
+	// Create authn/authz middleware
+	authn, err := auth.GetAuthenticator(ctx, &config.CommonServerConfig)
+	if err != nil {
+		return fmt.Errorf("error setting up authenticator middleware: %w", err)
+	}
+
+	authz, err := auth.GetAuthorizer()
+	if err != nil {
+		return fmt.Errorf("error setting up authorizer middleware: %w", err)
+	}
+
 	baseRouter := http.NewServeMux()
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
 			middleware.OpenAPIValidation(swagger),
 			middleware.ResponseFilter(filterAdapter),
+			authz,
+			authn,
 			middleware.LogDuration(),
 		},
 		ErrorHandlerFunc: middleware.GetOranReqErrFunc(),
@@ -189,9 +202,15 @@ func Serve(config *api.ResourceServerConfig) error {
 		middleware.TrailingSlashStripper(),
 	)
 
+	serverTLSConfig, err := utils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
+	if err != nil {
+		return fmt.Errorf("failed to get server TLS config: %w", err)
+	}
+
 	srv := &http.Server{
 		Handler:      handler,
 		Addr:         config.Listener.Address,
+		TLSConfig:    serverTLSConfig,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,
@@ -222,7 +241,8 @@ func Serve(config *api.ResourceServerConfig) error {
 	serverErrors := make(chan error, 1)
 	go func() {
 		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		// Cert/Key files aren't needed here since they've been added to the tls.Config above.
+		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
 		}
 	}()
