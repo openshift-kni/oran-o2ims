@@ -13,6 +13,8 @@ aliases:
     - edcdavid
     - sudomakeinstall2
     - mlguerrero12
+    - rauhersu
+    - fontivan
   oran-o2ims-approvers:
     - irinamihai
     - bartwensley
@@ -25,3 +27,8 @@ aliases:
     - edcdavid
     - sudomakeinstall2
     - mlguerrero12
+    - rauhersu
+    - fontivan
+  oran-o2ims-product-owners:
+    - fontivan
+    - rauhersu
