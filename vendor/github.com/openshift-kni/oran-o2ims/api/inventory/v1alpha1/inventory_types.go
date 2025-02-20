@@ -111,6 +111,16 @@ type AlarmServerConfig struct {
 	ServerConfig `json:",inline"`
 }
 
+// ArtifactsServerConfig contains the configuration for the artifacts server.
+type ArtifactsServerConfig struct {
+	ServerConfig `json:",inline"`
+}
+
+// ProvisioningServerConfig contains the configuration for the provisioning server.
+type ProvisioningServerConfig struct {
+	ServerConfig `json:",inline"`
+}
+
 // InventorySpec defines the desired state of Inventory
 type InventorySpec struct {
 	// Image is the full reference of the container image that contains the binary. This is
@@ -126,15 +136,23 @@ type InventorySpec struct {
 	// ResourceServerConfig contains the configuration for the resource server.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ResourceServerConfig ResourceServerConfig `json:"resourceServerConfig,omitempty"`
+	ResourceServerConfig *ResourceServerConfig `json:"resourceServerConfig,omitempty"`
 	// ClusterServerConfig contains the configuration for the resource server.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ClusterServerConfig ClusterServerConfig `json:"clusterServerConfig,omitempty"`
+	ClusterServerConfig *ClusterServerConfig `json:"clusterServerConfig,omitempty"`
 	// AlarmServerConfig contains the configuration for the alarm server.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Alarm Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	AlarmServerConfig AlarmServerConfig `json:"alarmServerConfig"`
+	AlarmServerConfig *AlarmServerConfig `json:"alarmServerConfig"`
+	// ArtifactsServerConfig contains the configuration for the artifacts server.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Artifacts Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ArtifactsServerConfig *ArtifactsServerConfig `json:"artifactsServerConfig"`
+	// ProvisioningServerConfig contains the configuration for the provisioning server.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Provisioning Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ProvisioningServerConfig *ProvisioningServerConfig `json:"provisioningServerConfig"`
 	// IngressHost defines the FQDN for the IMS endpoints.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ingress Host",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
