@@ -184,8 +184,8 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 	}
 
 	// Remove the disable-auto-import annotation for the managed cluster
-	// if the cluster provisioning is in progress.
-	if utils.IsClusterProvisionInProgress(t.object) {
+	// if the cluster provisioning is completed.
+	if utils.IsClusterProvisionCompleted(t.object) {
 		return t.removeDisableAutoImportAnnotation(ctx, clusterInstance)
 	}
 
