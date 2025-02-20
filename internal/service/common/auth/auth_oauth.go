@@ -20,6 +20,7 @@ type OAuthAuthenticatorConfig struct {
 	UsernameClaim        string
 	GroupsClaim          string
 	SupportedSigningAlgs []string
+	ClientBindingClaim   string
 	Client               *http.Client
 }
 
@@ -46,6 +47,12 @@ func (c *OAuthAuthenticatorConfig) New(ctx context.Context) (authenticator.Reque
 					Prefix: &noPrefix,
 					Claim:  c.GroupsClaim,
 				},
+				Extra: []apiserver.ExtraMapping{
+					{
+						Key:             fingerprintKey,
+						ValueExpression: c.ClientBindingClaim,
+					},
+				},
 			},
 		},
 		Client:               c.Client,
@@ -57,10 +64,10 @@ func (c *OAuthAuthenticatorConfig) New(ctx context.Context) (authenticator.Reque
 		return nil, fmt.Errorf("failed to create OIDC authenticator: %w", err)
 	}
 
-	tokenAuthenticator := bearertoken.New(jwtAuthenticator)
-
 	return &oAuthAuthenticator{
-		authenticator: tokenAuthenticator,
+		// Wrap the bearer token authenticate with one that can verify the client certificate binding if it is present
+		// in the incoming token.
+		authenticator: WithClientVerification(bearertoken.New(jwtAuthenticator)),
 		clientID:      c.ClientID,
 	}, nil
 }

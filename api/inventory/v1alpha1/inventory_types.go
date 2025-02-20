@@ -51,8 +51,13 @@ type OAuthConfig struct {
 	// a nested field in the JSON structure of the JWT object.
 	//    i.e., {"roles": ["a", "b"]} rather than {"realm": {"roles": ["a", "b"}}.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Groups Claim",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	//+kubebuilder:default=groups
+	//+kubebuilder:default=roles
 	GroupsClaim string `json:"groupsClaim"`
+	// ClientBindingClaim represents the claim contained within the OAuth JWT token which holds the certificate SHA256
+	// fingerprint.  This is expected to be a CEL mapper expression.  It should only be changed in advanced scenarios.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="OAuth Client Binding Claim",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	//+kubebuilder:default="has(claims.cnf) ? claims.cnf['x5t#S256'] : []"
+	ClientBindingClaim string `json:"clientBindingClaim"`
 }
 
 // TLSConfig defines the TLS specific attributes specific to the SMO and OAuth servers
