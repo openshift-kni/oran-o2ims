@@ -84,7 +84,7 @@ var _ = Describe("ExtensionUtils", func() {
 				Namespace: InventoryNamespace,
 			},
 			Spec: inventoryv1alpha1.InventorySpec{
-				ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{},
+				ResourceServerConfig: &inventoryv1alpha1.ResourceServerConfig{},
 			},
 		}
 
