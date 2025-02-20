@@ -146,6 +146,10 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 // DataChangeEventToNotification converts a DataChangeEvent to a generic Notification.
 // AlarmEventRecord is converted to AlarmEventNotification which becomes the final notification payload.
 func DataChangeEventToNotification(record *models.DataChangeEvent) (*notifier.Notification, error) {
+	if record == nil {
+		return nil, fmt.Errorf("cannot convert nil record")
+	}
+
 	if record.AfterState == nil {
 		return nil, fmt.Errorf("after_state is nil")
 	}
@@ -156,17 +160,9 @@ func DataChangeEventToNotification(record *models.DataChangeEvent) (*notifier.No
 	}
 
 	var alarm AlarmEventRecord
-	err = json.Unmarshal(data, &alarm)
-	if err != nil {
+	if err := json.Unmarshal(data, &alarm); err != nil {
 		return nil, fmt.Errorf("error unmarshalling alarm event: %w", err)
 	}
-
-	// Print the result
-	var rawData map[string]interface{}
-	json.Unmarshal(data, &rawData)
-	fmt.Printf("alarm_event_record_id type: %T\n", rawData["alarm_event_record_id"])
-	fmt.Printf("alarm_raised_time type: %T\n", rawData["alarm_raised_time"])
-	fmt.Printf("perceived_severity type: %T\n", rawData["perceived_severity"])
 
 	return &notifier.Notification{
 		NotificationID: *record.DataChangeID,
