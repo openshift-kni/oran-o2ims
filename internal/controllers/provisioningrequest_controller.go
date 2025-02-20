@@ -349,9 +349,6 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 			return requeueWithError(err)
 		}
 		if timedOutOrFailed {
-			if err = t.checkResourcePreparationStatus(ctx); err != nil {
-				return requeueWithError(err)
-			}
 			// Timeout occurred or failed, stop requeuing
 			return doNotRequeue(), nil
 		}
@@ -361,37 +358,47 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	}
 
 	// Check the ClusterInstance status if exists
-	if t.object.Status.Extensions.ClusterDetails != nil {
-		err = t.checkClusterProvisionStatus(
-			ctx, t.object.Status.Extensions.ClusterDetails.Name)
+	if t.object.Status.Extensions.ClusterDetails == nil {
+		if err = t.checkResourcePreparationStatus(ctx); err != nil {
+			return requeueWithError(err)
+		}
+		return doNotRequeue(), nil
+	}
+	err = t.checkClusterProvisionStatus(
+		ctx, t.object.Status.Extensions.ClusterDetails.Name)
+	if err != nil {
+		return requeueWithError(err)
+	}
+
+	// Check the policy configuration status only after the cluster provisioning
+	// has started, and not failed or timedout
+	if utils.IsClusterProvisionPresent(t.object) &&
+		!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+		requeue, err := t.handleClusterPolicyConfiguration(ctx)
 		if err != nil {
 			return requeueWithError(err)
 		}
-
-		// Check the policy configuration status only after the cluster provisioning
-		// has started, and not failed or timedout
-		if utils.IsClusterProvisionPresent(t.object) &&
-			!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
-			requeue, err := t.handleClusterPolicyConfiguration(ctx)
-			if err != nil {
-				return requeueWithError(err)
-			}
-			// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
-			// or there are enforce policies that are not Compliant
-			if !utils.IsClusterProvisionCompleted(t.object) || requeue {
-				return requeueWithLongInterval(), nil
-			}
+		// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
+		// or there are enforce policies that are not Compliant and configuration
+		// has not timed out
+		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
+			return requeueWithLongInterval(), nil
 		}
 	}
 
-	if err = t.checkResourcePreparationStatus(ctx); err != nil {
-		return requeueWithError(err)
+	// If the existing provisioning has been fulfilled, check if there are any issues
+	// with the validation, rendering, or creation of resources due to updates to the
+	// ProvisioningRequest. If there are issues, transition the provisioningPhase to failed.
+	if utils.IsProvisioningStateFulfilled(t.object) {
+		if err = t.checkResourcePreparationStatus(ctx); err != nil {
+			return requeueWithError(err)
+		}
 	}
 	return doNotRequeue(), nil
 }
 
 // checkResourcePreparationStatus checks for validation and preparation failures, setting the
-// provisioningState to failed if no provisioning is currently in progress and issues are found.
+// provisioningPhase to failed if issues are found.
 func (t *provisioningRequestReconcilerTask) checkResourcePreparationStatus(ctx context.Context) error {
 	conditionTypes := []provisioningv1alpha1.ConditionType{
 		provisioningv1alpha1.PRconditionTypes.Validated,
