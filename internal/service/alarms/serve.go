@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/listener"
+
 	"github.com/getkin/kin-openapi/openapi3"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
@@ -180,6 +182,13 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)
 
+	// Start listening for alarms events using pg listen/notify
+	go func() {
+		if err := listener.ListenForAlarmsPgChannels(ctx, pool, &alarmServer); err != nil {
+			slog.Error("ListenForAlarmsPgChannels error", "error", err)
+		}
+	}()
+
 	// Configure AM right before the server starts listening
 	if err := alertmanager.Setup(ctx); err != nil {
 		return fmt.Errorf("error configuring alert manager: %w", err)
@@ -243,7 +252,6 @@ func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfi
 	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
 	newNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
-	a.NotificationProvider = notificationsProvider
 	a.Notifier = newNotifier
 
 	// Start alarms notifier
