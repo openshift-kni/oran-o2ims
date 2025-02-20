@@ -147,7 +147,8 @@
                         },
                         "args": [
                                 "start",
-                                "controller-manager"
+                                "controller-manager",
+                                "--enable-webhooks=false"
                         ]
                 }
         ]

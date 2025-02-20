@@ -15,7 +15,6 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift/assisted-service/api/v1beta1"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -2303,7 +2302,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
                     `,
 					),
 				},
-				Interfaces: []*v1beta1.Interface{
+				Interfaces: []*assistedservicev1beta1.Interface{
 					{Name: "eno1", MacAddress: "00:00:00:01:20:30"},
 					{Name: "eth0", MacAddress: "02:00:00:80:12:14"},
 					{Name: "eth1", MacAddress: "02:00:00:80:12:15"},
