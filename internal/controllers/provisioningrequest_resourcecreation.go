@@ -129,6 +129,10 @@ func (t *provisioningRequestReconcilerTask) createExtraManifestsConfigMap(
 func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 	ctx context.Context, clusterName string) error {
 
+	if clusterName == "" {
+		return fmt.Errorf("spec.clusterName cannot be empty")
+	}
+
 	// Create the namespace.
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{

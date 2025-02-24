@@ -116,7 +116,7 @@ required:
 type: object
 `
 
-var _ = Describe("disallowUnknownFieldsInSchema", func() {
+var _ = Describe("DisallowUnknownFieldsInSchema", func() {
 	var schemaMap map[string]any
 
 	BeforeEach(func() {
@@ -232,7 +232,7 @@ required:
 type: object
 `
 		// Call the function
-		disallowUnknownFieldsInSchema(schemaMap)
+		DisallowUnknownFieldsInSchema(schemaMap)
 
 		var expectedSchema map[string]any
 		err := yaml.Unmarshal([]byte(expected), &expectedSchema)

@@ -14,11 +14,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/files"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
@@ -258,6 +261,125 @@ func ValidateDefaultInterfaces[T any](data T) error {
 				}
 			}
 		}
+	}
+	return nil
+}
+
+// removeLabelFromInterfaces removed the label property for each interface as the label
+// property is not part of the ClusterInstance schema.
+func removeLabelFromInterfaces[T any](data T) error {
+	dataMap, _ := any(data).(map[string]any)
+	nodes, ok := dataMap["nodes"].([]any)
+	if ok {
+		for _, node := range nodes {
+			nodeMap, ok := node.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("unexpected: invalid node data structure")
+			}
+			interfaces := getInterfaces(nodeMap)
+			if interfaces == nil {
+				return fmt.Errorf("failed to extract the interfaces from the node map")
+			}
+			for _, intf := range interfaces {
+				delete(intf, "label")
+			}
+		}
+	}
+	return nil
+}
+
+// removeRequiredFromSchema removes all the requiered properties from a map.
+func removeRequiredFromSchema(schema map[string]any) {
+	// Check if the current schema level has "properties" and "required" defined.
+	properties, hasProperties := schema["properties"]
+	_, hasRequired := schema["required"]
+
+	if hasProperties && hasRequired {
+		delete(schema, "required")
+
+		// Recurse into each property defined under "properties"
+		if propsMap, ok := properties.(map[string]any); ok {
+			for _, propValue := range propsMap {
+				if propSchema, ok := propValue.(map[string]any); ok {
+					removeRequiredFromSchema(propSchema)
+				}
+			}
+		}
+	}
+
+	// Recurse into each property defined under "items"
+	if items, hasItems := schema["items"]; hasItems {
+		if itemSchema, ok := items.(map[string]any); ok {
+			removeRequiredFromSchema(itemSchema)
+		}
+	}
+}
+
+// ValidateConfigmapSchemaAgainstClusterInstanceCRD checks if the data of the ClusterInstance
+// default ConfigMap matches the ClusterInstance CRD schema.
+func ValidateConfigmapSchemaAgainstClusterInstanceCRD[T any](ctx context.Context, c client.Client, data T) error {
+	// Get the ClusterInstance CRD.
+	clusterInstanceCrd := &unstructured.Unstructured{}
+	clusterInstanceCrd.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apiextensions.k8s.io",
+		Version: "v1",
+		Kind:    "CustomResourceDefinition",
+	})
+	crdName := fmt.Sprintf("%s.%s", ClusterInstanceCrdName, siteconfig.Group)
+	err := c.Get(ctx, types.NamespacedName{Name: crdName}, clusterInstanceCrd)
+	if err != nil {
+		return fmt.Errorf("failed to obtain the %s.%s CRD: %w", ClusterInstanceCrdName, siteconfig.Group, err)
+	}
+
+	// Extract the OpenAPIV3Schema.
+	openAPIV3Schema := make(map[string]interface{})
+	versions, found, err := unstructured.NestedSlice(clusterInstanceCrd.Object, "spec", "versions")
+	if err != nil || !found {
+		return fmt.Errorf("failed to obtain the versions of the %s.%s CRD: %w", ClusterInstanceCrdName, siteconfig.Group, err)
+	}
+
+	// Find the version that is stored and served.
+	for index, version := range versions {
+		versionMap, ok := version.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf(
+				"failed to convert version %d of the %s.%s CRD to map: %w",
+				index, ClusterInstanceCrdName, siteconfig.Group, err)
+		}
+		if versionMap["served"] != true || versionMap["storage"] != true {
+			continue
+		}
+		// Extract the schema.
+		openAPIV3Schema, found, err = unstructured.NestedMap(versionMap, "schema", "openAPIV3Schema")
+		if err != nil || !found {
+			return fmt.Errorf(
+				"failed to obtain the openAPIV3Schema from version %d of the %s.%s CRD: %w",
+				index, ClusterInstanceCrdName, siteconfig.Group, err)
+		}
+		break
+	}
+	if len(openAPIV3Schema) == 0 {
+		return fmt.Errorf("no version served & stored in the %s.%s CRD ", ClusterInstanceCrdName, siteconfig.Group)
+	}
+
+	// If the properties and spec attributes are missing or the conversion fails, then something is wrong
+	// with k8s itself.
+	openAPIV3SchemaSpec := openAPIV3Schema["properties"].(map[string]interface{})["spec"].(map[string]interface{})
+
+	// Prepare the data for schema validation.
+	// Remove the `required` property as the default ConfigMaps contains only a subset of the ClusterInstance spec.
+	removeRequiredFromSchema(openAPIV3SchemaSpec)
+	// Disalllow unknown properties in the ClusterInstance CRD schema.
+	provisioningv1alpha1.DisallowUnknownFieldsInSchema(openAPIV3SchemaSpec)
+	// Remove the interface label properties as it's not part of the ClusterInstance CRD schema.
+	dataMap, _ := any(data).(map[string]any)
+	if err := removeLabelFromInterfaces(dataMap); err != nil {
+		return fmt.Errorf("error removing label from interfaces")
+	}
+
+	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(openAPIV3SchemaSpec, dataMap)
+	if err != nil {
+		return fmt.Errorf("the ConfigMap does not match the ClusterInstance schema: %w", err)
 	}
 	return nil
 }

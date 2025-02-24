@@ -28,6 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -142,4 +143,5 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(pluginv1alpha1.GroupVersion, &pluginv1alpha1.HardwareManager{})
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.Agent{})
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.AgentList{})
+	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
 })

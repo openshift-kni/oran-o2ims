@@ -148,6 +148,7 @@ const (
 	ClusterInstanceTemplateName                 = "ClusterInstance"
 	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
+	ClusterInstanceCrdName                      = "clusterinstances"
 )
 
 var (

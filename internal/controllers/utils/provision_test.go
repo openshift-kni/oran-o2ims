@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -648,6 +649,159 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 		isReadyForConfig, err := ClusterIsReadyForPolicyConfig(ctx, fakeClient, clusterName)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(isReadyForConfig).To(BeTrue())
+	})
+})
+
+var _ = Describe("removeLabelFromInterfaces", func() {
+
+	It("returns error for invalid node structure", func() {
+		data := map[string]interface{}{
+			"baseDomain": "example.sno",
+			"nodes": []interface{}{
+				42, // should be a map
+			},
+		}
+		err := removeLabelFromInterfaces(data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("unexpected: invalid node data structure"))
+	})
+
+	It("returns error for failing to extract node interfaces", func() {
+		data := map[string]interface{}{
+			"baseDomain": "example.sno",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": "value", // should be a map
+				},
+			},
+		}
+		err := removeLabelFromInterfaces(data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("failed to extract the interfaces from the node map"))
+	})
+
+	It("removes the labels from the  node interfaces", func() {
+		data := map[string]interface{}{
+			"baseDomain": "example.sno",
+			"nodes": []interface{}{
+				map[string]interface{}{
+					"nodeNetwork": map[string]interface{}{
+						"interfaces": []interface{}{
+							map[string]interface{}{
+								"name":       "eth0",
+								"label":      "boot-interface",
+								"macAddress": "some-mac",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := removeLabelFromInterfaces(data)
+		Expect(err).To(Not(HaveOccurred()))
+		Expect(
+			data["nodes"].([]interface{})[0].(map[string]interface{})["nodeNetwork"].(map[string]interface{})["interfaces"].([]interface{})[0].(map[string]interface{})).
+			To(Equal(
+				map[string]interface{}{
+					"name":       "eth0",
+					"macAddress": "some-mac",
+				}),
+			)
+	})
+})
+
+var _ = Describe("removeRequiredFromClusterInstanceSchema", func() {
+
+	It("removes all the requested attributes from maps and arrays", func() {
+		var specIntf map[string]interface{}
+		err := yaml.Unmarshal([]byte(TestClusterInstancePropertiesRequiredRemoval), &specIntf)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(specIntf).To(HaveKey("required"))
+		Expect(
+			specIntf["properties"].(map[string]interface{})["machineNetwork"].(map[string]interface{})["items"].(map[string]interface{})).To(HaveKey("required"))
+		removeRequiredFromSchema(specIntf)
+		Expect(specIntf).To(Not(HaveKey("required")))
+		Expect(
+			specIntf["properties"].(map[string]interface{})["machineNetwork"].(map[string]interface{})["items"].(map[string]interface{})).To(Not(HaveKey("required")))
+	})
+})
+
+var _ = Describe("ValidateDefaultConfigmapSchema", func() {
+	var (
+		ctx        context.Context
+		fakeClient client.Client
+	)
+
+	BeforeEach(func() {
+		fakeClient = getFakeClientFromObjects()
+	})
+
+	It("returns an error when the ClusterInstance CRD does not exist", func() {
+		var data map[string]interface{}
+		err := ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).
+			To(Equal(
+				fmt.Sprintf(
+					"failed to obtain the %s.%s CRD: customresourcedefinitions.apiextensions.k8s.io \"%s.%s\" not found",
+					ClusterInstanceCrdName, siteconfig.Group, ClusterInstanceCrdName, siteconfig.Group)))
+	})
+
+	Context("The ClusterInstance CRD does exists", func() {
+		It("returns error if the ClusterInstance CRD is missing its versions", func() {
+			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecNoVersions)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
+
+			var data map[string]interface{}
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to obtain the versions of the %s.%s CRD", ClusterInstanceCrdName, siteconfig.Group)))
+		})
+
+		It("returns error if no version of the ClusterInstance CRD is served", func() {
+			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecServedFalse)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
+
+			var data map[string]interface{}
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("no version served & stored in the %s.%s CRD ", ClusterInstanceCrdName, siteconfig.Group)))
+		})
+
+		It("returns error if the ConfigMap schema does not match the ClusterInstance CRD schema", func() {
+			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
+
+			data := map[string]interface{}{
+				"clusterImageSetNameRef": "4.15",
+				"pullSecretRef": map[string]interface{}{
+					"should-be-name": "pull-secret",
+				},
+			}
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				"ConfigMap does not match the ClusterInstance schema: " +
+					"invalid input: pullSecretRef: Additional property should-be-name is not allowed"))
+		})
+
+		It("returns no error if the ConfigMap schema matches the ClusterInstance CRD schema", func() {
+			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
+
+			data := map[string]interface{}{
+				"clusterImageSetNameRef": "4.15",
+				"pullSecretRef": map[string]interface{}{
+					"name": "pull-secret",
+				},
+			}
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			Expect(err).ToNot(HaveOccurred())
+		})
 	})
 })
 

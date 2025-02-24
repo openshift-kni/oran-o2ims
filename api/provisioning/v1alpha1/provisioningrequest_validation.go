@@ -76,10 +76,10 @@ func ExtractMatchingInput(parentSchema []byte, subSchemaKey string) (any, error)
 	return matchingInput, nil
 }
 
-// disallowUnknownFieldsInSchema updates a schema by adding "additionalProperties": false
+// DisallowUnknownFieldsInSchema updates a schema by adding "additionalProperties": false
 // to all objects/arrays that define "properties". This ensures that any unknown fields
 // not defined in the schema will be disallowed during validation.
-func disallowUnknownFieldsInSchema(schema map[string]any) {
+func DisallowUnknownFieldsInSchema(schema map[string]any) {
 	// Check if the current schema level has "properties" defined
 	if properties, hasProperties := schema["properties"]; hasProperties {
 		// If "additionalProperties" is not already set, add it with the value false
@@ -91,7 +91,7 @@ func disallowUnknownFieldsInSchema(schema map[string]any) {
 		if propsMap, ok := properties.(map[string]any); ok {
 			for _, propValue := range propsMap {
 				if propSchema, ok := propValue.(map[string]any); ok {
-					disallowUnknownFieldsInSchema(propSchema)
+					DisallowUnknownFieldsInSchema(propSchema)
 				}
 			}
 		}
@@ -100,7 +100,7 @@ func disallowUnknownFieldsInSchema(schema map[string]any) {
 	// Recurse into each property defined under "items"
 	if items, hasItems := schema["items"]; hasItems {
 		if itemSchema, ok := items.(map[string]any); ok {
-			disallowUnknownFieldsInSchema(itemSchema)
+			DisallowUnknownFieldsInSchema(itemSchema)
 		}
 	}
 
@@ -201,7 +201,7 @@ func (r *ProvisioningRequest) ValidateClusterInstanceInputMatchesSchema(
 			"failed to extract %s subschema: %s", TemplateParamClusterInstance, err.Error())
 	}
 	// Any unknown fields not defined in the schema will be disallowed
-	disallowUnknownFieldsInSchema(clusterInstanceSubSchema)
+	DisallowUnknownFieldsInSchema(clusterInstanceSubSchema)
 
 	// Get the matching input for ClusterInstanceParameters
 	clusterInstanceMatchingInput, err := ExtractMatchingInput(
