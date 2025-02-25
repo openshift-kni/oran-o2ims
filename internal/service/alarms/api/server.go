@@ -18,7 +18,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/notifier_provider"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -47,8 +46,6 @@ type AlarmsServer struct {
 	Infrastructure *infrastructure.Infrastructure
 	// Wg to allow alarm server level background tasks to finish before graceful exit
 	Wg sync.WaitGroup
-	// NotificationProvider to handle new events
-	NotificationProvider notifier.NotificationProvider
 	// Notifier to notify subscribers with new events
 	Notifier *notifier.Notifier
 	// ServiceConfig config needed to manage ServiceConfig
@@ -138,13 +135,6 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 
 	r := models.ConvertSubscriptionAPIToModel(request.Body)
 
-	// Get the max alarms sequence to avoid overwhelming new subscribers and set it as event cursor. If sub wants any previous alerts, they would simply use `/alarm(s)` endpoint
-	seq, err := a.AlarmsRepository.GetMaxAlarmSeq(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get max alarm seq for subscription %+v: %w", request.Body, err)
-	}
-	r.EventCursor = seq
-
 	// TODO: perform a Reachability check as suggested in O-RAN.WG6.ORCH-USE-CASES-R003-v11.00
 
 	record, err := a.AlarmsRepository.CreateAlarmSubscription(ctx, r)
@@ -163,6 +153,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 		return nil, fmt.Errorf("failed to create alarm subscription: %w", err)
 	}
 
+	// TODO make it event-driven with PG listen/notify
 	// Signal the notifier to handle this new subscription
 	a.Notifier.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      false,
@@ -195,6 +186,7 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 		}), nil
 	}
 
+	// TODO make it event-driven with PG listen/notify
 	// Signal the notifier to handle this subscription change
 	a.Notifier.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      true,
@@ -336,7 +328,6 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 	}
 
 	// Patch alarmAcknowledged
-	notifyAlarmAcknowledged := false
 	if request.Body.AlarmAcknowledged != nil {
 		alarmAcknowledged := *request.Body.AlarmAcknowledged
 
@@ -368,21 +359,13 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		record.AlarmAcknowledged = alarmAcknowledged
 		currentTime := time.Now()
 		record.AlarmAcknowledgedTime = &currentTime
-
-		// Good to notify
-		notifyAlarmAcknowledged = true
 	}
 
 	// Update the Alarm Event Record
+	// Subscriber notification sent async
 	updated, err := a.AlarmsRepository.PatchAlarmEventRecordACK(ctx, request.AlarmEventRecordId, record)
 	if err != nil {
 		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
-	}
-
-	// Send a notification since we have now an ack event
-	if notifyAlarmAcknowledged && updated != nil {
-		n := notifier_provider.GetNotifierNotificationFromAer(*updated, a.GlobalCloudID)
-		a.Notifier.Notify(ctx, &n)
 	}
 
 	slog.Debug("Alarm acknowledged/cleared", "alarmEventRecordId", updated.AlarmEventRecordID, "alarmAcknowledged", updated.AlarmAcknowledged, "alarmAcknowledgedTime", updated.AlarmAcknowledgedTime,
@@ -446,6 +429,7 @@ func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, reque
 		return nil, fmt.Errorf("failed to patch Alarm Service Configuration: %w", err)
 	}
 
+	// TODO make it event-driven with PG listen/notify
 	// Update Cronjob
 	if err := a.ServiceConfig.EnsureCleanupCronJob(ctx, patched); err != nil {
 		return nil, fmt.Errorf("failed to start cleanup cronjob during AlarmServiceConfiguration patch: %w", err)
@@ -484,6 +468,7 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 		serviceConfigRecord.Extensions = *request.Body.Extensions
 	}
 
+	// TODO make it event-driven with PG listen/notify
 	// Update the Alarm Service Configuration
 	updated, err := a.AlarmsRepository.UpdateServiceConfiguration(ctx, serviceConfigRecord.ID, &serviceConfigRecord)
 	if err != nil {
@@ -530,22 +515,7 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
-	// Return 200 before subscription processing to free up AM conn
-	a.Wg.Add(1)
-	go func() {
-		defer a.Wg.Done()
-		// Create new background context for subscription processing
-		subCtx := context.Background()
-		notifications, err := a.NotificationProvider.GetNotifications(subCtx)
-		if err != nil {
-			slog.Error("failed to get alarm notifications", "error", err)
-		}
-
-		for _, notification := range notifications {
-			a.Notifier.Notify(subCtx, &notification)
-		}
-	}()
-
+	// Subscriber notification sent async
 	slog.Info("Successfully handled all alertmanager alerts")
 	return api.AmNotification200Response{}, nil
 }

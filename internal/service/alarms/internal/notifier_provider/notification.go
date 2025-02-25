@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
+
 	"github.com/google/uuid"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	a "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
@@ -30,26 +31,23 @@ func NewNotificationStorageProvider(repository a.AlarmRepositoryInterface, globa
 	}
 }
 
+// GetNotifications return all notations from outbox
 func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]notifier.Notification, error) {
 	var notifications []notifier.Notification
-	// Get all subscriptions
-	subscriptions, err := n.repository.GetAlarmSubscriptions(ctx)
-	if err != nil {
-		return notifications, fmt.Errorf("failed to get all subscriptions for alarms: %w", err)
-	}
-	if len(subscriptions) == 0 {
-		slog.Info("No subscriptions to notify")
-		return notifications, nil
-	}
-	slog.Info("Found subscriptions to notify", "subscription count", len(subscriptions))
-	// Find the min event cursor, this will decide the total events that needs to be there ignoring the filter
-	alarms, err := n.repository.GetAlarmsForSubscription(ctx, *getMinSubscription(subscriptions))
+	records, err := n.repository.GetAllAlarmsDataChange(ctx)
 	if err != nil {
 		return notifications, fmt.Errorf("failed to get alarms for subscription: %w", err)
 	}
 
-	for _, alarm := range alarms {
-		notifications = append(notifications, GetNotifierNotificationFromAer(alarm, n.globalCloudID))
+	for _, record := range records {
+		notification, err := models.DataChangeEventToNotification(&record, n.globalCloudID)
+		if err != nil {
+			slog.Warn("failed to convert alarm event to notification", "err", err)
+			continue
+		}
+		if notification != nil {
+			notifications = append(notifications, *notification)
+		}
 	}
 
 	if len(notifications) == 0 {
@@ -59,28 +57,10 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 	return notifications, nil
 }
 
-// GetNotifierNotificationFromAer convert alarmEventRecord to a notification type
-func GetNotifierNotificationFromAer(alarmEventRecord models.AlarmEventRecord, globalCloudID uuid.UUID) notifier.Notification {
-	payload := models.ConvertAlarmEventRecordModelToAlarmEventNotification(alarmEventRecord, globalCloudID)
-	return notifier.Notification{
-		NotificationID: payload.AlarmEventRecordId,
-		SequenceID:     int(alarmEventRecord.AlarmSequenceNumber),
-		Payload:        payload,
+func (n *NotificationStorageProvider) DeleteNotification(ctx context.Context, dataChangeId uuid.UUID) error {
+	if err := n.repository.DeleteAlarmsDataChange(ctx, dataChangeId); err != nil {
+		return fmt.Errorf("failed to delete alarms notifications from outbox : %w", err)
 	}
-}
 
-// getMinSubscription get the min cursor and set filer to nil - this will retrieve the alarms that are greater and ignoring the filter
-func getMinSubscription(subscriptions []models.AlarmSubscription) *models.AlarmSubscription {
-	minSub := subscriptions[0]
-	for i := 1; i < len(subscriptions); i++ {
-		if subscriptions[i].EventCursor < minSub.EventCursor {
-			minSub = subscriptions[i]
-		}
-	}
-	minSub.Filter = nil
-	return &minSub // return a copy
-}
-
-func (n *NotificationStorageProvider) DeleteNotification(_ context.Context, _ uuid.UUID) error {
 	return nil
 }

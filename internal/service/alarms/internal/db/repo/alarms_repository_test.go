@@ -335,99 +335,6 @@ var _ = Describe("AlarmsRepository", func() {
 		})
 	})
 
-	Describe("GetAlarmsForSubscription", func() {
-		It("retrieves alarms based on subscription criteria", func() {
-			f := api.AlarmSubscriptionInfoFilterNEW
-			subscription := models.AlarmSubscription{
-				SubscriptionID: uuid.New(),
-				EventCursor:    5,
-				Filter:         &f,
-			}
-
-			mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmEventRecord{}.TableName())).
-				WithArgs(subscription.EventCursor, subscription.Filter).
-				WillReturnRows(
-					pgxmock.NewRows([]string{
-						"alarm_event_record_id", "alarm_raised_time",
-						"perceived_severity", "notification_event_type",
-					}).
-						AddRow(uuid.New(), time.Now(), api.WARNING, f),
-				)
-
-			results, err := repo.GetAlarmsForSubscription(ctx, subscription)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(results).To(HaveLen(1))
-			Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-		})
-
-		It("filters alarms by notification event type", func() {
-			f := api.AlarmSubscriptionInfoFilterACKNOWLEDGE
-			subscription := models.AlarmSubscription{
-				SubscriptionID: uuid.New(),
-				EventCursor:    5,
-				Filter:         &f,
-			}
-
-			mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmEventRecord{}.TableName())).
-				WithArgs(subscription.EventCursor, subscription.Filter).
-				WillReturnRows(
-					pgxmock.NewRows([]string{
-						"alarm_event_record_id", "alarm_raised_time",
-						"perceived_severity", "notification_event_type",
-						"alarm_sequence_number",
-					}).AddRow(uuid.New(), time.Now(), api.WARNING, f, int64(6)))
-
-			results, err := repo.GetAlarmsForSubscription(ctx, subscription)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(results).To(HaveLen(1))
-			Expect(results[0].NotificationEventType).To(Equal(f))
-			Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-		})
-
-		It("handles subscription with no filter", func() {
-			subscription := models.AlarmSubscription{
-				SubscriptionID: uuid.New(),
-				EventCursor:    5,
-				Filter:         nil,
-			}
-
-			mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmEventRecord{}.TableName())).
-				WithArgs(subscription.EventCursor).
-				WillReturnRows(pgxmock.NewRows([]string{
-					"alarm_event_record_id", "alarm_raised_time",
-					"perceived_severity", "notification_event_type",
-					"alarm_sequence_number",
-				}))
-
-			results, err := repo.GetAlarmsForSubscription(ctx, subscription)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(results).To(BeEmpty())
-			Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-		})
-
-		It("handles no alarms above event cursor", func() {
-			subscription := models.AlarmSubscription{
-				SubscriptionID: uuid.New(),
-				EventCursor:    1000, // High cursor value
-				Filter:         nil,
-			}
-
-			mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmEventRecord{}.TableName())).
-				WithArgs(subscription.EventCursor).
-				WillReturnRows(pgxmock.NewRows([]string{
-					"alarm_event_record_id", "alarm_raised_time",
-					"perceived_severity", "notification_event_type",
-					"alarm_sequence_number",
-				}))
-
-			results, err := repo.GetAlarmsForSubscription(ctx, subscription)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(results).To(BeEmpty())
-			Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-		})
-
-	})
-
 	Describe("UpdateSubscriptionEventCursor", func() {
 		When("update is successful", func() {
 			It("updates subscription event cursor successfully", func() {
@@ -605,32 +512,6 @@ var _ = Describe("AlarmsRepository", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.ConsumerSubscriptionID).To(Equal(subscription.ConsumerSubscriptionID))
 			Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-		})
-	})
-
-	Describe("GetMaxAlarmSeq", func() {
-		When("alarms exist", func() {
-			It("returns maximum alarm sequence number", func() {
-				mock.ExpectQuery(fmt.Sprintf(`SELECT (.+MAX.+) FROM "%s"`, models.AlarmEventRecord{}.TableName())).
-					WillReturnRows(pgxmock.NewRows([]string{"coalesce"}).AddRow(int64(42)))
-
-				maxSeq, err := repo.GetMaxAlarmSeq(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(maxSeq).To(Equal(int64(42)))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
-		})
-
-		When("no alarms exist", func() {
-			It("returns 0 when no alarms exist", func() {
-				mock.ExpectQuery("SELECT COALESCE").
-					WillReturnRows(pgxmock.NewRows([]string{"coalesce"}).AddRow(int64(0)))
-
-				maxSeq, err := repo.GetMaxAlarmSeq(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(maxSeq).To(Equal(int64(0)))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
-			})
 		})
 	})
 })
