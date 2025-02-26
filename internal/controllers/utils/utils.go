@@ -417,7 +417,8 @@ func addArgsForOAuth(inventory *inventoryv1alpha1.Inventory, args []string) []st
 				fmt.Sprintf("--oauth-issuer-url=%s", smo.OAuthConfig.URL),
 				fmt.Sprintf("--oauth-token-endpoint=%s", smo.OAuthConfig.TokenEndpoint),
 				fmt.Sprintf("--oauth-username-claim=%s", smo.OAuthConfig.UsernameClaim),
-				fmt.Sprintf("--oauth-groups-claim=%s", smo.OAuthConfig.GroupsClaim))
+				fmt.Sprintf("--oauth-groups-claim=%s", smo.OAuthConfig.GroupsClaim),
+				fmt.Sprintf("--oauth-client-binding-claim=%s", smo.OAuthConfig.ClientBindingClaim))
 		}
 
 		if smo.TLS != nil && smo.TLS.ClientCertificateName != nil {

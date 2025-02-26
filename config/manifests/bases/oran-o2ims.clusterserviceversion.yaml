@@ -287,6 +287,13 @@ spec:
         displayName: SMO OAuth Configuration
         path: smo.oauth
       - description: |-
+          ClientBindingClaim represents the claim contained within the OAuth JWT token which holds the certificate SHA256
+          fingerprint.  This is expected to be a CEL mapper expression.  It should only be changed in advanced scenarios.
+        displayName: OAuth Client Binding Claim
+        path: smo.oauth.clientBindingClaim
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
           ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
           client-secret values used by the OAuth client.
         displayName: Client Secret

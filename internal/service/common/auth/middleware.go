@@ -39,6 +39,7 @@ func GetAuthenticator(ctx context.Context, config *utils.CommonServerConfig) (mi
 			ClientID:             config.OAuth.ClientID,
 			UsernameClaim:        config.OAuth.UsernameClaim,
 			GroupsClaim:          config.OAuth.GroupsClaim,
+			ClientBindingClaim:   config.OAuth.ClientBindingClaim,
 			SupportedSigningAlgs: DefaultSigningAlgorithms,
 			Client:               client,
 		}

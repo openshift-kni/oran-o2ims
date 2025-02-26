@@ -167,13 +167,19 @@ spec:
                     description: OAuthConfig defines the configurable attributes required
                       to access the OAuth2 authorization server
                     properties:
+                      clientBindingClaim:
+                        default: 'has(claims.cnf) ? claims.cnf[''x5t#S256''] : []'
+                        description: |-
+                          ClientBindingClaim represents the claim contained within the OAuth JWT token which holds the certificate SHA256
+                          fingerprint.  This is expected to be a CEL mapper expression.  It should only be changed in advanced scenarios.
+                        type: string
                       clientSecretName:
                         description: |-
                           ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
                           client-secret values used by the OAuth client.
                         type: string
                       groupsClaim:
-                        default: groups
+                        default: roles
                         description: |-
                           GroupsClaim represents the claim contained within the OAuth JWT token which holds the list of groups/roles. This
                           must be a list/array and not a space separated list of names.  It must also be a top level attribute rather than
@@ -203,6 +209,7 @@ spec:
                           within the OAuth JWT token which holds the username
                         type: string
                     required:
+                    - clientBindingClaim
                     - clientSecretName
                     - groupsClaim
                     - scopes

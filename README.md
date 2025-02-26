@@ -406,6 +406,12 @@ regarding the OAuth settings and JWT contents.
    cases, this may require special configuration steps on the Authorization Server to ensure the proper format in the
    JWT tokens.
 
+7. Client certificate binding (i.e., RFC8705) is enabled by default. If the authorization server has inserted a claim
+   into the token which contains the SHA256 fingerprint of the client certificate which requested a token then it will
+   be validated. If the client certificate which is making the request doesn't match the client certificate that
+   requested the token then the request will be rejected. That claim is expected to be `"cnf": {"x5t#S256": "...."}`.
+   This is an exception to the rule described in (6) above. See below for an example.
+
 ### Sample OAuth JWT Token
 
 The following is a sample JWT payload and header. The signature footer has been removed.
@@ -420,7 +426,7 @@ Header:
 }
 ```
 
-Footer:
+Payload:
 
 ```json
 {
@@ -435,9 +441,11 @@ Footer:
         "typ": "Bearer",
         "azp": "smo-client",
         "acr": "1",
-        "scope": "openid roles profile o2ims-audience",
-        "clientHost": "192.168.1.2",
-        "realm_access.roles": [
+        "cnf": {
+                "x5t#S256": "S1ArY2E4qD_l4lCuNhLh501CxjVJmNFJbLI2RRzigDc"
+        },
+        "scope": "openid profile role:o2ims-reader role:o2ims-subscriber role:o2ims-maintainer role:o2ims-provisioner",
+        "resource_access.o2ims-client.roles": [
                 "o2ims-reader",
                 "o2ims-subscriber",
                 "o2ims-maintainer",

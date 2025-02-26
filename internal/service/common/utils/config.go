@@ -15,13 +15,14 @@ import (
 
 // OAuthConfig defines the attributes used to communicate with the OAuth server
 type OAuthConfig struct {
-	IssuerURL     string
-	TokenEndpoint string
-	ClientID      string `envconfig:"SMO_OAUTH_CLIENT_ID"`
-	ClientSecret  string `envconfig:"SMO_OAUTH_CLIENT_SECRET"`
-	Scopes        []string
-	UsernameClaim string
-	GroupsClaim   string
+	IssuerURL          string
+	TokenEndpoint      string
+	ClientID           string `envconfig:"SMO_OAUTH_CLIENT_ID"`
+	ClientSecret       string `envconfig:"SMO_OAUTH_CLIENT_SECRET"`
+	Scopes             []string
+	UsernameClaim      string
+	GroupsClaim        string
+	ClientBindingClaim string
 }
 
 // TLSConfig defines the attributes used to establish an mTLS session
@@ -48,17 +49,18 @@ type CommonServerConfig struct {
 }
 
 const (
-	ListenerFlagName           = "api-listener-address"
-	OAuthIssuerURLFlagName     = "oauth-issuer-url"     // nolint: gosec
-	OAuthTokenEndpointFlagName = "oauth-token-endpoint" // nolint: gosec
-	OAuthScopesFlagName        = "oauth-scopes"
-	OAuthUsernameClaimFlagName = "oauth-username-claim"
-	OAuthGroupsClaimFlagName   = "oauth-groups-claim"
-	ServerCertFileFlagName     = "tls-server-cert"
-	ServerKeyFileFlagName      = "tls-server-key"
-	ClientCertFileFlagName     = "tls-client-cert"
-	ClientKeyFileFlagName      = "tls-client-key"
-	CABundleFileFlagName       = "ca-bundle-file"
+	ListenerFlagName                = "api-listener-address"
+	OAuthIssuerURLFlagName          = "oauth-issuer-url"     // nolint: gosec
+	OAuthTokenEndpointFlagName      = "oauth-token-endpoint" // nolint: gosec
+	OAuthScopesFlagName             = "oauth-scopes"
+	OAuthUsernameClaimFlagName      = "oauth-username-claim"
+	OAuthGroupsClaimFlagName        = "oauth-groups-claim"
+	OAuthClientBindingClaimFlagName = "oauth-client-binding-claim"
+	ServerCertFileFlagName          = "tls-server-cert"
+	ServerKeyFileFlagName           = "tls-server-key"
+	ClientCertFileFlagName          = "tls-client-cert"
+	ClientKeyFileFlagName           = "tls-client-key"
+	CABundleFileFlagName            = "ca-bundle-file"
 )
 
 // SetCommonServerFlags creates the flag instances for the server
@@ -99,6 +101,12 @@ func SetCommonServerFlags(cmd *cobra.Command, config *CommonServerConfig) error 
 		OAuthGroupsClaimFlagName,
 		"",
 		"OAuth groups claim",
+	)
+	flags.StringVar(
+		&config.OAuth.ClientBindingClaim,
+		OAuthClientBindingClaimFlagName,
+		"",
+		"OAuth client binding claim",
 	)
 	flags.StringVar(
 		&config.TLS.CertFile,
