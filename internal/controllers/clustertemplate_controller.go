@@ -84,6 +84,7 @@ func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
 	return ctrl.Result{RequeueAfter: interval}
 }
 
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates/finalizers,verbs=update
@@ -307,6 +308,10 @@ func validateConfigmapReference[T any](
 
 	if templateDataKey == utils.ClusterInstanceTemplateDefaultsConfigmapKey {
 		if err = utils.ValidateDefaultInterfaces(data); err != nil {
+			return utils.NewInputError("failed to validate the default ConfigMap: %w", err)
+		}
+
+		if err = utils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, c, data); err != nil {
 			return utils.NewInputError("failed to validate the default ConfigMap: %w", err)
 		}
 	}

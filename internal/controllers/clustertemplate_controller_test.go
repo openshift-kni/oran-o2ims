@@ -35,6 +35,8 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getClusterTemplateRefName(tName, tVersion),
@@ -53,7 +55,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{ct}...)
+		c = getFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
 		reconciler = &ClusterTemplateReconciler{
 			Client: c,
 			Logger: logger,
@@ -70,7 +72,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				},
 				Data: map[string]string{
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 				},
 			},
 			{
@@ -221,11 +223,15 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 			},
 		}
 
-		objs := []client.Object{cm}
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
+
+		objs := []client.Object{cm, clusterInstanceCRD}
 		for _, ct := range cts {
 			objs = append(objs, ct)
 		}
 		c = getFakeClientFromObjects(objs...)
+
 		r = &ClusterTemplateReconciler{
 			Client: c,
 			Logger: logger,
@@ -453,7 +459,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Data: map[string]string{
 					utils.ClusterInstallationTimeoutConfigKey: "80m",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 				},
 			},
 			{
@@ -496,7 +502,11 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{ct}...)
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
+
+		c = getFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
+
 		t = &clusterTemplateReconcilerTask{
 			client: c,
 			logger: logger,
@@ -601,7 +611,9 @@ var _ = Describe("validateConfigmapReference", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		c = getFakeClientFromObjects()
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
+		c = getFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
 	})
 
 	It("should validate a valid configmap", func() {
@@ -614,7 +626,7 @@ var _ = Describe("validateConfigmapReference", func() {
 			Data: map[string]string{
 				utils.ClusterInstallationTimeoutConfigKey: "40m",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: example.sno.com`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -635,6 +647,30 @@ key: value`,
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"failed to get ConfigmapReference: the ConfigMap '%s' is not found in the namespace '%s'", configmapName, namespace)))
+	})
+
+	It("should return validation error message for a configmap that does not match the ClusterInstance CRD", func() {
+		// Create a valid ConfigMap but with a wrong schema.
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.ClusterInstallationTimeoutConfigKey: "40m",
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+baDomain: example.sno.com`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+		// Cluster Instance schema error.
+		err := validateConfigmapReference[map[string]any](
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterInstallationTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("failed to validate the default ConfigMap: the ConfigMap does not match the ClusterInstance schema"))
 	})
 
 	It("should return validation error message for missing template data key in configmap", func() {
@@ -749,7 +785,7 @@ nodes:
 			Data: map[string]string{
 				utils.ClusterInstallationTimeoutConfigKey: "invalid-timeout",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -773,7 +809,7 @@ key: value`,
 			},
 			Data: map[string]string{
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 			},
 			Immutable: &mutable,
 		}
@@ -798,7 +834,7 @@ key: value`,
 			},
 			Data: map[string]string{
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())

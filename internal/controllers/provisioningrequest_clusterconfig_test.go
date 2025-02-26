@@ -42,6 +42,8 @@ var _ = Describe("policyManagement", func() {
 
 	BeforeEach(func() {
 		// Define the needed resources.
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
 		crs := []client.Object{
 			// Cluster Template Namespace.
 			&corev1.Namespace{
@@ -91,7 +93,7 @@ templateRefs:
 - name: "ai-cluster-templates-v1"
   namespace: "siteconfig-operator"
 nodes:
-- hostname: "node1"
+- hostName: "node1"
   nodeNetwork:
     interfaces:
     - name: eno1
@@ -158,6 +160,8 @@ defaultHugepagesSize: "1G"`,
 					Namespace: ctNamespace,
 				},
 			},
+			// ClusterInstance CRD.
+			clusterInstanceCRD,
 			// Provisioning Requests.
 			&provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
@@ -199,6 +203,7 @@ defaultHugepagesSize: "1G"`,
 		}
 
 		c = getFakeClientFromObjects(crs...)
+
 		// Reconcile the ClusterTemplate.
 		CTReconciler = &ClusterTemplateReconciler{
 			Client: c,
@@ -212,7 +217,7 @@ defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		_, err := CTReconciler.Reconcile(ctx, req)
+		_, err = CTReconciler.Reconcile(ctx, req)
 		Expect(err).ToNot(HaveOccurred())
 
 		CRReconciler = &ProvisioningRequestReconciler{
