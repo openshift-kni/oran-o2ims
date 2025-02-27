@@ -290,11 +290,8 @@ func removeLabelFromInterfaces[T any](data T) error {
 
 // removeRequiredFromSchema removes all the requiered properties from a map.
 func removeRequiredFromSchema(schema map[string]any) {
-	// Check if the current schema level has "properties" and "required" defined.
-	properties, hasProperties := schema["properties"]
-	_, hasRequired := schema["required"]
-
-	if hasProperties && hasRequired {
+	// Check if the current schema level has "properties" defined.
+	if properties, hasProperties := schema["properties"]; hasProperties {
 		delete(schema, "required")
 
 		// Recurse into each property defined under "properties"

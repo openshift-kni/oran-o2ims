@@ -141,6 +141,27 @@ properties:
       - cidr
       type: object
     type: array
+  nodes:
+    items:
+      properties:
+        bmcAddress:
+          type: string
+        nodeNetwork:
+          properties:
+            interfaces:
+              items:
+                properties:
+                  macAddress:
+                    type: string
+                  name:
+                    type: string
+                type: object
+                required:
+                - macAddress
+                - name
+              type: array
+          type: object
+    type: array
 type: object
 required:
 - baseDomain

@@ -723,6 +723,10 @@ var _ = Describe("removeRequiredFromClusterInstanceSchema", func() {
 		Expect(specIntf).To(Not(HaveKey("required")))
 		Expect(
 			specIntf["properties"].(map[string]interface{})["machineNetwork"].(map[string]interface{})["items"].(map[string]interface{})).To(Not(HaveKey("required")))
+		nodeItems := specIntf["properties"].(map[string]interface{})["nodes"].(map[string]interface{})["items"].(map[string]interface{})
+		nodeNetworkProperties := nodeItems["properties"].(map[string]interface{})["nodeNetwork"].(map[string]interface{})["properties"].(map[string]interface{})
+		interfacesItems := nodeNetworkProperties["interfaces"].(map[string]interface{})["items"].(map[string]interface{})
+		Expect(interfacesItems).To(Not(HaveKey("required")))
 	})
 })
 
