@@ -1555,18 +1555,6 @@ spec:
           - patch
           - update
           - watch
-        - apiGroups:
-          - authentication.k8s.io
-          resources:
-          - tokenreviews
-          verbs:
-          - create
-        - apiGroups:
-          - authorization.k8s.io
-          resources:
-          - subjectaccessreviews
-          verbs:
-          - create
         serviceAccountName: oran-o2ims-controller-manager
       deployments:
       - label:
@@ -1592,42 +1580,17 @@ spec:
                 control-plane: controller-manager
             spec:
               containers:
-              - args:
-                - --secure-listen-address=0.0.0.0:8443
-                - --upstream=http://127.0.0.1:8080/
-                - --logtostderr=true
-                - --v=0
-                - --http2-disable=true
-                image: quay.io/openshift/origin-kube-rbac-proxy:4.18
-                name: kube-rbac-proxy
-                ports:
-                - containerPort: 8443
-                  name: https
-                  protocol: TCP
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 5m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
               - command:
                 - /usr/bin/oran-o2ims
                 - start
                 - controller-manager
                 - --leader-elect
                 - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
+                - --metrics-bind-address=:6443
+                - --metrics-tls-cert-dir=/secrets/tls/metrics
                 env:
                 - name: IMAGE
                   value: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
-                - name: KUBE_RBAC_PROXY_IMAGE
-                  value: quay.io/openshift/origin-kube-rbac-proxy:4.18
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
                 - name: HWMGR_PLUGIN_NAMESPACE
@@ -1651,6 +1614,9 @@ spec:
                 - containerPort: 9443
                   name: webhook-server
                   protocol: TCP
+                - containerPort: 6443
+                  name: https
+                  protocol: TCP
                 readinessProbe:
                   httpGet:
                     path: /readyz
@@ -1670,6 +1636,8 @@ spec:
                 - mountPath: /tmp/k8s-webhook-server/serving-certs
                   name: cert
                   readOnly: true
+                - mountPath: /secrets/tls/metrics
+                  name: metrics-tls
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: oran-o2ims-controller-manager
@@ -1679,6 +1647,10 @@ spec:
                 secret:
                   defaultMode: 420
                   secretName: oran-o2ims-webhook-server-cert
+              - name: metrics-tls
+                secret:
+                  defaultMode: 420
+                  secretName: controller-manager-metrics-tls
       permissions:
       - rules:
         - apiGroups:

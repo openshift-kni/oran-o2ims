@@ -3,12 +3,8 @@ kind: Service
 metadata:
   labels:
     control-plane: controller-manager
-    app.kubernetes.io/name: service
-    app.kubernetes.io/instance: controller-manager-metrics-service
-    app.kubernetes.io/component: kube-rbac-proxy
-    app.kubernetes.io/created-by: oran-o2ims
-    app.kubernetes.io/part-of: oran-o2ims
-    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: controller-manager-metrics-tls
   name: controller-manager-metrics-service
   namespace: system
 spec:

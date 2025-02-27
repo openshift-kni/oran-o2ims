@@ -142,8 +142,7 @@
                             "KUBECONFIG": "${env:KUBECONFIG}",
                             "IMAGE": "quay.io/openshift-kni/oran-o2ims-operator:latest",
                             "HWMGR_PLUGIN_NAMESPACE": "oran-hwmgr-plugin",
-                            "POSTGRES_IMAGE": "registry.redhat.io/rhel9/postgresql-16:9.5-1731610873",
-                            "KUBE_RBAC_PROXY_IMAGE": "quay.io/openshift/origin-kube-rbac-proxy:4.18"
+                            "POSTGRES_IMAGE": "registry.redhat.io/rhel9/postgresql-16:9.5-1731610873"
                     },
                     "args": [
                             "start",
