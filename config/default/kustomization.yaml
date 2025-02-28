@@ -26,11 +26,6 @@ resources:
 #- ../prometheus
 
 patches:
-# Protect the /metrics endpoint by putting it behind auth.
-# If you want your controller-manager to expose the /metrics
-# endpoint w/o any authn/z, please comment the following line.
-- path: manager_auth_proxy_patch.yaml
-
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
 - target:
@@ -144,17 +139,3 @@ patches:
 #          delimiter: '.'
 #          index: 1
 #          create: true
-
-replacements:
-  # This replacement copies the kube-rbac-proxy containers image name to the manager's environment variables so that
-  # it can use it internally for launching other instances of kube-rbac-proxy for its servers as necessary.
-  - source:
-      fieldPath: spec.template.spec.containers.[name=kube-rbac-proxy].image
-      kind: Deployment
-      name: controller-manager
-    targets:
-      - fieldPaths:
-          - spec.template.spec.containers.[name=manager].env.[name=^KUBE_RBAC_PROXY_IMAGE$].value
-        select:
-          kind: Deployment
-          name: controller-manager

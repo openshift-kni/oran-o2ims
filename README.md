@@ -213,19 +213,19 @@ clusterrole.rbac.authorization.k8s.io "oran-o2ims-alarms-server" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-alertmanager" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-cluster-server" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-deployment-manager-server" deleted
-clusterrole.rbac.authorization.k8s.io "oran-o2ims-kube-rbac-proxy" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-subject-access-reviewer" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-metrics-reader" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-resource-server" deleted
 clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-alarms-server" deleted
-clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-alarms-server-kube-rbac-proxy" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-alarms-server-subject-access-reviewer-binding" deleted
 clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-alertmanager" deleted
 clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-cluster-server" deleted
-clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-cluster-server-kube-rbac-proxy" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-cluster-server-subject-access-reviewer-binding" deleted
 clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-deployment-manager-server" deleted
-clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-deployment-manager-server-kube-rbac-proxy" deleted
-clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-metadata-server-kube-rbac-proxy" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-deployment-manager-server-subject-access-reviewer-binding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-metadata-server-subject-access-reviewer-binding" deleted
 clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-resource-server" deleted
-clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-resource-server-kube-rbac-proxy" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-resource-server-subject-access-reviewer-binding" deleted
 catalogsource.operators.coreos.com "oran-o2ims" deleted
 ```
 
