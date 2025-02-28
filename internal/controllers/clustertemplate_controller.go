@@ -225,7 +225,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 	// Validation for upgrade defaults confimap
 	if t.object.Spec.Templates.UpgradeDefaults != "" {
-		err = validateUpgradeDefaultsConfigmap(
+		err = t.validateUpgradeDefaultsConfigmap(
 			ctx, t.client, t.object.Spec.Templates.UpgradeDefaults,
 			t.object.Namespace, utils.UpgradeDefaultsConfigmapKey,
 		)
@@ -254,7 +254,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	return validationErrsMsg == "", nil
 }
 
-func validateUpgradeDefaultsConfigmap(
+func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
 	ctx context.Context, c client.Client, name, namespace, key string,
 ) error {
 
@@ -262,6 +262,14 @@ func validateUpgradeDefaultsConfigmap(
 	if err != nil {
 		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
 	}
+
+	if t.object.Spec.Release != ibgu.Spec.IBUSpec.SeedImageRef.Version {
+		return utils.NewInputError(
+			"The ClusterTemplate spec.release (%s) does not match the seedImageRef version (%s) from the upgrade configmap",
+			t.object.Spec.Release, ibgu.Spec.IBUSpec.SeedImageRef.Version)
+	}
+
+	// Verify IBGU CR with dry-run
 	opts := []client.CreateOption{}
 	opts = append(opts, client.DryRunAll)
 	err = c.Create(ctx, ibgu, opts...)
@@ -667,17 +675,8 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 		if clusterTemplate.Namespace == obj.GetNamespace() {
 			if clusterTemplate.Spec.Templates.ClusterInstanceDefaults == obj.GetName() ||
 				clusterTemplate.Spec.Templates.PolicyTemplateDefaults == obj.GetName() ||
-				clusterTemplate.Spec.Templates.HwTemplate == obj.GetName() {
+				clusterTemplate.Spec.Templates.UpgradeDefaults == obj.GetName() {
 				// The configmap is referenced in this cluster template , enqueue it
-				requests = append(requests, reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Namespace: clusterTemplate.Namespace,
-						Name:      clusterTemplate.Name,
-					},
-				})
-			}
-		} else if obj.GetNamespace() == utils.InventoryNamespace {
-			if clusterTemplate.Spec.Templates.HwTemplate == obj.GetName() {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: types.NamespacedName{
 						Namespace: clusterTemplate.Namespace,

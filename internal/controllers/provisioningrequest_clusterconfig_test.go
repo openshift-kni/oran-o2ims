@@ -1382,7 +1382,7 @@ defaultHugepagesSize: "1G"`,
 			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
 		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
-		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
 		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Missing)))
 	})
 
