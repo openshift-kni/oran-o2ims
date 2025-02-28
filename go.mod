@@ -43,7 +43,7 @@ require (
 	golang.org/x/sync v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.31.6
-	k8s.io/apiextensions-apiserver v0.31.2
+	k8s.io/apiextensions-apiserver v0.31.6
 	k8s.io/apimachinery v0.31.6
 	k8s.io/apiserver v0.31.6
 	k8s.io/client-go v12.0.0+incompatible
