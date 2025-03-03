@@ -132,6 +132,13 @@ func IsClusterProvisionFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool
 	return condition != nil && condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed)
 }
 
+// IsClusterConfigCompleted checks if the cluster config condition status is completed
+func IsClusterConfigCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
+	return condition != nil && condition.Status == metav1.ConditionTrue
+}
+
 // IsSmoRegistrationCompleted checks if registration with SMO has been completed
 func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
@@ -169,4 +176,12 @@ func IsClusterUpgradeInitiated(cr *provisioningv1alpha1.ProvisioningRequest) boo
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
 		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 	return condition != nil
+}
+
+// IsClusterZtpDone checks if the cluster ZTP is done
+func IsClusterZtpDone(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	if cr.Status.Extensions.ClusterDetails != nil {
+		return cr.Status.Extensions.ClusterDetails.ZtpStatus == ClusterZtpDone
+	}
+	return false
 }

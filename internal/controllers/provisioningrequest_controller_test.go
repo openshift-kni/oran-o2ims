@@ -2201,6 +2201,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		var (
 			managedCluster    *clusterv1.ManagedCluster
 			clusterInstance   *siteconfig.ClusterInstance
+			policy            *policiesv1.Policy
 			newReleaseVersion string
 		)
 
@@ -2511,6 +2512,25 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			createNodeResources(ctx, c, nodePool.Name)
 
+			policy = &policiesv1.Policy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+					Namespace: "cluster-1",
+					Labels: map[string]string{
+						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						utils.ChildPolicyClusterNameLabel:      "cluster-1",
+						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+					},
+				},
+				Spec: policiesv1.PolicySpec{
+					RemediationAction: "enforce",
+				},
+				Status: policiesv1.PolicyStatus{
+					ComplianceState: policiesv1.Compliant,
+				},
+			}
+			Expect(c.Create(ctx, policy)).To(Succeed())
+
 			provisionedCond := metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionTrue,
@@ -2520,6 +2540,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 			cr.Status.Extensions.ClusterDetails.Name = crName
 			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: time.Now()}
+			cr.Status.Extensions.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
 			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
 				Name:                           nodePool.Name,
 				Namespace:                      nodePool.Namespace,
@@ -2715,8 +2736,13 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			clusterInstance.Spec.SuppressedManifests = utils.CRDsToBeSuppressedForUpgrade
 			Expect(c.Update(ctx, clusterInstance)).To(Succeed())
 
+			// Patch the policy to NonCompliant
+			policy.Status.ComplianceState = policiesv1.NonCompliant
+			Expect(c.Status().Update(ctx, policy)).To(Succeed())
+
 			result, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
+			// Upgrade failed, it does not requeue even if the policy is NonCompliant
 			Expect(result).To(Equal(doNotRequeue()))
 
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
