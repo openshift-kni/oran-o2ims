@@ -19,9 +19,11 @@ import (
 	"flag"
 	"log/slog"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	openshiftv1 "github.com/openshift/api/config/v1"
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -42,15 +44,16 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers"
-	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	"github.com/spf13/cobra"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
+
+	"github.com/openshift-kni/oran-o2ims/internal"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers"
+	"github.com/openshift-kni/oran-o2ims/internal/exit"
 )
 
 // ControllerManager creates and returns the `start controller-manager` command.
@@ -68,6 +71,12 @@ func ControllerManager() *cobra.Command {
 		"metrics-bind-address",
 		":8080",
 		"The address the metric endpoint binds to.",
+	)
+	flags.StringVar(
+		&c.metricsCertDir,
+		"metrics-tls-cert-dir",
+		"",
+		"The directory containing the tls.crt and tls.key.",
 	)
 	flags.StringVar(
 		&c.probeAddr,
@@ -106,6 +115,7 @@ func ControllerManager() *cobra.Command {
 // command.
 type ControllerManagerCommand struct {
 	metricsAddr          string
+	metricsCertDir       string
 	enableHTTP2          bool
 	enableLeaderElection bool
 	enableWebhooks       bool
@@ -179,8 +189,11 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: c.metricsAddr,
-			TLSOpts:     tlsOpts,
+			SecureServing:  c.metricsCertDir != "",
+			CertDir:        c.metricsCertDir,
+			BindAddress:    c.metricsAddr,
+			TLSOpts:        tlsOpts,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
 		},
 		HealthProbeBindAddress: c.probeAddr,
 		LeaderElection:         c.enableLeaderElection,
