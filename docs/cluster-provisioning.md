@@ -18,18 +18,43 @@ Ensure the following operators are installed on the hub cluster:
 
 - Advanced Cluster Management (ACM) v2.12+
 - Red Hat OpenShift GitOps Operator
-- ORAN Hardware Manager Plugin
+- Topology Aware Lifecycle Manager 
+- ORAN Hardware Manager Plugin Operator
 - SiteConfig Operator
 
-  Enable it in ACM by running the following command:
+  SiteConfig Operator can ben enabled in ACM by running the following command:
 
   ```console
   oc patch multiclusterhubs.operator.open-cluster-management.io multiclusterhub -n <ACM_NAMESPACE> --type json --patch '[{"op": "add", "path":"/spec/overrides/components/-", "value": {"name":"siteconfig","enabled": true}}]'
   ```
 
-### Git Respository Setup
+### Git Repository Setup
 
-Prepare a Git repository containing all necessary files for cluster provisioning and configuration, and sync it with ArgoCD. Follow the recommended directory structure as documented [here](samples/git-setup/).
+Prepare a Git repository containing all necessary files for cluster provisioning and configuration, and sync it with ArgoCD. Follow the recommended directory structure as documented [here](samples/git-setup).
+
+### ArgoCD Plugin
+
+Enable the PolicyGenerator plugin:
+
+```shell
+oc patch argocd openshift-gitops -n openshift-gitops --type=merge --patch-file argocd/argocd-openshift-gitops-patch.json
+```
+
+### ArgoCD and Git Repo Integration
+
+Use repository on github.com as an example:
+
+```shell
+./argocd/argocd-github-integration.sh
+```
+
+### ArgoCD AppProjects and Applications
+
+Create ArgoCD AppProjects and Applications, an example:
+
+```shell
+oc apply -k argocd
+```
 
 ## ClusterTemplate CR
 
@@ -54,14 +79,14 @@ The schema defined in the `templateParameterSchema` must include the following *
 
 - nodeClusterName: Specifies the name of the node cluster.
 - oCloudSiteId: Specifies the oCloud site identifier.
-- policyTemplateParameters: A subschema that defines the parameters for cluster configuration.
-- clusterInstanceParameters: A subschema for ClusterInstance, defining the parameters that are allowed in the ProvisioningRequest for cluster installation.
+- policyTemplateParameters: A sub-schema that defines the parameters for cluster configuration.
+- clusterInstanceParameters: A sub-schema for ClusterInstance, defining the parameters that are allowed in the ProvisioningRequest for cluster installation.
 
 When a ClusterTemplate is created, O-Cloud Manager validates the following to ensure:
 
 - The name is unique across all namespaces.
 - All referenced ConfigMaps and resources exist.
-- The required paramaters are present in the schema.
+- The required parameters are present in the schema.
 
 Once validation is successful, the status condition `ClusterTemplateValidated` will be set to `True`. After validation, any changes to `spec` are disallowed and will be rejected. The referenced configmaps are also immutable after validation.
 
