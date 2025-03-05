@@ -496,27 +496,8 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
 	// TODO: AM auto retries if it receives 5xx error code. That means any error, even if permanent (e.g postgres syntax), will be processed the same way. Once we have a better retry mechanism for pg, update all 5xx to 4xx as needed.
 
-	// Audit the table with full list of alerts in the current payload. If missing set them to resolve
-	if err := a.AlarmsRepository.ResolveNotificationIfNotInCurrent(ctx, request.Body); err != nil {
-		msg := "failed to resolve notification that are not present"
-		slog.Error(msg, "error", err)
-		return nil, fmt.Errorf("%s: %w", msg, err)
-	}
-
-	// Get cached cluster server data
-	var clusterServer infrastructure.Client
-	for i := range a.Infrastructure.Clients {
-		if a.Infrastructure.Clients[i].Name() == infrastructure.Name {
-			clusterServer = a.Infrastructure.Clients[i]
-		}
-	}
-
-	// Combine possible definitions with events
-	aerModels := alertmanager.ConvertAmToAlarmEventRecordModels(request.Body, clusterServer)
-
-	// Insert and update AlarmEventRecord
-	if err := a.AlarmsRepository.UpsertAlarmEventRecord(ctx, aerModels); err != nil {
-		msg := "failed to upsert AlarmEventRecord to db"
+	if err := alertmanager.HandleAlerts(ctx, a.Infrastructure.Clients, a.AlarmsRepository, &request.Body.Alerts, alertmanager.Webhook); err != nil {
+		msg := "failed to handle alerts"
 		slog.Error(msg, "error", err)
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}

@@ -104,15 +104,18 @@ receivers:
         url: https://alarms-server.oran-o2ims.svc.cluster.local:/internal/v1/caas-alerts/alertmanager
   - name: "null"
 route:
-  group_by: []
+  group_by:
+    - namespace
   group_interval: 5m
   group_wait: 30s
   receiver: "null"
   repeat_interval: 12h
   routes:
     - continue: true
-      group_interval: 1m
-      group_wait: 30s
+      group_by:
+        - severity
+      group_interval: 30s
+      group_wait: 5s
       matchers:
         - alertname!~"Watchdog"
       receiver: oran_alarm_receiver
@@ -225,16 +228,16 @@ route:
 		})
 	})
 
-	Describe("addOranRouteToConfig", func() {
+	Describe("MergeWithExisting", func() {
 		It("returns an error for invalid YAML input", func() {
 			invalidYAML := []byte("invalid: yaml: :::")
-			_, err := alertmanager.AddOranRouteToConfig(invalidYAML)
+			_, err := alertmanager.MergeWithExisting(invalidYAML)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("returns an error when configuration is empty", func() {
 			emptyYAML := []byte("")
-			_, err := alertmanager.AddOranRouteToConfig(emptyYAML)
+			_, err := alertmanager.MergeWithExisting(emptyYAML)
 			Expect(err).To(HaveOccurred())
 		})
 	})

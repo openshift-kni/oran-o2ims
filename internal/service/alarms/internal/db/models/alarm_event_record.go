@@ -30,6 +30,8 @@ type AlarmEventRecord struct {
 	NotificationEventType generated.AlarmSubscriptionInfoFilter `db:"notification_event_type" json:"notification_event_type"`
 	AlarmStatus           string                                `db:"alarm_status" json:"alarm_status"`
 	Fingerprint           string                                `db:"fingerprint" json:"fingerprint"`
+	GenerationID          int                                   `db:"generation_id" json:"generation_id"`
+	AlarmSource           string                                `db:"alarm_source" json:"alarm_source"`
 }
 
 // TableName returns the name of the table in the database

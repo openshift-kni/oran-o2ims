@@ -71,6 +71,7 @@ import (
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/alarmDictionaries/*",verbs=get
 //+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
 //+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -1232,6 +1233,22 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 					"delete",
 					"update",
 					"patch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"route.openshift.io",
+				},
+				Resources: []string{
+					"routes",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+				ResourceNames: []string{
+					"alertmanager",
 				},
 			},
 			{
