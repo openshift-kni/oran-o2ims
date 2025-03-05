@@ -224,42 +224,50 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	if err != nil {
 		return requeueWithError(err)
 	}
+	if !utils.IsClusterProvisionPresent(t.object) ||
+		utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+		// If the cluster installation has not started due to
+		// processing issue, failed or timed out, do not requeue.
+		return doNotRequeue(), nil
+	}
 
-	// Handle policy configuration only after the cluster provisioning
-	// has started, and not failed or timedout (completed, in-progress or unknown)
-	if utils.IsClusterProvisionPresent(t.object) &&
-		!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+	// Handle policy configuration
+	requeueForConfig, err := t.handleClusterPolicyConfiguration(ctx)
+	if err != nil {
+		return requeueWithError(err)
+	}
 
-		// Handle configuration through policies.
-		requeue, err := t.handleClusterPolicyConfiguration(ctx)
-		if err != nil {
-			return requeueWithError(err)
-		}
-
-		// Requeue if cluster provisioning is not completed (in-progress or unknown)
-		// or there are enforce policies that are not Compliant.
-		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
-			return requeueWithLongInterval(), nil
-		}
-
+	if utils.IsClusterZtpDone(t.object) {
+		// If the initial provisioning is completed, check if an upgrade is requested
 		shouldUpgrade, err := t.IsUpgradeRequested(ctx, renderedClusterInstance.GetName())
 		if err != nil {
 			return requeueWithError(err)
 		}
 
-		if utils.IsClusterUpgradeInitiated(t.object) && !utils.IsClusterUpgradeCompleted(t.object) ||
-			utils.IsClusterProvisionCompleted(t.object) && shouldUpgrade {
-			t.logger.InfoContext(
-				ctx,
-				"Upgrade requested. Start handling upgrade.",
-			)
-			requeue, err := t.handleUpgrade(ctx, renderedClusterInstance)
-			if err != nil {
-				return requeueWithError(err)
+		// An upgrade is requested or upgrade has started but not completed
+		if shouldUpgrade ||
+			(utils.IsClusterUpgradeInitiated(t.object) &&
+				!utils.IsClusterUpgradeCompleted(t.object)) {
+			upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, renderedClusterInstance.GetName())
+			if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
+				// Requeue if the upgrade is in progress or an error occurs.
+				// Stop reconciliation if the upgrade has failed.
+				// Proceed if the upgrade is completed.
+				return upgradeCtrlResult, err
 			}
-			return requeue, nil
 		}
+	}
 
+	// Requeue if cluster provisioning is not completed (in-progress or unknown)
+	// or there are enforce policies that are not Compliant but the configuration
+	// has not timed out.
+	if !utils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
+		return requeueWithLongInterval(), nil
+	}
+
+	err = t.finalizeProvisioningIfComplete(ctx)
+	if err != nil {
+		return requeueWithError(err)
 	}
 
 	return doNotRequeue(), nil
@@ -369,21 +377,28 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	if err != nil {
 		return requeueWithError(err)
 	}
+	if !utils.IsClusterProvisionPresent(t.object) ||
+		utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+		// If the cluster installation has not started due to
+		// processing issue, failed or timed out, do not requeue.
+		return doNotRequeue(), nil
+	}
 
-	// Check the policy configuration status only after the cluster provisioning
-	// has started, and not failed or timedout
-	if utils.IsClusterProvisionPresent(t.object) &&
-		!utils.IsClusterProvisionTimedOutOrFailed(t.object) {
-		requeue, err := t.handleClusterPolicyConfiguration(ctx)
-		if err != nil {
-			return requeueWithError(err)
-		}
-		// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
-		// or there are enforce policies that are not Compliant and configuration
-		// has not timed out
-		if !utils.IsClusterProvisionCompleted(t.object) || requeue {
-			return requeueWithLongInterval(), nil
-		}
+	// Check the policy configuration status
+	requeueForConfig, err := t.handleClusterPolicyConfiguration(ctx)
+	if err != nil {
+		return requeueWithError(err)
+	}
+	// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
+	// or there are enforce policies that are not Compliant and configuration
+	// has not timed out
+	if !utils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
+		return requeueWithLongInterval(), nil
+	}
+
+	err = t.finalizeProvisioningIfComplete(ctx)
+	if err != nil {
+		return requeueWithError(err)
 	}
 
 	// If the existing provisioning has been fulfilled, check if there are any issues
@@ -681,4 +696,31 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 
 func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
 	return t.ctDetails.templates.HwTemplate == ""
+}
+
+// finalizeProvisioningIfComplete checks if the provisioning/upgrade process is completed.
+// If so, it sets the provisioning state to "fulfilled" and updates the provisioned
+// resources in the status.
+func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx context.Context) error {
+	if utils.IsClusterProvisionCompleted(t.object) && utils.IsClusterConfigCompleted(t.object) &&
+		(!utils.IsClusterUpgradeInitiated(t.object) || utils.IsClusterUpgradeCompleted(t.object)) {
+
+		utils.SetProvisioningStateFulfilled(t.object)
+		mcl, err := t.updateOCloudNodeClusterId(ctx)
+		if err != nil {
+			return err
+		}
+
+		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+			return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
+		}
+
+		// Make sure extra labels are added to the needed CRs.
+		err = t.addPostProvisioningLabels(ctx, mcl)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
