@@ -68,7 +68,7 @@ func (r *ProvisioningServer) GetMinorVersions(ctx context.Context, request api.G
 // GetProvisioningRequests handles an API request to fetch provisioning requests
 func (r *ProvisioningServer) GetProvisioningRequests(ctx context.Context, request api.GetProvisioningRequestsRequestObject) (api.GetProvisioningRequestsResponseObject, error) {
 	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
-	if err := options.Validate(api.ProvisioningRequest{}); err != nil {
+	if err := options.Validate(api.ProvisioningRequestInfo{}); err != nil {
 		return api.GetProvisioningRequests400ApplicationProblemPlusJSONResponse{
 			Detail: err.Error(),
 			Status: http.StatusBadRequest,
@@ -80,7 +80,7 @@ func (r *ProvisioningServer) GetProvisioningRequests(ctx context.Context, reques
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ProvisioningRequests: %w", err)
 	}
-	objects := make([]api.ProvisioningRequest, 0, len(provisioningRequests.Items))
+	objects := make([]api.ProvisioningRequestInfo, 0, len(provisioningRequests.Items))
 	for _, provisioningRequest := range provisioningRequests.Items {
 		// Convert the ProvisioningRequest's name to uuid
 		// TODO: Check name is a valid uuid in the validation webhook
@@ -90,7 +90,7 @@ func (r *ProvisioningServer) GetProvisioningRequests(ctx context.Context, reques
 				provisioningRequest.Name, err)
 		}
 
-		object, err := convertProvisioningRequestCRToApi(provisioningRequestId, provisioningRequest, options)
+		object, err := convertProvisioningRequestCRToApi(provisioningRequestId, provisioningRequest)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ func (r *ProvisioningServer) GetProvisioningRequest(ctx context.Context, request
 		return nil, fmt.Errorf("failed to get ProvisioningRequest: %w", err)
 	}
 
-	object, err := convertProvisioningRequestCRToApi(request.ProvisioningRequestId, provisioningRequest, commonapi.NewDefaultFieldOptions())
+	object, err := convertProvisioningRequestCRToApi(request.ProvisioningRequestId, provisioningRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +156,19 @@ func (r *ProvisioningServer) CreateProvisioningRequest(ctx context.Context, requ
 		return nil, fmt.Errorf("failed to create ProvisioningRequest (%s): %w", request.Body.ProvisioningRequestId.String(), err) // 500 error
 	}
 
+	// Query the created ProvisioningRequest to get the latest status and convert to API provisioningRequestInfo
+	createdProvisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
+	err = r.HubClient.Get(ctx, types.NamespacedName{Name: provisioningRequest.Name}, createdProvisioningRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ProvisioningRequest (%s): %w", provisioningRequest.Name, err)
+	}
+	provisioningRequestInfo, err := convertProvisioningRequestCRToApi(request.Body.ProvisioningRequestId, *createdProvisioningRequest)
+	if err != nil {
+		return nil, err
+	}
+
 	slog.Info("Created ProvisioningRequest", "provisioningRequestId", request.Body.ProvisioningRequestId.String())
-	return api.CreateProvisioningRequest201JSONResponse(*request.Body), nil
+	return api.CreateProvisioningRequest201JSONResponse(provisioningRequestInfo), nil
 }
 
 // UpdateProvisioningRequest handles an API request to update a provisioning request
@@ -207,7 +218,19 @@ func (r *ProvisioningServer) UpdateProvisioningRequest(ctx context.Context, requ
 		return nil, fmt.Errorf("failed to update ProvisioningRequest (%s): %w", request.ProvisioningRequestId.String(), err)
 	}
 
-	return api.UpdateProvisioningRequest200JSONResponse(*request.Body), nil
+	// Query the updated ProvisioningRequest to get the latest status and convert to API provisioningRequestInfo
+	updatedProvisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
+	err = r.HubClient.Get(ctx, types.NamespacedName{Name: provisioningRequest.Name}, updatedProvisioningRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ProvisioningRequest (%s): %w", provisioningRequest.Name, err)
+	}
+	provisioningRequestInfo, err := convertProvisioningRequestCRToApi(request.ProvisioningRequestId, *updatedProvisioningRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("Updated ProvisioningRequest", "provisioningRequestId", request.ProvisioningRequestId.String())
+	return api.UpdateProvisioningRequest200JSONResponse(provisioningRequestInfo), nil
 }
 
 // DeleteProvisioningRequest handles an API request to delete a provisioning request
@@ -233,69 +256,56 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 	return api.DeleteProvisioningRequest200Response{}, nil
 }
 
-// convertProvisioningRequestCRToApi converts a ProvisioningRequest CR to an API model
-func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisioningv1alpha1.ProvisioningRequest, options *commonapi.FieldOptions) (api.ProvisioningRequest, error) {
-	var status api.ProvisioningRequestStatus
-	if provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase != "" {
-		provisioningPhase := api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
-		status.ProvisioningStatus.ProvisioningPhase = &provisioningPhase
-	}
-	if provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails != "" {
-		status.ProvisioningStatus.Message = &provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails
-	}
-	if !provisioningRequest.Status.ProvisioningStatus.UpdateTime.IsZero() {
-		status.ProvisioningStatus.UpdateTime = &provisioningRequest.Status.ProvisioningStatus.UpdateTime.Time
-	}
-
-	// Convert the OCloudNodeClusterId string to uuid if it exists
-	if provisioningRequest.Status.ProvisioningStatus.ProvisionedResources != nil &&
-		provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId != "" {
-		nodeClusterId, err := uuid.Parse(provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId)
-		if err != nil {
-			return api.ProvisioningRequest{}, fmt.Errorf("could not convert OCloudNodeClusterId (%s) to uuid: %w",
-				provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId, err)
-		}
-		status.ProvisionedResourceSets = &api.ProvisionedResourceSets{
-			NodeClusterId: &nodeClusterId,
-		}
-	}
+// convertProvisioningRequestCRToApi converts a ProvisioningRequest CR to an API model ProvisioningRequestInfo
+func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisioningv1alpha1.ProvisioningRequest) (api.ProvisioningRequestInfo, error) {
+	provisioningRequestInfo := api.ProvisioningRequestInfo{}
 
 	// Unmarshal the TemplateParameters bytes into a map
 	var templateParameters = make(map[string]interface{})
 	err := json.Unmarshal(provisioningRequest.Spec.TemplateParameters.Raw, &templateParameters)
 	if err != nil {
-		return api.ProvisioningRequest{}, fmt.Errorf("failed to unmarshal TemplateParameters into a map: %w", err)
+		return provisioningRequestInfo, fmt.Errorf("failed to unmarshal TemplateParameters into a map: %w", err)
 	}
-
-	result := api.ProvisioningRequest{
+	provisioningRequestInfo.ProvisioningRequestData = api.ProvisioningRequestData{
 		ProvisioningRequestId: id,
 		Name:                  provisioningRequest.Spec.Name,
 		Description:           provisioningRequest.Spec.Description,
 		TemplateName:          provisioningRequest.Spec.TemplateName,
 		TemplateVersion:       provisioningRequest.Spec.TemplateVersion,
 		TemplateParameters:    templateParameters,
-		Status:                &status,
 	}
 
-	if options.IsIncluded(commonapi.ExtensionsAttribute) {
-		// Convert the CR's status.extensions to map[string]interface{}
-		var extensions = make(map[string]interface{})
-		extensionsBytes, err := json.Marshal(provisioningRequest.Status.Extensions)
+	status := api.ProvisioningStatus{}
+	if provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase != "" {
+		provisioningPhase := api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
+		status.ProvisioningPhase = &provisioningPhase
+	}
+	if provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails != "" {
+		status.Message = &provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails
+	}
+	if !provisioningRequest.Status.ProvisioningStatus.UpdateTime.IsZero() {
+		status.UpdateTime = &provisioningRequest.Status.ProvisioningStatus.UpdateTime.Time
+	}
+	provisioningRequestInfo.Status = status
+
+	// Convert the OCloudNodeClusterId string to uuid if it exists
+	if provisioningRequest.Status.ProvisioningStatus.ProvisionedResources != nil &&
+		provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId != "" {
+		nodeClusterId, err := uuid.Parse(provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId)
 		if err != nil {
-			return api.ProvisioningRequest{}, fmt.Errorf("failed to marshal Extensions into bytes: %w", err)
+			return api.ProvisioningRequestInfo{}, fmt.Errorf("could not convert OCloudNodeClusterId (%s) to uuid: %w",
+				provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId, err)
 		}
-		if err := json.Unmarshal(extensionsBytes, &extensions); err != nil {
-			return api.ProvisioningRequest{}, fmt.Errorf("failed to unmarshal Extensions into a map: %w", err)
+		provisioningRequestInfo.ProvisionedResourceSets = api.ProvisionedResourceSets{
+			NodeClusterId: &nodeClusterId,
 		}
-
-		result.Extensions = &extensions
 	}
 
-	return result, nil
+	return provisioningRequestInfo, nil
 }
 
-// convertProvisioningRequestApiToCR converts an API model to a ProvisioningRequest CR
-func convertProvisioningRequestApiToCR(request api.ProvisioningRequest) (*provisioningv1alpha1.ProvisioningRequest, error) {
+// convertProvisioningRequestApiToCR converts an API model ProvisioningRequestData to a ProvisioningRequest CR
+func convertProvisioningRequestApiToCR(request api.ProvisioningRequestData) (*provisioningv1alpha1.ProvisioningRequest, error) {
 	// Marshal the TemplateParameters map into bytes
 	templateParametersBytes, err := json.Marshal(request.TemplateParameters)
 	if err != nil {
