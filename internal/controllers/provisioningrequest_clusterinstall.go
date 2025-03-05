@@ -54,7 +54,7 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 	} else {
 		// Add ProvisioningRequest labels to the generated ClusterInstance
 		labels := make(map[string]string)
-		labels[provisioningRequestNameLabel] = t.object.Name
+		labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
 		renderedClusterInstanceUnstructure.SetLabels(labels)
 
 		// Create the ClusterInstance namespace if not exist.

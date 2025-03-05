@@ -19,6 +19,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -54,7 +55,7 @@ var _ = Describe("policyManagement", func() {
 			// Cluster Template.
 			&provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      getClusterTemplateRefName(tName, tVersion),
+					Name:      GetClusterTemplateRefName(tName, tVersion),
 					Namespace: ctNamespace,
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -66,7 +67,7 @@ var _ = Describe("policyManagement", func() {
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwTemplate:              hwTemplate,
 					},
-					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 				},
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
@@ -94,6 +95,10 @@ templateRefs:
   namespace: "siteconfig-operator"
 nodes:
 - hostName: "node1"
+  role: master
+  ironicInspect: ""
+  automatedCleaningMode: "disabled"
+  bootMode: "UEFI"
   nodeNetwork:
     interfaces:
     - name: eno1
@@ -166,13 +171,13 @@ defaultHugepagesSize: "1G"`,
 			&provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "cluster-1",
-					Finalizers: []string{provisioningRequestFinalizer},
+					Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
 				},
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
 					TemplateParameters: runtime.RawExtension{
-						Raw: []byte(testFullTemplateParameters),
+						Raw: []byte(testutils.TestFullTemplateParameters),
 					},
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
@@ -212,7 +217,7 @@ defaultHugepagesSize: "1G"`,
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -1476,7 +1481,7 @@ defaultHugepagesSize: "1G"`,
 		err := CRReconciler.Client.Get(
 			context.TODO(),
 			types.NamespacedName{
-				Name: getClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
+				Name: GetClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
 			clusterTemplate,
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -1849,13 +1854,13 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			&provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "cluster-1",
-					Finalizers: []string{provisioningRequestFinalizer},
+					Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
 				},
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
 					TemplateParameters: runtime.RawExtension{
-						Raw: []byte(testFullTemplateParameters),
+						Raw: []byte(testutils.TestFullTemplateParameters),
 					},
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
@@ -1875,7 +1880,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -2009,13 +2014,13 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		provisioningRequest := &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       mclName,
-				Finalizers: []string{provisioningRequestFinalizer},
+				Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
 			},
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
 				TemplateParameters: runtime.RawExtension{
-					Raw: []byte(testFullTemplateParameters),
+					Raw: []byte(testutils.TestFullTemplateParameters),
 				},
 			},
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
@@ -2062,7 +2067,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			// Cluster Template.
 			&provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      getClusterTemplateRefName(tName, tVersion),
+					Name:      GetClusterTemplateRefName(tName, tVersion),
 					Namespace: ctNamespace,
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -2074,7 +2079,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwTemplate:              hwTemplate,
 					},
-					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 				},
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
@@ -2234,7 +2239,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 			err := ProvReqTask.client.Get(
 				ctx,
-				types.NamespacedName{Name: getClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
+				types.NamespacedName{Name: GetClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
 				oranct,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -2368,7 +2373,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			// Remove the HW template from the ClusterTemplate.
 			ct := &provisioningv1alpha1.ClusterTemplate{}
 			Expect(c.Get(ctx, types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			}, ct)).To(Succeed())
 			ct.Spec.Templates.HwTemplate = ""

@@ -403,9 +403,9 @@ go-generate:
 	@echo "All generated files are up-to-date."
 
 .PHONY: test tests
-test tests:
+test tests: envtest
 	@echo "Run ginkgo"
-	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api $(ginkgo_flags)
+	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api ./test $(ginkgo_flags)
 
 .PHONY: fmt
 fmt:
