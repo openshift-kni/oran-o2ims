@@ -181,7 +181,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForClusterTemp
 	// Create reconciling requests only for the ProvisioningRequests that are using the
 	// current ClusterTemplate.
 	for _, provisioningRequest := range provisioningRequests.Items {
-		clusterTemplateRefName := getClusterTemplateRefName(
+		clusterTemplateRefName := GetClusterTemplateRefName(
 			provisioningRequest.Spec.TemplateName, provisioningRequest.Spec.TemplateVersion)
 		if clusterTemplateRefName == obj.GetName() {
 			r.Logger.Info(
@@ -221,7 +221,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForManagedClus
 	}
 
 	// Get the ProvisioningRequest name.
-	crName, nameExists := clusterInstance.GetLabels()[provisioningRequestNameLabel]
+	crName, nameExists := clusterInstance.GetLabels()[provisioningv1alpha1.ProvisioningRequestNameLabel]
 	if nameExists {
 		r.Logger.Info(
 			"[enqueueProvisioningRequestForManagedCluster] Add new reconcile request for ProvisioningRequest",
@@ -258,7 +258,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 
 	// Requeue for the ProvisioningRequest which created the ClusterInstance and thus the
 	// ManagedCluster to which the policy is matched.
-	provisioningRequest, okCR := clusterInstance.GetLabels()[provisioningRequestNameLabel]
+	provisioningRequest, okCR := clusterInstance.GetLabels()[provisioningv1alpha1.ProvisioningRequestNameLabel]
 	if okCR {
 		provReq := &provisioningv1alpha1.ProvisioningRequest{}
 		if err := r.Get(ctx, types.NamespacedName{Name: provisioningRequest}, provReq); err != nil {
@@ -276,7 +276,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 			return nil
 		}
 
-		ctRefName := getClusterTemplateRefName(
+		ctRefName := GetClusterTemplateRefName(
 			provReq.Spec.TemplateName, provReq.Spec.TemplateVersion)
 		ctRefNamespace := ""
 		for _, ct := range clusterTemplates.Items {

@@ -142,7 +142,7 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 
 	// Add ProvisioningRequest labels to the namespace
 	labels := make(map[string]string)
-	labels[provisioningRequestNameLabel] = t.object.Name
+	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
 	namespace.SetLabels(labels)
 
 	err := utils.CreateK8sCR(ctx, t.client, namespace, t.object, "")

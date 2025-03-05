@@ -48,7 +48,13 @@ versions:
             nodes:
               items:
                 properties:
+                  automatedCleaningMode:
+                    type: string
+                  bootMode:
+                    type: string
                   hostName:
+                    type: string
+                  ironicInspect:
                     type: string
                   templateRefs:
                     items:
@@ -69,6 +75,8 @@ versions:
                               type: string
                         type: array
                     type: object
+                  role:
+                    type: string
               type: array
             templateRefs:
               items:

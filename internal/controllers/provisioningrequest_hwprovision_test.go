@@ -18,6 +18,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
@@ -94,7 +95,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
 				TemplateParameters: runtime.RawExtension{
-					Raw: []byte(testFullTemplateParameters),
+					Raw: []byte(testutils.TestFullTemplateParameters),
 				},
 			},
 		}
@@ -102,7 +103,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		// Define the cluster template.
 		ct = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -188,7 +189,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		Expect(nodePool.Spec.CloudID).To(Equal(clusterInstance.GetName()))
 		Expect(nodePool.Spec.HwMgrId).To(Equal(hwTemplate.Spec.HwMgrId))
 		Expect(nodePool.Spec.Extensions).To(Equal(hwTemplate.Spec.Extensions))
-		Expect(nodePool.Labels[provisioningRequestNameLabel]).To(Equal(task.object.Name))
+		Expect(nodePool.Labels[provisioningv1alpha1.ProvisioningRequestNameLabel]).To(Equal(task.object.Name))
 
 		roleCounts := make(map[string]int)
 		for _, node := range clusterInstance.Spec.Nodes {
@@ -288,7 +289,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 
 			cond := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
-			verifyStatusCondition(*cond, metav1.Condition{
+			testutils.VerifyStatusCondition(*cond, metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
@@ -337,7 +338,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 
 			cond := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
-			verifyStatusCondition(*cond, metav1.Condition{
+			testutils.VerifyStatusCondition(*cond, metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
@@ -392,7 +393,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 
 			cond := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered))
 			Expect(cond).ToNot(BeNil())
-			verifyStatusCondition(*cond, metav1.Condition{
+			testutils.VerifyStatusCondition(*cond, metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
@@ -944,7 +945,7 @@ func VerifyHardwareTemplateStatus(ctx context.Context, c client.Client, template
 	Expect(c.Get(ctx, client.ObjectKey{Name: templateName, Namespace: utils.InventoryNamespace}, updatedHwTempl)).To(Succeed())
 	hwTemplCond := meta.FindStatusCondition(updatedHwTempl.Status.Conditions, expectedCon.Type)
 	Expect(hwTemplCond).ToNot(BeNil())
-	verifyStatusCondition(*hwTemplCond, metav1.Condition{
+	testutils.VerifyStatusCondition(*hwTemplCond, metav1.Condition{
 		Type:    expectedCon.Type,
 		Status:  expectedCon.Status,
 		Reason:  expectedCon.Reason,
