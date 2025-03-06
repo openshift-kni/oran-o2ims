@@ -35,6 +35,15 @@ updates:
     # golang.org/x/oauth2 moved to go 1.23 in 0.27.0, so ignore major/minor updates until this repo is 1.23-based
     - dependency-name: "golang.org/x/oauth2"
       update-types: ["version-update:semver-major","version-update:semver-minor"]
+    # golang.org/x/mod moved to go 1.23 in 0.24.0, so ignore major/minor updates until this repo is 1.23-based
+    - dependency-name: "golang.org/x/mod"
+      update-types: ["version-update:semver-major","version-update:semver-minor"]
+    # golang.org/x/sync moved to go 1.23 in 0.12.0, so ignore major/minor updates until this repo is 1.23-based
+    - dependency-name: "golang.org/x/sync"
+      update-types: ["version-update:semver-major","version-update:semver-minor"]
+    # github.com/onsi/ginkgo/v2 moved to go 1.23 in 2.23.0, so ignore major/minor updates until this repo is 1.23-based
+    - dependency-name: "github.com/onsi/ginkgo/v2"
+      update-types: ["version-update:semver-major","version-update:semver-minor"]
   #ignore:
   #  - dependency-name: "*"
   #    update-types: ["version-update:semver-patch"]
