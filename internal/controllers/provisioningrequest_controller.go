@@ -166,49 +166,14 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 }
 
 func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, error) {
-	// Set the provisioning state to pending if spec changes are observed
-	if t.object.Status.ObservedGeneration != t.object.Generation {
-		utils.SetProvisioningStatePending(t.object, "Validating and preparing resources")
-		if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-			return requeueWithError(fmt.Errorf(
-				"failed to update status for ProvisioningRequest %s: %w",
-				t.object.Name, updateErr,
-			))
-		}
+	if t.shouldStopReconciliation() {
+		return doNotRequeue(), nil
 	}
 
-	// Validate the ProvisioningRequest
-	err := t.handleValidation(ctx)
-	if err != nil {
-		if utils.IsInputError(err) {
-			return t.checkClusterDeployConfigState(ctx)
-		}
-		// internal error that might recover
-		return requeueWithError(err)
-	}
-
-	// Render and validate ClusterInstance
-	renderedClusterInstance, err := t.handleRenderClusterInstance(ctx)
-	if err != nil {
-		if utils.IsInputError(err) {
-			return t.checkClusterDeployConfigState(ctx)
-		}
-		return requeueWithError(err)
-	}
-
-	// Handle the creation of resources required for cluster deployment
-	err = t.handleClusterResources(ctx, renderedClusterInstance)
-	if err != nil {
-		if utils.IsInputError(err) {
-			_, err = t.checkClusterDeployConfigState(ctx)
-			if err != nil {
-				return requeueWithError(err)
-			}
-			// Requeue since we are not watching for updates to required resources
-			// if they are missing
-			return requeueWithMediumInterval(), nil
-		}
-		return requeueWithError(err)
+	// Handle validation, rendering and creation of required resources
+	renderedClusterInstance, res, err := t.handlePreProvisioning(ctx)
+	if renderedClusterInstance == nil {
+		return res, err
 	}
 
 	// Handle hardware template and NodePool provisioning/configuring
@@ -271,6 +236,73 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	}
 
 	return doNotRequeue(), nil
+}
+
+// shouldStopReconciliation checks if the reconciliation should stop.
+func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
+	if t.object.Status.ObservedGeneration == t.object.Generation &&
+		t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed &&
+		provisioningv1alpha1.HasFatalProvisioningFailure(t.object.Status.Conditions) {
+		// If the provisioning has failed with a fatal error and no spec changes,
+		// stop reconciliation.
+		return true
+	}
+
+	return false
+}
+
+// handlePreProvisioning handles the validation, rendering and creation of required resources.
+// It returns a rendered ClusterInstance for successful pre-provisioning, a ctrl.Result to
+// indicate if/when to requeue, and an error if any issues occur.
+func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Context) (*siteconfig.ClusterInstance, ctrl.Result, error) {
+	// Set the provisioning state to pending if spec changes are observed
+	if t.object.Status.ObservedGeneration != t.object.Generation {
+		utils.SetProvisioningStatePending(t.object, "Validating and preparing resources")
+		if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			return nil, doNotRequeue(), fmt.Errorf(
+				"failed to update status for ProvisioningRequest %s: %w",
+				t.object.Name, updateErr,
+			)
+		}
+	}
+
+	// Validate the ProvisioningRequest
+	err := t.handleValidation(ctx)
+	if err != nil {
+		if utils.IsInputError(err) {
+			res, err := t.checkClusterDeployConfigState(ctx)
+			return nil, res, err
+		}
+		// internal error that might recover
+		return nil, doNotRequeue(), err
+	}
+
+	// Render and validate ClusterInstance
+	renderedClusterInstance, err := t.handleRenderClusterInstance(ctx)
+	if err != nil {
+		if utils.IsInputError(err) {
+			res, err := t.checkClusterDeployConfigState(ctx)
+			return nil, res, err
+		}
+		return nil, doNotRequeue(), err
+	}
+
+	// Handle the creation of resources required for cluster deployment
+	err = t.handleClusterResources(ctx, renderedClusterInstance)
+	if err != nil {
+		if utils.IsInputError(err) {
+			_, err = t.checkClusterDeployConfigState(ctx)
+			if err != nil {
+				return nil, doNotRequeue(), err
+			}
+			// Requeue since we are not watching for updates to required resources
+			// if they are missing
+			return nil, requeueWithMediumInterval(), nil
+		}
+		return nil, doNotRequeue(), err
+	}
+
+	return renderedClusterInstance, doNotRequeue(), nil
 }
 
 // handleNodePoolProvisioning handles the rendering, creation, and provisioning of the NodePool.
