@@ -73,12 +73,7 @@ type timeouts struct {
 	clusterConfiguration time.Duration
 }
 
-const (
-	provisioningRequestFinalizer = "provisioningrequest.o2ims.provisioning.oran.org/finalizer"
-	provisioningRequestNameLabel = "provisioningrequest.o2ims.provisioning.oran.org/name"
-)
-
-func getClusterTemplateRefName(name, version string) string {
+func GetClusterTemplateRefName(name, version string) string {
 	return fmt.Sprintf("%s.%s", name, version)
 }
 
@@ -598,15 +593,15 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 	// indicated by the deletion timestamp being set.
 	if provisioningRequest.DeletionTimestamp.IsZero() {
 		// Check and add finalizer for this CR.
-		if !controllerutil.ContainsFinalizer(provisioningRequest, provisioningRequestFinalizer) {
-			controllerutil.AddFinalizer(provisioningRequest, provisioningRequestFinalizer)
+		if !controllerutil.ContainsFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
+			controllerutil.AddFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer)
 			if err := r.Update(ctx, provisioningRequest); err != nil {
 				return doNotRequeue(), true, fmt.Errorf("failed to update ProvisioningRequest with finalizer: %w", err)
 			}
 			// Requeue since the finalizer has been added.
 			return requeueImmediately(), false, nil
 		}
-	} else if controllerutil.ContainsFinalizer(provisioningRequest, provisioningRequestFinalizer) {
+	} else if controllerutil.ContainsFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 		r.Logger.Info(fmt.Sprintf("ProvisioningRequest (%s) is being deleted", provisioningRequest.Name))
 		deleteComplete, err := r.handleProvisioningRequestDeletion(ctx, provisioningRequest)
 		if !deleteComplete {
@@ -619,7 +614,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 		// removed, the object will be deleted.
 		r.Logger.Info("Dependents have been deleted. Removing provisioningRequest finalizer", "name", provisioningRequest.Name)
 		patch := client.MergeFrom(provisioningRequest.DeepCopy())
-		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningRequestFinalizer) {
+		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {
 				return doNotRequeue(), true, fmt.Errorf("failed to patch ProvisioningRequest: %w", err)
 			}
@@ -645,7 +640,7 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 
 	// List resources by label
 	var labels = map[string]string{
-		provisioningRequestNameLabel: provisioningRequest.Name,
+		provisioningv1alpha1.ProvisioningRequestNameLabel: provisioningRequest.Name,
 	}
 	listOpts := []client.ListOption{
 		client.MatchingLabels(labels),

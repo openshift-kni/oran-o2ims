@@ -15,6 +15,7 @@ import (
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
 
 var _ = Describe("handleRenderClusterInstance", func() {
@@ -42,7 +43,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
 				TemplateParameters: runtime.RawExtension{
-					Raw: []byte(testFullTemplateParameters),
+					Raw: []byte(testutils.TestFullTemplateParameters),
 				},
 			},
 		}
@@ -50,7 +51,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		// Define the cluster template.
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -76,6 +77,7 @@ templateRefs:
     namespace: "siteconfig-operator"
 nodes:
 - hostname: "node1"
+  role: master
   ironicInspect: ""
   nodeNetwork:
     interfaces:
@@ -129,7 +131,7 @@ nodes:
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
-		verifyStatusCondition(*cond, metav1.Condition{
+		testutils.VerifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionTrue,
 			Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
@@ -160,7 +162,7 @@ nodes:
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
-		verifyStatusCondition(*cond, metav1.Condition{
+		testutils.VerifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionTrue,
 			Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
@@ -178,7 +180,7 @@ nodes:
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
-		verifyStatusCondition(*cond, metav1.Condition{
+		testutils.VerifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
 			Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
@@ -229,7 +231,7 @@ nodes:
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
-		verifyStatusCondition(*cond, metav1.Condition{
+		testutils.VerifyStatusCondition(*cond, metav1.Condition{
 			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
 			Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
