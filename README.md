@@ -236,7 +236,9 @@ recommended. The O-Cloud manager uses an ingress controller to terminate incomin
 O-Cloud Manager, the ingress controller needs to be re-configured to enforce mTLS. If the ingress controller is shared
 with other applications, this will also impact those applications by requiring client certificates on all incoming
 connections. If that is not desirable, then consider creating a secondary ingress controller to manage a separate DNS
-domain and enable mTLS only on that controller.
+domain and enable mTLS only on that controller. Alternatively, it can be configured as optional as long as OAuth is
+enabled, in which case it will effectively be mandatory since the OAuth implementation of RFC8705 will require that the
+client present a certificate.
 
 To configure the primary controller to enable mTLS the following attributes must be set in the `clientTLS` section of
 the `spec`. For more information, please refer to the
@@ -262,7 +264,9 @@ spec:
 1. `allowedSubjectPatterns` is optional but can be set to limit access to specific certificate subjects.
 2. `clientCA` is mandatory and must be set to a `ConfigMap` containing a list of CA certificates used to validate
    incoming client certificates.
-3. `clientCertificatePolicy` must be set to `Required` to enforce that clients provide a valid certificate.
+3. `clientCertificatePolicy` must be set to `Required` to enforce that clients provide a valid certificate. As noted
+   above, set to `Optional` if OAuth is enabled and it is not possible to set to `Required` due to other application
+   requirements.
 
 ## Registering the O-Cloud Manager with the SMO
 
@@ -324,13 +328,52 @@ configuration requirements.
 
 4. Create a Secret that contains a TLS client certificate and key to be used to enable mTLS to the SMO and OAuth2
    authorization servers. The Secret is expected to have the 'tls.crt' and 'tls.key' attributes. The 'tls.crt'
-   attribute must contain the full certificate chain having the device certificate first and the root certificate being
-   last. In a production environment, it is expected that this certificate should be renewed periodically and managed
-   by cert-manager. In a development environment, if mTLS is not required, then this can be skipped and the
-   corresponding attribute can be omitted from the Inventory CR.
+   attribute must contain the full certificate chain having the device certificate first, then intermediate
+   certificates, and the root certificate being last.
+
+    * In a development environment, if mTLS is not required, then this can be skipped and the corresponding attributes
+      can be omitted from the Inventory CR.
+
+    * In a production environment, it is expected that this certificate should be renewed periodically and managed by
+      cert-manager. When managing this certificate with cert-manager, it is expected that the CN and DNS SAN values of
+      the certificate will be set to the Ingress domain name for the application
+      (e.g., o2ims.apps.${CLUSTER_DOMAIN_NAME}). The certificate's extended usage should be set to both `server auth`
+      and `client auth`. The certificate should be set in both the `spec.smo.tls.secretName` and
+      `spec.ingress.tls.secretName` attributes.
+
+   **cert-manager method (recommended):**
+   > :exclamation: ensure that the `LAB_URL` environment variable is set to your DNS domain name as described above.
 
    ```console
-   oc create secret tls -n oran-o2ims o2ims-client-tls-certificate --cert /some/path/to/tls.crt --key /some/path/to/tls.key
+   cat << EOF > oran-o2ims-tls-certificate.yaml
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: oran-o2ims-tls-certificate
+      namespace: oran-o2ims
+   spec:
+     secretName: oran-o2ims-tls-certificate
+     subject:
+       organizations: [ ORAN ]
+     commonName: ${LAB_URL}
+     usages:
+     - server auth
+     - client auth
+     dnsNames:
+     - ${LAB_URL}
+     issuerRef:
+       name: acme-cert-issuer
+       kind: ClusterIssuer
+       group: cert-manager.io
+     EOF
+   
+   oc apply -f oran-o2ims-tls-certificate.yaml
+     ```
+
+   **manual method:**
+
+   ```console
+   oc create secret tls -n oran-o2ims oran-o2ims-tls-certificate --cert /some/path/to/tls.crt --key /some/path/to/tls.key
    ```
 
 5. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
@@ -354,7 +397,10 @@ configuration requirements.
              usernameClaim: preferred_username
              groupsClaim: roles
           tls:
-             clientCertificateName: o2ims-client-tls-certificate
+             secretName: oran-o2ims-tls-certificate
+       ingress:
+         tls:
+           secretName: oran-o2ims-tls-certificate
        caBundleName: o2ims-trusted-ca-bundle
    ```
 

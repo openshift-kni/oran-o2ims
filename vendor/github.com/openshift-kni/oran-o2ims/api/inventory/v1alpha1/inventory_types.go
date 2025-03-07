@@ -62,14 +62,15 @@ type OAuthConfig struct {
 
 // TLSConfig defines the TLS specific attributes specific to the SMO and OAuth servers
 type TLSConfig struct {
-	// ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-	// certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-	// expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-	// then it is expected that the full chain is to be appended to the certificate file with the device certificate
-	// being first and the root CA being last.
+	// SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
+	// private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
+	// intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
+	// the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
+	// to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
+	// used as the ingress certificate as well as the outgoing client certificate.
 	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS client certificate"
-	ClientCertificateName *string `json:"clientCertificateName"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS certificate"
+	SecretName *string `json:"secretName"`
 }
 
 // SmoConfig defines the configurable attributes to represent the SMO instance
@@ -84,19 +85,15 @@ type SmoConfig struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO OAuth Configuration"
 	OAuthConfig *OAuthConfig `json:"oauth,omitempty"`
-	// TLSConfig defines the TLS attributes specific to the SMO and OAuth servers
+	// TLSConfig defines the TLS attributes specific to enabling mTLS communication to the SMO and OAuth servers.  If
+	// a configuration is provided, then an mTLS connection will be established to the destination; otherwise, a regular
+	// TLS connection will be used.
 	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS Configuration"
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Configuration"
 	TLS *TLSConfig `json:"tls"`
 }
 
 type ServerConfig struct {
-	// ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-	// then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-	// present a client TLS certificate to the OAuth server or SMO.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Config",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ClientTLS *TLSConfig `json:"clientTLS,omitempty"`
 }
 
 // ResourceServerConfig contains the configuration for the resource server.
@@ -124,6 +121,22 @@ type ArtifactsServerConfig struct {
 // ProvisioningServerConfig contains the configuration for the provisioning server.
 type ProvisioningServerConfig struct {
 	ServerConfig `json:",inline"`
+}
+
+// IngressConfig contains the configuration for the Ingress instance.
+type IngressConfig struct {
+	// IngressHost defines the FQDN for the IMS endpoints.  By default, it is assumed to be "o2ims.apps.<cluster domain name>".
+	// If a different DNS domain is used, then it should be customized here.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ingress Host",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	IngressHost *string `json:"ingressHost,omitempty"`
+	// TLS defines the TLS configuration for the IMS endpoints.  The certificate CN and DNS SAN values must match exactly
+	// the value provided by the `IngressHost` value.  If the `IngressHost` value is not provided, then the CN and SAN
+	// must match the expected default value.  If the TLS configuration is not provided, then the TLS configuration of
+	// the default IngressController will be used.
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TLS *TLSConfig `json:"tls,omitempty"`
 }
 
 // InventorySpec defines the desired state of Inventory
@@ -158,10 +171,10 @@ type InventorySpec struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Provisioning Server Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	ProvisioningServerConfig *ProvisioningServerConfig `json:"provisioningServerConfig"`
-	// IngressHost defines the FQDN for the IMS endpoints.
+	// IngressConfig defines configuration attributes related to the Ingress endpoint.
 	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ingress Host",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	IngressHost *string `json:"ingressHost,omitempty"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ingress Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	IngressConfig *IngressConfig `json:"ingress,omitempty"`
 	// SmoConfig defines the configurable attributes to represent the SMO instance
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO Configuration"

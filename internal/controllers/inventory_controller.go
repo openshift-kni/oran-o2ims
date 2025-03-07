@@ -581,8 +581,8 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 		config.OAuthConfig = &o
 	}
 
-	if t.object.Spec.SmoConfig.TLS != nil && t.object.Spec.SmoConfig.TLS.ClientCertificateName != nil {
-		secretName := *t.object.Spec.SmoConfig.TLS.ClientCertificateName
+	if t.object.Spec.SmoConfig.TLS != nil && t.object.Spec.SmoConfig.TLS.SecretName != nil {
+		secretName := *t.object.Spec.SmoConfig.TLS.SecretName
 		cert, key, err := utils.GetKeyPairFromSecret(ctx, t.client, secretName, t.object.Namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get certificate and key from secret: %w", err)
@@ -695,7 +695,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 	// Determine our ingress domain
 	var ingressHost string
-	if t.object.Spec.IngressHost == nil {
+	if t.object.Spec.IngressConfig == nil || t.object.Spec.IngressConfig.IngressHost == nil {
 		var err error
 		ingressHost, err = utils.GetIngressDomain(ctx, t.client)
 		if err != nil {
@@ -707,7 +707,7 @@ func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 		}
 		ingressHost = utils.DefaultAppName + "." + ingressHost
 	} else {
-		ingressHost = *t.object.Spec.IngressHost
+		ingressHost = *t.object.Spec.IngressConfig.IngressHost
 	}
 
 	t.object.Status.IngressHost = ingressHost
@@ -1764,6 +1764,15 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 				},
 			},
 		},
+	}
+
+	if t.object.Spec.IngressConfig != nil && t.object.Spec.IngressConfig.TLS != nil && t.object.Spec.IngressConfig.TLS.SecretName != nil {
+		ingressSpec.TLS = []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{t.object.Status.IngressHost},
+				SecretName: *t.object.Spec.IngressConfig.TLS.SecretName,
+			},
+		}
 	}
 
 	newIngress := &networkingv1.Ingress{

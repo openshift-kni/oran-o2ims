@@ -165,6 +165,11 @@ metadata:
           "spec": {
             "caBundleName": "o2ims-custom-ca-certs",
             "cloudID": "b7dcb3ff-583d-42d9-abb5-f484386fc688",
+            "ingress": {
+              "tls": {
+                "secretName": "oran-o2ims-tls-certificate"
+              }
+            },
             "smo": {
               "oauth": {
                 "clientSecretName": "oauth-client-secrets",
@@ -180,7 +185,7 @@ metadata:
               },
               "registrationEndpoint": "/smo/v1/registration",
               "tls": {
-                "clientCertificateName": "o2ims-client-tls-certificate"
+                "secretName": "oran-o2ims-tls-certificate"
               },
               "url": "https://smo.example.com"
             }
@@ -744,44 +749,12 @@ spec:
         path: alarmServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-          then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          present a client TLS certificate to the OAuth server or SMO.
-        displayName: Client TLS Config
-        path: alarmServerConfig.clientTLS
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-          being first and the root CA being last.
-        displayName: TLS client certificate
-        path: alarmServerConfig.clientTLS.clientCertificateName
       - description: ArtifactsServerConfig contains the configuration for the artifacts
           server.
         displayName: Artifacts Server Configuration
         path: artifactsServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-          then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          present a client TLS certificate to the OAuth server or SMO.
-        displayName: Client TLS Config
-        path: artifactsServerConfig.clientTLS
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-          being first and the root CA being last.
-        displayName: TLS client certificate
-        path: artifactsServerConfig.clientTLS.clientCertificateName
       - description: |-
           CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
           with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
@@ -804,22 +777,6 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
-          ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-          then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          present a client TLS certificate to the OAuth server or SMO.
-        displayName: Client TLS Config
-        path: clusterServerConfig.clientTLS
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-          being first and the root CA being last.
-        displayName: TLS client certificate
-        path: clusterServerConfig.clientTLS.clientCertificateName
-      - description: |-
           Image is the full reference of the container image that contains the binary. This is
           optional and the default will be the value passed to the `--image` command line flag of
           the controller manager.
@@ -827,55 +784,49 @@ spec:
         path: image
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: IngressHost defines the FQDN for the IMS endpoints.
-        displayName: Ingress Host
-        path: ingressHost
+      - description: IngressConfig defines configuration attributes related to the
+          Ingress endpoint.
+        displayName: Ingress Configuration
+        path: ingress
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          IngressHost defines the FQDN for the IMS endpoints.  By default, it is assumed to be "o2ims.apps.<cluster domain name>".
+          If a different DNS domain is used, then it should be customized here.
+        displayName: Ingress Host
+        path: ingress.ingressHost
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TLS defines the TLS configuration for the IMS endpoints.  The certificate CN and DNS SAN values must match exactly
+          the value provided by the `IngressHost` value.  If the `IngressHost` value is not provided, then the CN and SAN
+          must match the expected default value.  If the TLS configuration is not provided, then the TLS configuration of
+          the default IngressController will be used.
+        displayName: TLS Configuration
+        path: ingress.tls
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
+          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
+          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
+          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
+          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
+          used as the ingress certificate as well as the outgoing client certificate.
+        displayName: TLS certificate
+        path: ingress.tls.secretName
       - description: ProvisioningServerConfig contains the configuration for the provisioning
           server.
         displayName: Provisioning Server Configuration
         path: provisioningServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-          then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          present a client TLS certificate to the OAuth server or SMO.
-        displayName: Client TLS Config
-        path: provisioningServerConfig.clientTLS
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-          being first and the root CA being last.
-        displayName: TLS client certificate
-        path: provisioningServerConfig.clientTLS.clientCertificateName
       - description: ResourceServerConfig contains the configuration for the resource
           server.
         displayName: Resource Server Configuration
         path: resourceServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-          then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-          present a client TLS certificate to the OAuth server or SMO.
-        displayName: Client TLS Config
-        path: resourceServerConfig.clientTLS
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-          being first and the root CA being last.
-        displayName: TLS client certificate
-        path: resourceServerConfig.clientTLS.clientCertificateName
       - description: SmoConfig defines the configurable attributes to represent the
           SMO instance
         displayName: SMO Configuration
@@ -940,18 +891,21 @@ spec:
         path: smo.registrationEndpoint
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: TLSConfig defines the TLS attributes specific to the SMO and
-          OAuth servers
-        displayName: TLS Configuration
+      - description: |-
+          TLSConfig defines the TLS attributes specific to enabling mTLS communication to the SMO and OAuth servers.  If
+          a configuration is provided, then an mTLS connection will be established to the destination; otherwise, a regular
+          TLS connection will be used.
+        displayName: Client TLS Configuration
         path: smo.tls
       - description: |-
-          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-          being first and the root CA being last.
-        displayName: TLS client certificate
-        path: smo.tls.clientCertificateName
+          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
+          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
+          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
+          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
+          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
+          used as the ingress certificate as well as the outgoing client certificate.
+        displayName: TLS certificate
+        path: smo.tls.secretName
       - description: URL represents the base URL of the SMO instance
         displayName: SMO URL
         path: smo.url
