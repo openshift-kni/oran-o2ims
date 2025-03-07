@@ -42,42 +42,10 @@ spec:
               alarmServerConfig:
                 description: AlarmServerConfig contains the configuration for the
                   alarm server.
-                properties:
-                  clientTLS:
-                    description: |-
-                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      present a client TLS certificate to the OAuth server or SMO.
-                    properties:
-                      clientCertificateName:
-                        description: |-
-                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-                          being first and the root CA being last.
-                        type: string
-                    type: object
                 type: object
               artifactsServerConfig:
                 description: ArtifactsServerConfig contains the configuration for
                   the artifacts server.
-                properties:
-                  clientTLS:
-                    description: |-
-                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      present a client TLS certificate to the OAuth server or SMO.
-                    properties:
-                      clientCertificateName:
-                        description: |-
-                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-                          being first and the root CA being last.
-                        type: string
-                    type: object
                 type: object
               caBundleName:
                 description: |-
@@ -93,22 +61,6 @@ spec:
               clusterServerConfig:
                 description: ClusterServerConfig contains the configuration for the
                   resource server.
-                properties:
-                  clientTLS:
-                    description: |-
-                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      present a client TLS certificate to the OAuth server or SMO.
-                    properties:
-                      clientCertificateName:
-                        description: |-
-                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-                          being first and the root CA being last.
-                        type: string
-                    type: object
                 type: object
               image:
                 description: |-
@@ -116,48 +68,40 @@ spec:
                   optional and the default will be the value passed to the `--image` command line flag of
                   the controller manager.
                 type: string
-              ingressHost:
-                description: IngressHost defines the FQDN for the IMS endpoints.
-                type: string
+              ingress:
+                description: IngressConfig defines configuration attributes related
+                  to the Ingress endpoint.
+                properties:
+                  ingressHost:
+                    description: |-
+                      IngressHost defines the FQDN for the IMS endpoints.  By default, it is assumed to be "o2ims.apps.<cluster domain name>".
+                      If a different DNS domain is used, then it should be customized here.
+                    type: string
+                  tls:
+                    description: |-
+                      TLS defines the TLS configuration for the IMS endpoints.  The certificate CN and DNS SAN values must match exactly
+                      the value provided by the `IngressHost` value.  If the `IngressHost` value is not provided, then the CN and SAN
+                      must match the expected default value.  If the TLS configuration is not provided, then the TLS configuration of
+                      the default IngressController will be used.
+                    properties:
+                      secretName:
+                        description: |-
+                          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
+                          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
+                          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
+                          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
+                          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
+                          used as the ingress certificate as well as the outgoing client certificate.
+                        type: string
+                    type: object
+                type: object
               provisioningServerConfig:
                 description: ProvisioningServerConfig contains the configuration for
                   the provisioning server.
-                properties:
-                  clientTLS:
-                    description: |-
-                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      present a client TLS certificate to the OAuth server or SMO.
-                    properties:
-                      clientCertificateName:
-                        description: |-
-                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-                          being first and the root CA being last.
-                        type: string
-                    type: object
                 type: object
               resourceServerConfig:
                 description: ResourceServerConfig contains the configuration for the
                   resource server.
-                properties:
-                  clientTLS:
-                    description: |-
-                      ClientTLS defines the TLS configuration to be used when sending notifications to the SMO.  If this is not provided
-                      then we will fall back to using the TLS config in the SMO attributes.  If no TLS is provided then we will not
-                      present a client TLS certificate to the OAuth server or SMO.
-                    properties:
-                      clientCertificateName:
-                        description: |-
-                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-                          being first and the root CA being last.
-                        type: string
-                    type: object
                 type: object
               smo:
                 description: SmoConfig defines the configurable attributes to represent
@@ -222,16 +166,19 @@ spec:
                       used to register the O2IMS with the SMO.
                     type: string
                   tls:
-                    description: TLSConfig defines the TLS attributes specific to
-                      the SMO and OAuth servers
+                    description: |-
+                      TLSConfig defines the TLS attributes specific to enabling mTLS communication to the SMO and OAuth servers.  If
+                      a configuration is provided, then an mTLS connection will be established to the destination; otherwise, a regular
+                      TLS connection will be used.
                     properties:
-                      clientCertificateName:
+                      secretName:
                         description: |-
-                          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-                          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-                          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-                          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-                          being first and the root CA being last.
+                          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
+                          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
+                          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
+                          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
+                          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
+                          used as the ingress certificate as well as the outgoing client certificate.
                         type: string
                     type: object
                   url:
