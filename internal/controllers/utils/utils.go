@@ -193,43 +193,14 @@ func NeedsOAuthAccess(serverName string) bool {
 		serverName == InventoryProvisioningServerName
 }
 
-// getTLSClientCertificateSecret determines which TLS secret to use for the specified server.  If a specific TLS config
-// was provided for the server then that one is used; otherwise we fall back to the TLS config for the SMO.
-func getTLSClientCertificateSecret(serverName string, inventory *inventoryv1alpha1.Inventory) *string {
+// getTLSClientCertificateSecret determines whether there is a TLS secret configured.
+func getTLSClientCertificateSecret(inventory *inventoryv1alpha1.Inventory) *string {
 	if inventory.Spec.SmoConfig == nil || inventory.Spec.SmoConfig.TLS == nil {
 		return nil
 	}
 
-	switch serverName {
-	case InventoryClusterServerName:
-		if inventory.Spec.ClusterServerConfig != nil && inventory.Spec.ClusterServerConfig.ClientTLS != nil &&
-			inventory.Spec.ClusterServerConfig.ClientTLS.ClientCertificateName != nil {
-			return inventory.Spec.ClusterServerConfig.ClientTLS.ClientCertificateName
-		}
-	case InventoryResourceServerName:
-		if inventory.Spec.ResourceServerConfig != nil && inventory.Spec.ResourceServerConfig.ClientTLS != nil &&
-			inventory.Spec.ResourceServerConfig.ClientTLS.ClientCertificateName != nil {
-			return inventory.Spec.ResourceServerConfig.ClientTLS.ClientCertificateName
-		}
-	case InventoryAlarmServerName:
-		if inventory.Spec.AlarmServerConfig != nil && inventory.Spec.AlarmServerConfig.ClientTLS != nil &&
-			inventory.Spec.AlarmServerConfig.ClientTLS.ClientCertificateName != nil {
-			return inventory.Spec.AlarmServerConfig.ClientTLS.ClientCertificateName
-		}
-	case InventoryArtifactsServerName:
-		if inventory.Spec.ArtifactsServerConfig != nil && inventory.Spec.ArtifactsServerConfig.ClientTLS != nil &&
-			inventory.Spec.ArtifactsServerConfig.ClientTLS.ClientCertificateName != nil {
-			return inventory.Spec.ArtifactsServerConfig.ClientTLS.ClientCertificateName
-		}
-	case InventoryProvisioningServerName:
-		if inventory.Spec.ProvisioningServerConfig != nil && inventory.Spec.ProvisioningServerConfig.ClientTLS != nil &&
-			inventory.Spec.ProvisioningServerConfig.ClientTLS.ClientCertificateName != nil {
-			return inventory.Spec.ProvisioningServerConfig.ClientTLS.ClientCertificateName
-		}
-	}
-
 	tlsConfig := inventory.Spec.SmoConfig.TLS
-	return tlsConfig.ClientCertificateName
+	return tlsConfig.SecretName
 }
 
 // GetDeploymentVolumes builds the list of volumes applicable to the specified server
@@ -252,7 +223,7 @@ func GetDeploymentVolumes(serverName string, inventory *inventoryv1alpha1.Invent
 
 	if NeedsOAuthAccess(serverName) {
 		if inventory.Spec.SmoConfig != nil {
-			clientSecretName := getTLSClientCertificateSecret(serverName, inventory)
+			clientSecretName := getTLSClientCertificateSecret(inventory)
 			if clientSecretName != nil {
 				volumes = append(volumes, corev1.Volume{
 					Name: "smo-mtls",
@@ -296,7 +267,7 @@ func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.I
 
 	if NeedsOAuthAccess(serverName) {
 		if inventory.Spec.SmoConfig != nil {
-			clientSecretName := getTLSClientCertificateSecret(serverName, inventory)
+			clientSecretName := getTLSClientCertificateSecret(inventory)
 			if clientSecretName != nil {
 				mounts = append(mounts, corev1.VolumeMount{
 					Name:      "smo-mtls",
@@ -421,7 +392,7 @@ func addArgsForOAuth(inventory *inventoryv1alpha1.Inventory, args []string) []st
 				fmt.Sprintf("--oauth-client-binding-claim=%s", smo.OAuthConfig.ClientBindingClaim))
 		}
 
-		if smo.TLS != nil && smo.TLS.ClientCertificateName != nil {
+		if smo.TLS != nil && smo.TLS.SecretName != nil {
 			args = append(args,
 				fmt.Sprintf("--tls-client-cert=%s/tls.crt", TLSClientMountPath),
 				fmt.Sprintf("--tls-client-key=%s/tls.key", TLSClientMountPath),
