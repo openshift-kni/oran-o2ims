@@ -173,6 +173,13 @@ func (r *ProvisioningServer) CreateProvisioningRequest(ctx context.Context, requ
 
 // UpdateProvisioningRequest handles an API request to update a provisioning request
 func (r *ProvisioningServer) UpdateProvisioningRequest(ctx context.Context, request api.UpdateProvisioningRequestRequestObject) (api.UpdateProvisioningRequestResponseObject, error) {
+	if request.Body.ProvisioningRequestId.String() != request.ProvisioningRequestId.String() {
+		return api.UpdateProvisioningRequest422ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			Detail: "the provisioningRequestId in the request body must match the provisioningRequestId in the request path",
+			Status: http.StatusUnprocessableEntity,
+		}), nil
+	}
+
 	// Get the existing ProvisioningRequest
 	existingProvisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
 	err := r.HubClient.Get(ctx, types.NamespacedName{Name: request.ProvisioningRequestId.String()}, existingProvisioningRequest)

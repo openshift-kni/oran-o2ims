@@ -348,6 +348,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
+        '422':
+          description: Unprocessable entity.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
         '500':
           description: Internal server error.
           content:
