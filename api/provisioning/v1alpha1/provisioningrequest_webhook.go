@@ -23,7 +23,6 @@ import (
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -102,24 +101,10 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldOb
 				newPr.Status.ProvisioningStatus.ProvisioningPhase)
 		case StateFailed:
 			// Check if the ProvisioningRequest has failed with a disallowed error
-			conditionTypes := []ConditionType{
-				PRconditionTypes.HardwareProvisioned,
-				PRconditionTypes.HardwareNodeConfigApplied,
-				PRconditionTypes.HardwareConfigured,
-				PRconditionTypes.ClusterInstanceProcessed,
-				PRconditionTypes.ClusterProvisioned,
-				PRconditionTypes.ConfigurationApplied,
-				PRconditionTypes.UpgradeCompleted,
-			}
-
-			for _, condType := range conditionTypes {
-				cond := meta.FindStatusCondition(newPr.Status.Conditions, string(condType))
-				if cond != nil && cond.Status == metav1.ConditionFalse &&
-					(cond.Reason == string(CRconditionReasons.Failed) || cond.Reason == string(CRconditionReasons.TimedOut)) {
-					return nil, fmt.Errorf(
-						"updates to spec.templateName or spec.templateVersion are not allowed " +
-							"because the ProvisioningRequest has failed with a disallowed error")
-				}
+			if HasFatalProvisioningFailure(newPr.Status.Conditions) {
+				return nil, fmt.Errorf(
+					"updates to spec.templateName or spec.templateVersion are not allowed " +
+						"because the ProvisioningRequest has failed with a disallowed error")
 			}
 		default:
 			// ProvisioningRequest is fulfilled, allow the change

@@ -76,3 +76,15 @@ var CRconditionReasons = struct {
 	TimedOut:        "TimedOut",
 	Unknown:         "Unknown",
 }
+
+// FatalPRconditionTypes is a list of ProvisioningRequest conditions
+// that are fatal and cannot be recovered on their own.
+var FatalPRconditionTypes = []ConditionType{
+	PRconditionTypes.HardwareProvisioned,
+	PRconditionTypes.HardwareNodeConfigApplied,
+	PRconditionTypes.HardwareConfigured,
+	PRconditionTypes.ClusterInstanceProcessed,
+	PRconditionTypes.ClusterProvisioned,
+	PRconditionTypes.ConfigurationApplied,
+	PRconditionTypes.UpgradeCompleted,
+}
