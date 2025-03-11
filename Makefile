@@ -407,6 +407,13 @@ test tests:
 	@echo "Run ginkgo"
 	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api $(ginkgo_flags)
 
+.PHONY: test-e2e
+test-e2e: envtest kubectl
+ifeq ($(shell uname -s),Linux)
+	@chmod -R u+w $(LOCALBIN)
+endif
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v ginkgo.v
+
 .PHONY: fmt
 fmt:
 	@echo "Run fmt"
@@ -438,7 +445,7 @@ deps-update:
 	hack/install_test_deps.sh
 
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-e2e bundle-check
 
 .PHONY: clean
 clean:

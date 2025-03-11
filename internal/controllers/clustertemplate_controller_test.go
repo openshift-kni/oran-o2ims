@@ -11,6 +11,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 		Expect(err).ToNot(HaveOccurred())
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -51,7 +52,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplate,
 				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 			},
 		}
 
@@ -119,7 +120,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -143,7 +144,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 	It("should requeue an invalid ClusterTemplate", func() {
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -434,7 +435,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ctx = context.Background()
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -445,7 +446,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplate,
 				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 			},
 		}
 
@@ -874,7 +875,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -897,7 +898,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		// Create a valid cluster template
 		ct1 := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -912,7 +913,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		}
 		ct2 := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: "namespace1",
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -943,7 +944,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -985,7 +986,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -1011,7 +1012,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -1033,7 +1034,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -1073,7 +1074,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1105,7 +1106,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1137,7 +1138,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1169,7 +1170,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1200,7 +1201,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
