@@ -10,6 +10,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/google/uuid"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client/generated"
 )
@@ -51,6 +52,17 @@ func LogDuration() Middleware {
 	}
 }
 
+// UUIDValidator ensures a valid UUID in request bodies
+type UUIDValidator struct{}
+
+// Validate checks if a string is a valid UUID
+func (v UUIDValidator) Validate(value string) error {
+	if _, err := uuid.Parse(value); err != nil {
+		return err // nolint: wrapcheck
+	}
+	return nil
+}
+
 // OpenAPIValidation to findFieldByName all incoming requests as specified in the spec
 func OpenAPIValidation(swagger *openapi3.T) Middleware {
 	// Clear out the servers array in the swagger spec, that skips validating
@@ -59,6 +71,9 @@ func OpenAPIValidation(swagger *openapi3.T) Middleware {
 
 	// explicitly register `merge-patch+json` needed for validation during patch requests
 	openapi3filter.RegisterBodyDecoder("application/merge-patch+json", openapi3filter.JSONBodyDecoder)
+
+	// explicitly enable validation for uuid format
+	openapi3.DefineStringFormatValidator("uuid", UUIDValidator{})
 
 	return oapimiddleware.OapiRequestValidatorWithOptions(swagger, &oapimiddleware.Options{
 		Options: openapi3filter.Options{
