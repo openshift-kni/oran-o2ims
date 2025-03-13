@@ -1,5 +1,9 @@
 #!/bin/bash
 #
+# SPDX-FileCopyrightText: Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 # This script uses go workspaces to sync the dependencies of the exported API submodules against the main go.mod
 #
 

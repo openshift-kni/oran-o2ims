@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# SPDX-FileCopyrightText: Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 
 # Create a temporary directory for the virtual environment
 VENVDIR=$(mktemp --tmpdir -d venv.XXXXXX) || {

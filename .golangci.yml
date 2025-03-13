@@ -12,6 +12,7 @@ linters:
     - gocritic
     - gocyclo
     - gofmt
+    - goheader
     - goimports
     - gosec
     - gosimple
@@ -148,3 +149,16 @@ linters-settings:
         alias: $1$2
       - pkg: k8s.io/apimachinery/pkg/apis/(\w+)/(v[\w\d]+)
         alias: $1$2
+  goheader:
+    # Supports two types 'const` and `regexp`.
+    # Values can be used recursively.
+    # Default: {}
+    values:
+      const:
+        # Define here const type values in format k:v.
+        # For example:
+        COMPANY: Red Hat
+    template: |-
+      SPDX-FileCopyrightText: {{ COMPANY }}
+
+      SPDX-License-Identifier: Apache-2.0

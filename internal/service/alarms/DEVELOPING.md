@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Tools to test the alarms server
 
 - A minimal server that can be called to accept Subscriber notification `./server -port 8080`

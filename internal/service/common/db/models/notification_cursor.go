@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package models
 
 // NotificationCursor db to track the high watermark

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Example upgrade from 4.Y.Z to 4.Y.Z+1
 
 ## Starting conditions
