@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Gitops setup
 
 This directory highlights the recommended GIT layout and goes over the Gitops setup for deploying and configuring a cluster through the O-Cloud Manager.

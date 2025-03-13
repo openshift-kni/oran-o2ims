@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # source CRs
 
 The content of the `source-crs` directory should be copied over from the [cnf-features-deploy](https://github.com/openshift-kni/cnf-features-deploy/tree/master/ztp/source-crs/) repo

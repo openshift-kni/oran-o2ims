@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 <!-- vscode-markdown-toc -->
 
 # O-RAN O-Cloud Manager
