@@ -1498,6 +1498,14 @@ spec:
           - update
           - watch
         - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - siteconfig.open-cluster-management.io
           resources:
           - clusterinstances

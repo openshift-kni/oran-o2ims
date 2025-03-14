@@ -122,12 +122,13 @@ func (r *ClusterServer) FetchAll(ctx context.Context) error {
 	r.nodeClusterTypeIDToAlarmDictionaryID = r.buildNodeClusterTypeIDToAlarmDictionaryID(nodeClusterTypes)
 	r.alarmDictionaryIDToAlarmDefinitions = r.buildAlarmDictionaryIDToAlarmDefinitions(alarmDictionaries)
 
+	slog.Info("Successfully synced ClusterServer objects")
 	return nil
 }
 
 // GetObjectTypeID gets the node cluster type ID for a given node cluster ID
 // It uses the cache if available, otherwise it fetches the data from the server
-func (r *ClusterServer) GetObjectTypeID(nodeClusterID uuid.UUID) (uuid.UUID, error) {
+func (r *ClusterServer) GetObjectTypeID(ctx context.Context, nodeClusterID uuid.UUID) (uuid.UUID, error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -136,7 +137,7 @@ func (r *ClusterServer) GetObjectTypeID(nodeClusterID uuid.UUID) (uuid.UUID, err
 		slog.Info("Node cluster ID not found in cache", "nodeClusterID", nodeClusterID)
 
 		// Try to fetch it from the server
-		nodeCluster, err := r.getNodeCluster(context.Background(), nodeClusterID)
+		nodeCluster, err := r.getNodeCluster(ctx, nodeClusterID)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("failed to fetch node cluster type ID: %w", err)
 		}
@@ -151,7 +152,7 @@ func (r *ClusterServer) GetObjectTypeID(nodeClusterID uuid.UUID) (uuid.UUID, err
 
 // GetAlarmDefinitionID gets the alarm definition ID for a given node cluster type ID, name and severity
 // It uses the cache if available, otherwise it fetches the data from the server
-func (r *ClusterServer) GetAlarmDefinitionID(nodeClusterTypeID uuid.UUID, name, severity string) (uuid.UUID, error) {
+func (r *ClusterServer) GetAlarmDefinitionID(ctx context.Context, nodeClusterTypeID uuid.UUID, name, severity string) (uuid.UUID, error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -160,7 +161,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(nodeClusterTypeID uuid.UUID, name, 
 		slog.Info("Node Cluster Type ID not found in cache", "nodeClusterTypeID", nodeClusterTypeID)
 
 		// Try to fetch it from the server
-		nodeClusterType, err := r.getNodeClusterType(context.Background(), nodeClusterTypeID)
+		nodeClusterType, err := r.getNodeClusterType(ctx, nodeClusterTypeID)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("failed to fetch alarm dictionary ID: %w", err)
 		}
@@ -180,7 +181,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(nodeClusterTypeID uuid.UUID, name, 
 		slog.Info("Alarm dictionary ID not found in cache", "alarmDictionaryID", alarmDictionaryID)
 
 		// Try to fetch it from the server
-		alarmDictionary, err := r.getAlarmDictionary(context.Background(), alarmDictionaryID)
+		alarmDictionary, err := r.getAlarmDictionary(ctx, alarmDictionaryID)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("failed to fetch alarm dictionary - alarm Dictionary ID: %w", err)
 		}
@@ -202,7 +203,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(nodeClusterTypeID uuid.UUID, name, 
 			// Resync definitions and try again. It is possible that cache is not up to date
 			slog.Debug("Resynced alarm definitions", "alarmDictionaryID", alarmDictionaryID, "uniqueAlarmDefinitionIdentifier", uniqueAlarmDefinitionIdentifier)
 
-			alarmDictionary, err := r.getAlarmDictionary(context.Background(), alarmDictionaryID)
+			alarmDictionary, err := r.getAlarmDictionary(ctx, alarmDictionaryID)
 			if err != nil {
 				return uuid.Nil, fmt.Errorf("failed to fetch alarm dictionary - alarm Dictionary ID: %w", err)
 			}
@@ -227,18 +228,25 @@ func (r *ClusterServer) GetAlarmDefinitionID(nodeClusterTypeID uuid.UUID, name, 
 func (r *ClusterServer) Sync(ctx context.Context) {
 	slog.Info("Starting sync process for cluster server objects")
 
+	// First fetch of all objects.
+	// When doing a clean deployment cluster server may not be ready which results incomplete data during startup Alerts sync
+	// Making an effort with retry to make sure everything comes out clean before Alarms server starts up
+	// This is edge case and even if the Cluster server cant come up within retry time, we can still continue
+	// But once it does come up, user may get unwanted "CHANGED" alerts
+	if err := r.FetchAllWithRetry(ctx, 3); err != nil {
+		slog.Error("Failed to run initial sync for cluster server objects", "error", err)
+	}
+
 	go func() {
-		// First fetch of all objects
-		if err := r.FetchAll(ctx); err != nil {
-			slog.Error("Failed to run initial sync for cluster server objects", "error", err)
-		}
+		ticker := time.NewTicker(resyncInterval)
+		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				slog.Info("Stopping sync process for cluster server objects")
 				return
-			case <-time.After(resyncInterval):
+			case <-ticker.C:
 				slog.Info("Syncing ClusterServer objects")
 				if err := r.FetchAll(ctx); err != nil {
 					slog.Error("Failed to sync cluster server objects", "error", err)
@@ -246,6 +254,37 @@ func (r *ClusterServer) Sync(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// FetchAllWithRetry Helper function to retry FetchAll with exponential backoff
+func (r *ClusterServer) FetchAllWithRetry(ctx context.Context, maxRetries int) error {
+	var err error
+	backoff := time.Second // Start with 1 second backoff
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err = r.FetchAll(ctx)
+
+		// Success
+		if err == nil {
+			return nil
+		}
+
+		// If this was the last attempt, break out
+		if attempt == maxRetries-1 {
+			break
+		}
+
+		// Wait before retrying with exponential backoff
+		slog.Warn("Fetch operation failed", "attempt", attempt+1, "maxRetries", maxRetries, "error", err)
+		select {
+		case <-time.After(backoff):
+			backoff *= 2
+		case <-ctx.Done():
+			return nil
+		}
+	}
+
+	return fmt.Errorf("failed after %d retries: %w", maxRetries, err)
 }
 
 // getNodeClusters lists all node clusters

@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -260,7 +262,7 @@ var _ = Describe("AlarmsRepository", func() {
 		})
 	})
 
-	Describe("UpsertAlarmEventRecord", func() {
+	Describe("UpsertAlarmEventCaaSRecord", func() {
 		When("upserting a single record", func() {
 			It("successfully upserts alarm event records", func() {
 				id := uuid.New()
@@ -272,6 +274,8 @@ var _ = Describe("AlarmsRepository", func() {
 						Fingerprint:       "9a9e2d82a78cf2b9",
 					},
 				}
+				// Expect transaction begin
+				mock.ExpectBegin()
 
 				mock.ExpectExec(fmt.Sprintf("INSERT INTO %s", models.AlarmEventRecord{}.TableName())).
 					WithArgs(
@@ -280,11 +284,19 @@ var _ = Describe("AlarmsRepository", func() {
 						records[0].PerceivedSeverity, records[0].Extensions,
 						records[0].ObjectID, records[0].ObjectTypeID,
 						records[0].AlarmStatus, records[0].Fingerprint,
-						records[0].AlarmDefinitionID, records[0].ProbableCauseID,
+						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), "alertmanager",
 					).
 					WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
-				err := repo.UpsertAlarmEventRecord(ctx, records)
+				// Expect transaction commit
+				mock.ExpectCommit()
+
+				// Expect the deferred rollback after commit
+				mock.ExpectRollback()
+
+				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
+					return repo.UpsertAlarmEventCaaSRecord(ctx, tx, records, int64(0))
+				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
 			})
@@ -309,6 +321,9 @@ var _ = Describe("AlarmsRepository", func() {
 					},
 				}
 
+				// Expect transaction begin
+				mock.ExpectBegin()
+
 				mock.ExpectExec(fmt.Sprintf("INSERT INTO %s", models.AlarmEventRecord{}.TableName())).
 					WithArgs(
 						records[0].AlarmRaisedTime, records[0].AlarmClearedTime,
@@ -316,17 +331,26 @@ var _ = Describe("AlarmsRepository", func() {
 						records[0].PerceivedSeverity, records[0].Extensions,
 						records[0].ObjectID, records[0].ObjectTypeID,
 						records[0].AlarmStatus, records[0].Fingerprint,
-						records[0].AlarmDefinitionID, records[0].ProbableCauseID,
+						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0),
 						records[1].AlarmRaisedTime, records[1].AlarmClearedTime,
 						records[1].AlarmAcknowledgedTime, records[1].AlarmAcknowledged,
 						records[1].PerceivedSeverity, records[1].Extensions,
 						records[1].ObjectID, records[1].ObjectTypeID,
 						records[1].AlarmStatus, records[1].Fingerprint,
-						records[1].AlarmDefinitionID, records[1].ProbableCauseID,
+						records[1].AlarmDefinitionID, records[1].ProbableCauseID, int64(0),
+						"alertmanager",
 					).
 					WillReturnResult(pgxmock.NewResult("INSERT", 2))
 
-				err := repo.UpsertAlarmEventRecord(ctx, records)
+				// Expect transaction commit
+				mock.ExpectCommit()
+
+				// Expect the deferred rollback after commit
+				mock.ExpectRollback()
+
+				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
+					return repo.UpsertAlarmEventCaaSRecord(ctx, tx, records, int64(0))
+				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
 			})
@@ -334,9 +358,23 @@ var _ = Describe("AlarmsRepository", func() {
 
 		When("given an empty record list", func() {
 			It("handles empty record list", func() {
-				err := repo.UpsertAlarmEventRecord(ctx, []models.AlarmEventRecord{})
+				// Expect transaction begin
+				mock.ExpectBegin()
+
+				// No database operations should be performed with empty list
+				// but we need to expect commit and rollback for transaction completion
+
+				// Expect transaction commit
+				mock.ExpectCommit()
+
+				// Expect the deferred rollback after commit
+				mock.ExpectRollback()
+				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
+					return repo.UpsertAlarmEventCaaSRecord(ctx, tx, []models.AlarmEventRecord{}, int64(0))
+				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+
 			})
 		})
 	})
@@ -377,28 +415,30 @@ var _ = Describe("AlarmsRepository", func() {
 		})
 	})
 
-	Describe("ResolveNotificationIfNotInCurrent", func() {
+	Describe("ResolveStaleAlarmEventCaaSRecord", func() {
 		When("resolving notifications", func() {
-			It("resolves notifications not in current payload", func() {
+			It("resolves notifications that are older than current generation ID", func() {
 				clearTime := time.Now()
 				alarmsrepo.TimeNow = func() time.Time {
 					return clearTime
 				}
-				fp := "9a9e2d82a78cf2b9" //nolint:goconst
-				t := time.Now()
-				am := &api.AlertmanagerNotification{
-					Alerts: []api.Alert{
-						{
-							Fingerprint: &fp,
-							StartsAt:    &t,
-						},
-					},
-				}
+
+				// Expect transaction begin
+				mock.ExpectBegin()
+
 				mock.ExpectQuery(fmt.Sprintf("UPDATE %s SET", models.AlarmEventRecord{}.TableName())).
-					WithArgs(api.Resolved, clearTime, api.CLEARED, &fp, &t).
+					WithArgs(api.Resolved, api.CLEARED, clearTime, int64(2), "alertmanager", api.Resolved).
 					WillReturnRows(pgxmock.NewRows([]string{"alarm_event_record_id"}).AddRow(uuid.New()))
 
-				err := repo.ResolveNotificationIfNotInCurrent(ctx, am)
+				// Expect transaction commit
+				mock.ExpectCommit()
+
+				// Expect the deferred rollback after commit
+				mock.ExpectRollback()
+
+				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
+					return repo.ResolveStaleAlarmEventCaaSRecord(ctx, tx, int64(2))
+				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
 			})

@@ -85,5 +85,6 @@ func processOutboxNotification(ctx context.Context, pool *pgxpool.Pool, a *api.A
 		a.Notifier.Notify(ctx, &notification)
 	}
 
+	slog.Info("Successfully processed outbox notifications", "caller", caller)
 	return nil
 }

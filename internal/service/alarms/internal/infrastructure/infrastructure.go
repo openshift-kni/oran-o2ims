@@ -18,6 +18,8 @@ import (
 
 const resyncInterval = 1 * time.Hour
 
+//go:generate mockgen -source=infrastructure.go -destination=generated/mock_infrastructure_client.generated.go -package=generated
+
 // Client is the interface that wraps the basic methods for the infrastructure clients
 type Client interface {
 	Name() string
@@ -25,8 +27,8 @@ type Client interface {
 
 	FetchAll(context.Context) error
 
-	GetObjectTypeID(objectID uuid.UUID) (uuid.UUID, error)
-	GetAlarmDefinitionID(ObjectTypeID uuid.UUID, name, severity string) (uuid.UUID, error)
+	GetObjectTypeID(ctx context.Context, objectID uuid.UUID) (uuid.UUID, error)
+	GetAlarmDefinitionID(ctx context.Context, ObjectTypeID uuid.UUID, name, severity string) (uuid.UUID, error)
 
 	// Sync starts a background process to populate and keep up-to-date a local cache with data from the infrastructure servers
 	Sync(ctx context.Context)

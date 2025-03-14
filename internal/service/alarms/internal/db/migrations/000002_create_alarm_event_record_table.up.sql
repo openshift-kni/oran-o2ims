@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     fingerprint TEXT NOT NULL, -- Unique identifier of caas alerts
     should_create_data_change_event BOOLEAN DEFAULT TRUE NOT NULL, -- This flag is transient and is re-evaluated with each change to the alarm event row which potentially results a new entry in outbox using AFTER trigger.
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record creation timestamp
+    generation_id BIGINT DEFAULT 0 NOT NULL, -- GenerationID to determine if an event is stale
+    alarm_source TEXT DEFAULT 'alertmanager' NOT NULL, -- Source of event such as AM, hardware etc
 
     CONSTRAINT unique_fingerprint_alarm_raised_time UNIQUE (fingerprint, alarm_raised_time), -- Unique constraint to prevent duplicate caas alert with the same fingerprint and time
     CONSTRAINT chk_status CHECK (alarm_status IN ('firing', 'resolved')), -- Check constraint to enforce status as either 'firing' or 'resolved'
@@ -44,8 +46,8 @@ For new alarms (INSERT):
 - should_create_data_change_event set to true
 
 State transition priority (UPDATE):
-1. Alarm State Change (NEW) - When status becomes 'firing' (from 'resolved')
-2. Alarm State Change (CLEAR) - When status becomes 'resolved' (from 'new')
+1. Alarm State Change (CLEAR) - When status becomes 'resolved' (from 'new')
+2. Alarm State Change (NEW) - When status becomes 'firing' (from 'resolved')
 3. Acknowledgment (ACKNOWLEDGE) - On first acknowledgment
 4. Attribute Changes (CHANGE) - For unacknowledged alarms only
 
@@ -86,17 +88,23 @@ BEGIN
     ELSIF TG_OP = 'UPDATE' THEN
         -- Reset should_create_data_change_event flag for any significant change
         NEW.should_create_data_change_event := FALSE;
-        -- 1. Transition from resolved to firing
-        IF OLD.alarm_status = 'resolved' AND NEW.alarm_status = 'firing' THEN
+
+        -- 1. Transition from firing to resolved.
+        -- We consider a resolved state to be end of the event lifecycle,
+        -- meaning even if something changes to event (e.g a new alarm definition) after the state is
+        -- resolved we keep it "locked" and no more alerts sent this particular event.
+        IF NEW.alarm_status = 'resolved' THEN
+            IF NEW.alarm_status IS DISTINCT FROM OLD.alarm_status THEN
+                NEW.notification_event_type := 'CLEAR';
+                NEW.alarm_changed_time = NEW.alarm_cleared_time;
+                NEW.should_create_data_change_event := TRUE;
+            END IF;
+
+        -- 2. Transition from resolved to firing. This is rare but this can happen.
+        ELSIF OLD.alarm_status = 'resolved' AND NEW.alarm_status = 'firing' THEN
             NEW.notification_event_type := 'NEW';
             NEW.alarm_changed_time := CURRENT_TIMESTAMP;
             NEW.alarm_cleared_time := NULL;
-            NEW.should_create_data_change_event := TRUE;
-
-        -- 2. Transition from firing to resolved.
-        ELSIF OLD.alarm_status = 'firing' AND NEW.alarm_status = 'resolved' THEN
-            NEW.notification_event_type := 'CLEAR';
-            NEW.alarm_changed_time = NEW.alarm_cleared_time;
             NEW.should_create_data_change_event := TRUE;
 
         -- 3. Handling alarm_acknowledged. Set alarm_changed_time to alarm_acknowledged_time

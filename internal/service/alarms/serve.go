@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -77,6 +78,13 @@ func Serve(config *api.AlarmsServerConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Recovery defer to print panic strace
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("something went wrong", "stacktrace", string(debug.Stack()))
+		}
+	}()
+
 	go func() {
 		sig := <-shutdown
 		slog.Info("Shutdown signal received", "signal", sig)
@@ -95,8 +103,21 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("failed to connected to DB: %w", err)
 	}
 	defer func() {
-		slog.Info("Closing DB connection")
-		pool.Close()
+		// Try to close the pool with a timeout
+		closeComplete := make(chan struct{})
+		go func() {
+			pool.Close()
+			close(closeComplete)
+		}()
+
+		// If there's panic during server init, DB pool.Close() may deadlock - handling this with timeout
+		// Wait for either close completion or timeout
+		select {
+		case <-closeComplete:
+			slog.Info("Closed DB connection")
+		case <-time.After(5 * time.Second):
+			slog.Warn("DB connection close timed out")
+		}
 	}()
 
 	// Init infrastructure clients
@@ -217,9 +238,10 @@ func Serve(config *api.AlarmsServerConfig) error {
 		}
 	}()
 
-	// Configure AM right before the server starts listening
-	if err := alertmanager.Setup(ctx); err != nil {
-		return fmt.Errorf("error configuring alert manager: %w", err)
+	// Configure webhook and init DB with CaaS alerts using AM right before the server starts listening
+	// Also start alert sync scheduler
+	if err := startAlertmanager(ctx, &alarmServer); err != nil {
+		return fmt.Errorf("failed to start alartmanager: %w", err)
 	}
 
 	// Init server
@@ -320,5 +342,40 @@ func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer
 	}
 	slog.Info("Successfully created initial set of cronjob and resources")
 
+	return nil
+}
+
+// Init everything needed to start using ACM's alertmanager
+// Collect the full set of alerts with API, start a background sync and finally open up webhook
+func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer) error {
+	hubclient, err := k8s.NewClientForHub()
+	if err != nil {
+		return fmt.Errorf("failed to create k8s client: %w", err)
+	}
+
+	// Run the first sync - running it outside also makes sure connectivity is good before server starts listening
+	c := alertmanager.NewAlertManagerClient(hubclient, alarmServer.AlarmsRepository, alarmServer.Infrastructure)
+	slog.Info("Running initial alert sync")
+	if err := c.SyncAlerts(ctx); err != nil {
+		return fmt.Errorf("failed to run initial alert sync: %w", err)
+	}
+
+	// Start alert sync scheduler with a go routine
+	alarmServer.Wg.Add(1)
+	go func() {
+		defer alarmServer.Wg.Done()
+		if err := c.RunAlertSyncScheduler(ctx, 1*time.Hour); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				slog.Error("failed to run alert sync scheduler", "error", err)
+			}
+		}
+	}()
+
+	// Configure webhook by programmatically merging with the existing config
+	if err := alertmanager.Setup(ctx); err != nil {
+		return fmt.Errorf("error configuring alert manager: %w", err)
+	}
+
+	slog.Info("Successfully did the first sync and configured alertmanager")
 	return nil
 }
