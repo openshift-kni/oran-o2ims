@@ -318,6 +318,12 @@ github.com/inconshreveable/mousetrap
 # github.com/integralist/go-findroot v0.0.0-20160518114804-ac90681525dc
 ## explicit
 github.com/integralist/go-findroot/find
+# github.com/itchyny/gojq v0.12.8
+## explicit; go 1.16
+github.com/itchyny/gojq
+# github.com/itchyny/timefmt-go v0.1.3
+## explicit; go 1.14
+github.com/itchyny/timefmt-go
 # github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 ## explicit; go 1.12
 github.com/jackc/pgerrcode
@@ -376,15 +382,20 @@ github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
+# github.com/lib/pq v1.10.9
+## explicit; go 1.13
+github.com/lib/pq
+github.com/lib/pq/oid
+github.com/lib/pq/scram
 # github.com/mailru/easyjson v0.7.7
 ## explicit; go 1.12
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/metal3-io/baremetal-operator/apis v0.5.1
-## explicit; go 1.20
+# github.com/metal3-io/baremetal-operator/apis v0.9.0
+## explicit; go 1.22.4
 github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1
-# github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.4.0
+# github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.5.1
 ## explicit; go 1.20
 github.com/metal3-io/baremetal-operator/pkg/hardwareutils/bmc
 # github.com/mitchellh/mapstructure v1.5.0
@@ -491,12 +502,16 @@ github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
 ## explicit; go 1.21
 github.com/openshift/api/config/v1
 github.com/openshift/api/operator/v1
-# github.com/openshift/assisted-service/api v0.0.0-20240405132132-484ec5c683c6
-## explicit; go 1.20
-github.com/openshift/assisted-service/api/common
-github.com/openshift/assisted-service/api/v1beta1
-# github.com/openshift/assisted-service/models v0.0.0 => github.com/openshift/assisted-service/models v0.0.0-20230831114549-1922eda29cf8
+# github.com/openshift/assisted-service v1.0.10-0.20230830164851-6573b5d7021d
 ## explicit; go 1.18
+github.com/openshift/assisted-service/pkg/validations
+# github.com/openshift/assisted-service/api v0.0.0 => github.com/openshift/assisted-service/api v0.0.0-20250301063121-0889f438699f
+## explicit; go 1.21
+github.com/openshift/assisted-service/api/common
+github.com/openshift/assisted-service/api/hiveextension/v1beta1
+github.com/openshift/assisted-service/api/v1beta1
+# github.com/openshift/assisted-service/models v0.0.0 => github.com/openshift/assisted-service/models v0.0.0-20250301063121-0889f438699f
+## explicit; go 1.21
 github.com/openshift/assisted-service/models
 # github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
 ## explicit; go 1.12
@@ -605,9 +620,24 @@ github.com/stephenafamo/scan/stdscan
 # github.com/stoewer/go-strcase v1.2.0
 ## explicit; go 1.11
 github.com/stoewer/go-strcase
-# github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
-## explicit; go 1.21
+# github.com/stolostron/siteconfig v0.0.0-20250306185047-a08f1e7c2af7
+## explicit; go 1.22.9
 github.com/stolostron/siteconfig/api/v1alpha1
+# github.com/thoas/go-funk v0.9.2
+## explicit; go 1.13
+github.com/thoas/go-funk
+# github.com/tidwall/gjson v1.18.0
+## explicit; go 1.12
+github.com/tidwall/gjson
+# github.com/tidwall/match v1.1.1
+## explicit; go 1.15
+github.com/tidwall/match
+# github.com/tidwall/pretty v1.2.1
+## explicit; go 1.16
+github.com/tidwall/pretty
+# github.com/tidwall/sjson v1.2.5
+## explicit; go 1.14
+github.com/tidwall/sjson
 # github.com/vmihailenco/msgpack/v5 v5.3.5
 ## explicit; go 1.11
 github.com/vmihailenco/msgpack/v5
@@ -620,6 +650,9 @@ github.com/vmihailenco/tagparser/v2/internal/parser
 # github.com/vmware-labs/yaml-jsonpath v0.3.2
 ## explicit; go 1.13
 github.com/vmware-labs/yaml-jsonpath/pkg/yamlpath
+# github.com/wI2L/jsondiff v0.6.1
+## explicit; go 1.21
+github.com/wI2L/jsondiff
 # github.com/x448/float16 v0.8.4
 ## explicit; go 1.11
 github.com/x448/float16
@@ -1443,7 +1476,7 @@ k8s.io/kube-openapi/pkg/validation/errors
 k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
-# k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
+# k8s.io/utils v0.0.0-20241210054802-24370beab758
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock
@@ -1539,7 +1572,8 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# github.com/openshift/assisted-service/models => github.com/openshift/assisted-service/models v0.0.0-20230831114549-1922eda29cf8
+# github.com/openshift/assisted-service/api => github.com/openshift/assisted-service/api v0.0.0-20250301063121-0889f438699f
+# github.com/openshift/assisted-service/models => github.com/openshift/assisted-service/models v0.0.0-20250301063121-0889f438699f
 # github.com/openshift-kni/oran-o2ims/api/hardwaremanagement => ./api/hardwaremanagement
 # github.com/openshift-kni/oran-o2ims/api/inventory => ./api/inventory
 # github.com/openshift-kni/oran-o2ims/api/provisioning => ./api/provisioning
