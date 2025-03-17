@@ -18,15 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/listener"
-
 	"github.com/getkin/kin-openapi/openapi3"
-
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
-
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
-
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -35,9 +27,13 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/listener"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/notifier_provider"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/serviceconfig"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
@@ -96,7 +92,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("missing %s environment variable", utils.AlarmsPasswordEnvName)
 	}
 
-	// Init DB client
+	// Init DB client and alarm repository
 	pgConfig := db.GetPgConfig(username, password, database)
 	pool, err := db.NewPgxPool(ctx, pgConfig)
 	if err != nil {
@@ -119,16 +115,14 @@ func Serve(config *api.AlarmsServerConfig) error {
 			slog.Warn("DB connection close timed out")
 		}
 	}()
+	alarmRepository := &repo.AlarmsRepository{
+		Db: pool,
+	}
 
 	// Init infrastructure clients
 	infrastructureClients, err := infrastructure.Init(ctx)
 	if err != nil {
 		return fmt.Errorf("error setting up and collecting objects from infrastructure servers: %w", err)
-	}
-
-	// Init alarm repository
-	alarmRepository := &repo.AlarmsRepository{
-		Db: pool,
 	}
 
 	// Parse global cloud id
@@ -148,10 +142,38 @@ func Serve(config *api.AlarmsServerConfig) error {
 		Infrastructure:   infrastructureClients,
 	}
 
-	// Start a new notifier
-	if err := startSubscriptionNotifier(ctx, *config, &alarmServer); err != nil {
-		return fmt.Errorf("error starting alarms notifier: %w", err)
+	// Create the OAuth client config
+	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create oauth client configuration for alarms subscribers: %w", err)
 	}
+
+	newNotifier := notifier.NewNotifier(
+		notifier_provider.NewSubscriptionStorageProvider(alarmRepository),
+		notifier_provider.NewNotificationStorageProvider(alarmRepository, globalCloudID),
+		notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile),
+	)
+
+	// Attribute needed when subscription event happens
+	alarmServer.SubscriptionEventHandler = newNotifier
+
+	// Start alarms notifier
+	alarmServer.Wg.Add(1)
+	go func() {
+		defer alarmServer.Wg.Done()
+		slog.Info("Starting alarms subs notifier")
+		if err := newNotifier.Run(ctx); err != nil {
+			slog.Error("notifier error", "error", err)
+		}
+	}()
+
+	// Start listening for alarms events using pg listen/notify
+	alarmServer.Wg.Add(1)
+	go func() {
+		defer alarmServer.Wg.Done()
+		listener.ListenForAlarmsPgChannels(ctx, pool, newNotifier, globalCloudID)
+		slog.Info("Done listening to alarms pg channels")
+	}()
 
 	// Configure server and start alarms cleanup cronjob
 	if err := ConfigAlarmServerCleanup(ctx, &alarmServer, pgConfig); err != nil {
@@ -229,21 +251,12 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)
 
-	// Start listening for alarms events using pg listen/notify
-	alarmServer.Wg.Add(1)
-	go func() {
-		defer alarmServer.Wg.Done()
-		if err := listener.ListenForAlarmsPgChannels(ctx, pool, &alarmServer); err != nil {
-			slog.Error("failed to listen for alarms PG channels", "error", err)
-		}
-	}()
-
 	// Configure webhook and init DB with CaaS alerts using AM right before the server starts listening
 	// Also start alert sync scheduler
 	if err := startAlertmanager(ctx, &alarmServer); err != nil {
 		return fmt.Errorf("failed to start alartmanager: %w", err)
-	}
 
+	}
 	// Init server
 	go func() {
 		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
@@ -288,32 +301,6 @@ func gracefulShutdownWithTasks(srv *http.Server, alarmsServer *api.AlarmsServer)
 		}
 		return fmt.Errorf("alarms server background tasks timed out")
 	}
-}
-
-// startSubscriptionNotifier set a new startSubscriptionNotifier for alarms server
-func startSubscriptionNotifier(ctx context.Context, config api.AlarmsServerConfig, a *api.AlarmsServer) error {
-	// Create the OAuth client config
-	oauthConfig, err := config.CommonServerConfig.CreateOAuthConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create oauth client configuration for alarms subscribers: %w", err)
-	}
-
-	notificationsProvider := notifier_provider.NewNotificationStorageProvider(a.AlarmsRepository, a.GlobalCloudID)
-	subscriptionsProvider := notifier_provider.NewSubscriptionStorageProvider(a.AlarmsRepository)
-	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
-	newNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
-
-	a.Notifier = newNotifier
-
-	// Start alarms notifier
-	go func() {
-		slog.Info("Starting alarms subs notifier")
-		if err := newNotifier.Run(ctx); err != nil {
-			slog.Error("notifier error", "error", err)
-		}
-	}()
-
-	return nil
 }
 
 // ConfigAlarmServerCleanup configure server and launch the cleanup cronjob for resolved alarm events

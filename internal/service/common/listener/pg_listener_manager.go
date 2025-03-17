@@ -58,7 +58,7 @@ func (lm *Manager) RegisterListener(channel string, handler NotificationHandler,
 
 // StartListeners begins listening on all registered channels.
 // It spawns one goroutine per channel for real-time listening and, if configured, one for catch-up.
-func (lm *Manager) StartListeners(ctx context.Context) error {
+func (lm *Manager) StartListeners(ctx context.Context) {
 	for channel, config := range lm.channels {
 		// Start real-time listener.
 		lm.wg.Add(1)
@@ -70,7 +70,6 @@ func (lm *Manager) StartListeners(ctx context.Context) error {
 			go lm.startChannelCatchUp(ctx, channel, config.CatchUpInterval, config.CatchUpFunc)
 		}
 	}
-	return nil
 }
 
 // listenChannel handles notifications for a specific channel.
