@@ -97,7 +97,7 @@ var _ = Describe("Alertmanager API Client", func() {
 		fakeSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: alertmanager.ACMObsAMNamespace,
-				Name:      alertmanager.ACMObsAMAuthSecrtName,
+				Name:      alertmanager.ACMObsAMAuthSecretName,
 			},
 			Data: map[string][]byte{
 				"token":  []byte("fake-token"),

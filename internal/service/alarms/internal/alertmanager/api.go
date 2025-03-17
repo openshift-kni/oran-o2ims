@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	ACMObsAMRouteName     = "alertmanager"                              // ACM's AM API host
-	ACMObsAMAuthSecrtName = "observability-alertmanager-accessor-token" // ACM's AM API BEARER and ca.Crt
+	// ACMObsAMRouteName route to collect ACM's AM API host
+	ACMObsAMRouteName = "alertmanager"
+	// ACMObsAMAuthSecretName secret to collect ACM's AM API BEARER and ca.Crt
+	ACMObsAMAuthSecretName = "observability-alertmanager-accessor-token" // nolint: gosec
 )
 
 // APIAlert represents the alert structure returned by the Alertmanager API.
@@ -229,14 +231,14 @@ func (c *AMClient) GetAlertmanagerRoute(ctx context.Context) (string, error) {
 }
 
 // createAlertmanagerClient creates a new HTTP client with the latest token
-// TODO: we can be more robust by reading our `/var/run/secrets/kubernetes.io/serviceaccount/token` for token instead of relying on ACMObsAMAuthSecrtName data.
+// TODO: we can be more robust by reading our `/var/run/secrets/kubernetes.io/serviceaccount/token` for token instead of relying on ACMObsAMAuthSecretName data.
 func (c *AMClient) createAlertmanagerClient(ctx context.Context) (*http.Client, string, error) {
 	var secret corev1.Secret
 	if err := c.k8sClient.Get(ctx, client.ObjectKey{
 		Namespace: ACMObsAMNamespace,
-		Name:      ACMObsAMAuthSecrtName,
+		Name:      ACMObsAMAuthSecretName,
 	}, &secret); err != nil {
-		return nil, "", fmt.Errorf("error getting token secret from '%s': %w", ACMObsAMAuthSecrtName, err)
+		return nil, "", fmt.Errorf("error getting token secret from '%s': %w", ACMObsAMAuthSecretName, err)
 	}
 
 	// Extract token
