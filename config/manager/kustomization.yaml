@@ -11,7 +11,7 @@ generatorOptions:
 images:
 - name: controller
   newName: quay.io/openshift-kni/oran-o2ims-operator
-  newTag: 4.18.0
+  newTag: 4.18.0-poc.2503.0
 
 
 # This replacement copies the controller image into the `IMAGE` environment variable of the pod,
