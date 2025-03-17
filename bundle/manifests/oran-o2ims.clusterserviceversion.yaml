@@ -627,7 +627,7 @@ metadata:
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.18.0
+  name: oran-o2ims.v4.18.0-poc.2503.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -1544,7 +1544,7 @@ spec:
                 - --metrics-tls-cert-dir=/secrets/tls/metrics
                 env:
                 - name: IMAGE
-                  value: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
+                  value: quay.io/openshift-kni/oran-o2ims-operator:4.18.0-poc.2503.0
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
                 - name: HWMGR_PLUGIN_NAMESPACE
@@ -1555,7 +1555,7 @@ spec:
                       fieldPath: metadata.namespace
                 - name: IMAGE_PULL_POLICY
                   value: IfNotPresent
-                image: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
+                image: quay.io/openshift-kni/oran-o2ims-operator:4.18.0-poc.2503.0
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
@@ -1667,7 +1667,7 @@ spec:
   provider:
     name: Red Hat
   replaces: oran-o2ims.v0.0.0
-  version: 4.18.0
+  version: 4.18.0-poc.2503.0
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
