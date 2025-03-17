@@ -52,6 +52,9 @@ spec:
   {{- end }}
 {{- end }}
   networkType: "{{ default "OVNKubernetes" .Cluster.networkType }}"
+{{- if .Cluster.cpuArchitecture }}
+  cpuArchitecture: "{{ .Cluster.cpuArchitecture }}"
+{{- end }}
   cpuPartitioningMode: "{{ default "None" .Cluster.cpuPartitioningMode }}"
 {{- if .Cluster.diskEncryption }}
   diskEncryption:
@@ -138,6 +141,9 @@ spec:
           namespace: "{{ $t_ref.namespace | validateNonEmpty (printf "%s[%d].namespace" $t_path $t_index) }}"
       {{- end }}
       # Optional fields at node-level
+      {{- if .cpuArchitecture }}
+      cpuArchitecture: "{{ .cpuArchitecture }}"
+      {{- end }}
       automatedCleaningMode: "{{ default "disabled" .automatedCleaningMode }}"
       {{- if .extraAnnotations }}
       extraAnnotations:
