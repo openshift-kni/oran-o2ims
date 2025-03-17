@@ -727,6 +727,23 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			clusterInstance = &siteconfig.ClusterInstance{}
 			clusterInstance.SetName(crName)
 			clusterInstance.SetNamespace(crName)
+			clusterInstance.Spec = siteconfig.ClusterInstanceSpec{
+				Nodes: []siteconfig.NodeSpec{
+					{
+						HostName:           "node-1",
+						BmcAddress:         "192.168.111.1",
+						BmcCredentialsName: siteconfig.BmcCredentialsName{Name: "node-1-bmc-secret"},
+						NodeNetwork: &assistedservicev1beta1.NMStateConfigSpec{
+							Interfaces: []*assistedservicev1beta1.Interface{
+								{
+									Name:       "eno1",
+									MacAddress: "00:00:00:00:00:00",
+								},
+							},
+						},
+					},
+				},
+			}
 			clusterInstance.Status.Conditions = []metav1.Condition{
 				{Type: string(siteconfig.ClusterInstanceValidated), Status: metav1.ConditionTrue},
 				{Type: string(siteconfig.RenderedTemplates), Status: metav1.ConditionTrue},
