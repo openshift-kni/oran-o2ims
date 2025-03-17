@@ -1065,3 +1065,18 @@ func GenerateSearchApiUrl(backendURL string) (string, error) {
 	searchUri := strings.Join(hostArr, ".")
 	return fmt.Sprintf("%s://%s/searchapi/graphql", u.Scheme, searchUri), nil
 }
+
+// Generates the name for a node's secret from a node map.
+func GenerateSecretName(nodeMap map[string]interface{}, provisioningRequest string) (string, error) {
+	nodeHostnameInterface, nodeHostnameExists := nodeMap["hostName"]
+	if !nodeHostnameExists {
+		return "", NewInputError(
+			`\"hostname\" key expected to exist in `+
+				`spec.templateParameters.clusterInstanceParameters `+
+				`of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
+		)
+	}
+	secretName := ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) + "-bmc-secret"
+	return secretName, nil
+}

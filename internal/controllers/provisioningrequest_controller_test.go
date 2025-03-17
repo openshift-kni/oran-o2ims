@@ -33,22 +33,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-const (
-	masterNodeName = "master-node"
-	bmcSecretName  = "bmc-secret"
-)
-
 type expectedNodeDetails struct {
 	BMCAddress         string
 	BMCCredentialsName string
 	BootMACAddress     string
 	Interfaces         []map[string]interface{}
-}
-
-func createNodeResources(ctx context.Context, c client.Client, npName string) {
-	node := createNode(masterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", utils.UnitTestHwmgrNamespace, npName, nil)
-	secrets := createSecrets([]string{bmcSecretName}, utils.UnitTestHwmgrNamespace)
-	createResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
 }
 
 var _ = Describe("ProvisioningRequestReconcile", func() {
@@ -101,7 +90,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
     - name: "ai-cluster-templates-v1"
       namespace: "siteconfig-operator"
     nodes:
-    - hostname: "node1"
+    - hostName: "node1"
       role: master
       bootMode: UEFI
       nodeNetwork:
@@ -262,39 +251,6 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				provisioningv1alpha1.StateFailed, "Failed to validate the ProvisioningRequest", nil)
 		})
 
-		It("Verify status conditions if ClusterInstance rendering fails", func() {
-			// Fail the ClusterInstance rendering
-			testutils.RemoveRequiredFieldFromClusterInstanceCm(ctx, c, ciDefaultsCm, ctNamespace)
-
-			// Start reconciliation
-			result, err := reconciler.Reconcile(ctx, req)
-			// Verify the reconciliation result
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(doNotRequeue()))
-
-			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
-			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
-			conditions := reconciledCR.Status.Conditions
-
-			// Verify the ProvisioningRequest's status conditions
-			Expect(len(conditions)).To(Equal(2))
-			testutils.VerifyStatusCondition(conditions[0], metav1.Condition{
-				Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
-				Status: metav1.ConditionTrue,
-				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
-			})
-			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
-				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
-				Status:  metav1.ConditionFalse,
-				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
-				Message: "spec.nodes[0].templateRefs must be provided",
-			})
-
-			// Verify provisioningState is failed when the clusterInstance rendering fails.
-			testutils.VerifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateFailed, "Failed to render and validate ClusterInstance", nil)
-		})
-
 		It("Verify status conditions if Cluster resources creation fails", func() {
 			// Delete the pull secret for ClusterInstance
 			secret := &corev1.Secret{}
@@ -418,10 +374,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
 			}
-			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{masterNodeName}}
+			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
 			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			createNodeResources(ctx, c, nodePool.Name)
+			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 
 			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
 				Name:                           nodePool.Name,
@@ -627,53 +583,6 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				provisioningv1alpha1.StateFailed,
 				"Hardware provisioning failed", nil)
 		})
-
-		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodePool becomes provisioned", func() {
-			// Initial reconciliation
-			_, err := reconciler.Reconcile(ctx, req)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Patch NodePool provision status to Completed
-			currentNp := &hwv1alpha1.NodePool{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
-			npProvisionedCond := meta.FindStatusCondition(
-				currentNp.Status.Conditions, string(hwv1alpha1.Provisioned),
-			)
-			npProvisionedCond.Status = metav1.ConditionTrue
-			npProvisionedCond.Reason = string(hwv1alpha1.Completed)
-			Expect(c.Status().Update(ctx, currentNp)).To(Succeed())
-
-			// Fail the ClusterInstance rendering
-			testutils.RemoveRequiredFieldFromClusterInstanceCm(ctx, c, ciDefaultsCm, ctNamespace)
-
-			// Start reconciliation
-			result, err := reconciler.Reconcile(ctx, req)
-			// Verify the reconciliation result
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal(doNotRequeue()))
-
-			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
-			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
-			conditions := reconciledCR.Status.Conditions
-
-			// Verify that the ClusterInstanceRendered condition fails but hw provisioned condition
-			// has changed to Completed
-			Expect(len(conditions)).To(Equal(5))
-			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
-				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
-				Status:  metav1.ConditionFalse,
-				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
-				Message: "spec.nodes[0].templateRefs must be provided",
-			})
-			testutils.VerifyStatusCondition(conditions[4], metav1.Condition{
-				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
-				Status: metav1.ConditionTrue,
-				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
-			})
-			// Verify the provisioningState moves to failed
-			testutils.VerifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateFailed, "Failed to render and validate ClusterInstance", nil)
-		})
 	})
 
 	Context("When ClusterInstance has been created", func() {
@@ -711,10 +620,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
-			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{masterNodeName}}
+			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
 			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			createNodeResources(ctx, c, nodePool.Name)
+			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 			// Set the provisioningRequest extensions.nodePoolRef
 			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
 				Name:                           nodePool.Name,
@@ -1264,11 +1173,17 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			policy.Status.ComplianceState = policiesv1.Compliant
 			Expect(c.Status().Update(ctx, policy)).To(Succeed())
 
-			// Fail the ClusterInstance rendering
+			// Start reconciliation to complete the ProvisioningRequest.
+			result, err := reconciler.Reconcile(ctx, req)
+			// Verify the reconciliation result
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(doNotRequeue()))
+
+			// Fail the ClusterInstance rendering.
 			testutils.RemoveRequiredFieldFromClusterInstanceCm(ctx, c, ciDefaultsCm, ctNamespace)
 
-			// Start reconciliation
-			result, err := reconciler.Reconcile(ctx, req)
+			// Start reconciliation.
+			result, err = reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(doNotRequeue()))
@@ -1284,7 +1199,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
-				Message: "spec.nodes[0].templateRefs must be provided",
+				Message: "detected disallowed changes in immutable fields: nodes.0.templateRefs",
 			})
 			testutils.VerifyStatusCondition(conditions[7], metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
@@ -1520,10 +1435,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			nodePool.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
-			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{masterNodeName}}
+			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
 			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			createNodeResources(ctx, c, nodePool.Name)
+			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
 				Name:                           nodePool.Name,
 				Namespace:                      nodePool.Namespace,
@@ -1735,12 +1650,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						},
 					},
 					Properties: hwv1alpha1.Properties{
-						NodeNames: []string{masterNodeName},
+						NodeNames: []string{testutils.MasterNodeName},
 					},
 				},
 			}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			createNodeResources(ctx, c, nodePool.Name)
+			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 
 			provisionedCond := metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
@@ -2073,15 +1988,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					utils.ClusterInstallationTimeoutConfigKey: "60s",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
     clusterImageSetNameRef: "4.16.3"
+    cpuPartitioningMode: "None"
     pullSecretRef:
       name: "pull-secret"
     templateRefs:
     - name: "ai-cluster-templates-v1"
       namespace: "siteconfig-operator"
     holdInstallation: true
+    networkType: "OVNKubernetes"
     nodes:
-    - hostname: "node1"
+    - hostName: "node1"
       ironicInspect: "false"
+      automatedCleaningMode: "disabled"
+      bootMode: "UEFI"
+      role: "master"
       templateRefs:
       - name: "ai-node-templates-v1"
         namespace: "siteconfig-operator"
@@ -2139,12 +2059,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						},
 					},
 					Properties: hwv1alpha1.Properties{
-						NodeNames: []string{masterNodeName},
+						NodeNames: []string{testutils.MasterNodeName},
 					},
 				},
 			}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			createNodeResources(ctx, c, nodePool.Name)
+			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 
 			policy = &policiesv1.Policy{
 				ObjectMeta: metav1.ObjectMeta{

@@ -280,12 +280,12 @@ defaultHugepagesSize: "1G"`,
 					},
 				},
 				Properties: hwv1alpha1.Properties{
-					NodeNames: []string{masterNodeName},
+					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
 		}
 		Expect(c.Create(ctx, nodePool)).To(Succeed())
-		createNodeResources(ctx, c, nodePool.Name)
+		testutils.CreateNodeResources(ctx, c, nodePool.Name)
 
 		// Update the managedCluster cluster-1 to be available, joined and accepted.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -2145,7 +2145,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					},
 				},
 				Properties: hwv1alpha1.Properties{
-					NodeNames: []string{masterNodeName},
+					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
 		}
@@ -2196,7 +2196,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 			// Create the NodePool.
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			createNodeResources(ctx, c, nodePool.Name)
+			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 		})
 
 		It("Updates Agent and ManagedCluster labels as expected", func() {
@@ -2291,12 +2291,12 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			masterNodeName2 := "master-node-2"
 			// #nosec G101
 			bmcSecretName2 := "bmc-secret-2"
-			node := createNode(
+			node := testutils.CreateNode(
 				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = agent2Hostname
-			secrets := createSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			createResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
@@ -2359,12 +2359,12 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			masterNodeName2 := "master-node-2"
 			// #nosec G101
 			bmcSecretName2 := "bmc-secret-2"
-			node := createNode(
+			node := testutils.CreateNode(
 				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = "some-other-cluster.lab.example.com"
-			secrets := createSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			createResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)

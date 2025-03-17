@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -194,57 +193,6 @@ nodes:
 			Status:  metav1.ConditionFalse,
 			Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 			Message: "spec.clusterName cannot be empty",
-		})
-	})
-
-	It("should detect updates to immutable fields and fail rendering", func() {
-		// Simulate that the ClusterInstance has been provisioned
-		task.object.Status.Conditions = []metav1.Condition{
-			{
-				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
-				Status: metav1.ConditionTrue,
-				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
-			},
-		}
-
-		oldSpec := make(map[string]any)
-		newSpec := make(map[string]any)
-		data, err := yaml.Marshal(task.clusterInput.clusterInstanceData)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(yaml.Unmarshal(data, &oldSpec)).To(Succeed())
-		Expect(yaml.Unmarshal(data, &newSpec)).To(Succeed())
-
-		clusterInstanceObj := map[string]any{
-			"Cluster": task.clusterInput.clusterInstanceData,
-		}
-		oldClusterInstance, err := utils.RenderTemplateForK8sCR(
-			utils.ClusterInstanceTemplateName, utils.ClusterInstanceTemplatePath, clusterInstanceObj)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(c.Create(ctx, oldClusterInstance)).To(Succeed())
-
-		// Update the cluster data with modified field
-		// Change an immutable field at the cluster-level
-		newSpec["baseDomain"] = "newdomain.example.com"
-		task.clusterInput.clusterInstanceData = newSpec
-
-		_, err = task.handleRenderClusterInstance(ctx)
-		Expect(err).To(HaveOccurred())
-
-		// Note that the detected changed fields in this unittest include nodes.0.ironicInspect, baseDomain,
-		// and holdInstallation, even though nodes.0.ironicInspect and holdInstallation were not actually changed.
-		// This is due to the difference between the fakeclient and a real cluster. When applying a manifest
-		// to a cluster, the API server preserves the full resource, including optional fields with empty values.
-		// However, the fakeclient in unittests behaves differently, as it uses an in-memory store and
-		// does not go through the API server. As a result, fields with empty values like false or "" are
-		// stripped from the retrieved ClusterInstance CR (existing ClusterInstance) in the fakeclient.
-		cond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
-		Expect(cond).ToNot(BeNil())
-		testutils.VerifyStatusCondition(*cond, metav1.Condition{
-			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
-			Status:  metav1.ConditionFalse,
-			Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
-			Message: "Failed to render and validate ClusterInstance: detected disallowed changes in immutable fields",
 		})
 	})
 })

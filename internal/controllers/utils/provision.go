@@ -7,15 +7,11 @@ SPDX-License-Identifier: Apache-2.0
 package utils
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
-	"text/template"
 	"time"
 
-	sprig "github.com/go-task/slim-sprig/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,10 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/files"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
@@ -109,88 +103,6 @@ func ExtractTimeoutFromConfigMap(cm *corev1.ConfigMap, key string) (time.Duratio
 	}
 
 	return 0, nil
-}
-
-// RenderTemplateForK8sCR returns a rendered K8s resource with an given template and object data
-func RenderTemplateForK8sCR(templateName, templatePath string, templateDataObj map[string]any) (*unstructured.Unstructured, error) {
-	renderedTemplate := &unstructured.Unstructured{}
-
-	// Load the template from yaml file
-	tmplContent, err := files.Controllers.ReadFile(templatePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read template file: %s, err: %w", templatePath, err)
-	}
-
-	// Create a FuncMap with template functions
-	funcMap := sprig.TxtFuncMap()
-	funcMap["toYaml"] = toYaml
-	funcMap["validateNonEmpty"] = validateNonEmpty
-	funcMap["validateArrayType"] = validateArrayType
-	funcMap["validateMapType"] = validateMapType
-
-	// Parse the template
-	tmpl, err := template.New(templateName).Funcs(funcMap).Parse(string(tmplContent))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse template content from template file: %s, err: %w", templatePath, err)
-	}
-
-	// Execute the template with the data
-	var output bytes.Buffer
-	err = tmpl.Execute(&output, templateDataObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute template %s with data, err: %w", templateName, err)
-	}
-
-	err = yaml.Unmarshal(output.Bytes(), renderedTemplate)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal, err: %w", err)
-	}
-
-	return renderedTemplate, nil
-}
-
-// toYaml converts an interface to a YAML string and trims the trailing newline
-func toYaml(v any) (string, error) {
-	// yaml.Marshal adds a trailing newline to its output
-	yamlData, err := yaml.Marshal(v)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal interface to YAML: %w", err)
-	}
-
-	return strings.TrimRight(string(yamlData), "\n"), nil
-}
-
-// validateNonEmpty validates the input and fails if it is not provided or empty
-func validateNonEmpty(fieldName string, input any) (any, error) {
-	// Check if the input is empty (you can adjust this condition as per your validation logic)
-	if input == nil {
-		return nil, fmt.Errorf("%s must be provided", fieldName)
-	}
-
-	v := reflect.ValueOf(input)
-	if v.Kind() == reflect.String || v.Kind() == reflect.Slice || v.Kind() == reflect.Map {
-		if v.Len() == 0 {
-			return nil, fmt.Errorf("%s cannot be empty", fieldName)
-		}
-	}
-
-	return input, nil
-}
-
-// validateMapType checks if the input is of type map and raises an error if not.
-func validateMapType(fieldName string, input any) (any, error) {
-	if reflect.TypeOf(input).Kind() != reflect.Map {
-		return nil, fmt.Errorf("%s must be of type map", fieldName)
-	}
-	return input, nil
-}
-
-// validateArrayType checks if the input is of type slice (array) and raises an error if not.
-func validateArrayType(fieldName string, input any) (any, error) {
-	if reflect.TypeOf(input).Kind() != reflect.Slice {
-		return nil, fmt.Errorf("%s must be of type array", fieldName)
-	}
-	return input, nil
 }
 
 // TimeoutExceeded returns true if it's been more time than the timeout configuration.

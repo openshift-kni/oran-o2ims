@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	oranhwmgrplugintestutils "github.com/openshift-kni/oran-hwmgr-plugin/test/utils"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -39,9 +40,19 @@ func RemoveRequiredFieldFromClusterInstanceCm(
     pullSecretRef:
       name: "pull-secret"
     nodes:
-    - hostname: "node1"
+    - hostName: "node1"
+      role: master
+      bootMode: UEFI
+      nodeNetwork:
+        interfaces:
+        - name: eno1
+          label: bootable-interface
+        - name: eth0
+          label: base-interface
+        - name: eth1
+          label: data-interface
     templateRefs:
-    - name: "ai-node-templates-v1"
+    - name: "ai-cluster-templates-v1"
       namespace: "siteconfig-operator"
     `}
 	Expect(c.Update(ctx, ciConfigmap)).To(Succeed())
@@ -163,4 +174,73 @@ func DownloadFile(rawUrl, filename, dirpath string) error {
 	}
 
 	return nil
+}
+
+func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
+	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", utils.UnitTestHwmgrNamespace, npName, nil)
+	secrets := CreateSecrets([]string{BmcSecretName}, utils.UnitTestHwmgrNamespace)
+	CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+}
+
+func CreateResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.Node, secrets []*corev1.Secret) {
+	for _, node := range nodes {
+		Expect(c.Create(ctx, node)).To(Succeed())
+	}
+	for _, secret := range secrets {
+		Expect(c.Create(ctx, secret)).To(Succeed())
+	}
+}
+
+func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
+	if interfaces == nil {
+		interfaces = []*hwv1alpha1.Interface{
+			{
+				Name:       "eno1",
+				Label:      "bootable-interface",
+				MACAddress: "00:00:00:01:20:30",
+			},
+			{
+				Name:       "eth0",
+				Label:      "base-interface",
+				MACAddress: "00:00:00:01:20:31",
+			},
+			{
+				Name:       "eth1",
+				Label:      "data-interface",
+				MACAddress: "00:00:00:01:20:32",
+			},
+		}
+	}
+	return &hwv1alpha1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: hwv1alpha1.NodeSpec{
+			NodePool:    npName,
+			GroupName:   groupName,
+			HwMgrId:     utils.UnitTestHwmgrID,
+			HwMgrNodeId: name,
+		},
+		Status: hwv1alpha1.NodeStatus{
+			BMC: &hwv1alpha1.BMC{
+				Address:         bmcAddress,
+				CredentialsName: bmcSecret,
+			},
+			Interfaces: interfaces,
+		},
+	}
+}
+
+func CreateSecrets(names []string, namespace string) []*corev1.Secret {
+	var secrets []*corev1.Secret
+	for _, name := range names {
+		secrets = append(secrets, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+		})
+	}
+	return secrets
 }

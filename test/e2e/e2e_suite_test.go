@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,8 +22,10 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -31,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
@@ -40,6 +44,7 @@ import (
 )
 
 const testHwMgrPluginNameSpace = "hwmgr"
+const testHwMgrId = "hwmgr"
 
 var (
 	K8SClient                     client.Client
@@ -84,6 +89,8 @@ var _ = BeforeSuite(func() {
 	err := provisioningv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = hwv1alpha1.AddToScheme(testScheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = pluginv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = corev1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -153,7 +160,7 @@ var _ = BeforeSuite(func() {
 	err = ProvReqTestReconciler.SetupWithManager(K8SManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	namespaceCrs := []client.Object{
+	suiteCrs := []client.Object{
 		// HW plugin test namespace
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -166,9 +173,19 @@ var _ = BeforeSuite(func() {
 				Name: "oran-o2ims",
 			},
 		},
+		// HardwareManager CRs
+		&pluginv1alpha1.HardwareManager{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: testHwMgrPluginNameSpace,
+				Name:      testHwMgrId,
+			},
+			Spec: pluginv1alpha1.HardwareManagerSpec{
+				AdaptorID: "loopback",
+			},
+		},
 	}
 
-	for _, cr := range namespaceCrs {
+	for _, cr := range suiteCrs {
 		err := K8SClient.Create(context.Background(), cr)
 		Expect(err).ToNot(HaveOccurred())
 	}
@@ -192,198 +209,403 @@ var _ = Describe("Dry-run-ProvisioningRequestReconcile", func() {
 	const interval = time.Second * 3
 
 	var (
-		ctx           context.Context
-		ProvRequestCR *provisioningv1alpha1.ProvisioningRequest
-		ct            *provisioningv1alpha1.ClusterTemplate
-		tName         = "clustertemplate-a"
-		tVersion      = "v1.0.0"
-		ctNamespace   = "clustertemplate-a-v4-16"
-		ciDefaultsCm  = "clusterinstance-defaults-v1"
-		ptDefaultsCm  = "policytemplate-defaults-v1"
-		hwTemplate    = "hwtemplate-v1"
-		crName        = "aaaaaaaa-ac56-4143-9b10-d1a71517d04f"
+		testCtx                context.Context
+		ProvRequestCR          *provisioningv1alpha1.ProvisioningRequest
+		ctIncomplete           *provisioningv1alpha1.ClusterTemplate
+		ctComplete             *provisioningv1alpha1.ClusterTemplate
+		tName                  = "clustertemplate-a"
+		tVersion1              = "v1.0.0"
+		tVersion2              = "v2.0.0"
+		ctNamespace            = "clustertemplate-a-v4-16"
+		ciDefaultsCmIncomplete = "clusterinstance-defaults-v1"
+		ciDefaultsCmComplete   = "clusterinstance-defaults-v2"
+		ptDefaultsCm           = "policytemplate-defaults-v1"
+		hwTemplate             = "hwtemplate-v1"
 	)
 
-	BeforeEach(func() {
-		ctx = context.Background()
+	testCtx = context.Background()
 
-		crs := []client.Object{
-			// Cluster Template Namespace
-			&corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: ctNamespace,
-				},
-			},
-			// Configmap for ClusterInstance defaults
-			&corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      ciDefaultsCm,
-					Namespace: ctNamespace,
-				},
-				Data: map[string]string{
-					utils.ClusterInstallationTimeoutConfigKey: "60s",
-					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-    clusterImageSetNameRef: "4.15"
-    pullSecretRef:
-      name: "pull-secret"
-    templateRefs:
-    - name: "ai-cluster-templates-v1"
-      namespace: "siteconfig-operator"
-    nodes:
-    - role: master
-      bootMode: UEFI
-      nodeNetwork:
-        interfaces:
-        - name: eno1
-          label: bootable-interface
-        - name: eth0
-          label: base-interface
-        - name: eth1
-          label: data-interface
-      templateRefs:
-      - name: "ai-node-templates-v1"
-        namespace: "siteconfig-operator"
-    `,
-				},
-			},
-			// Configmap for policy template defaults
-			&corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      ptDefaultsCm,
-					Namespace: ctNamespace,
-				},
-				Data: map[string]string{
-					utils.ClusterConfigurationTimeoutConfigKey: "1m",
-					utils.PolicyTemplateDefaultsConfigmapKey: `
-    cpu-isolated: "2-31"
-    cpu-reserved: "0-1"
-    defaultHugepagesSize: "1G"`,
-				},
-			},
-			// hardware template
-			&hwv1alpha1.HardwareTemplate{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplate,
-					Namespace: utils.InventoryNamespace,
-				},
-				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:                     utils.UnitTestHwmgrID,
-					BootInterfaceLabel:          "bootable-interface",
-					HardwareProvisioningTimeout: "1m",
-					NodePoolData: []hwv1alpha1.NodePoolData{
-						{
-							Name:           "controller",
-							Role:           "master",
-							ResourcePoolId: "xyz",
-							HwProfile:      "profile-spr-single-processor-64G",
-						},
-						{
-							Name:           "worker",
-							Role:           "worker",
-							ResourcePoolId: "xyz",
-							HwProfile:      "profile-spr-dual-processor-128G",
-						},
-					},
-					Extensions: map[string]string{
-						"resourceTypeId": "ResourceGroup~2.1.1",
-					},
-				},
-			},
-			// Pull secret for ClusterInstance
-			&corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "pull-secret",
-					Namespace: ctNamespace,
-				},
-			},
-		}
-		// Define the cluster template.
-		ct = &provisioningv1alpha1.ClusterTemplate{
+	mainCRs := []client.Object{
+		// Cluster Template Namespace
+		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      provisioningcontrollers.GetClusterTemplateRefName(tName, tVersion),
+				Name: ctNamespace,
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "ztp-" + ctNamespace,
+			},
+		},
+		// Configmap for ClusterInstance defaults v1 - missing required values.
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ciDefaultsCmIncomplete,
 				Namespace: ctNamespace,
 			},
-			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:       tName,
-				Version:    tVersion,
-				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: provisioningv1alpha1.Templates{
-					ClusterInstanceDefaults: ciDefaultsCm,
-					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
-				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
+			Data: map[string]string{
+				utils.ClusterInstallationTimeoutConfigKey: "60s",
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.15"
+holdInstallation: false
+cpuPartitioningMode: AllNodes
+networkType: OVNKubernetes
+pullSecretRef:
+  name: "pull-secret"
+templateRefs:
+- name: "ai-cluster-templates-v1"
+  namespace: "siteconfig-operator"
+nodes:
+- role: master
+  automatedCleaningMode: disabled
+  ironicInspect: ""
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: bootable-interface
+    - name: eth0
+      label: base-interface
+    - name: eth1
+      label: data-interface
+`,
 			},
-		}
-
-		// Define the provisioning request.
-		ProvRequestCR = &provisioningv1alpha1.ProvisioningRequest{
+		},
+		// Configmap for ClusterInstance defaults - complete.
+		&corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:       crName,
-				Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
+				Name:      ciDefaultsCmComplete,
+				Namespace: ctNamespace,
 			},
-			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
-				Name:            "test",
-				Description:     "description",
-				TemplateName:    tName,
-				TemplateVersion: tVersion,
-				TemplateParameters: runtime.RawExtension{
-					Raw: []byte(testutils.TestFullTemplateParameters),
+			Data: map[string]string{
+				utils.ClusterInstallationTimeoutConfigKey: "60s",
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.15"
+holdInstallation: false
+cpuPartitioningMode: AllNodes
+networkType: OVNKubernetes
+pullSecretRef:
+  name: "pull-secret"
+templateRefs:
+- name: "ai-cluster-templates-v1"
+  namespace: "siteconfig-operator"
+nodes:
+- role: master
+  automatedCleaningMode: disabled
+  ironicInspect: ""
+  bootMode: UEFI
+  hostName: node1
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: bootable-interface
+    - name: eth0
+      label: base-interface
+    - name: eth1
+      label: data-interface
+  templateRefs:
+  - name: test
+    namespace: test
+`,
+			},
+		},
+		// Configmap for policy template defaults
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ptDefaultsCm,
+				Namespace: ctNamespace,
+			},
+			Data: map[string]string{
+				utils.ClusterConfigurationTimeoutConfigKey: "1m",
+				utils.PolicyTemplateDefaultsConfigmapKey: `
+cpu-isolated: "2-31"
+cpu-reserved: "0-1"
+defaultHugepagesSize: "1G"`,
+			},
+		},
+		// hardware template
+		&hwv1alpha1.HardwareTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwTemplate,
+				Namespace: utils.InventoryNamespace,
+			},
+			Spec: hwv1alpha1.HardwareTemplateSpec{
+				HwMgrId:                     utils.UnitTestHwmgrID,
+				BootInterfaceLabel:          "bootable-interface",
+				HardwareProvisioningTimeout: "1m",
+				NodePoolData: []hwv1alpha1.NodePoolData{
+					{
+						Name:           "controller",
+						Role:           "master",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-single-processor-64G",
+					},
+					{
+						Name:           "worker",
+						Role:           "worker",
+						ResourcePoolId: "xyz",
+						HwProfile:      "profile-spr-dual-processor-128G",
+					},
+				},
+				Extensions: map[string]string{
+					"resourceTypeId": "ResourceGroup~2.1.1",
 				},
 			},
+		},
+		// Pull secret for ClusterInstance
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pull-secret",
+				Namespace: ctNamespace,
+			},
+			Data: map[string][]byte{
+				".dockerconfigjson": []byte(testutils.TestSecretDataStr),
+			},
+			Type: corev1.SecretTypeDockerConfigJson,
+		},
+	}
+	// Define the cluster templates.
+	ctIncomplete = &provisioningv1alpha1.ClusterTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      provisioningcontrollers.GetClusterTemplateRefName(tName, tVersion1),
+			Namespace: ctNamespace,
+		},
+		Spec: provisioningv1alpha1.ClusterTemplateSpec{
+			Name:       tName,
+			Version:    tVersion1,
+			TemplateID: "aab39bda-ac56-4143-9b10-d1a71517d04f",
+			Templates: provisioningv1alpha1.Templates{
+				ClusterInstanceDefaults: ciDefaultsCmIncomplete,
+				PolicyTemplateDefaults:  ptDefaultsCm,
+				HwTemplate:              hwTemplate,
+			},
+			TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
+		},
+	}
+	ctComplete = &provisioningv1alpha1.ClusterTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      provisioningcontrollers.GetClusterTemplateRefName(tName, tVersion2),
+			Namespace: ctNamespace,
+		},
+		Spec: provisioningv1alpha1.ClusterTemplateSpec{
+			Name:       tName,
+			Version:    tVersion2,
+			TemplateID: "bbb39bda-ac56-4143-9b10-d1a71517d04f",
+			Templates: provisioningv1alpha1.Templates{
+				ClusterInstanceDefaults: ciDefaultsCmComplete,
+				PolicyTemplateDefaults:  ptDefaultsCm,
+				HwTemplate:              hwTemplate,
+			},
+			TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
+		},
+	}
+	ctCRs := []client.Object{ctComplete, ctIncomplete}
+
+	// Define the provisioning request.
+	ProvRequestCR = &provisioningv1alpha1.ProvisioningRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
+			// Name to be set up in each test.
+		},
+		Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+			Name:            "test",
+			Description:     "description",
+			TemplateName:    tName,
+			TemplateVersion: tVersion1,
+		},
+	}
+
+	AfterEach(func() {
+		for _, cr := range mainCRs {
+			// Deleting namespaces is not supported.
+			if _, ok := cr.(*corev1.Namespace); !ok {
+				err := K8SClient.Delete(testCtx, cr)
+				Expect(err).ToNot(HaveOccurred())
+			}
 		}
 
-		crs = append(crs, ct)
-		for _, cr := range crs {
-			Expect(K8SClient.Create(ctx, cr)).To(Succeed())
+		for _, cr := range ctCRs {
+			Expect(K8SClient.Delete(testCtx, cr)).To(Succeed())
+		}
+	})
+
+	BeforeEach(func() {
+		for _, cr := range mainCRs {
+			crCopy := cr.DeepCopyObject().(client.Object)
+			err := K8SClient.Create(testCtx, crCopy)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				Panic()
+			}
+		}
+
+		for _, cr := range ctCRs {
+			crCopy := cr.DeepCopyObject().(client.Object)
+			err := K8SClient.Create(testCtx, crCopy)
+			Expect(err).ToNot(HaveOccurred())
 		}
 
 		Eventually(func() bool {
 			newct := &provisioningv1alpha1.ClusterTemplate{}
-			Expect(K8SClient.Get(context.Background(), client.ObjectKeyFromObject(ct), newct)).To(Succeed())
+			Expect(K8SClient.Get(context.Background(), client.ObjectKeyFromObject(ctComplete), newct)).To(Succeed())
+			return newct.Status.Conditions != nil
+		}, timeout, interval).Should(BeTrue())
+
+		Eventually(func() bool {
+			newct := &provisioningv1alpha1.ClusterTemplate{}
+			Expect(K8SClient.Get(context.Background(), client.ObjectKeyFromObject(ctIncomplete), newct)).To(Succeed())
 			return newct.Status.Conditions != nil
 		}, timeout, interval).Should(BeTrue())
 	})
 
 	Context("Provisioning Request is created", func() {
-		It("Simple test for validating functionality", func() {
-
-			err := K8SClient.Get(ctx, client.ObjectKeyFromObject(ct), ct)
+		It("Verify status conditions if ClusterInstance rendering fails", func() {
+			crName := "cluster-1"
+			// Make sure the needed ClusterTemplate exists.
+			oranCT := &provisioningv1alpha1.ClusterTemplate{}
+			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ctIncomplete), oranCT)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Create the ProvisioningRequest.
-			err = K8SClient.Create(ctx, ProvRequestCR)
+			ProvRequestCR.Name = crName
+			ProvRequestCR.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(testutils.TestFullTemplateParameters),
+			}
+			copyProvRequestCR := ProvRequestCR.DeepCopy()
+			err = K8SClient.Create(testCtx, copyProvRequestCR)
 			Expect(err).ToNot(HaveOccurred())
 
 			reconciledPR := &provisioningv1alpha1.ProvisioningRequest{}
 			Eventually(func() bool {
-				err := K8SClient.Get(ctx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
+				err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
 				Expect(err).ToNot(HaveOccurred())
-				return reconciledPR.Status.Conditions != nil
-			}, timeout, interval).Should(BeTrue())
+				return len(reconciledPR.Status.Conditions) == 2
+			}, time.Minute*1, time.Second*3).Should(BeTrue())
 
 			conditions := reconciledPR.Status.Conditions
-			// Verify the ProvisioningRequest's status conditions
-			Expect(len(conditions)).To(Equal(3))
+			// Verify the ProvisioningRequest's status conditions.
+			Expect(len(conditions)).To(Equal(2))
 			testutils.VerifyStatusCondition(conditions[0], metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
 				Status: metav1.ConditionTrue,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
-				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
-				Status: metav1.ConditionTrue,
-				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
-			})
-			testutils.VerifyStatusCondition(conditions[2], metav1.Condition{
-				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated),
-				Status: metav1.ConditionFalse,
-				Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
+				Message: "ClusterInstance.siteconfig.open-cluster-management.io \"cluster-1\" is invalid: spec.nodes[0].templateRefs: Required value",
 			})
 
 			// Verify provisioningState is failed when the clusterInstance rendering fails.
 			testutils.VerifyProvisioningStatus(reconciledPR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StatePending, "Validating and preparing resources", nil)
+				provisioningv1alpha1.StateFailed, "Failed to render and validate ClusterInstance", nil)
+		})
+	})
+
+	Context("When NodePool has been created", func() {
+
+		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodePool becomes provisioned", func() {
+			crName := "cluster-2"
+			// Make sure the needed ClusterTemplate exists.
+			oranCT := &provisioningv1alpha1.ClusterTemplate{}
+			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ctComplete), oranCT)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create the ProvisioningRequest.
+			ProvRequestCR.Name = crName
+			templateParms := strings.Replace(
+				testutils.TestFullTemplateParameters, "\"clusterName\": \"cluster-1\"", "\"clusterName\": \"cluster-2\"", 1)
+			ProvRequestCR.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(templateParms)}
+			copyProvRequestCR := ProvRequestCR.DeepCopy()
+			copyProvRequestCR.Spec.TemplateVersion = tVersion2
+			err = K8SClient.Create(testCtx, copyProvRequestCR)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Eventually, the PR should have 5 conditions.
+			reconciledPR := &provisioningv1alpha1.ProvisioningRequest{}
+			Eventually(func() bool {
+				err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
+				Expect(err).ToNot(HaveOccurred())
+				return len(reconciledPR.Status.Conditions) == 5
+			}, time.Minute*1, time.Second*3).Should(BeTrue())
+
+			conditions := reconciledPR.Status.Conditions
+			// Verify the ProvisioningRequest's status conditions - the last should be showing that
+			// we're waiting for the NodePool.
+			Expect(len(conditions)).To(Equal(5))
+
+			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
+				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
+				Status: metav1.ConditionTrue,
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+			})
+			testutils.VerifyStatusCondition(conditions[4], metav1.Condition{
+				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+				Status:  metav1.ConditionUnknown,
+				Reason:  string(metav1.ConditionUnknown),
+				Message: "Waiting for NodePool (cluster-2) to be processed",
+			})
+			// Verify the provisioningState moves to progressing.
+			testutils.VerifyProvisioningStatus(reconciledPR.Status.ProvisioningStatus,
+				provisioningv1alpha1.StateProgressing, "Waiting for NodePool (cluster-2) to be processed", nil)
+
+			// Patch NodePool provision status to Completed.
+			currentNp := &hwv1alpha1.NodePool{}
+			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
+			Expect(currentNp.Status.Conditions).To(BeEmpty())
+			currentNp.Status.Conditions = []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Reason:             string(hwv1alpha1.Completed),
+					Type:               string(hwv1alpha1.Provisioned),
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			Expect(K8SClient.Status().Update(ctx, currentNp)).To(Succeed())
+			// Create the expected nodes.
+			testutils.CreateNodeResources(ctx, K8SClient, currentNp.Name)
+
+			// The ProvisioningRequest should complete hardware provisioning.
+			Eventually(func() bool {
+				err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
+				Expect(err).ToNot(HaveOccurred())
+				return reconciledPR.Status.Conditions[4].Status == metav1.ConditionTrue
+			}, time.Minute*1, time.Second*3).Should(BeTrue())
+			conditions = reconciledPR.Status.Conditions
+			testutils.VerifyStatusCondition(conditions[4], metav1.Condition{
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+			})
+
+			// Update the ProvisioningRequest to use a ClusterTemplate pointing to a ConfigMap that would
+			// trigger ClusterInstance dry-run failure.
+			Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)).To(Succeed())
+			reconciledPR.Spec.TemplateVersion = tVersion1
+			Expect(K8SClient.Update(testCtx, reconciledPR)).To(Succeed())
+
+			Eventually(func() bool {
+				err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
+				Expect(err).ToNot(HaveOccurred())
+				return reconciledPR.Status.Conditions[1].Status == metav1.ConditionFalse
+			}, time.Minute*1, time.Second*3).Should(BeTrue())
+
+			conditions = reconciledPR.Status.Conditions
+			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
+				Message: "ClusterInstance.siteconfig.open-cluster-management.io \"cluster-2\" is invalid: spec.nodes[0].templateRefs: Required value",
+			})
+
+			testutils.VerifyStatusCondition(conditions[4], metav1.Condition{
+				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+				Status: metav1.ConditionTrue,
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+			})
+			// Verify the provisioningState moves to failed.
+			testutils.VerifyProvisioningStatus(reconciledPR.Status.ProvisioningStatus,
+				provisioningv1alpha1.StateFailed, "Failed to render and validate ClusterInstance", nil)
 		})
 	})
 })
