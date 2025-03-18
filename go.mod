@@ -33,7 +33,7 @@ require (
 	github.com/openshift/api v0.0.0-20240423014330-2cb60a113ad1
 	github.com/openshift/assisted-service/api v0.0.0-20240405132132-484ec5c683c6
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
-	github.com/pashagolub/pgxmock/v4 v4.5.0
+	github.com/pashagolub/pgxmock/v4 v4.6.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.76.2
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
