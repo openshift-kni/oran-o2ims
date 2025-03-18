@@ -6,7 +6,152 @@ SPDX-License-Identifier: Apache-2.0
 
 # Tools to test the alarms server
 
-- A minimal server that can be called to accept Subscriber notification `./server -port 8080`
+## Minimal CRs needed to run ACM's observability stack
+
+1. S3 compatible minio deployment that you can apply to Hub cluster (i.e the same cluster where ACM observability stack will run)
+
+    ```yaml
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: minio-dev
+    ---
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: minio-pv-claim
+      namespace: minio-dev
+      labels:
+        app: minio-storage-claim
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: minio-deployment
+      namespace: minio-dev
+    spec:
+      selector:
+        matchLabels:
+          app: minio
+      strategy:
+        type: Recreate
+      template:
+        metadata:
+          labels:
+            app: minio
+        spec:
+          volumes:
+            - name: storage
+              persistentVolumeClaim:
+                claimName: minio-pv-claim
+            - name: bucket-script
+              configMap:
+                name: minio-bucket-script
+                defaultMode: 0755
+          containers:
+            - name: minio
+              image: quay.io/minio/minio:latest
+              args:
+                - server
+                - /storage
+                - --console-address
+                - :9090
+              env:
+                - name: MINIO_ROOT_USER
+                  value: "minio"
+                - name: MINIO_ROOT_PASSWORD
+                  value: "minio123"
+              ports:
+                - containerPort: 9000
+                  name: api
+                - containerPort: 9090
+                  name: console
+              volumeMounts:
+                - name: storage
+                  mountPath: "/storage"
+                - name: bucket-script
+                  mountPath: "/scripts"
+              lifecycle:
+                postStart:
+                  exec:
+                    command: ["/bin/sh", "/scripts/create-bucket.sh"]
+    ---
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: minio-bucket-script
+      namespace: minio-dev
+    data:
+      create-bucket.sh: |
+        #!/bin/sh
+        sleep 10
+        mkdir -p /storage/thanos
+        echo "Bucket 'thanos' created."
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: minio
+      namespace: minio-dev
+    spec:
+      ports:
+        - port: 9000
+          targetPort: 9000
+          protocol: TCP
+          name: api
+        - port: 9090
+          targetPort: 9090
+          protocol: TCP
+          name: console
+      selector:
+        app: minio
+    ```
+
+2. Enable ACM observability stack
+
+   Create `open-cluster-management-observability` namespace and apply the following. Note the S3 config.
+
+    ```yaml
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: thanos-object-storage
+      namespace: open-cluster-management-observability
+    type: Opaque
+    stringData:
+      thanos.yaml: |
+        type: s3
+        config:
+          bucket: thanos
+          endpoint: minio.minio-dev.svc:9000
+          insecure: true
+          access_key: minio
+          secret_key: minio123
+    ---
+    apiVersion: observability.open-cluster-management.io/v1beta2
+    kind: MultiClusterObservability
+    metadata:
+      name: observability
+    spec:
+      advanced:
+        alertmanager:
+          replicas: 1 # required due a known ACM issue CNF-16350
+      observabilityAddonSpec: {}
+      storageConfig:
+        metricObjectStorage:
+          name: thanos-object-storage
+          key: thanos.yaml
+    ```
+
+## A minimal server that can be called to accept Subscriber notification
+
+`./server -port 8080`
 
 ```go
 package main
@@ -60,7 +205,7 @@ func main() {
 }
 ```
 
-- A test PromRule that emits alert. Apply to Hub to Spoke. ACM auto applies cluster ID.
+## A test PromRule that emits alert. Apply to Hub to Spoke. ACM auto applies cluster ID
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -78,8 +223,9 @@ spec:
             severity: major
 ```
 
-- A test Thanos rule that is accepted by ACM on Hub and is propagated everywhere.
-  Note this is the type of rule that has missing cluster ID.
+## A test Thanos rule that is accepted by ACM on Hub and is propagated everywhere
+
+Note this is the type of rule that has missing cluster ID (CNF-16632)
 
 ```yaml
 kind: ConfigMap
@@ -102,7 +248,7 @@ data:
           severity: warning
 ```
 
-- Generate large alert payload
+## Generate large alert payload
 
 ```python
 import json
