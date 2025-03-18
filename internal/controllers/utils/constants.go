@@ -48,6 +48,8 @@ const IngressClassName = "openshift-default"
 // IngressPortName defines the name of service port to which our ingress controller directs traffic to
 const IngressPortName = "api"
 
+const Metal3PluginName = "metal3"
+
 // Resource operations
 const (
 	UPDATE = "Update"
@@ -176,6 +178,7 @@ var (
 		{"nodes", "*", "bmcAddress"},
 		{"nodes", "*", "bmcCredentialsName"},
 		{"nodes", "*", "bootMACAddress"},
+		{"nodes", "*", "hostRef"},
 		{"nodes", "*", "nodeNetwork", "interfaces", "*", "macAddress"},
 		// modified for upgrade
 		{"suppressedManifests"},
