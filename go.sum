@@ -428,8 +428,8 @@ github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
 github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87/go.mod h1:DB/Mf2oTeiAmVVX1gN+NEqweonAPY0TKUwADizj8+ZA=
 github.com/openshift/hive/apis v0.0.0-20240306163002-9c5806a63531 h1:gDvXi3utTK311BNY7WInJ9JvrHbaiUFH1HThrG4pJX0=
 github.com/openshift/hive/apis v0.0.0-20240306163002-9c5806a63531/go.mod h1:jqpZWDUo9JcnO4Q5RuNWjESE1EJ3Qi9xowBBi0nyxQA=
-github.com/pashagolub/pgxmock/v4 v4.5.0 h1:l2nGpTiX0Yi62z+I69HOXYXRewkAM19bVYFsp5nhpeM=
-github.com/pashagolub/pgxmock/v4 v4.5.0/go.mod h1:9VoVHXwS3XR/yPtKGzwQvwZX1kzGB9sM8SviDcHDa3A=
+github.com/pashagolub/pgxmock/v4 v4.6.0 h1:ds0hIs+bJtkfo01vqjp0BOFirjt4Ea8XV082uorzM3w=
+github.com/pashagolub/pgxmock/v4 v4.6.0/go.mod h1:9VoVHXwS3XR/yPtKGzwQvwZX1kzGB9sM8SviDcHDa3A=
 github.com/pelletier/go-toml v1.7.0/go.mod h1:vwGMzjaWMwyfHwgIBhI2YUM4fB6nL6lVAvS1LBMMhTE=
 github.com/perimeterx/marshmallow v1.1.5 h1:a2LALqQ1BlHM8PZblsDdidgv1mWi1DgC2UmX50IvK2s=
 github.com/perimeterx/marshmallow v1.1.5/go.mod h1:dsXbUu8CRzfYP5a87xpp0xq9S3u0Vchtcl8we9tYaXw=
