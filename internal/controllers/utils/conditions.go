@@ -98,9 +98,7 @@ func IsClusterProvisionPresent(cr *provisioningv1alpha1.ProvisioningRequest) boo
 func IsClusterProvisionInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
 		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
-	return condition != nil &&
-		(condition.Status == metav1.ConditionFalse ||
-			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress))
+	return condition != nil && condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress)
 }
 
 // IsClusterProvisionCompleted checks if the cluster provision condition status is completed.

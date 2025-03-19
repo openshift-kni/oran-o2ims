@@ -27,7 +27,7 @@ const (
 var (
 	// allowedClusterInstanceFields contains path patterns for fields that are allowed to be updated.
 	// The wildcard "*" is used to match any index in a list.
-	allowedClusterInstanceFields = [][]string{
+	AllowedClusterInstanceFields = [][]string{
 		// Cluster-level non-immutable fields
 		{"extraAnnotations"},
 		{"extraLabels"},
@@ -268,7 +268,7 @@ func (r *ProvisioningRequest) GetClusterTemplateRef(ctx context.Context, client 
 // that are considered immutable and should not be modified and a list of fields related
 // to node scaling, indicating nodes that were added or removed.
 func FindClusterInstanceImmutableFieldUpdates(
-	old, new map[string]any, ignoredFields [][]string) ([]string, []string, error) {
+	old, new map[string]any, ignoredFields [][]string, allowedFields [][]string) ([]string, []string, error) {
 
 	diffs, err := diff.Diff(old, new)
 	if err != nil {
@@ -311,7 +311,7 @@ func FindClusterInstanceImmutableFieldUpdates(
 		)
 
 		// Check if the path matches any allowed fields
-		if matchesAnyPattern(diff.Path, allowedClusterInstanceFields) {
+		if matchesAnyPattern(diff.Path, allowedFields) {
 			// Allowed field; skip
 			continue
 		}

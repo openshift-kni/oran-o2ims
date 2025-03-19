@@ -35,6 +35,15 @@ const (
 	disableAutoImportAnnotation = "import.open-cluster-management.io/disable-auto-import"
 )
 
+// nodeInfo represents the node details extracted
+// from the existing ClusterInstance
+type nodeInfo struct {
+	bmcAddress          *string
+	bootMACAddress      *string
+	bmcCredentialsName  *string
+	interfaceMACAddress map[string]string // keyed by interface name
+}
+
 func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 	ctx context.Context) (*siteconfig.ClusterInstance, error) {
 	t.logger.InfoContext(
@@ -49,124 +58,80 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		"Cluster": t.clusterInput.clusterInstanceData,
 	}
 
-	disableAutoImport := true
-	suppressedManifests := []string{}
-
-	renderedClusterInstance := &siteconfig.ClusterInstance{}
-	renderedClusterInstanceUnstructure, err := utils.RenderTemplateForK8sCR(
+	renderedCIUnstructured, err := utils.RenderTemplateForK8sCR(
 		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
 	if err != nil {
 		return nil, utils.NewInputError("failed to render the ClusterInstance template for ProvisioningRequest: %w", err)
-	} else {
-		// Add ProvisioningRequest labels to the generated ClusterInstance
-		labels := make(map[string]string)
-		labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
-		renderedClusterInstanceUnstructure.SetLabels(labels)
+	}
 
-		// Create the ClusterInstance namespace if not exist.
-		ciName := renderedClusterInstanceUnstructure.GetName()
-		err = t.createClusterInstanceNamespace(ctx, ciName)
+	// Add ProvisioningRequest labels to the generated ClusterInstance
+	labels := make(map[string]string)
+	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
+	renderedCIUnstructured.SetLabels(labels)
+
+	// Create the ClusterInstance namespace if not exist.
+	ciName := renderedCIUnstructured.GetName()
+	err = t.createClusterInstanceNamespace(ctx, ciName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cluster namespace %s: %w", ciName, err)
+	}
+
+	// We want to add the disable-auto-import annotation to the
+	// rendered ClusterInstance until the cluster installation
+	// is marked as completed.
+	if !utils.IsClusterProvisionCompleted(t.object) {
+		err = addDisableAutoImportAnnotation(renderedCIUnstructured)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create cluster namespace %s: %w", ciName, err)
-		}
-
-		// Check for updates to immutable fields in the ClusterInstance, if it exists.
-		// Once provisioning has started or reached a final state (Completed or Failed),
-		// updates to immutable fields in the ClusterInstance spec are disallowed,
-		// with the exception of scaling up/down when Cluster provisioning is completed.
-		crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions,
-			string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
-		if crProvisionedCond != nil && crProvisionedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Unknown) {
-			disableAutoImport = false
-
-			existingClusterInstance := &unstructured.Unstructured{}
-			existingClusterInstance.SetGroupVersionKind(
-				renderedClusterInstanceUnstructure.GroupVersionKind())
-			ciExists, err := utils.DoesK8SResourceExist(
-				ctx, t.client, ciName, ciName, existingClusterInstance,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get ClusterInstance (%s): %w",
-					ciName, err)
-			}
-			if ciExists {
-				updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
-					existingClusterInstance.Object["spec"].(map[string]any),
-					renderedClusterInstanceUnstructure.Object["spec"].(map[string]any),
-					utils.IgnoredClusterInstanceFields)
-				if err != nil {
-					return nil, fmt.Errorf(
-						"failed to find immutable field updates for ClusterInstance (%s): %w", ciName, err)
-				}
-
-				// copy the existing suppressedManifests
-				existingCI := &siteconfig.ClusterInstance{}
-				err = runtime.DefaultUnstructuredConverter.FromUnstructured(existingClusterInstance.Object, existingCI)
-				if err != nil {
-					return nil, fmt.Errorf("failed to get current suppressedManifests values: %w", err)
-				}
-				suppressedManifests = existingCI.Spec.SuppressedManifests
-
-				var disallowedChanges []string
-				for _, updatedField := range updatedFields {
-					// Suppress install manifests to prevent unnecessary updates
-					if updatedField == "clusterImageSetNameRef" &&
-						crProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Completed) {
-						for _, crd := range utils.CRDsToBeSuppressedForUpgrade {
-							if !slices.Contains(suppressedManifests, crd) {
-								suppressedManifests = append(suppressedManifests, crd)
-							}
-						}
-					} else {
-						disallowedChanges = append(disallowedChanges, updatedField)
-					}
-				}
-				if len(scalingNodes) != 0 &&
-					crProvisionedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Completed) {
-					// In-progress || Failed
-					disallowedChanges = append(disallowedChanges, scalingNodes...)
-				}
-
-				if len(disallowedChanges) != 0 {
-					return nil, utils.NewInputError(
-						"detected changes in immutable fields: %s", strings.Join(disallowedChanges, ", "))
-				}
-			}
-		}
-
-		// Validate the rendered ClusterInstance with dry-run
-		isDryRun := true
-		err = t.applyClusterInstance(ctx, renderedClusterInstanceUnstructure, isDryRun)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
-		}
-
-		// Convert unstructured to siteconfig.ClusterInstance type
-		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(
-			renderedClusterInstanceUnstructure.Object, renderedClusterInstance); err != nil {
-			// Unlikely to happen since dry-run validation has passed
-			return nil, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
-		}
-		renderedClusterInstance.Spec.SuppressedManifests = append(renderedClusterInstance.Spec.SuppressedManifests, suppressedManifests...)
-
-		if disableAutoImport {
-			// Disable ManagedCluster auto-import by adding annotation import.open-cluster-management.io/disable-auto-import
-			// through the ClusterInstance.
-			// This workaround addresses a race condition during server reboot caused by hardware provisioning.
-			// During this period, stale clusters may be re-imported because timing issues (e.g., delayed leader election
-			// or incomplete container restarts) cause ACM to mistakenly identify an old cluster as ready.
-			// This annotation will be removed from ManagedCluster once the cluster installation starts.
-			if renderedClusterInstance.Spec.ExtraAnnotations == nil {
-				renderedClusterInstance.Spec.ExtraAnnotations = make(map[string]map[string]string)
-			}
-			if _, exists := renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"]; !exists {
-				renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"] = make(map[string]string)
-			}
-			renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"][disableAutoImportAnnotation] = "true"
+			return nil, fmt.Errorf(
+				"failed to add disable-auto-import annotation to the rendered ClusterInstance (%s): %w",
+				renderedCIUnstructured.GetName(), err)
 		}
 	}
 
-	return renderedClusterInstance, nil
+	existingCIUnstructured := &unstructured.Unstructured{}
+	existingCIUnstructured.SetGroupVersionKind(renderedCIUnstructured.GroupVersionKind())
+	ciExists, err := utils.DoesK8SResourceExist(
+		ctx, t.client, ciName, ciName, existingCIUnstructured,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ClusterInstance (%s): %w", ciName, err)
+	}
+	if ciExists {
+		// Extract node details from the existing ClusterInstance and assign them to the rendered ClusterInstance
+		// when hardware provisioning is enabled.
+		if !t.isHardwareProvisionSkipped() {
+			nodesInfo := extractNodeDetails(existingCIUnstructured)
+			assignNodeDetails(renderedCIUnstructured, nodesInfo)
+		}
+	}
+
+	// Validate the rendered ClusterInstance with dry-run. The defaults defined in the
+	// ClusterInstance CRD will be applied by the APIserver after the dry-run.
+	isDryRun := true
+	err = t.applyClusterInstance(ctx, renderedCIUnstructured, isDryRun)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
+	}
+
+	// Validate updates for ClusterInstance spec. Once cluster has started installation,
+	// updates to spec are disallowed. After cluster installation is completed, only
+	// permissible fields can be updated.
+	// TODO: This updates validation could be removed when we require ACM 2.13+ which
+	// already has the feature gate for immutable field validation.
+	err = t.validateClusterInstanceChanges(existingCIUnstructured, renderedCIUnstructured)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert unstructured to siteconfig.ClusterInstance type
+	renderedCI := &siteconfig.ClusterInstance{}
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(
+		renderedCIUnstructured.Object, renderedCI); err != nil {
+		// Unlikely to happen since dry-run validation has passed
+		return nil, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
+	}
+
+	return renderedCI, nil
 }
 
 // handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
@@ -446,4 +411,271 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 	t.logger.Info(
 		fmt.Sprintf("ClusterInstance (%s) installation status: %s", ci.Name, message),
 	)
+}
+
+// addDisableAutoImportAnnotation adds the disable-auto-import annotation to the ManagedCluster
+// through the ClusterInstance.
+// This workaround addresses a race condition during server reboot caused by hardware provisioning.
+// During this period, stale clusters may be re-imported because timing issues (e.g., delayed leader election
+// or incomplete container restarts) cause ACM to mistakenly identify an old cluster as ready.
+// This annotation will be removed from ManagedCluster after the cluster installation is completed.
+func addDisableAutoImportAnnotation(renderedCI *unstructured.Unstructured) error {
+	extraAnnotations, found, err := unstructured.NestedMap(renderedCI.Object, "spec", "extraAnnotations")
+	if err != nil {
+		return fmt.Errorf("failed to get spec.extraAnnotations: %w", err)
+	}
+	if !found {
+		extraAnnotations = make(map[string]any)
+	}
+
+	mcAnnotations, found, err := unstructured.NestedMap(extraAnnotations, "ManagedCluster")
+	if err != nil {
+		return fmt.Errorf("failed to get spec.extraAnnotations.ManagedCluster: %w", err)
+	}
+	if !found {
+		mcAnnotations = make(map[string]any)
+	}
+	mcAnnotations[disableAutoImportAnnotation] = "true"
+	extraAnnotations["ManagedCluster"] = mcAnnotations
+
+	if err := unstructured.SetNestedMap(renderedCI.Object, extraAnnotations, "spec", "extraAnnotations"); err != nil {
+		return fmt.Errorf("failed to set spec.extraAnnotations: %w", err)
+	}
+	return nil
+}
+
+// addSuppressedInstallManifests adds the suppressed manifests to the rendered ClusterInstance for upgrade
+// case.
+func addSuppressedInstallManifests(renderedCI *unstructured.Unstructured) error {
+	suppressedManifests, found, err := unstructured.NestedSlice(renderedCI.Object, "spec", "suppressedManifests")
+	if err != nil {
+		return fmt.Errorf("failed to get spec.suppressedManifests: %w", err)
+	}
+	if !found {
+		suppressedManifests = []any{}
+	}
+	for _, crd := range utils.CRDsToBeSuppressedForUpgrade {
+		// Suppress install manifests to prevent unnecessary updates
+		if !slices.ContainsFunc(suppressedManifests, func(item any) bool {
+			return item.(string) == crd
+		}) {
+			suppressedManifests = append(suppressedManifests, crd)
+		}
+	}
+	err = unstructured.SetNestedSlice(renderedCI.Object, suppressedManifests, "spec", "suppressedManifests")
+	if err != nil {
+		return fmt.Errorf("failed to set spec.suppressedManifests: %w", err)
+	}
+
+	return nil
+}
+
+// validateClusterInstanceChanges validates the changes between the existing and rendered
+// ClusterInstance for immutable fields.
+func (t *provisioningRequestReconcilerTask) validateClusterInstanceChanges(
+	existingCI *unstructured.Unstructured, renderedCI *unstructured.Unstructured) error {
+
+	if existingCI.GetName() == "" || len(existingCI.Object) == 0 {
+		// No existing ClusterInstance, skip validation
+		return nil
+	}
+
+	allowedFields := [][]string{}
+	if utils.IsClusterProvisionCompleted(t.object) {
+		allowedFields = provisioningv1alpha1.AllowedClusterInstanceFields
+	}
+
+	disallowedChanges, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+		existingCI.Object["spec"].(map[string]any),
+		renderedCI.Object["spec"].(map[string]any),
+		utils.IgnoredClusterInstanceFields,
+		allowedFields)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to find immutable field updates for ClusterInstance (%s): %w", existingCI.GetName(), err)
+	}
+
+	// Special handling for upgrade
+	if slices.Contains(disallowedChanges, "clusterImageSetNameRef") &&
+		utils.IsClusterProvisionCompleted(t.object) {
+		err = addSuppressedInstallManifests(renderedCI)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to add suppressed install manifests to the rendered ClusterInstance (%s): %w",
+				renderedCI.GetName(), err)
+		}
+		disallowedChanges = slices.DeleteFunc(disallowedChanges, func(field string) bool {
+			return field == "clusterImageSetNameRef"
+		})
+	}
+	if existingCISuppressed, ok := existingCI.Object["spec"].(map[string]any)["suppressedManifests"].([]any); ok {
+		renderedCISuppressed, ok := renderedCI.Object["spec"].(map[string]any)["suppressedManifests"].([]any)
+		if !ok {
+			renderedCISuppressed = []any{}
+		}
+		for _, suppressedManifest := range existingCISuppressed {
+			if !slices.ContainsFunc(renderedCISuppressed, func(item any) bool {
+				return item.(string) == suppressedManifest.(string)
+			}) {
+				renderedCISuppressed = append(renderedCISuppressed, suppressedManifest)
+			}
+		}
+		renderedCI.Object["spec"].(map[string]any)["suppressedManifests"] = renderedCISuppressed
+	}
+
+	if len(disallowedChanges) > 0 &&
+		utils.IsClusterProvisionCompleted(t.object) {
+		return utils.NewInputError(
+			"detected disallowed changes in immutable fields: %s", strings.Join(disallowedChanges, ", "))
+	}
+
+	disallowedChanges = append(disallowedChanges, scalingNodes...)
+	if len(disallowedChanges) > 0 &&
+		utils.IsClusterProvisionInProgress(t.object) {
+		return utils.NewInputError(
+			"updates to ClusterInstance parameters are disallowed during cluster installation, "+
+				"detected changes in fields: %s", strings.Join(disallowedChanges, ", "))
+	}
+
+	return nil
+}
+
+// extractNodeDetails extracts necessary node details from the existing ClusterInstance
+func extractNodeDetails(existingCI *unstructured.Unstructured) map[string]nodeInfo {
+	nodes := existingCI.Object["spec"].(map[string]any)["nodes"].([]any)
+	extractedNodesInfo := make(map[string]nodeInfo) // keyed by hostname
+
+	for _, node := range nodes {
+		nodeMap := node.(map[string]any)
+		hostname, ok := nodeMap["hostName"].(string)
+		if !ok {
+			continue
+		}
+
+		extractedNodeInfo := nodeInfo{}
+		bmcAddress, ok := nodeMap["bmcAddress"].(string)
+		if ok {
+			extractedNodeInfo.bmcAddress = &bmcAddress
+		}
+
+		bootMACAddress, ok := nodeMap["bootMACAddress"].(string)
+		if ok {
+			extractedNodeInfo.bootMACAddress = &bootMACAddress
+		}
+
+		bmcCreds, ok := nodeMap["bmcCredentialsName"].(map[string]any)
+		if ok {
+			bmcCredsName, ok := bmcCreds["name"].(string)
+			if ok {
+				extractedNodeInfo.bmcCredentialsName = &bmcCredsName
+			}
+		}
+
+		// Extract interface macAddress by interface name
+		if nodeNetwork, ok := nodeMap["nodeNetwork"].(map[string]any); ok {
+			if ifaces, ok := nodeNetwork["interfaces"].([]any); ok {
+				macByIface := make(map[string]string)
+				for _, iface := range ifaces {
+					ifaceMap := iface.(map[string]any)
+					name, ok := ifaceMap["name"].(string)
+					if !ok {
+						continue
+					}
+					mac, ok := ifaceMap["macAddress"].(string)
+					if !ok {
+						continue
+					}
+					macByIface[name] = mac
+				}
+				extractedNodeInfo.interfaceMACAddress = macByIface
+			}
+		}
+
+		extractedNodesInfo[hostname] = extractedNodeInfo
+	}
+
+	return extractedNodesInfo
+}
+
+// assignNodeDetails assigns extracted node details to the rendered ClusterInstance
+// Unexpected nodes structure in rendered ClusterInstance will be ignored here and
+// the error will be caught by the dry-run validation.
+func assignNodeDetails(renderedCI *unstructured.Unstructured, nodesInfo map[string]nodeInfo) {
+	nodes, ok := renderedCI.Object["spec"].(map[string]any)["nodes"].([]any)
+	if !ok {
+		return
+	}
+
+	for _, node := range nodes {
+		nodeMap, ok := node.(map[string]any)
+		if !ok {
+			continue
+		}
+		hostname, ok := nodeMap["hostName"].(string)
+		if !ok {
+			continue
+		}
+		// Assign the node info
+		if extractedNode, exists := nodesInfo[hostname]; exists {
+			if extractedNode.bmcAddress != nil {
+				nodeMap["bmcAddress"] = *extractedNode.bmcAddress
+			}
+			if extractedNode.bootMACAddress != nil {
+				nodeMap["bootMACAddress"] = *extractedNode.bootMACAddress
+			}
+			if extractedNode.bmcCredentialsName != nil {
+				nodeMap["bmcCredentialsName"] = map[string]any{
+					"name": *extractedNode.bmcCredentialsName,
+				}
+			}
+			if len(extractedNode.interfaceMACAddress) == 0 {
+				continue
+			}
+
+			if _, exists := nodeMap["nodeNetwork"]; !exists {
+				nodeMap["nodeNetwork"] = map[string]any{}
+			}
+			// If nodeNetwork exists but not a map, skip processing
+			nodeNetworkMap, ok := nodeMap["nodeNetwork"].(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if _, exists := nodeNetworkMap["interfaces"]; !exists {
+				nodeNetworkMap["interfaces"] = []any{}
+			}
+			// If interfaces exists but not a slice, skip processing
+			interfaces, ok := nodeNetworkMap["interfaces"].([]any)
+			if !ok {
+				continue
+			}
+
+			// Iterate through existing rendered interfaces and update in-place
+			existingInterfaces := make(map[string]map[string]any)
+			for _, iface := range interfaces {
+				if ifaceMap, ok := iface.(map[string]any); ok {
+					if name, ok := ifaceMap["name"].(string); ok {
+						existingInterfaces[name] = ifaceMap
+					}
+				}
+			}
+
+			// Modify existing interfaces or append new ones
+			for ifaceName, mac := range extractedNode.interfaceMACAddress {
+				if existingIface, exists := existingInterfaces[ifaceName]; exists {
+					// Update existing interface
+					existingIface["macAddress"] = mac
+				} else {
+					// Add new interface
+					interfaces = append(interfaces, map[string]any{
+						"name":       ifaceName,
+						"macAddress": mac,
+					})
+				}
+			}
+
+			// Store updated interfaces back in nodeNetwork
+			nodeNetworkMap["interfaces"] = interfaces
+		}
+	}
 }
