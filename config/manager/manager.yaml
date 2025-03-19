@@ -76,7 +76,7 @@ spec:
         - name: IMAGE
           value: controller:latest
         - name: POSTGRES_IMAGE
-          value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
+          value: quay.io/sclorg/postgresql-16-c9s:20250319
         - name: HWMGR_PLUGIN_NAMESPACE
           # A placeholder for the replacement kustomization that will inject the value from the config map
           value: plugin-namespace-placeholder
