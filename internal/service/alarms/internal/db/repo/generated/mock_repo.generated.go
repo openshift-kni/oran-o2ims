@@ -13,7 +13,7 @@ import (
 	reflect "reflect"
 
 	uuid "github.com/google/uuid"
-	generated "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
+	pgx "github.com/jackc/pgx/v5"
 	models "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	models0 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	gomock "go.uber.org/mock/gomock"
@@ -206,18 +206,18 @@ func (mr *MockAlarmRepositoryInterfaceMockRecorder) PatchAlarmEventRecordACK(ctx
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchAlarmEventRecordACK", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).PatchAlarmEventRecordACK), ctx, id, record)
 }
 
-// ResolveNotificationIfNotInCurrent mocks base method.
-func (m *MockAlarmRepositoryInterface) ResolveNotificationIfNotInCurrent(ctx context.Context, am *generated.AlertmanagerNotification) error {
+// ResolveStaleAlarmEventCaaSRecord mocks base method.
+func (m *MockAlarmRepositoryInterface) ResolveStaleAlarmEventCaaSRecord(ctx context.Context, tx pgx.Tx, generationID int64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResolveNotificationIfNotInCurrent", ctx, am)
+	ret := m.ctrl.Call(m, "ResolveStaleAlarmEventCaaSRecord", ctx, tx, generationID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ResolveNotificationIfNotInCurrent indicates an expected call of ResolveNotificationIfNotInCurrent.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) ResolveNotificationIfNotInCurrent(ctx, am any) *gomock.Call {
+// ResolveStaleAlarmEventCaaSRecord indicates an expected call of ResolveStaleAlarmEventCaaSRecord.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) ResolveStaleAlarmEventCaaSRecord(ctx, tx, generationID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveNotificationIfNotInCurrent", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).ResolveNotificationIfNotInCurrent), ctx, am)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveStaleAlarmEventCaaSRecord", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).ResolveStaleAlarmEventCaaSRecord), ctx, tx, generationID)
 }
 
 // UpdateServiceConfiguration mocks base method.
@@ -249,16 +249,30 @@ func (mr *MockAlarmRepositoryInterfaceMockRecorder) UpdateSubscriptionEventCurso
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSubscriptionEventCursor", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).UpdateSubscriptionEventCursor), ctx, subscription)
 }
 
-// UpsertAlarmEventRecord mocks base method.
-func (m *MockAlarmRepositoryInterface) UpsertAlarmEventRecord(ctx context.Context, records []models.AlarmEventRecord) error {
+// UpsertAlarmEventCaaSRecord mocks base method.
+func (m *MockAlarmRepositoryInterface) UpsertAlarmEventCaaSRecord(ctx context.Context, tx pgx.Tx, records []models.AlarmEventRecord, generationID int64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpsertAlarmEventRecord", ctx, records)
+	ret := m.ctrl.Call(m, "UpsertAlarmEventCaaSRecord", ctx, tx, records, generationID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UpsertAlarmEventRecord indicates an expected call of UpsertAlarmEventRecord.
-func (mr *MockAlarmRepositoryInterfaceMockRecorder) UpsertAlarmEventRecord(ctx, records any) *gomock.Call {
+// UpsertAlarmEventCaaSRecord indicates an expected call of UpsertAlarmEventCaaSRecord.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) UpsertAlarmEventCaaSRecord(ctx, tx, records, generationID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertAlarmEventRecord", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).UpsertAlarmEventRecord), ctx, records)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertAlarmEventCaaSRecord", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).UpsertAlarmEventCaaSRecord), ctx, tx, records, generationID)
+}
+
+// WithTransaction mocks base method.
+func (m *MockAlarmRepositoryInterface) WithTransaction(ctx context.Context, fn func(pgx.Tx) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTransaction", ctx, fn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTransaction indicates an expected call of WithTransaction.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) WithTransaction(ctx, fn any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).WithTransaction), ctx, fn)
 }

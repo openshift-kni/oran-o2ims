@@ -29,7 +29,7 @@ const (
 
 var GetHubClient = k8s.NewClientForHub
 
-// Setup updates the alertmanager config secret with the new configuration
+// Setup updates the alertmanager config secret with the new webhook configuration
 func Setup(ctx context.Context) error {
 	hubClient, err := GetHubClient()
 	if err != nil {
@@ -49,7 +49,7 @@ func Setup(ctx context.Context) error {
 	}
 
 	// Merge the existing configuration with oran-specific settings
-	updateCfg, err := AddOranRouteToConfig(existingYAML)
+	updateCfg, err := MergeWithExisting(existingYAML)
 	if err != nil {
 		return fmt.Errorf("failed to update existing alertmanager config with oran config: %w", err)
 	}
@@ -73,8 +73,8 @@ func Setup(ctx context.Context) error {
 	return nil
 }
 
-// AddOranRouteToConfig updates the existing alertmanager configuration with oran-specific changes.
-func AddOranRouteToConfig(existingYAML []byte) (map[string]interface{}, error) {
+// MergeWithExisting updates the existing alertmanager configuration with oran-specific changes.
+func MergeWithExisting(existingYAML []byte) (map[string]interface{}, error) {
 	// Unmarshal the existing YAML into a map.
 	var config map[string]interface{}
 	if err := yaml.Unmarshal(existingYAML, &config); err != nil {
@@ -147,20 +147,15 @@ func updateRoutes(config map[string]interface{}) {
 		slog.Info("Creating new main route configuration with oran receiver as default")
 	}
 
-	// This is the only global config that needs to be replaced.
-	// The child route is not override "group_by" unlike other attributes if child is an empty list
-	// TODO: Our code depends on the full list coming in at the same, check with AM team and fix this.
-	mainRoute["group_by"] = []string{}
-
 	// Create oran route config.
 	oranRoute := map[string]interface{}{
 		"receiver":        OranReceiverName,
-		"group_wait":      "30s",
-		"group_interval":  "1m",
-		"repeat_interval": "4h",
+		"group_wait":      "5s",                              // When a new alert group is created, Alertmanager waits this amount before sending the first notification
+		"group_interval":  "30s",                             // Controls the frequency of checks for new or changed alerts within a group. Value here is a trade-off between real-time notification and flooding the system
+		"repeat_interval": "4h",                              // Minimum time between repeated notifications for unchanged alerts
 		"matchers":        []string{`alertname!~"Watchdog"`}, // Exclude Watchdog alerts.
-		"continue":        true,                              // Process subsequent routes.
-		// "group_by":        []string{},                        // Empty array groups all alerts together.
+		"continue":        true,                              // Process subsequent routes (which is why this needs to prepended to the routes list)
+		"group_by":        []string{"severity"},              // This can be anything (code is not dependent on how alerts reach us) but if empty it will only use the parent group_by so need have something here to be not dependent on parent
 	}
 
 	// Merge existing child routes, filtering out any previous oran routes.
