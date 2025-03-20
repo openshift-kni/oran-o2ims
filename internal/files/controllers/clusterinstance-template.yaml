@@ -129,6 +129,10 @@ spec:
       bootMACAddress: "{{ default "00:00:5E:00:53:AF" .bootMACAddress }}"
       bootMode: "{{ default "UEFI" .bootMode }}"
       hostName: "{{ .hostName | validateNonEmpty (printf "spec.nodes[%d].hostName" $n_index) }}"
+      {{- if .hostRef }}
+      hostRef:
+{{ .hostRef | toYaml | indent 8 }}
+      {{- end }}
       templateRefs:
       {{- $t_path := printf "spec.nodes[%d].templateRefs" $n_index }}
       {{- $_ := .templateRefs | validateNonEmpty $t_path }}

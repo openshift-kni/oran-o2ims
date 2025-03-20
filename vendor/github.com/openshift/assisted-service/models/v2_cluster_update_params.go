@@ -24,10 +24,6 @@ type V2ClusterUpdateParams struct {
 	// A comma-separated list of NTP sources (name or IP) going to be added to all the hosts.
 	AdditionalNtpSource *string `json:"additional_ntp_source,omitempty"`
 
-	// (DEPRECATED) The virtual IP used to reach the OpenShift cluster's API.
-	// Pattern: ^(?:(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3})|(?:(?:[0-9a-fA-F]*:[0-9a-fA-F]*){2,}))?$
-	APIVip *string `json:"api_vip,omitempty"`
-
 	// The domain name used to reach the OpenShift cluster API.
 	APIVipDNSName *string `json:"api_vip_dns_name,omitempty"`
 
@@ -49,6 +45,9 @@ type V2ClusterUpdateParams struct {
 	// Cluster networks that are associated with this cluster.
 	ClusterNetworks []*ClusterNetwork `json:"cluster_networks"`
 
+	// Specifies the required number of control plane nodes that should be part of the cluster.
+	ControlPlaneCount *int64 `json:"control_plane_count,omitempty"`
+
 	// Installation disks encryption mode and host roles to be applied.
 	DiskEncryption *DiskEncryption `json:"disk_encryption,omitempty" gorm:"embedded;embeddedPrefix:disk_encryption_"`
 
@@ -69,12 +68,11 @@ type V2ClusterUpdateParams struct {
 	// Explicit ignition endpoint overrides the default ignition endpoint.
 	IgnitionEndpoint *IgnitionEndpoint `json:"ignition_endpoint,omitempty" gorm:"embedded;embeddedPrefix:ignition_endpoint_"`
 
-	// (DEPRECATED) The virtual IP used for cluster ingress traffic.
-	// Pattern: ^(?:(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3})|(?:(?:[0-9a-fA-F]*:[0-9a-fA-F]*){2,}))?$
-	IngressVip *string `json:"ingress_vip,omitempty"`
-
 	// The virtual IPs used for cluster ingress traffic. Enter one IP address for single-stack clusters, or up to two for dual-stack clusters (at most one IP address per IP stack used). The order of stacks should be the same as order of subnets in Cluster Networks, Service Networks, and Machine Networks.
 	IngressVips []*IngressVip `json:"ingress_vips"`
+
+	// load balancer
+	LoadBalancer *LoadBalancer `json:"load_balancer,omitempty" gorm:"embedded;embeddedPrefix:load_balancer_"`
 
 	// A CIDR that all hosts belonging to the cluster should have an interfaces with IP address that belongs to this CIDR. The api_vip belongs to this CIDR.
 	// Pattern: ^(?:(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3}\/(?:(?:[0-9])|(?:[1-2][0-9])|(?:3[0-2])))|(?:(?:[0-9a-fA-F]*:[0-9a-fA-F]*){2,})/(?:(?:[0-9])|(?:[1-9][0-9])|(?:1[0-1][0-9])|(?:12[0-8])))$
@@ -96,6 +94,8 @@ type V2ClusterUpdateParams struct {
 	NoProxy *string `json:"no_proxy,omitempty"`
 
 	// List of OLM operators to be installed.
+	// For the full list of supported operators, check the endpoint `/v2/supported-operators`:
+	//
 	OlmOperators []*OperatorCreateParams `json:"olm_operators"`
 
 	// platform
@@ -131,10 +131,6 @@ type V2ClusterUpdateParams struct {
 func (m *V2ClusterUpdateParams) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateAPIVip(formats); err != nil {
-		res = append(res, err)
-	}
-
 	if err := m.validateAPIVips(formats); err != nil {
 		res = append(res, err)
 	}
@@ -163,11 +159,11 @@ func (m *V2ClusterUpdateParams) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
-	if err := m.validateIngressVip(formats); err != nil {
+	if err := m.validateIngressVips(formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.validateIngressVips(formats); err != nil {
+	if err := m.validateLoadBalancer(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -206,18 +202,6 @@ func (m *V2ClusterUpdateParams) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
-	return nil
-}
-
-func (m *V2ClusterUpdateParams) validateAPIVip(formats strfmt.Registry) error {
-	if swag.IsZero(m.APIVip) { // not required
-		return nil
-	}
-
-	if err := validate.Pattern("api_vip", "body", *m.APIVip, `^(?:(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3})|(?:(?:[0-9a-fA-F]*:[0-9a-fA-F]*){2,}))?$`); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -387,18 +371,6 @@ func (m *V2ClusterUpdateParams) validateIgnitionEndpoint(formats strfmt.Registry
 	return nil
 }
 
-func (m *V2ClusterUpdateParams) validateIngressVip(formats strfmt.Registry) error {
-	if swag.IsZero(m.IngressVip) { // not required
-		return nil
-	}
-
-	if err := validate.Pattern("ingress_vip", "body", *m.IngressVip, `^(?:(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3})|(?:(?:[0-9a-fA-F]*:[0-9a-fA-F]*){2,}))?$`); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (m *V2ClusterUpdateParams) validateIngressVips(formats strfmt.Registry) error {
 	if swag.IsZero(m.IngressVips) { // not required
 		return nil
@@ -420,6 +392,25 @@ func (m *V2ClusterUpdateParams) validateIngressVips(formats strfmt.Registry) err
 			}
 		}
 
+	}
+
+	return nil
+}
+
+func (m *V2ClusterUpdateParams) validateLoadBalancer(formats strfmt.Registry) error {
+	if swag.IsZero(m.LoadBalancer) { // not required
+		return nil
+	}
+
+	if m.LoadBalancer != nil {
+		if err := m.LoadBalancer.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("load_balancer")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("load_balancer")
+			}
+			return err
+		}
 	}
 
 	return nil
@@ -628,6 +619,10 @@ func (m *V2ClusterUpdateParams) ContextValidate(ctx context.Context, formats str
 		res = append(res, err)
 	}
 
+	if err := m.contextValidateLoadBalancer(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateMachineNetworks(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -737,6 +732,22 @@ func (m *V2ClusterUpdateParams) contextValidateIngressVips(ctx context.Context, 
 			}
 		}
 
+	}
+
+	return nil
+}
+
+func (m *V2ClusterUpdateParams) contextValidateLoadBalancer(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.LoadBalancer != nil {
+		if err := m.LoadBalancer.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("load_balancer")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("load_balancer")
+			}
+			return err
+		}
 	}
 
 	return nil

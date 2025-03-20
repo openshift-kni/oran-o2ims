@@ -15,9 +15,8 @@ package v1alpha1
 import (
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/util/errors"
-
 	"k8s.io/apimachinery/pkg/runtime"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -27,10 +26,10 @@ var bmcsubscriptionlog = logf.Log.WithName("webhooks").WithName("BMCEventSubscri
 
 //+kubebuilder:webhook:verbs=create;update,path=/validate-metal3-io-v1alpha1-bmceventsubscription,mutating=false,failurePolicy=fail,sideEffects=none,admissionReviewVersions=v1;v1beta,groups=metal3.io,resources=bmceventsubscriptions,versions=v1alpha1,name=bmceventsubscription.metal3.io
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
+// ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (s *BMCEventSubscription) ValidateCreate() (admission.Warnings, error) {
 	bmcsubscriptionlog.Info("validate create", "namespace", s.Namespace, "name", s.Name)
-	return nil, errors.NewAggregate(s.validateSubscription())
+	return nil, kerrors.NewAggregate(s.validateSubscription())
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -52,7 +51,7 @@ func (s *BMCEventSubscription) ValidateUpdate(old runtime.Object) (admission.War
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
+// ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
 func (s *BMCEventSubscription) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }

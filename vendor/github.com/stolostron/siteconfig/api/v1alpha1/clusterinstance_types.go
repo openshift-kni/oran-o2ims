@@ -89,13 +89,37 @@ const (
 	CPUPartitioningAllNodes CPUPartitioningMode = "AllNodes"
 )
 
-// TemplateRef is used to specify the installation CR templates
-type TemplateRef struct {
+// CpuArchitecture is used to define the software architecture of a host.
+type CPUArchitecture string
+
+const (
+	// Supported architectures are x86, arm, or multi
+	CPUArchitectureX86_64  CPUArchitecture = "x86_64"
+	CPUArchitectureAarch64 CPUArchitecture = "aarch64"
+	CPUArchitectureMulti   CPUArchitecture = "multi"
+)
+
+// Reference represents a namespaced reference to a Kubernetes object.
+// It is commonly used to specify dependencies or related objects in different namespaces.
+type Reference struct {
+	// Name specifies the name of the referenced object.
+	// +kubebuilder:validation:MinLength=1
 	// +required
 	Name string `json:"name"`
+
+	// Namespace specifies the namespace of the referenced object.
+	// +kubebuilder:validation:MinLength=1
 	// +required
 	Namespace string `json:"namespace"`
 }
+
+// TemplateRef is a reference to an installation Custom Resource (CR) template.
+// It provides a way to specify the template to be used for an installation process.
+type TemplateRef Reference
+
+// HostRef is a reference to a BareMetalHost node located in another namespace.
+// It is used to link a resource to a specific BareMetalHost instance.
+type HostRef Reference
 
 // ResourceRef represents the API version and kind of a Kubernetes resource
 type ResourceRef struct {
@@ -157,6 +181,17 @@ type NodeSpec struct {
 	// +required
 	HostName string `json:"hostName"`
 
+	// HostRef is used to specify a reference to a BareMetalHost resource.
+	// +optional
+	HostRef *HostRef `json:"hostRef,omitempty"`
+
+	// CPUArchitecture is the software architecture of the node.
+	// If it is not defined here then it is inheirited from the ClusterInstanceSpec.
+	// +kubebuilder:validation:Enum=x86_64;aarch64
+	// +kubebuilder:default:=x86_64
+	// +optional
+	CPUArchitecture CPUArchitecture `json:"cpuArchitecture,omitempty"`
+
 	// Provide guidance about how to choose the device for the image being provisioned.
 	// +kubebuilder:default:=UEFI
 	// +optional
@@ -214,6 +249,43 @@ const (
 	ClusterTypeSNO             ClusterType = "SNO"
 	ClusterTypeHighlyAvailable ClusterType = "HighlyAvailable"
 )
+
+// PreservationMode represents the modes of data preservation for a ClusterInstance during reinstallation.
+type PreservationMode string
+
+// Supported modes of data preservation for reinstallation.
+const (
+	// PreservationModeNone indicates that no data preservation will be performed.
+	PreservationModeNone PreservationMode = "None"
+
+	// PreservationModeAll indicates that all resources labeled with PreservationLabelKey will be preserved.
+	PreservationModeAll PreservationMode = "All"
+
+	// PreservationModeClusterIdentity indicates that only cluster identity resources labeled with
+	// PreservationLabelKey and ClusterIdentityLabelValue will be preserved.
+	PreservationModeClusterIdentity PreservationMode = "ClusterIdentity"
+)
+
+// ReinstallSpec defines the configuration for reinstallation of a ClusterInstance.
+type ReinstallSpec struct {
+	// Generation specifies the desired generation for the reinstallation operation.
+	// Updating this field triggers a new reinstall request.
+	// +required
+	Generation string `json:"generation"`
+
+	// PreservationMode defines the strategy for data preservation during reinstallation.
+	// Supported values:
+	// - None: No data will be preserved.
+	// - All: All Secrets and ConfigMaps in the ClusterInstance namespace labeled with the PreservationLabelKey will be
+	//   preserved.
+	// - ClusterIdentity: Only Secrets and ConfigMaps in the ClusterInstance namespace labeled with both the
+	//   PreservationLabelKey and the ClusterIdentityLabelValue will be preserved.
+	// This field ensures critical cluster identity data is preserved when required.
+	// +kubebuilder:validation:Enum=None;All;ClusterIdentity
+	// +kubebuilder:default=None
+	// +required
+	PreservationMode PreservationMode `json:"preservationMode"`
+}
 
 // ClusterInstanceSpec defines the desired state of ClusterInstance
 type ClusterInstanceSpec struct {
@@ -341,6 +413,12 @@ type ClusterInstanceSpec struct {
 	// +optional
 	CPUPartitioning CPUPartitioningMode `json:"cpuPartitioningMode,omitempty"`
 
+	// CPUArchitecture is the default software architecture used for nodes that do not have an architecture defined.
+	// +kubebuilder:validation:Enum=x86_64;aarch64;multi
+	// +kubebuilder:default:=x86_64
+	// +optional
+	CPUArchitecture CPUArchitecture `json:"cpuArchitecture,omitempty"`
+
 	// +kubebuilder:validation:Enum=SNO;HighlyAvailable
 	// +optional
 	ClusterType ClusterType `json:"clusterType,omitempty"`
@@ -355,16 +433,24 @@ type ClusterInstanceSpec struct {
 	// +optional
 	CaBundleRef *corev1.LocalObjectReference `json:"caBundleRef,omitempty"`
 
+	// List of node objects
 	// +required
 	Nodes []NodeSpec `json:"nodes"`
+
+	// Reinstall specifications
+	// +optional
+	Reinstall *ReinstallSpec `json:"reinstall,omitempty"`
 }
 
 const (
-	ManifestRenderedSuccess   = "rendered"
-	ManifestRenderedFailure   = "failed"
-	ManifestRenderedValidated = "validated"
-	ManifestSuppressed        = "suppressed"
-	ManifestPruneFailure      = "pruning-attempt-failed"
+	ManifestRenderedSuccess    = "rendered"
+	ManifestRenderedFailure    = "failed"
+	ManifestRenderedValidated  = "validated"
+	ManifestSuppressed         = "suppressed"
+	ManifestDeleted            = "deleted"
+	ManifestDeletionInProgress = "deletion-in-progress"
+	ManifestDeletionFailure    = "deletion-failed"
+	ManifestDeletionTimedOut   = "deletion-attempt-timed-out"
 )
 
 // ManifestReference contains enough information to let you locate the
@@ -406,6 +492,79 @@ type ManifestReference struct {
 	Message string `json:"message,omitempty"`
 }
 
+// ReinstallHistory represents a record of a reinstallation event for a ClusterInstance.
+type ReinstallHistory struct {
+	// Generation specifies the generation of the ClusterInstance at the time of the reinstallation.
+	// This value corresponds to the ReinstallSpec.Generation field associated with the reinstallation request.
+	// +required
+	Generation string `json:"generation"`
+
+	// RequestStartTime indicates the time at which SiteConfig was requested to reinstall.
+	// +required
+	RequestStartTime metav1.Time `json:"requestStartTime,omitempty"`
+
+	// RequestEndTime indicates the time at which SiteConfig completed processing the reinstall request.
+	// +required
+	RequestEndTime metav1.Time `json:"requestEndTime,omitempty"`
+
+	// ClusterInstanceSpecDiff provides a JSON representation of the differences between the
+	// ClusterInstance spec at the time of reinstallation and the previous spec.
+	// This field helps in tracking changes that triggered the reinstallation.
+	// +required
+	ClusterInstanceSpecDiff string `json:"clusterInstanceSpecDiff"`
+}
+
+// ReinstallStatus represents the current state and historical details of reinstall operations for a ClusterInstance.
+type ReinstallStatus struct {
+
+	// List of conditions pertaining to reinstall requests.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// InProgressGeneration is the generation of the ClusterInstance that is being processed for reinstallation.
+	// It corresponds to the Generation field in ReinstallSpec and indicates the latest reinstall request that
+	// the controller is acting upon.
+	// +optional
+	InProgressGeneration string `json:"inProgressGeneration,omitempty"`
+
+	// ObservedGeneration is the generation of the ClusterInstance that has been processed for reinstallation.
+	// It corresponds to the Generation field in ReinstallSpec and indicates the latest reinstall request that
+	// the controller has acted upon.
+	// +optionsl
+	ObservedGeneration string `json:"observedGeneration,omitempty"`
+
+	// RequestStartTime indicates the time at which SiteConfig was requested to reinstall.
+	// +optional
+	RequestStartTime metav1.Time `json:"requestStartTime,omitempty"`
+
+	// RequestEndTime indicates the time at which SiteConfig completed processing the reinstall request.
+	// +optional
+	RequestEndTime metav1.Time `json:"requestEndTime,omitempty"`
+
+	// History maintains a record of all previous reinstallation attempts.
+	// Each entry captures details such as the generation, timestamp, and the differences in the ClusterInstance
+	// specification that triggered the reinstall.
+	// This field is useful for debugging, auditing, and tracking reinstallation events over time.
+	// +optional
+	History []ReinstallHistory `json:"history,omitempty"`
+}
+
+type PausedStatus struct {
+	// TimeSet indicates when the paused annotation was applied.
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	TimeSet metav1.Time `json:"timeSet"`
+
+	// Reason provides an explanation for why the paused annotation was applied.
+	// This field may not be empty.
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=32768
+	Reason string `json:"reason"`
+}
+
 // ClusterInstanceStatus defines the observed state of ClusterInstance
 type ClusterInstanceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -428,11 +587,22 @@ type ClusterInstanceStatus struct {
 
 	// Track the observed generation to avoid unnecessary reconciles
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// Reinstall status information.
+	// +optional
+	Reinstall *ReinstallStatus `json:"reinstall,omitempty"`
+
+	// Paused provides information about the pause annotation set by the controller
+	// to temporarily pause reconciliation of the ClusterInstance.
+	// +optional
+	Paused *PausedStatus `json:"paused,omitempty"`
 }
 
+//nolint:lll
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:path=clusterinstances,scope=Namespaced
+//+kubebuilder:printcolumn:name="Paused",type="date",JSONPath=".status.paused.timeSet"
 //+kubebuilder:printcolumn:name="ProvisionStatus",type="string",JSONPath=".status.conditions[?(@.type=='Provisioned')].reason"
 //+kubebuilder:printcolumn:name="ProvisionDetails",type="string",JSONPath=".status.conditions[?(@.type=='Provisioned')].message"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

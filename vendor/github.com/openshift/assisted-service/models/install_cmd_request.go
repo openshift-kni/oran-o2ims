@@ -33,13 +33,22 @@ type InstallCmdRequest struct {
 	// Format: uuid
 	ClusterID *strfmt.UUID `json:"cluster_id"`
 
+	// Specifies the required number of control plane nodes that should be part of the cluster.
+	ControlPlaneCount int64 `json:"control_plane_count,omitempty"`
+
 	// Assisted installer controller image
 	// Required: true
 	// Pattern: ^(([a-zA-Z0-9\-\.]+)(:[0-9]+)?\/)?[a-z0-9\._\-\/@]+[?::a-zA-Z0-9_\-.]+$
 	ControllerImage *string `json:"controller_image"`
 
+	// CoreOS container image to use if installing to the local device
+	CoreosImage string `json:"coreos_image,omitempty"`
+
 	// List of disks to format
 	DisksToFormat []string `json:"disks_to_format"`
+
+	// If true, assisted service will attempt to skip MCO reboot
+	EnableSkipMcoReboot bool `json:"enable_skip_mco_reboot,omitempty"`
 
 	// Guaranteed availability of the installed cluster. 'Full' installs a Highly-Available cluster
 	// over multiple master nodes whereas 'None' installs a full cluster over one node.
@@ -71,6 +80,9 @@ type InstallCmdRequest struct {
 
 	// Must-gather images to use
 	MustGatherImage string `json:"must_gather_image,omitempty"`
+
+	// If true, notify number of reboots by assisted controller
+	NotifyNumReboots bool `json:"notify_num_reboots,omitempty"`
 
 	// Version of the OpenShift cluster.
 	OpenshiftVersion string `json:"openshift_version,omitempty"`
