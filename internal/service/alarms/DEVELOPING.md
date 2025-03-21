@@ -157,51 +157,57 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
-  "encoding/json"
-  "flag"
-  "fmt"
-  "log"
-  "net/http"
-  "sync/atomic"
+   "encoding/json"
+   "flag"
+   "fmt"
+   "log"
+   "net/http"
+   "sync/atomic"
 )
 
 var count atomic.Int64
 
 func main() {
-  // Define command-line flag for port
-  port := flag.Int("port", 8080, "Port to listen on")
-  flag.Parse()
+   // Define command-line flag for port
+   port := flag.Int("port", 8080, "Port to listen on")
+   flag.Parse()
 
-  http.HandleFunc("/notify", func(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodPost {
-      http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-      return
-    }
+   http.HandleFunc("/notify", func(w http.ResponseWriter, r *http.Request) {
+      switch r.Method {
+      case http.MethodGet:
+         // Handle reachability check: respond with 204 No Content.
+         w.WriteHeader(http.StatusNoContent)
+         log.Printf("Received reachability GET request")
+         return
+      case http.MethodPost:
+         // Process the notification as usual.
+         var payload interface{}
+         if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return
+         }
 
-    var payload interface{}
-    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-      http.Error(w, err.Error(), http.StatusBadRequest)
-      return
-    }
+         prettyJSON, _ := json.MarshalIndent(payload, "", "  ")
+         log.Printf("Received notification:\n%s\n", string(prettyJSON))
+         w.WriteHeader(http.StatusOK)
+         log.Printf("Notification received successfully")
 
-    prettyJSON, _ := json.MarshalIndent(payload, "", "  ")
-    log.Printf("Received notification:\n%s\n", string(prettyJSON))
-    w.WriteHeader(http.StatusOK)
-    log.Printf("Notification received successfully")
+         if payloadList, ok := payload.([]interface{}); ok {
+            log.Printf("Number of items in list: %d", len(payloadList))
+         }
 
-    if payloadList, ok := payload.([]interface{}); ok {
-      log.Printf("Number of items in list: %d", len(payloadList))
-    }
+         newCount := count.Add(1)
+         log.Printf("Total calls so far: %d", newCount)
+      default:
+         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+      }
+   })
 
-    newCount := count.Add(1)
-    log.Printf("Total calls so far: %d", newCount)
-  })
-
-  addr := fmt.Sprintf(":%d", *port)
-  log.Printf("Starting server on %s", addr)
-  if err := http.ListenAndServe(addr, nil); err != nil {
-    log.Fatal("Server failed to start:", err)
-  }
+   addr := fmt.Sprintf(":%d", *port)
+   log.Printf("Starting server on %s", addr)
+   if err := http.ListenAndServe(addr, nil); err != nil {
+      log.Fatal("Server failed to start:", err)
+   }
 }
 ```
 

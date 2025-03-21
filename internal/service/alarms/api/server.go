@@ -52,8 +52,8 @@ type AlarmsServer struct {
 	Infrastructure *infrastructure.Infrastructure
 	// Wg to allow alarm server level background tasks to finish before graceful exit
 	Wg sync.WaitGroup
-	// Notifier to notify subscribers with new events
-	Notifier *notifier.Notifier
+	// SubscriptionEventHandler to notify subscribers with new events
+	SubscriptionEventHandler notifier.SubscriptionEventHandler
 	// ServiceConfig config needed to manage ServiceConfig
 	ServiceConfig serviceconfig.Config
 }
@@ -129,7 +129,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 	}
 
 	// Validate the subscription
-	if err := commonapi.ValidateCallbackURL(request.Body.Callback); err != nil {
+	if err := commonapi.ValidateCallbackURL(ctx, a.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
 		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"callback": request.Body.Callback,
@@ -139,11 +139,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 		}, nil
 	}
 
-	r := models.ConvertSubscriptionAPIToModel(request.Body)
-
-	// TODO: perform a Reachability check as suggested in O-RAN.WG6.ORCH-USE-CASES-R003-v11.00
-
-	record, err := a.AlarmsRepository.CreateAlarmSubscription(ctx, r)
+	record, err := a.AlarmsRepository.CreateAlarmSubscription(ctx, models.ConvertSubscriptionAPIToModel(request.Body))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "unique_callback" {
@@ -161,7 +157,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 
 	// TODO make it event-driven with PG listen/notify
 	// Signal the notifier to handle this new subscription
-	a.Notifier.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
+	a.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      false,
 		Subscription: models.ConvertAlertSubToNotificationSub(record),
 	})
@@ -194,7 +190,7 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 
 	// TODO make it event-driven with PG listen/notify
 	// Signal the notifier to handle this subscription change
-	a.Notifier.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
+	a.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      true,
 		Subscription: models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{SubscriptionID: request.AlarmSubscriptionId}),
 	})

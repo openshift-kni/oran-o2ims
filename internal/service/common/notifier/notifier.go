@@ -68,6 +68,7 @@ type SubscriptionEvent struct {
 // is prepared to handle subscription events.
 type SubscriptionEventHandler interface {
 	SubscriptionEvent(ctx context.Context, event *SubscriptionEvent)
+	GetClientFactory() ClientProvider
 }
 
 // Notifier represents the data required by the notification process
@@ -254,6 +255,11 @@ func (n *Notifier) SubscriptionEvent(ctx context.Context, event *SubscriptionEve
 	case <-ctx.Done():
 		slog.Info("context terminated; aborting SubscriptionEvent attempt")
 	}
+}
+
+// GetClientFactory return the underlying factory to create httpclient that can be used reach callback url
+func (n *Notifier) GetClientFactory() ClientProvider {
+	return n.clientProvider
 }
 
 // releaseNotification deletes a notification if it does not match any active subscriptions.
