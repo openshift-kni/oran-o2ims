@@ -5,9 +5,10 @@ package api_test
 
 import (
 	"context"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"net/http"
 	"net/http/httptest"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
