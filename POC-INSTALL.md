@@ -11,6 +11,7 @@ SPDX-License-Identifier: Apache-2.0
 <!-- TOC -->
 - [POC Operator Installation](#poc-operator-installation)
   - [POC Images](#poc-images)
+  - [Platform Requirements](#platform-requirements)
   - [Installing POC Operators](#installing-poc-operators)
     - [CatalogSource CRs](#catalogsource-crs)
     - [Namespace CRs](#namespace-crs)
@@ -43,6 +44,14 @@ quay.io/openshift-kni/oran-hwmgr-plugin-bundle:4.18.0-poc.2503.0
 quay.io/openshift-kni/oran-o2ims-operator-catalog:v4.18.0-poc.2503.0
 quay.io/openshift-kni/oran-hwmgr-plugin-catalog:v4.18.0-poc.2503.0
 ```
+
+## Platform Requirements
+
+The POC O-Cloud Manager and O-Cloud Hardware Manager Plugin operators have been tested against the following platform versions:
+
+- OCP: 4.18.5
+- ACM: 2.12.2
+- MCE: 2.7.2
 
 ## Installing POC Operators
 
