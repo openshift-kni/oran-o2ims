@@ -150,6 +150,7 @@ func (c *ReflectorStore) Receive(ctx context.Context, handler AsyncEventHandler)
 		case <-ctx.Done():
 			slog.Info("stopping store adapter; context canceled")
 			close(c.ready)
+			return
 		case <-c.ready:
 			c.handleOperations(ctx, handler)
 		}
