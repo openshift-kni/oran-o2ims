@@ -44,7 +44,7 @@ type nodeInfo struct {
 	interfaceMACAddress map[string]string // keyed by interface name
 }
 
-func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
+func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 	ctx context.Context) (*siteconfig.ClusterInstance, error) {
 	t.logger.InfoContext(
 		ctx,
@@ -52,24 +52,14 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 		slog.String("name", t.object.Name),
 	)
 
-	// Wrap the merged ClusterInstance data in a map with key "Cluster"
-	// This data object will be consumed by the clusterInstance template
-	mergedClusterInstanceData := map[string]any{
-		"Cluster": t.clusterInput.clusterInstanceData,
-	}
-
-	renderedCIUnstructured, err := utils.RenderTemplateForK8sCR(
-		"ClusterInstance", utils.ClusterInstanceTemplatePath, mergedClusterInstanceData)
+	// Build an initial unstructured ClusterInstance using the merged ClusterInstance data
+	// and default values.
+	renderedCIUnstructured, err := t.buildClusterInstanceUnstructured()
 	if err != nil {
-		return nil, utils.NewInputError("failed to render the ClusterInstance template for ProvisioningRequest: %w", err)
+		return nil, fmt.Errorf("failed to build unstructured ClusterInstance %s: %w", t.clusterInput.clusterInstanceData["clusterName"].(string), err)
 	}
 
-	// Add ProvisioningRequest labels to the generated ClusterInstance
-	labels := make(map[string]string)
-	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
-	renderedCIUnstructured.SetLabels(labels)
-
-	// Create the ClusterInstance namespace if not exist.
+	// Create the ClusterInstance namespace if it does not exist.
 	ciName := renderedCIUnstructured.GetName()
 	err = t.createClusterInstanceNamespace(ctx, ciName)
 	if err != nil {
@@ -90,9 +80,7 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 
 	existingCIUnstructured := &unstructured.Unstructured{}
 	existingCIUnstructured.SetGroupVersionKind(renderedCIUnstructured.GroupVersionKind())
-	ciExists, err := utils.DoesK8SResourceExist(
-		ctx, t.client, ciName, ciName, existingCIUnstructured,
-	)
+	ciExists, err := utils.DoesK8SResourceExist(ctx, t.client, ciName, ciName, existingCIUnstructured)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ClusterInstance (%s): %w", ciName, err)
 	}
@@ -132,6 +120,71 @@ func (t *provisioningRequestReconcilerTask) renderClusterInstanceTemplate(
 	}
 
 	return renderedCI, nil
+}
+
+// buildClusterInstanceUnstructured creates a ClusterInstance in an unstructured format using both placeholder
+// values and configuration values from t.clusterInput.clusterInstanceData.
+func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (*unstructured.Unstructured, error) {
+
+	renderedClusterInstanceUnstructured := &unstructured.Unstructured{}
+	// Set the GVK and metadata.
+	renderedClusterInstanceUnstructured.SetAPIVersion(fmt.Sprintf("%s/%s", siteconfig.Group, siteconfig.Version))
+	renderedClusterInstanceUnstructured.SetKind(siteconfig.ClusterInstanceKind)
+	renderedClusterInstanceUnstructured.SetName(t.clusterInput.clusterInstanceData["clusterName"].(string))
+	renderedClusterInstanceUnstructured.SetNamespace(t.clusterInput.clusterInstanceData["clusterName"].(string))
+
+	// Set the spec to the value obtained from the merge of the ClusterInstance default ConfigMap and
+	// the ProvisioningRequest ClusterInstance input.
+	err := unstructured.SetNestedField(renderedClusterInstanceUnstructured.Object, t.clusterInput.clusterInstanceData, "spec")
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to set the unstructured spec for the %s(%s) CRD: %w",
+			renderedClusterInstanceUnstructured.GetName(), renderedClusterInstanceUnstructured.GetNamespace(), err)
+	}
+
+	// Override the hardware properties with placeholders if they are empty, as they will come
+	// from the HW Manager plugin if they have not been set through the ProvisioningRequest.
+	// If hardware provisioning is disabled, then the values should have been set, so they will not be changed here.
+	nodes := renderedClusterInstanceUnstructured.Object["spec"].(map[string]interface{})["nodes"].([]interface{})
+
+	for _, node := range nodes {
+		// Set placeholders for BMC details.
+		nodeMap := node.(map[string]interface{})
+		if value, ok := nodeMap["bmcAddress"]; !ok || value == "" {
+			nodeMap["bmcAddress"] = "placeholder"
+		}
+		if value, ok := nodeMap["bootMACAddress"]; !ok || value == "" {
+			nodeMap["bootMACAddress"] = "00:00:5E:00:53:AF"
+		}
+		if value, ok := nodeMap["bmcCredentialsName"]; !ok || value == "" {
+			secretName, err := utils.GenerateSecretName(nodeMap, renderedClusterInstanceUnstructured.GetName())
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate Secret name: %w", err)
+			}
+			nodeMap["bmcCredentialsName"] = map[string]interface{}{
+				"name": secretName,
+			}
+		}
+		if nodeNetwork, ok := nodeMap["nodeNetwork"]; ok {
+			if interfaces, ok := nodeNetwork.(map[string]interface{})["interfaces"]; ok {
+				if interfaceItems, ok := interfaces.([]interface{}); ok {
+					for _, interfaceItem := range interfaceItems {
+						interfaceMap := interfaceItem.(map[string]interface{})
+						if value, ok := interfaceMap["macAddress"]; !ok || value == "" {
+							interfaceMap["macAddress"] = "00:00:5E:00:53:AF"
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Add ProvisioningRequest labels to the generated ClusterInstance.
+	labels := make(map[string]string)
+	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
+	renderedClusterInstanceUnstructured.SetLabels(labels)
+
+	return renderedClusterInstanceUnstructured, nil
 }
 
 // handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.

@@ -45,6 +45,8 @@ versions:
               type: string
             clusterImageSetNameRef:
               type: string
+            cpuPartitioningMode:
+              type: string
             pullSecretRef:
               properties:
                 name:
@@ -54,6 +56,9 @@ versions:
             nodes:
               items:
                 properties:
+                  role:
+                    default: master
+                    type: string
                   automatedCleaningMode:
                     type: string
                   bootMode:
@@ -81,8 +86,6 @@ versions:
                               type: string
                         type: array
                     type: object
-                  role:
-                    type: string
               type: array
             templateRefs:
               items:

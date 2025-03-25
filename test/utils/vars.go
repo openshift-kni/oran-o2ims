@@ -329,6 +329,12 @@ const (
 "clusterInstanceParameters"
 ]
 }`
+	TestSecretDataStr = `{"auths":{"example.com":{"username":"dummyuser","password": "dummypass","realm":"example.io"}}}` // #nosec G101
+)
+
+const (
+	MasterNodeName = "node1"
+	BmcSecretName  = "bmc-secret"
 )
 
 var (
@@ -368,6 +374,13 @@ var (
 			"crdPath":     "config/crd/bases",
 			"owner":       "openshift-kni",
 			"crdFileName": "lcm.openshift.io_imagebasedgroupupgrades.yaml",
+		},
+		{
+			"repoName":    "oran-hwmgr-plugin",
+			"modName":     "github.com/openshift-kni",
+			"crdPath":     "config/crd/bases",
+			"owner":       "openshift-kni",
+			"crdFileName": "hwmgr-plugin.oran.openshift.io_hardwaremanagers.yaml",
 		},
 	}
 )

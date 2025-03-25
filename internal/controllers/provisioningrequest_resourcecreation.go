@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -344,18 +343,10 @@ func getBMCDetailsForClusterInstance(node map[string]any, provisioningRequest st
 	// Get the BMC CredentialsName.
 	bmcCredentialsNameInterface, bmcCredentialsNameExist := node["bmcCredentialsName"]
 	if !bmcCredentialsNameExist {
-		nodeHostnameInterface, nodeHostnameExists := node["hostName"]
-		if !nodeHostnameExists {
-			return nil, nil, "", utils.NewInputError(
-				`\"hostname\" key expected to exist in `+
-					`spec.templateParameters.clusterInstanceParameters `+
-					`of ProvisioningRequest %s, but it's missing`,
-				provisioningRequest,
-			)
+		secretName, err = utils.GenerateSecretName(node, provisioningRequest)
+		if err != nil {
+			return nil, nil, "", utils.NewInputError("failed to generate Secret name: %w", err)
 		}
-		secretName =
-			utils.ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) +
-				"-bmc-secret"
 	} else {
 		secretName = bmcCredentialsNameInterface.(map[string]any)["name"].(string)
 	}

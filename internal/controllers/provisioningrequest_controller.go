@@ -493,7 +493,7 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 
 // handleRenderClusterInstance handles the ClusterInstance rendering and validation.
 func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx context.Context) (*siteconfig.ClusterInstance, error) {
-	renderedClusterInstance, err := t.renderClusterInstanceTemplate(ctx)
+	renderedClusterInstance, err := t.buildClusterInstance(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,

@@ -14,7 +14,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -650,9 +649,9 @@ var _ = Describe("updateClusterInstance", func() {
 				MACAddress: "66:77:88:99:AA:BB",
 			},
 		}
-		masterNode = createNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
+		masterNode = testutils.CreateNode(mn, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
 			"site-1-master-bmc-secret", groupNameController, poolns, crName, mIfaces)
-		workerNode = createNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1",
+		workerNode = testutils.CreateNode(wn, "idrac-virtualmedia+https://10.16.3.4/redfish/v1/Systems/System.Embedded.1",
 			"site-1-worker-bmc-secret", groupNameWorker, poolns, crName, wIfaces)
 	)
 
@@ -750,7 +749,7 @@ var _ = Describe("updateClusterInstance", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("returns error when no match handware node", func() {
+	It("returns error when no match hardware node", func() {
 		task.clusterInput.clusterInstanceData = map[string]any{
 			"nodes": []any{
 				map[string]any{
@@ -803,9 +802,9 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 		}
 		nodes := []*hwv1alpha1.Node{masterNode, workerNode}
-		secrets := createSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, poolns)
+		secrets := testutils.CreateSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, poolns)
 
-		createResources(ctx, c, nodes, secrets)
+		testutils.CreateResources(ctx, c, nodes, secrets)
 
 		err := task.updateClusterInstance(ctx, ci, np)
 		Expect(err).ToNot(HaveOccurred())
@@ -849,69 +848,6 @@ func getInterfaceMap(interfaces []*hwv1alpha1.Interface) []map[string]interface{
 		})
 	}
 	return ifaceList
-}
-
-func createNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
-	if interfaces == nil {
-		interfaces = []*hwv1alpha1.Interface{
-			{
-				Name:       "eno1",
-				Label:      "bootable-interface",
-				MACAddress: "00:00:00:01:20:30",
-			},
-			{
-				Name:       "eth0",
-				Label:      "base-interface",
-				MACAddress: "00:00:00:01:20:31",
-			},
-			{
-				Name:       "eth1",
-				Label:      "data-interface",
-				MACAddress: "00:00:00:01:20:32",
-			},
-		}
-	}
-	return &hwv1alpha1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: hwv1alpha1.NodeSpec{
-			NodePool:    npName,
-			GroupName:   groupName,
-			HwMgrId:     utils.UnitTestHwmgrID,
-			HwMgrNodeId: name,
-		},
-		Status: hwv1alpha1.NodeStatus{
-			BMC: &hwv1alpha1.BMC{
-				Address:         bmcAddress,
-				CredentialsName: bmcSecret,
-			},
-			Interfaces: interfaces,
-		},
-	}
-}
-
-func createSecrets(names []string, namespace string) []*corev1.Secret {
-	var secrets []*corev1.Secret
-	for _, name := range names {
-		secrets = append(secrets, &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-		})
-	}
-	return secrets
-}
-
-func createResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.Node, secrets []*corev1.Secret) {
-	for _, node := range nodes {
-		Expect(c.Create(ctx, node)).To(Succeed())
-	}
-	for _, secret := range secrets {
-		Expect(c.Create(ctx, secret)).To(Succeed())
-	}
 }
 
 func verifyClusterInstance(ci *siteconfig.ClusterInstance, expectedDetails []expectedNodeDetails) {
