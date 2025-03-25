@@ -554,6 +554,7 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 		// Agents will finish being installed before the Managed Cluster is completely provisioned, therefore, we have to
 		// link them after the fact, so here we just skip them.
 		slog.Warn("no node cluster found", "name", clusterResource.NodeClusterName, "resource", clusterResource.Name)
+		return nil
 	} else if err != nil {
 		return fmt.Errorf("failed to get node cluster '%s': %w", clusterResource.NodeClusterName, err)
 	}
