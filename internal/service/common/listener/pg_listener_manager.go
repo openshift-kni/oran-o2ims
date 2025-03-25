@@ -8,7 +8,6 @@ package listener
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -78,12 +77,13 @@ func (lm *Manager) listenChannel(ctx context.Context, channel string, handler No
 	for {
 		// listenAndProcess returns on error (it could simply be a shutdown signal or fatal database error)
 		if err := lm.listenAndProcess(ctx, channel, handler); err != nil {
-			slog.Error("Error listening to channel", "channel", channel, "error", err)
 			// Wait before retrying to avoid busy-looping.
 			select {
 			case <-ctx.Done():
+				slog.Info("Listener is shutting down", "channel", channel)
 				return
 			case <-time.After(time.Minute):
+				slog.Error("failed to listen to pg channel, retrying", "channel", channel, "error", err)
 			}
 		}
 	}
@@ -105,11 +105,6 @@ func (lm *Manager) listenAndProcess(ctx context.Context, channel string, handler
 	for {
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				slog.Info("Listener is shutting down", "pg_channel", channel)
-				return nil
-			}
-
 			return fmt.Errorf("failed waiting for notification on %s: %w", channel, err)
 		}
 		slog.Debug("Received notification from PG", "channel", channel, "payload", notification.Payload)
