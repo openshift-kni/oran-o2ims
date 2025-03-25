@@ -57,10 +57,10 @@ func getBootInterfaceLabel(nodePool *hwv1alpha1.NodePool) (string, error) {
 	}
 
 	// Ensure the boot interface label annotation exists and is not empty
-	bootIfaceLabel, exists := annotation[HwTemplateBootIfaceLabel]
+	bootIfaceLabel, exists := annotation[hwv1alpha1.BootInterfaceLabelAnnotation]
 	if !exists || bootIfaceLabel == "" {
 		return "", fmt.Errorf("%s annotation is missing or empty from nodePool %s in namespace %s",
-			HwTemplateBootIfaceLabel, nodePool.Name, nodePool.Namespace)
+			hwv1alpha1.BootInterfaceLabelAnnotation, nodePool.Name, nodePool.Namespace)
 	}
 	return bootIfaceLabel, nil
 }

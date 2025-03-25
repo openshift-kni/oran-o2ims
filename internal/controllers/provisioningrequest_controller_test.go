@@ -375,7 +375,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
 			}
 			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
+			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 
@@ -621,7 +621,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
 			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
+			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 			// Set the provisioningRequest extensions.nodePoolRef
@@ -1436,7 +1436,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
 			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
+			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			Expect(c.Create(ctx, nodePool)).To(Succeed())
 			testutils.CreateNodeResources(ctx, c, nodePool.Name)
 			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
@@ -1614,7 +1614,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Name:      "cluster-1",
 					Namespace: utils.UnitTestHwmgrNamespace,
 					Annotations: map[string]string{
-						utils.HwTemplateBootIfaceLabel: "bootable-interface",
+						hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 					},
 				},
 				Spec: hwv1alpha1.NodePoolSpec{
@@ -2023,7 +2023,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Name:      "cluster-1",
 					Namespace: utils.UnitTestHwmgrNamespace,
 					Annotations: map[string]string{
-						utils.HwTemplateBootIfaceLabel: "bootable-interface",
+						hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 					},
 				},
 				Spec: hwv1alpha1.NodePoolSpec{

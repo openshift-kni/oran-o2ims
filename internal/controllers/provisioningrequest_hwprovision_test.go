@@ -189,7 +189,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		Expect(nodePool).ToNot(BeNil())
 		Expect(nodePool.ObjectMeta.Name).To(Equal(clusterInstance.GetName()))
 		Expect(nodePool.ObjectMeta.Namespace).To(Equal(utils.UnitTestHwmgrNamespace))
-		Expect(nodePool.Annotations[utils.HwTemplateBootIfaceLabel]).To(Equal(hwTemplate.Spec.BootInterfaceLabel))
+		Expect(nodePool.Annotations[hwv1alpha1.BootInterfaceLabelAnnotation]).To(Equal(hwTemplate.Spec.BootInterfaceLabel))
 
 		Expect(nodePool.Spec.CloudID).To(Equal(clusterInstance.GetName()))
 		Expect(nodePool.Spec.HwMgrId).To(Equal(hwTemplate.Spec.HwMgrId))
@@ -242,7 +242,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 			nodePool.SetName(crName)
 			nodePool.SetNamespace("hwmgr")
 			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
-			nodePool.Annotations = map[string]string{"bootInterfaceLabel": "bootable-interface"}
+			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
 				{
 					NodePoolData: hwv1alpha1.NodePoolData{
@@ -699,7 +699,7 @@ var _ = Describe("updateClusterInstance", func() {
 				Name:      crName,
 				Namespace: poolns,
 				Annotations: map[string]string{
-					utils.HwTemplateBootIfaceLabel: "test",
+					hwv1alpha1.BootInterfaceLabelAnnotation: "test",
 				},
 			},
 			Status: hwv1alpha1.NodePoolStatus{

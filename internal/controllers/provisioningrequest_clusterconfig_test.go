@@ -245,7 +245,7 @@ defaultHugepagesSize: "1G"`,
 				Name:      "cluster-1",
 				Namespace: utils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
-					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
 			Spec: hwv1alpha1.NodePoolSpec{
@@ -2110,7 +2110,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				Name:      mclName,
 				Namespace: utils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
-					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
 			Spec: hwv1alpha1.NodePoolSpec{
