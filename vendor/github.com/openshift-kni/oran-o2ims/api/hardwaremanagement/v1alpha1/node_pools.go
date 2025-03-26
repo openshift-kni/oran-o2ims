@@ -10,6 +10,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	BootInterfaceLabelAnnotation = "o2ims.oran.openshift.io/boot-interface-label"
+)
+
 // LocationSpec is the geographical location of the requested node.
 type LocationSpec struct {
 	// Location

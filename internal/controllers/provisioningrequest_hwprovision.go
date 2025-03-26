@@ -446,7 +446,7 @@ func (t *provisioningRequestReconcilerTask) buildNodePoolSpec(clusterInstance *s
 	nodePool.ObjectMeta.Namespace = utils.GetHwMgrPluginNS()
 
 	// Add boot interface label annotation to the generated nodePool
-	utils.SetNodePoolAnnotations(nodePool, utils.HwTemplateBootIfaceLabel, hwTemplate.Spec.BootInterfaceLabel)
+	utils.SetNodePoolAnnotations(nodePool, hwv1alpha1.BootInterfaceLabelAnnotation, hwTemplate.Spec.BootInterfaceLabel)
 	// Add ProvisioningRequest labels to the generated nodePool
 	utils.SetNodePoolLabels(nodePool, provisioningv1alpha1.ProvisioningRequestNameLabel, t.object.Name)
 
