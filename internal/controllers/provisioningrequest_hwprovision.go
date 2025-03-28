@@ -154,8 +154,19 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 		return fmt.Errorf("failed to collect hardware node %s details for node pool: %w", nodePool.GetName(), err)
 	}
 
-	if err := utils.CopyBMCSecrets(ctx, t.client, hwNodes, nodePool); err != nil {
-		return fmt.Errorf("failed to copy BMC secret: %w", err)
+	if nodePool.Spec.HwMgrId != utils.Metal3PluginName {
+		if err := utils.CopyBMCSecrets(ctx, t.client, hwNodes, nodePool); err != nil {
+			return fmt.Errorf("failed to copy BMC secret: %w", err)
+		}
+	} else {
+		// The pull secret must be in the same namespace as the BMH.
+		pullSecretName := clusterInstance.Spec.PullSecretRef.Name
+		if err != nil {
+			return fmt.Errorf("failed to get pull secret name from cluster instance: %w", err)
+		}
+		if err := utils.CopyPullSecret(ctx, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
+			return fmt.Errorf("failed to copy pull secret: %w", err)
+		}
 	}
 
 	configErr := t.applyNodeConfiguration(ctx, hwNodes, nodePool, clusterInstance)
@@ -274,6 +285,14 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(ctx context.C
 
 		clusterInstance.Spec.Nodes[i].BmcAddress = nodeInfos[0].BmcAddress
 		clusterInstance.Spec.Nodes[i].BmcCredentialsName = siteconfig.BmcCredentialsName{Name: nodeInfos[0].BmcCredentials}
+
+		if nodeInfos[0].HwMgrNodeId != "" && nodeInfos[0].HwMgrNodeNs != "" {
+			if clusterInstance.Spec.Nodes[i].HostRef == nil {
+				clusterInstance.Spec.Nodes[i].HostRef = &siteconfig.HostRef{}
+			}
+			clusterInstance.Spec.Nodes[i].HostRef.Name = nodeInfos[0].HwMgrNodeId
+			clusterInstance.Spec.Nodes[i].HostRef.Namespace = nodeInfos[0].HwMgrNodeNs
+		}
 		// Get the boot MAC address based on the interface label
 		bootMAC, err := utils.GetBootMacAddress(nodeInfos[0].Interfaces, nodePool)
 		if err != nil {
