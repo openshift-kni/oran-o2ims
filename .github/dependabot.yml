@@ -44,6 +44,9 @@ updates:
     # github.com/onsi/ginkgo/v2 moved to go 1.23 in 2.23.0, so ignore major/minor updates until this repo is 1.23-based
     - dependency-name: "github.com/onsi/ginkgo/v2"
       update-types: ["version-update:semver-major","version-update:semver-minor"]
+    # github.com/onsi/gomega moved to go 1.23 in 1.36.3, so ignore all updates until this repo is 1.23-based
+    - dependency-name: "github.com/onsi/gomega"
+      update-types: ["version-update:semver-major","version-update:semver-minor","version-update:semver-patch"]
   #ignore:
   #  - dependency-name: "*"
   #    update-types: ["version-update:semver-patch"]
