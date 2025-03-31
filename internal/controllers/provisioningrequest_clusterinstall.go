@@ -41,6 +41,8 @@ type nodeInfo struct {
 	bmcAddress          *string
 	bootMACAddress      *string
 	bmcCredentialsName  *string
+	HwMgrNodeId         string
+	HwMgrNodeNs         string
 	interfaceMACAddress map[string]string // keyed by interface name
 }
 
@@ -188,11 +190,11 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 }
 
 // handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
-func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
+func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *unstructured.Unstructured) error {
 	isDryRun := false
 	err := t.applyClusterInstance(ctx, clusterInstance, isDryRun)
 	if err != nil {
-		return fmt.Errorf("failed to apply the rendered ClusterInstance (%s): %s", clusterInstance.Name, err.Error())
+		return fmt.Errorf("failed to apply the rendered ClusterInstance (%s): %s", clusterInstance.GetName(), err.Error())
 
 	} else {
 		// Set ClusterDetails
@@ -203,7 +205,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 	}
 
 	// Continue checking the existing ClusterInstance provision status
-	if err := t.checkClusterProvisionStatus(ctx, clusterInstance.Name); err != nil {
+	if err := t.checkClusterProvisionStatus(ctx, clusterInstance.GetName()); err != nil {
 		return err
 	}
 
@@ -219,11 +221,11 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 // removeDisableAutoImportAnnotation removes the disable-auto-import annotation
 // from the ManagedCluster if it exists.
 func (t *provisioningRequestReconcilerTask) removeDisableAutoImportAnnotation(
-	ctx context.Context, ci *siteconfig.ClusterInstance) error {
+	ctx context.Context, ci *unstructured.Unstructured) error {
 
 	managedCluster := &clusterv1.ManagedCluster{}
 	exists, err := utils.DoesK8SResourceExist(
-		ctx, t.client, ci.Name, "", managedCluster)
+		ctx, t.client, ci.GetName(), "", managedCluster)
 	if err != nil {
 		return fmt.Errorf("failed to check if ManagedCluster exists: %w", err)
 	}
@@ -273,14 +275,19 @@ func (t *provisioningRequestReconcilerTask) checkClusterProvisionStatus(
 func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance client.Object, isDryRun bool) error {
 	var operationType string
 
-	// Query the ClusterInstance and its status.
-	existingClusterInstance := &siteconfig.ClusterInstance{}
+	existingClusterInstance := &unstructured.Unstructured{}
+
+	existingClusterInstance.SetGroupVersionKind(clusterInstance.GetObjectKind().GroupVersionKind())
+
 	err := t.client.Get(
 		ctx,
 		types.NamespacedName{
 			Name:      clusterInstance.GetName(),
-			Namespace: clusterInstance.GetNamespace()},
-		existingClusterInstance)
+			Namespace: clusterInstance.GetNamespace(),
+		},
+		existingClusterInstance,
+	)
+
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get ClusterInstance: %w", err)
@@ -298,25 +305,29 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 			return fmt.Errorf("failed to set controller reference: %w", err)
 		}
 
-		// Create the ClusterInstance
-		err = t.client.Create(ctx, clusterInstance, opts...)
-		if err != nil {
+		if err = t.client.Create(ctx, clusterInstance, opts...); err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 				return fmt.Errorf("failed to create ClusterInstance: %w", err)
 			}
-			// Invalid or webhook error
 			return utils.NewInputError("%s", err.Error())
 		}
 	} else {
-		if _, ok := clusterInstance.(*siteconfig.ClusterInstance); ok {
-			// No update needed, return
-			if equality.Semantic.DeepEqual(existingClusterInstance.Spec,
-				clusterInstance.(*siteconfig.ClusterInstance).Spec) {
-				return nil
-			}
+		// Compare spec fields of both unstructured objects
+		newSpec, _, err := unstructured.NestedMap(clusterInstance.(*unstructured.Unstructured).Object, "spec")
+		if err != nil {
+			return fmt.Errorf("failed to extract spec from new object: %w", err)
 		}
 
-		// Make sure these fields from existing object are copied
+		existingSpec, _, err := unstructured.NestedMap(existingClusterInstance.Object, "spec")
+		if err != nil {
+			return fmt.Errorf("failed to extract spec from existing object: %w", err)
+		}
+
+		if equality.Semantic.DeepEqual(existingSpec, newSpec) {
+			return nil
+		}
+
+		// Preserve metadata
 		clusterInstance.SetResourceVersion(existingClusterInstance.GetResourceVersion())
 		clusterInstance.SetFinalizers(existingClusterInstance.GetFinalizers())
 		clusterInstance.SetLabels(existingClusterInstance.GetLabels())
@@ -328,12 +339,12 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 			opts = append(opts, client.DryRunAll)
 			operationType = utils.OperationTypeDryRun
 		}
+
 		patch := client.MergeFrom(existingClusterInstance.DeepCopy())
 		if err := t.client.Patch(ctx, clusterInstance, patch, opts...); err != nil {
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 				return fmt.Errorf("failed to patch ClusterInstance: %w", err)
 			}
-			// Invalid or webhook error
 			return utils.NewInputError("%s", err.Error())
 		}
 	}
@@ -624,6 +635,12 @@ func extractNodeDetails(existingCI *unstructured.Unstructured) map[string]nodeIn
 			}
 		}
 
+		hostRef, ok := nodeMap["hostRef"].(map[string]string)
+		if ok {
+			extractedNodeInfo.HwMgrNodeId = hostRef["name"]
+			extractedNodeInfo.HwMgrNodeNs = hostRef["namespace"]
+		}
+
 		// Extract interface macAddress by interface name
 		if nodeNetwork, ok := nodeMap["nodeNetwork"].(map[string]any); ok {
 			if ifaces, ok := nodeNetwork["interfaces"].([]any); ok {
@@ -681,54 +698,52 @@ func assignNodeDetails(renderedCI *unstructured.Unstructured, nodesInfo map[stri
 					"name": *extractedNode.bmcCredentialsName,
 				}
 			}
-			if len(extractedNode.interfaceMACAddress) == 0 {
-				continue
+			if extractedNode.HwMgrNodeId != "" && extractedNode.HwMgrNodeNs != "" {
+				nodeMap["hostRef"] = map[string]string{
+					"name":      extractedNode.HwMgrNodeId,
+					"namespace": extractedNode.HwMgrNodeNs,
+				}
 			}
 
-			if _, exists := nodeMap["nodeNetwork"]; !exists {
-				nodeMap["nodeNetwork"] = map[string]any{}
-			}
-			// If nodeNetwork exists but not a map, skip processing
-			nodeNetworkMap, ok := nodeMap["nodeNetwork"].(map[string]any)
-			if !ok {
-				continue
-			}
-
-			if _, exists := nodeNetworkMap["interfaces"]; !exists {
-				nodeNetworkMap["interfaces"] = []any{}
-			}
-			// If interfaces exists but not a slice, skip processing
-			interfaces, ok := nodeNetworkMap["interfaces"].([]any)
-			if !ok {
-				continue
-			}
-
-			// Iterate through existing rendered interfaces and update in-place
-			existingInterfaces := make(map[string]map[string]any)
-			for _, iface := range interfaces {
-				if ifaceMap, ok := iface.(map[string]any); ok {
-					if name, ok := ifaceMap["name"].(string); ok {
-						existingInterfaces[name] = ifaceMap
+			// Only proceed with nodeNetwork.interfaces if interfaceMACAddress is present
+			if len(extractedNode.interfaceMACAddress) > 0 {
+				if _, exists := nodeMap["nodeNetwork"]; !exists {
+					nodeMap["nodeNetwork"] = map[string]any{}
+				}
+				nodeNetworkMap, ok := nodeMap["nodeNetwork"].(map[string]any)
+				if !ok {
+					continue
+				}
+				if _, exists := nodeNetworkMap["interfaces"]; !exists {
+					nodeNetworkMap["interfaces"] = []any{}
+				}
+				interfaces, ok := nodeNetworkMap["interfaces"].([]any)
+				if !ok {
+					continue
+				}
+				// Iterate through existing rendered interfaces and update in-place
+				existingInterfaces := make(map[string]map[string]any)
+				for _, iface := range interfaces {
+					if ifaceMap, ok := iface.(map[string]any); ok {
+						if name, ok := ifaceMap["name"].(string); ok {
+							existingInterfaces[name] = ifaceMap
+						}
 					}
 				}
-			}
-
-			// Modify existing interfaces or append new ones
-			for ifaceName, mac := range extractedNode.interfaceMACAddress {
-				if existingIface, exists := existingInterfaces[ifaceName]; exists {
-					// Update existing interface
-					existingIface["macAddress"] = mac
-				} else {
-					// Add new interface
-					interfaces = append(interfaces, map[string]any{
-						"name":       ifaceName,
-						"macAddress": mac,
-					})
+				// Modify existing interfaces or append new ones
+				for ifaceName, mac := range extractedNode.interfaceMACAddress {
+					if existingIface, exists := existingInterfaces[ifaceName]; exists {
+						existingIface["macAddress"] = mac
+					} else {
+						interfaces = append(interfaces, map[string]any{
+							"name":       ifaceName,
+							"macAddress": mac,
+						})
+					}
 				}
+				// Store updated interfaces back in nodeNetwork
+				nodeNetworkMap["interfaces"] = interfaces
 			}
-
-			// Store updated interfaces back in nodeNetwork
-			nodeNetworkMap["interfaces"] = interfaces
 		}
 	}
 }
