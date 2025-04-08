@@ -702,7 +702,7 @@ go.opentelemetry.io/proto/otlp/trace/v1
 # go.uber.org/atomic v1.11.0
 ## explicit; go 1.18
 go.uber.org/atomic
-# go.uber.org/mock v0.5.0
+# go.uber.org/mock v0.5.1
 ## explicit; go 1.22
 go.uber.org/mock/gomock
 # golang.org/x/crypto v0.32.0 => github.com/openshift/golang-crypto v0.33.1-0.20250310193910-9003f682e581
