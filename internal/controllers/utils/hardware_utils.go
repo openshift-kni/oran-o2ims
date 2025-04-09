@@ -31,6 +31,10 @@ var (
 	once                 sync.Once
 )
 
+const (
+	bmhNamespaceLabel = "baremetalhost.metal3.io/namespace"
+)
+
 // ConditionDoesNotExistsErr represents an error when a specific condition is missing
 type ConditionDoesNotExistsErr struct {
 	ConditionName string
@@ -108,11 +112,18 @@ func CollectNodeDetails(ctx context.Context, c client.Client,
 			return nil, fmt.Errorf("the Node %s status in namespace %s does not have BMC details",
 				nodeName, nodePool.Namespace)
 		}
+		// Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
+		bmhNs, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]
+		if !ok {
+			bmhNs = node.Spec.HwMgrNodeNs
+		}
 		// Store the nodeInfo per group
 		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], NodeInfo{
 			BmcAddress:     node.Status.BMC.Address,
 			BmcCredentials: node.Status.BMC.CredentialsName,
 			NodeName:       node.Name,
+			HwMgrNodeId:    node.Spec.HwMgrNodeId,
+			HwMgrNodeNs:    bmhNs,
 			Interfaces:     node.Status.Interfaces,
 		})
 	}
@@ -156,6 +167,48 @@ func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]N
 			}
 		}
 	}
+	return nil
+}
+
+func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Object, sourceNamespace, pullSecretName string,
+	hwNodes map[string][]NodeInfo) error {
+
+	pullSecret := &corev1.Secret{}
+	exists, err := DoesK8SResourceExist(ctx, c, pullSecretName, sourceNamespace, pullSecret)
+	if err != nil {
+		return fmt.Errorf("failed to check existence of pull secret %q in namespace %q: %w", pullSecretName, sourceNamespace, err)
+	}
+	if !exists {
+		return NewInputError(
+			"pull secret %s expected to exist in the %s namespace, but it is missing",
+			pullSecretName, sourceNamespace)
+	}
+
+	// Extract the namespace from any node (all nodes in the same pool share the same namespace).
+	var targetNamespace string
+	for _, nodes := range hwNodes {
+		if len(nodes) > 0 {
+			targetNamespace = nodes[0].HwMgrNodeNs
+			break
+		}
+	}
+	if targetNamespace == "" {
+		return fmt.Errorf("failed to determine the target namespace for pull secret copy")
+	}
+
+	newSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pullSecretName,
+			Namespace: targetNamespace,
+		},
+		Data: pullSecret.Data,
+		Type: corev1.SecretTypeDockerConfigJson,
+	}
+
+	if err := CreateK8sCR(ctx, c, newSecret, ownerObject, UPDATE); err != nil {
+		return fmt.Errorf("failed to create Kubernetes CR for PullSecret: %w", err)
+	}
+
 	return nil
 }
 
