@@ -22,7 +22,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20241213003211-a57a58a5c4f2
-	github.com/openshift-kni/lifecycle-agent v0.0.0-20241010194013-9d0e25438512
+	github.com/openshift-kni/lifecycle-agent 38b8a7b18333
 	github.com/openshift-kni/oran-hwmgr-plugin v0.0.0-20250228171929-433e46166247
 	github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250125003258-ee379f966a62
 	github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client v0.0.0-20250125003258-ee379f966a62
