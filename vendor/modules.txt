@@ -318,7 +318,7 @@ github.com/inconshreveable/mousetrap
 # github.com/integralist/go-findroot v0.0.0-20160518114804-ac90681525dc
 ## explicit
 github.com/integralist/go-findroot/find
-# github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
+# github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 ## explicit; go 1.12
 github.com/jackc/pgerrcode
 # github.com/jackc/pgpassfile v1.0.0
