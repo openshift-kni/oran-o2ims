@@ -81,20 +81,26 @@ parse_map_images_file() {
 }
 
 map_images() {
-    echo "Overlaying by profile ..."
+    echo "Mapping images ..."
 
     parse_map_images_file
 
     for image_name in "${!IMAGE_TO_TARGET[@]}"; do
         local image_name_target="${IMAGE_TO_TARGET[$image_name]}"
         local image_name_target_trimmed="${image_name_target%@*}"
-        local image_name_target_trimmed_mapped="${IMAGE_TO_PRODUCTION[$image_name]}"
+
+        local image_name_target_trimmed_mapped=""
+        if [[ "$ARG_MAP" == "$MAP_STAGING" ]]; then
+            image_name_target_trimmed_mapped="${IMAGE_TO_STAGING[$image_name]}"
+        elif [[ "$ARG_MAP" == "$MAP_PRODUCTION" ]]; then
+            image_name_target_trimmed_mapped="${IMAGE_TO_PRODUCTION[$image_name]}"
+        fi
 
         echo "replacing: image_name: $image_name, original: $image_name_target_trimmed, mapped: $image_name_target_trimmed_mapped"
         sed -i "s,$image_name_target_trimmed,$image_name_target_trimmed_mapped,g" $ARG_CSV_FILE
     done
 
-    echo "Overlaying by profile completed"
+    echo "Mapping images completed"
 }
 
 parse_overlay_images_file() {
@@ -140,6 +146,9 @@ parse_args() {
    local map_staging=0
    local map_production=0
    declare -g ARG_MAP_FILE=""
+   declare -g ARG_IMAGES_FILE=""
+   declare -g ARG_CSV_FILE=""
+   declare -g ARG_MAP=""
    while true; do
       case $1 in
          --help)
@@ -147,11 +156,11 @@ parse_args() {
             exit
             ;;
          --set-csv-file)
-            declare -g ARG_CSV_FILE=$2
+            ARG_CSV_FILE=$2
             shift 2
             ;;
          --set-images-file)
-            declare -g ARG_IMAGES_FILE=$2
+            ARG_IMAGES_FILE=$2
             shift 2
             ;;
          --set-map-file)
@@ -160,12 +169,12 @@ parse_args() {
             ;;
          --set-map-staging)
             map_staging=1
-            declare -g ARG_MAP=$MAP_STAGING
+            ARG_MAP=$MAP_STAGING
             shift 1
             ;;
          --set-map-production)
             map_production=1
-            declare -g ARG_MAP=$MAP_PRODUCTION
+            ARG_MAP=$MAP_PRODUCTION
             shift 1
             ;;
          --)
@@ -180,9 +189,15 @@ parse_args() {
       esac
    done
 
-   # validate overlay options
+   # validate images file
    if [[ -n $ARG_IMAGES_FILE && ! -f "$ARG_IMAGES_FILE" ]]; then
        echo "Error: file '$ARG_IMAGES_FILE' does not exist.Exit!"
+       exit 1
+   fi
+
+   # validate csv file
+   if [[ -n $ARG_CSV_FILE && ! -f "$ARG_CSV_FILE" ]]; then
+       echo "Error: file '$ARG_CSV_FILE' does not exist.Exit!"
        exit 1
    fi
 
@@ -194,7 +209,7 @@ parse_args() {
 
    if [[ $map_staging -eq 1 || $map_production -eq 1 ]]; then
        if [[ ! -n $ARG_MAP_FILE ]]; then
-           echo "Error: specify '--set-map-file' to use a container registry file map.Exit!!"
+           echo "Error: specify '--set-map-file' to use a container registry map file.Exit!!"
            exit 1
        fi
    fi
@@ -220,6 +235,7 @@ main() {
    parse_overlay_images_file
    overlay_images
    overlay_related_images
+   # this must always be the last action
    map_images
 
     # Access the arrays
