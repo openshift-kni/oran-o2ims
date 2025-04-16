@@ -1,12 +1,7 @@
-- key: aztp
-  stage: registry.stage.redhat.io/openshift4/topology-aware-lifecycle-manager-aztp-rhel9
-  production: registry.redhat.io/openshift4/topology-aware-lifecycle-manager-aztp-rhel9
-- key: precache
-  stage: registry.stage.redhat.io/openshift4/topology-aware-lifecycle-manager-precache-rhel9
-  production: registry.redhat.io/openshift4/topology-aware-lifecycle-manager-precache-rhel9
-- key: recovery
-  stage: registry.stage.redhat.io/openshift4/topology-aware-lifecycle-manager-recovery-rhel9
-  production: registry.redhat.io/openshift4/topology-aware-lifecycle-manager-recovery-rhel9
-- key: manager
-  stage: registry.stage.redhat.io/openshift4/topology-aware-lifecycle-manager-aztp-rhel9
-  production: registry.redhat.io/registry.stage.redhat.io/openshift4/topology-aware-lifecycle-manager-aztp-rhel9
+# Do not modify the manager 'key' value: 'manager_img'
+- key: manager_img
+  staging: registry.stage.redhat.io/openshift4/o-cloud-manager-rhel9-operator
+  production: registry.redhat.io/openshift4/o-cloud-manager-rhel9-operator
+- key: postgres_img
+  staging: registry.stage.redhat.io/rhel9/postgresql-16
+  production: registry.redhat.io/rhel9/postgresql-16

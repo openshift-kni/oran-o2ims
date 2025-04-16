@@ -4,17 +4,20 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+#set -x
+
 SCRIPT_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 SCRIPT_NAME=$(basename "$(readlink -f "${BASH_SOURCE[0]}")")
 
 MAP_STAGING="staging"
 MAP_PRODUCTION="production"
+MANAGER_KEY="manager_img"
 
 check_preconditions() {
     echo "Checking pre-conditions..."
 
     # yq must be installed
-    command -v yq >/dev/null 2>&1 || { echo "Error: yq seems not to be installed.Exit!"; exit 1; }
+    command -v yq >/dev/null 2>&1 || { echo "Error: yq seems not to be installed.Exit!" >&2; exit 1; }
     echo "Checking pre-conditions completed!"
     return 0
 }
@@ -60,7 +63,7 @@ parse_map_images_file() {
 
     # Extract keys and images
     local keys=($(yq eval '.[].key' "$ARG_MAP_FILE"))
-    local staging_images=($(yq eval '.[].stage' "$ARG_MAP_FILE"))
+    local staging_images=($(yq eval '.[].staging' "$ARG_MAP_FILE"))
     local production_images=($(yq eval '.[].production' "$ARG_MAP_FILE"))
     local entries=${#keys[@]}
 
@@ -91,9 +94,21 @@ map_images() {
 
         local image_name_target_trimmed_mapped=""
         if [[ "$ARG_MAP" == "$MAP_STAGING" ]]; then
+            if [[ -z "${IMAGE_TO_STAGING[$image_name]-}" ]]; then
+                echo "Warning: no staging image mapped for: $image_name" >&2
+                continue
+            fi
+
             image_name_target_trimmed_mapped="${IMAGE_TO_STAGING[$image_name]}"
+
         elif [[ "$ARG_MAP" == "$MAP_PRODUCTION" ]]; then
+            if [[ -z "${IMAGE_TO_PRODUCTION[$image_name]-}" ]]; then
+                echo "Warning: no production image mapped for: $image_name" >&2
+                continue
+            fi
+
             image_name_target_trimmed_mapped="${IMAGE_TO_PRODUCTION[$image_name]}"
+
         fi
 
         echo "replacing: image_name: $image_name, original: $image_name_target_trimmed, mapped: $image_name_target_trimmed_mapped"
@@ -136,97 +151,129 @@ parse_overlay_images_file() {
 parse_args() {
     echo "Parsing args..."
 
-   # command line options
-   local options=
-   local long_options="set-images-file:,set-map-file:,set-csv-file:,set-map-staging,set-map-production,help"
+    # command line options
+    local options=
+    local long_options="set-images-file:,set-map-file:,set-csv-file:,set-map-staging,set-map-production,help"
 
-   local parsed=$(getopt --options="$options" --longoptions="$long_options" --name "$SCRIPT_NAME" -- "$@")
-   eval set -- "$parsed"
+    local parsed=$(getopt --options="$options" --longoptions="$long_options" --name "$SCRIPT_NAME" -- "$@")
+    eval set -- "$parsed"
 
-   local map_staging=0
-   local map_production=0
-   declare -g ARG_MAP_FILE=""
-   declare -g ARG_IMAGES_FILE=""
-   declare -g ARG_CSV_FILE=""
-   declare -g ARG_MAP=""
-   while true; do
-      case $1 in
-         --help)
-            usage
-            exit
-            ;;
-         --set-csv-file)
-            ARG_CSV_FILE=$2
-            shift 2
-            ;;
-         --set-images-file)
-            ARG_IMAGES_FILE=$2
-            shift 2
-            ;;
-         --set-map-file)
-            ARG_MAP_FILE=$2
-            shift 2
-            ;;
-         --set-map-staging)
-            map_staging=1
-            ARG_MAP=$MAP_STAGING
-            shift 1
-            ;;
-         --set-map-production)
-            map_production=1
-            ARG_MAP=$MAP_PRODUCTION
-            shift 1
-            ;;
-         --)
-            shift
-            break
-            ;;
-         *)
-            echo "Unexpected option: $1" >&2
-            usage
+    local map_staging=0
+    local map_production=0
+    declare -g ARG_MAP_FILE=""
+    declare -g ARG_IMAGES_FILE=""
+    declare -g ARG_CSV_FILE=""
+    declare -g ARG_MAP=""
+    while true; do
+        case $1 in
+            --help)
+                usage
+                exit
+                ;;
+            --set-csv-file)
+                ARG_CSV_FILE=$2
+                shift 2
+                ;;
+            --set-images-file)
+                ARG_IMAGES_FILE=$2
+                shift 2
+                ;;
+            --set-map-file)
+                ARG_MAP_FILE=$2
+                shift 2
+                ;;
+            --set-map-staging)
+                map_staging=1
+                ARG_MAP=$MAP_STAGING
+                shift 1
+                ;;
+            --set-map-production)
+                map_production=1
+                ARG_MAP=$MAP_PRODUCTION
+                shift 1
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                echo "Error: unexpected option: $1" >&2
+                usage
+                exit 1
+                ;;
+        esac
+    done
+
+    # validate images file
+    if [[ -n $ARG_IMAGES_FILE && ! -f "$ARG_IMAGES_FILE" ]]; then
+        echo "Error: file '$ARG_IMAGES_FILE' does not exist.Exit!" >&2
+        exit 1
+    fi
+
+    # validate csv file
+    if [[ -n $ARG_CSV_FILE && ! -f "$ARG_CSV_FILE" ]]; then
+        echo "Error: file '$ARG_CSV_FILE' does not exist.Exit!" >&2
+        exit 1
+    fi
+
+    # validate map options
+    if [[ $map_staging -eq 1 && $map_production -eq 1 ]]; then
+        echo "Error: cannot specify both '--set-map-staging' and '--set-map-production'.Exit!" >&2
+        exit 1
+    fi
+
+    if [[ $map_staging -eq 1 || $map_production -eq 1 ]]; then
+        if [[ ! -n $ARG_MAP_FILE ]]; then
+            echo "Error: specify '--set-map-file' to use a container registry map file.Exit!" >&2
             exit 1
-            ;;
-      esac
-   done
+        fi
+    fi
 
-   # validate images file
-   if [[ -n $ARG_IMAGES_FILE && ! -f "$ARG_IMAGES_FILE" ]]; then
-       echo "Error: file '$ARG_IMAGES_FILE' does not exist.Exit!"
-       exit 1
-   fi
+    if [[ $map_staging -eq 0 && $map_production -eq 0 ]]; then
+        if [[ -n $ARG_MAP_FILE ]]; then
+            echo "Error: specify '--set-map-staging' or '--set-map-production'.Exit!" >&2
+            exit 1
+        fi
+    fi
 
-   # validate csv file
-   if [[ -n $ARG_CSV_FILE && ! -f "$ARG_CSV_FILE" ]]; then
-       echo "Error: file '$ARG_CSV_FILE' does not exist.Exit!"
-       exit 1
-   fi
+    if [[ -n $ARG_MAP_FILE && ! -f "$ARG_MAP_FILE" ]]; then
+        echo "Error: file '$ARG_MAP_FILE' does not exist.Exit!" >&2
+        exit 1
+    fi
 
-   # validate map options
-   if [[ $map_staging -eq 1 && $map_production -eq 1 ]]; then
-       echo "Error: cannot specify both '--set-map-staging' and '--set-map-production'.Exit!"
-       exit 1
-   fi
+    echo "Parsing args completed!"
+}
 
-   if [[ $map_staging -eq 1 || $map_production -eq 1 ]]; then
-       if [[ ! -n $ARG_MAP_FILE ]]; then
-           echo "Error: specify '--set-map-file' to use a container registry map file.Exit!!"
-           exit 1
-       fi
-   fi
+overlay_misc()
+{
+    echo "Overlaying misc..."
 
-   if [[ $map_staging -eq 0 && $map_production -eq 0 ]]; then
-       if [[ -n $ARG_MAP_FILE ]]; then
-           echo "Error: specify '--set-map-staging' or '--set-map-production'.Exit!"
-           exit 1
-       fi
-   fi
+    local display_name="o-cloud manager"
+    local description="o-cloud-manager operator"
+    local version="4.19.0"
+    local name="o-cloud-manager"
+    local name_version="$name.v$version"
+    local manager="o-cloud-manager"
+    local skip_range=">=4.9.0 <4.19.0"
+    local replaces="o-cloud-manager.v4.19.0"
+    # ocp 4.19
+    export min_kube_version="1.32.0"
 
-   if [[ -n $ARG_MAP_FILE && ! -f "$ARG_MAP_FILE" ]]; then
-       echo "Error: file '$ARG_MAP_FILE' does not exist.Exit!"
-       exit 1
-   fi
+    yq e -i ".metadata.annotations[\"containerImage\"] = \"${IMAGE_TO_TARGET[$MANAGER_KEY]}\"" $ARG_CSV_FILE
+    yq e -i ".spec.displayName = \"$display_name\"" $ARG_CSV_FILE
+    yq e -i ".spec.description = \"$description\""  $ARG_CSV_FILE
+    yq e -i ".spec.version = \"$version\"" $ARG_CSV_FILE
+    yq e -i ".metadata.name = \"$name_version\"" $ARG_CSV_FILE
+    yq e -i ".metadata.annotations[\"olm.skipRange\"] = \"$skip_range\"" $ARG_CSV_FILE
+    yq e -i ".spec.minKubeVersion = \"$min_kube_version\"" $ARG_CSV_FILE
 
-   echo "Parsing args completed..."
+    # dont need 'replaces' for first release in a new channel (4.19.0)
+    yq e -i "del(.spec.replaces)" $ARG_CSV_FILE
+
+    # use this from 4.19.1 onwards
+    # ./yq e -i ".spec.replaces = $replaces)" $ARG_CSV_FILE
+
+    echo "Overlaying misc completed!"
 }
 
 main() {
@@ -235,8 +282,8 @@ main() {
    parse_overlay_images_file
    overlay_images
    overlay_related_images
-   # this must always be the last action
-   map_images
+   overlay_misc
+   map_images    # this must always be the last action
 
     # Access the arrays
     echo "=== Image Mapping Summary ==="
