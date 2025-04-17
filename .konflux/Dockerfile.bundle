@@ -1,23 +1,26 @@
-# Runtime image is used to overlay clusterserviceversion.yaml for Konflux
+# Overlay stage: overlay bundle manifests
+#
+FROM quay.io/konflux-ci/yq@sha256:01268c9795f2dfb99268c72d5682840eba48287848a97fd33f52c51f8e910c94 AS overlay
 
-# yq is required for merging the yaml files
-# Run the overlay in a container
-FROM quay.io/konflux-ci/yq:7861165 AS overlay
-
-# Set work dir
 WORKDIR /tmp
 
-# Copy manifests into the container
-COPY --chown=yq:yq bundle/manifests /tmp/manifests
+# Copy bundle manifests
+ENV MANIFESTS_PATH=/tmp/manifests
+COPY --chown=yq:yq bundle/manifests $MANIFESTS_PATH
 
-COPY konflux_clusterserviceversion_overlay.sh .
-COPY konflux_clusterserviceversion_overlay.data .
-RUN /tmp/konflux_clusterserviceversion_overlay.sh
+# Copy overlay scripts
+ENV OVERLAY_PATH=./overlay
+RUN mkdir -p $OVERLAY_PATH
+COPY .konflux/overlay/ $OVERLAY_PATH
 
-# From here downwards this should mostly match the non-konflux bundle, i.e., `bundle.Dockerfile`
+# Run the overlay
+RUN $OVERLAY_PATH/overlay.bash --set-pinning-file $OVERLAY_PATH/pin_images.in.yaml --set-csv-file $MANIFESTS_PATH/oran-o2ims.clusterserviceversion.yaml
+
+# Bundle stage: store the files a bundle needs
+#
 FROM scratch
 
-# Core bundle labels.
+# Core labels
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
 LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
 LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
@@ -27,12 +30,11 @@ LABEL operators.operatorframework.io.bundle.channels.default.v1=stable
 LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.28.0-ocp
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v3
-
-# Labels for testing.
+# Labels for testing
 LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 
-# Copy files to locations specified by labels.
+# Copy files to locations specified by labels
 COPY --from=overlay /tmp/manifests /manifests/
 COPY bundle/metadata /metadata/
 COPY bundle/tests/scorecard /tests/scorecard/

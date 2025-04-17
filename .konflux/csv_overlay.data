@@ -1,2 +1,0 @@
-oran-o2ims-operator quay.io/openshift-kni/oran-o2ims-operator:4.19.0 quay.io/redhat-user-workloads/telco-5g-tenant/topology-aware-lifecycle-manager-aztp-4-19@sha256:a41730bf7e4ab0fc8871c874a578dedf73be75bef4edeb83a5eb7994d5146857
-postgresql-16 registry.redhat.io/rhel9/postgresql-16:9.5-1731610873 registry.redhat.io/rhel9/postgresql-16@sha256:c25b59080f0e65994cfc3be7bf1a9f6ef550fd43b10b7927f20c9a38128302de
