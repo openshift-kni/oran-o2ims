@@ -194,6 +194,12 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 		return fmt.Errorf("data source '%s' is not an Alarms data source", dataSource.Name())
 	}
 
+	// Sync thanos alarm definitions
+	err := c.syncThanosAlarmDefinitions(ctx, ds)
+	if err != nil {
+		return fmt.Errorf("failed to sync Thanos alarm definitions: %w", err)
+	}
+
 	nodeClusterTypes, err := c.repository.GetNodeClusterTypes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get node cluster types: %w", err)
@@ -208,7 +214,7 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 	}
 
 	// Fetch prometheus rules and sync alarm definitions
-	err = c.syncAlarmDefinitions(ctx, ds, nodeClusterTypes)
+	err = c.syncManagedClusterAlarmDefinitions(ctx, ds, nodeClusterTypes)
 	if err != nil {
 		return fmt.Errorf("failed to sync alarm definitions: %w", err)
 	}
@@ -568,9 +574,60 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 	return nil
 }
 
-// syncAlarmDefinitions fetches Prometheus rules and syncs alarm definitions to the database
-func (c *Collector) syncAlarmDefinitions(ctx context.Context, ds *AlarmsDataSource, nodeClusterTypes []models.NodeClusterType) error {
-	slog.Info("Syncing alarm definitions", "nodeClusterTypes", len(nodeClusterTypes))
+func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDataSource) error {
+	slog.Info("Syncing Thanos alarm definitions")
+
+	rules, err := ds.collectThanosRules(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to collect Thanos rules: %w", err)
+	}
+
+	if len(rules) == 0 {
+		slog.Info("No Thanos rules found in config maps")
+
+		count, err := c.repository.DeleteThanosAlarmDefinitions(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete Thanos alarm definitions: %w", err)
+		}
+
+		if count != 0 {
+			slog.Info("Deleted Thanos alarm definitions", "count", count)
+		}
+
+		return nil
+	}
+
+	definitions, err := ds.makeThanosAlarmDefinitions(rules)
+	if err != nil {
+		return fmt.Errorf("failed to make Thanos alarm definitions: %w", err)
+	}
+
+	// Upsert Thanos alarm definitions
+	alarmDefinitionRecords, err := c.repository.UpsertAlarmDefinitions(ctx, definitions)
+	if err != nil {
+		slog.Error("failed to upsert thanos alarm definitions", "error", err)
+		return nil
+	}
+
+	// Delete Alarm Definitions that were not upserted
+	alarmDefinitionIDs := make([]any, 0, len(alarmDefinitionRecords))
+	for _, record := range alarmDefinitionRecords {
+		alarmDefinitionIDs = append(alarmDefinitionIDs, record.AlarmDefinitionID)
+	}
+
+	count, err := c.repository.DeleteThanosAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs)
+	if err != nil {
+		slog.Error("failed to delete outdated thanos alarm definitions", "error", err)
+		return nil
+	}
+
+	slog.Info("Thanos alarm definitions synced", "upserted count", len(alarmDefinitionRecords), "deleted count", count)
+	return nil
+}
+
+// syncManagedClusterAlarmDefinitions fetches Prometheus rules and syncs alarm definitions to the database
+func (c *Collector) syncManagedClusterAlarmDefinitions(ctx context.Context, ds *AlarmsDataSource, nodeClusterTypes []models.NodeClusterType) error {
+	slog.Info("Syncing managed cluster alarm definitions", "nodeClusterTypes", len(nodeClusterTypes))
 
 	// Fetch prometheus rules and build a map of alarm definitions
 	alarmDictionaryIDToAlarmDefinitions, err := ds.makeAlarmDictionaryIDToAlarmDefinitions(ctx, nodeClusterTypes)
@@ -745,7 +802,7 @@ func (c *Collector) handleAsyncAlarmDictionaryAndDefinitionsCreation(ctx context
 	}
 
 	// Collect and persist Alarm Definitions
-	err = c.syncAlarmDefinitions(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
+	err = c.syncManagedClusterAlarmDefinitions(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
 	if err != nil {
 		slog.Error("failed to create alarm definitions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
 		return

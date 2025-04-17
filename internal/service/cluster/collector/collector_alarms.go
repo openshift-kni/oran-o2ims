@@ -15,6 +15,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -300,17 +303,18 @@ func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterT
 			continue
 		}
 
+		slog.Debug("filtering rules for node cluster type", "NodeClusterType ID", nodeClusterType.NodeClusterTypeID)
 		// Remove conflicting rules before creating alarm definitions
-		filteredRules := d.getFilteredRules(nodeClusterType.NodeClusterTypeID, nodeClusterTypeIDToMonitoringRules[nodeClusterType.NodeClusterTypeID])
+		filteredRules := d.getFilteredRules(nodeClusterTypeIDToMonitoringRules[nodeClusterType.NodeClusterTypeID])
 
-		alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID] = d.createAlarmDefinitions(filteredRules, alarmDictionaryID, extensions.version)
+		alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID] = d.createAlarmDefinitions(filteredRules, alarmDictionaryID, extensions.version, false)
 	}
 
 	return alarmDictionaryIDToAlarmDefinitions
 }
 
 // getFilteredRules check to see if rule can potentially be skipped
-func (d *AlarmsDataSource) getFilteredRules(nodeClusterTypeID uuid.UUID, monitoringRules []monitoringv1.Rule) []monitoringv1.Rule {
+func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule) []monitoringv1.Rule {
 	// Upsert will complain if there are rules with the same Alert and Severity
 	// We need to filter them out. First occurrence wins.
 	type uniqueAlarm struct {
@@ -324,7 +328,7 @@ func (d *AlarmsDataSource) getFilteredRules(nodeClusterTypeID uuid.UUID, monitor
 	for _, rule := range monitoringRules {
 		severity, ok := rule.Labels["severity"]
 		if !ok {
-			slog.Warn("rule missing severity label", "alert", rule.Alert, "nodeClusterTypeID", nodeClusterTypeID)
+			slog.Warn("rule missing severity label", "alert", rule.Alert)
 		}
 
 		key := uniqueAlarm{
@@ -336,14 +340,14 @@ func (d *AlarmsDataSource) getFilteredRules(nodeClusterTypeID uuid.UUID, monitor
 			exist[key] = true
 			filteredRules = append(filteredRules, rule)
 		} else {
-			slog.Warn("Duplicate rules found", "nodeClusterTypeID", nodeClusterTypeID, "rule", rule)
+			slog.Warn("Duplicate rules found", "rule", rule)
 		}
 	}
 	return filteredRules
 }
 
 // createAlarmDefinitions creates alarm definitions from prometheus rules
-func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, alarmDictionaryID uuid.UUID, version string) []commonmodels.AlarmDefinition {
+func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, alarmDictionaryID uuid.UUID, version string, isThanosRule bool) []commonmodels.AlarmDefinition {
 	var records []commonmodels.AlarmDefinition
 
 	for _, rule := range rules {
@@ -364,7 +368,7 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 		description := rule.Annotations["description"]
 		runbookURL := rule.Annotations["runbook_url"]
 
-		records = append(records, commonmodels.AlarmDefinition{
+		record := commonmodels.AlarmDefinition{
 			AlarmName:             rule.Alert,
 			AlarmLastChange:       version,
 			AlarmChangeType:       string(common.ADDED),
@@ -372,9 +376,16 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 			ProposedRepairActions: runbookURL,
 			ClearingType:          string(common.AUTOMATIC),
 			AlarmAdditionalFields: &additionalFields,
-			Severity:              rule.Labels["severity"],
-			AlarmDictionaryID:     alarmDictionaryID,
-		})
+
+			IsThanosRule: isThanosRule,
+		}
+
+		// Set the alarm dictionary ID
+		if alarmDictionaryID != uuid.Nil {
+			record.AlarmDictionaryID = &alarmDictionaryID
+		}
+
+		records = append(records, record)
 	}
 
 	slog.Info("AlarmDefinitions from prometheus rules prepared", "count", len(records), "alarmDictionaryID", alarmDictionaryID)
@@ -417,6 +428,77 @@ func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeC
 	}
 
 	return alarmDictionaries
+}
+
+const (
+	alertRuleCustomConfigMapName  = "thanos-ruler-custom-rules"
+	alertRuleDefaultConfigMapName = "thanos-ruler-default-rules"
+
+	defaultConfigMapKey = "default_rules.yaml"
+	customConfigMapKey  = "custom_rules.yaml"
+)
+
+func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoringv1.Rule, error) {
+	slog.Info("Collecting Thanos rules")
+	var rules []monitoringv1.Rule
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.SingleRequestTimeout)
+	defer cancel()
+
+	for name, configMapName := range map[string]string{"default": alertRuleDefaultConfigMapName, "custom": alertRuleCustomConfigMapName} {
+		// Get the config map
+		configMap := &corev1.ConfigMap{}
+		err := d.hubClient.Get(ctxWithTimeout, client.ObjectKey{
+			Namespace: utils.OpenClusterManagementObservabilityNamespace,
+			Name:      configMapName,
+		}, configMap)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				slog.Warn("Config map not found", "configMap", configMapName)
+				continue
+			}
+
+			return nil, fmt.Errorf("failed to get %s thanos config map: %w", name, err)
+		}
+
+		// Set config map key based on the name
+		key := defaultConfigMapKey
+		if configMapName == alertRuleCustomConfigMapName {
+			key = customConfigMapKey
+		}
+
+		// Extract rules from the config map
+		rulSpec := configMap.Data[key]
+		if rulSpec != "" {
+			var spec monitoringv1.PrometheusRuleSpec
+			err = yaml.Unmarshal([]byte(rulSpec), &spec)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal %s thanos rules: %w", name, err)
+			}
+
+			for _, group := range spec.Groups {
+				for _, rule := range group.Rules {
+					if rule.Alert != "" {
+						rules = append(rules, rule)
+					}
+				}
+			}
+
+			slog.Debug("fetched %s thanos rules", "rules count", name, len(rules))
+		} else {
+			slog.Warn("No data found in config map", "configMap", configMapName)
+		}
+	}
+
+	return rules, nil
+}
+
+func (d *AlarmsDataSource) makeThanosAlarmDefinitions(rules []monitoringv1.Rule) ([]commonmodels.AlarmDefinition, error) {
+	slog.Debug("Making Thanos alarm definitions", "rules count", len(rules))
+
+	filteredRules := d.getFilteredRules(rules)
+
+	return d.createAlarmDefinitions(filteredRules, uuid.Nil, "", true), nil
 }
 
 // vendorExtensions holds the model, version, and vendor of a node cluster type
