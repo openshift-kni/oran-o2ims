@@ -305,9 +305,9 @@ const AlarmDefinitionSeverityField = "severity"
 
 // Alertmanager values
 const (
-	AlertmanagerObjectName = "alertmanager"
-	AlertmanagerNamespace  = "open-cluster-management-observability"
-	AlertmanagerSA         = "alertmanager"
+	AlertmanagerObjectName                      = "alertmanager"
+	OpenClusterManagementObservabilityNamespace = "open-cluster-management-observability"
+	AlertmanagerSA                              = "alertmanager"
 )
 
 // TLS Mount Paths
