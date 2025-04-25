@@ -277,7 +277,7 @@ overlay_release()
     local skip_range=">=4.9.0 <4.19.0"
     local replaces="o-cloud-manager.v4.19.0"
     # ocp 4.19
-    export min_kube_version="1.32.0"
+    local min_kube_version="1.32.0"
 
     yq e -i ".metadata.annotations[\"containerImage\"] = \"${IMAGE_TO_TARGET[$MANAGER_KEY]}\"" $ARG_CSV_FILE
     yq e -i ".spec.displayName = \"$display_name\"" $ARG_CSV_FILE

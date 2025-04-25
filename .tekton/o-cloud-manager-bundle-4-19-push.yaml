@@ -2,6 +2,7 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
+    build.appstudio.openshift.io/nudge_renovate_config_map: namespace-wide-nudging-renovate-config
     build.appstudio.openshift.io/repo: https://github.com/openshift-kni/oran-o2ims?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
@@ -26,6 +27,14 @@ spec:
     value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19:{{revision}}
   - name: dockerfile
     value: .konflux/Dockerfile.bundle
+  - name: hermetic
+    value: "true"
+  - name: prefetch-input
+    value: ""
+  - name: build-source-image
+    value: "true"
+  - name: skip-preflight
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
