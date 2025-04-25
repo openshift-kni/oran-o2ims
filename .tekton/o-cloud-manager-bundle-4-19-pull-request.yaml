@@ -29,6 +29,14 @@ spec:
     value: 5d
   - name: dockerfile
     value: .konflux/Dockerfile.bundle
+  - name: hermetic
+    value: "true"
+  - name: prefetch-input
+    value: ""
+  - name: build-source-image
+    value: "true"
+  - name: skip-preflight
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.

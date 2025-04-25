@@ -31,6 +31,10 @@ spec:
       value: .konflux/Dockerfile
     - name: hermetic
       value: "true"
+    - name: prefetch-input
+      value: ""
+    - name: build-source-image
+      value: "true"
   pipelineRef:
     name: o-cloud-manager-4-19-build
   taskRunTemplate: {}
