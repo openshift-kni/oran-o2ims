@@ -1,8 +1,7 @@
 module github.com/openshift-kni/oran-o2ims
 
 go 1.22.5
-
-toolchain go1.22.7
+toolchain go1.24.1
 
 // Needed for importing the siteconfig operator, taken from the siteconfig operator repo.
 replace github.com/openshift/assisted-service/models => github.com/openshift/assisted-service/models v0.0.0-20230831114549-1922eda29cf8
@@ -38,7 +37,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stephenafamo/bob v0.28.1
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
-	go.uber.org/mock v0.5.1
+	go.uber.org/mock v0.5.2
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
