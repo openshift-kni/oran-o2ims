@@ -114,7 +114,7 @@ github.com/fsnotify/fsnotify
 # github.com/fxamacker/cbor/v2 v2.7.0
 ## explicit; go 1.17
 github.com/fxamacker/cbor/v2
-# github.com/getkin/kin-openapi v0.131.0
+# github.com/getkin/kin-openapi v0.132.0
 ## explicit; go 1.22.5
 github.com/getkin/kin-openapi/openapi3
 github.com/getkin/kin-openapi/openapi3filter
