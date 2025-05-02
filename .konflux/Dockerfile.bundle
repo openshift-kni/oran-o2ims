@@ -14,8 +14,7 @@ RUN mkdir -p $OVERLAY_PATH
 COPY .konflux/overlay/ $OVERLAY_PATH
 
 # Run the overlay
-RUN mv $MANIFESTS_PATH/oran-o2ims.clusterserviceversion.yaml $MANIFESTS_PATH/o-cloud-manager.clusterserviceversion.yaml \
-    && $OVERLAY_PATH/overlay.bash --set-pinning-file $OVERLAY_PATH/pin_images.in.yaml --set-csv-file $MANIFESTS_PATH/o-cloud-manager.clusterserviceversion.yaml
+RUN $OVERLAY_PATH/overlay.bash --set-pinning-file $OVERLAY_PATH/pin_images.in.yaml --set-csv-file $MANIFESTS_PATH/oran-o2ims.clusterserviceversion.yaml
 
 # Bundle stage: store the files a bundle needs
 #
