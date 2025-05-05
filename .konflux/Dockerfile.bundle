@@ -38,18 +38,21 @@ LABEL com.redhat.openshift.versions="=v4.19"
 LABEL com.redhat.delivery.backport=false
 LABEL com.redhat.component="o-cloud-manager-operator-bundle-container"
 LABEL name="openshift4/o-cloud-manager-operator-bundle-container-rhel9"
-LABEL summary="oran o2ims"
+LABEL summary="o-cloud"
 LABEL io.k8s.display-name="o-cloud-manager"
 LABEL io.k8s.description="o-cloud-manager"
 LABEL description="o-cloud-manager"
-LABEL maintainer="rauherna@redhat.com"
+LABEL maintainer="sskeard@redhat.com,rauherna@redhat.com"
 LABEL license="ASL 2.0"
 
 LABEL io.openshift.expose-services=""
 LABEL io.openshift.maintainer.component="o-cloud-manager"
 
-
 # Copy files to locations specified by labels
 COPY --from=overlay /tmp/manifests /manifests/
 COPY bundle/metadata /metadata/
 COPY bundle/tests/scorecard /tests/scorecard/
+
+# Replace additional bundle files
+COPY .konflux/bundle/metadata/annotations.yaml /metadata/
+COPY .konflux/bundle/tests/scorecard/config.yaml /tests/scorecard/

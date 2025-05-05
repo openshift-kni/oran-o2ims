@@ -13,7 +13,7 @@ SCRIPT_NAME=$(basename "$(readlink -f "${BASH_SOURCE[0]}")")
 
 MAP_STAGING="staging"
 MAP_PRODUCTION="production"
-MANAGER_KEY="manager_img"
+MANAGER_KEY="manager"
 
 debug() {
     if [ "$DEBUG" = true ]; then
