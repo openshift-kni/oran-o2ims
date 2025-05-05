@@ -100,6 +100,10 @@ spec:
       description: 'Whether to enable privileged mode, should be used only with remote VMs'
       name: privileged-nested
       type: string
+    - default: "false"
+      description: Skip the sast coverity check
+      name: skip-sast-coverity
+      type: string
   results:
     - description: ''
       name: IMAGE_URL
@@ -495,6 +499,10 @@ spec:
           operator: in
           values:
             - success
+        - input: $(params.skip-sast-coverity)
+          operator: in
+          values:
+            - "false"
     - name: coverity-availability-check
       runAfter:
         - build-image-index

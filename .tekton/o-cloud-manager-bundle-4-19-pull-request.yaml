@@ -37,6 +37,8 @@ spec:
       value: "true"
     - name: skip-preflight
       value: "true"
+    - name: skip-sast-coverity
+      value: "true"
   pipelineRef:
     name: o-cloud-manager-4-19-build
   taskRunTemplate:

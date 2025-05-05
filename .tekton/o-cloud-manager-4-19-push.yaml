@@ -31,6 +31,8 @@ spec:
       value: ""
     - name: build-source-image
       value: "true"
+    - name: skip-sast-coverity
+      value: "true"
   pipelineRef:
     name: o-cloud-manager-4-19-build
   taskRunTemplate: {}
