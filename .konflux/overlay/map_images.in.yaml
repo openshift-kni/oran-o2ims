@@ -1,8 +1,8 @@
-# Do not modify the manager 'key' value: 'manager_img'
-- key: manager_img
+# Do not modify the manager 'key' value: 'manager'
+- key: manager
   staging: registry.stage.redhat.io/openshift4/o-cloud-manager-rhel9-operator
   production: registry.redhat.io/openshift4/o-cloud-manager-rhel9-operator
-- key: postgres_img
+- key: postgres_image
   staging: registry.stage.redhat.io/rhel9/postgresql-16
   production: registry.redhat.io/rhel9/postgresql-16
 

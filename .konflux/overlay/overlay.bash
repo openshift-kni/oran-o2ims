@@ -13,7 +13,7 @@ SCRIPT_NAME=$(basename "$(readlink -f "${BASH_SOURCE[0]}")")
 
 MAP_STAGING="staging"
 MAP_PRODUCTION="production"
-MANAGER_KEY="manager_img"
+MANAGER_KEY="manager"
 
 debug() {
     if [ "$DEBUG" = true ]; then
@@ -52,9 +52,9 @@ add_related_images() {
     # create a new section from scratch
     declare -i index=0
     for image_name in "${!IMAGE_TO_SOURCE[@]}"; do
-        echo "Adding related image: image_name: $image_name source: ${IMAGE_TO_SOURCE[$image_name]}, target: ${IMAGE_TO_TARGET[$image_name]}"
+        echo "Adding related image: name: $image_name source: ${IMAGE_TO_SOURCE[$image_name]}, image: ${IMAGE_TO_TARGET[$image_name]}"
         yq e -i ".spec.relatedImages[$index].name=\"$image_name\" |
-                 .spec.relatedImages[$index].value=\"${IMAGE_TO_TARGET[$image_name]}\"" $ARG_CSV_FILE
+                 .spec.relatedImages[$index].image=\"${IMAGE_TO_TARGET[$image_name]}\"" $ARG_CSV_FILE
         index=$index+1
     done
 
@@ -127,7 +127,7 @@ map_images() {
         sed -i "s,$image_name_target_trimmed,$image_name_target_trimmed_mapped,g" $ARG_CSV_FILE
     done
 
-    echo "Mapping images completed"
+    echo "Mapping images completed!"
 }
 
 parse_pinning_images_file() {
