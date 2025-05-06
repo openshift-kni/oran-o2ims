@@ -517,3 +517,12 @@ connect-postgres: ##Connect to O-RAN postgres
 connect-cluster-server: ##Connect to resource server svc
 	@echo "Starting port-forward in background on port 8001:8000 to cluster server svc in namespace $(OCLOUD_MANAGER_NAMESPACE)"
 	nohup oc port-forward --address localhost svc/cluster-server 8001:8000 -n $(OCLOUD_MANAGER_NAMESPACE) > pgproxy_resource.log 2>&1 &
+
+##@ Konflux
+
+.PHONY: konflux-update
+konflux-update: konflux-task-manifest-updates
+
+.PHONY: konflux-task-manifest-updates
+konflux-task-manifest-updates:
+	hack/konflux_update_task_refs.sh .tekton/o-cloud-manager-4-19-build.yaml

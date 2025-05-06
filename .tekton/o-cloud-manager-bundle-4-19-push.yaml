@@ -8,8 +8,16 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "push" &&
+      target_branch == "main" &&
+      (
+        '.tekton/o-cloud-manager-bundle-4-19-push.yaml'.pathChanged() ||
+        '.tekton/o-cloud-manager-4-19-build.yaml'.pathChanged() ||
+        '.konflux/Dockerfile.bundle'.pathChanged() ||
+        '.konflux/overlay/***'.pathChanged() ||
+        'bundle/***'.pathChanged()
+      )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: o-cloud-manager-4-19
