@@ -664,7 +664,7 @@ properties:
           }
         ]
       capabilities: Basic Install
-      containerImage: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19@sha256:c04cce95ad120527aa5e919efd997c2bd924f9c0c311256c8c567142864c2be4
+      containerImage: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19@sha256:25da034ac15a5ab7aef4bb3722c7c25762bc9ca1607df55ea0880ca4893dca78
       description: The O-RAN O2IMS operator provides an implementation of the O-RAN
         O2 IMS API on top of OpenShift and ACM.
       features.operators.openshift.io/cnf: "false"
@@ -1178,7 +1178,7 @@ relatedImages:
   name: postgres_img
 - image: ""
   name: manager_img
-- image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19@sha256:c04cce95ad120527aa5e919efd997c2bd924f9c0c311256c8c567142864c2be4
+- image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19@sha256:25da034ac15a5ab7aef4bb3722c7c25762bc9ca1607df55ea0880ca4893dca78
   name: ""
 - image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19:44c39d00b306f43db131fe9d816e902095e8dbe5
   name: ""
