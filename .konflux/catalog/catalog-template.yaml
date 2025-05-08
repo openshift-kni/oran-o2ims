@@ -18,6 +18,6 @@ entries:
   name: "4.19"
   package: o-cloud-manager
   schema: olm.channel
-- image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19:44c39d00b306f43db131fe9d816e902095e8dbe5
+- image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19@sha256:56a03d807c3bc2b87072fad9b14e4d7f0449d832d7ae32101ea724f9d3629580
   schema: olm.bundle
 schema: olm.template.basic
