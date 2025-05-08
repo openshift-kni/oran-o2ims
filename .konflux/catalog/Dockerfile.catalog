@@ -10,14 +10,4 @@ COPY .konflux/catalog/o-cloud-manager/ /configs/o-cloud-manager
 
 RUN ["/bin/opm", "serve", "/configs", "--cache-dir=/tmp/cache", "--cache-only"]
 
-# Core labels
-LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
-LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
-LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
-LABEL operators.operatorframework.io.bundle.package.v1=o-cloud-manager
-LABEL operators.operatorframework.io.bundle.channels.v1=stable,4.19
-LABEL operators.operatorframework.io.bundle.channels.default.v1=stable
-LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.28.0-ocp
-LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
-LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v3
 LABEL operators.operatorframework.io.index.configs.v1=/configs
