@@ -20,9 +20,9 @@ name: stable
 package: o-cloud-manager
 schema: olm.channel
 ---
-image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19:44c39d00b306f43db131fe9d816e902095e8dbe5
+image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19@sha256:56a03d807c3bc2b87072fad9b14e4d7f0449d832d7ae32101ea724f9d3629580
 name: o-cloud-manager.v4.19.0
-package: oran-o2ims
+package: o-cloud-manager
 properties:
 - type: olm.gvk
   value:
@@ -56,7 +56,7 @@ properties:
     version: v1alpha1
 - type: olm.package
   value:
-    packageName: oran-o2ims
+    packageName: o-cloud-manager
     version: 4.19.0
 - type: olm.csv.metadata
   value:
@@ -1174,12 +1174,10 @@ properties:
     provider:
       name: Red Hat
 relatedImages:
-- image: ""
-  name: postgres_img
-- image: ""
-  name: manager_img
 - image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19@sha256:c04cce95ad120527aa5e919efd997c2bd924f9c0c311256c8c567142864c2be4
+  name: manager
+- image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19@sha256:56a03d807c3bc2b87072fad9b14e4d7f0449d832d7ae32101ea724f9d3629580
   name: ""
-- image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19:44c39d00b306f43db131fe9d816e902095e8dbe5
-  name: ""
+- image: registry.redhat.io/rhel9/postgresql-16@sha256:4f46bed6bce211be83c110a3452bd3f151a1e8ab150c58f2a02c56e9cc83db98
+  name: postgres_image
 schema: olm.bundle
