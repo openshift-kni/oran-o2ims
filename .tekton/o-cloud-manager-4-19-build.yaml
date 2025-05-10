@@ -30,7 +30,7 @@ spec:
             value: show-sbom
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-show-sbom:0.1@sha256:04f15cbce548e1db7770eee3f155ccb2cc0140a6c371dc67e9a34d83673ea0c0
+              quay.io/konflux-ci/tekton-catalog/task-show-sbom:0.1@sha256:002f7c8c1d2f9e09904035da414aba1188ae091df0ea9532cd997be05e73d594
           - name: kind
             value: task
         resolver: bundles
@@ -263,7 +263,7 @@ spec:
             value: buildah-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.4@sha256:b91b634c32b7fd98dbfc4cdbc0a97d7694997fd49ceebabf34c2535fd47f84a2
+              quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.4@sha256:6ac9d16f598c14a4b56e662eccda0a438e94aa8f87dd27a3ea0ff1abc6e00c66
           - name: kind
             value: task
         resolver: bundles
@@ -486,7 +486,7 @@ spec:
             value: sast-coverity-check-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-sast-coverity-check-oci-ta:0.3@sha256:c8eb622d59019582f6f11ed656c0f04f388737f7dd6e47cd780ad0f34bb38bb2
+              quay.io/konflux-ci/tekton-catalog/task-sast-coverity-check-oci-ta:0.3@sha256:a9a3c472624d0598c28aaa67319e74a807ac1948946002dd7b181d200e672b8b
           - name: kind
             value: task
         resolver: bundles
