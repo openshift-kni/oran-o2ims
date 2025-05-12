@@ -28,6 +28,7 @@ const (
 	TimedOut       ConditionReason = "TimedOut"
 	ConfigUpdate   ConditionReason = "ConfigurationUpdateRequested"
 	ConfigApplied  ConditionReason = "ConfigurationApplied"
+	InvalidInput   ConditionReason = "InvalidUserInput"
 )
 
 // ConditionMessage provides detailed messages associated with condition status updates.
