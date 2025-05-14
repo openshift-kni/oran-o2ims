@@ -234,7 +234,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 	if t.object.Status.ObservedGeneration == t.object.Generation &&
 		t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed &&
-		provisioningv1alpha1.HasFatalProvisioningFailure(t.object.Status.Conditions) {
+		utils.HasFatalProvisioningFailure(t.object.Status.Conditions) {
 		// If the provisioning has failed with a fatal error and no spec changes,
 		// stop reconciliation.
 		return true

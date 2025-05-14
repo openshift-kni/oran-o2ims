@@ -189,3 +189,18 @@ func IsClusterZtpDone(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	}
 	return false
 }
+
+// HasFatalProvisioningFailure checks if the ProvisioningRequest
+// has a fatal provisioning failure that cannot be recovered
+// on its own.
+func HasFatalProvisioningFailure(conditions []metav1.Condition) bool {
+	for _, condType := range provisioningv1alpha1.FatalPRconditionTypes {
+		cond := meta.FindStatusCondition(conditions, string(condType))
+		if cond != nil && cond.Status == metav1.ConditionFalse &&
+			(cond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+				cond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
+			return true
+		}
+	}
+	return false
+}
