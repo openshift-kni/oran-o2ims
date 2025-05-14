@@ -1,4 +1,5 @@
 # Do not modify the manager 'key' value: 'manager'
+---
 - key: manager
   source: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
   target: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19@sha256:78330bcd2cdd4ffe7da99c4dafa8f899e8b1930345e129e362c794dc77a61e5d
