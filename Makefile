@@ -327,7 +327,7 @@ bundle-clean: # Uninstall bundle on cluster using operator sdk.
 
 
 .PHONY: opm
-OPM = ./bin/opm
+OPM ?= ./bin/opm
 opm: ## Download opm locally if necessary.
 ifeq (,$(wildcard $(OPM)))
 ifeq (,$(shell which opm 2>/dev/null))
@@ -526,7 +526,7 @@ connect-cluster-server: ##Connect to resource server svc
 ##@ Konflux
 
 .PHONY: yq
-YQ = ./bin/yq
+YQ ?= ./bin/yq
 yq: ## download yq if not in the path
 ifeq (,$(wildcard $(YQ)))
 ifeq (,$(shell which yq 2>/dev/null))
@@ -555,13 +555,13 @@ konflux-validate-catalog-template-bundle: yq operator-sdk
 	$(OPERATOR_SDK) bundle validate $${bundle} ;\
 	}
 
- .PHONY: konflux-validate-catalog
- konflux-validate-catalog: opm ## validate the current catalog file
+.PHONY: konflux-validate-catalog
+konflux-validate-catalog: opm ## validate the current catalog file
 	@echo "validating catalog: .konflux/catalog/$(PACKAGE_NAME_KONFLUX)"
 	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/
 
 .PHONY: konflux-generate-catalog ## generate a quay.io catalog
-konflux-generate-catalog: yq opm konflux-validate-catalog-template-bundle
+konflux-generate-catalog: yq opm
 	hack/konflux-update-catalog-template.sh --set-catalog-template-file $(CATALOG_TEMPLATE_KONFLUX) --set-bundle-builds-file .konflux/catalog/bundle.builds.in.yaml
         # CAVEAT: for < ocp 4.17, use this opm render instead:
         # (OPM) alpha render-template basic --output yaml ./konflux/catalog/catalog-template.yaml > .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
@@ -574,4 +574,4 @@ konflux-generate-catalog-production: konflux-generate-catalog
 	sed -i 's|quay.io/redhat-user-workloads/telco-5g-tenant/$(PACKAGE_NAME_KONFLUX)-bundle-4-19|registry.redhat.io/openshift4/$(PACKAGE_NAME_KONFLUX)-operator-bundle|g' $(CATALOG_KONFLUX)
         # From now on, all the related images must reference production (registry.redhat.io) exclusively
 	./hack/konflux-validate-related-images-production.sh --set-catalog-file $(CATALOG_KONFLUX)
-	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/
+	$(MAKE) konflux-validate-catalog
