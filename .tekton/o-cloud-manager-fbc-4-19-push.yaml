@@ -212,7 +212,7 @@ spec:
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       - name: SCRIPT_RUNNER_IMAGE
-        value: quay.io/konflux-ci/yq:latest@sha256:8068ee12171e5be43d60d5a34e3372e68ba7d935f3592e95931b325c9447282a
+        value: quay.io/konflux-ci/yq:latest
       - name: SCRIPT
         value: ./hack/konflux-build-catalog.sh
       - name: HERMETIC
