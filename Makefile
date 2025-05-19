@@ -574,4 +574,4 @@ konflux-generate-catalog-production: konflux-generate-catalog
 	sed -i 's|quay.io/redhat-user-workloads/telco-5g-tenant/$(PACKAGE_NAME_KONFLUX)-bundle-4-19|registry.redhat.io/openshift4/$(PACKAGE_NAME_KONFLUX)-operator-bundle|g' $(CATALOG_KONFLUX)
         # From now on, all the related images must reference production (registry.redhat.io) exclusively
 	./hack/konflux-validate-related-images-production.sh --set-catalog-file $(CATALOG_KONFLUX)
-	$(MAKE) konflux-validate-catalog
+	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/
