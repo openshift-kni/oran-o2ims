@@ -33,8 +33,21 @@ COPY hack/ /app/hack/
 COPY .konflux/catalog/ /app/.konflux/catalog/
 
 # generate catalog
+
+# debug
+RUN echo "root dir" && ls -lra $HOME
+
 WORKDIR /app
-RUN REGISTRY_AUTH_FILE=I-need-these-credentials-somehow.json YQ=$YQ_BIN OPM=$OPM_BIN make konflux-generate-catalog-production
+RUN --mount=type=secret,id=telco-5g-redhat-pull-secret/.dockerconfigjson \
+    mkdir -p $HOME/.docker/ && \
+    cp /run/secrets/telco-5g-redhat-pull-secret/.dockerconfigjson $HOME/.docker/config.json
+
+# debug
+RUN echo "run secrets" && ls -lra /run/secrets/ && echo "docker dir" && ls -lra $HOME/.docker/ && cat $HOME/.docker/config.json
+
+ENV REGISTRY_AUTH_FILE=$HOME/.docker/config.json
+RUN YQ=$YQ_BIN OPM=$OPM_BIN make konflux-generate-catalog-production && \
+    rm $HOME/.docker/config.json
 
 # run catalog
 FROM ${OPM_IMAGE}
