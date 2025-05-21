@@ -36,6 +36,9 @@ spec:
     - linux/x86_64
   - name: dockerfile
     value: .konflux/Dockerfile.catalog
+  # We have configured an fbc exception for hermetic builds on the release repo.
+  - name: hermetic
+    value: "false"
   pipelineSpec:
     description: |
       This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
