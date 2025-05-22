@@ -6,7 +6,6 @@ set -o pipefail
 
 # set -x
 
-SCRIPT_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 SCRIPT_NAME=$(basename "$(readlink -f "${BASH_SOURCE[0]}")")
 
 check_preconditions() {
@@ -25,7 +24,8 @@ parse_args() {
     # command line options
     local options=
     local long_options="set-catalog-template-file:,set-bundle-builds-file:,help"
-    local parsed=$(getopt --options="$options" --longoptions="$long_options" --name "$SCRIPT_NAME" -- "$@")
+    local parsed
+    parsed=$(getopt --options="$options" --longoptions="$long_options" --name "$SCRIPT_NAME" -- "$@")
     eval set -- "$parsed"
 
     declare -g ARG_CATALOG_TEMPLATE_FILE=""
@@ -115,7 +115,8 @@ update_catalog_template_file() {
     echo "Updating catalog template file..."
 
     # Extract bundle
-    local bundle_quay=($(yq eval '.quay' "$ARG_BUNDLE_BUILDS_FILE"))
+    local bundle_quay
+    bundle_quay="$(yq eval '.quay' "$ARG_BUNDLE_BUILDS_FILE")"
     if [ -z "$bundle_quay" ] || [ "$bundle_quay" = "null" ]; then
         echo "Error: No .quay key found in $ARG_BUNDLE_BUILDS_FILE or value is null." >&2
         exit 1
@@ -130,10 +131,10 @@ update_catalog_template_file() {
 }
 
 main() {
-   check_preconditions
-   parse_args "$@"
-   validate_catalog_template_file
-   update_catalog_template_file
+    check_preconditions
+    parse_args "$@"
+    validate_catalog_template_file
+    update_catalog_template_file
 }
 
 usage() {

@@ -6,7 +6,6 @@ set -o pipefail
 
 # set -x
 
-SCRIPT_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 SCRIPT_NAME=$(basename "$(readlink -f "${BASH_SOURCE[0]}")")
 
 check_preconditions() {
@@ -25,7 +24,8 @@ parse_args() {
     # command line options
     local options=
     local long_options="set-catalog-file:,help"
-    local parsed=$(getopt --options="$options" --longoptions="$long_options" --name "$SCRIPT_NAME" -- "$@")
+    local parsed
+    parsed=$(getopt --options="$options" --longoptions="$long_options" --name "$SCRIPT_NAME" -- "$@")
     eval set -- "$parsed"
 
     declare -g ARG_CATALOG_FILE=""
@@ -80,7 +80,8 @@ validate_related_images() {
         exit 1
     fi
 
-    local images_parsed=($(yq eval '.relatedImages | .[] | .image' "$ARG_CATALOG_FILE"))
+    local images_parsed
+    mapfile -t images_parsed < <(yq eval '.relatedImages | .[] | .image' "$ARG_CATALOG_FILE")
     entries=${#images_parsed[@]}
 
     declare -i i=0
@@ -101,9 +102,9 @@ validate_related_images() {
 
 
 main() {
-   check_preconditions
-   parse_args "$@"
-   validate_related_images
+    check_preconditions
+    parse_args "$@"
+    validate_related_images
 }
 
 usage() {
