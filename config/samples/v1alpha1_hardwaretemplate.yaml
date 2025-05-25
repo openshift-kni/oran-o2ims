@@ -10,7 +10,7 @@ spec:
   hardwareProvisioningTimeout: "60m"
   hwMgrId: hwmgr-1
   bootInterfaceLabel: bootable-interface
-  nodePoolData:
+  nodeGroupData:
     - name: controller
       role: master
       hwProfile: profile-spr-single-processor-64G

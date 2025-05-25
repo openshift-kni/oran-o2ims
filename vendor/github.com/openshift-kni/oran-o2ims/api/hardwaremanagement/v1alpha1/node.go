@@ -20,9 +20,9 @@ type Interface struct {
 
 // NodeSpec describes a node presents a hardware server
 type NodeSpec struct {
-	// NodePool
+	// NodeAllocationRequest
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Node Pool",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	NodePool string `json:"nodePool"`
+	NodeAllocationRequest string `json:"nodeAllocationRequest"`
 
 	// GroupName
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Group Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -85,7 +85,7 @@ type NodeStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=nodes,shortName=orannode
 // +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hwMgrId"
-// +kubebuilder:printcolumn:name="NodePool",type="string",JSONPath=".spec.nodePool"
+// +kubebuilder:printcolumn:name="NodeAllocationRequest",type="string",JSONPath=".spec.nodeAllocationRequest"
 // +kubebuilder:printcolumn:name="HwMgr Node Id",type="string",JSONPath=".spec.hwMgrNodeId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
