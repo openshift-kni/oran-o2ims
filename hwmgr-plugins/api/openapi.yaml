@@ -1,0 +1,749 @@
+openapi: 3.0.3
+info:
+  title: Hardware Manager Plugin API
+  version: 1.0.0
+  description: API for serving Hardware Manager plugins
+  contact:
+    name: Red Hat
+    url: https://www.redhat.com
+
+servers:
+  - url: http://localhost:8080
+    description: O-Cloud Hardware Manager API Server
+
+tags:
+  - name: metadata
+    description: API metadata information
+  - name: provisioning
+    description: Provisioning resources
+
+paths:
+  /hardware-manager/provisioning/api-versions:
+    get:
+      operationId: getAllVersions
+      summary: Get API versions
+      description: |
+        Returns the complete list of API versions implemented by the service.
+      tags:
+        - metadata
+      responses:
+        '200':
+          description: |
+            Successfully obtained the complete list of versions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/provisioning/v1/api-versions:
+    get:
+      operationId: getMinorVersions
+      summary: Get minor API versions
+      description: |
+        Returns the list of minor API versions implemented for this major version of the API.
+      tags:
+        - metadata
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/provisioning/v1/node-allocation-requests:
+    get:
+      operationId: getNodeAllocationRequests
+      summary: Get NodeAllocationRequest resources
+      description: |
+        Returns the list of NodeAllocationRequest resources.
+      tags:
+        - provisioning
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NodeAllocationRequestResponse'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    post:
+      operationId: createNodeAllocationRequest
+      summary: Create NodeAllocationRequest resource
+      description: |
+        Creates a NodeAllocationRequest resource.
+      tags:
+      - provisioning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodeAllocationRequest'
+      responses:
+        '202':
+          description: |
+            The plugin successfully initiated the creation process of the NodeAllocationRequest resource. 
+          content:
+            application/json:
+              schema:
+                type: string
+                description: |
+                  NodeAllocationRequestId is returned.
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/provisioning/v1/node-allocation-requests/{nodeAllocationRequestId}:
+    get:
+      operationId: getNodeAllocationRequest
+      summary: Retrieve the NodeAllocationRequest resource.
+      tags:
+        - provisioning
+      parameters:
+        - in: path
+          name: nodeAllocationRequestId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeAllocationRequestResponse'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    put: 
+      operationId: updateNodeAllocationRequest
+      summary: Modify all fields of the NodeAllocationRequest.
+      parameters:
+        - in: path
+          name: nodeAllocationRequestId
+          required: true
+          schema:
+            type: string      
+      tags:
+        - provisioning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodeAllocationRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeAllocationRequestResponse'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                           
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'              
+
+    delete:
+      operationId: deleteNodeAllocationRequest
+      summary: Delete NodeAllocationRequest
+      description: |
+        Deletes a Node Allocation Request.
+      parameters:
+        - in: path
+          name: nodeAllocationRequestId
+          required: true
+          schema:
+            type: string
+      tags:
+        - provisioning
+      responses:
+        '200':
+          description: Successfully deleted the NodeAllocationRequest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeAllocationRequestResponse'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                          
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/provisioning/v1/node-allocation-requests/{nodeAllocationRequestId}/allocated-nodes:
+    get:
+      operationId: getAllocatedNodesFromNodeAllocationRequest
+      summary: Retrieve the AllocatedNode resources associated with a NodeAllocationRequest resource.
+      tags:
+        - provisioning
+      parameters:
+        - in: path
+          name: nodeAllocationRequestId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AllocatedNode'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'   
+
+  /hardware-manager/provisioning/v1/allocated-nodes:
+    get:
+      operationId: getAllocatedNodes
+      summary: Get AllocatedNode resources
+      description: |
+        Returns the list of AllocatedNode resources.
+      tags:
+       - provisioning
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AllocatedNode'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'      
+
+  /hardware-manager/provisioning/v1/allocated-nodes/{allocatedNodeId}:
+    get:
+      operationId: getAllocatedNode
+      summary: Get AllocatedNode resources
+      description: |
+        Returns the AllocatedNode resource.
+      tags:
+       - provisioning
+      parameters:
+        - in: path
+          name: allocatedNodeId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocatedNode'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                            
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'      
+
+components:
+  schemas:
+    APIVersion:
+      description: |
+        Information about a version of the API.
+      type: object
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+
+    APIVersions:
+      description: |
+        Information about a list of versions of the API.
+      type: object
+      properties:
+        uriPrefix:
+          type: string
+          example: "/hardware-manager/provisioning/v1"
+        apiVersions:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIVersion"
+          example:
+            - version: "1.0.0"
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            A URI reference according to IETF RFC 3986 [3] that identifies the problem type. It is encouraged that the URI provides
+            human-readable documentation for the problem (e.g. usingHTML) when dereferenced. When this member is not present,
+            its value is assumed to be "about:blank".
+          example: 'https://problem.description.com'
+        title:
+          type: string
+          description: |
+            A short, human-readable summary of the problem type. It should not change from occurrence to occurrence of the problem,
+            except for purposes of localization. If type is given and other than "about:blank", this attribute shall also be provided.
+        status:
+          type: integer
+          format: int
+          description: The HTTP status code for this occurrence of the problem.
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence of the problem.
+          example: Connection to database timed out
+        instance:
+          type: string
+          format: uri
+          description: |
+            A URI reference that identifies the specific occurrence of the problem.
+            It may yield further information if dereferenced.
+        additionalAttributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Any number of additional attributes, as defined in a specification or by an implementation.
+      required:
+        - status
+        - detail
+
+    NodeAllocationRequest:
+      description: |
+        Information about a NodeAllocationRequest resource.    
+      type: object
+      properties:
+        cloudID:
+          type: string
+          description: |
+            Cloud Identifier.
+        hwMgrID:
+          type: string
+          description: |
+            Hardware Manager Identifier for the plugin.        
+        nodeGroup:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeGroup"
+          description: |
+            List of node groups which this resource is based on.
+        site:
+          type: string
+          description: |
+            Site identifier associated with the NodeAllocationRequest.
+        extensions:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Additional key-value pairs for extending the NodeAllocationRequest configuration.
+      required:
+        - cloudID
+        - hwMgrID
+        - nodeGroup
+        - site
+        - extensions
+
+    NodeGroup:
+      description: |
+        Information about a node group within a NodeAllocationRequest.
+      type: object
+      properties:
+        nodeGroupData:
+          $ref: "#/components/schemas/NodeGroupData"
+        size:
+          type: integer
+          description: |
+            Size of the node group.
+      required:
+        - nodeGroupData
+        - size
+
+    NodeGroupData:
+      description: |
+        Configuration data for a NodeGroup.
+      type: object
+      properties:
+        name:
+          type: string
+          description: |
+            Name of the node group data.
+        role:
+          type: string
+          description: |
+            Role of the node group data.
+        hwProfile:
+          type: string
+          description: |
+            Hardware profile associated with the node group data.
+        resourceGroupId:
+          type: string
+          description: |
+            Identifier for the resource group.
+        resourceSelector:
+          type: string
+          description: |
+            Selector for the resource.
+      required:
+        - name
+        - role
+        - hwProfile
+        - resourceGroupId
+        - resourceSelector
+
+    AllocatedNode:
+      description: |
+        Information about an allocated node resource.
+      type: object
+      properties:
+        bmc:
+          $ref: "#/components/schemas/BMC"
+        interfaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/Interface"
+          description: |
+            List of network interfaces associated with the node.
+        hwProfile:
+          type: string
+          description: |
+            Hardware profile of the node.
+        status:
+          $ref: '#/components/schemas/AllocatedNodeStatus'
+      required:
+        - bmc
+        - interfaces
+        - hwProfile
+        - status
+
+    BMC:
+      description: |
+        Baseboard Management Controller (BMC) configuration for an AllocatedNode.
+      type: object
+      properties:
+        address:
+          type: string
+          description: |
+            IP address or hostname of the BMC.
+        credentialsName:
+          type: string
+          description: |
+            Name of the credentials used to access the BMC.
+      required:
+        - address
+        - credentialsName
+
+    Interface:
+      description: |
+        Network interface configuration for an AllocatedNode.
+      type: object
+      properties:
+        name:
+          type: string
+          description: |
+            Name of the network interface.
+        label:
+          type: string
+          description: |
+            Label or identifier for the network interface.
+        macAddress:
+          type: string
+          description: |
+            MAC address of the network interface.
+      required:
+        - name
+        - label
+        - macAddress
+
+    NodeAllocationRequestResponse:
+      description: |
+        Information (including observed state) about a NodeAllocationRequest resource.    
+      type: object
+      properties:
+        NodeAllocationRequest:
+          $ref: "#/components/schemas/NodeAllocationRequest"
+        Status:
+          $ref: "#/components/schemas/NodeAllocationRequestStatus"
+
+    NodeAllocationRequestStatus:
+      description: NodeAllocationRequestStatus describes the observed state of a NodeAllocationRequest resource.
+      type: object
+      properties:
+        properties:
+          $ref: '#/components/schemas/Properties'
+        conditions:
+          type: array
+          description: Conditions represent the latest available observations of a NodeAllocationRequest's state.
+          items:
+            $ref: '#/components/schemas/Condition'    
+        selectedGroups:
+          type: object
+          additionalProperties:
+            type: string
+          description: SelectedGroups is a map of group identifiers to their selected values
+      required: []
+
+    AllocatedNodeStatus:
+      description: |
+        Current status of an AllocatedNode.
+      type: object
+      properties:
+        conditions:
+          type: array
+          description: Conditions represent the latest available observations of an AllocatedNode's state.
+          items:
+            $ref: '#/components/schemas/Condition'    
+
+    Properties:
+      type: object
+      description: Properties represent the AllocatedNode properties in the group.
+      properties:
+        nodeNames:
+          type: array
+          items:
+            type: string
+          description: List of AllocatedNode names in the group.
+      required: []      
+
+    Condition:
+      type: object
+      description: Condition represents an observation of an object's state.
+      properties:
+        type:
+          type: string
+          description: Type of condition
+        status:
+          type: string
+          description: Status of the condition, one of True, False, Unknown
+        lastTransitionTime:
+          type: string
+          format: date-time
+          description: LastTransitionTime is the last time the condition transitioned from one status to another
+        reason:
+          type: string
+          description: Reason for the condition's last transition
+        message:
+          type: string
+          description: Message is a human-readable message indicating details about the transition
+      required:
+        - type
+        - status
+        - lastTransitionTime
+        - reason
+        - message
