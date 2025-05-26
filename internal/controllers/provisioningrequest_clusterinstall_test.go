@@ -548,6 +548,8 @@ func TestAssignNodeDetails(t *testing.T) {
 					bmcCredentialsName: ptr("bmc-secret"),
 					bootMACAddress:     ptr("AA:BB:CC:DD:EE:FF"),
 					bmcAddress:         ptr("192.168.1.1"),
+					HwMgrNodeId:        "test",
+					HwMgrNodeNs:        "test",
 				},
 			},
 			expected: map[string]any{
@@ -559,6 +561,10 @@ func TestAssignNodeDetails(t *testing.T) {
 							"bmcAddress":     "192.168.1.1",
 							"bmcCredentialsName": map[string]any{
 								"name": "bmc-secret",
+							},
+							"hostRef": map[string]string{
+								"name":      "test",
+								"namespace": "test",
 							},
 						},
 					},

@@ -1079,6 +1079,7 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 				},
 				Resources: []string{
 					"secrets",
+					"configmaps",
 				},
 				Verbs: []string{
 					"get",
@@ -1330,7 +1331,7 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: utils.AlertmanagerNamespace,
+				Namespace: utils.OpenClusterManagementObservabilityNamespace,
 				Name:      utils.AlertmanagerSA,
 			},
 		},
