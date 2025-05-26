@@ -10,13 +10,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"maps"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,6 +22,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
 
 // createOrUpdateNodePool creates a new NodePool resource if it doesn't exist or updates it if the spec has changed.
@@ -134,7 +132,7 @@ func (t *provisioningRequestReconcilerTask) createNodePoolResources(ctx context.
 // waitForHardwareData waits for the NodePool to be provisioned and update BMC details
 // and bootMacAddress in ClusterInstance.
 func (t *provisioningRequestReconcilerTask) waitForHardwareData(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) (bool, *bool, bool, error) {
+	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) (bool, *bool, bool, error) {
 
 	var configured *bool
 	provisioned, timedOutOrFailed, err := t.checkNodePoolProvisionStatus(ctx, clusterInstance, nodePool)
@@ -149,25 +147,15 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(ctx context.Cont
 
 // updateClusterInstance updates the given ClusterInstance object based on the provisioned nodePool.
 func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) error {
+	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) error {
 
 	hwNodes, err := utils.CollectNodeDetails(ctx, t.client, nodePool)
 	if err != nil {
 		return fmt.Errorf("failed to collect hardware node %s details for node pool: %w", nodePool.GetName(), err)
 	}
-	if nodePool.Spec.HwMgrId != utils.Metal3PluginName {
-		if err := utils.CopyBMCSecrets(ctx, t.client, hwNodes, nodePool); err != nil {
-			return fmt.Errorf("failed to copy BMC secret: %w", err)
-		}
-	} else {
-		// The pull secret must be in the same namespace as the BMH.
-		pullSecretName, err := utils.GetPullSecretName(clusterInstance)
-		if err != nil {
-			return fmt.Errorf("failed to get pull secret name from cluster instance: %w", err)
-		}
-		if err := utils.CopyPullSecret(ctx, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
-			return fmt.Errorf("failed to copy pull secret: %w", err)
-		}
+
+	if err := utils.CopyBMCSecrets(ctx, t.client, hwNodes, nodePool); err != nil {
+		return fmt.Errorf("failed to copy BMC secret: %w", err)
 	}
 
 	configErr := t.applyNodeConfiguration(ctx, hwNodes, nodePool, clusterInstance)
@@ -234,7 +222,7 @@ func (t *provisioningRequestReconcilerTask) checkNodePoolStatus(ctx context.Cont
 
 // checkNodePoolProvisionStatus checks the provisioned status of the node pool.
 func (t *provisioningRequestReconcilerTask) checkNodePoolProvisionStatus(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodePool *hwv1alpha1.NodePool) (bool, bool, error) {
+	clusterInstance *siteconfig.ClusterInstance, nodePool *hwv1alpha1.NodePool) (bool, bool, error) {
 
 	provisioned, timedOutOrFailed, err := t.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Provisioned)
 	if provisioned && err == nil {
@@ -270,93 +258,49 @@ func (t *provisioningRequestReconcilerTask) checkNodePoolConfigStatus(ctx contex
 
 // applyNodeConfiguration updates the clusterInstance with BMC details, interface MACAddress and bootMACAddress
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(ctx context.Context, hwNodes map[string][]utils.NodeInfo,
-	nodePool *hwv1alpha1.NodePool, clusterInstance *unstructured.Unstructured) error {
+	nodePool *hwv1alpha1.NodePool, clusterInstance *siteconfig.ClusterInstance) error {
 
 	// Create a map to track unmatched nodes
 	unmatchedNodes := make(map[int]string)
 
 	roleToNodeGroupName := utils.GetRoleToGroupNameMap(nodePool)
-
-	// Extract the nodes slice
-	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
-	if err != nil {
-		return fmt.Errorf("failed to extract nodes from cluster instance: %w", err)
-	}
-	if !found {
-		return fmt.Errorf("spec.nodes not found in cluster instance")
-	}
-
-	for i, n := range nodes {
-		nodeMap, ok := n.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("node at index %d is not a valid map", i)
-		}
-
-		role, _, _ := unstructured.NestedString(nodeMap, "role")
-		hostName, _, _ := unstructured.NestedString(nodeMap, "hostName")
-		groupName := roleToNodeGroupName[role]
-
-		nodeInfos, exists := hwNodes[groupName]
+	for i, node := range clusterInstance.Spec.Nodes {
+		// Check if the node's role has a match in NodeGroupName
+		nodeInfos, exists := hwNodes[roleToNodeGroupName[node.Role]]
 		if !exists || len(nodeInfos) == 0 {
-			unmatchedNodes[i] = hostName
+			unmatchedNodes[i] = node.HostName
 			continue
 		}
 
-		// Make a copy of the nodeMap before mutating
-		updatedNode := maps.Clone(nodeMap)
-
-		// Set BMC info
-		updatedNode["bmcAddress"] = nodeInfos[0].BmcAddress
-		updatedNode["bmcCredentialsName"] = map[string]interface{}{
-			"name": nodeInfos[0].BmcCredentials,
-		}
-
-		if nodeInfos[0].HwMgrNodeId != "" && nodeInfos[0].HwMgrNodeNs != "" {
-			hostRef, ok := updatedNode["hostRef"].(map[string]interface{})
-			if !ok {
-				hostRef = make(map[string]interface{})
-			}
-			hostRef["name"] = nodeInfos[0].HwMgrNodeId
-			hostRef["namespace"] = nodeInfos[0].HwMgrNodeNs
-			updatedNode["hostRef"] = hostRef
-		}
-		// Boot MAC
+		clusterInstance.Spec.Nodes[i].BmcAddress = nodeInfos[0].BmcAddress
+		clusterInstance.Spec.Nodes[i].BmcCredentialsName = siteconfig.BmcCredentialsName{Name: nodeInfos[0].BmcCredentials}
+		// Get the boot MAC address based on the interface label
 		bootMAC, err := utils.GetBootMacAddress(nodeInfos[0].Interfaces, nodePool)
 		if err != nil {
-			return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
+			return fmt.Errorf("failed to get the node boot MAC address: %w", err)
 		}
-		updatedNode["bootMACAddress"] = bootMAC
+		clusterInstance.Spec.Nodes[i].BootMACAddress = bootMAC
 
-		// Assign MACs to interfaces
-		if err := utils.AssignMacAddress(t.clusterInput.clusterInstanceData, nodeInfos[0].Interfaces, updatedNode); err != nil {
-			return fmt.Errorf("failed to assign MACs for node '%s': %w", hostName, err)
-		}
-
-		// Update node status
-		if err := utils.UpdateNodeStatusWithHostname(ctx, t.client, nodeInfos[0].NodeName, hostName, nodePool.Namespace); err != nil {
-			return fmt.Errorf("failed to update status for node '%s': %w", hostName, err)
+		// Populate the MAC address for each interface
+		if err := utils.AssignMacAddress(t.clusterInput.clusterInstanceData, nodeInfos[0].Interfaces, &clusterInstance.Spec.Nodes[i]); err != nil {
+			return fmt.Errorf("failed to assign mac address:  %w", err)
 		}
 
-		// Update the node only after all mutations succeed
-		nodes[i] = updatedNode
-
-		// Consume the nodeInfo
-		hwNodes[groupName] = nodeInfos[1:]
-	}
-
-	// Final write back to clusterInstance
-	if err := unstructured.SetNestedSlice(clusterInstance.Object, nodes, "spec", "nodes"); err != nil {
-		return fmt.Errorf("failed to update nodes in cluster instance: %w", err)
+		// Indicates which host has been assigned to the node
+		if err := utils.UpdateNodeStatusWithHostname(ctx, t.client, nodeInfos[0].NodeName, node.HostName,
+			nodePool.Namespace); err != nil {
+			return fmt.Errorf("failed to update the node status: %w", err)
+		}
+		hwNodes[roleToNodeGroupName[node.Role]] = nodeInfos[1:]
 	}
 	// Check if there are unmatched nodes
 	if len(unmatchedNodes) > 0 {
-		var unmatchedDetails []string
+		unmatchedNodeDetails := []string{}
 		for idx, name := range unmatchedNodes {
-			unmatchedDetails = append(unmatchedDetails, fmt.Sprintf("Index: %d, Host Name: %s", idx, name))
+			unmatchedNodeDetails = append(unmatchedNodeDetails, fmt.Sprintf("Index: %d, Host Name: %s", idx, name))
 		}
-		return fmt.Errorf("failed to find matches for the following nodes: %s", strings.Join(unmatchedDetails, "; "))
+		return fmt.Errorf("failed to find matches for the following nodes: %s", unmatchedNodeDetails)
 	}
-
 	return nil
 }
 
@@ -400,10 +344,6 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		// If the condition is Configured and it's completed, reset the configuring check start time.
 		if hwCondition.Type == string(hwv1alpha1.Configured) && status == metav1.ConditionTrue {
 			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = nil
-		} else if hwCondition.Type == string(hwv1alpha1.Configured) && t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart == nil {
-			// HardwareConfiguringCheckStart is nil, so reset it to current time
-			currentTime := metav1.Now()
-			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = &currentTime
 		}
 
 		// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
@@ -457,7 +397,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 }
 
 // checkExistingNodePool checks for an existing NodePool and verifies changes if necessary
-func (t *provisioningRequestReconcilerTask) checkExistingNodePool(ctx context.Context, clusterInstance *unstructured.Unstructured,
+func (t *provisioningRequestReconcilerTask) checkExistingNodePool(ctx context.Context, clusterInstance *siteconfig.ClusterInstance,
 	hwTemplate *hwv1alpha1.HardwareTemplate, nodePool *hwv1alpha1.NodePool) error {
 
 	ns := utils.GetHwMgrPluginNS()
@@ -477,26 +417,12 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodePool(ctx context.Co
 }
 
 // buildNodePoolSpec builds the NodePool spec based on the templates and cluster instance
-func (t *provisioningRequestReconcilerTask) buildNodePoolSpec(clusterInstance *unstructured.Unstructured,
+func (t *provisioningRequestReconcilerTask) buildNodePoolSpec(clusterInstance *siteconfig.ClusterInstance,
 	hwTemplate *hwv1alpha1.HardwareTemplate, nodePool *hwv1alpha1.NodePool) error {
 
 	roleCounts := make(map[string]int)
-	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
-	if err != nil {
-		return fmt.Errorf("failed to extract nodes from cluster instance: %w", err)
-	}
-	if !found {
-		return fmt.Errorf("spec.nodes not found in cluster instance")
-	}
-
-	for i, n := range nodes {
-		nodeMap, ok := n.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("node at index %d is not a valid map", i)
-		}
-
-		role, _, _ := unstructured.NestedString(nodeMap, "role")
-		roleCounts[role]++
+	for _, node := range clusterInstance.Spec.Nodes {
+		roleCounts[node.Role]++
 	}
 
 	nodeGroups := []hwv1alpha1.NodeGroup{}
@@ -528,7 +454,7 @@ func (t *provisioningRequestReconcilerTask) buildNodePoolSpec(clusterInstance *u
 }
 
 func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwv1alpha1.NodePool, error) {
+	clusterInstance *siteconfig.ClusterInstance) (*hwv1alpha1.NodePool, error) {
 
 	nodePool := &hwv1alpha1.NodePool{}
 

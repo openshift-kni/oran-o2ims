@@ -147,7 +147,7 @@ func (r *ClusterRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 	columns := utils.GetColumns(records[0], []string{
 		"AlarmName", "AlarmLastChange", "AlarmChangeType", "AlarmDescription",
 		"ProposedRepairActions", "ClearingType", "AlarmAdditionalFields",
-		"AlarmDictionaryID", "IsThanosRule", "Severity"},
+		"AlarmDictionaryID", "Severity"},
 	)
 
 	modInsert := []bob.Mod[*dialect.InsertQuery]{
@@ -160,7 +160,7 @@ func (r *ClusterRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 	for _, record := range records {
 		modInsert = append(modInsert, im.Values(psql.Arg(record.AlarmName, record.AlarmLastChange, record.AlarmChangeType,
 			record.AlarmDescription, record.ProposedRepairActions, record.ClearingType, record.AlarmAdditionalFields,
-			record.AlarmDictionaryID, record.IsThanosRule, record.Severity)))
+			record.AlarmDictionaryID, record.Severity)))
 	}
 
 	query := psql.Insert(
@@ -181,30 +181,8 @@ func (r *ClusterRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids
 	tags := utils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "AlarmDictionaryID")
 
 	expr := psql.Quote(commonmodels.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["AlarmDictionaryID"]).EQ(psql.Arg(alarmDictionaryID)))
-	return utils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
-}
-
-// DeleteThanosAlarmDefinitions deletes all thanos alarm definitions
-func (r *ClusterRepository) DeleteThanosAlarmDefinitions(ctx context.Context) (int64, error) {
-	tags := utils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "IsThanosRule")
-
-	expr := psql.Quote(tags["IsThanosRule"]).EQ(psql.Arg(true))
-	return utils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
-}
-
-// DeleteThanosAlarmDefinitionsNotIn deletes all thanos alarm definitions identified by the primary key that are not in the list of IDs
-func (r *ClusterRepository) DeleteThanosAlarmDefinitionsNotIn(ctx context.Context, ids []any) (int64, error) {
-	tags := utils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "IsThanosRule")
-
-	expr := psql.Quote(commonmodels.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["IsThanosRule"]).EQ(psql.Arg(true)))
-	return utils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
-}
-
-// GetThanosAlarmDefinitions returns the list of Thanos alarm definitions or an empty list if none exist; otherwise an error
-func (r *ClusterRepository) GetThanosAlarmDefinitions(ctx context.Context) ([]commonmodels.AlarmDefinition, error) {
-	tags := utils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "IsThanosRule")
-	expr := psql.Quote(tags["IsThanosRule"]).EQ(psql.Arg(true))
-	return utils.Search[commonmodels.AlarmDefinition](ctx, r.Db, expr)
+	count, err := utils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
+	return count, err
 }
 
 // GetAlarmDefinitionsByAlarmDictionaryID returns the list of AlarmDefinition records that have a matching "alarm_dictionary_id"

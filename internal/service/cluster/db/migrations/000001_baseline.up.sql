@@ -136,11 +136,8 @@ CREATE TABLE alarm_definition
     -- There exists alerts within the same PrometheusRule.Group that have the same name but different severity label.
     -- By adding this columns and a unique constraint on (alarm_name, severity), we can differentiate between them.
     -- All the Alerts from the Core Platform Monitoring have a severity label (except alert Watchdog). Alerts without a severity label are not affected by this.
-    severity                VARCHAR(50)   NOT NULL,
-
-    alarm_dictionary_id     UUID          NULL,
-    is_thanos_rule          BOOLEAN       DEFAULT false,
-
+    severity                VARCHAR(20)   NOT NULL,
+    alarm_dictionary_id     UUID          NOT NULL,
     created_at              TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (alarm_dictionary_id) REFERENCES alarm_dictionary (alarm_dictionary_id) ON DELETE CASCADE,

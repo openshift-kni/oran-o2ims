@@ -150,7 +150,7 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
 	namespace.SetLabels(labels)
 
-	err := utils.CreateK8sCR(ctx, t.client, namespace, t.object, utils.UPDATE)
+	err := utils.CreateK8sCR(ctx, t.client, namespace, t.object, "")
 	if err != nil {
 		return fmt.Errorf("failed to create or update namespace %s: %w", clusterName, err)
 	}

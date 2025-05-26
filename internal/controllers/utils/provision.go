@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -313,22 +312,4 @@ func GetParentPolicyNameAndNamespace(childPolicyName string) (policyName, policy
 // in the namespace "ztp-<clustertemplate-ns>".
 func IsParentPolicyInZtpClusterTemplateNs(policyNamespace, ctNamespace string) bool {
 	return policyNamespace == fmt.Sprintf("ztp-%s", ctNamespace)
-}
-
-func ConvertToUnstructured(ci siteconfig.ClusterInstance) (*unstructured.Unstructured, error) {
-	objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&ci)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert cluster instance to unstructured: %w", err)
-	}
-	unstructuredObj := &unstructured.Unstructured{Object: objMap}
-	return unstructuredObj, nil
-}
-
-func ConvertFromUnstructured(u *unstructured.Unstructured) (*siteconfig.ClusterInstance, error) {
-	var ci siteconfig.ClusterInstance
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &ci)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert unstructured to ClusterInstance: %w", err)
-	}
-	return &ci, nil
 }

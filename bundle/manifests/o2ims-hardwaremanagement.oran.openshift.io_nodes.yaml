@@ -71,9 +71,6 @@ spec:
                 description: HwMgrNodeId is the node identifier from the hardware
                   manager.
                 type: string
-              hwMgrNodeNs:
-                description: HwMgrNodeNs is the node namespace from the hardware manager.
-                type: string
               hwProfile:
                 description: HwProfile
                 type: string

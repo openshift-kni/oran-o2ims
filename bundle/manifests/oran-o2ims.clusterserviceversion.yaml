@@ -620,8 +620,6 @@ metadata:
     features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.16.0 <4.18'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
-    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
-      Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.36.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     provider: Red Hat
@@ -1003,11 +1001,6 @@ spec:
       - description: HwMgrNodeId is the node identifier from the hardware manager.
         displayName: Hardware Manager Node ID
         path: hwMgrNodeId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrNodeNs is the node namespace from the hardware manager.
-        displayName: Hardware Manager Node Namespace
-        path: hwMgrNodeNs
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: HwProfile
