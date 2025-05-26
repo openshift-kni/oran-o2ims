@@ -175,9 +175,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 		}
 
 		Expect(c.Create(ctx, hwTemplate)).To(Succeed())
-		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-		Expect(err).ToNot(HaveOccurred())
-		nodePool, err := task.renderHardwareTemplate(ctx, unstructuredCi)
+
+		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 
 		VerifyHardwareTemplateStatus(ctx, c, hwTemplate.Name, metav1.Condition{
@@ -220,18 +219,14 @@ var _ = Describe("renderHardwareTemplate", func() {
 	It("returns an error when the HwTemplate is not found", func() {
 		// Ensure the ClusterTemplate is created
 		Expect(c.Create(ctx, ct)).To(Succeed())
-		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-		Expect(err).ToNot(HaveOccurred())
-		nodePool, err := task.renderHardwareTemplate(ctx, unstructuredCi)
+		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
 		Expect(err).To(HaveOccurred())
 		Expect(nodePool).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("failed to get the HardwareTemplate %s resource", hwTemplate))
 	})
 
 	It("returns an error when the ClusterTemplate is not found", func() {
-		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-		Expect(err).ToNot(HaveOccurred())
-		nodePool, err := task.renderHardwareTemplate(ctx, unstructuredCi)
+		nodePool, err := task.renderHardwareTemplate(ctx, clusterInstance)
 		Expect(err).To(HaveOccurred())
 		Expect(nodePool).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("failed to get the ClusterTemplate"))
@@ -286,9 +281,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 				},
 			}
 			Expect(c.Create(ctx, hwTemplate2)).To(Succeed())
-			unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-			Expect(err).ToNot(HaveOccurred())
-			_, err = task.renderHardwareTemplate(ctx, unstructuredCi)
+
+			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
 			Expect(err).To(HaveOccurred())
 
 			VerifyHardwareTemplateStatus(ctx, c, hwTemplate2.Name, metav1.Condition{
@@ -336,9 +330,8 @@ var _ = Describe("renderHardwareTemplate", func() {
 				},
 			}
 			Expect(c.Create(ctx, hwTemplate2)).To(Succeed())
-			unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-			Expect(err).ToNot(HaveOccurred())
-			_, err = task.renderHardwareTemplate(ctx, unstructuredCi)
+
+			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
 			Expect(err).To(HaveOccurred())
 
 			VerifyHardwareTemplateStatus(ctx, c, hwTemplate2.Name, metav1.Condition{
@@ -392,9 +385,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 				},
 			}
 			Expect(c.Create(ctx, hwTemplate2)).To(Succeed())
-			unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-			Expect(err).ToNot(HaveOccurred())
-			_, err = task.renderHardwareTemplate(ctx, unstructuredCi)
+			_, err := task.renderHardwareTemplate(ctx, clusterInstance)
 			Expect(err).To(HaveOccurred())
 
 			errMessage := fmt.Sprintf("node group %s found in NodePool spec but not in Hardware Template", groupNameController)
@@ -754,9 +745,7 @@ var _ = Describe("updateClusterInstance", func() {
 	})
 
 	It("returns error when failing to get the Node object", func() {
-		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
-		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, np)
+		err := task.updateClusterInstance(ctx, ci, np)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -772,9 +761,7 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 		}
 		np.Status.Properties = hwv1alpha1.Properties{}
-		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
-		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, np)
+		err := task.updateClusterInstance(ctx, ci, np)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to find matches for the following nodes"))
 	})
@@ -818,9 +805,8 @@ var _ = Describe("updateClusterInstance", func() {
 		secrets := testutils.CreateSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, poolns)
 
 		testutils.CreateResources(ctx, c, nodes, secrets)
-		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
-		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, np)
+
+		err := task.updateClusterInstance(ctx, ci, np)
 		Expect(err).ToNot(HaveOccurred())
 
 		masterBootMAC, err := utils.GetBootMacAddress(masterNode.Status.Interfaces, np)
@@ -845,8 +831,6 @@ var _ = Describe("updateClusterInstance", func() {
 		}
 
 		// Verify the bmc address, secret, boot mac address and interface mac addresses are set correctly in the cluster instance
-		ci, err := utils.ConvertFromUnstructured(unstructuredCi)
-		Expect(err).ToNot(HaveOccurred())
 		verifyClusterInstance(ci, expectedDetails)
 
 		// Verify the host name is set in the node status

@@ -48,8 +48,6 @@ const IngressClassName = "openshift-default"
 // IngressPortName defines the name of service port to which our ingress controller directs traffic to
 const IngressPortName = "api"
 
-const Metal3PluginName = "metal3"
-
 // Resource operations
 const (
 	UPDATE = "Update"
@@ -177,7 +175,6 @@ var (
 		{"nodes", "*", "bmcAddress"},
 		{"nodes", "*", "bmcCredentialsName"},
 		{"nodes", "*", "bootMACAddress"},
-		{"nodes", "*", "hostRef"},
 		{"nodes", "*", "nodeNetwork", "interfaces", "*", "macAddress"},
 		// The interface labels are not part of the ClusterInstance.
 		{"nodes", "*", "nodeNetwork", "interfaces", "*", "label"},
@@ -305,9 +302,9 @@ const AlarmDefinitionSeverityField = "severity"
 
 // Alertmanager values
 const (
-	AlertmanagerObjectName                      = "alertmanager"
-	OpenClusterManagementObservabilityNamespace = "open-cluster-management-observability"
-	AlertmanagerSA                              = "alertmanager"
+	AlertmanagerObjectName = "alertmanager"
+	AlertmanagerNamespace  = "open-cluster-management-observability"
+	AlertmanagerSA         = "alertmanager"
 )
 
 // TLS Mount Paths

@@ -24,7 +24,6 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -162,22 +161,16 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		return res, err
 	}
 
-	// TODO: the handlePreProvisioning function should be updated to return an unstructured ClusterInstance
-	unstructuredClusterInstance, err := utils.ConvertToUnstructured(*renderedClusterInstance)
-	if err != nil {
-		return requeueWithError(err)
-	}
-
 	// Handle hardware template and NodePool provisioning/configuring
 	if !t.isHardwareProvisionSkipped() {
-		res, proceed, err := t.handleNodePoolProvisioning(ctx, unstructuredClusterInstance)
+		res, proceed, err := t.handleNodePoolProvisioning(ctx, renderedClusterInstance)
 		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
 			return res, err
 		}
 	}
 
 	// Handle the cluster install with ClusterInstance
-	err = t.handleClusterInstallation(ctx, unstructuredClusterInstance)
+	err = t.handleClusterInstallation(ctx, renderedClusterInstance)
 	if err != nil {
 		return requeueWithError(err)
 	}
@@ -234,7 +227,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 	if t.object.Status.ObservedGeneration == t.object.Generation &&
 		t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed &&
-		utils.HasFatalProvisioningFailure(t.object.Status.Conditions) {
+		provisioningv1alpha1.HasFatalProvisioningFailure(t.object.Status.Conditions) {
 		// If the provisioning has failed with a fatal error and no spec changes,
 		// stop reconciliation.
 		return true
@@ -303,7 +296,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 // The function returns a ctrl.Result to indicate if/when to requeue, the rendered NodePool, a bool
 // to indicate whether to process with further processing and an error if any issues occur.
 func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx context.Context,
-	renderedClusterInstance *unstructured.Unstructured) (ctrl.Result, bool, error) {
+	renderedClusterInstance *siteconfig.ClusterInstance) (ctrl.Result, bool, error) {
 
 	// Render the hardware template for NodePool
 	renderedNodePool, err := t.renderHardwareTemplate(ctx, renderedClusterInstance)
@@ -577,7 +570,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 }
 
 func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwv1alpha1.NodePool, error) {
+	clusterInstance *siteconfig.ClusterInstance) (*hwv1alpha1.NodePool, error) {
 	renderedNodePool, err := t.handleRenderHardwareTemplate(ctx, clusterInstance)
 	if err != nil {
 		t.logger.ErrorContext(

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	ACMObsAMNamespace  = utils.OpenClusterManagementObservabilityNamespace
+	ACMObsAMNamespace  = utils.AlertmanagerNamespace
 	ACMObsAMSecretName = "alertmanager-config"
 	ACMObsAMSecretKey  = "alertmanager.yaml"
 	OranReceiverName   = "oran_alarm_receiver"

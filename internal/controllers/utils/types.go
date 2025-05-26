@@ -110,7 +110,5 @@ type NodeInfo struct {
 	BmcAddress     string
 	BmcCredentials string
 	NodeName       string
-	HwMgrNodeId    string
-	HwMgrNodeNs    string
 	Interfaces     []*hwv1alpha1.Interface
 }
