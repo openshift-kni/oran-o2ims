@@ -6,41 +6,7 @@ metadata:
       [
         {
           "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "HardwareTemplate",
-          "metadata": {
-            "name": "sample-hwtemplate-v1",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "bootInterfaceLabel": "bootable-interface",
-            "extensions": {
-              "resourceTypeId": "ResourceGroup~2.1.1"
-            },
-            "hardwareProvisioningTimeout": "60m",
-            "hwMgrId": "hwmgr-1",
-            "nodeGroupData": [
-              {
-                "hwProfile": "profile-spr-single-processor-64G",
-                "name": "controller",
-                "resourcePoolId": "master-pool",
-                "resourceSelector": "selector-here",
-                "role": "master"
-              },
-              {
-                "hwProfile": "profile-spr-dual-processor-128G",
-                "name": "worker",
-                "resourcePoolId": "worker-pool",
-                "role": "worker"
-              }
-            ]
-          },
-          "status": {
-            "conditions": []
-          }
-        },
-        {
-          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "Node",
+          "kind": "AllocatedNode",
           "metadata": {
             "labels": {
               "app.kubernetes.io/created-by": "oran-o2ims",
@@ -84,6 +50,40 @@ metadata:
                 "name": "eno2"
               }
             ]
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "HardwareTemplate",
+          "metadata": {
+            "name": "sample-hwtemplate-v1",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "bootInterfaceLabel": "bootable-interface",
+            "extensions": {
+              "resourceTypeId": "ResourceGroup~2.1.1"
+            },
+            "hardwareProvisioningTimeout": "60m",
+            "hwMgrId": "hwmgr-1",
+            "nodeGroupData": [
+              {
+                "hwProfile": "profile-spr-single-processor-64G",
+                "name": "controller",
+                "resourcePoolId": "master-pool",
+                "resourceSelector": "selector-here",
+                "role": "master"
+              },
+              {
+                "hwProfile": "profile-spr-dual-processor-128G",
+                "name": "worker",
+                "resourcePoolId": "worker-pool",
+                "role": "worker"
+              }
+            ]
+          },
+          "status": {
+            "conditions": []
           }
         },
         {
@@ -635,6 +635,62 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: AllocatedNode is the schema for an allocated node
+      displayName: AllocatedNode
+      kind: AllocatedNode
+      name: allocatednodes.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - displayName: Extensions
+        path: extensions
+      - description: GroupName
+        displayName: Group Name
+        path: groupName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrId is the identifier for the hardware manager instance.
+        displayName: Hardware Manager ID
+        path: hwMgrId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrNodeId is the node identifier from the hardware manager.
+        displayName: Hardware Manager Node ID
+        path: hwMgrNodeId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrNodeNs is the node namespace from the hardware manager.
+        displayName: Hardware Manager Node Namespace
+        path: hwMgrNodeNs
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwProfile
+        displayName: Hardware Profile
+        path: hwProfile
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: NodeAllocationRequest
+        displayName: Node Allocation Request
+        path: nodeAllocationRequest
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: BMC
+        path: bmc
+      - description: |-
+          Conditions represent the observations of the AllocatedNodeStatus's current state.
+          Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+        displayName: Conditions
+        path: conditions
+      - displayName: Hostname
+        path: hostname
+      - displayName: Hw Profile
+        path: hwProfile
+      - displayName: Interfaces
+        path: interfaces
+      version: v1alpha1
     - description: ClusterTemplate is the Schema for the clustertemplates API
       displayName: ORAN O2IMS Cluster Template
       kind: ClusterTemplate
@@ -979,62 +1035,6 @@ spec:
         path: properties
       - displayName: Selected Groups
         path: selectedGroups
-      version: v1alpha1
-    - description: Node is the schema for an allocated node
-      displayName: Node
-      kind: Node
-      name: nodes.o2ims-hardwaremanagement.oran.openshift.io
-      resources:
-      - kind: Namespace
-        name: ""
-        version: v1
-      specDescriptors:
-      - displayName: Extensions
-        path: extensions
-      - description: GroupName
-        displayName: Group Name
-        path: groupName
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrId is the identifier for the hardware manager instance.
-        displayName: Hardware Manager ID
-        path: hwMgrId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrNodeId is the node identifier from the hardware manager.
-        displayName: Hardware Manager Node ID
-        path: hwMgrNodeId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrNodeNs is the node namespace from the hardware manager.
-        displayName: Hardware Manager Node Namespace
-        path: hwMgrNodeNs
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwProfile
-        displayName: Hardware Profile
-        path: hwProfile
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodeAllocationRequest
-        displayName: Node Pool
-        path: nodeAllocationRequest
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      statusDescriptors:
-      - displayName: BMC
-        path: bmc
-      - description: |-
-          Conditions represent the observations of the NodeStatus's current state.
-          Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
-        displayName: Conditions
-        path: conditions
-      - displayName: Hostname
-        path: hostname
-      - displayName: Hw Profile
-        path: hwProfile
-      - displayName: Interfaces
-        path: interfaces
       version: v1alpha1
     - description: ProvisioningRequest is the Schema for the provisioningrequests
         API

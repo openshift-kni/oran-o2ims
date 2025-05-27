@@ -18,10 +18,10 @@ type Interface struct {
 	MACAddress string `json:"macAddress"` // The MAC address of the interface
 }
 
-// NodeSpec describes a node presents a hardware server
-type NodeSpec struct {
+// AllocatedNodeSpec describes a node presents a hardware server
+type AllocatedNodeSpec struct {
 	// NodeAllocationRequest
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Node Pool",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Node Allocation Request",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	NodeAllocationRequest string `json:"nodeAllocationRequest"`
 
 	// GroupName
@@ -58,9 +58,9 @@ type BMC struct {
 	CredentialsName string `json:"credentialsName,omitempty"`
 }
 
-// NodeStatus describes the observed state of a request to allocate and prepare
+// AllocatedNodeStatus describes the observed state of a request to allocate and prepare
 // a node that will eventually be part of a deployment manager.
-type NodeStatus struct {
+type AllocatedNodeStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	BMC *BMC `json:"bmc,omitempty"`
 
@@ -73,43 +73,43 @@ type NodeStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	HwProfile string `json:"hwProfile,omitempty"`
 
-	// Conditions represent the observations of the NodeStatus's current state.
+	// Conditions represent the observations of the AllocatedNodeStatus's current state.
 	// Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// Node is the schema for an allocated node
+// AllocatedNode is the schema for an allocated node
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=nodes,shortName=orannode
+// +kubebuilder:resource:path=allocatednodes,shortName=allocatednode
 // +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hwMgrId"
 // +kubebuilder:printcolumn:name="NodeAllocationRequest",type="string",JSONPath=".spec.nodeAllocationRequest"
-// +kubebuilder:printcolumn:name="HwMgr Node Id",type="string",JSONPath=".spec.hwMgrNodeId"
+// +kubebuilder:printcolumn:name="HwMgr AllocatedNode Id",type="string",JSONPath=".spec.hwMgrNodeId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
-// +operator-sdk:csv:customresourcedefinitions:displayName="Node",resources={{Namespace, v1}}
-type Node struct {
+// +operator-sdk:csv:customresourcedefinitions:displayName="AllocatedNode",resources={{Namespace, v1}}
+type AllocatedNode struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   NodeSpec   `json:"spec,omitempty"`
-	Status NodeStatus `json:"status,omitempty"`
+	Spec   AllocatedNodeSpec   `json:"spec,omitempty"`
+	Status AllocatedNodeStatus `json:"status,omitempty"`
 }
 
-// NodeList contains a list of provisioned node.
+// AllocatedNodeList contains a list of provisioned node.
 //
 // +kubebuilder:object:root=true
-type NodeList struct {
+type AllocatedNodeList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Node `json:"items"`
+	Items           []AllocatedNode `json:"items"`
 }
 
 func init() {
 	SchemeBuilder.Register(
-		&Node{},
-		&NodeList{},
+		&AllocatedNode{},
+		&AllocatedNodeList{},
 	)
 }

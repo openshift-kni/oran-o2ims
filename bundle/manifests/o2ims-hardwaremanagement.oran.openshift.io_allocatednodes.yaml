@@ -1,19 +1,19 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: nodes.o2ims-hardwaremanagement.oran.openshift.io
+  creationTimestamp: null
+  name: allocatednodes.o2ims-hardwaremanagement.oran.openshift.io
 spec:
   group: o2ims-hardwaremanagement.oran.openshift.io
   names:
-    kind: Node
-    listKind: NodeList
-    plural: nodes
+    kind: AllocatedNode
+    listKind: AllocatedNodeList
+    plural: allocatednodes
     shortNames:
-    - orannode
-    singular: node
+    - allocatednode
+    singular: allocatednode
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -24,7 +24,7 @@ spec:
       name: NodeAllocationRequest
       type: string
     - jsonPath: .spec.hwMgrNodeId
-      name: HwMgr Node Id
+      name: HwMgr AllocatedNode Id
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -35,7 +35,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Node is the schema for an allocated node
+        description: AllocatedNode is the schema for an allocated node
         properties:
           apiVersion:
             description: |-
@@ -55,7 +55,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: NodeSpec describes a node presents a hardware server
+            description: AllocatedNodeSpec describes a node presents a hardware server
             properties:
               extensions:
                 additionalProperties:
@@ -87,7 +87,7 @@ spec:
             type: object
           status:
             description: |-
-              NodeStatus describes the observed state of a request to allocate and prepare
+              AllocatedNodeStatus describes the observed state of a request to allocate and prepare
               a node that will eventually be part of a deployment manager.
             properties:
               bmc:
@@ -105,7 +105,7 @@ spec:
                 type: object
               conditions:
                 description: |-
-                  Conditions represent the observations of the NodeStatus's current state.
+                  Conditions represent the observations of the AllocatedNodeStatus's current state.
                   Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
                 items:
                   description: "Condition contains details for one aspect of the current
@@ -202,3 +202,9 @@ spec:
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

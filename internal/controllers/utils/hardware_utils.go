@@ -92,7 +92,7 @@ func CollectNodeDetails(ctx context.Context, c client.Client,
 	hwNodes := make(map[string][]NodeInfo)
 
 	for _, nodeName := range nodeAllocationRequest.Status.Properties.NodeNames {
-		node := &hwv1alpha1.Node{}
+		node := &hwv1alpha1.AllocatedNode{}
 		exists, err := DoesK8SResourceExist(ctx, c, nodeName, nodeAllocationRequest.Namespace, node)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get the Node object %s in namespace %s: %w",
@@ -223,7 +223,7 @@ func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Obj
 // UpdateNodeStatusWithHostname updates the Node status with the hostname after BMC information has been assigned.
 func UpdateNodeStatusWithHostname(ctx context.Context, c client.Client, nodeName, hostname, namespace string) error {
 	err := RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		node := &hwv1alpha1.Node{}
+		node := &hwv1alpha1.AllocatedNode{}
 		exists, err := DoesK8SResourceExist(ctx, c, nodeName, namespace, node)
 		if err != nil || !exists {
 			return fmt.Errorf("failed to get the Node object %s in namespace %s: %w, exists %v", nodeName, namespace, err, exists)
@@ -589,7 +589,7 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 
 // GetBMHNamespace returns the BMH namespace for the given node.
 // Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
-func GetBMHNamespace(node *hwv1alpha1.Node) string {
+func GetBMHNamespace(node *hwv1alpha1.AllocatedNode) string {
 
 	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {
 		return ns

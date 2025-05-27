@@ -44,7 +44,7 @@ resources:
   controller: true
   domain: oran.openshift.io
   group: o2ims-hardwaremanagement
-  kind: Node
+  kind: AllocatedNode
   path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
   version: v1alpha1
 - api:

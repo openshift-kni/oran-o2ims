@@ -814,7 +814,7 @@ var _ = Describe("updateClusterInstance", func() {
 				},
 			},
 		}
-		nodes := []*hwv1alpha1.Node{masterNode, workerNode}
+		nodes := []*hwv1alpha1.AllocatedNode{masterNode, workerNode}
 		secrets := testutils.CreateSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, poolns)
 
 		testutils.CreateResources(ctx, c, nodes, secrets)
@@ -883,9 +883,9 @@ func verifyClusterInstance(ci *siteconfig.ClusterInstance, expectedDetails []exp
 	}
 }
 
-func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.Node, mhost, whost string) {
+func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.AllocatedNode, mhost, whost string) {
 	for _, node := range nodes {
-		updatedNode := &hwv1alpha1.Node{}
+		updatedNode := &hwv1alpha1.AllocatedNode{}
 		Expect(c.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: node.Namespace}, updatedNode)).To(Succeed())
 		switch updatedNode.Spec.GroupName {
 		case groupNameController:

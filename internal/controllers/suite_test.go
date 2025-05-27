@@ -70,14 +70,14 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		WithStatusSubresource(&hwv1alpha1.HardwareTemplate{}).
 		WithStatusSubresource(&hwv1alpha1.NodeAllocationRequest{}).
-		WithStatusSubresource(&hwv1alpha1.Node{}).
+		WithStatusSubresource(&hwv1alpha1.AllocatedNode{}).
 		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
 		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		WithStatusSubresource(&pluginv1alpha1.HardwareManager{}).
-		WithIndex(&hwv1alpha1.Node{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-			return []string{obj.(*hwv1alpha1.Node).Spec.NodeAllocationRequest}
+		WithIndex(&hwv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+			return []string{obj.(*hwv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 		}).
 		Build()
 }
@@ -123,8 +123,8 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
 	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.HardwareTemplate{})
 	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodeAllocationRequest{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.Node{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodeList{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.AllocatedNode{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.AllocatedNodeList{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
