@@ -1,5 +1,5 @@
 apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
-kind: Node
+kind: AllocatedNode
 metadata:
   labels:
     app.kubernetes.io/name: inventory
