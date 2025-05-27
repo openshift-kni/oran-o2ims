@@ -10,8 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// NodePoolData provides the necessary information for populating a node pool
-type NodePoolData struct {
+// NodeGroupData provides the necessary information for populating a node allocation request
+type NodeGroupData struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 	// +kubebuilder:validation:Enum=master;worker
@@ -42,12 +42,12 @@ type HardwareTemplateSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Provisioning Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
 
-	// NodePoolData defines a collection of NodePoolData items
+	// NodeGroupData defines a collection of NodeGroupData items
 	// +kubebuilder:validation:MinItems=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	NodePoolData []NodePoolData `json:"nodePoolData"`
+	NodeGroupData []NodeGroupData `json:"nodeGroupData"`
 
-	// Extensions holds additional custom key-value pairs that can be used to extend the node pool's configuration.
+	// Extensions holds additional custom key-value pairs that can be used to extend the node allocation request's configuration.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
