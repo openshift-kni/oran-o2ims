@@ -5,7 +5,7 @@ resources:
 
 # Hardware management:
 - bases/o2ims-hardwaremanagement.oran.openshift.io_hardwaretemplates.yaml
-- bases/o2ims-hardwaremanagement.oran.openshift.io_nodepools.yaml
+- bases/o2ims-hardwaremanagement.oran.openshift.io_nodeallocationrequests.yaml
 - bases/o2ims-hardwaremanagement.oran.openshift.io_nodes.yaml
 
 # Provisioning:

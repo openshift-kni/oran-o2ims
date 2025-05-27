@@ -333,7 +333,7 @@ defaultHugepagesSize: "1G"`,
 				HwMgrId:                     utils.UnitTestHwmgrID,
 				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "1m",
-				NodePoolData: []hwv1alpha1.NodePoolData{
+				NodeGroupData: []hwv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
 						Role:           "master",
@@ -502,9 +502,9 @@ defaultHugepagesSize: "1G"`,
 		})
 	})
 
-	Context("When NodePool has been created", func() {
+	Context("When NodeAllocationRequest has been created", func() {
 
-		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodePool becomes provisioned", func() {
+		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodeAllocationRequest becomes provisioned", func() {
 			crName := "cluster-2"
 			// Make sure the needed ClusterTemplate exists.
 			oranCT := &provisioningv1alpha1.ClusterTemplate{}
@@ -531,7 +531,7 @@ defaultHugepagesSize: "1G"`,
 
 			conditions := reconciledPR.Status.Conditions
 			// Verify the ProvisioningRequest's status conditions - the last should be showing that
-			// we're waiting for the NodePool.
+			// we're waiting for the NodeAllocationRequest.
 			Expect(len(conditions)).To(Equal(5))
 
 			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
@@ -543,14 +543,14 @@ defaultHugepagesSize: "1G"`,
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status:  metav1.ConditionUnknown,
 				Reason:  string(metav1.ConditionUnknown),
-				Message: "Waiting for NodePool (cluster-2) to be processed",
+				Message: "Waiting for NodeAllocationRequest (cluster-2) to be processed",
 			})
 			// Verify the provisioningState moves to progressing.
 			testutils.VerifyProvisioningStatus(reconciledPR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for NodePool (cluster-2) to be processed", nil)
+				provisioningv1alpha1.StateProgressing, "Waiting for NodeAllocationRequest (cluster-2) to be processed", nil)
 
-			// Patch NodePool provision status to Completed.
-			currentNp := &hwv1alpha1.NodePool{}
+			// Patch NodeAllocationRequest provision status to Completed.
+			currentNp := &hwv1alpha1.NodeAllocationRequest{}
 			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
 			Expect(currentNp.Status.Conditions).To(BeEmpty())
 			currentNp.Status.Conditions = []metav1.Condition{

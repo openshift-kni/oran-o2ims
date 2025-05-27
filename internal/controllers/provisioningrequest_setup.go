@@ -35,12 +35,12 @@ import (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Setup Node CRD indexer. This field indexer allows us to query a list of Node CRs, filtered by the spec.nodePool field.
+	// Setup Node CRD indexer. This field indexer allows us to query a list of Node CRs, filtered by the spec.nodeAllocationRequest field.
 	nodeIndexFunc := func(obj client.Object) []string {
-		return []string{obj.(*hwv1alpha1.Node).Spec.NodePool}
+		return []string{obj.(*hwv1alpha1.Node).Spec.NodeAllocationRequest}
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &hwv1alpha1.Node{}, "spec.nodePool", nodeIndexFunc); err != nil {
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &hwv1alpha1.Node{}, "spec.nodeAllocationRequest", nodeIndexFunc); err != nil {
 		return fmt.Errorf("failed to setup indexer for o2ims-hardwaremanagement.oran.openshift.io/v1alpha Node: %w", err)
 	}
 	//nolint:wrapcheck
@@ -89,7 +89,7 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
 		Owns(
-			&hwv1alpha1.NodePool{},
+			&hwv1alpha1.NodeAllocationRequest{},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Watch on status changes.

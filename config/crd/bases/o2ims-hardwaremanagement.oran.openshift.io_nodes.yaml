@@ -20,8 +20,8 @@ spec:
     - jsonPath: .spec.hwMgrId
       name: HwMgr Id
       type: string
-    - jsonPath: .spec.nodePool
-      name: NodePool
+    - jsonPath: .spec.nodeAllocationRequest
+      name: NodeAllocationRequest
       type: string
     - jsonPath: .spec.hwMgrNodeId
       name: HwMgr Node Id
@@ -77,13 +77,13 @@ spec:
               hwProfile:
                 description: HwProfile
                 type: string
-              nodePool:
-                description: NodePool
+              nodeAllocationRequest:
+                description: NodeAllocationRequest
                 type: string
             required:
             - groupName
             - hwProfile
-            - nodePool
+            - nodeAllocationRequest
             type: object
           status:
             description: |-

@@ -1,5 +1,5 @@
 apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
-kind: NodePool
+kind: NodeAllocationRequest
 metadata:
   annotations:
     bootInterfaceLabel: bootable-interface
@@ -10,19 +10,19 @@ metadata:
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: oran-o2ims
-  name: sample-nodepool
+  name: sample-nodeallocationrequest
   namespace: oran-hwmgr-plugin
 spec:
   cloudID: sample
   hwMgrId: loopback-1
   nodeGroup:
-  - nodePoolData:
+  - nodeGroupData:
       hwProfile: sample-master-profile
       name: controller
       resourcePoolId: master-pool
       role: master
     size: 1
-  - nodePoolData:
+  - nodeGroupData:
       hwProfile: sample-worker-profile
       name: worker
       resourcePoolId: worker-pool

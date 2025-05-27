@@ -188,8 +188,8 @@ spec:
                         description: Says if ZTP has complete or not.
                         type: string
                     type: object
-                  nodePoolRef:
-                    description: NodePoolRef references to the NodePool.
+                  nodeAllocationRequestRef:
+                    description: NodeAllocationRequestRef references to the NodeAllocationRequest.
                     properties:
                       hardwareConfiguringCheckStart:
                         description: Represents the timestamp of the first status
@@ -202,10 +202,10 @@ spec:
                         format: date-time
                         type: string
                       name:
-                        description: Contains the name of the created NodePool.
+                        description: Contains the name of the created NodeAllocationRequest.
                         type: string
                       namespace:
-                        description: Contains the namespace of the created NodePool.
+                        description: Contains the namespace of the created NodeAllocationRequest.
                         type: string
                     type: object
                   policies:

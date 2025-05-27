@@ -250,7 +250,7 @@ rules:
 - apiGroups:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
-  - nodepools
+  - nodeallocationrequests
   verbs:
   - create
   - delete
@@ -262,7 +262,7 @@ rules:
 - apiGroups:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
-  - nodepools/status
+  - nodeallocationrequests/status
   verbs:
   - get
   - patch

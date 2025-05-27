@@ -191,7 +191,7 @@ func CreateResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.N
 	}
 }
 
-func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
+func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
 	if interfaces == nil {
 		interfaces = []*hwv1alpha1.Interface{
 			{
@@ -217,10 +217,10 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string
 			Namespace: namespace,
 		},
 		Spec: hwv1alpha1.NodeSpec{
-			NodePool:    npName,
-			GroupName:   groupName,
-			HwMgrId:     utils.UnitTestHwmgrID,
-			HwMgrNodeId: name,
+			NodeAllocationRequest: narName,
+			GroupName:             groupName,
+			HwMgrId:               utils.UnitTestHwmgrID,
+			HwMgrNodeId:           name,
 		},
 		Status: hwv1alpha1.NodeStatus{
 			BMC: &hwv1alpha1.BMC{

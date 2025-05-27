@@ -131,7 +131,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					HwMgrId:                     utils.UnitTestHwmgrID,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
-					NodePoolData: []hwv1alpha1.NodePoolData{
+					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
 							Name:           "controller",
 							Role:           "master",
@@ -303,10 +303,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 			conditions := reconciledCR.Status.Conditions
 
-			// Verify NodePool was created
-			nodePool := &hwv1alpha1.NodePool{}
+			// Verify NodeAllocationRequest was created
+			nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
 			Expect(c.Get(ctx, types.NamespacedName{
-				Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, nodePool)).To(Succeed())
+				Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, nodeAllocationRequest)).To(Succeed())
 
 			// Verify the ProvisioningRequest's status conditions
 			Expect(len(conditions)).To(Equal(5))
@@ -336,25 +336,25 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Unknown),
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
-			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
-			// Verify provisioningState is progressing when nodePool has been created
+			Expect(reconciledCR.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			// Verify provisioningState is progressing when nodeAllocationRequest has been created
 			testutils.VerifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for NodePool (cluster-1) to be processed", nil)
+				provisioningv1alpha1.StateProgressing, "Waiting for NodeAllocationRequest (cluster-1) to be processed", nil)
 		})
 	})
 
-	Context("When NodePool has been created", func() {
-		var nodePool *hwv1alpha1.NodePool
+	Context("When NodeAllocationRequest has been created", func() {
+		var nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
-			// Create NodePool resource
-			nodePool = &hwv1alpha1.NodePool{}
-			nodePool.SetName(crName)
-			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
-			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
+			// Create NodeAllocationRequest resource
+			nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
+			nodeAllocationRequest.SetName(crName)
+			nodeAllocationRequest.SetNamespace(utils.UnitTestHwmgrNamespace)
+			nodeAllocationRequest.Spec.HwMgrId = utils.UnitTestHwmgrID
 			// Ensure that the NodeGroup matches the data in the hwTemplate
-			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{NodePoolData: hwv1alpha1.NodePoolData{
+			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{NodeGroupData: hwv1alpha1.NodeGroupData{
 					Name:           "controller",
 					Role:           "master",
 					HwProfile:      "profile-spr-single-processor-64G",
@@ -362,7 +362,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 					Size: 1,
 				},
-				{NodePoolData: hwv1alpha1.NodePoolData{
+				{NodeGroupData: hwv1alpha1.NodeGroupData{
 					Name:           "worker",
 					Role:           "worker",
 					HwProfile:      "profile-spr-dual-processor-128G",
@@ -371,23 +371,23 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Size: 0,
 				},
 			}
-			nodePool.Status.Conditions = []metav1.Condition{
+			nodeAllocationRequest.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
 			}
-			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			testutils.CreateNodeResources(ctx, c, nodePool.Name)
+			nodeAllocationRequest.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
+			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 
-			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
-				Name:                           nodePool.Name,
-				Namespace:                      nodePool.Namespace,
+			cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				Name:                           nodeAllocationRequest.Name,
+				Namespace:                      nodeAllocationRequest.Namespace,
 				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
 			}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 		})
 
-		It("Verify ClusterInstance should not be created when NodePool provision is in-progress", func() {
+		It("Verify ClusterInstance should not be created when NodeAllocationRequest provision is in-progress", func() {
 			// Start reconciliation
 			result, err := reconciler.Reconcile(ctx, req)
 			// Verify the reconciliation result
@@ -411,20 +411,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
-			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
-			// Verify provisioningState is progressing when nodePool is in-progress
+			Expect(reconciledCR.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			// Verify provisioningState is progressing when nodeAllocationRequest is in-progress
 			testutils.VerifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Hardware provisioning is in progress", nil)
 		})
 
-		It("Verify ClusterInstance should be created when NodePool has provisioned", func() {
-			// Patch NodePool provision status to Completed
-			npProvisionedCond := meta.FindStatusCondition(
-				nodePool.Status.Conditions, string(hwv1alpha1.Provisioned),
+		It("Verify ClusterInstance should be created when NodeAllocationRequest has provisioned", func() {
+			// Patch NodeAllocationRequest provision status to Completed
+			narProvisionedCond := meta.FindStatusCondition(
+				nodeAllocationRequest.Status.Conditions, string(hwv1alpha1.Provisioned),
 			)
-			npProvisionedCond.Status = metav1.ConditionTrue
-			npProvisionedCond.Reason = string(hwv1alpha1.Completed)
-			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+			narProvisionedCond.Status = metav1.ConditionTrue
+			narProvisionedCond.Reason = string(hwv1alpha1.Completed)
+			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
 
 			// Start reconciliation
 			result, err := reconciler.Reconcile(ctx, req)
@@ -458,19 +458,19 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Status: metav1.ConditionUnknown,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Unknown),
 			})
-			// Verify provisioningState is still progressing when nodePool is provisioned and clusterInstance is created
+			// Verify provisioningState is still progressing when nodeAllocationRequest is provisioned and clusterInstance is created
 			testutils.VerifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateProgressing, "Waiting for ClusterInstance (cluster-1) to be processed", nil)
 		})
 
 		It("Verify status when HW provision has failed", func() {
-			// Patch NodePool provision status to Completed
-			npProvisionedCond := meta.FindStatusCondition(
-				nodePool.Status.Conditions, string(hwv1alpha1.Provisioned),
+			// Patch NodeAllocationRequest provision status to Completed
+			narProvisionedCond := meta.FindStatusCondition(
+				nodeAllocationRequest.Status.Conditions, string(hwv1alpha1.Provisioned),
 			)
-			npProvisionedCond.Status = metav1.ConditionFalse
-			npProvisionedCond.Reason = string(hwv1alpha1.Failed)
-			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+			narProvisionedCond.Status = metav1.ConditionFalse
+			narProvisionedCond.Reason = string(hwv1alpha1.Failed)
+			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
 
 			// Start reconciliation again
 			result, err := reconciler.Reconcile(ctx, req)
@@ -501,11 +501,11 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 			cr := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, cr)).To(Succeed())
-			// Verify the start timestamp has been set for NodePool
-			Expect(cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			// Verify the start timestamp has been set for NodeAllocationRequest
+			Expect(cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 
 			// Patch HardwareProvisioningCheckStart timestamp to mock timeout
-			cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart.Time = metav1.Now().Add(-2 * time.Minute)
+			cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart.Time = metav1.Now().Add(-2 * time.Minute)
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
 			// Start reconciliation again
@@ -531,21 +531,21 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				provisioningv1alpha1.StateFailed, "Hardware provisioning timed out", nil)
 		})
 
-		It("Verify status when configuration change causes ProvisioningRequest validation to fail but NodePool is also failed", func() {
+		It("Verify status when configuration change causes ProvisioningRequest validation to fail but NodeAllocationRequest is also failed", func() {
 			// Initial reconciliation
 			_, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Patch NodePool provision status to Completed
-			currentNp := &hwv1alpha1.NodePool{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
-			npProvisionedCond := meta.FindStatusCondition(
-				currentNp.Status.Conditions, string(hwv1alpha1.Provisioned),
+			// Patch NodeAllocationRequest provision status to Completed
+			currentNar := &hwv1alpha1.NodeAllocationRequest{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNar)).To(Succeed())
+			narProvisionedCond := meta.FindStatusCondition(
+				currentNar.Status.Conditions, string(hwv1alpha1.Provisioned),
 			)
-			npProvisionedCond.Status = metav1.ConditionFalse
-			npProvisionedCond.Reason = string(hwv1alpha1.Failed)
-			npProvisionedCond.Message = "NodePool failed"
-			Expect(c.Status().Update(ctx, currentNp)).To(Succeed())
+			narProvisionedCond.Status = metav1.ConditionFalse
+			narProvisionedCond.Reason = string(hwv1alpha1.Failed)
+			narProvisionedCond.Message = "NodeAllocationRequest failed"
+			Expect(c.Status().Update(ctx, currentNar)).To(Succeed())
 
 			// Remove required field hostname to fail ProvisioningRequest validation
 			testutils.RemoveRequiredFieldFromClusterInstanceInput(ctx, c, crName)
@@ -587,20 +587,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 	Context("When ClusterInstance has been created", func() {
 		var (
-			nodePool        *hwv1alpha1.NodePool
-			clusterInstance *siteconfig.ClusterInstance
-			managedCluster  *clusterv1.ManagedCluster
-			policy          *policiesv1.Policy
+			nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest
+			clusterInstance       *siteconfig.ClusterInstance
+			managedCluster        *clusterv1.ManagedCluster
+			policy                *policiesv1.Policy
 		)
 		BeforeEach(func() {
-			// Create NodePool resource that has provisioned
-			nodePool = &hwv1alpha1.NodePool{}
-			nodePool.SetName(crName)
-			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
-			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
+			// Create NodeAllocationRequest resource that has provisioned
+			nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
+			nodeAllocationRequest.SetName(crName)
+			nodeAllocationRequest.SetNamespace(utils.UnitTestHwmgrNamespace)
+			nodeAllocationRequest.Spec.HwMgrId = utils.UnitTestHwmgrID
 			// Ensure that the NodeGroup matches the data in the hwTemplate
-			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{NodePoolData: hwv1alpha1.NodePoolData{
+			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{NodeGroupData: hwv1alpha1.NodeGroupData{
 					Name:           "controller",
 					Role:           "master",
 					HwProfile:      "profile-spr-single-processor-64G",
@@ -608,7 +608,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 					Size: 1,
 				},
-				{NodePoolData: hwv1alpha1.NodePoolData{
+				{NodeGroupData: hwv1alpha1.NodeGroupData{
 					Name:           "worker",
 					Role:           "worker",
 					HwProfile:      "profile-spr-dual-processor-128G",
@@ -617,17 +617,17 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Size: 0,
 				},
 			}
-			nodePool.Status.Conditions = []metav1.Condition{
+			nodeAllocationRequest.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
-			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			testutils.CreateNodeResources(ctx, c, nodePool.Name)
-			// Set the provisioningRequest extensions.nodePoolRef
-			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
-				Name:                           nodePool.Name,
-				Namespace:                      nodePool.Namespace,
+			nodeAllocationRequest.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
+			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
+			// Set the provisioningRequest extensions.nodeAllocationRequestRef
+			cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				Name:                           nodeAllocationRequest.Name,
+				Namespace:                      nodeAllocationRequest.Namespace,
 				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
 			}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
@@ -800,7 +800,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Message: "The Cluster is not yet ready",
 			})
 			// Verify the start timestamp has been set for HardwareProvisioning
-			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart).ToNot(BeZero())
+			Expect(reconciledCR.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart).ToNot(BeZero())
 			// Verify the provisioningState moves to failed when cluster provisioning times out
 			testutils.VerifyProvisioningStatus(reconciledCR.Status.ProvisioningStatus,
 				provisioningv1alpha1.StateFailed, "Cluster installation timed out", nil)
@@ -1343,10 +1343,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 	Context("When hw template is updated", func() {
 		var (
-			hwTemplateName = "hw-template-updated"
-			hwTemplate     *hwv1alpha1.HardwareTemplate
-			nodePool       *hwv1alpha1.NodePool
-			tVersion       = "v1.0.0-1"
+			hwTemplateName        = "hw-template-updated"
+			hwTemplate            *hwv1alpha1.HardwareTemplate
+			nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest
+			tVersion              = "v1.0.0-1"
 		)
 
 		BeforeEach(func() {
@@ -1359,7 +1359,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					HwMgrId:                     utils.UnitTestHwmgrID,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
-					NodePoolData: []hwv1alpha1.NodePoolData{
+					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
 							Name:           "controller",
 							Role:           "master",
@@ -1409,13 +1409,13 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			}
 			Expect(c.Create(ctx, ct)).To(Succeed())
 
-			// Create NodePool resource that has provisioned
-			nodePool = &hwv1alpha1.NodePool{}
-			nodePool.SetName(crName)
-			nodePool.SetNamespace(utils.UnitTestHwmgrNamespace)
-			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
-			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{NodePoolData: hwv1alpha1.NodePoolData{
+			// Create NodeAllocationRequest resource that has provisioned
+			nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
+			nodeAllocationRequest.SetName(crName)
+			nodeAllocationRequest.SetNamespace(utils.UnitTestHwmgrNamespace)
+			nodeAllocationRequest.Spec.HwMgrId = utils.UnitTestHwmgrID
+			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+				{NodeGroupData: hwv1alpha1.NodeGroupData{
 					Name:           "controller",
 					Role:           "master",
 					HwProfile:      "profile-spr-single-processor-64G",
@@ -1423,7 +1423,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 					Size: 1,
 				},
-				{NodePoolData: hwv1alpha1.NodePoolData{
+				{NodeGroupData: hwv1alpha1.NodeGroupData{
 					Name:           "worker",
 					Role:           "worker",
 					HwProfile:      "profile-spr-dual-processor-128G",
@@ -1432,16 +1432,16 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					Size: 0,
 				},
 			}
-			nodePool.Status.Conditions = []metav1.Condition{
+			nodeAllocationRequest.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
 			}
-			nodePool.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			testutils.CreateNodeResources(ctx, c, nodePool.Name)
-			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
-				Name:                           nodePool.Name,
-				Namespace:                      nodePool.Namespace,
+			nodeAllocationRequest.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
+			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
+			cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				Name:                           nodeAllocationRequest.Name,
+				Namespace:                      nodeAllocationRequest.Namespace,
 				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
 			}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())
@@ -1451,7 +1451,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Update(ctx, cr)).To(Succeed())
 		})
 
-		It("should update the status to unknown when nodePool does not have configured condition", func() {
+		It("should update the status to unknown when nodeAllocationRequest does not have configured condition", func() {
 			// Start reconciliation
 			result, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
@@ -1460,8 +1460,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
-			// Verify the nodePool change is detected and configuration check start time is set
-			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart).ToNot(BeNil())
+			// Verify the nodeAllocationRequest change is detected and configuration check start time is set
+			Expect(reconciledCR.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart).ToNot(BeNil())
 			hwConfiguredCond := meta.FindStatusCondition(
 				reconciledCR.Status.Conditions,
 				string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -1470,19 +1470,19 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
 				Status:  metav1.ConditionUnknown,
 				Reason:  string(provisioningv1alpha1.CRconditionReasons.Unknown),
-				Message: "Waiting for NodePool (cluster-1) to be processed",
+				Message: "Waiting for NodeAllocationRequest (cluster-1) to be processed",
 			})
 		})
 
-		It("should update the status to InProgress when nodePool has configured condition in progress", func() {
+		It("should update the status to InProgress when nodeAllocationRequest has configured condition in progress", func() {
 			// Set the configured condition to in progress
-			nodePool.Status.Conditions = append(nodePool.Status.Conditions, metav1.Condition{
+			nodeAllocationRequest.Status.Conditions = append(nodeAllocationRequest.Status.Conditions, metav1.Condition{
 				Type:    string(hwv1alpha1.Configured),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(hwv1alpha1.InProgress),
 				Message: "Hardware configuring is in progress",
 			})
-			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
 
 			// Start reconciliation
 			result, err := reconciler.Reconcile(ctx, req)
@@ -1492,8 +1492,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			reconciledCR := &provisioningv1alpha1.ProvisioningRequest{}
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
-			// Verify the nodePool change is detected and configuration check start time is set
-			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart).ToNot(BeNil())
+			// Verify the nodeAllocationRequest change is detected and configuration check start time is set
+			Expect(reconciledCR.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart).ToNot(BeNil())
 			hwConfiguredCond := meta.FindStatusCondition(
 				reconciledCR.Status.Conditions,
 				string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -1506,15 +1506,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			})
 		})
 
-		It("should update the status to completed when nodePool has configured condition completed", func() {
+		It("should update the status to completed when nodeAllocationRequest has configured condition completed", func() {
 			// Set the configured condition to completed
-			nodePool.Status.Conditions = append(nodePool.Status.Conditions, metav1.Condition{
+			nodeAllocationRequest.Status.Conditions = append(nodeAllocationRequest.Status.Conditions, metav1.Condition{
 				Type:    string(hwv1alpha1.Configured),
 				Status:  metav1.ConditionTrue,
 				Reason:  string(hwv1alpha1.ConfigApplied),
 				Message: "Configuration has been applied successfully",
 			})
-			Expect(c.Status().Update(ctx, nodePool)).To(Succeed())
+			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
 
 			// Start reconciliation
 			result, err := reconciler.Reconcile(ctx, req)
@@ -1525,7 +1525,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Get(ctx, req.NamespacedName, reconciledCR)).To(Succeed())
 
 			// Verify configuration check start time is reset
-			Expect(reconciledCR.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart).To(BeNil())
+			Expect(reconciledCR.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart).To(BeNil())
 			hwConfiguredCond := meta.FindStatusCondition(
 				reconciledCR.Status.Conditions,
 				string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -1609,7 +1609,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			}
 			Expect(c.Create(ctx, agent)).To(Succeed())
 
-			nodePool := &hwv1alpha1.NodePool{
+			nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
 					Namespace: utils.UnitTestHwmgrNamespace,
@@ -1617,12 +1617,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 					},
 				},
-				Spec: hwv1alpha1.NodePoolSpec{
+				Spec: hwv1alpha1.NodeAllocationRequestSpec{
 					HwMgrId: utils.UnitTestHwmgrID,
 					// Ensure that the NodeGroup matches the data in the hwTemplate
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
-							NodePoolData: hwv1alpha1.NodePoolData{
+							NodeGroupData: hwv1alpha1.NodeGroupData{
 								Name:           "controller",
 								Role:           "master",
 								HwProfile:      "profile-spr-single-processor-64G",
@@ -1631,7 +1631,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 							Size: 1,
 						},
 						{
-							NodePoolData: hwv1alpha1.NodePoolData{
+							NodeGroupData: hwv1alpha1.NodeGroupData{
 								Name:           "worker",
 								Role:           "worker",
 								HwProfile:      "profile-spr-dual-processor-128G",
@@ -1641,7 +1641,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						},
 					},
 				},
-				Status: hwv1alpha1.NodePoolStatus{
+				Status: hwv1alpha1.NodeAllocationRequestStatus{
 					Conditions: []metav1.Condition{
 						{
 							Type:   string(hwv1alpha1.Provisioned),
@@ -1654,17 +1654,17 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					},
 				},
 			}
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			testutils.CreateNodeResources(ctx, c, nodePool.Name)
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 
 			provisionedCond := metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 				Status: metav1.ConditionFalse,
 			}
 			cr.Status.Conditions = append(cr.Status.Conditions, provisionedCond)
-			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
-				Name:                           nodePool.Name,
-				Namespace:                      nodePool.Namespace,
+			cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				Name:                           nodeAllocationRequest.Name,
+				Namespace:                      nodeAllocationRequest.Namespace,
 				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now().Add(-time.Minute)},
 			}
 			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
@@ -2018,7 +2018,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			}
 			Expect(c.Create(ctx, clusterInstanceDefaultsV2)).To(Succeed())
 
-			nodePool := &hwv1alpha1.NodePool{
+			nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
 					Namespace: utils.UnitTestHwmgrNamespace,
@@ -2026,12 +2026,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 					},
 				},
-				Spec: hwv1alpha1.NodePoolSpec{
+				Spec: hwv1alpha1.NodeAllocationRequestSpec{
 					HwMgrId: utils.UnitTestHwmgrID,
 					// Ensure that the NodeGroup matches the data in the hwTemplate
 					NodeGroup: []hwv1alpha1.NodeGroup{
 						{
-							NodePoolData: hwv1alpha1.NodePoolData{
+							NodeGroupData: hwv1alpha1.NodeGroupData{
 								Name:           "controller",
 								Role:           "master",
 								HwProfile:      "profile-spr-single-processor-64G",
@@ -2040,7 +2040,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 							Size: 1,
 						},
 						{
-							NodePoolData: hwv1alpha1.NodePoolData{
+							NodeGroupData: hwv1alpha1.NodeGroupData{
 								Name:           "worker",
 								Role:           "worker",
 								HwProfile:      "profile-spr-dual-processor-128G",
@@ -2050,7 +2050,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						},
 					},
 				},
-				Status: hwv1alpha1.NodePoolStatus{
+				Status: hwv1alpha1.NodeAllocationRequestStatus{
 					Conditions: []metav1.Condition{
 						{
 							Type:   string(hwv1alpha1.Provisioned),
@@ -2063,8 +2063,8 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 					},
 				},
 			}
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			testutils.CreateNodeResources(ctx, c, nodePool.Name)
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 
 			policy = &policiesv1.Policy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2095,9 +2095,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			cr.Status.Extensions.ClusterDetails.Name = crName
 			cr.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &metav1.Time{Time: time.Now()}
 			cr.Status.Extensions.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
-			cr.Status.Extensions.NodePoolRef = &provisioningv1alpha1.NodePoolRef{
-				Name:                           nodePool.Name,
-				Namespace:                      nodePool.Namespace,
+			cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				Name:                           nodeAllocationRequest.Name,
+				Namespace:                      nodeAllocationRequest.Namespace,
 				HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now().Add(-time.Minute)},
 			}
 			Expect(c.Status().Update(ctx, cr)).To(Succeed())

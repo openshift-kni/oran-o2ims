@@ -200,10 +200,10 @@ const (
 
 // Hardeware template constants
 const (
-	HwTemplatePluginMgr      = "hwMgrId"
-	HwTemplateNodePool       = "node-pools-data"
-	HwTemplateBootIfaceLabel = "bootInterfaceLabel"
-	HwTemplateExtensions     = "extensions"
+	HwTemplatePluginMgr             = "hwMgrId"
+	HwTemplateNodeAllocationRequest = "node-group-data"
+	HwTemplateBootIfaceLabel        = "bootInterfaceLabel"
+	HwTemplateExtensions            = "extensions"
 )
 
 const (
