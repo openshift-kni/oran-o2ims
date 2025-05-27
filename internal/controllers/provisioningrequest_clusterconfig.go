@@ -278,7 +278,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 	}
 
 	var bmhNs string
-	nodes := &hwv1alpha1.NodeList{}
+	nodes := &hwv1alpha1.AllocatedNodeList{}
 	// If the HW template is provided, get the NodeAllocationRequest and the corresponding o2ims-hardwaremanagement Nodes.
 	if oranct.Spec.Templates.HwTemplate != "" {
 		// Get the NodeAllocationRequest associated to the current ProvisioningRequest.
