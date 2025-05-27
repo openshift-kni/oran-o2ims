@@ -179,10 +179,10 @@ func DownloadFile(rawUrl, filename, dirpath string) error {
 func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
 	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", utils.UnitTestHwmgrNamespace, npName, nil)
 	secrets := CreateSecrets([]string{BmcSecretName}, utils.UnitTestHwmgrNamespace)
-	CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+	CreateResources(ctx, c, []*hwv1alpha1.AllocatedNode{node}, secrets)
 }
 
-func CreateResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.Node, secrets []*corev1.Secret) {
+func CreateResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.AllocatedNode, secrets []*corev1.Secret) {
 	for _, node := range nodes {
 		Expect(c.Create(ctx, node)).To(Succeed())
 	}
@@ -191,7 +191,7 @@ func CreateResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.N
 	}
 }
 
-func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
+func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.AllocatedNode {
 	if interfaces == nil {
 		interfaces = []*hwv1alpha1.Interface{
 			{
@@ -211,18 +211,18 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName strin
 			},
 		}
 	}
-	return &hwv1alpha1.Node{
+	return &hwv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: hwv1alpha1.NodeSpec{
+		Spec: hwv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: narName,
 			GroupName:             groupName,
 			HwMgrId:               utils.UnitTestHwmgrID,
 			HwMgrNodeId:           name,
 		},
-		Status: hwv1alpha1.NodeStatus{
+		Status: hwv1alpha1.AllocatedNodeStatus{
 			BMC: &hwv1alpha1.BMC{
 				Address:         bmcAddress,
 				CredentialsName: bmcSecret,

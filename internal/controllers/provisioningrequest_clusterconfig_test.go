@@ -2296,7 +2296,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = agent2Hostname
 			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
@@ -2364,7 +2364,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = "some-other-cluster.lab.example.com"
 			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)

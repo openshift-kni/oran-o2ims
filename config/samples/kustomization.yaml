@@ -4,7 +4,7 @@ resources:
 - v1alpha1_inventory.yaml
 
 # Hardware management:
-- v1alpha1_node.yaml
+- v1alpha1_allocatednode.yaml
 - v1alpha1_nodeallocationrequest.yaml
 - v1alpha1_hardwaretemplate.yaml
 

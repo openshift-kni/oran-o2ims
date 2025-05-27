@@ -32,7 +32,7 @@ properties:
 - type: olm.gvk
   value:
     group: o2ims-hardwaremanagement.oran.openshift.io
-    kind: Node
+    kind: AllocatedNode
     version: v1alpha1
 - type: olm.gvk
   value:
@@ -99,7 +99,7 @@ properties:
           },
           {
             "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-            "kind": "Node",
+            "kind": "AllocatedNode",
             "metadata": {
               "labels": {
                 "app.kubernetes.io/created-by": "oran-o2ims",
@@ -785,7 +785,7 @@ properties:
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: nodeGroupData defines a collection of nodeGroupData items
-          displayName: Node Pool Data
+          displayName: Node Group Data
           path: nodeGroupData
         statusDescriptors:
         - displayName: Conditions
@@ -1036,8 +1036,8 @@ properties:
         version: v1alpha1
       - description: Node is the schema for an allocated node
         displayName: Node
-        kind: Node
-        name: nodes.o2ims-hardwaremanagement.oran.openshift.io
+        kind: AllocatedNode
+        name: allocatednodes.o2ims-hardwaremanagement.oran.openshift.io
         resources:
         - kind: Namespace
           name: ""
