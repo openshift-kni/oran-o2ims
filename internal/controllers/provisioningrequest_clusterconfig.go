@@ -279,39 +279,39 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 
 	var bmhNs string
 	nodes := &hwv1alpha1.NodeList{}
-	// If the HW template is provided, get the NodePool and the corresponding o2ims-hardwaremanagement Nodes.
+	// If the HW template is provided, get the NodeAllocationRequest and the corresponding o2ims-hardwaremanagement Nodes.
 	if oranct.Spec.Templates.HwTemplate != "" {
-		// Get the NodePool associated to the current ProvisioningRequest.
-		nodePool := &hwv1alpha1.NodePool{}
-		// The NodePool was created in the HW Manager Plugin Namespace.
-		nodePoolNs := utils.GetHwMgrPluginNS()
-		// The NodePool, ClusterInstance, ClusterDeployment and ManagedCluster share the same name.
-		nodePoolName := mcl.Name
+		// Get the NodeAllocationRequest associated to the current ProvisioningRequest.
+		nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
+		// The NodeAllocationRequest was created in the HW Manager Plugin Namespace.
+		narNs := utils.GetHwMgrPluginNS()
+		// The NodeAllocationRequest, ClusterInstance, ClusterDeployment and ManagedCluster share the same name.
+		narName := mcl.Name
 
-		exist, err := utils.DoesK8SResourceExist(ctx, t.client, nodePoolName, nodePoolNs, nodePool)
+		exist, err := utils.DoesK8SResourceExist(ctx, t.client, narName, narNs, nodeAllocationRequest)
 		if err != nil {
-			return fmt.Errorf("failed to get NodePool %s in namespace %s: %w", nodePoolName, nodePool.GetNamespace(), err)
+			return fmt.Errorf("failed to get NodeAllocationRequest %s in namespace %s: %w", narName, nodeAllocationRequest.GetNamespace(), err)
 		}
 		if !exist {
-			return fmt.Errorf("expected NodePool %s not found in the %s namespace", nodePoolName, nodePoolNs)
+			return fmt.Errorf("expected NodeAllocationRequest %s not found in the %s namespace", narName, narNs)
 		}
 
-		// Get the o2ims-hardwaremanagement Nodes corresponding to the above NodePool.
+		// Get the o2ims-hardwaremanagement Nodes corresponding to the above NodeAllocationRequest.
 		listOpts := []client.ListOption{
-			client.MatchingFields{"spec.nodePool": nodePoolName},
-			client.InNamespace(nodePoolNs),
+			client.MatchingFields{"spec.nodeAllocationRequest": narName},
+			client.InNamespace(narNs),
 		}
 		err = t.client.List(ctx, nodes, listOpts...)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to list o2ims-hardwaremanagement.oran.openshift.io Nodes in the %s namespace: %w",
-				nodePoolNs, err,
+				narNs, err,
 			)
 		}
 		if len(nodes.Items) == 0 {
 			return fmt.Errorf(
 				"the expected o2ims-hardwaremanagement.oran.openshift.io Nodes were not found in the %s namespace",
-				nodePoolNs,
+				narNs,
 			)
 		}
 		bmhNs = utils.GetBMHNamespace(&nodes.Items[0])

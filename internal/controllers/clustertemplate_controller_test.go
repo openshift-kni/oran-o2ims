@@ -106,7 +106,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			Spec: hwv1alpha1.HardwareTemplateSpec{
 				HwMgrId:            "hwMgr",
 				BootInterfaceLabel: "label",
-				NodePoolData: []hwv1alpha1.NodePoolData{
+				NodeGroupData: []hwv1alpha1.NodeGroupData{
 					{
 						Name:           "master",
 						Role:           "mmaster",
@@ -492,7 +492,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			Spec: hwv1alpha1.HardwareTemplateSpec{
 				HwMgrId:            "hwMgr",
 				BootInterfaceLabel: "label",
-				NodePoolData: []hwv1alpha1.NodePoolData{
+				NodeGroupData: []hwv1alpha1.NodeGroupData{
 					{
 						Name:           "master",
 						Role:           "master",
