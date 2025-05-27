@@ -37,7 +37,7 @@ properties:
 - type: olm.gvk
   value:
     group: o2ims-hardwaremanagement.oran.openshift.io
-    kind: NodePool
+    kind: NodeAllocationRequest
     version: v1alpha1
 - type: olm.gvk
   value:
@@ -77,7 +77,7 @@ properties:
               },
               "hardwareProvisioningTimeout": "60m",
               "hwMgrId": "hwmgr-1",
-              "nodePoolData": [
+              "nodeGroupData": [
                 {
                   "hwProfile": "profile-spr-single-processor-64G",
                   "name": "controller",
@@ -114,7 +114,7 @@ properties:
             "spec": {
               "groupName": "master",
               "hwProfile": "sample-profile",
-              "nodePool": "sample-nodepool"
+              "nodeAllocationRequest": "sample-nodeAllocationRequest"
             },
             "status": {
               "bmc": {
@@ -147,7 +147,7 @@ properties:
           },
           {
             "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-            "kind": "NodePool",
+            "kind": "NodeAllocationRequest",
             "metadata": {
               "annotations": {
                 "bootInterfaceLabel": "bootable-interface"
@@ -160,7 +160,7 @@ properties:
                 "app.kubernetes.io/name": "inventory",
                 "app.kubernetes.io/part-of": "oran-o2ims"
               },
-              "name": "sample-nodepool",
+              "name": "sample-nodeallocationrequest",
               "namespace": "oran-hwmgr-plugin"
             },
             "spec": {
@@ -169,7 +169,7 @@ properties:
               "hwMgrId": "loopback-1",
               "nodeGroup": [
                 {
-                  "nodePoolData": {
+                  "nodeGroupData": {
                     "hwProfile": "sample-master-profile",
                     "name": "controller",
                     "resourcePoolId": "master-pool",
@@ -178,7 +178,7 @@ properties:
                   "size": 1
                 },
                 {
-                  "nodePoolData": {
+                  "nodeGroupData": {
                     "hwProfile": "sample-worker-profile",
                     "name": "worker",
                     "resourcePoolId": "worker-pool",
@@ -770,7 +770,7 @@ properties:
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: Extensions holds additional custom key-value pairs that can
-            be used to extend the node pool's configuration.
+            be used to extend the node allocation request's configuration.
           displayName: Extensions
           path: extensions
         - description: HardwareProvisioningTimeout defines the timeout duration string
@@ -784,9 +784,9 @@ properties:
           path: hwMgrId
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: NodePoolData defines a collection of NodePoolData items
+        - description: nodeGroupData defines a collection of nodeGroupData items
           displayName: Node Pool Data
-          path: nodePoolData
+          path: nodeGroupData
         statusDescriptors:
         - displayName: Conditions
           path: conditions
@@ -985,10 +985,10 @@ properties:
         - displayName: Deployed Server Configurations
           path: usedServerConfig
         version: v1alpha1
-      - description: NodePool is the schema for an allocation request of nodes
-        displayName: Node Pool
-        kind: NodePool
-        name: nodepools.o2ims-hardwaremanagement.oran.openshift.io
+      - description: NodeAllocationRequest is the schema for an allocation request of nodes
+        displayName: Node Allocation Request
+        kind: NodeAllocationRequest
+        name: nodeallocationrequests.o2ims-hardwaremanagement.oran.openshift.io
         resources:
         - kind: Namespace
           name: ""
@@ -1023,7 +1023,7 @@ properties:
           - urn:alm:descriptor:com.tectonic.ui:text
         statusDescriptors:
         - description: Conditions represent the latest available observations of an
-            NodePool's state.
+            NodeAllocationRequest's state.
           displayName: Conditions
           path: conditions
         - displayName: Hw Mgr Plugin
@@ -1070,9 +1070,9 @@ properties:
           path: hwProfile
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: NodePool
-          displayName: Node Pool
-          path: nodePool
+        - description: NodeAllocationRequest
+          displayName: Node Allocation Request
+          path: nodeAllocationRequest
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         statusDescriptors:

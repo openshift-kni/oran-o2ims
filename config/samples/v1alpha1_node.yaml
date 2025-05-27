@@ -12,7 +12,7 @@ metadata:
 spec:
   groupName: master
   hwProfile: sample-profile
-  nodePool: sample-nodepool
+  nodeAllocationRequest: sample-nodeallocationrequest
 status:
   bmc:
     address: idrac-virtualmedia+https://198.51.100.1/redfish/v1/Systems/System.Embedded.1

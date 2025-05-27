@@ -113,7 +113,7 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Extensions holds additional custom key-value pairs that can be
-          used to extend the node pool's configuration.
+          used to extend the node allocation request's configuration.
         displayName: Extensions
         path: extensions
       - description: HardwareProvisioningTimeout defines the timeout duration string
@@ -127,9 +127,9 @@ spec:
         path: hwMgrId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodePoolData defines a collection of NodePoolData items
-        displayName: Node Pool Data
-        path: nodePoolData
+      - description: NodeGroupData defines a collection of NodeGroupData items
+        displayName: Node Group Data
+        path: nodeGroupData
       statusDescriptors:
       - displayName: Conditions
         path: conditions
@@ -327,10 +327,11 @@ spec:
       - displayName: Deployed Server Configurations
         path: usedServerConfig
       version: v1alpha1
-    - description: NodePool is the schema for an allocation request of nodes
-      displayName: Node Pool
-      kind: NodePool
-      name: nodepools.o2ims-hardwaremanagement.oran.openshift.io
+    - description: NodeAllocationRequest is the schema for an allocation request of
+        nodes
+      displayName: Node Allocation Request
+      kind: NodeAllocationRequest
+      name: nodeallocationrequests.o2ims-hardwaremanagement.oran.openshift.io
       resources:
       - kind: Namespace
         name: ""
@@ -365,7 +366,7 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - description: Conditions represent the latest available observations of an
-          NodePool's state.
+          NodeAllocationRequest's state.
         displayName: Conditions
         path: conditions
       - displayName: Hw Mgr Plugin
@@ -373,8 +374,8 @@ spec:
       - description: Properties represent the node properties in the pool
         displayName: Properties
         path: properties
-      - displayName: Selected Pools
-        path: selectedPools
+      - displayName: Selected Groups
+        path: selectedGroups
       version: v1alpha1
     - description: Node is the schema for an allocated node
       displayName: Node
@@ -412,9 +413,9 @@ spec:
         path: hwProfile
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodePool
+      - description: NodeAllocationRequest
         displayName: Node Pool
-        path: nodePool
+        path: nodeAllocationRequest
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:

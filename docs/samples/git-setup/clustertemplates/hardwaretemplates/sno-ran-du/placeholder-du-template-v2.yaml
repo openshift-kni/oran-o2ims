@@ -10,7 +10,7 @@ spec:
   # hardwareProvisioningTimeout: "30m"
   hwMgrId: oran-hwmgr-plugin-test
   bootInterfaceLabel: bootable-interface
-  nodePoolData:
+  nodeGroupData:
     - name: controller
       role: master
       hwProfile: profile-proliant-gen11-dual-processor-256G-v2

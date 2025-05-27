@@ -59,7 +59,7 @@ spec:
                 additionalProperties:
                   type: string
                 description: Extensions holds additional custom key-value pairs that
-                  can be used to extend the node pool's configuration.
+                  can be used to extend the node allocation request's configuration.
                 type: object
               hardwareProvisioningTimeout:
                 description: HardwareProvisioningTimeout defines the timeout duration
@@ -70,11 +70,11 @@ spec:
                   adaptor.
                 minLength: 1
                 type: string
-              nodePoolData:
-                description: NodePoolData defines a collection of NodePoolData items
+              nodeGroupData:
+                description: NodeGroupData defines a collection of NodeGroupData items
                 items:
-                  description: NodePoolData provides the necessary information for
-                    populating a node pool
+                  description: NodeGroupData provides the necessary information for
+                    populating a node allocation request
                   properties:
                     hwProfile:
                       minLength: 1
@@ -103,7 +103,7 @@ spec:
             required:
             - bootInterfaceLabel
             - hwMgrId
-            - nodePoolData
+            - nodeGroupData
             type: object
           status:
             description: HardwareTemplateStatus defines the observed state of HardwareTemplate

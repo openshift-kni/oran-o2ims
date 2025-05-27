@@ -5,7 +5,7 @@ resources:
 
 # Hardware management:
 - v1alpha1_node.yaml
-- v1alpha1_nodepool.yaml
+- v1alpha1_nodeallocationrequest.yaml
 - v1alpha1_hardwaretemplate.yaml
 
 # Provisioning:

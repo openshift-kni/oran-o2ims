@@ -48,11 +48,11 @@ type ProvisioningRequestSpec struct {
 	Extensions runtime.RawExtension `json:"extensions,omitempty"`
 }
 
-// NodePoolRef references a node pool.
-type NodePoolRef struct {
-	// Contains the name of the created NodePool.
+// NodeAllocationRequestRef references a node allocation request.
+type NodeAllocationRequestRef struct {
+	// Contains the name of the created NodeAllocationRequest.
 	Name string `json:"name,omitempty"`
-	// Contains the namespace of the created NodePool.
+	// Contains the namespace of the created NodeAllocationRequest.
 	Namespace string `json:"namespace,omitempty"`
 	// Represents the timestamp of the first status check for hardware provisioning
 	HardwareProvisioningCheckStart *metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
@@ -78,8 +78,8 @@ type Extensions struct {
 	// ClusterDetails references to the ClusterInstance.
 	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
 
-	// NodePoolRef references to the NodePool.
-	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
+	// NodeAllocationRequestRef references to the NodeAllocationRequest.
+	NodeAllocationRequestRef *NodeAllocationRequestRef `json:"nodeAllocationRequestRef,omitempty"`
 
 	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
 	Policies []PolicyDetails `json:"policies,omitempty"`
