@@ -15,7 +15,7 @@ metadata:
         '.tekton/o-cloud-manager-fbc-4-19-pull-request.yaml'.pathChanged() ||
         '.tekton/o-cloud-manager-fbc-4-19-push.yaml'.pathChanged() ||
         '.konflux/Dockerfile.catalog'.pathChanged() ||
-        '.konflux/.konflux/catalog/bundle.builds.in.yaml'.pathChanged()
+        '.konflux/catalog/bundle.builds.in.yaml'.pathChanged()
       )
   creationTimestamp: null
   labels:
