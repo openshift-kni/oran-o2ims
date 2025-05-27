@@ -1,0 +1,7 @@
+apiVersion: hardwaremanagement.openshift.io/v1alpha1
+kind: HardwarePlugin
+metadata:
+  name: hardwareplugin-sample
+  namespace: oran-o2ims
+spec:
+  apiEndpoint: "https://plugin-server.oran-o2ims.svc.cluster.local:8443"

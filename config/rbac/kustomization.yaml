@@ -24,3 +24,10 @@ resources:
 #- o2ims.provisioning.oran.org_clustertemplate_viewer_role.yaml
 #- o2ims.provisioning.oran.org_provisioningrequest_editor_role.yaml
 #- o2ims.provisioning.oran.org_provisioningrequest_viewer_role.yaml
+# For each CRD, "Editor" and "Viewer" roles are scaffolded by
+# default, aiding admins in cluster management. Those roles are
+# not used by the Project itself. You can comment the following lines
+# if you do not want those helpers be installed with your Project.
+- hardwaremanagement_hardwareplugin_editor_role.yaml
+- hardwaremanagement_hardwareplugin_viewer_role.yaml
+
