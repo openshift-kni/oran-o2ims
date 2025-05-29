@@ -757,6 +757,9 @@ spec:
       - displayName: Conditions
         path: conditions
       version: v1alpha1
+    - kind: HardwarePlugin
+      name: hardwareplugins.o2ims-hardwaremanagement.oran.openshift.io
+      version: v1alpha1
     - description: HardwareTemplate is the Schema for the hardwaretemplates API
       displayName: ORAN O2IMS Hardware Template
       kind: HardwareTemplate
@@ -1157,6 +1160,14 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - ""
+          resources:
           - namespaces
           verbs:
           - create
@@ -1283,6 +1294,18 @@ spec:
           - list
           - watch
         - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - hwmgr-plugin.oran.openshift.io
           resources:
           - hardwaremanagers
@@ -1331,6 +1354,60 @@ spec:
         - apiGroups:
           - o2ims-hardwaremanagement.oran.openshift.io
           resources:
+          - allocatednodes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - allocatednodes/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - allocatednodes/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareplugins
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareplugins/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareplugins/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
           - hardwaretemplates
           verbs:
           - create
@@ -1360,6 +1437,13 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - nodeallocationrequests/finalizers
+          verbs:
+          - patch
+          - update
         - apiGroups:
           - o2ims-hardwaremanagement.oran.openshift.io
           resources:
