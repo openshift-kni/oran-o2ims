@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 
+	hwpluginscmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/cmd"
 	alarmscmd "github.com/openshift-kni/oran-o2ims/internal/service/alarms/cmd"
 	artifactscmd "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/cmd"
 	clustercmd "github.com/openshift-kni/oran-o2ims/internal/service/cluster/cmd"
@@ -37,6 +38,7 @@ func main() {
 		SetErr(os.Stderr).
 		AddCommand(cmd.Start).
 		AddCommand(cmd.Version).
+		AddCommand(hwpluginscmd.Start).
 		AddCommand(alarmscmd.GetAlarmRootCmd).              // TODO: all server should have same root to share init info
 		AddCommand(clustercmd.GetClusterRootCmd).           // TODO: all server should have same root to share init info
 		AddCommand(inventorycmd.GetResourcesRootCmd).       // TODO: all server should have same root to share init info
