@@ -39,6 +39,11 @@ const (
 	InventoryProvisioningServerName = InventoryProvisioning + serverSuffix
 )
 
+const (
+	HardwarePluginManager           = "hardwareplugin-manager"
+	HardwarePluginManagerServerName = HardwarePluginManager + serverSuffix
+)
+
 // IngressName defines the name of our ingress controller
 const IngressName = "oran-o2ims-ingress"
 
@@ -96,6 +101,15 @@ var (
 		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
 		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
 		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+	}
+
+	HardwarePluginManagerArgs = []string{
+		"hardwareplugin-manager",
+		"start",
+		"--health-probe-bind-address=:8081",
+		"--metrics-bind-address=:8080",
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
+		"--leader-elect",
 	}
 )
 
@@ -229,7 +243,7 @@ const (
 const (
 	UnitTestHwmgrID        = "hwmgr"
 	UnitTestHwmgrNamespace = "hwmgr"
-	DefaultPluginNamespace = "oran-hwmgr-plugin"
+	DefaultPluginNamespace = "oran-o2ims"
 )
 
 // POD Container Names

@@ -72,6 +72,17 @@ import (
 //+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
 //+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch;update
+//+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/finalizers,verbs=update;patch
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -843,6 +854,12 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 
 	// Start the provisioning server
 	nextReconcile, err = t.setupProvisioningServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
+	}
+
+	// Start the HardwarePlugin manager
+	nextReconcile, err = t.setupHardwarePluginManager(ctx, nextReconcile)
 	if err != nil {
 		return
 	}

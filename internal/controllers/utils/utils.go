@@ -164,7 +164,8 @@ func HasApiEndpoints(serverName string) bool {
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryResourceServerName ||
 		serverName == InventoryArtifactsServerName ||
-		serverName == InventoryProvisioningServerName
+		serverName == InventoryProvisioningServerName ||
+		serverName == HardwarePluginManagerServerName
 }
 
 // HasDatabase determines whether a server owns a logical database instance
@@ -180,7 +181,8 @@ func HasDatabase(serverName string) bool {
 func RequiresInternalListener(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
 		serverName == InventoryClusterServerName ||
-		serverName == InventoryAlarmServerName
+		serverName == InventoryAlarmServerName ||
+		serverName == HardwarePluginManagerServerName
 }
 
 // IsOAuthEnabled determines if the Inventory CR has OAuth attributes provided.
@@ -196,7 +198,8 @@ func NeedsOAuthAccess(serverName string) bool {
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryArtifactsServerName ||
-		serverName == InventoryProvisioningServerName
+		serverName == InventoryProvisioningServerName ||
+		serverName == HardwarePluginManagerServerName
 }
 
 // getTLSClientCertificateSecret determines whether there is a TLS secret configured.
@@ -477,6 +480,12 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 
 		// Add OAuth command line arguments
 		result = addArgsForOAuth(inventory, result)
+		return
+	}
+
+	// HwMgr Plugin Controller
+	if serverName == HardwarePluginManagerServerName {
+		result = slices.Clone(HardwarePluginManagerArgs)
 		return
 	}
 
