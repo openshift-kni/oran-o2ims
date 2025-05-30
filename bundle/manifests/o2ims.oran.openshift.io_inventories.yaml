@@ -86,12 +86,12 @@ spec:
                     properties:
                       secretName:
                         description: |-
-                          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
-                          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
-                          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
-                          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
-                          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
-                          used as the ingress certificate as well as the outgoing client certificate.
+                          SecretName specifies the name of a secret (in the current namespace) containing an X.509 certificate and
+                          private key. The secret must include 'tls.key' and 'tls.crt' keys. If the certificate is signed by
+                          intermediate CA(s), the full certificate chain should be included in the certificate file, with the
+                          leaf certificate first and the root CA last. The certificate's Common Name (CN) or Subject Alternative
+                          Name (SAN) should align with the service's fully qualified domain name to support both ingress and
+                          outgoing client certificate use cases.
                         type: string
                     type: object
                 type: object
@@ -173,12 +173,12 @@ spec:
                     properties:
                       secretName:
                         description: |-
-                          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
-                          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
-                          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
-                          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
-                          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
-                          used as the ingress certificate as well as the outgoing client certificate.
+                          SecretName specifies the name of a secret (in the current namespace) containing an X.509 certificate and
+                          private key. The secret must include 'tls.key' and 'tls.crt' keys. If the certificate is signed by
+                          intermediate CA(s), the full certificate chain should be included in the certificate file, with the
+                          leaf certificate first and the root CA last. The certificate's Common Name (CN) or Subject Alternative
+                          Name (SAN) should align with the service's fully qualified domain name to support both ingress and
+                          outgoing client certificate use cases.
                         type: string
                     type: object
                   url:

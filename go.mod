@@ -129,6 +129,7 @@ require (
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/openshift-kni/oran-o2ims/api/common v0.0.0-00010101000000-000000000000 // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
 	github.com/openshift/hive/apis v0.0.0-20240306163002-9c5806a63531 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
@@ -192,11 +193,12 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
-replace github.com/openshift-kni/oran-o2ims/api/hardwaremanagement => ./api/hardwaremanagement
-
-replace github.com/openshift-kni/oran-o2ims/api/inventory => ./api/inventory
-
-replace github.com/openshift-kni/oran-o2ims/api/provisioning => ./api/provisioning
+replace (
+	github.com/openshift-kni/oran-o2ims/api/common => ./api/common
+	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement => ./api/hardwaremanagement
+	github.com/openshift-kni/oran-o2ims/api/inventory => ./api/inventory
+	github.com/openshift-kni/oran-o2ims/api/provisioning => ./api/provisioning
+)
 
 // From the mergo project's README: "If the vanity URL is causing issues in
 // your project due to a dependency pulling Mergo - it isn't a direct
