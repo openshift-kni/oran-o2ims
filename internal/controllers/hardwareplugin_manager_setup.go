@@ -197,6 +197,16 @@ func (t *reconcilerTask) createHardwarePluginManagerClusterRole(ctx context.Cont
 					"update",
 				},
 			},
+			// HardwarePlugin registration verification
+			{
+				NonResourceURLs: []string{
+					"/hardware-manager/provisioning/*",
+					utils.HardwarePluginValidationEndpoint,
+				},
+				Verbs: []string{
+					"get",
+				},
+			},
 		},
 	}
 
