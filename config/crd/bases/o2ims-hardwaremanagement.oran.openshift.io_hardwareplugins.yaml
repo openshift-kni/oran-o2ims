@@ -43,6 +43,82 @@ spec:
                 description: ApiRoot is the root URL for the Hardware Plugin.
                 minLength: 1
                 type: string
+              authClientConfig:
+                description: AuthClientConfig defines the configurable client attributes
+                  required to access the OAuth2 authorization server
+                properties:
+                  basicAuthSecret:
+                    description: |-
+                      BasicAuthSecret represents the name of a secret (in the current namespace) containing the username
+                      and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
+                      This field is required when Type is set to "Basic".
+                    type: string
+                  oauthConfig:
+                    description: |-
+                      OAuthConfig holds the configuration for OAuth2-based authentication, including the authorization server
+                      URL, token endpoint, and client credentials. This field is required when Type is set to "OAuth".
+                    properties:
+                      clientSecretName:
+                        description: |-
+                          ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
+                          client-secret values used by the OAuth client.
+                        type: string
+                      scopes:
+                        description: |-
+                          Scopes represents the OAuth scope values to request when acquiring a token.  Typically, this should be set to
+                          "openid" in addition to any other scopes that the SMO specifically requires (e.g., "roles", "groups", etc...) to
+                          authorize our requests
+                        items:
+                          type: string
+                        type: array
+                      tokenEndpoint:
+                        description: |-
+                          TokenEndpoint represents the API endpoint used to acquire a token (e.g., /protocol/openid-connect/token) which
+                          will be appended to the base URL to form the full URL
+                        type: string
+                      url:
+                        description: URL represents the base URL of the authorization
+                          server. (e.g., https://keycloak.example.com/realms/oran)
+                        type: string
+                    required:
+                    - clientSecretName
+                    - scopes
+                    - tokenEndpoint
+                    - url
+                    type: object
+                  tlsConfig:
+                    description: |-
+                      TLSConfig specifies the TLS configuration for secure communication, including the certificate and private
+                      key. This field is optional and can be used with any authentication type to enable TLS for the connection.
+                    properties:
+                      secretName:
+                        description: |-
+                          SecretName specifies the name of a secret (in the current namespace) containing an X.509 certificate and
+                          private key. The secret must include 'tls.key' and 'tls.crt' keys. If the certificate is signed by
+                          intermediate CA(s), the full certificate chain should be included in the certificate file, with the
+                          leaf certificate first and the root CA last. The certificate's Common Name (CN) or Subject Alternative
+                          Name (SAN) should align with the service's fully qualified domain name to support both ingress and
+                          outgoing client certificate use cases.
+                        type: string
+                    type: object
+                  type:
+                    description: Type specifies the authentication type to be used
+                      (e.g., ServiceAccount, Basic, or OAuth).
+                    enum:
+                    - ServiceAccount
+                    - Basic
+                    - OAuth
+                    type: string
+                required:
+                - type
+                type: object
+              caBundleName:
+                description: |-
+                  CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
+                  with any outside HardwarePlugin server that has its TLS certificate signed by a non-public CA certificate.
+                  The config map is expected to contain a single file called 'ca-bundle.crt' containing all trusted CA certificates
+                  in PEM format.
+                type: string
             required:
             - apiRoot
             type: object
