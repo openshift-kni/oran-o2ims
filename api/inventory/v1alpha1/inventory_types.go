@@ -8,6 +8,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift-kni/oran-o2ims/api/common"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -50,19 +52,6 @@ type OAuthConfig struct {
 	ClientBindingClaim string `json:"clientBindingClaim"`
 }
 
-// TLSConfig defines the TLS specific attributes specific to the SMO and OAuth servers
-type TLSConfig struct {
-	// SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
-	// private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
-	// intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
-	// the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
-	// to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
-	// used as the ingress certificate as well as the outgoing client certificate.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS certificate"
-	SecretName *string `json:"secretName"`
-}
-
 // SmoConfig defines the configurable attributes to represent the SMO instance
 type SmoConfig struct {
 	// URL represents the base URL of the SMO instance
@@ -80,7 +69,7 @@ type SmoConfig struct {
 	// TLS connection will be used.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Configuration"
-	TLS *TLSConfig `json:"tls"`
+	TLS *common.TLSConfig `json:"tls"`
 }
 
 type ServerConfig struct {
@@ -126,7 +115,7 @@ type IngressConfig struct {
 	// the default IngressController will be used.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	TLS *TLSConfig `json:"tls,omitempty"`
+	TLS *common.TLSConfig `json:"tls,omitempty"`
 }
 
 // InventorySpec defines the desired state of Inventory
