@@ -32,6 +32,7 @@ import (
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
@@ -1088,4 +1089,14 @@ func GenerateSecretName(nodeMap map[string]interface{}, provisioningRequest stri
 	}
 	secretName := ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) + "-bmc-secret"
 	return secretName, nil
+}
+
+func DetermineAuthType(callback string) commonapi.AuthType {
+	// At this time, only the OAuth and ServiceAccount authTypes are supported
+	// Set authType to OAuth
+	authType := commonapi.OAuth
+	if strings.Contains(callback, "svc.cluster.local") {
+		authType = commonapi.ServiceAccount
+	}
+	return authType
 }
