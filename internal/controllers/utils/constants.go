@@ -338,3 +338,13 @@ const (
 	OAuthClientIDEnvName     = "SMO_OAUTH_CLIENT_ID"
 	OAuthClientSecretEnvName = "SMO_OAUTH_CLIENT_SECRET" // nolint: gosec
 )
+
+// OAuth Secret fields
+const (
+	OAuthClientIDField     = "client-id"
+	OAuthClientSecretField = "client-secret"
+)
+
+// HardwarePluginValidationEndpoint is the endpoint that the HardwarePlugin manager will try to reach for the plugin being
+// registered.
+const HardwarePluginValidationEndpoint = "/hardware-manager/provisioning/api_versions"
