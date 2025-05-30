@@ -26,6 +26,7 @@ require (
 	github.com/openshift-kni/oran-hwmgr-plugin v0.0.0-20250228171929-433e46166247
 	github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin v0.0.0-20250125003258-ee379f966a62
 	github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client v0.0.0-20250125003258-ee379f966a62
+	github.com/openshift-kni/oran-o2ims/api/common v0.0.0-00010101000000-000000000000
 	github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250124152543-be560cbe2609
 	github.com/openshift-kni/oran-o2ims/api/inventory v0.0.0-00010101000000-000000000000
 	github.com/openshift-kni/oran-o2ims/api/provisioning v0.0.0-00010101000000-000000000000
@@ -129,7 +130,6 @@ require (
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/openshift-kni/oran-o2ims/api/common v0.0.0-00010101000000-000000000000 // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
 	github.com/openshift/hive/apis v0.0.0-20240306163002-9c5806a63531 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
