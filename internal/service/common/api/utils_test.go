@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -122,6 +123,6 @@ type stubClientProvider struct {
 	client *http.Client
 }
 
-func (s *stubClientProvider) NewClient(ctx context.Context, callback string) (*http.Client, error) {
+func (s *stubClientProvider) NewClient(ctx context.Context, authType commonapi.AuthType) (*http.Client, error) {
 	return s.client, nil
 }
