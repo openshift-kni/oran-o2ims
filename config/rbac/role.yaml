@@ -10,6 +10,10 @@ rules:
   - get
   - list
 - nonResourceURLs:
+  - /hardware-manager/provisioning/*
+  verbs:
+  - get
+- nonResourceURLs:
   - /internal/v1/caas-alerts/alertmanager
   verbs:
   - create
