@@ -83,6 +83,7 @@ import (
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/finalizers,verbs=update;patch
+//+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
