@@ -44,6 +44,12 @@ const (
 	HardwarePluginManagerServerName = HardwarePluginManager + serverSuffix
 )
 
+// HardwarePlugins
+const (
+	LoopbackPlugin           = "loopback-hardwareplugin"
+	LoopbackPluginServerName = LoopbackPlugin + serverSuffix
+)
+
 // IngressName defines the name of our ingress controller
 const IngressName = "oran-o2ims-ingress"
 
@@ -110,6 +116,18 @@ var (
 		"--metrics-bind-address=:8080",
 		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
 		"--leader-elect",
+	}
+
+	LoopbackPluginServerArgs = []string{
+		"loopback-hardwareplugin-manager",
+		"start",
+		"--health-probe-bind-address=:8081",
+		"--metrics-bind-address=:8080",
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
+		"--leader-elect",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
 )
 
@@ -268,6 +286,13 @@ const (
 	PostgresImageName       = "POSTGRES_IMAGE"
 	HwMgrPluginNameSpace    = "HWMGR_PLUGIN_NAMESPACE"
 	InternalServicePortName = "INTERNAL_SERVICE_PORT"
+)
+
+// Deploy Loopback HardwarePlugin constants
+const (
+	DeployLoopbackHWPluginEnvVar  = "DEPLOY_LOOPBACK_HW_PLUGIN"
+	DefaultDeployLoopbackHWPlugin = "false"
+	DeployLoopbackHWPluginOk      = "true"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
