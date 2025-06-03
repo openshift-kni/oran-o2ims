@@ -760,6 +760,9 @@ spec:
     - kind: HardwarePlugin
       name: hardwareplugins.o2ims-hardwaremanagement.oran.openshift.io
       version: v1alpha1
+    - kind: HardwareProfile
+      name: hardwareprofiles.o2ims-hardwaremanagement.oran.openshift.io
+      version: v1alpha1
     - description: HardwareTemplate is the Schema for the hardwaretemplates API
       displayName: ORAN O2IMS Hardware Template
       kind: HardwareTemplate

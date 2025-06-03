@@ -6,6 +6,7 @@ resources:
 # Hardware management:
 - bases/o2ims-hardwaremanagement.oran.openshift.io_hardwareplugins.yaml
 - bases/o2ims-hardwaremanagement.oran.openshift.io_hardwaretemplates.yaml
+- bases/o2ims-hardwaremanagement.oran.openshift.io_hardwareprofiles.yaml
 - bases/o2ims-hardwaremanagement.oran.openshift.io_nodeallocationrequests.yaml
 - bases/o2ims-hardwaremanagement.oran.openshift.io_allocatednodes.yaml
 
@@ -22,7 +23,6 @@ resources:
 # [CERTMANAGER] To enable webhook, uncomment all the sections with [CERTMANAGER] prefix.
 # patches here are for enabling the CA injection for each CRD
 #- patches/cainjection_in_provisioning_provisioningrequests.yaml
-#- path: patches/cainjection_in_hardwaremanagement_hardwareplugins.yaml
 # +kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 configurations:
