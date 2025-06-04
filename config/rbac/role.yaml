@@ -12,7 +12,12 @@ rules:
 - nonResourceURLs:
   - /hardware-manager/provisioning/*
   verbs:
+  - create
+  - delete
   - get
+  - list
+  - post
+  - put
 - nonResourceURLs:
   - /internal/v1/caas-alerts/alertmanager
   verbs:
