@@ -83,7 +83,7 @@ import (
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/finalizers,verbs=update;patch
-//+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get
+//+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get;list;create;post;put;delete
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -865,6 +865,14 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		return
 	}
 
+	// Start the Loopback HardwarePlugin server
+	if utils.ShouldDeployLoopbackHWPlugin() {
+		nextReconcile, err = t.setupLoopbackPluginServer(ctx, nextReconcile)
+		if err != nil {
+			return
+		}
+	}
+
 	// Wait for pods to become ready
 	nextReconcile, err = t.checkForPodReadyStatus(ctx)
 	if err != nil {
@@ -1545,6 +1553,13 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  utils.PostgresImageName,
 			Value: postgresImage,
+		})
+	}
+
+	if serverName == utils.LoopbackPluginServerName {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  utils.DeployLoopbackHWPluginEnvVar,
+			Value: utils.GetDeployLoopbackHWPlugin(),
 		})
 	}
 

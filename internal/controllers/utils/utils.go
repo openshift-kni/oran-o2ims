@@ -166,7 +166,8 @@ func HasApiEndpoints(serverName string) bool {
 		serverName == InventoryResourceServerName ||
 		serverName == InventoryArtifactsServerName ||
 		serverName == InventoryProvisioningServerName ||
-		serverName == HardwarePluginManagerServerName
+		serverName == HardwarePluginManagerServerName ||
+		serverName == LoopbackPluginServerName
 }
 
 // HasDatabase determines whether a server owns a logical database instance
@@ -183,7 +184,8 @@ func RequiresInternalListener(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
-		serverName == HardwarePluginManagerServerName
+		serverName == HardwarePluginManagerServerName ||
+		serverName == LoopbackPluginServerName
 }
 
 // IsOAuthEnabled determines if the Inventory CR has OAuth attributes provided.
@@ -200,7 +202,8 @@ func NeedsOAuthAccess(serverName string) bool {
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryArtifactsServerName ||
 		serverName == InventoryProvisioningServerName ||
-		serverName == HardwarePluginManagerServerName
+		serverName == HardwarePluginManagerServerName ||
+		serverName == LoopbackPluginServerName
 }
 
 // getTLSClientCertificateSecret determines whether there is a TLS secret configured.
@@ -487,6 +490,12 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 	// HwMgr Plugin Controller
 	if serverName == HardwarePluginManagerServerName {
 		result = slices.Clone(HardwarePluginManagerArgs)
+		return
+	}
+
+	// Loopback Plugin Server
+	if serverName == LoopbackPluginServerName {
+		result = slices.Clone(LoopbackPluginServerArgs)
 		return
 	}
 
