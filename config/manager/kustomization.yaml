@@ -40,6 +40,16 @@ replacements:
       kind: Deployment
       name: controller-manager
 - source:
+    fieldPath: data.DEPLOY_LOOPBACK_HW_PLUGIN
+    kind: ConfigMap
+    name: env-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=manager].env.[name=DEPLOY_LOOPBACK_HW_PLUGIN].value
+    select:
+      kind: Deployment
+      name: controller-manager
+- source:
     fieldPath: data.imagePullPolicy
     kind: ConfigMap
     name: env-config
