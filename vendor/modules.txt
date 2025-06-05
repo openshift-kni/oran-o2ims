@@ -35,7 +35,7 @@ github.com/ProtonMail/go-crypto/openpgp/x448
 # github.com/aarondl/json v0.0.0-20221020222930-8b0db17ef1bf
 ## explicit; go 1.18
 github.com/aarondl/json
-# github.com/aarondl/opt v0.0.0-20230114172057-b91f370c41f0
+# github.com/aarondl/opt v0.0.0-20240623220848-083f18ab9536
 ## explicit; go 1.18
 github.com/aarondl/opt
 github.com/aarondl/opt/internal/globaldata
