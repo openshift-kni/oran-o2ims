@@ -169,6 +169,31 @@ func UpdateNodeAllocationRequestStatusCondition(
 	return nil
 }
 
+func UpdateNodeAllocationRequestProperties(
+	ctx context.Context,
+	c client.Client,
+	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) error {
+
+	// nolint: wrapcheck
+	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		newNodeAllocationRequest := &pluginv1alpha1.NodeAllocationRequest{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
+			return err
+		}
+		newNodeAllocationRequest.Status.Properties = nodeAllocationRequest.Status.Properties
+		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update NodeAllocationRequest properties: %w", err)
+	}
+
+	return nil
+}
+
 func NodeAllocationRequestAddFinalizer(
 	ctx context.Context,
 	c client.Client,
