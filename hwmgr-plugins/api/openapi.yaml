@@ -203,7 +203,13 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'                                
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                             
         '500':
           description: Internal server error.
           content:
@@ -234,7 +240,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NodeAllocationRequestResponse'
+                type: string
+                description: |
+                  NodeAllocationRequestId is returned.
         '400':
           description: Bad request
           content:
@@ -285,7 +293,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NodeAllocationRequestResponse'
+                type: string
+                description: |
+                  NodeAllocationRequestId is returned.
         '400':
           description: Bad request
           content:
@@ -613,11 +623,16 @@ components:
           type: string
           description: |
             Hardware profile of the node.
+        groupName:
+          type: string
+          description: |
+            Name of the NodeGroup the allocated node is associated with.
         status:
           $ref: '#/components/schemas/AllocatedNodeStatus'
       required:
         - bmc
         - interfaces
+        - groupName
         - hwProfile
         - status
 

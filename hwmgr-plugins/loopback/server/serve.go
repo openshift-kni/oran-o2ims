@@ -17,13 +17,14 @@ import (
 	"syscall"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api"
 	hwpluginserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/server"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
@@ -35,7 +36,7 @@ const (
 )
 
 // Serve starts the Loopback HardwarePlugin API server and blocks until it terminates or context is canceled.
-func Serve(ctx context.Context, config svcutils.CommonServerConfig) error {
+func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient client.Client) error {
 	slog.Info("Initializing the Loopback HardwarePlugin server")
 
 	// Retrieve the OpenAPI spec file
@@ -57,16 +58,14 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig) error {
 		cancel()
 	}()
 
-	// Get client for hub
-	hubClient, err := k8s.NewClientForHub()
-	if err != nil {
-		return fmt.Errorf("error creating client for hub: %w", err)
-	}
-
 	// Init loopbackServer
 	loopbackServer := LoopbackPluginServer{
 		CommonServerConfig: config,
 		HubClient:          hubClient,
+		Logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			AddSource: true,
+			Level:     slog.LevelDebug,
+		})),
 	}
 
 	serverStrictHandler := hwpluginserver.NewStrictHandlerWithOptions(&loopbackServer, nil,
