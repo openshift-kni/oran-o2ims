@@ -953,6 +953,15 @@ func (response GetNodeAllocationRequest403ApplicationProblemPlusJSONResponse) Vi
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetNodeAllocationRequest404ApplicationProblemPlusJSONResponse ProblemDetails
+
+func (response GetNodeAllocationRequest404ApplicationProblemPlusJSONResponse) VisitGetNodeAllocationRequestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetNodeAllocationRequest500ApplicationProblemPlusJSONResponse ProblemDetails
 
 func (response GetNodeAllocationRequest500ApplicationProblemPlusJSONResponse) VisitGetNodeAllocationRequestResponse(w http.ResponseWriter) error {
@@ -1457,10 +1466,10 @@ var swaggerSpec = []string{
 	"aFT7j3Q9WejG+k+5HQtFpc8E3fxhxWDgRL2962dI77aHA0/upcSIs/IZBXtBwwDawFawn+K4PTFQzf0Z",
 	"xpl2p4PFzTu3O5tJETVu2ex30QFPDngyFk9c+u4JqgfS1iGCMP3M/Tm1ddmXoO9u0gv7vAQrqIdD655B",
 	"G6XcoCGU2t9fDyj6wD77ydfFxJqNfCkGWR/cH4MOCHTo5f8cvbzDDRgCjkGeVfQ94xqWR0Sg48dDoPpo",
-	"CmSjbTrgxoG5jErNS9SS4R2OKki7WqLck6pvM0q+C77wA7dPj8BXcuu2A1s5sJW/JFu5EJTFGyBJAjHD",
-	"hO7OgMk3b+t23HTYc1XhpRTpj82dvupliQOJOsDZnw/OWgxv4ES19zcV5Mu5oJ3d6uOQZOCvOeo7i3Bl",
-	"v27dlDyZTu2t45VQ+uT58XP3Pz0UM372XJksj9uaF8Fr6KoO47ah51pqpX1r978Y2lrd9nb7/wAAAP//",
-	"BNvo+a5DAAA=",
+	"CmSjbTrgxgE3fnzcuEQtGd7hqGq5q1/LPTjyNqPkuyAzP3Bv9whkKrduO1CpAyT+JSHxQlAWb4AkCcQM",
+	"E7o7AybfvOfccQ1jzz2Kl1KkPzax+6o3OQ4M7wBnf3KGN3Dc2/uDD/LlXNDObvVxSDLwpyb1hUq4sl+3",
+	"rnGeTKf2SvRKKH3y/Pi5+28oihk/e+5zlmeBzVvqNXRVJ4Xb0HNnttK+dTRRDG2tbnu7/X8AAAD//5mT",
+	"1FJLRAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
