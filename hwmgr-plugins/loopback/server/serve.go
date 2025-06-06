@@ -67,6 +67,10 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig) error {
 	loopbackServer := LoopbackPluginServer{
 		CommonServerConfig: config,
 		HubClient:          hubClient,
+		Logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			AddSource: true,
+			Level:     slog.LevelDebug,
+		})),
 	}
 
 	serverStrictHandler := hwpluginserver.NewStrictHandlerWithOptions(&loopbackServer, nil,

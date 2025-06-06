@@ -203,7 +203,13 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'                                
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                             
         '500':
           description: Internal server error.
           content:
