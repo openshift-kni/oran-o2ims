@@ -26,7 +26,7 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	loopbackctrl "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/loopback/controllers"
+	loopbackctrl "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/loopback/controller"
 	loopbackserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/loopback/server"
 	"github.com/openshift-kni/oran-o2ims/internal"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
