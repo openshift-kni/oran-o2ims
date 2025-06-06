@@ -91,7 +91,7 @@ ENVTEST_VERSION = release-0.19
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
 
 # HWMGR_PLUGIN_NAMESPACE refers to the namespace of the hardware manager plugin.
-HWMGR_PLUGIN_NAMESPACE ?= oran-hwmgr-plugin
+HWMGR_PLUGIN_NAMESPACE ?= oran-o2ims
 
 # DEPLOY_LOOPBACK_HW_PLUGIN is a flag to indicate whether the loopback HardwarePlugin should be deployed
 DEPLOY_LOOPBACK_HW_PLUGIN ?= false

@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -92,7 +93,7 @@ func (r *LoopbackPluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		// Handle deletion
 		r.Logger.InfoContext(ctx, "NodeAllocationRequest is being deleted")
 		if controllerutil.ContainsFinalizer(nodeAllocationRequest, hwpluginutils.NodeAllocationRequestFinalizer) {
-			completed, deleteErr := r.HandleNodeAllocationRequestDeletion(ctx, nodeAllocationRequest)
+			completed, deleteErr := r.handleNodeAllocationRequestDeletion(ctx, nodeAllocationRequest)
 			if deleteErr != nil {
 				return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed HandleNodeAllocationRequestDeletion: %w", deleteErr)
 			}
@@ -137,10 +138,9 @@ func (r *LoopbackPluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // HandleNodeAllocationRequest processes the NodeAllocationRequest CR
-func (r *LoopbackPluginReconciler) HandleNodeAllocationRequest(ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+func (r *LoopbackPluginReconciler) HandleNodeAllocationRequest(
+	ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 	result := hwpluginutils.DoNotRequeue()
-
-	// TODO
 
 	if !controllerutil.ContainsFinalizer(nodeAllocationRequest, hwpluginutils.NodeAllocationRequestFinalizer) {
 		r.Logger.InfoContext(ctx, "Adding finalizer to NodeAllocationRequest")
@@ -149,13 +149,121 @@ func (r *LoopbackPluginReconciler) HandleNodeAllocationRequest(ctx context.Conte
 		}
 	}
 
+	switch determineAction(ctx, r.Logger, nodeAllocationRequest) {
+	case NodeAllocationRequestFSMCreate:
+		return r.handleNewNodeAllocationRequestCreate(ctx, nodeAllocationRequest)
+	case NodeAllocationRequestFSMProcessing:
+		return r.handleNodeAllocationRequestProcessing(ctx, nodeAllocationRequest)
+	case NodeAllocationRequestFSMSpecChanged:
+		return r.handleNodeAllocationRequestSpecChanged(ctx, nodeAllocationRequest)
+	case NodeAllocationRequestFSMNoop:
+		// Nothing to do
+		return result, nil
+	}
+
 	return result, nil
 }
 
-// HandleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion
-func (r *LoopbackPluginReconciler) HandleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (bool, error) {
+func (r *LoopbackPluginReconciler) handleNewNodeAllocationRequestCreate(
+	ctx context.Context,
+	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
-	// TODO
+	conditionType := pluginv1alpha1.Provisioned
+	var conditionReason pluginv1alpha1.ConditionReason
+	var conditionStatus metav1.ConditionStatus
+	var message string
+
+	if err := processNewNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
+		r.Logger.InfoContext(ctx, "failed processNewNodeAllocationRequest", slog.String("err", err.Error()))
+		conditionReason = pluginv1alpha1.Failed
+		conditionStatus = metav1.ConditionFalse
+		message = "Creation request failed: " + err.Error()
+	} else {
+		conditionReason = pluginv1alpha1.InProgress
+		conditionStatus = metav1.ConditionFalse
+		message = "Handling creation"
+	}
+
+	if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+		conditionType, conditionReason, conditionStatus, message); err != nil {
+		return hwpluginutils.RequeueWithMediumInterval(),
+			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+	// Update the NodeAllocationRequest hwMgrPlugin status
+	if err := hwpluginutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+		return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+	}
+
+	return hwpluginutils.DoNotRequeue(), nil
+}
+
+func (r *LoopbackPluginReconciler) handleNodeAllocationRequestProcessing(
+	ctx context.Context,
+	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest,
+) (ctrl.Result, error) {
+
+	full, err := checkNodeAllocationRequestProgress(ctx, r.Client, r.Logger, nodeAllocationRequest)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed checkNodeAllocationRequestProgress: %w", err)
+	}
+
+	allocatedNodes, err := getAllocatedNodes(ctx, r.Client, r.Logger, nodeAllocationRequest)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get allocated nodes for %s: %w", nodeAllocationRequest.Name, err)
+	}
+	nodeAllocationRequest.Status.Properties.NodeNames = allocatedNodes
+
+	if err := hwpluginutils.UpdateNodeAllocationRequestProperties(ctx, r.Client, nodeAllocationRequest); err != nil {
+		return hwpluginutils.RequeueWithMediumInterval(),
+			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	var result ctrl.Result
+
+	if full {
+		r.Logger.InfoContext(ctx, "NodeAllocationRequest request is fully allocated")
+
+		if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+			pluginv1alpha1.Provisioned, pluginv1alpha1.Completed, metav1.ConditionTrue, "Created"); err != nil {
+			return hwpluginutils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+		}
+
+		result = hwpluginutils.DoNotRequeue()
+	} else {
+		r.Logger.InfoContext(ctx, "NodeAllocationRequest request in progress")
+		result = hwpluginutils.RequeueWithShortInterval()
+	}
+
+	return result, nil
+}
+
+func (r *LoopbackPluginReconciler) handleNodeAllocationRequestSpecChanged(
+	ctx context.Context,
+	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+
+	if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(
+		ctx,
+		r.Client,
+		nodeAllocationRequest,
+		pluginv1alpha1.Configured,
+		pluginv1alpha1.ConfigUpdate,
+		metav1.ConditionFalse,
+		string(pluginv1alpha1.AwaitConfig)); err != nil {
+		return hwpluginutils.RequeueWithMediumInterval(),
+			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	return handleNodeAllocationRequestConfiguring(ctx, r.Client, r.Logger, nodeAllocationRequest)
+}
+
+// handleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion
+func (r *LoopbackPluginReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (bool, error) {
+	r.Logger.InfoContext(ctx, "Finalizing NodeAllocationRequest")
+
+	if err := releaseNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
+		return false, fmt.Errorf("failed to release NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
 
 	return true, nil
 }
