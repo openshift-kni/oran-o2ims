@@ -1,0 +1,14 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: o-cloud-manager-fbc-4-19-0-manual
+  namespace: telco-5g-tenant
+spec:
+  application: o-cloud-manager-fbc-4-19
+  components:
+    - name: o-cloud-manager-fbc-4-19
+      containerImage: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-fbc-4-19@sha256:74d7b15a209c77a6c01281982664a2fbe1d8d7f4ad5bc8a6c543763a702cb870
+      source:
+        git:
+          url: https://github.com/openshift-kni/oran-o2ims
+          revision: 152da112ea37d793881c49b5fedecd56b1eb9b5e

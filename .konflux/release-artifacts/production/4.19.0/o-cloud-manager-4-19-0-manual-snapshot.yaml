@@ -1,0 +1,21 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: o-cloud-manager-4-19-0-manual
+  namespace: telco-5g-tenant
+spec:
+  application: o-cloud-manager-4-19
+  components:
+  - containerImage: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19@sha256:56328042d4e6172c075efddb1f90d6c10db90f1fa3639f37d04279f7e5df1182
+    name: o-cloud-manager-4-19
+    source:
+      git:
+        dockerfileUrl: .konflux/Dockerfile
+        revision: d718f75849819a9f922353102cf9aa3d0da47ba3
+        url: https://github.com/openshift-kni/oran-o2ims
+  - containerImage: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19@sha256:abb0ee46723e4e39bb91297efad05a777e298e5ed055dd45fdf8fdcee92725f1
+    name: o-cloud-manager-bundle-4-19
+    source:
+      git:
+        revision: 74e7ff05db6fbb71a89c294545d74fd6e62f3e2a
+        url: https://github.com/openshift-kni/oran-o2ims

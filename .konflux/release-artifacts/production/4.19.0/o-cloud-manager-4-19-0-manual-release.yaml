@@ -1,0 +1,22 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Release
+metadata:
+  name: o-cloud-manager-4-19-0-manual
+  namespace: telco-5g-tenant
+spec:
+  releasePlan: releaseplan-o-cloud-manager-production-4-19
+  snapshot: o-cloud-manager-4-19-0-manual-prod
+  data:
+    releaseNotes:
+      synopsis: >-
+         OpenShift Container Platform 4.19.0 o-cloud ims
+    mapping:
+      defaults:
+        pushSourceContainer: true
+        tags:
+          - "{{ git_sha }}"
+          - "{{ git_short_sha }}"
+          - "v4.19"
+          - "v4.19.0"
+          - "v4.19.0-{{ timestamp }}"
+

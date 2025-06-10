@@ -1,0 +1,8 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Release
+metadata:
+  name: o-cloud-manager-fbc-4-19-0-manual
+  namespace: telco-5g-tenant
+spec:
+  releasePlan: rp-o-cloud-manager-fbc-prod-4-19
+  snapshot: o-cloud-manager-fbc-4-19-0-manual
