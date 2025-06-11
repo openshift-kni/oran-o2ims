@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
@@ -127,9 +128,23 @@ func (r *LoopbackPluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *LoopbackPluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
+	// Create a label selector for filtering NodeAllocationRequests pertaining to the Loopback HardwarePlugin
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			HardwarePluginLabel: LoopbackHardwarePlugingID,
+		},
+	}
+
+	// Create a predicate to filter NodeAllocationRequests with the specified label
+	pred, err := predicate.LabelSelectorPredicate(labelSelector)
+	if err != nil {
+		return fmt.Errorf("failed to create label selector predicate: %w", err)
+	}
+
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&pluginv1alpha1.NodeAllocationRequest{}).
-		// TODO - add predicate filter to filter for NodeAllocationRequests associated with the Loopback Hw Plugin
+		WithEventFilter(pred).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
