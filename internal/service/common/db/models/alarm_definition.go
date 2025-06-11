@@ -26,7 +26,8 @@ type AlarmDefinition struct {
 	AlarmAdditionalFields *map[string]interface{} `db:"alarm_additional_fields"`
 
 	Severity          string     `db:"severity"`
-	AlarmDictionaryID uuid.UUID  `db:"alarm_dictionary_id"`
+	AlarmDictionaryID *uuid.UUID `db:"alarm_dictionary_id"`
+	IsThanosRule      bool       `db:"is_thanos_rule"`
 	CreatedAt         *time.Time `db:"created_at"`
 }
 

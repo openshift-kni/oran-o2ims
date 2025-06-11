@@ -1,14 +1,14 @@
 # Build stage
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.23@sha256:2d5976ded2a3abda6966949c4d545d0cdd88a4d6a15989af38ca5e30e430a619 AS builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_golang_1.23@sha256:4805e1cb2d1bd9d3c5de5d6986056bbda94ca7b01642f721d83d26579d333c60 AS builder
 
-WORKDIR app
+WORKDIR /app
 COPY . .
 
 # manager
 RUN GOEXPERIMENT=strictfipsruntime CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -mod=vendor -tags strictfipsruntime -a -o /bin/oran-o2ims main.go
 
 # Runtime stage
-FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.4@sha256:5e1be69fd81a9fe2f58df325ac15fc7e0812d34e6345f5feaf50df38e16d52e3
+FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.4@sha256:9577a9ed1707ba2a1a229559d188a015cf3b20b18e4b83541f427697d1c0b8df
 
 WORKDIR /
 
