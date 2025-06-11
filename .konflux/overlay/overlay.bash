@@ -266,7 +266,7 @@ parse_args() {
 
 overlay_release()
 {
-    echo "Overlaying relase..."
+    echo "Overlaying release..."
 
     local display_name="o-cloud manager"
     local description="o-cloud-manager operator"
@@ -276,7 +276,8 @@ overlay_release()
     local manager="o-cloud-manager"
     local skip_range=">=4.9.0 <4.19.0"
     local replaces="o-cloud-manager.v4.19.0"
-    # ocp 4.19
+    # min_kube_version should match ocp
+    # https://access.redhat.com/solutions/4870701
     local min_kube_version="1.32.0"
 
     yq e -i ".metadata.annotations[\"containerImage\"] = \"${IMAGE_TO_TARGET[$MANAGER_KEY]}\"" $ARG_CSV_FILE
@@ -291,7 +292,7 @@ overlay_release()
     yq e -i "del(.spec.replaces)" $ARG_CSV_FILE
 
     # use this from 4.19.1 onwards
-    # ./yq e -i ".spec.replaces = $replaces)" $ARG_CSV_FILE
+    # yq e -i ".spec.replaces = \"$replaces\"" $ARG_CSV_FILE
 
     echo "Overlaying release completed!"
 }
@@ -314,18 +315,18 @@ NAME
 
 SYNOPSIS
 
-   $SCRIPT_NAME --set-pinning-file FILE [--set-mapping-file FILE (--set-mapping-staging|--set-mapping-production) --set-csv-file FILE
+   $SCRIPT_NAME --set-pinning-file FILE [--set-mapping-file FILE (--set-mapping-staging|--set-mapping-production)] --set-csv-file FILE
 
 EXAMPLES
 
    - Pin (sha256) images on 'oran-o2ims.clusterserviceversion.yaml' according to the configuration on 'pin_images.in.yaml':
 
-     $ overlay.bash --set-pinning-file pin_images.in.yaml --set-csv-file oran-o2ims.clusterserviceversion.yaml
+     $ $SCRIPT_NAME --set-pinning-file pin_images.in.yaml --set-csv-file oran-o2ims.clusterserviceversion.yaml
 
    - Pin (sha256) images on 'oran-o2ims.clusterserviceversion.yaml' according to the configuration on 'pin_images.in.yaml'
      and map them to the production registry according to the configuration on 'map_images.in.yaml':
 
-     $ overlay.bash --set-pinning-file pin_images.in.yaml --set-mapping-file map_images.in.yaml --set-mapping-production --set-csv-file oran-o2ims.clusterserviceversion.yaml
+     $ $SCRIPT_NAME --set-pinning-file pin_images.in.yaml --set-mapping-file map_images.in.yaml --set-mapping-production --set-csv-file oran-o2ims.clusterserviceversion.yaml
 
 DESCRIPTION
 
