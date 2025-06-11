@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package utils
 
 import (
@@ -7,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"reflect"
 	"slices"
@@ -15,11 +22,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -27,6 +33,7 @@ import (
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -41,26 +48,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
-// from an OAuth capable authorization server.
-type OAuthClientConfig struct {
-	// Defines a PEM encoded set of CA certificates used to validate server certificates.  If not provided then the
-	// default root CA bundle will be used.
-	CaBundle []byte
-	// Defines the OAuth client-id attribute to be used when acquiring a token.  If not provided (for debug/testing)
-	// then a normal HTTP client without OAuth capabilities will be created
-	ClientId     string
-	ClientSecret string
-	// The absolute URL of the API endpoint to be used to acquire a token
-	// (e.g., http://example.com/realms/oran/protocol/openid-connect/token)
-	TokenUrl string
-	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
-	// the token.
-	Scopes []string
-	// The client certificate to be used when initiating connection to the server.
-	ClientCert *tls.Certificate
-}
-
 const (
 	PropertiesString = "properties"
 	requiredString   = "required"
@@ -71,6 +58,11 @@ var (
 )
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
+	cr, ok := object.(*provisioningv1alpha1.ProvisioningRequest)
+	if ok {
+		cr.Status.ObservedGeneration = cr.Generation
+	}
+
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := c.Status().Update(ctx, object); err != nil {
 			return fmt.Errorf("failed to update status: %w", err)
@@ -165,35 +157,64 @@ func DoesK8SResourceExist(ctx context.Context, c client.Client, name, namespace 
 	}
 }
 
-func extensionsToExtensionArgs(extensions []string) []string {
-	var extensionsArgsArray []string
-	for _, crtExt := range extensions {
-		newExtensionFlag := "--extensions=" + crtExt
-		extensionsArgsArray = append(extensionsArgsArray, newExtensionFlag)
-	}
-
-	return extensionsArgsArray
-}
-
 // HasApiEndpoints determines whether a server exposes a set of API endpoints
 func HasApiEndpoints(serverName string) bool {
 	return serverName == InventoryDatabaseServerName ||
+		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
-		serverName == InventoryMetadataServerName ||
 		serverName == InventoryResourceServerName ||
-		serverName == InventoryDeploymentManagerServerName
+		serverName == InventoryArtifactsServerName ||
+		serverName == InventoryProvisioningServerName
 }
 
 // HasDatabase determines whether a server owns a logical database instance
 func HasDatabase(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
+		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName
 }
 
-func GetDeploymentVolumes(serverName string) []corev1.Volume {
+// RequiresInternalListener determines whether a server expects its API to be accessed by another server.  If this
+// is the case, then in an OAuth configuration we run a second listener for that server which handles authenticating
+// using a Kubernetes service account token rather than an OAuth token.
+func RequiresInternalListener(serverName string) bool {
+	return serverName == InventoryResourceServerName ||
+		serverName == InventoryClusterServerName ||
+		serverName == InventoryAlarmServerName
+}
+
+// IsOAuthEnabled determines if the Inventory CR has OAuth attributes provided.
+func IsOAuthEnabled(inventory *inventoryv1alpha1.Inventory) bool {
+	return inventory.Spec.SmoConfig != nil && inventory.Spec.SmoConfig.OAuthConfig != nil
+}
+
+// NeedsOAuthAccess determines whether a server requires access to the Authorization server.  This can be either
+// because it needs to get a token to communicate with the SMO or to validate a token against the authorization server
+// directly.
+func NeedsOAuthAccess(serverName string) bool {
+	return serverName == InventoryResourceServerName ||
+		serverName == InventoryClusterServerName ||
+		serverName == InventoryAlarmServerName ||
+		serverName == InventoryArtifactsServerName ||
+		serverName == InventoryProvisioningServerName
+}
+
+// getTLSClientCertificateSecret determines whether there is a TLS secret configured.
+func getTLSClientCertificateSecret(inventory *inventoryv1alpha1.Inventory) *string {
+	if inventory.Spec.SmoConfig == nil || inventory.Spec.SmoConfig.TLS == nil {
+		return nil
+	}
+
+	tlsConfig := inventory.Spec.SmoConfig.TLS
+	return tlsConfig.SecretName
+}
+
+// GetDeploymentVolumes builds the list of volumes applicable to the specified server
+func GetDeploymentVolumes(serverName string, inventory *inventoryv1alpha1.Inventory) []corev1.Volume {
+	var volumes []corev1.Volume
+	tlsDefaultMode := int32(os.FileMode(0o400))
 	if HasApiEndpoints(serverName) {
-		tlsDefaultMode := int32(os.FileMode(0o400))
-		return []corev1.Volume{
+		volumes = append(volumes, []corev1.Volume{
 			{
 				Name: "tls",
 				VolumeSource: corev1.VolumeSource{
@@ -203,23 +224,72 @@ func GetDeploymentVolumes(serverName string) []corev1.Volume {
 					},
 				},
 			},
+		}...)
+	}
+
+	if NeedsOAuthAccess(serverName) {
+		if inventory.Spec.SmoConfig != nil {
+			clientSecretName := getTLSClientCertificateSecret(inventory)
+			if clientSecretName != nil {
+				volumes = append(volumes, corev1.Volume{
+					Name: "smo-mtls",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							DefaultMode: &tlsDefaultMode,
+							SecretName:  *clientSecretName,
+						},
+					},
+				})
+			}
+		}
+		if inventory.Spec.CaBundleName != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: "ca-bundle",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: *inventory.Spec.CaBundleName,
+						},
+					},
+				},
+			})
 		}
 	}
 
-	return []corev1.Volume{}
+	return volumes
 }
 
-func GetDeploymentVolumeMounts(serverName string) []corev1.VolumeMount {
+// GetDeploymentVolumeMounts builds the list of volume mounts applicable to the specified server
+func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.Inventory) []corev1.VolumeMount {
+	var mounts []corev1.VolumeMount
 	if HasApiEndpoints(serverName) {
-		return []corev1.VolumeMount{
+		mounts = append(mounts, []corev1.VolumeMount{
 			{
 				Name:      "tls",
-				MountPath: "/secrets/tls",
+				MountPath: TLSServerMountPath,
 			},
+		}...)
+	}
+
+	if NeedsOAuthAccess(serverName) {
+		if inventory.Spec.SmoConfig != nil {
+			clientSecretName := getTLSClientCertificateSecret(inventory)
+			if clientSecretName != nil {
+				mounts = append(mounts, corev1.VolumeMount{
+					Name:      "smo-mtls",
+					MountPath: TLSClientMountPath,
+				})
+			}
+		}
+		if inventory.Spec.CaBundleName != nil {
+			mounts = append(mounts, corev1.VolumeMount{
+				Name:      "ca-bundle",
+				MountPath: CABundleMountPath,
+			})
 		}
 	}
 
-	return []corev1.VolumeMount{}
+	return mounts
 }
 
 func GetBackendTokenArg(backendToken string) string {
@@ -306,9 +376,43 @@ func GetServerDatabasePasswordName(serverName string) (string, error) {
 		return AlarmsPasswordEnvName, nil
 	case InventoryResourceServerName:
 		return ResourcesPasswordEnvName, nil
+	case InventoryClusterServerName:
+		return ClustersPasswordEnvName, nil
 	default:
 		return "", fmt.Errorf("database name not found for server '%s'", serverName)
 	}
+}
+
+// addArgsForOAuth sets up the command line arguments related to enabling communication to the SMO and OAuth server
+func addArgsForOAuth(inventory *inventoryv1alpha1.Inventory, args []string) []string {
+	if inventory.Spec.SmoConfig != nil {
+		smo := inventory.Spec.SmoConfig
+
+		if smo.OAuthConfig != nil {
+			args = append(args,
+				fmt.Sprintf("--oauth-scopes=%s", strings.Join(smo.OAuthConfig.Scopes, ",")),
+				fmt.Sprintf("--oauth-issuer-url=%s", smo.OAuthConfig.URL),
+				fmt.Sprintf("--oauth-token-endpoint=%s", smo.OAuthConfig.TokenEndpoint),
+				fmt.Sprintf("--oauth-username-claim=%s", smo.OAuthConfig.UsernameClaim),
+				fmt.Sprintf("--oauth-groups-claim=%s", smo.OAuthConfig.GroupsClaim),
+				fmt.Sprintf("--oauth-client-binding-claim=%s", smo.OAuthConfig.ClientBindingClaim))
+		}
+
+		if smo.TLS != nil && smo.TLS.SecretName != nil {
+			args = append(args,
+				fmt.Sprintf("--tls-client-cert=%s/tls.crt", TLSClientMountPath),
+				fmt.Sprintf("--tls-client-key=%s/tls.key", TLSClientMountPath),
+			)
+		}
+	}
+
+	if inventory.Spec.CaBundleName != nil {
+		args = append(args,
+			fmt.Sprintf("--ca-bundle-file=%s/%s", CABundleMountPath, CABundleFilename),
+		)
+	}
+
+	return args
 }
 
 func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
@@ -323,18 +427,17 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		result = append(
 			result,
 			fmt.Sprintf("--global-cloud-id=%s", cloudId))
+
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 		return
 	}
 
-	// MetadataServer
-	if serverName == InventoryMetadataServerName {
-		result = slices.Clone(MetadataServerArgs)
-		result = append(
-			result,
-			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
-			fmt.Sprintf("--global-cloud-id=%s", cloudId),
-			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
+	if serverName == InventoryArtifactsServerName {
+		result = slices.Clone(ArtifactsServerArgs)
 
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 		return
 	}
 
@@ -346,49 +449,34 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		result = append(
 			result,
 			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
-			fmt.Sprintf("--backend-url=%s", inventory.Status.SearchURL),
 			fmt.Sprintf("--global-cloud-id=%s", cloudId),
-			fmt.Sprintf("--namespace=%s", inventory.Namespace),
-			GetBackendTokenArg(inventory.Spec.ResourceServerConfig.BackendToken))
+			fmt.Sprintf("--external-address=https://%s", inventory.Status.IngressHost))
+
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 
 		return result, nil
 	}
 
-	// DeploymentManagerServer
-	if serverName == InventoryDeploymentManagerServerName {
-		result = slices.Clone(DeploymentManagerServerArgs)
-
-		// Set the cloud identifier:
+	// ClusterServer
+	if serverName == InventoryClusterServerName {
+		result = slices.Clone(ClusterServerArgs)
 		result = append(
 			result,
-			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID),
-		)
+			fmt.Sprintf("--cloud-id=%s", inventory.Status.ClusterID))
 
-		// Set the backend type:
-		if inventory.Spec.DeploymentManagerServerConfig.BackendType != "" {
-			result = append(
-				result,
-				fmt.Sprintf("--backend-type=%s", inventory.Spec.DeploymentManagerServerConfig.BackendType),
-			)
-		}
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 
-		// If no backend URL has been provided then use the default URL of the Kubernetes
-		// API server of the cluster:
-		backendURL := inventory.Spec.DeploymentManagerServerConfig.BackendURL
-		if backendURL == "" {
-			backendURL = defaultApiServerURL
-		}
+		return
+	}
 
-		// Add the backend and token args:
-		result = append(
-			result,
-			fmt.Sprintf("--backend-url=%s", backendURL),
-			GetBackendTokenArg(inventory.Spec.DeploymentManagerServerConfig.BackendToken))
+	// ProvisioningServer
+	if serverName == InventoryProvisioningServerName {
+		result = slices.Clone(ProvisioningServerArgs)
 
-		// Add the extensions:
-		extensionsArgsArray := extensionsToExtensionArgs(inventory.Spec.DeploymentManagerServerConfig.Extensions)
-		result = append(result, extensionsArgsArray...)
-
+		// Add OAuth command line arguments
+		result = addArgsForOAuth(inventory, result)
 		return
 	}
 
@@ -536,6 +624,139 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	return result, nil
 }
 
+// GetDefaultsFromConfigMap returns the data of a defaults ConfigMap with its content
+// separated in 2 sections:
+//   - immutable: the values for configuration that is not exposed through the ClusterTemplate.
+//   - editable : the values for configuration is exposed through the ClusterTemplate and
+//     can later be changed through the ProvisioningRequest.
+//
+// If any error is encountered, the default data is returned as it is in the ConfigMap, without
+// any further separation.
+func GetDefaultsFromConfigMap(ctx context.Context, c client.Client, configMapName string, configMapNamespace string,
+	configMapKey string, schema []byte, schemaKey string) (map[string]interface{}, error) {
+
+	// Retrieve the configmap that holds the default data.
+	defaultConfigMap, err := GetConfigmap(ctx, c, configMapName, configMapNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ConfigMap %s/%s: %w", configMapName, configMapNamespace, err)
+	}
+	defaultValues, err := ExtractTemplateDataFromConfigMap[map[string]any](defaultConfigMap, configMapKey)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"could not obtain the requested field from default ConfigMap: %w", err,
+		)
+	}
+	// Get the schema to check the default values against it.
+	subSchema, err := provisioningv1alpha1.ExtractSubSchema(schema, schemaKey)
+	if err != nil {
+		return nil, fmt.Errorf("could not extract subSchema: %w", err)
+	}
+	// Get the immutable and editable values from the defaults.
+	editableValues, immutableValues, err := GetDefaultsFromMaps(
+		defaultValues, subSchema["properties"].(map[string]any))
+	// Build the final response. If an error occurred, return all the default ConfigMap, without separating
+	// the immutable and editable values.
+	resultMap := defaultValues
+	if err == nil {
+		resultMap = map[string]interface{}{"editable": editableValues, "immutable": immutableValues}
+	}
+	return resultMap, nil
+}
+
+// GetDefaultsFromMaps separates the values from a map
+// into 2 maps: one with elements that match the passed schema and one with the
+// elements that do not match the schema.
+func GetDefaultsFromMaps[K comparable, V any](
+	mapDefaults map[K]V, mapSchema map[K]V) (map[K]V, map[K]V, error) {
+	editable := make(map[K]V)
+	immutable := make(map[K]V)
+	// Go through all the default values and check which keys are present in the schema.
+	for key, defaultValue := range mapDefaults {
+		if schemaValue, exists := mapSchema[key]; exists {
+			switch valueType := any(defaultValue).(type) {
+			case map[K]V:
+				newSchema := any(schemaValue).(map[string]interface{})["properties"]
+				// If no "properties" are found, consider the whole object editable.
+				if newSchema == nil {
+					editable[key] = defaultValue
+					continue
+				}
+				schemaValueType := newSchema.(map[K]V)
+				newEditable, newImmutable, err := GetDefaultsFromMaps(valueType, schemaValueType)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(newEditable) != 0 {
+					editable[key] = any(newEditable).(V)
+				}
+				if len(newImmutable) != 0 {
+					immutable[key] = any(newImmutable).(V)
+				}
+			case []V:
+				newSchemaItems, ok := any(schemaValue).(map[string]interface{})["items"]
+				if !ok {
+					return nil, nil, fmt.Errorf("array type schema is missing its expected \"items\" component")
+				}
+				// We will be missing the "properties" component for an array of simple objects:
+				//   apiVIPs:
+				//     items:
+				//       type: string
+				//     maxItems: 2
+				//     type: array
+				newSchema := newSchemaItems.(map[string]interface{})["properties"]
+				schemaValueType := newSchemaItems.(map[K]V)
+				if newSchema != nil {
+					schemaValueType = newSchema.(map[K]V)
+				}
+				newEditable, newImmutable, err := GetDefaultsFromSlices[K](valueType, schemaValueType)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(newEditable) != 0 {
+					editable[key] = any(newEditable).(V)
+				}
+				if len(newImmutable) != 0 {
+					immutable[key] = any(newImmutable).(V)
+				}
+			default:
+				editable[key] = defaultValue
+			}
+		} else {
+			immutable[key] = defaultValue
+		}
+	}
+	return editable, immutable, nil
+}
+
+// GetDefaultsFromSlices separates the values from a slice
+// into 2 lists: one with elements that match the passed schema and one with the
+// elements that do not match the schema.
+func GetDefaultsFromSlices[K comparable, V any](
+	sliceDefaults []V, mapSchema map[K]V) ([]V, []V, error) {
+	editable := make([]V, 0, len(sliceDefaults))
+	immutable := make([]V, 0, len(sliceDefaults))
+	// Ensure that each value of the slice matches the schema.
+	for _, defaultValue := range sliceDefaults {
+		switch valueType := any(defaultValue).(type) {
+		case map[K]V:
+			schemaValueType := any(mapSchema).(map[K]V)
+			newEditable, newImmutable, err := GetDefaultsFromMaps(valueType, schemaValueType)
+			if err != nil {
+				return nil, nil, err
+			}
+			if len(newEditable) != 0 {
+				editable = append(editable, any(newEditable).(V))
+			}
+			if len(newImmutable) != 0 {
+				immutable = append(immutable, any(newImmutable).(V))
+			}
+		default:
+			editable = append(editable, defaultValue)
+		}
+	}
+	return editable, immutable, nil
+}
+
 // GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting
 func GetTLSSkipVerify() bool {
 	value, ok := os.LookupEnv(TLSSkipVerifyEnvName)
@@ -600,6 +821,87 @@ func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
 	return config, nil
 }
 
+// AddCABundle to an existing TLS configuration
+func AddCABundle(config *tls.Config, caBundle string) error {
+	data, err := os.ReadFile(caBundle)
+	if err != nil {
+		return fmt.Errorf("failed to read CA bundle '%s': %w", caBundle, err)
+	}
+
+	if config.RootCAs == nil {
+		config.RootCAs = x509.NewCertPool()
+	}
+	config.RootCAs.AppendCertsFromPEM(data)
+
+	return nil
+}
+
+// GetInternalClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+func GetInternalClientTLSConfig(ctx context.Context) (*tls.Config, error) {
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	err := AddCABundle(tlsConfig, DefaultServiceCAFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return tlsConfig, nil
+}
+
+// GetClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	if caFile != "" {
+		err := AddCABundle(tlsConfig, caFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add ca bundle: %w", err)
+		}
+	}
+
+	if certFile != "" {
+		loader, err := dynamiccertificates.NewDynamicServingContentFromFiles("tls-client", certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup certificate loader: %w", err)
+		}
+		go loader.Run(ctx, 1)
+
+		tlsConfig.GetClientCertificate = func(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			cert, key := loader.CurrentCertKeyContent()
+			result, err := tls.X509KeyPair(cert, key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create client certificate: %w", err)
+			}
+			return &result, nil
+		}
+	}
+
+	return tlsConfig, nil
+}
+
+// GetServerTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Config, error) {
+	loader, err := dynamiccertificates.NewDynamicServingContentFromFiles("tls-server", certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup certificate loader: %w", err)
+	}
+	go loader.Run(ctx, 1)
+
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			certBytes, keyBytes := loader.CurrentCertKeyContent()
+			cert, err := tls.X509KeyPair(certBytes, keyBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create server certificate: %w", err)
+			}
+			return &cert, nil
+		},
+	}
+
+	return tlsConfig, nil
+}
+
 // GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
 func GetDefaultBackendTransport() (http.RoundTripper, error) {
 	tlsConfig, err := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
@@ -628,55 +930,6 @@ func MapKeysToSlice(inputMap map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// SetupOAuthClient creates an HTTP client capable of acquiring an OAuth token used to authorize client requests.  If
-// the config excludes the OAuth specific sections then the client produced is a simple HTTP client without OAuth
-// capabilities.
-func SetupOAuthClient(ctx context.Context, config OAuthClientConfig) (*http.Client, error) {
-	tlsConfig, _ := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
-
-	if config.ClientCert != nil {
-		// Enable mTLS if a client certificate was provided.  The client CA is expected to be recognized by the server.
-		tlsConfig.Certificates = []tls.Certificate{*config.ClientCert}
-	}
-
-	if len(config.CaBundle) != 0 {
-		// If the user has provided a CA bundle then we must use it to build our client so that we can verify the
-		// identity of remote servers.
-		if tlsConfig.RootCAs == nil {
-			certPool := x509.NewCertPool()
-			if !certPool.AppendCertsFromPEM(config.CaBundle) {
-				return nil, fmt.Errorf("failed to append certificate bundle to pool")
-			}
-			tlsConfig.RootCAs = certPool
-		} else {
-			// We may not need the default CA bundles in this case but there's no harm in keeping them in the pool
-			// to handle cases where they may be needed.
-			tlsConfig.RootCAs.AppendCertsFromPEM(config.CaBundle)
-		}
-	}
-
-	c := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig}}
-
-	if config.ClientId != "" {
-		config := clientcredentials.Config{
-			ClientID:       config.ClientId,
-			ClientSecret:   config.ClientSecret,
-			TokenURL:       config.TokenUrl,
-			Scopes:         config.Scopes,
-			EndpointParams: nil,
-			AuthStyle:      oauth2.AuthStyleInParams,
-		}
-
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, c)
-
-		c = config.Client(ctx)
-	}
-
-	return c, nil
 }
 
 // GetClusterID retrieves the UUID value for the cluster specified by name
@@ -745,27 +998,6 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 			Name:      DefaultInventoryCR,
 			Namespace: GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace),
 		},
-		Spec: inventoryv1alpha1.InventorySpec{
-			AlarmServerConfig: inventoryv1alpha1.AlarmServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true},
-			},
-			DeploymentManagerServerConfig: inventoryv1alpha1.DeploymentManagerServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true,
-				},
-			},
-			MetadataServerConfig: inventoryv1alpha1.MetadataServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true,
-				},
-			},
-			ResourceServerConfig: inventoryv1alpha1.ResourceServerConfig{
-				ServerConfig: inventoryv1alpha1.ServerConfig{
-					Enabled: true,
-				},
-			},
-		},
 	}
 
 	err := c.Create(ctx, &inventory)
@@ -796,5 +1028,55 @@ func GetPasswordOrRandom(envName string) string {
 
 // GetServiceURL constructs the default service URL for a server
 func GetServiceURL(serverName string) string {
-	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), DefaultServicePort)
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%s", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), os.Getenv(InternalServicePortName))
+}
+
+// MakeUUIDFromNames generates a namespaced uuid value from the specified namespace and name values.  The values are
+// scoped to a `cloudID` to avoid conflicts with other systems.
+func MakeUUIDFromNames(namespace string, cloudID uuid.UUID, names ...string) uuid.UUID {
+	value := fmt.Sprintf("%s/%s", cloudID.String(), strings.Join(names, "/"))
+	namespaceUUID := uuid.MustParse(namespace)
+	return uuid.NewSHA1(namespaceUUID, []byte(value))
+}
+
+// ConvertMapAnyToString converts a map of any to a map of strings.  Values not of type string are
+// ignored.
+func ConvertMapAnyToString(input map[string]any) map[string]string {
+	output := make(map[string]string)
+	for key, value := range input {
+		if _, ok := input[key].(string); ok {
+			output[key] = value.(string)
+		}
+	}
+	return output
+}
+
+// GenerateSearchApiUrl appends graphql path to the backend URL to form the fully qualified search path
+func GenerateSearchApiUrl(backendURL string) (string, error) {
+	u, err := url.Parse(backendURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse backend URL %s: %w", backendURL, err)
+	}
+
+	// Split URL address
+	hostArr := strings.Split(u.Host, ".")
+
+	// Generate search API URL
+	searchUri := strings.Join(hostArr, ".")
+	return fmt.Sprintf("%s://%s/searchapi/graphql", u.Scheme, searchUri), nil
+}
+
+// Generates the name for a node's secret from a node map.
+func GenerateSecretName(nodeMap map[string]interface{}, provisioningRequest string) (string, error) {
+	nodeHostnameInterface, nodeHostnameExists := nodeMap["hostName"]
+	if !nodeHostnameExists {
+		return "", NewInputError(
+			`\"hostname\" key expected to exist in `+
+				`spec.templateParameters.clusterInstanceParameters `+
+				`of ProvisioningRequest %s, but it's missing`,
+			provisioningRequest,
+		)
+	}
+	secretName := ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) + "-bmc-secret"
+	return secretName, nil
 }

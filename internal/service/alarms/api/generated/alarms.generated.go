@@ -25,20 +25,24 @@ import (
 	externalRef0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
+const (
+	Oauth2Scopes = "oauth2.Scopes"
+)
+
 // Defines values for AlarmEventNotificationNotificationEventType.
 const (
-	ACKNOWLEDGE AlarmEventNotificationNotificationEventType = 3
-	CHANGE      AlarmEventNotificationNotificationEventType = 1
-	CLEAR       AlarmEventNotificationNotificationEventType = 2
-	NEW         AlarmEventNotificationNotificationEventType = 0
+	AlarmEventNotificationNotificationEventTypeACKNOWLEDGE AlarmEventNotificationNotificationEventType = 3
+	AlarmEventNotificationNotificationEventTypeCHANGE      AlarmEventNotificationNotificationEventType = 1
+	AlarmEventNotificationNotificationEventTypeCLEAR       AlarmEventNotificationNotificationEventType = 2
+	AlarmEventNotificationNotificationEventTypeNEW         AlarmEventNotificationNotificationEventType = 0
 )
 
 // Defines values for AlarmSubscriptionInfoFilter.
 const (
-	Acknowledge AlarmSubscriptionInfoFilter = "acknowledge"
-	Change      AlarmSubscriptionInfoFilter = "change"
-	Clear       AlarmSubscriptionInfoFilter = "clear"
-	New         AlarmSubscriptionInfoFilter = "new"
+	AlarmSubscriptionInfoFilterACKNOWLEDGE AlarmSubscriptionInfoFilter = "ACKNOWLEDGE"
+	AlarmSubscriptionInfoFilterCHANGE      AlarmSubscriptionInfoFilter = "CHANGE"
+	AlarmSubscriptionInfoFilterCLEAR       AlarmSubscriptionInfoFilter = "CLEAR"
+	AlarmSubscriptionInfoFilterNEW         AlarmSubscriptionInfoFilter = "NEW"
 )
 
 // Defines values for AlertmanagerNotificationStatus.
@@ -124,8 +128,8 @@ type AlarmEventRecord struct {
 	// AlarmClearedTime This field is populated with a Date/Time stamp value when the alarm condition is cleared.
 	AlarmClearedTime *time.Time `json:"alarmClearedTime,omitempty"`
 
-	// AlarmDefinitionId A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
-	AlarmDefinitionId openapi_types.UUID `json:"alarmDefinitionId"`
+	// AlarmDefinitionID A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
+	AlarmDefinitionID openapi_types.UUID `json:"alarmDefinitionID"`
 
 	// AlarmEventRecordId Identifier of an entry in the AlarmEventRecord.
 	// Locally unique within the scope of an O-Cloud instance.
@@ -141,8 +145,11 @@ type AlarmEventRecord struct {
 	// PerceivedSeverity This is an enumerated set of values which identify the perceived severity of the alarm.
 	PerceivedSeverity PerceivedSeverity `json:"perceivedSeverity"`
 
-	// ProbableCauseId A reference to the ProbableCause of the Alarm.
-	ProbableCauseId openapi_types.UUID `json:"probableCauseId"`
+	// ProbableCauseID A reference to the ProbableCause of the Alarm.
+	ProbableCauseID openapi_types.UUID `json:"probableCauseID"`
+
+	// ResourceID A reference to the resource which caused the alarm.
+	ResourceID openapi_types.UUID `json:"resourceID"`
 
 	// ResourceTypeID A reference to the type of resource which caused the alarm.
 	ResourceTypeID openapi_types.UUID `json:"resourceTypeID"`
@@ -151,11 +158,27 @@ type AlarmEventRecord struct {
 // AlarmEventRecordModifications defines model for AlarmEventRecordModifications.
 type AlarmEventRecordModifications struct {
 	// AlarmAcknowledged Acknowledge an alarm.
-	AlarmAcknowledged bool `json:"alarmAcknowledged"`
+	AlarmAcknowledged *bool `json:"alarmAcknowledged,omitempty"`
+
+	// PerceivedSeverity This is an enumerated set of values which identify the perceived severity of the alarm.
+	PerceivedSeverity *PerceivedSeverity `json:"perceivedSeverity,omitempty"`
+}
+
+// AlarmServiceConfiguration defines model for AlarmServiceConfiguration.
+type AlarmServiceConfiguration struct {
+	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related alarm service
+	Extensions *map[string]string `json:"extensions,omitempty"`
+
+	// RetentionPeriod Number of days for alarm history to be retained.
+	// This value has cannot be set lower than 1 (day).
+	RetentionPeriod int `json:"retentionPeriod"`
 }
 
 // AlarmSubscriptionInfo defines model for AlarmSubscriptionInfo.
 type AlarmSubscriptionInfo struct {
+	// AlarmSubscriptionId Identifier for the Alarm Subscription. This identifier is allocated by the O-Cloud.
+	AlarmSubscriptionId *openapi_types.UUID `json:"alarmSubscriptionId,omitempty"`
+
 	// Callback The fully qualified URI to a consumer procedure which can process a Post of the AlarmEventNotification.
 	Callback string `json:"callback"`
 
@@ -167,9 +190,6 @@ type AlarmSubscriptionInfo struct {
 	// It can be filtered by criteria based on the type of notification of fields of the
 	// AlarmEventRecord.
 	Filter *AlarmSubscriptionInfoFilter `json:"filter,omitempty"`
-
-	// SubscriptionID Identifier for the Alarm Subscription. This identifier is allocated by the O-Cloud.
-	SubscriptionID *openapi_types.UUID `json:"subscriptionID,omitempty"`
 }
 
 // AlarmSubscriptionInfoFilter Criteria for events which do not need to be reported or will be filtered by the subscription
@@ -178,23 +198,26 @@ type AlarmSubscriptionInfo struct {
 // AlarmEventRecord.
 type AlarmSubscriptionInfoFilter string
 
+// Alert defines model for Alert.
+type Alert struct {
+	Annotations *map[string]string `json:"annotations,omitempty"`
+	EndsAt      *time.Time         `json:"endsAt,omitempty"`
+
+	// Fingerprint Fingerprint to identify the alert
+	Fingerprint *string `json:"fingerprint,omitempty"`
+
+	// GeneratorURL Identifies the entity that caused the alert
+	GeneratorURL *string            `json:"generatorURL,omitempty"`
+	Labels       *map[string]string `json:"labels,omitempty"`
+	StartsAt     *time.Time         `json:"startsAt,omitempty"`
+
+	// Status Alertmanager notification status
+	Status *AlertmanagerNotificationStatus `json:"status,omitempty"`
+}
+
 // AlertmanagerNotification Alertmanager notification payload as described here https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
 type AlertmanagerNotification struct {
-	Alerts []struct {
-		Annotations *map[string]string `json:"annotations,omitempty"`
-		EndsAt      *time.Time         `json:"endsAt,omitempty"`
-
-		// Fingerprint Fingerprint to identify the alert
-		Fingerprint *string `json:"fingerprint,omitempty"`
-
-		// GeneratorURL Identifies the entity that caused the alert
-		GeneratorURL *string            `json:"generatorURL,omitempty"`
-		Labels       *map[string]string `json:"labels,omitempty"`
-		StartsAt     *time.Time         `json:"startsAt,omitempty"`
-
-		// Status Alertmanager notification status
-		Status *AlertmanagerNotificationStatus `json:"status,omitempty"`
-	} `json:"alerts"`
+	Alerts            []Alert            `json:"alerts"`
 	CommonAnnotations *map[string]string `json:"commonAnnotations,omitempty"`
 	CommonLabels      *map[string]string `json:"commonLabels,omitempty"`
 
@@ -229,20 +252,15 @@ type HardwareAlert = map[string]interface{}
 // PerceivedSeverity This is an enumerated set of values which identify the perceived severity of the alarm.
 type PerceivedSeverity int
 
-// ProbableCause defines model for ProbableCause.
-type ProbableCause struct {
-	// Description Any additional information beyond the name to describe the probableCause derived from corresponding AlarmDefinition.
-	Description string `json:"description"`
-
-	// Name Human readable text of the probable cause derived from corresponding AlarmDefinition.
-	Name string `json:"name"`
-
-	// ProbableCauseId Identifier of the ProbableCause.
-	ProbableCauseId openapi_types.UUID `json:"probableCauseId"`
-}
-
 // GetSubscriptionsParams defines parameters for GetSubscriptions.
 type GetSubscriptionsParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -328,6 +346,13 @@ type GetSubscriptionsParams struct {
 
 // GetAlarmsParams defines parameters for GetAlarms.
 type GetAlarmsParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -417,11 +442,17 @@ type AmNotificationJSONRequestBody = AlertmanagerNotification
 // HwNotificationJSONRequestBody defines body for HwNotification for application/json ContentType.
 type HwNotificationJSONRequestBody = HardwareAlert
 
+// PatchAlarmServiceConfigurationApplicationMergePatchPlusJSONRequestBody defines body for PatchAlarmServiceConfiguration for application/merge-patch+json ContentType.
+type PatchAlarmServiceConfigurationApplicationMergePatchPlusJSONRequestBody = AlarmServiceConfiguration
+
+// UpdateAlarmServiceConfigurationJSONRequestBody defines body for UpdateAlarmServiceConfiguration for application/json ContentType.
+type UpdateAlarmServiceConfigurationJSONRequestBody = AlarmServiceConfiguration
+
 // CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
 type CreateSubscriptionJSONRequestBody = AlarmSubscriptionInfo
 
-// AckAlarmJSONRequestBody defines body for AckAlarm for application/json ContentType.
-type AckAlarmJSONRequestBody = AlarmEventRecordModifications
+// PatchAlarmApplicationMergePatchPlusJSONRequestBody defines body for PatchAlarm for application/merge-patch+json ContentType.
+type PatchAlarmApplicationMergePatchPlusJSONRequestBody = AlarmEventRecordModifications
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -434,6 +465,15 @@ type ServerInterface interface {
 	// Get API versions
 	// (GET /o2ims-infrastructureMonitoring/api_versions)
 	GetAllVersions(w http.ResponseWriter, r *http.Request)
+	// Retrieve the alarm service configuration
+	// (GET /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
+	GetServiceConfiguration(w http.ResponseWriter, r *http.Request)
+	// Modify individual fields of the Alarm Service Configuration.
+	// (PATCH /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
+	PatchAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
+	// Modify all fields of the Alarm Service Configuration.
+	// (PUT /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
+	UpdateAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
 	// Retrieve the list of alarm subscriptions
 	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
 	GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams)
@@ -452,18 +492,12 @@ type ServerInterface interface {
 	// Retrieve exactly one alarm
 	// (GET /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
 	GetAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
-	// Modify exactly one alarm to acknowledge
+	// Modify an individual alarm record
 	// (PATCH /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
-	AckAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
+	PatchAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
 	// Get minor API versions
 	// (GET /o2ims-infrastructureMonitoring/v1/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request)
-	// Retrieve all probable causes
-	// (GET /o2ims-infrastructureMonitoring/v1/probableCauses)
-	GetProbableCauses(w http.ResponseWriter, r *http.Request)
-	// Retrieve exactly one probable cause
-	// (GET /o2ims-infrastructureMonitoring/v1/probableCauses/{probableCauseId})
-	GetProbableCause(w http.ResponseWriter, r *http.Request, probableCauseId openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -477,6 +511,12 @@ type MiddlewareFunc func(http.Handler) http.Handler
 
 // AmNotification operation middleware
 func (siw *ServerInterfaceWrapper) AmNotification(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin"})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AmNotification(w, r)
@@ -503,6 +543,12 @@ func (siw *ServerInterfaceWrapper) HwNotification(w http.ResponseWriter, r *http
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.HwNotification(w, r, hwVendorName)
 	}))
@@ -517,8 +563,74 @@ func (siw *ServerInterfaceWrapper) HwNotification(w http.ResponseWriter, r *http
 // GetAllVersions operation middleware
 func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAllVersions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetServiceConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader", "role:o2ims-maintainer"})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServiceConfiguration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchAlarmServiceConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) PatchAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-maintainer"})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchAlarmServiceConfiguration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAlarmServiceConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-maintainer"})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAlarmServiceConfiguration(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -533,8 +645,22 @@ func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *ht
 
 	var err error
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetSubscriptionsParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
@@ -574,6 +700,12 @@ func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *ht
 // CreateSubscription operation middleware
 func (siw *ServerInterfaceWrapper) CreateSubscription(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-subscriber"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateSubscription(w, r)
 	}))
@@ -598,6 +730,12 @@ func (siw *ServerInterfaceWrapper) DeleteSubscription(w http.ResponseWriter, r *
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "alarmSubscriptionId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-subscriber"})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteSubscription(w, r, alarmSubscriptionId)
@@ -624,6 +762,12 @@ func (siw *ServerInterfaceWrapper) GetSubscription(w http.ResponseWriter, r *htt
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSubscription(w, r, alarmSubscriptionId)
 	}))
@@ -640,8 +784,22 @@ func (siw *ServerInterfaceWrapper) GetAlarms(w http.ResponseWriter, r *http.Requ
 
 	var err error
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetAlarmsParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
@@ -692,6 +850,12 @@ func (siw *ServerInterfaceWrapper) GetAlarm(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAlarm(w, r, alarmEventRecordId)
 	}))
@@ -703,8 +867,8 @@ func (siw *ServerInterfaceWrapper) GetAlarm(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
-// AckAlarm operation middleware
-func (siw *ServerInterfaceWrapper) AckAlarm(w http.ResponseWriter, r *http.Request) {
+// PatchAlarm operation middleware
+func (siw *ServerInterfaceWrapper) PatchAlarm(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
@@ -717,8 +881,14 @@ func (siw *ServerInterfaceWrapper) AckAlarm(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-maintainer"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AckAlarm(w, r, alarmEventRecordId)
+		siw.Handler.PatchAlarm(w, r, alarmEventRecordId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -731,47 +901,14 @@ func (siw *ServerInterfaceWrapper) AckAlarm(w http.ResponseWriter, r *http.Reque
 // GetMinorVersions operation middleware
 func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMinorVersions(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetProbableCauses operation middleware
-func (siw *ServerInterfaceWrapper) GetProbableCauses(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProbableCauses(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetProbableCause operation middleware
-func (siw *ServerInterfaceWrapper) GetProbableCause(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "probableCauseId" -------------
-	var probableCauseId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "probableCauseId", r.PathValue("probableCauseId"), &probableCauseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "probableCauseId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProbableCause(w, r, probableCauseId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -904,16 +1041,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/internal/v1/caas-alerts/alertmanager", wrapper.AmNotification)
 	m.HandleFunc("POST "+options.BaseURL+"/internal/v1/hardware-alerts/{hwVendorName}", wrapper.HwNotification)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/api_versions", wrapper.GetAllVersions)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.GetServiceConfiguration)
+	m.HandleFunc("PATCH "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.PatchAlarmServiceConfiguration)
+	m.HandleFunc("PUT "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.UpdateAlarmServiceConfiguration)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions", wrapper.GetSubscriptions)
 	m.HandleFunc("POST "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions", wrapper.CreateSubscription)
 	m.HandleFunc("DELETE "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.DeleteSubscription)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.GetSubscription)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms", wrapper.GetAlarms)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.GetAlarm)
-	m.HandleFunc("PATCH "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.AckAlarm)
+	m.HandleFunc("PATCH "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.PatchAlarm)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/api_versions", wrapper.GetMinorVersions)
-	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/probableCauses", wrapper.GetProbableCauses)
-	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/probableCauses/{probableCauseId}", wrapper.GetProbableCause)
 
 	return m
 }
@@ -1008,9 +1146,203 @@ func (response GetAllVersions400ApplicationProblemPlusJSONResponse) VisitGetAllV
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetAllVersions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions401ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAllVersions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions403ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetAllVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAllVersions500ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceConfigurationRequestObject struct {
+}
+
+type GetServiceConfigurationResponseObject interface {
+	VisitGetServiceConfigurationResponse(w http.ResponseWriter) error
+}
+
+type GetServiceConfiguration200JSONResponse AlarmServiceConfiguration
+
+func (response GetServiceConfiguration200JSONResponse) VisitGetServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceConfiguration400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetServiceConfiguration400ApplicationProblemPlusJSONResponse) VisitGetServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceConfiguration401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetServiceConfiguration401ApplicationProblemPlusJSONResponse) VisitGetServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceConfiguration403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetServiceConfiguration403ApplicationProblemPlusJSONResponse) VisitGetServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceConfiguration500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetServiceConfiguration500ApplicationProblemPlusJSONResponse) VisitGetServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarmServiceConfigurationRequestObject struct {
+	Body *PatchAlarmServiceConfigurationApplicationMergePatchPlusJSONRequestBody
+}
+
+type PatchAlarmServiceConfigurationResponseObject interface {
+	VisitPatchAlarmServiceConfigurationResponse(w http.ResponseWriter) error
+}
+
+type PatchAlarmServiceConfiguration200JSONResponse AlarmServiceConfiguration
+
+func (response PatchAlarmServiceConfiguration200JSONResponse) VisitPatchAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response PatchAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse) VisitPatchAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarmServiceConfiguration401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response PatchAlarmServiceConfiguration401ApplicationProblemPlusJSONResponse) VisitPatchAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarmServiceConfiguration403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response PatchAlarmServiceConfiguration403ApplicationProblemPlusJSONResponse) VisitPatchAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarmServiceConfiguration412ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response PatchAlarmServiceConfiguration412ApplicationProblemPlusJSONResponse) VisitPatchAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarmServiceConfiguration500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response PatchAlarmServiceConfiguration500ApplicationProblemPlusJSONResponse) VisitPatchAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAlarmServiceConfigurationRequestObject struct {
+	Body *UpdateAlarmServiceConfigurationJSONRequestBody
+}
+
+type UpdateAlarmServiceConfigurationResponseObject interface {
+	VisitUpdateAlarmServiceConfigurationResponse(w http.ResponseWriter) error
+}
+
+type UpdateAlarmServiceConfiguration200JSONResponse AlarmServiceConfiguration
+
+func (response UpdateAlarmServiceConfiguration200JSONResponse) VisitUpdateAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response UpdateAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse) VisitUpdateAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAlarmServiceConfiguration401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response UpdateAlarmServiceConfiguration401ApplicationProblemPlusJSONResponse) VisitUpdateAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAlarmServiceConfiguration403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response UpdateAlarmServiceConfiguration403ApplicationProblemPlusJSONResponse) VisitUpdateAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAlarmServiceConfiguration412ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response UpdateAlarmServiceConfiguration412ApplicationProblemPlusJSONResponse) VisitUpdateAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateAlarmServiceConfiguration500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response UpdateAlarmServiceConfiguration500ApplicationProblemPlusJSONResponse) VisitUpdateAlarmServiceConfigurationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(500)
 
@@ -1039,6 +1371,24 @@ type GetSubscriptions400ApplicationProblemPlusJSONResponse externalRef0.ProblemD
 func (response GetSubscriptions400ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSubscriptions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscriptions401ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSubscriptions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscriptions403ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1074,6 +1424,24 @@ type CreateSubscription400ApplicationProblemPlusJSONResponse externalRef0.Proble
 func (response CreateSubscription400ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSubscription401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response CreateSubscription401ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSubscription403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response CreateSubscription403ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1117,6 +1485,24 @@ type DeleteSubscription400ApplicationProblemPlusJSONResponse externalRef0.Proble
 func (response DeleteSubscription400ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSubscription401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response DeleteSubscription401ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSubscription403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response DeleteSubscription403ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1165,6 +1551,24 @@ func (response GetSubscription400ApplicationProblemPlusJSONResponse) VisitGetSub
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetSubscription401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscription401ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSubscription403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscription403ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetSubscription404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetSubscription404ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
@@ -1205,6 +1609,15 @@ type GetAlarms400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 func (response GetAlarms400ApplicationProblemPlusJSONResponse) VisitGetAlarmsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarms401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarms401ApplicationProblemPlusJSONResponse) VisitGetAlarmsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1253,6 +1666,24 @@ func (response GetAlarm400ApplicationProblemPlusJSONResponse) VisitGetAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetAlarm401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarm401ApplicationProblemPlusJSONResponse) VisitGetAlarmResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarm403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarm403ApplicationProblemPlusJSONResponse) VisitGetAlarmResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetAlarm404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAlarm404ApplicationProblemPlusJSONResponse) VisitGetAlarmResponse(w http.ResponseWriter) error {
@@ -1271,63 +1702,81 @@ func (response GetAlarm500ApplicationProblemPlusJSONResponse) VisitGetAlarmRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarmRequestObject struct {
+type PatchAlarmRequestObject struct {
 	AlarmEventRecordId openapi_types.UUID `json:"alarmEventRecordId"`
-	Body               *AckAlarmJSONRequestBody
+	Body               *PatchAlarmApplicationMergePatchPlusJSONRequestBody
 }
 
-type AckAlarmResponseObject interface {
-	VisitAckAlarmResponse(w http.ResponseWriter) error
+type PatchAlarmResponseObject interface {
+	VisitPatchAlarmResponse(w http.ResponseWriter) error
 }
 
-type AckAlarm200JSONResponse AlarmEventRecordModifications
+type PatchAlarm200JSONResponse AlarmEventRecordModifications
 
-func (response AckAlarm200JSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
+func (response PatchAlarm200JSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+type PatchAlarm400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
-func (response AckAlarm400ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
+func (response PatchAlarm400ApplicationProblemPlusJSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+type PatchAlarm401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
-func (response AckAlarm404ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
+func (response PatchAlarm401ApplicationProblemPlusJSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarm403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response PatchAlarm403ApplicationProblemPlusJSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchAlarm404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response PatchAlarm404ApplicationProblemPlusJSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm409ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+type PatchAlarm409ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
-func (response AckAlarm409ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
+func (response PatchAlarm409ApplicationProblemPlusJSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm412ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+type PatchAlarm412ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
-func (response AckAlarm412ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
+func (response PatchAlarm412ApplicationProblemPlusJSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type AckAlarm500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+type PatchAlarm500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
-func (response AckAlarm500ApplicationProblemPlusJSONResponse) VisitAckAlarmResponse(w http.ResponseWriter) error {
+func (response PatchAlarm500ApplicationProblemPlusJSONResponse) VisitPatchAlarmResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(500)
 
@@ -1359,78 +1808,27 @@ func (response GetMinorVersions400ApplicationProblemPlusJSONResponse) VisitGetMi
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetMinorVersions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions401ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions403ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetMinorVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetMinorVersions500ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProbableCausesRequestObject struct {
-}
-
-type GetProbableCausesResponseObject interface {
-	VisitGetProbableCausesResponse(w http.ResponseWriter) error
-}
-
-type GetProbableCauses200JSONResponse []ProbableCause
-
-func (response GetProbableCauses200JSONResponse) VisitGetProbableCausesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProbableCauses500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
-
-func (response GetProbableCauses500ApplicationProblemPlusJSONResponse) VisitGetProbableCausesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProbableCauseRequestObject struct {
-	ProbableCauseId openapi_types.UUID `json:"probableCauseId"`
-}
-
-type GetProbableCauseResponseObject interface {
-	VisitGetProbableCauseResponse(w http.ResponseWriter) error
-}
-
-type GetProbableCause200JSONResponse ProbableCause
-
-func (response GetProbableCause200JSONResponse) VisitGetProbableCauseResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProbableCause400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
-
-func (response GetProbableCause400ApplicationProblemPlusJSONResponse) VisitGetProbableCauseResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProbableCause404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
-
-func (response GetProbableCause404ApplicationProblemPlusJSONResponse) VisitGetProbableCauseResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProbableCause500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
-
-func (response GetProbableCause500ApplicationProblemPlusJSONResponse) VisitGetProbableCauseResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(500)
 
@@ -1448,6 +1846,15 @@ type StrictServerInterface interface {
 	// Get API versions
 	// (GET /o2ims-infrastructureMonitoring/api_versions)
 	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
+	// Retrieve the alarm service configuration
+	// (GET /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
+	GetServiceConfiguration(ctx context.Context, request GetServiceConfigurationRequestObject) (GetServiceConfigurationResponseObject, error)
+	// Modify individual fields of the Alarm Service Configuration.
+	// (PATCH /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
+	PatchAlarmServiceConfiguration(ctx context.Context, request PatchAlarmServiceConfigurationRequestObject) (PatchAlarmServiceConfigurationResponseObject, error)
+	// Modify all fields of the Alarm Service Configuration.
+	// (PUT /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
+	UpdateAlarmServiceConfiguration(ctx context.Context, request UpdateAlarmServiceConfigurationRequestObject) (UpdateAlarmServiceConfigurationResponseObject, error)
 	// Retrieve the list of alarm subscriptions
 	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
 	GetSubscriptions(ctx context.Context, request GetSubscriptionsRequestObject) (GetSubscriptionsResponseObject, error)
@@ -1466,18 +1873,12 @@ type StrictServerInterface interface {
 	// Retrieve exactly one alarm
 	// (GET /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
 	GetAlarm(ctx context.Context, request GetAlarmRequestObject) (GetAlarmResponseObject, error)
-	// Modify exactly one alarm to acknowledge
+	// Modify an individual alarm record
 	// (PATCH /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
-	AckAlarm(ctx context.Context, request AckAlarmRequestObject) (AckAlarmResponseObject, error)
+	PatchAlarm(ctx context.Context, request PatchAlarmRequestObject) (PatchAlarmResponseObject, error)
 	// Get minor API versions
 	// (GET /o2ims-infrastructureMonitoring/v1/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
-	// Retrieve all probable causes
-	// (GET /o2ims-infrastructureMonitoring/v1/probableCauses)
-	GetProbableCauses(ctx context.Context, request GetProbableCausesRequestObject) (GetProbableCausesResponseObject, error)
-	// Retrieve exactly one probable cause
-	// (GET /o2ims-infrastructureMonitoring/v1/probableCauses/{probableCauseId})
-	GetProbableCause(ctx context.Context, request GetProbableCauseRequestObject) (GetProbableCauseResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -1590,6 +1991,92 @@ func (sh *strictHandler) GetAllVersions(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetAllVersionsResponseObject); ok {
 		if err := validResponse.VisitGetAllVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetServiceConfiguration operation middleware
+func (sh *strictHandler) GetServiceConfiguration(w http.ResponseWriter, r *http.Request) {
+	var request GetServiceConfigurationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServiceConfiguration(ctx, request.(GetServiceConfigurationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServiceConfiguration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServiceConfigurationResponseObject); ok {
+		if err := validResponse.VisitGetServiceConfigurationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchAlarmServiceConfiguration operation middleware
+func (sh *strictHandler) PatchAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request) {
+	var request PatchAlarmServiceConfigurationRequestObject
+
+	var body PatchAlarmServiceConfigurationApplicationMergePatchPlusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchAlarmServiceConfiguration(ctx, request.(PatchAlarmServiceConfigurationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchAlarmServiceConfiguration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchAlarmServiceConfigurationResponseObject); ok {
+		if err := validResponse.VisitPatchAlarmServiceConfigurationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAlarmServiceConfiguration operation middleware
+func (sh *strictHandler) UpdateAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request) {
+	var request UpdateAlarmServiceConfigurationRequestObject
+
+	var body UpdateAlarmServiceConfigurationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAlarmServiceConfiguration(ctx, request.(UpdateAlarmServiceConfigurationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAlarmServiceConfiguration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAlarmServiceConfigurationResponseObject); ok {
+		if err := validResponse.VisitUpdateAlarmServiceConfigurationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1758,13 +2245,13 @@ func (sh *strictHandler) GetAlarm(w http.ResponseWriter, r *http.Request, alarmE
 	}
 }
 
-// AckAlarm operation middleware
-func (sh *strictHandler) AckAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID) {
-	var request AckAlarmRequestObject
+// PatchAlarm operation middleware
+func (sh *strictHandler) PatchAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID) {
+	var request PatchAlarmRequestObject
 
 	request.AlarmEventRecordId = alarmEventRecordId
 
-	var body AckAlarmJSONRequestBody
+	var body PatchAlarmApplicationMergePatchPlusJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
 		return
@@ -1772,18 +2259,18 @@ func (sh *strictHandler) AckAlarm(w http.ResponseWriter, r *http.Request, alarmE
 	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.AckAlarm(ctx, request.(AckAlarmRequestObject))
+		return sh.ssi.PatchAlarm(ctx, request.(PatchAlarmRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "AckAlarm")
+		handler = middleware(handler, "PatchAlarm")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(AckAlarmResponseObject); ok {
-		if err := validResponse.VisitAckAlarmResponse(w); err != nil {
+	} else if validResponse, ok := response.(PatchAlarmResponseObject); ok {
+		if err := validResponse.VisitPatchAlarmResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1815,146 +2302,103 @@ func (sh *strictHandler) GetMinorVersions(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// GetProbableCauses operation middleware
-func (sh *strictHandler) GetProbableCauses(w http.ResponseWriter, r *http.Request) {
-	var request GetProbableCausesRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetProbableCauses(ctx, request.(GetProbableCausesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetProbableCauses")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetProbableCausesResponseObject); ok {
-		if err := validResponse.VisitGetProbableCausesResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetProbableCause operation middleware
-func (sh *strictHandler) GetProbableCause(w http.ResponseWriter, r *http.Request, probableCauseId openapi_types.UUID) {
-	var request GetProbableCauseRequestObject
-
-	request.ProbableCauseId = probableCauseId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetProbableCause(ctx, request.(GetProbableCauseRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetProbableCause")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetProbableCauseResponseObject); ok {
-		if err := validResponse.VisitGetProbableCauseResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"xfAPgQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

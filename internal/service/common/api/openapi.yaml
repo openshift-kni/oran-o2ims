@@ -23,9 +23,25 @@ info:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
 
+paths: {}
 
 components:
   parameters:
+    allFields:
+      name: all_fields
+      description: |
+        This URI query parameter requests that all complex attributes are included in the response.
+
+        ```
+        all_fields
+        ```
+      in: query
+      required: false
+      schema:
+        type: string
+        nullable: true
+        default: "false"
+
     fields:
       name: fields
       description: |
@@ -129,6 +145,17 @@ components:
         type: string
       example: "(eq,name,my cluster)"
 
+    alarmDictionaryId:
+      name: alarmDictionaryId
+      description: |
+        Unique identifier of an alarm dictionary.
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
+
   schemas:
 
     APIVersion:
@@ -173,7 +200,6 @@ components:
             except for purposes of localization. If type is given and other than "about:blank", this attribute shall also be provided.
         status:
           type: integer
-          format: int
           description: The HTTP status code for this occurrence of the problem.
         detail:
           type: string
@@ -193,3 +219,127 @@ components:
       required:
       - status
       - detail
+
+    AlarmDictionary:
+      description: Information about an alarm dictionary.
+      type: object
+      properties:
+        alarmDictionaryId:
+          type: string
+          format: uuid
+          description: |
+            The Identifier of the Alarm Dictionary. The Identifier is unique within an O-Cloud.
+        alarmDictionaryVersion:
+          type: string
+          description: |
+            Version of the Alarm Dictionary. Version is vendor defined such that the version of the dictionary can be
+            associated with a specific version of the software delivery of this product.
+        alarmDictionarySchemaVersion:
+          type: string
+          description: |
+            Version of the Alarm Dictionary Schema to which this alarm dictionary conforms.
+        entityType:
+          type: string
+          description: |
+            O-RAN entity type emitting the alarm: This shall be unique per vendor ResourceType.model and
+            ResourceType.version
+        vendor:
+          type: string
+          description: |
+            Vendor of the Entity Type to whom this Alarm Dictionary applies. This should be the same value as in the 
+            ResourceType.vendor attribute
+        managementInterfaceId:
+          type: array
+          description: |
+            List of management interface over which alarms are transmitted for this Entity Type.  
+            RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
+          items:
+            type: string
+            enum: [ O2IMS ]
+        pkNotificationField:
+          type: array
+          description: |
+            Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
+            Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
+          items:
+            type: string
+        alarmDefinition:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlarmDefinition"
+      required:
+        - alarmDictionaryId
+        - alarmDictionaryVersion
+        - alarmDictionarySchemaVersion
+        - entityType
+        - vendor
+        - managementInterfaceId
+        - pkNotificationField
+        - alarmDefinition
+
+    AlarmDefinition:
+      description: Information about an alarm definition.
+      type: object
+      properties:
+        alarmDefinitionId:
+          type: string
+          format: uuid
+          description: |
+            Provides a unique identifier of the alarm being raised. This is the Primary Key into the Alarm Dictionary
+        alarmName:
+          type: string
+          description: |
+            Provides short name for the alarm
+        alarmLastChange:
+          type: string
+          description: |
+            Indicates the Alarm Dictionary Version in which this alarm last changed.
+        alarmChangeType:
+          type: string
+          enum: [ ADDED, DELETED, MODIFIED ]
+          description: |
+            Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
+        alarmDescription:
+          type: string
+          description: |
+            Provides a longer descriptive meaning of the alarm condition and a description of the consequences of the
+            alarm condition. This is intended to be read by an operator to give an idea of what happened and a sense of
+            the effects, consequences, and other impacted areas of the system.
+        proposedRepairActions:
+          type: string
+          description: |
+            Provides guidance for proposed repair actions.
+        clearingType:
+          type: string
+          enum: [ AUTOMATIC, MANUAL ]
+          description: |
+            Identifies whether alarm is cleared automatically or manually.
+        managementInterfaceId:
+          type: array
+          items:
+            type: string
+            enum: [ O2IMS ]
+          description: |
+            List of management interface over which alarms are transmitted for this Entity Type.
+            RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
+        pkNotificationField:
+          type: array
+          items:
+            type: string
+          description: |
+            Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
+            Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
+        alarmAdditionalFields:
+          type: object
+          description: |
+            List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
+      required:
+        - alarmDefinitionId
+        - alarmName
+        - alarmLastChange
+        - alarmChangeType
+        - alarmDescription
+        - proposedRepairActions
+        - clearingType
+        - managementInterfaceId
+        - pkNotificationField

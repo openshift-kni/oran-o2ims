@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package models
 
 import (
@@ -6,31 +12,60 @@ import (
 
 	"github.com/google/uuid"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
+// managementInterfaceID defines the unique identifier for the IMS O2 interface
+const managementInterfaceID = "O2IMS"
+
+// dummyDefinitionID is a temporary value used to render a placeholder alarm definition.  To be replaced when we support
+// retrieving alarm dictionaries from the hardware manager
+const dummyDefinitionID = "46a600ca-bb4d-470d-b8ca-0f95989518e4"
+
+// dummyVersion is a temporary value to used to render a placeholder alarm dictionary/definition.
+const dummyVersion = "0.0.0"
+
 // DeploymentManagerToModel converts a DB tuple to an API Model
-func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentManager {
+func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.FieldOptions) generated.DeploymentManager {
 	object := generated.DeploymentManager{
 		Capabilities:        map[string]string{},
 		Capacity:            map[string]string{},
 		DeploymentManagerId: record.DeploymentManagerID,
 		Description:         record.Description,
-		Extensions:          record.Extensions,
 		Name:                record.Name,
 		OCloudId:            record.OCloudID,
 		ServiceUri:          record.URL,
 		SupportedLocations:  record.Locations,
 	}
 
-	if record.CapacityInfo != nil {
-		object.Capacity = record.CapacityInfo
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			object.Extensions = &extensions
+		} else {
+			object.Extensions = &record.Extensions
+		}
 	}
 
-	if record.Capabilities != nil {
-		object.Capabilities = record.Capabilities
+	if options.IsIncluded(commonapi.CapacityAttribute) {
+		if record.CapacityInfo != nil {
+			object.Capacity = record.CapacityInfo
+		} else {
+			object.Capacity = map[string]string{}
+		}
+	}
+
+	if options.IsIncluded(commonapi.CapabilitiesAttribute) {
+		if record.Capabilities != nil {
+			object.Capabilities = record.Capabilities
+		} else {
+			object.Capabilities = map[string]string{}
+		}
 	}
 
 	return object
@@ -38,24 +73,47 @@ func DeploymentManagerToModel(record *DeploymentManager) generated.DeploymentMan
 
 // ResourceTypeToModel converts a DB tuple to an API Model
 func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
+	alarmAdditionalFields := map[string]interface{}{}
 	object := generated.ResourceType{
-		AlarmDictionary: nil,
-		Description:     record.Description,
-		Extensions:      record.Extensions,
-		Model:           record.Model,
-		Name:            record.Name,
-		ResourceClass:   "",
-		ResourceKind:    "",
-		ResourceTypeId:  record.ResourceTypeID,
-		Vendor:          record.Vendor,
-		Version:         record.Version,
+		// TODO: fill-in a proper alarm dictionary when we can get it from the hardware manager
+		AlarmDictionary: &common.AlarmDictionary{
+			AlarmDefinition: []common.AlarmDefinition{
+				{
+					AlarmAdditionalFields: &alarmAdditionalFields,
+					AlarmChangeType:       common.ADDED,
+					AlarmDefinitionId:     uuid.MustParse(dummyDefinitionID),
+					AlarmDescription:      "Sample alarm definition",
+					AlarmLastChange:       dummyVersion,
+					AlarmName:             "Sample alarm name",
+					ClearingType:          common.MANUAL,
+					ManagementInterfaceId: []common.AlarmDefinitionManagementInterfaceId{managementInterfaceID},
+					PkNotificationField:   []string{"alarmDefinitionID"},
+					ProposedRepairActions: "Please consult the documentation",
+				},
+			},
+			AlarmDictionarySchemaVersion: dummyVersion,
+			AlarmDictionaryVersion:       dummyVersion,
+			EntityType:                   fmt.Sprintf("%s/%s", record.Model, record.Version),
+			ManagementInterfaceId:        []common.AlarmDictionaryManagementInterfaceId{"O2IMS"},
+			PkNotificationField:          []string{"alarmDictionaryID"},
+			Vendor:                       record.Vendor,
+		},
+		Description:    record.Description,
+		Extensions:     record.Extensions,
+		Model:          record.Model,
+		Name:           record.Name,
+		ResourceClass:  generated.ResourceTypeResourceClass(record.ResourceClass),
+		ResourceKind:   generated.ResourceTypeResourceKind(record.ResourceKind),
+		ResourceTypeId: record.ResourceTypeID,
+		Vendor:         record.Vendor,
+		Version:        record.Version,
 	}
 
 	return object
 }
 
 // SubscriptionToModel converts a DB tuple to an API Model
-func SubscriptionToModel(record *Subscription) generated.Subscription {
+func SubscriptionToModel(record *models2.Subscription) generated.Subscription {
 	object := generated.Subscription{
 		Callback:               record.Callback,
 		ConsumerSubscriptionId: record.ConsumerSubscriptionID,
@@ -67,10 +125,10 @@ func SubscriptionToModel(record *Subscription) generated.Subscription {
 }
 
 // SubscriptionFromModel converts an API model to a DB tuple
-func SubscriptionFromModel(object *generated.Subscription) *Subscription {
+func SubscriptionFromModel(object *generated.Subscription) *models2.Subscription {
 	id := uuid.Must(uuid.NewRandom())
 
-	record := Subscription{
+	record := models2.Subscription{
 		SubscriptionID:         &id,
 		ConsumerSubscriptionID: object.ConsumerSubscriptionId,
 		Filter:                 object.Filter,
@@ -82,15 +140,23 @@ func SubscriptionFromModel(object *generated.Subscription) *Subscription {
 }
 
 // ResourcePoolToModel converts a DB tuple to an API model
-func ResourcePoolToModel(record *ResourcePool) generated.ResourcePool {
+func ResourcePoolToModel(record *ResourcePool, options *commonapi.FieldOptions) generated.ResourcePool {
 	object := generated.ResourcePool{
 		Description:      record.Description,
-		Extensions:       record.Extensions,
 		GlobalLocationId: record.GlobalLocationID,
 		Location:         record.Location,
 		Name:             record.Name,
 		OCloudId:         record.OCloudID,
 		ResourcePoolId:   record.ResourcePoolID,
+	}
+
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			object.Extensions = &extensions
+		} else {
+			object.Extensions = &record.Extensions
+		}
 	}
 
 	return object
@@ -128,7 +194,7 @@ func ResourceToModel(record *Resource, elements []Resource) generated.Resource {
 }
 
 // getEventType determines the event type based on the object transition
-func getEventType(before, after *string) int {
+func getEventType(before, after map[string]interface{}) int {
 	switch {
 	case before == nil && after != nil:
 		return 0
@@ -162,21 +228,27 @@ func getObjectReference(objectType string, objectID uuid.UUID, parentID *uuid.UU
 }
 
 // DataChangeEventToModel converts a DB tuple to an API model
-func DataChangeEventToModel(record *DataChangeEvent) generated.InventoryChangeNotification {
+func DataChangeEventToModel(record *models2.DataChangeEvent) generated.InventoryChangeNotification {
 	eventType := getEventType(record.BeforeState, record.AfterState)
 	object := generated.InventoryChangeNotification{
 		NotificationEventType: generated.InventoryChangeNotificationNotificationEventType(eventType),
 		NotificationId:        *record.DataChangeID,
 		ObjectRef:             getObjectReference(record.ObjectType, record.ObjectID, record.ParentID),
-		PostObjectState:       record.AfterState,
-		PriorObjectState:      record.BeforeState,
+	}
+
+	if record.AfterState != nil {
+		object.PostObjectState = &record.AfterState
+	}
+
+	if record.BeforeState != nil {
+		object.PriorObjectState = &record.BeforeState
 	}
 
 	return object
 }
 
 // DataChangeEventToNotification converts a DataChangeEvent to a generic Notification
-func DataChangeEventToNotification(record *DataChangeEvent) *notifier.Notification {
+func DataChangeEventToNotification(record *models2.DataChangeEvent) *notifier.Notification {
 	return &notifier.Notification{
 		NotificationID: *record.DataChangeID,
 		SequenceID:     *record.SequenceID,
@@ -185,11 +257,12 @@ func DataChangeEventToNotification(record *DataChangeEvent) *notifier.Notificati
 }
 
 // SubscriptionToInfo converts a Subscription to a generic SubscriptionInfo
-func SubscriptionToInfo(record *Subscription) *notifier.SubscriptionInfo {
+func SubscriptionToInfo(record *models2.Subscription) *notifier.SubscriptionInfo {
 	return &notifier.SubscriptionInfo{
-		SubscriptionID: *record.SubscriptionID,
-		Callback:       record.Callback,
-		Filter:         record.Filter,
-		EventCursor:    record.EventCursor,
+		SubscriptionID:         *record.SubscriptionID,
+		ConsumerSubscriptionID: record.ConsumerSubscriptionID,
+		Callback:               record.Callback,
+		Filter:                 record.Filter,
+		EventCursor:            record.EventCursor,
 	}
 }

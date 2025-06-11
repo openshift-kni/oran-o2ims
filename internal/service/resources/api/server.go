@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package api
 
 import (
@@ -6,10 +12,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
@@ -18,15 +25,14 @@ import (
 	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
-// AlarmsServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
+// ResourceServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
 var _ api.StrictServerInterface = (*ResourceServer)(nil)
 
 // ResourceServerConfig defines the configuration attributes for the resource server
 type ResourceServerConfig struct {
-	Address         string
+	utils.CommonServerConfig
 	CloudID         string
 	GlobalCloudID   string
-	BackendURL      string
 	Extensions      []string
 	ExternalAddress string
 }
@@ -58,7 +64,19 @@ func (r *ResourceServer) GetAllVersions(ctx context.Context, request api.GetAllV
 
 // GetCloudInfo receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetCloudInfo(ctx context.Context, request api.GetCloudInfoRequestObject) (api.GetCloudInfoResponseObject, error) {
-	return api.GetCloudInfo200JSONResponse(r.Info), nil
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.OCloudInfo{}); err != nil {
+		return api.GetCloudInfo400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+	result := r.Info
+	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+		extensions := make(map[string]interface{})
+		result.Extensions = &extensions
+	}
+	return api.GetCloudInfo200JSONResponse(result), nil
 }
 
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
@@ -80,6 +98,14 @@ func (r *ResourceServer) GetMinorVersions(ctx context.Context, request api.GetMi
 
 // GetDeploymentManagers receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetDeploymentManagers(ctx context.Context, request api.GetDeploymentManagersRequestObject) (api.GetDeploymentManagersResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.DeploymentManager{}); err != nil {
+		return api.GetDeploymentManagers400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetDeploymentManagers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deployment managers: %w", err)
@@ -87,7 +113,7 @@ func (r *ResourceServer) GetDeploymentManagers(ctx context.Context, request api.
 
 	objects := make([]api.DeploymentManager, len(records))
 	for i, record := range records {
-		objects[i] = models.DeploymentManagerToModel(&record)
+		objects[i] = models.DeploymentManagerToModel(&record, options)
 	}
 
 	return api.GetDeploymentManagers200JSONResponse(objects), nil
@@ -114,12 +140,20 @@ func (r *ResourceServer) GetDeploymentManager(ctx context.Context, request api.G
 		}, nil
 	}
 
-	object := models.DeploymentManagerToModel(record)
+	object := models.DeploymentManagerToModel(record, commonapi.NewDefaultFieldOptions())
 	return api.GetDeploymentManager200JSONResponse(object), nil
 }
 
 // GetSubscriptions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSubscriptionsRequestObject) (api.GetSubscriptionsResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.Subscription{}); err != nil {
+		return api.GetSubscriptions400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetSubscriptions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subscriptions: %w", err)
@@ -134,17 +168,12 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 }
 
 // validateSubscription validates a subscription before accepting the request
-func (r *ResourceServer) validateSubscription(request api.CreateSubscriptionRequestObject) error {
-	callback := request.Body.Callback
-	u, err := url.Parse(callback)
-	if err != nil {
-		return fmt.Errorf("invalid callback URL: %w", err)
+func (r *ResourceServer) validateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) error {
+	if err := commonapi.ValidateCallbackURL(ctx, r.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
+		return fmt.Errorf("invalid callback url: %w", err)
 	}
 
-	if u.Scheme != "https" {
-		return fmt.Errorf("invalid callback scheme %q, only https is supported", u.Scheme)
-	}
-
+	// TODO: add validation of filter and move to common if filter syntax is the same for all servers
 	return nil
 }
 
@@ -156,7 +185,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 	}
 
 	// Validate the subscription
-	if err := r.validateSubscription(request); err != nil {
+	if err := r.validateSubscription(ctx, request); err != nil {
 		filter := "<null>"
 		if request.Body.Filter != nil {
 			filter = *request.Body.Filter
@@ -171,6 +200,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 			Status: http.StatusBadRequest,
 		}, nil
 	}
+
 	// Convert from Model -> DB
 	record := models.SubscriptionFromModel(request.Body)
 
@@ -202,7 +232,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 	}
 
 	// Signal the notifier to handle this new subscription
-	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+	r.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed:      false,
 		Subscription: models.SubscriptionToInfo(result),
 	})
@@ -260,9 +290,9 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 	}
 
 	// Signal the notifier to handle this subscription change
-	r.SubscriptionEventHandler.SubscriptionEvent(&notifier.SubscriptionEvent{
+	r.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
 		Removed: true,
-		Subscription: models.SubscriptionToInfo(&models.Subscription{
+		Subscription: models.SubscriptionToInfo(&models2.Subscription{
 			SubscriptionID: &request.SubscriptionId,
 		}),
 	})
@@ -272,6 +302,14 @@ func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.Del
 
 // GetResourcePools receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourcePools(ctx context.Context, request api.GetResourcePoolsRequestObject) (api.GetResourcePoolsResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.ResourcePool{}); err != nil {
+		return api.GetResourcePools400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetResourcePools(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve resource pools: %w", err)
@@ -279,7 +317,7 @@ func (r *ResourceServer) GetResourcePools(ctx context.Context, request api.GetRe
 
 	objects := make([]api.ResourcePool, len(records))
 	for i, record := range records {
-		objects[i] = models.ResourcePoolToModel(&record)
+		objects[i] = models.ResourcePoolToModel(&record, options)
 	}
 
 	return api.GetResourcePools200JSONResponse(objects), nil
@@ -306,12 +344,20 @@ func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetRes
 		}, nil
 	}
 
-	object := models.ResourcePoolToModel(record)
+	object := models.ResourcePoolToModel(record, commonapi.NewDefaultFieldOptions())
 	return api.GetResourcePool200JSONResponse(object), nil
 }
 
 // GetResources receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResourcesRequestObject) (api.GetResourcesResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.Resource{}); err != nil {
+		return api.GetResources400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	// First, find the pool
 	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); err == nil && !exists {
 		return api.GetResources404ApplicationProblemPlusJSONResponse{
@@ -403,6 +449,14 @@ func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourc
 
 // GetResourceTypes receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetResourceTypesRequestObject) (api.GetResourceTypesResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.ResourceType{}); err != nil {
+		return api.GetResourceTypes400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
 	records, err := r.Repo.GetResourceTypes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource types: %w", err)

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # ACM configuration
 
 ## [Install ACM Operator](https://github.com/stolostron/multiclusterhub-operator)

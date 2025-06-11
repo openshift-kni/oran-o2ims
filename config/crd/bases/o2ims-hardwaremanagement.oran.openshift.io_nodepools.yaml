@@ -82,7 +82,10 @@ spec:
                           minLength: 1
                           type: string
                         resourcePoolId:
-                          minLength: 1
+                          description: ResourcePoolId is the identifier for the Resource
+                            Pool in the hardware manager instance.
+                          type: string
+                        resourceSelector:
                           type: string
                         role:
                           enum:
@@ -92,7 +95,6 @@ spec:
                       required:
                       - hwProfile
                       - name
-                      - resourcePoolId
                       - role
                       type: object
                     size:
@@ -201,6 +203,10 @@ spec:
                     items:
                       type: string
                     type: array
+                type: object
+              selectedPools:
+                additionalProperties:
+                  type: string
                 type: object
             type: object
         type: object

@@ -1,17 +1,7 @@
 /*
-Copyright 2024.
+SPDX-FileCopyrightText: Red Hat
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package controllers
@@ -22,14 +12,16 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/postgres"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sptr "k8s.io/utils/ptr"
+
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/service/postgres"
 )
 
 // deployPostgresServer deploys the actual Postgres database server instance.  Prior to invoking this method the other
@@ -38,8 +30,8 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 	t.logger.InfoContext(ctx, "[deploy postgres server]", "Name", serverName)
 
 	// Default server volumes.
-	deploymentVolumes := utils.GetDeploymentVolumes(serverName)
-	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName)
+	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
+	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName, t.object)
 
 	// Add additional database volumes.
 	deploymentVolumes = append(deploymentVolumes,
@@ -141,6 +133,12 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 							},
 						},
 						VolumeMounts: deploymentVolumeMounts,
+						Resources: corev1.ResourceRequirements{ // Values here are derived from current PG tuning (update postgresql.conf and then these values as needed)
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
+							},
+						},
 					},
 				},
 			},
@@ -179,6 +177,7 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 			utils.AdminPasswordEnvName:     []byte(utils.GetPasswordOrRandom(utils.AdminPasswordEnvName)),
 			utils.AlarmsPasswordEnvName:    []byte(utils.GetPasswordOrRandom(utils.AlarmsPasswordEnvName)),
 			utils.ResourcesPasswordEnvName: []byte(utils.GetPasswordOrRandom(utils.ResourcesPasswordEnvName)),
+			utils.ClustersPasswordEnvName:  []byte(utils.GetPasswordOrRandom(utils.ClustersPasswordEnvName)),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create passwords: %w", err)
@@ -197,6 +196,9 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 		}
 		if _, ok := existing.Data[utils.ResourcesPasswordEnvName]; !ok {
 			existing.Data[utils.ResourcesPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.ResourcesPasswordEnvName))
+		}
+		if _, ok := existing.Data[utils.ClustersPasswordEnvName]; !ok {
+			existing.Data[utils.ClustersPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.ClustersPasswordEnvName))
 		}
 
 		err = utils.CreateK8sCR(ctx, t.client, &existing, t.object, utils.UPDATE)

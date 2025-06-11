@@ -1,0 +1,29 @@
+# This full DU profile example is based on OCP 4.17.
+apiVersion: policy.open-cluster-management.io/v1
+kind: PolicyGenerator
+metadata:
+  name: oran-o2ims-pg-obs-v1
+policyDefaults:
+  namespace: open-cluster-management-observability
+  # Use an existing placement rule so that placement bindings can be consolidated
+  placement:
+    labelSelector:
+      local-cluster: "true"
+  remediationAction: enforce
+  severity: low
+  namespaceSelector:
+    exclude:
+      - kube-*
+    include:
+      - '*'
+  evaluationInterval:
+    compliant: 10m
+    noncompliant: 10s
+  orderPolicies: true
+policies:
+- name: v1-copy-acm-route
+  manifests:
+    # REDUCE FOOTPRINT
+    # Do not add retention field for prometheusK8s when observability is enabled.
+    # It will be overridden by OBS.
+    - path: common/source-cr-observability.yaml

@@ -1,44 +1,50 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 <!-- vscode-markdown-toc -->
-# O-RAN O2IMS
+# O-RAN O-Cloud Manager
 
 <!-- markdownlint-disable MD033 -->
-<a href="https://github.com/o-ran-sc/it-test/tree/master/test_scripts/O2IMS_Compliance_Test"><img src="https://img.shields.io/badge/O--RAN_SC_O2_IMS_Automated_Test_Compliance-59%25-yellow"/></a>
+<a href="https://github.com/o-ran-sc/it-test/tree/master/test_scripts/O2IMS_Compliance_Test"><img src="https://img.shields.io/badge/O--RAN_SC_O2_IMS_Automated_Test_Compliance-100%25-green"/></a>
 <!-- markdownlint-enable MD033 -->
 
-* [Operator Deployment](#operator-deployment)
-  * [Deploy the operator on your cluster](#deploy-the-operator-on-your-cluster)
-  * [Update Inventory CR](#update-inventory-cr)
-* [Local Deployment Start](#local-deployment-start)
-  * [Build binary](#build-binary)
-  * [Run](#run)
-    * [Metadata server](#metadata-server)
-    * [Deployment manager server](#deployment-manager-server)
-    * [Resource server](#resource-server)
-    * [Alarm server](#alarm-server)
-    * [Alarm Subscription server](#alarm-subscription-server)
-    * [Alarm Notification server](#alarm-notification-server)
-* [Testing API endpoints on a cluster](#testing-api-endpoints-on-a-cluster)
-* [Registering the O2IMS application with the SMO](#registering-the-o2ims-application-with-the-smo)
-* [Using the development debug mode to attach the DLV debugger](#using-the-development-debug-mode-to-attach-the-dlv-debugger)
-* [Request Examples](#request-examples)
-  * [Query the Metadata server](#query-the-metadata-server)
-    * [GET api_versions](#get-api_versions)
-    * [GET O-Cloud infrastructure information](#get-o-cloud-infrastructure-information)
-  * [Query the Deployment manager server](#query-the-deployment-manager-server)
-    * [GET deploymentManagers List](#get-deploymentmanagers-list)
-    * [GET field or fields from the deploymentManagers List](#get-field-or-fields-from-the-deploymentmanagers-list)
-    * [GET deploymentManagers List using filter](#get-deploymentmanagers-list-using-filter)
-  * [Query the Resource server](#query-the-resource-server)
-    * [GET Resource Type List](#get-resource-type-list)
-    * [GET Specific Resource Type](#get-specific-resource-type)
-    * [GET Resource Pool List](#get-resource-pool-list)
-    * [GET Specific Resource Pool](#get-specific-resource-pool)
-    * [GET all Resources of a specific Resource Pool](#get-all-resources-of-a-specific-resource-pool)
-  * [Query the Infrastructure Inventory Subscription (Resource Server)](#query-the-infrastructure-inventory-subscription-resource-server)
-    * [GET Infrastructure Inventory Subscription List](#get-infrastructure-inventory-subscription-list)
-    * [GET Infrastructure Inventory Subscription Information](#get-infrastructure-inventory-subscription-information)
-    * [POST a new Infrastructure Inventory Subscription Information](#post-a-new-infrastructure-inventory-subscription-information)
-    * [DELETE an Infrastructure Inventory Subscription](#delete-an-infrastructure-inventory-subscription)
+<!-- TOC -->
+* [O-RAN O-Cloud Manager](#o-ran-o-cloud-manager)
+  * [Operator Deployment](#operator-deployment)
+    * [Deploy the operator on your cluster](#deploy-the-operator-on-your-cluster)
+    * [Deploying operator from catalog](#deploying-operator-from-catalog)
+  * [mTLS pre-requisites](#mtls-pre-requisites)
+  * [Registering the O-Cloud Manager with the SMO](#registering-the-o-cloud-manager-with-the-smo)
+    * [OAuth Expectations/Requirements](#oauth-expectationsrequirements)
+    * [Sample OAuth JWT Token](#sample-oauth-jwt-token)
+  * [Testing API endpoints on a cluster](#testing-api-endpoints-on-a-cluster)
+    * [Acquiring a token using OAuth](#acquiring-a-token-using-oauth)
+    * [Acquiring a token using Service Account (development testing only)](#acquiring-a-token-using-service-account-development-testing-only)
+    * [Access an API endpoint](#access-an-api-endpoint)
+  * [Using the development debug mode to attach the DLV debugger](#using-the-development-debug-mode-to-attach-the-dlv-debugger)
+  * [Request Examples](#request-examples)
+    * [Query the Metadata endpoints](#query-the-metadata-endpoints)
+      * [GET api_versions](#get-api_versions)
+      * [GET O-Cloud infrastructure information](#get-o-cloud-infrastructure-information)
+    * [Query the Deployment manager server](#query-the-deployment-manager-server)
+      * [GET deploymentManagers List](#get-deploymentmanagers-list)
+      * [GET field or fields from the deploymentManagers List](#get-field-or-fields-from-the-deploymentmanagers-list)
+      * [GET deploymentManagers List using filter](#get-deploymentmanagers-list-using-filter)
+    * [Query the Resource server](#query-the-resource-server)
+      * [GET Resource Type List](#get-resource-type-list)
+      * [GET Specific Resource Type](#get-specific-resource-type)
+      * [GET Resource Pool List](#get-resource-pool-list)
+      * [GET Specific Resource Pool](#get-specific-resource-pool)
+      * [GET all Resources of a specific Resource Pool](#get-all-resources-of-a-specific-resource-pool)
+    * [Query the Infrastructure Inventory Subscription (Resource Server)](#query-the-infrastructure-inventory-subscription-resource-server)
+      * [GET Infrastructure Inventory Subscription List](#get-infrastructure-inventory-subscription-list)
+      * [GET Infrastructure Inventory Subscription Information](#get-infrastructure-inventory-subscription-information)
+      * [POST a new Infrastructure Inventory Subscription Information](#post-a-new-infrastructure-inventory-subscription-information)
+      * [DELETE an Infrastructure Inventory Subscription](#delete-an-infrastructure-inventory-subscription)
+<!-- TOC -->
 
 <!-- vscode-markdown-toc-config
 	numbering=false
@@ -72,7 +78,7 @@ If you want to build the image yourself and push it to your registry right after
 
 > :warning: Replace the USERNAME and IMAGE_NAME values with the full name of your container image.
 
-```bash
+```console
 $ export USERNAME=your_user
 $ export IMAGE_NAME=quay.io/${USERNAME}/oran-o2ims:latest
 $ git clone https://github.com/openshift-kni/oran-o2ims.git
@@ -94,7 +100,7 @@ eaa55268bfffeb23644c545b3d0a768326821e0afea8b146c51835b3f90a9d0c
 
 Now, let's deploy the operator. If you want to deploy your already built image then add the `IMG=${IMAGE_NAME}` argument to the `make` command:
 
-```sh
+```console
 $ make deploy install
 
 … REDACTED …
@@ -120,29 +126,33 @@ deployment.apps/oran-o2ims-controller-manager created
 
 The operator and the default enabled components are installed in the `oran-o2ims` namespace, which is created during the install.
 
-```bash
-$ oc get pods -n oran-o2ims-system
-NAME                                             READY   STATUS    RESTARTS   AGE
-oran-o2ims-controller-manager-8668794cdc-27xvf   2/2     Running   0          9m15s
-deployment-manager-server-565f5cc68d-gwhmh       2/2     Running   0          8m50s
-metadata-server-7f4f8f87fb-zc7s8                 2/2     Running   0          8m50s
-resource-server-8668dffd44-xn9pj                 2/2     Running   0          8m50s
+```console
+$ oc get pods -n oran-o2ims
+NAME                                             READY   STATUS    RESTARTS      AGE
+alarms-server-5d5cfb75bf-rbp6g                   2/2     Running   0             21s
+artifacts-server-c48f6bd99-xnk2n                 2/2     Running   0             21s
+cluster-server-68f8946f74-l82bn                  2/2     Running   0             21s
+oran-o2ims-controller-manager-555755dbd7-sprs9   2/2     Running   0             26s
+postgres-server-674458bfbd-mnzt5                 1/1     Running   0             23s
+provisioning-server-86bd6bf6f-kl829              2/2     Running   0             20s
+resource-server-6dbd5788df-vpq44                 2/2     Running   0             22s
 ```
 
 Several routes were created in the same namespace too. The `HOST` column is the URI where the o2ims API will be listening from outside the OpenShift cluster, for instance where the SMO will connect to.
 
-```sh
+```console
 $ oc get route -n oran-o2ims
-NAME        HOST/PORT                                                   PATH                                                   SERVICES                    PORT   TERMINATION          WILDCARD
-api-2fv99   o2ims.apps.example.com   /                                                      metadata-server             api    reencrypt/Redirect   None
-api-cbvbz   o2ims.apps.example.com   /o2ims-infrastructureInventory/v1/resourceTypes        resource-server             api    reencrypt/Redirect   None
-api-v92jb   o2ims.apps.example.com   /o2ims-infrastructureInventory/v1/deploymentManagers   deployment-manager-server   api    reencrypt/Redirect   None
-api-xllml   o2ims.apps.example.com   /o2ims-infrastructureInventory/v1/resourcePools        resource-server             api    reencrypt/Redirect   None
+NAME                       HOST/PORT                                    PATH                                SERVICES              PORT   TERMINATION          WILDCARD
+oran-o2ims-ingress-8v8lp   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureArtifacts      artifacts-server      api    reencrypt/Redirect   None
+oran-o2ims-ingress-92sf5   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureCluster        cluster-server        api    reencrypt/Redirect   None
+oran-o2ims-ingress-gfm9r   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureProvisioning   provisioning-server   api    reencrypt/Redirect   None
+oran-o2ims-ingress-n6p9w   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureInventory      resource-server       api    reencrypt/Redirect   None
+oran-o2ims-ingress-n9d7w   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureMonitoring     alarms-server         api    reencrypt/Redirect   None
 ```
 
 The operator by default creates a default inventory CR in the oran-o2ims namespace:
 
-```bash
+```console
 $ oc get inventory -n oran-o2ims
 NAME      AGE
 default   4m20s
@@ -150,520 +160,232 @@ default   4m20s
 
 > :warning: Currently, the following components are enabled by default.
 
-```sh
+```console
 $ oc get inventory -n oran-o2ims -oyaml
+apiVersion: v1
+items:
+- apiVersion: o2ims.oran.openshift.io/v1alpha1
+  kind: Inventory
+  metadata:
+    creationTimestamp: "2025-01-22T16:45:32Z"
+    generation: 1
+    name: default
+    namespace: oran-o2ims
+    resourceVersion: "116847464"
+    uid: e296aede-6309-478b-be10-6fd8f7904324
+  spec:
+    alarmServerConfig: {}
+    clusterServerConfig: {}
+    resourceServerConfig: {}
+```
+
+### Deploying operator from catalog
+
+To deploy from catalog, first build the operator, bundle, and catalog images, pushing to your repo:
+
+```console
+make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-o2ims docker-build docker-push bundle-build bundle-push catalog-build catalog-push
+```
+
+You can then use the `catalog-deploy` target to generate the catalog and subscription resources and deploy the operator:
+
+```console
+$ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-o2ims catalog-deploy
+hack/generate-catalog-deploy.sh \
+        --package oran-o2ims \
+        --namespace oran-o2ims \
+        --catalog-image quay.io/${MY_REPO}/oran-o2ims-catalog:v4.18.0 \
+        --channel alpha \
+        --install-mode AllNamespaces \
+        | oc create -f -
+catalogsource.operators.coreos.com/oran-o2ims created
+namespace/oran-o2ims created
+operatorgroup.operators.coreos.com/oran-o2ims created
+subscription.operators.coreos.com/oran-o2ims created
+```
+
+To undeploy and clean up the installed resources, use the `catalog-undeploy` target:
+
+```console
+$ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-o2ims VERSION=4.18.0 catalog-undeploy
+hack/catalog-undeploy.sh --package oran-o2ims --namespace oran-o2ims --crd-search "o2ims.*oran"
+subscription.operators.coreos.com "oran-o2ims" deleted
+clusterserviceversion.operators.coreos.com "oran-o2ims.v4.18.0" deleted
+customresourcedefinition.apiextensions.k8s.io "clustertemplates.o2ims.provisioning.oran.org" deleted
+customresourcedefinition.apiextensions.k8s.io "hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "inventories.o2ims.oran.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "nodepools.o2ims-hardwaremanagement.oran.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "nodes.o2ims-hardwaremanagement.oran.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "provisioningrequests.o2ims.provisioning.oran.org" deleted
+namespace "oran-o2ims" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-alarms-server" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-alertmanager" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-cluster-server" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-deployment-manager-server" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-subject-access-reviewer" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-metrics-reader" deleted
+clusterrole.rbac.authorization.k8s.io "oran-o2ims-resource-server" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-alarms-server" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-alarms-server-subject-access-reviewer-binding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-alertmanager" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-cluster-server" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-cluster-server-subject-access-reviewer-binding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-deployment-manager-server" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-deployment-manager-server-subject-access-reviewer-binding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-metadata-server-subject-access-reviewer-binding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-resource-server" deleted
+clusterrolebinding.rbac.authorization.k8s.io "oran-o2ims-resource-server-subject-access-reviewer-binding" deleted
+catalogsource.operators.coreos.com "oran-o2ims" deleted
+```
+
+## mTLS pre-requisites
+
+In a production environment, using mTLS to secure communications between the O-Cloud and the SMO in both directions is
+recommended. The O-Cloud manager uses an ingress controller to terminate incoming TLS sessions. Before configuring the
+O-Cloud Manager, the ingress controller needs to be re-configured to enforce mTLS. If the ingress controller is shared
+with other applications, this will also impact those applications by requiring client certificates on all incoming
+connections. If that is not desirable, then consider creating a secondary ingress controller to manage a separate DNS
+domain and enable mTLS only on that controller. Alternatively, it can be configured as optional as long as OAuth is
+enabled, in which case it will effectively be mandatory since the OAuth implementation of RFC8705 will require that the
+client present a certificate.
+
+To configure the primary controller to enable mTLS the following attributes must be set in the `clientTLS` section of
+the `spec`. For more information, please refer to the
+documention [here](https://docs.openshift.com/container-platform/4.17/networking/networking_operators/ingress-operator.html#configuring-ingress-controller-tls).
 
 ```yaml
-apiVersion: o2ims.oran.openshift.io/v1alpha1
-kind: Inventory
+apiVersion: operator.openshift.io/v1
+kind: IngressController
 metadata:
-  creationTimestamp: "2024-11-07T09:26:12Z"
-  generation: 1
   name: default
-  namespace: oran-o2ims
-  resourceVersion: "279507769"
-  uid: aeb85580-f7ca-4861-8c38-3f57902b1617
+  namespace: openshift-ingress-operator
 spec:
-  alarmSubscriptionServerConfig:
-    enabled: false
-  deploymentManagerServerConfig:
-    backendType: regular-hub
-    enabled: true
-  metadataServerConfig:
-    enabled: true
-  resourceServerConfig:
-    enabled: true
+  clientTLS:
+    allowedSubjectPatterns:
+    - ^/C=CA/ST=Ontario/L=Ottawa/O=Red\ Hat/OU=ORAN/
+    clientCA:
+      name: ingress-client-ca-certs
+    clientCertificatePolicy: Required
+...
+...
 ```
 
-### Update Inventory CR
-
-The `Inventory` custom resource (CR) is the way to configure the different components of the IMS operator. The default Inventory CR that is created by the system is sufficient to enable the basic API functionality.
-
-The end user must edit the default Inventory CR to enable communication with the SMO instance after the SMO has been configured to accept connections from this O-Cloud.
-Specifically, the `cloudID` and `smo` attributes will need to be configured appropriately. The `cloudID` is the globally unique UUID value assigned to this O-Cloud by the SMO.
-
-```yaml
-apiVersion: o2ims.oran.openshift.io/v1alpha1
-kind: Inventory
-metadata:
-  annotations:
-  labels:
-    app.kubernetes.io/created-by: oran-o2ims
-    app.kubernetes.io/instance: orano2ims-sample
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: orano2ims
-    app.kubernetes.io/part-of: oran-o2ims
-  name: default
-  namespace: oran-o2ims
-spec:  
-  smo:
-    url: http://smo.example.com
-    registrationEndpoint: /mock_smo/v1/ocloud_observer
-  #alarmSubscription is not yet available, enable it otherwise.
-  alarmSubscriptionServerConfig:
-    enabled: false 
-  cloudID: f7fd171f-57b5-4a17-b176-9a73bf6064a4
-  deploymentManagerServerConfig:
-    enabled: true
-  metadataServerConfig:
-    enabled: true
-  resourceServerConfig:
-    enabled: true
-```
-
-Apply the patch to the hub cluster:
-
-```bash
-$ oc apply -f inventory_sample.yaml 
-inventory.o2ims.oran.openshift.io/default configured
-```
-
-The status of the different components of the O2IMS operator can be checked by examining the `status` field of the inventory CR.
-
-```bash
-oc get inventory default -ojson | jq .status.deploymentStatus.conditions
-```
-
-```json
-[
-  {
-    "lastTransitionTime": "2024-11-14T11:29:02Z",
-    "message": "Registered with SMO at: http://smo.example.com",
-    "reason": "SmoRegistrationSuccessful",
-    "status": "True",
-    "type": "SmoRegistrationCompleted"
-  },
-  {
-    "lastTransitionTime": "2024-11-14T11:29:02Z",
-    "message": "Deployment has minimum availability.",
-    "reason": "MinimumReplicasAvailable",
-    "status": "True",
-    "type": "MetadataServerAvailable"
-  },
-  {
-    "lastTransitionTime": "2024-11-14T11:29:02Z",
-    "message": "Deployment has minimum availability.",
-    "reason": "MinimumReplicasAvailable",
-    "status": "True",
-    "type": "ResourceServerAvailable"
-  },
-  {
-    "lastTransitionTime": "2024-11-14T11:29:02Z",
-    "message": "Deployment has minimum availability.",
-    "reason": "MinimumReplicasAvailable",
-    "status": "True",
-    "type": "DeploymentServerAvailable"
-  }
-]
-```
-
-Also, you can check the logs of the Pods running in the `oran-o2ims` namespace searching for any error.
-
-## Local Deployment Start
-
-### Build binary
-
-``` bash
-make binary
-```
-
-### Run
-
-#### Metadata server
-
-The metadata server returns information about the supported versions of the
-API. It doesn't require any backend, only the O-Cloud identifier. You can start
-it with a command like this:
-
-``` bash
-$ ./oran-o2ims start metadata-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8000 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123
-```
-
-You can send requests with commands like these:
-
-``` bash
-curl -s http://localhost:8000/o2ims-infrastructureInventory/api_versions | jq
-curl -s http://localhost:8000/o2ims-infrastructureInventory/v1 | jq
-```
-
-Inside *VS Code* use the *Run and Debug* option with the `start
-metadata-server` [configuration](.vscode/launch.json).
-
-#### Deployment manager server
-
-The deployment manager server needs to connect to the non-kubernetes API of the
-ACM global hub. If you are already connected to an OpenShift cluster that has
-that global hub installed and configured you can obtain the required URL and
-token like this:
-
-``` bash
-$ export BACKEND_URL=$(
-  oc get route -n multicluster-global-hub multicluster-global-hub-manager -o json |
-  jq -r '"https://" + .spec.host'
-)
-$ export BACKEND_TOKEN=$(
-  oc create token -n multicluster-global-hub multicluster-global-hub-manager --duration=24h
-)
-$ export INSECURE_SKIP_VERIFY=true
-```
-
-Start the deployment manager server with a command like this:
-
-``` bash
-$ ./oran-o2ims start deployment-manager-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8001 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123 \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}"
-```
-
-Note that by default all the servers listen on `localhost:8000`, so there will
-be conflicts if you try to run multiple servers in the same machine. The
-`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in
-use.
-
-The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
-
-For more information about other command line flags use the `--help` command:
-
-``` bash
-./oran-o2ims start deployment-manager-server --help
-```
-
-You can send requests with commands like this:
-
-``` bash
-curl -s http://localhost:8001/o2ims-infrastructureInventory/v1/deploymentManagers | jq
-```
-
-Inside *VS Code* use the *Run and Debug* option with the `start
-deployment-manager-server` [configuration](.vscode/launch.json).
-
-#### Resource server
-
-The resource server exposes endpoints for retrieving resource types, resource pools
-and resources objects. The server relies on the Search Query API of ACM hub.
-Follow the these [instructions](docs/dev/env_acm.md#search-query-api) to enable
-and configure the search API access.
-
-The required URL and token can be obtained
-as follows:
-
-``` bash
-$ export BACKEND_URL=$(
-  oc get route -n open-cluster-management search-api -o json |
-  jq -r '"https://" + .spec.host'
-)
-$ export BACKEND_TOKEN=$(
-  oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
-)
-$ export INSECURE_SKIP_VERIFY=true
-```
-
-Start the resource server with a command like this:
-
-``` bash
-$ ./oran-o2ims start resource-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8002 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123 \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}"
-```
-
-Notes:
-
-* `--backend-token-file="${BACKEND_TOKEN_FILE}"` can also be used instead of `--backend-token`.
-* see more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
-
-For more information about other command line flags use the `--help` command:
-
-``` console
-./oran-o2ims start resource-server --help
-```
-
-##### Run and Debug resource server
-
-Inside *VS Code* use the *Run and Debug* option with the `start
-resource-server` [configuration](.vscode/launch.json).
-
-#### Alarm server
-
-The alarm server exposes endpoints for retrieving alarms (AlarmEventRecord objects).
-The server relies on the Alertmanager API from Observability operator.
-Follow the these [instructions](docs/dev/env_acm.md#observability) to enable
-and configure Observability.
-
-The required URL and token can be obtained
-as follows:
-
-``` bash
-$ export BACKEND_URL=$(
-  oc get route -n open-cluster-management-observability alertmanager -o json |
-  jq -r '"https://" + .spec.host'
-)
-$ export BACKEND_TOKEN=$(
-  oc create token -n openshift-oauth-apiserver oauth-apiserver-sa --duration=24h
-)
-$ export RESOURCE_SERVER_URL=http://localhost:8002/o2ims-infrastructureInventory/v1/
-$ export INSECURE_SKIP_VERIFY=true
-```
-
-Start the resource server with a command like this:
-
-``` bash
-$ ./oran-o2ims start alarm-server \
---log-level=debug \
---log-file=stdout \
---api-listener-address=localhost:8003 \
---metrics-listener-address="127.0.0.1:8008" \
---cloud-id=123 \
---backend-url="${BACKEND_URL}" \
---backend-token="${BACKEND_TOKEN}" \
---resource-server-url="${RESOURCE_SERVER_URL}"
-```
-
-Notes:
-
-* See more details regarding `api-listener-address` and `cloud-id` in the previous [section](#deployment-manager-server).
-* The alarm server requires the `resource-server-url`, which is needed for fetching information about resources that are associated with retrieved alarms.
-
-For more information about other command line flags use the `--help` command:
-
-``` console
-./oran-o2ims start alarm-server --help
-```
-
-##### Run and Debug alarm server
-
-Inside *VS Code* use the *Run and Debug* option with the `start
-alarm-server` [configuration](.vscode/launch.json).
-
-##### Requests Examples
-
-###### GET Alarm List
-
-To get a list of alarms:
-
-``` bash
-curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms | jq
-```
-
-###### GET an Alarm
-
-To get a specific alarm:
-
-``` bash
-curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId} | jq
-```
-
-###### GET Alarm Probable Causes
-
-To get a list of alarm probable causes:
-
-``` bash
-curl -s http://localhost:8003/o2ims-infrastructureMonitoring/v1/alarmProbableCauses | jq
-```
-
-Notes:
-
-* This API is not defined by O2ims Interface Specification.
-* The server supports the `alarmProbableCauses` endpoint for exposing a custom list of probable causes.
-* The list is available in [data folder](internal/files/alarms/probable_causes.json). Can be customized and maintained as required.
-
-#### Alarm Subscription server
-
-To use the configmap to persist the subscriptions, the namespace "orantest" should be created at hub cluster for now.
-
-Start the alarm subscription server with a command like this:
-
-``` bash
-$./oran-o2ims start alarm-subscription-server \
---log-file="servers.log" \
---log-level="debug" \
---log-field="server=alarm-subscription" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8006" \
---metrics-listener-address="127.0.0.1:8008" \
---namespace="test" \
---configmap-name="testConfigmap" \
---cloud-id="123" 
-```
-
-Note that by default all the servers listen on `localhost:8000`, so there will
-be conflicts if you try to run multiple servers in the same machine. The
-`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in use.
-
-The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
-
-By default, the namespace of "orantest" and configmap-name of "oran-o2ims-alarm-subscriptions" are used.
-
-For more information about other command line flags use the `--help` command:
-
-``` bash
-./oran-o2ims start alarm-subscription-server --help
-```
-
-You can send requests with commands like this:
-
-``` bash
-curl -s http://localhost:8001/o2ims-infrastructureMonitoring/v1/alarmSubscriptions | jq
-```
-
-Above example will get a list of existing alarm subscriptions
-
-``` bash
-curl -s -X POST --header "Content-Type: application/json" -d @subscription.json http://localhost:8000/o2ims-infrastructureMonitoring/v1/alarmSubscriptions
-```
-
-Above example will post an alarm subscription defined in subscription.json file
-
-Inside *VS Code* use the *Run and Debug* option with the `start
-alarm-subscription-server` [configuration](.vscode/launch.json).
-
-#### Alarm Notification server
-
-The alarm-notification-server should use together with alarm subscription server. The alarm subscription sever accept and manages the alarm subscriptions.
-The alarm notificaton servers synch the alarm subscriptions via perisist storage. To use the configmap to persist the subscriptions,
-the namespace "orantest" should be created at hub cluster for now (will use official oranims namespace in future). Alarm subscripton server and corresonding
-alarm notification server should have same namespace and configmap-name. The alarm notification server accept the alerts, match the subscription filter,
-build and send out the alarm notification based on url in the subscription.
-
-The required Resource server URL and token can be obtained as follows:
-
-``` bash
-$ export RESOURCE_SERVER_URL=http://localhost:8002/o2ims-infrastructureInventory/v1/
-$ export RESOURCE_SERVER_TOKEN=$(
-  oc whoami --show-token
-)
-$ export INSECURE_SKIP_VERIFY=true
-```
-
-Start the alarm notification server with a command like this:
-
-``` bash
-$./oran-o2ims start alarm-notification-server \
---log-file="servers.log" \
---log-level="debug" \
---log-field="server=alarm-notification" \
---log-field="pid=%p" \
---api-listener-address="127.0.0.1:8010" \
---metrics-listener-address="127.0.0.1:8011" \
---cloud-id="123" \
---namespace="test" \
---configmap-name="testConfigmap" \
---resource-server-url="${RESOURCE_SERVER_URL}"
---resource-server-token="${RESOURCE_SERVER_TOKEN}" \
-```
-
-Note that by default all the servers listen on `localhost:8000`, so there will
-be conflicts if you try to run multiple servers in the same machine. The
-`--api-listener-address` and `--metrics-listener-address` options are used to select a port number that isn't in use.
-
-The `cloud-id` is any string that you want to use as identifier of the O-Cloud instance.
-
-By default, the namespace of "orantest" and configmap-name of "oran-o2ims-alarm-subscriptions" are used.
-
-For more information about other command line flags use the `--help` command:
-
-``` bash
-./oran-o2ims start alarm-notification-server --help
-```
-
-Inside *VS Code* use the *Run and Debug* option with the `start
-alarm-notification-server` [configuration](.vscode/launch.json).
-
-## Testing API endpoints on a cluster
-
-> :exclamation: If you already have a user account from which you can generate an API access token then you can skip ahead to step
-3 assuming you have already stored your access token in a variable called `MY_TOKEN`.
-
-1. Apply the test client service account CR instances. It will enable us to authenticate against the O2IMS API. It creates the proper cluster role (`oran-o2ims-test-client-role`) and bind it (`oran-o2ims-test-client-binding`) to the service account (`test-client`).
-
-   ```shell
-   $ oc apply -f config/testing/client-service-account-rbac.yaml
-   serviceaccount/test-client created
-   clusterrole.rbac.authorization.k8s.io/oran-o2ims-test-client-role created
-   clusterrolebinding.rbac.authorization.k8s.io/oran-o2ims-test-client-binding created
-   ```
-
-   Verify a new service account called test-client is created in the oran-o2ims namespace.
-
-   ```sh
-   $ oc get sa -n oran-o2ims
-   NAME                            SECRETS   AGE
-   builder                         0         117m
-   default                         0         117m
-   deployer                        0         117m
-   deployment-manager-server       0         16m
-   metadata-server                 0         16m
-   oran-o2ims-controller-manager   0         117m
-   resource-server                 0         16m
-   test-client                     0         15m
-   ```
-
-2. Generate a token to access the API endpoint
-Export the token in a variable such as MY_TOKEN and adjust the duration of the token to your needs.
-
-   ```sh
-   export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
-   ```
-
-   That token will be used as an authorization bearer in our queries sent from the SMO or any other object outside OpenShift:
-
-3. Access an API endpoint
-
-   ```shell
-   MY_CLUSTER=your.domain.com
-   curl -kq https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v1/api_version \
-   -H "Authorization: Bearer ${MY_TOKEN}"
-   ```
-
-## Registering the O2IMS application with the SMO
-
-Once the hub cluster is setup and the O2IMS application is started the end user must update the Inventory CR to
-configure the SMO attributes so that the application can register with the SMO. In a production environment this
-requires that an OAuth2 authorization server be available and configured with the appropriate client configurations for
-both the SMO and the O2IMS applications. In debug/test environments, the OAuth2 can also be used if the appropriate
-server and configurations exist but OAuth2 can also be disabled to simplify the configuration requirements.
+1. `allowedSubjectPatterns` is optional but can be set to limit access to specific certificate subjects.
+2. `clientCA` is mandatory and must be set to a `ConfigMap` containing a list of CA certificates used to validate
+   incoming client certificates.
+3. `clientCertificatePolicy` must be set to `Required` to enforce that clients provide a valid certificate. As noted
+   above, set to `Optional` if OAuth is enabled and it is not possible to set to `Required` due to other application
+   requirements.
+
+## Registering the O-Cloud Manager with the SMO
+
+Once the hub cluster is set up and the O-Cloud Manager is started, the end user must update the Inventory CR to
+configure the SMO attributes so that the application can register with the SMO. The user must provide the Global
+O-Cloud ID value, which is provided by the SMO. This registration is a one-time operation. Once it succeeds, it will
+not be repeated.
+
+> :exclamation: For development/debug purposes, if repeating the registration is necessary, the following annotation can
+> be applied to the Inventory CR.
+>
+>```bash
+> oc annotate -n oran-o2ims inventories default o2ims.oran.openshift.io/register-on-restart=true
+>```
+
+In a production environment, this requires that an OAuth2 authorization server be available and configured with the
+appropriate client configurations for both the SMO and the O-Cloud Manager. In debug/test environments, the OAuth2
+can also be used if the appropriate server and configurations exist, but OAuth2 can also be disabled to simplify the
+configuration requirements.
 
 1. Create a ConfigMap that contains the custom X.509 CA certificate bundle if either of the SMO or OAuth2 server TLS
-   certificates are signed by a non-public CA certificate.
+   certificates are signed by a non-public CA certificate. This is optional. If not required, then the 'caBundle'
+   attribute can be omitted from the Inventory CR.
 
-   ```shell
-   oc create configmap -n oran-o2ims o2ims-custom-ca-certs --from-file=ca-bundle.pem=/some/path/to/ca-bundle.pem
+   > :warning: Do this only if the cluster proxy isn't currently pointing to some other custom CA bundle. If it is
+   > pointing to an existing bundle, then the new private certificates need to be appended to the existing set. Refer to
+   > the OpenShift documentation for more
+   details [here](https://docs.openshift.com/container-platform/4.17/networking/configuring-a-custom-pki.html).
+
+   ```console
+   oc create configmap -n openshift-config custom-ca-certs --from-file=ca-bundle.crt=/some/path/to/ca-bundle.crt
+   oc patch proxy/cluster --type=merge --patch='{"spec":{"trustedCA":{"name": "custom-ca-certs"}}}'
    ```
 
-2. Create a Secret that contains the OAuth client-id and client-secret for the O2IMS application. These values should
+2. Create a new empty config map that includes the trust bundle injection label so that we end up with a config
+   map that includes the private CA certificates *plus* the full set of public CA certificates.
+
+   ```console
+   cat << EOF > o2ims-trusted-ca-bundle.yaml 
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     labels:
+       config.openshift.io/inject-trusted-cabundle: "true"
+     name: o2ims-trusted-ca-bundle
+     namespace: oran-o2ims
+   EOF
+   oc apply -f o2ims-trusted-ca-bundle.yaml
+   ```
+
+3. Create a Secret that contains the OAuth client-id and client-secret for the O-Cloud Manager. These values should
    be obtained from the administrator of the OAuth server that set up the client credentials. The client secrets must
-   not
-   be stored locally once the secret is created. The values used here are for example purposes only, your values may
+   not be stored locally once the secret is created. The values used here are for example purposes only, your values may
    differ for the client-id and will definitely differ for the client-secret.
 
-   ```shell
+   ```console
    oc create secret generic -n oran-o2ims oauth-client-secrets --from-literal=client-id=o2ims-client --from-literal=client-secret=SFuwTyqfWK5vSwaCPSLuFzW57HyyQPHg
    ```
 
-3. Create a Secret that contains a TLS client certificate and key to be used to enable mTLS to the SMO and OAuth2
+4. Create a Secret that contains a TLS client certificate and key to be used to enable mTLS to the SMO and OAuth2
    authorization servers. The Secret is expected to have the 'tls.crt' and 'tls.key' attributes. The 'tls.crt'
-   attribute must contain the full certificate chain having the device certificate first and the root certificate being
-   last.
+   attribute must contain the full certificate chain having the device certificate first, then intermediate
+   certificates, and the root certificate being last.
 
-   ```shell
-   oc create secret tls -n oran-o2ims o2ims-client-tls-certificate --cert /some/path/to/tls.crt --key /some/path/to/tls.key
+    * In a development environment, if mTLS is not required, then this can be skipped and the corresponding attributes
+      can be omitted from the Inventory CR.
+
+    * In a production environment, it is expected that this certificate should be renewed periodically and managed by
+      cert-manager. When managing this certificate with cert-manager, it is expected that the CN and DNS SAN values of
+      the certificate will be set to the Ingress domain name for the application
+      (e.g., o2ims.apps.${CLUSTER_DOMAIN_NAME}). The certificate's extended usage should be set to both `server auth`
+      and `client auth`. The certificate should be set in both the `spec.smo.tls.secretName` and
+      `spec.ingress.tls.secretName` attributes.
+
+   **cert-manager method (recommended):**
+   > :exclamation: ensure that the `LAB_URL` environment variable is set to your DNS domain name as described above.
+
+   ```console
+   cat << EOF > oran-o2ims-tls-certificate.yaml
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: oran-o2ims-tls-certificate
+      namespace: oran-o2ims
+   spec:
+     secretName: oran-o2ims-tls-certificate
+     subject:
+       organizations: [ ORAN ]
+     commonName: ${LAB_URL}
+     usages:
+     - server auth
+     - client auth
+     dnsNames:
+     - ${LAB_URL}
+     issuerRef:
+       name: acme-cert-issuer
+       kind: ClusterIssuer
+       group: cert-manager.io
+     EOF
+   
+   oc apply -f oran-o2ims-tls-certificate.yaml
+     ```
+
+   **manual method:**
+
+   ```console
+   oc create secret tls -n oran-o2ims oran-o2ims-tls-certificate --cert /some/path/to/tls.crt --key /some/path/to/tls.key
    ```
 
-4. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
+5. Update the Inventory CR to include the SMO and OAuth configuration attributes. These values will vary depending
    on the domain names used in your environment and by the type of OAuth2 server deployed. Check the configuration
    documentation for the actual server being used.
 
@@ -679,23 +401,22 @@ server and configurations exist but OAuth2 can also be disabled to simplify the 
              tokenEndpoint: /protocol/openid-connect/token
              scopes:
                 - profile
-                - smo-audience
-                - roles
+                - openid
+                - role:ocloud-manager
+             usernameClaim: preferred_username
+             groupsClaim: roles
           tls:
-             clientCertificateName: o2ims-client-tls-certificate
-       caBundleName: o2ims-custom-ca-certs
+             secretName: oran-o2ims-tls-certificate
+       ingress:
+         tls:
+           secretName: oran-o2ims-tls-certificate
+       caBundleName: o2ims-trusted-ca-bundle
    ```
 
-    notes:</p>
-    a) The `caBundleName` can be omitted if step 1 was skipped.</p>
-    b) The `scopes` attribute will vary based on the actual configuration of the OAuth2 server. At a minimum there must be
-    scopes established on the server to allow a client to request its profile info (i.e., account info), and the intended
-    audience identifier (i.e., the OAuth client-id of the SMO application).
+6. Once the Inventory CR is updated, the following condition will be updated to reflect the status of the SMO
+   registration. If an error occurred that prevented registration from completing, then the error will be noted here.
 
-5. Once the Inventory CR is updated the following condition will be used updated to reflect the status of the SMO
-   registration. If an error occurred that prevented registration from completing the error will be noted here.
-
-   ```shell
+   ```console
    oc describe inventories.o2ims.oran.openshift.io sample
    ...
    Status:
@@ -709,6 +430,142 @@ server and configurations exist but OAuth2 can also be disabled to simplify the 
    ...
    ```
 
+### OAuth Expectations/Requirements
+
+To ensure interoperability between the SMO, the O-Cloud Manager, and the Authorization Server, these are the
+requirements
+regarding the OAuth settings and JWT contents.
+
+1. It is expected that the administrator of the Authentication Server has created clients for both the SMO and IMS
+   resource servers. For example purposes, this document assumes these to be "smo-client" and "o2ims-client".
+
+2. It is expected that the "smo-client" has been assigned "roles" which map to the Kubernetes RBAC roles
+   defined [here](config/rbac/oran_o2ims_oauth_role_bindings.yaml) according to the level of access required by the SMO.
+   The "roles" attribute is expected to contain a list of roles assigned to the client.
+   For example, one or more of "o2ims-reader", "o2ims-subscriber", "o2ims-maintainer", "o2ims-provisioner", or
+   "o2ims-admin".
+
+3. The "o2ims-client" is also expected to be assigned some form of authorization on the SMO. This depends largely on the
+   SMO implementation and is somewhat transparent to the O-Cloud Manager. If specific scopes are required for the
+   "o2ims-client" to access the SMO resource server, then the Inventory CR must be customized by setting the "scopes"
+   attribute.
+
+4. It is expected that the JWT token will contain the mandatory attributes defined in
+   [RFC9068](https://datatracker.ietf.org/doc/html/rfc9068) as well as the optional attributes related to "roles".
+
+5. The "aud" attribute is expected to contain a list of intended audiences and must at a minimum include the
+   "o2ims-client" identifier.
+
+6. It is expected that all attributes are top-level attributes (i.e., are not nested). For example,
+   `"realm_access.roles": ["a", "b", "c"]` is valid, but `"realm_access": {"roles": ["a", "b", "c"]}` is not. In some
+   cases, this may require special configuration steps on the Authorization Server to ensure the proper format in the
+   JWT tokens.
+
+7. Client certificate binding (i.e., RFC8705) is enabled by default. If the authorization server has inserted a claim
+   into the token which contains the SHA256 fingerprint of the client certificate which requested a token then it will
+   be validated. If the client certificate which is making the request doesn't match the client certificate that
+   requested the token then the request will be rejected. That claim is expected to be `"cnf": {"x5t#S256": "...."}`.
+   This is an exception to the rule described in (6) above. See below for an example.
+
+### Sample OAuth JWT Token
+
+The following is a sample JWT payload and header. The signature footer has been removed.
+
+Header:
+
+```json
+{
+        "alg": "RS256",
+        "typ": "JWT",
+        "kid": "VJr29clVBAFFo6rbwn4HvTByCH5KbhioharsRbXx3N8"
+}
+```
+
+Payload:
+
+```json
+{
+        "exp": 1737565732,
+        "iat": 1737564832,
+        "jti": "cc0f4c88-fffd-48da-91d8-24b80f1f6955",
+        "iss": "https://keycloak.example.com/realms/oran",
+        "aud": [
+                "o2ims-client"
+        ],
+        "sub": "34c94cc0-720d-4f29-81e9-b9e794b51e9a",
+        "typ": "Bearer",
+        "azp": "smo-client",
+        "acr": "1",
+        "cnf": {
+                "x5t#S256": "S1ArY2E4qD_l4lCuNhLh501CxjVJmNFJbLI2RRzigDc"
+        },
+        "scope": "openid profile role:o2ims-reader role:o2ims-subscriber role:o2ims-maintainer role:o2ims-provisioner",
+        "resource_access.o2ims-client.roles": [
+                "o2ims-reader",
+                "o2ims-subscriber",
+                "o2ims-maintainer",
+                "o2ims-provisioner"
+        ],
+        "preferred_username": "service-account-smo-client",
+        "clientAddress": "192.168.1.2",
+        "client_id": "smo-client"
+}
+```
+
+## Testing API endpoints on a cluster
+
+Before accessing any O2IMS API endpoint, an access token must be acquired. The approach used depends on the
+configuration of the system. The following subsections describe both the OAuth and non-OAuth cases.
+
+### Acquiring a token using OAuth
+
+In a production environment, the system should be configured with mTLS and OAuth enabled. In this configuration, an API
+requests must include a valid OAuth JWT token acquired from the authorization server that is configured in the
+Inventory CR. To manually acquire a token from the authorization server, a command similar to this one should be used.
+This method may vary depending on the type of authorization server used. This example is for a Keycloak server.
+
+```console
+export MY_TOKEN=$(curl -s --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.crt \
+  -XPOST https://keycloak.example.com/realms/oran/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=${SMO_CLIENT_ID} \
+  -d client_secret=${SMO_CLIENT_SECRET} \
+  -d 'response_type=token id_token' \
+  -d 'scope=profile o2ims-audience roles'| jq -j .access_token)
+```
+
+### Acquiring a token using Service Account (development testing only)
+
+In a development environment in which OAuth is not being used, the access token must be acquired from a Kubernetes
+Service Account. This Service Account must be assigned appropriate RBAC permissions to access the O2IMS API endpoints.
+As a convenience, a pre-canned Service Account and ClusterRoleBinding is defined
+[here](config/testing/client-service-account-rbac.yaml). It can be applied as follows.
+
+   ```console
+   $ oc apply -f config/testing/client-service-account-rbac.yaml
+   serviceaccount/test-client created
+   clusterrole.rbac.authorization.k8s.io/oran-o2ims-test-client-role created
+   clusterrolebinding.rbac.authorization.k8s.io/oran-o2ims-test-client-binding created
+   ```
+
+And then the following command can be used to acquire a token.
+
+   ```console
+   export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
+   ```
+
+### Access an API endpoint
+
+Note that here the `--cert` and `--key` options can be omitted if not using mTLS and the `--cacert` option can be
+removed if the ingress certificate is signed by a public certificate or if you are operating in a development
+environment, in which case it can be replaced with `-k`.
+
+   ```console
+   MY_CLUSTER=your.domain.com
+   curl --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.crt -q \
+     https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v1/api_version \
+     -H "Authorization: Bearer ${MY_TOKEN}"
+   ```
+
 ## Using the development debug mode to attach the DLV debugger
 
 The following instructions provide a mechanism to build an image that is based on a more full-featured distro so that
@@ -717,7 +574,7 @@ disabled which would otherwise cause debugging with a debugger to be more diffic
 
 1. Build and deploy the debug image
 
-   ```shell
+   ```console
    make IMAGE_TAG_BASE=quay.io/${USER}/oran-o2ims VERSION=latest DEBUG=yes build docker-build docker-push install deploy
    ```
 
@@ -725,20 +582,20 @@ disabled which would otherwise cause debugging with a debugger to be more diffic
    it is terminated with ctrl+c therefore you will need to execute it in a dedicated window (or move it to the
    background).
 
-   ```shell
+   ```console
    oc port-forward -n oran-o2ims pods/oran-o2ims-controller-manager-85b4bbcf58-4fc9s 40000:40000
    ```
 
 3. Execute a shell into the Pod to be debugged.
 
-   ```shell
+   ```console
    oc rsh -n oran-o2ims pods/oran-o2ims-controller-manager-85b4bbcf58-4fc9s
    ```
 
 4. Attach the DLV debugger to the process. This is usually PID 1, but this may vary based on the deployment. Use the
    same port number that was specified earlier in the `port-forward` command.
 
-   ```shell
+   ```console
    dlv attach --continue --accept-multiclient --api-version 2 --headless --listen :40000 --log 1
    ```
 
@@ -747,24 +604,26 @@ disabled which would otherwise cause debugging with a debugger to be more diffic
 
 ## Request Examples
 
-### Query the Metadata server
+### Query the Metadata endpoints
 
-> :warning: Double check you already applied the proper permissions to access the O2IMS API and created the test-client service account. See section [Testing API endpoints on a cluster](#testing-api-endpoints-on-a-cluster)
+> :warning: Confirm that an authorization token has already been acquired. See
+> section [Testing API endpoints on a cluster](#testing-api-endpoints-on-a-cluster)
 
 Notice the `API_URI` is the route HOST/PORT column of the oran-o2ims operator.
 
-```sh
+```console
 $ oc get routes -n oran-o2ims
-NAME        HOST/PORT                                                   PATH                                                   SERVICES                    PORT   TERMINATION          WILDCARD
-api-2fv99   o2ims.apps.example.com   /                                                      metadata-server             api    reencrypt/Redirect   None
-api-cbvbz   o2ims.apps.example.com   /o2ims-infrastructureInventory/v1/resourceTypes        resource-server             api    reencrypt/Redirect   None
-api-v92jb   o2ims.apps.example.com   /o2ims-infrastructureInventory/v1/deploymentManagers   deployment-manager-server   api    reencrypt/Redirect   None
-api-xllml   o2ims.apps.example.com   /o2ims-infrastructureInventory/v1/resourcePools        resource-server             api    reencrypt/Redirect   None
+NAME                       HOST/PORT                                    PATH                                SERVICES              PORT   TERMINATION          WILDCARD
+oran-o2ims-ingress-ghcwc   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureInventory      resource-server       api    reencrypt/Redirect   None
+oran-o2ims-ingress-pz8hc   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureMonitoring     alarms-server         api    reencrypt/Redirect   None
+oran-o2ims-ingress-qrnfq   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureProvisioning   provisioning-server   api    reencrypt/Redirect   None
+oran-o2ims-ingress-t842p   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureArtifacts      artifacts-server      api    reencrypt/Redirect   None
+oran-o2ims-ingress-tbzbl   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureCluster        cluster-server        api    reencrypt/Redirect   None
 ```
 
 Export the o2ims endpoint as the API_URI variable so it can be re-used in the requests.
 
-```sh
+```console
 export API_URI=o2ims.apps.${DOMAIN}
 ```
 
@@ -772,7 +631,7 @@ export API_URI=o2ims.apps.${DOMAIN}
 
 To get the api versions supported
 
-```sh
+```console
 $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/api_versions" | jq
 ```
@@ -781,7 +640,7 @@ $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}"
 
 To obtain information from the O-Cloud:
 
-```bash
+```console
 $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1"
 ```
@@ -794,7 +653,7 @@ The deployment manager server (DMS) needs to connect to kubernetes API of the RH
 
 To get a list of all the deploymentManagers (clusters) available in our O-Cloud:
 
-```bash
+```console
 $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers" | jq
 ```
@@ -803,7 +662,7 @@ $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}"
 
 To get a list of only the `name` of the available deploymentManagers available in our O-Cloud:
 
-```bash
+```console
 $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers?fields=name" | jq
 ```
@@ -812,7 +671,7 @@ $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}"
 
 To get a list of all the deploymentManagers whose name is **not** local-cluster in our O-Cloud:
 
-```bash
+```console
 $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers?filter=(neq,name,local-cluster)" | jq
  | jq
@@ -829,7 +688,7 @@ and configure the search API access. The resource server will translate those RE
 
 To get a list of available resource types:
 
-```bash
+```console
 $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes" | jq
 ```
@@ -838,7 +697,7 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 
 To get information of a specific resource type:
 
-```bash
+```console
 $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes/${resource_type_name} | jq
 ```
@@ -847,7 +706,7 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 
 To get a list of available resource pools:
 
-```bash
+```console
 $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools" | jq
 ```
@@ -856,7 +715,7 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 
 To get information of a specific resource pool:
 
-```bash
+```console
 $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}" | jq
 ```
@@ -865,7 +724,7 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 
 We can filter down to get all the resources of a specific resourcePool.
 
-```bash
+```console
 $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}
 /resources" | jq
@@ -877,7 +736,7 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 
 To get a list of resource subscriptions:
 
-```bash
+```console
 $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions | jq
 ```
@@ -886,7 +745,7 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 
 To get all the information about an existing resource subscription:
 
-```bash
+```console
 $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq
 ```
@@ -895,7 +754,7 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 
 To add a new resource subscription:
 
-```bash
+```console
 $ curl -ks -X POST \
 --header "Content-Type: application/json" \
 --header "Authorization: Bearer ${MY_TOKEN}" \
@@ -904,7 +763,7 @@ $ curl -ks -X POST \
 
 Where the content of `infra-sub.json` is as follows:
 
-``` json
+```json
 {
   "consumerSubscriptionId": "69253c4b-8398-4602-855d-783865f5f25c",
   "filter": "(eq,extensions/country,US);",
@@ -916,7 +775,7 @@ Where the content of `infra-sub.json` is as follows:
 
 To delete an existing resource subscription:
 
-```bash
+```console
 $ curl -ks -X DELETE \
 --header "Authorization: Bearer ${MY_TOKEN}" \
 https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq

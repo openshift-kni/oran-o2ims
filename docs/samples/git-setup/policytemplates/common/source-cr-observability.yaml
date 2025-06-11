@@ -1,0 +1,12 @@
+object-templates-raw: |
+  {{hub range $namespace := (list "ztp-sno-ran-full-du-v4-Y-Z" "ztp-sno-ran-du-v4-Y-Z") hub}}
+  - complianceType: musthave
+    objectDefinition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: acm-route
+        namespace: {{hub $namespace hub}}
+      data:
+        host: '{{hub (lookup "route.openshift.io/v1" "Route" "open-cluster-management-observability" "alertmanager").spec.host hub}}'
+  {{hub end hub}}

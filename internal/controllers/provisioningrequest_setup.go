@@ -1,7 +1,14 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package controllers
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -28,6 +35,14 @@ import (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Setup Node CRD indexer. This field indexer allows us to query a list of Node CRs, filtered by the spec.nodePool field.
+	nodeIndexFunc := func(obj client.Object) []string {
+		return []string{obj.(*hwv1alpha1.Node).Spec.NodePool}
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &hwv1alpha1.Node{}, "spec.nodePool", nodeIndexFunc); err != nil {
+		return fmt.Errorf("failed to setup indexer for o2ims-hardwaremanagement.oran.openshift.io/v1alpha Node: %w", err)
+	}
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("o2ims-cluster-request").
@@ -172,7 +187,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForClusterTemp
 	// Create reconciling requests only for the ProvisioningRequests that are using the
 	// current ClusterTemplate.
 	for _, provisioningRequest := range provisioningRequests.Items {
-		clusterTemplateRefName := getClusterTemplateRefName(
+		clusterTemplateRefName := GetClusterTemplateRefName(
 			provisioningRequest.Spec.TemplateName, provisioningRequest.Spec.TemplateVersion)
 		if clusterTemplateRefName == obj.GetName() {
 			r.Logger.Info(
@@ -212,7 +227,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForManagedClus
 	}
 
 	// Get the ProvisioningRequest name.
-	crName, nameExists := clusterInstance.GetLabels()[provisioningRequestNameLabel]
+	crName, nameExists := clusterInstance.GetLabels()[provisioningv1alpha1.ProvisioningRequestNameLabel]
 	if nameExists {
 		r.Logger.Info(
 			"[enqueueProvisioningRequestForManagedCluster] Add new reconcile request for ProvisioningRequest",
@@ -249,7 +264,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 
 	// Requeue for the ProvisioningRequest which created the ClusterInstance and thus the
 	// ManagedCluster to which the policy is matched.
-	provisioningRequest, okCR := clusterInstance.GetLabels()[provisioningRequestNameLabel]
+	provisioningRequest, okCR := clusterInstance.GetLabels()[provisioningv1alpha1.ProvisioningRequestNameLabel]
 	if okCR {
 		provReq := &provisioningv1alpha1.ProvisioningRequest{}
 		if err := r.Get(ctx, types.NamespacedName{Name: provisioningRequest}, provReq); err != nil {
@@ -267,7 +282,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 			return nil
 		}
 
-		ctRefName := getClusterTemplateRefName(
+		ctRefName := GetClusterTemplateRefName(
 			provReq.Spec.TemplateName, provReq.Spec.TemplateVersion)
 		ctRefNamespace := ""
 		for _, ct := range clusterTemplates.Items {

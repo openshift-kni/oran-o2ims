@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package server
 
 import (
@@ -31,7 +37,7 @@ var _ = Describe("Flags", func() {
 		result, err := GetTokenFlag(testCtx, testFlagSet, testLogger)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(result).ToNot(BeEmpty())
-		Expect(result).To(ContainSubstring("Copyright 2023 Red Hat Inc."))
+		Expect(result).To(ContainSubstring("SPDX-FileCopyrightText: Red Hat"))
 	})
 
 	It("Reads the backend token file if needed and returns error if the file doesn't exist", func() {

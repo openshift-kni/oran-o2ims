@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Setup development environment
 
 Follow these instructions to deploy an ACM hub cluster with additional managed clusters.

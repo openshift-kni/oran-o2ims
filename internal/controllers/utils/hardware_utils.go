@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package utils
 
 import (
@@ -10,11 +16,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	bmhNamespaceLabel = "baremetalhost.metal3.io/namespace"
 )
 
 var (
@@ -49,10 +61,10 @@ func getBootInterfaceLabel(nodePool *hwv1alpha1.NodePool) (string, error) {
 	}
 
 	// Ensure the boot interface label annotation exists and is not empty
-	bootIfaceLabel, exists := annotation[HwTemplateBootIfaceLabel]
+	bootIfaceLabel, exists := annotation[hwv1alpha1.BootInterfaceLabelAnnotation]
 	if !exists || bootIfaceLabel == "" {
 		return "", fmt.Errorf("%s annotation is missing or empty from nodePool %s in namespace %s",
-			HwTemplateBootIfaceLabel, nodePool.Name, nodePool.Namespace)
+			hwv1alpha1.BootInterfaceLabelAnnotation, nodePool.Name, nodePool.Namespace)
 	}
 	return bootIfaceLabel, nil
 }
@@ -100,11 +112,14 @@ func CollectNodeDetails(ctx context.Context, c client.Client,
 			return nil, fmt.Errorf("the Node %s status in namespace %s does not have BMC details",
 				nodeName, nodePool.Namespace)
 		}
+
 		// Store the nodeInfo per group
 		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], NodeInfo{
 			BmcAddress:     node.Status.BMC.Address,
 			BmcCredentials: node.Status.BMC.CredentialsName,
 			NodeName:       node.Name,
+			HwMgrNodeId:    node.Spec.HwMgrNodeId,
+			HwMgrNodeNs:    GetBMHNamespace(node),
 			Interfaces:     node.Status.Interfaces,
 		})
 	}
@@ -151,20 +166,77 @@ func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]N
 	return nil
 }
 
-// UpdateNodeStatusWithHostname updates the Node status with the hostname after BMC information has been assigned.
-func UpdateNodeStatusWithHostname(ctx context.Context, c client.Client, nodeName, hostname, namespace string) error {
-	node := &hwv1alpha1.Node{}
-	exists, err := DoesK8SResourceExist(ctx, c, nodeName, namespace, node)
-	if err != nil || !exists {
-		return fmt.Errorf("failed to get the Node object %s in namespace %s: %w, exists %v", nodeName, namespace, err, exists)
+func GetPullSecretName(clusterInstance *unstructured.Unstructured) (string, error) {
+	pullSecretName, found, err := unstructured.NestedString(clusterInstance.Object, "spec", "pullSecretRef", "name")
+	if err != nil {
+		return "", fmt.Errorf("error getting pullSecretRef.name: %w", err)
+	}
+	if !found {
+		return "", fmt.Errorf("pullSecretRef.name not found")
+	}
+	return pullSecretName, nil
+}
+
+// CopyPullSecret copies the pull secrets from the cluster template namespace to the bmh namespace.
+func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Object, sourceNamespace, pullSecretName string,
+	hwNodes map[string][]NodeInfo) error {
+
+	pullSecret := &corev1.Secret{}
+	exists, err := DoesK8SResourceExist(ctx, c, pullSecretName, sourceNamespace, pullSecret)
+	if err != nil {
+		return fmt.Errorf("failed to check existence of pull secret %q in namespace %q: %w", pullSecretName, sourceNamespace, err)
+	}
+	if !exists {
+		return NewInputError(
+			"pull secret %s expected to exist in the %s namespace, but it is missing",
+			pullSecretName, sourceNamespace)
 	}
 
-	node.Status.Hostname = hostname
-	err = c.Status().Update(ctx, node)
-	if err != nil {
-		return fmt.Errorf("failed to update the Node object %s in namespace %s: %w", nodeName, namespace, err)
+	// Extract the namespace from any node (all nodes in the same pool share the same namespace).
+	var targetNamespace string
+	for _, nodes := range hwNodes {
+		if len(nodes) > 0 {
+			targetNamespace = nodes[0].HwMgrNodeNs
+			break
+		}
 	}
+	if targetNamespace == "" {
+		return fmt.Errorf("failed to determine the target namespace for pull secret copy")
+	}
+
+	newSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pullSecretName,
+			Namespace: targetNamespace,
+		},
+		Data: pullSecret.Data,
+		Type: corev1.SecretTypeDockerConfigJson,
+	}
+
+	if err := CreateK8sCR(ctx, c, newSecret, ownerObject, UPDATE); err != nil {
+		return fmt.Errorf("failed to create Kubernetes CR for PullSecret: %w", err)
+	}
+
 	return nil
+}
+
+// UpdateNodeStatusWithHostname updates the Node status with the hostname after BMC information has been assigned.
+func UpdateNodeStatusWithHostname(ctx context.Context, c client.Client, nodeName, hostname, namespace string) error {
+	err := RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		node := &hwv1alpha1.Node{}
+		exists, err := DoesK8SResourceExist(ctx, c, nodeName, namespace, node)
+		if err != nil || !exists {
+			return fmt.Errorf("failed to get the Node object %s in namespace %s: %w, exists %v", nodeName, namespace, err, exists)
+		}
+
+		node.Status.Hostname = hostname
+		err = c.Status().Update(ctx, node)
+		if err != nil {
+			return fmt.Errorf("failed to update the Node object %s in namespace %s: %w", nodeName, namespace, err)
+		}
+		return nil
+	})
+	return err
 }
 
 // CreateHwMgrPluginNamespace creates the namespace of the hardware manager plugin
@@ -240,17 +312,37 @@ func getInterfaces(nodeMap map[string]interface{}) []map[string]interface{} {
 //
 // Returns:
 // - error: An error if any unexpected structure or data is encountered; otherwise, nil.
-func AssignMacAddress(clusterInput map[string]any, hwInterfacess []*hwv1alpha1.Interface,
-	nodeSpec *siteconfig.NodeSpec) error {
+func AssignMacAddress(clusterInput map[string]any, hwInterfaces []*hwv1alpha1.Interface,
+	nodeSpec map[string]interface{}) error {
 
 	nodesInput, ok := clusterInput["nodes"].([]any)
 	if !ok {
 		return fmt.Errorf("unexpected: invalid nodes slice from the cluster input data")
 	}
-	// Iterate over each interface in the node specification to assign MAC addresses.
+
+	// Extract nodeNetwork.interfaces from nodeSpec
+	interfacesSlice, found, err := unstructured.NestedSlice(nodeSpec, "nodeNetwork", "interfaces")
+	if err != nil {
+		return fmt.Errorf("failed to extract nodeNetwork.interfaces: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("nodeNetwork.interfaces not found in nodeSpec")
+	}
+
 OuterLoop:
-	for i, iface := range nodeSpec.NodeNetwork.Interfaces {
+	for i, ifaceRaw := range interfacesSlice {
+		ifaceMap, ok := ifaceRaw.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected: interface at index %d is not a valid map", i)
+		}
+
+		name, ok := ifaceMap["name"].(string)
+		if !ok {
+			return fmt.Errorf("missing or invalid 'name' in nodeSpec interface at index %d", i)
+		}
+
 		macAddressAssigned := false
+
 		for _, node := range nodesInput {
 			nodeMapInput, ok := node.(map[string]interface{})
 			if !ok {
@@ -269,31 +361,42 @@ OuterLoop:
 			for _, intf := range interfaces {
 				// Check that "label" and "name" keys are present in the interface map.
 				label, labelOk := intf["label"]
-				name, nameOk := intf["name"]
+				ifName, nameOk := intf["name"]
 				if !labelOk || !nameOk {
 					return fmt.Errorf("interface map from the cluster input is missing 'label' or 'name' key")
 				}
-				for _, nodeIface := range hwInterfacess {
-					if nodeIface.Label == label && iface.Name == name {
-						nodeSpec.NodeNetwork.Interfaces[i].MacAddress = nodeIface.MACAddress
+
+				for _, nodeIface := range hwInterfaces {
+					if nodeIface.Label == label && ifName == name {
+						// Assign MAC address
+						ifaceMap["macAddress"] = nodeIface.MACAddress
+						interfacesSlice[i] = ifaceMap
 						macAddressAssigned = true
 						continue OuterLoop
 					}
 				}
 			}
 		}
+
 		if !macAddressAssigned {
-			return fmt.Errorf("mac address not assigned for interface %s, node name %s", iface.Name, nodeSpec.HostName)
+			hostName, _, _ := unstructured.NestedString(nodeSpec, "hostName")
+			return fmt.Errorf("mac address not assigned for interface %s, node name %s", name, hostName)
 		}
 	}
+
+	// Set updated interfaces slice back into nodeSpec
+	if err := unstructured.SetNestedSlice(nodeSpec, interfacesSlice, "nodeNetwork", "interfaces"); err != nil {
+		return fmt.Errorf("failed to update interfaces in nodeSpec: %w", err)
+	}
+
 	return nil
 }
 
 // HandleHardwareTimeout checks for provisioning or configuration timeout
 func HandleHardwareTimeout(
 	condition hwv1alpha1.ConditionType,
-	provisioningStartTime metav1.Time,
-	configurationStartTime metav1.Time,
+	provisioningStartTime *metav1.Time,
+	configurationStartTime *metav1.Time,
 	timeout time.Duration,
 	currentReason string,
 	currentMessage string) (bool, string, string) {
@@ -439,7 +542,8 @@ func SetNodePoolLabels(nodePool *hwv1alpha1.NodePool, label, value string) {
 
 // UpdateHardwareTemplateStatusCondition updates the status condition of the HardwareTemplate resource
 func UpdateHardwareTemplateStatusCondition(ctx context.Context, c client.Client, hardwareTemplate *hwv1alpha1.HardwareTemplate,
-	conditionType ConditionType, conditionReason ConditionReason, conditionStatus metav1.ConditionStatus, message string) error {
+	conditionType provisioningv1alpha1.ConditionType, conditionReason provisioningv1alpha1.ConditionReason,
+	conditionStatus metav1.ConditionStatus, message string) error {
 
 	SetStatusCondition(&hardwareTemplate.Status.Conditions,
 		conditionType,
@@ -469,8 +573,8 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 		if err != nil {
 			errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string: %v",
 				name, err)
-			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, ConditionType(hwv1alpha1.Validation),
-				ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, errMessage)
+			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
+				provisioningv1alpha1.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, errMessage)
 			if updateErr != nil {
 				// nolint: wrapcheck
 				return 0, updateErr
@@ -481,4 +585,14 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 	}
 
 	return 0, nil
+}
+
+// GetBMHNamespace returns the BMH namespace for the given node.
+// Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
+func GetBMHNamespace(node *hwv1alpha1.Node) string {
+
+	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {
+		return ns
+	}
+	return node.Spec.HwMgrNodeNs
 }

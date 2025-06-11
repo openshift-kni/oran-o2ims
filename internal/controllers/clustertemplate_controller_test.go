@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package controllers
 
 import (
@@ -11,6 +17,7 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,9 +42,11 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -49,11 +58,11 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplate,
 				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{ct}...)
+		c = getFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
 		reconciler = &ClusterTemplateReconciler{
 			Client: c,
 			Logger: logger,
@@ -70,7 +79,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				},
 				Data: map[string]string{
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 				},
 			},
 			{
@@ -117,7 +126,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -132,16 +141,16 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(c.Get(ctx, req.NamespacedName, updatedCT)).To(Succeed())
 		conditions := updatedCT.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Completed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Completed)))
 		Expect(conditions[0].Message).To(Equal("The cluster template validation succeeded"))
 	})
 
 	It("should requeue an invalid ClusterTemplate", func() {
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -156,9 +165,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(c.Get(ctx, req.NamespacedName, updatedCT)).To(Succeed())
 		conditions := updatedCT.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the ConfigMap '%s' is not found in the namespace '%s'", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
@@ -221,11 +230,15 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 			},
 		}
 
-		objs := []client.Object{cm}
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
+
+		objs := []client.Object{cm, clusterInstanceCRD}
 		for _, ct := range cts {
 			objs = append(objs, ct)
 		}
 		c = getFakeClientFromObjects(objs...)
+
 		r = &ClusterTemplateReconciler{
 			Client: c,
 			Logger: logger,
@@ -428,7 +441,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ctx = context.Background()
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -439,7 +452,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwTemplate:              hwTemplate,
 				},
-				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 			},
 		}
 
@@ -453,7 +466,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Data: map[string]string{
 					utils.ClusterInstallationTimeoutConfigKey: "80m",
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 				},
 			},
 			{
@@ -496,7 +509,11 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{ct}...)
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
+
+		c = getFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
+
 		t = &clusterTemplateReconcilerTask{
 			client: c,
 			logger: logger,
@@ -517,9 +534,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		// Check the status condition
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Completed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Completed)))
 		Expect(conditions[0].Message).To(Equal("The cluster template validation succeeded"))
 	})
 
@@ -532,9 +549,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		// Check the status condition
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the ConfigMap '%s' is not found in the namespace '%s'", ciDefaultsCm, ctNamespace)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
@@ -555,9 +572,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		// Check the status condition
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
@@ -576,9 +593,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
 		errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string", hwtmpl.Name)
-		Expect(conditions[0].Type).To(Equal(string(utils.CTconditionTypes.Validated)))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(conditions[0].Reason).To(Equal(string(utils.CTconditionReasons.Failed)))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(errMessage))
 
 		// Check the HardwareTemplate status condition
@@ -601,7 +618,9 @@ var _ = Describe("validateConfigmapReference", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		c = getFakeClientFromObjects()
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
+		c = getFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
 	})
 
 	It("should validate a valid configmap", func() {
@@ -614,7 +633,7 @@ var _ = Describe("validateConfigmapReference", func() {
 			Data: map[string]string{
 				utils.ClusterInstallationTimeoutConfigKey: "40m",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: example.sno.com`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -635,6 +654,30 @@ key: value`,
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"failed to get ConfigmapReference: the ConfigMap '%s' is not found in the namespace '%s'", configmapName, namespace)))
+	})
+
+	It("should return validation error message for a configmap that does not match the ClusterInstance CRD", func() {
+		// Create a valid ConfigMap but with a wrong schema.
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.ClusterInstallationTimeoutConfigKey: "40m",
+				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+baDomain: example.sno.com`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+		// Cluster Instance schema error.
+		err := validateConfigmapReference[map[string]any](
+			ctx, c, configmapName, namespace,
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			utils.ClusterInstallationTimeoutConfigKey)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("failed to validate the default ConfigMap: the ConfigMap does not match the ClusterInstance schema"))
 	})
 
 	It("should return validation error message for missing template data key in configmap", func() {
@@ -749,7 +792,7 @@ nodes:
 			Data: map[string]string{
 				utils.ClusterInstallationTimeoutConfigKey: "invalid-timeout",
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -773,7 +816,7 @@ key: value`,
 			},
 			Data: map[string]string{
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 			},
 			Immutable: &mutable,
 		}
@@ -798,7 +841,7 @@ key: value`,
 			},
 			Data: map[string]string{
 				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-key: value`,
+baseDomain: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -838,7 +881,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -861,7 +904,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		// Create a valid cluster template
 		ct1 := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -876,7 +919,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		}
 		ct2 := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: "namespace1",
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -907,7 +950,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -949,7 +992,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -975,7 +1018,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -997,7 +1040,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		// Create a valid cluster template
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -1037,7 +1080,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1069,7 +1112,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1101,7 +1144,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1133,7 +1176,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
@@ -1164,7 +1207,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			args: args{
 				object: &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: getClusterTemplateRefName(tName, tVersion),
+						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{

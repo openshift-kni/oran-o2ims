@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package utils
 
 import (
@@ -8,37 +14,45 @@ import (
 type InventoryConditionType string
 
 var InventoryConditionTypes = struct {
-	Ready                     InventoryConditionType
-	NotReady                  InventoryConditionType
-	Error                     InventoryConditionType
-	Available                 InventoryConditionType
-	MetadataServerAvailable   InventoryConditionType
-	DeploymentServerAvailable InventoryConditionType
-	ResourceServerAvailable   InventoryConditionType
-	AlarmServerError          InventoryConditionType
-	DatabaseServerError       InventoryConditionType
-	MetadataServerError       InventoryConditionType
-	DeploymentServerError     InventoryConditionType
-	ResourceServerError       InventoryConditionType
-	SmoRegistrationCompleted  InventoryConditionType
-	DatabaseServerAvailable   InventoryConditionType
-	AlarmServerAvailable      InventoryConditionType
+	Ready                    InventoryConditionType
+	NotReady                 InventoryConditionType
+	Error                    InventoryConditionType
+	Available                InventoryConditionType
+	SmoRegistrationCompleted InventoryConditionType
+
+	AlarmServerError        InventoryConditionType
+	ArtifactsServerError    InventoryConditionType
+	ClusterServerError      InventoryConditionType
+	DatabaseServerError     InventoryConditionType
+	ResourceServerError     InventoryConditionType
+	ProvisioningServerError InventoryConditionType
+
+	AlarmServerAvailable        InventoryConditionType
+	ArtifactsServerAvailable    InventoryConditionType
+	ClusterServerAvailable      InventoryConditionType
+	DatabaseServerAvailable     InventoryConditionType
+	ResourceServerAvailable     InventoryConditionType
+	ProvisioningServerAvailable InventoryConditionType
 }{
-	Ready:                     "InventoryReady",
-	NotReady:                  "InventoryConditionType",
-	Error:                     "Error",
-	Available:                 "Available",
-	MetadataServerAvailable:   "MetadataServerAvailable",
-	DeploymentServerAvailable: "DeploymentServerAvailable",
-	ResourceServerAvailable:   "ResourceServerAvailable",
-	AlarmServerError:          "AlarmServerError",
-	DatabaseServerError:       "DatabaseServerError",
-	MetadataServerError:       "MetadataServerError",
-	DeploymentServerError:     "DeploymentServerError",
-	ResourceServerError:       "ResourceServerError",
-	SmoRegistrationCompleted:  "SmoRegistrationCompleted",
-	DatabaseServerAvailable:   "DatabaseServerAvailable",
-	AlarmServerAvailable:      "AlarmServerAvailable",
+	Ready:                    "InventoryReady",
+	NotReady:                 "InventoryConditionType",
+	Error:                    "Error",
+	Available:                "Available",
+	SmoRegistrationCompleted: "SmoRegistrationCompleted",
+
+	AlarmServerError:        "AlarmServerError",
+	ArtifactsServerError:    "ArtifactsServerError",
+	ClusterServerError:      "ClusterServerError",
+	DatabaseServerError:     "DatabaseServerError",
+	ResourceServerError:     "ResourceServerError",
+	ProvisioningServerError: "ProvisioningServerError",
+
+	AlarmServerAvailable:        "AlarmServerAvailable",
+	ArtifactsServerAvailable:    "ArtifactsServerAvailable",
+	ClusterServerAvailable:      "ClusterServerAvailable",
+	DatabaseServerAvailable:     "DatabaseServerAvailable",
+	ResourceServerAvailable:     "ResourceServerAvailable",
+	ProvisioningServerAvailable: "ProvisioningServerAvailable",
 }
 
 type InventoryConditionReason string
@@ -52,6 +66,7 @@ var InventoryConditionReasons = struct {
 	SmoRegistrationSuccessful         InventoryConditionReason
 	SmoRegistrationFailed             InventoryConditionReason
 	SmoNotConfigured                  InventoryConditionReason
+	OAuthClientIDNotConfigured        InventoryConditionReason
 }{
 	DatabaseDeploymentFailed:          "DatabaseDeploymentFailed",
 	DeploymentsReady:                  "AllDeploymentsReady",
@@ -61,22 +76,25 @@ var InventoryConditionReasons = struct {
 	SmoRegistrationSuccessful:         "SmoRegistrationSuccessful",
 	SmoRegistrationFailed:             "SmoRegistrationFailed",
 	SmoNotConfigured:                  "SmoNotConfigured",
+	OAuthClientIDNotConfigured:        "OAuthClientIDNotConfigured",
 }
 
 var MapAvailableDeploymentNameConditionType = map[string]InventoryConditionType{
-	InventoryAlarmServerName:             InventoryConditionTypes.AlarmServerAvailable,
-	InventoryDatabaseServerName:          InventoryConditionTypes.DatabaseServerAvailable,
-	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerAvailable,
-	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerAvailable,
-	InventoryResourceServerName:          InventoryConditionTypes.ResourceServerAvailable,
+	InventoryAlarmServerName:        InventoryConditionTypes.AlarmServerAvailable,
+	InventoryArtifactsServerName:    InventoryConditionTypes.ArtifactsServerAvailable,
+	InventoryClusterServerName:      InventoryConditionTypes.ClusterServerAvailable,
+	InventoryDatabaseServerName:     InventoryConditionTypes.DatabaseServerAvailable,
+	InventoryResourceServerName:     InventoryConditionTypes.ResourceServerAvailable,
+	InventoryProvisioningServerName: InventoryConditionTypes.ProvisioningServerAvailable,
 }
 
 var MapErrorDeploymentNameConditionType = map[string]InventoryConditionType{
-	InventoryAlarmServerName:             InventoryConditionTypes.AlarmServerError,
-	InventoryMetadataServerName:          InventoryConditionTypes.MetadataServerError,
-	InventoryDeploymentManagerServerName: InventoryConditionTypes.DeploymentServerError,
-	InventoryResourceServerName:          InventoryConditionTypes.ResourceServerError,
-	InventoryDatabaseServerName:          InventoryConditionTypes.DatabaseServerError,
+	InventoryAlarmServerName:        InventoryConditionTypes.AlarmServerError,
+	InventoryArtifactsServerName:    InventoryConditionTypes.ArtifactsServerError,
+	InventoryClusterServerName:      InventoryConditionTypes.ClusterServerError,
+	InventoryDatabaseServerName:     InventoryConditionTypes.DatabaseServerError,
+	InventoryResourceServerName:     InventoryConditionTypes.ResourceServerError,
+	InventoryProvisioningServerName: InventoryConditionTypes.ProvisioningServerError,
 }
 
 // AvailableNotification represents the data sent to the SMO once the O2IMS is ready to accept API calls.   This is
@@ -92,5 +110,7 @@ type NodeInfo struct {
 	BmcAddress     string
 	BmcCredentials string
 	NodeName       string
+	HwMgrNodeId    string
+	HwMgrNodeNs    string
 	Interfaces     []*hwv1alpha1.Interface
 }

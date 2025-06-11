@@ -1,14 +1,20 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package controllers
 
 import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
@@ -128,6 +134,10 @@ func (t *provisioningRequestReconcilerTask) createExtraManifestsConfigMap(
 func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 	ctx context.Context, clusterName string) error {
 
+	if clusterName == "" {
+		return fmt.Errorf("spec.clusterName cannot be empty")
+	}
+
 	// Create the namespace.
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -137,10 +147,10 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 
 	// Add ProvisioningRequest labels to the namespace
 	labels := make(map[string]string)
-	labels[provisioningRequestNameLabel] = t.object.Name
+	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
 	namespace.SetLabels(labels)
 
-	err := utils.CreateK8sCR(ctx, t.client, namespace, t.object, "")
+	err := utils.CreateK8sCR(ctx, t.client, namespace, t.object, utils.UPDATE)
 	if err != nil {
 		return fmt.Errorf("failed to create or update namespace %s: %w", clusterName, err)
 	}
@@ -239,7 +249,7 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceBMCSecrets(
 	ctx context.Context, clusterName string) error {
 
 	// The BMC credential details are obtained from the ProvisioningRequest.
-	clusterInstanceMatchingInput, err := utils.ExtractMatchingInput(
+	clusterInstanceMatchingInput, err := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
 	if err != nil {
 		return utils.NewInputError(
@@ -333,18 +343,10 @@ func getBMCDetailsForClusterInstance(node map[string]any, provisioningRequest st
 	// Get the BMC CredentialsName.
 	bmcCredentialsNameInterface, bmcCredentialsNameExist := node["bmcCredentialsName"]
 	if !bmcCredentialsNameExist {
-		nodeHostnameInterface, nodeHostnameExists := node["hostName"]
-		if !nodeHostnameExists {
-			return nil, nil, "", utils.NewInputError(
-				`\"hostname\" key expected to exist in `+
-					`spec.templateParameters.clusterInstanceParameters `+
-					`of ProvisioningRequest %s, but it's missing`,
-				provisioningRequest,
-			)
+		secretName, err = utils.GenerateSecretName(node, provisioningRequest)
+		if err != nil {
+			return nil, nil, "", utils.NewInputError("failed to generate Secret name: %w", err)
 		}
-		secretName =
-			utils.ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) +
-				"-bmc-secret"
 	} else {
 		secretName = bmcCredentialsNameInterface.(map[string]any)["name"].(string)
 	}

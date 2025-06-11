@@ -24,27 +24,8 @@ import (
 	externalRef0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
-// Defines values for AlarmDefinitionAlarmChangeType.
 const (
-	ADDED    AlarmDefinitionAlarmChangeType = "ADDED"
-	DELETED  AlarmDefinitionAlarmChangeType = "DELETED"
-	MODIFIED AlarmDefinitionAlarmChangeType = "MODIFIED"
-)
-
-// Defines values for AlarmDefinitionClearingType.
-const (
-	AUTOMATIC AlarmDefinitionClearingType = "AUTOMATIC"
-	MANUAL    AlarmDefinitionClearingType = "MANUAL"
-)
-
-// Defines values for AlarmDefinitionManagementInterfaceId.
-const (
-	AlarmDefinitionManagementInterfaceIdO2IMS AlarmDefinitionManagementInterfaceId = "O2IMS"
-)
-
-// Defines values for AlarmDictionaryManagementInterfaceId.
-const (
-	AlarmDictionaryManagementInterfaceIdO2IMS AlarmDictionaryManagementInterfaceId = "O2IMS"
+	Oauth2Scopes = "oauth2.Scopes"
 )
 
 // Defines values for InventoryChangeNotificationNotificationEventType.
@@ -68,83 +49,6 @@ const (
 	ResourceTypeResourceKindPHYSICAL  ResourceTypeResourceKind = "PHYSICAL"
 	ResourceTypeResourceKindUNDEFINED ResourceTypeResourceKind = "UNDEFINED"
 )
-
-// AlarmDefinition Information about an alarm definition.
-type AlarmDefinition struct {
-	// AlarmAdditionalFields List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-	AlarmAdditionalFields map[string]interface{} `json:"alarmAdditionalFields"`
-
-	// AlarmChangeType Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
-	AlarmChangeType AlarmDefinitionAlarmChangeType `json:"alarmChangeType"`
-
-	// AlarmDefinitionId Provides a unique identifier of the alarm being raised. This is the Primary Key into the Alarm Dictionary
-	AlarmDefinitionId openapi_types.UUID `json:"alarmDefinitionId"`
-
-	// AlarmDescription Provides a longer descriptive meaning of the alarm condition and a description of the consequences of the
-	// alarm condition. This is intended to be read by an operator to give an idea of what happened and a sense of
-	// the effects, consequences, and other impacted areas of the system.
-	AlarmDescription string `json:"alarmDescription"`
-
-	// AlarmLastChange Indicates the Alarm Dictionary Version in which this alarm last changed.
-	AlarmLastChange string `json:"alarmLastChange"`
-
-	// AlarmName Provides short name for the alarm
-	AlarmName string `json:"alarmName"`
-
-	// ClearingType Identifies whether alarm is cleared automatically or manually.
-	ClearingType AlarmDefinitionClearingType `json:"clearingType"`
-
-	// ManagementInterfaceId List of management interface over which alarms are transmitted for this Entity Type.
-	// RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
-	ManagementInterfaceId []AlarmDefinitionManagementInterfaceId `json:"managementInterfaceId"`
-
-	// PkNotificationField Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
-	// Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
-	PkNotificationField []string `json:"pkNotificationField"`
-
-	// ProposedRepairActions Provides guidance for proposed repair actions.
-	ProposedRepairActions string `json:"proposedRepairActions"`
-}
-
-// AlarmDefinitionAlarmChangeType Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
-type AlarmDefinitionAlarmChangeType string
-
-// AlarmDefinitionClearingType Identifies whether alarm is cleared automatically or manually.
-type AlarmDefinitionClearingType string
-
-// AlarmDefinitionManagementInterfaceId defines model for AlarmDefinition.ManagementInterfaceId.
-type AlarmDefinitionManagementInterfaceId string
-
-// AlarmDictionary Information about an alarm dictionary.
-type AlarmDictionary struct {
-	AlarmDefinition []AlarmDefinition `json:"alarmDefinition"`
-
-	// AlarmDictionarySchema Version of the Alarm Dictionary Schema to which this alarm dictionary conforms.
-	AlarmDictionarySchema string `json:"alarmDictionarySchema"`
-
-	// AlarmDictionaryVersion Version of the Alarm Dictionary. Version is vendor defined such that the version of the dictionary can be
-	// associated with a specific version of the software delivery of this product.
-	AlarmDictionaryVersion string `json:"alarmDictionaryVersion"`
-
-	// EntityType O-RAN entity type emitting the alarm: This shall be unique per vendor ResourceType.model and
-	// ResourceType.version
-	EntityType string `json:"entityType"`
-
-	// ManagementInterfaceId List of management interface over which alarms are transmitted for this Entity Type.
-	// RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
-	ManagementInterfaceId []AlarmDictionaryManagementInterfaceId `json:"managementInterfaceId"`
-
-	// PkNotificationField Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
-	// Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
-	PkNotificationField []string `json:"pkNotificationField"`
-
-	// Vendor Vendor of the Entity Type to whom this Alarm Dictionary applies. This should be the same value as in the
-	// ResourceType.vendor attribute
-	Vendor string `json:"vendor"`
-}
-
-// AlarmDictionaryManagementInterfaceId defines model for AlarmDictionary.ManagementInterfaceId.
-type AlarmDictionaryManagementInterfaceId string
 
 // DeploymentManager Information about a deployment manager.
 type DeploymentManager struct {
@@ -198,12 +102,12 @@ type InventoryChangeNotification struct {
 	// PostObjectState This is required if the notificationEventType is 0 (CREATE) or 1 (MODIFY) and is one of the following data
 	// types defined in clause 3.2.6 and will match the type of object in priorObjectState and/or the type
 	// referred to in objectRef.
-	PostObjectState *string `json:"postObjectState,omitempty"`
+	PostObjectState *map[string]interface{} `json:"postObjectState,omitempty"`
 
 	// PriorObjectState This is required if the notificationEventType is 1 (MODIFY) or 2 (DELETE) and is one of the following
 	// data types defined in clause 3.2.6 and will match the type of object in postObjectState and/or the type
 	// referred to in objectRef.
-	PriorObjectState *string `json:"priorObjectState,omitempty"`
+	PriorObjectState *map[string]interface{} `json:"priorObjectState,omitempty"`
 }
 
 // InventoryChangeNotificationNotificationEventType One of the following values: 0 - create, 1 - modify, 2 - delete
@@ -212,13 +116,13 @@ type InventoryChangeNotificationNotificationEventType int
 // OCloudInfo defines model for OCloudInfo.
 type OCloudInfo struct {
 	// Description Human readable description of the O-Cloud as provided by the SMO at cloud genesis.
-	Description string             `json:"description"`
-	Extensions  *map[string]string `json:"extensions,omitempty"`
+	Description string                  `json:"description"`
+	Extensions  *map[string]interface{} `json:"extensions,omitempty"`
 
-	// GlobalCloudId Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud
+	// GlobalcloudId Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud
 	// instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud
 	// IMS Inventory.
-	GlobalCloudId openapi_types.UUID `json:"globalCloudId"`
+	GlobalcloudId openapi_types.UUID `json:"globalcloudId"`
 
 	// Name Human readable name of the O-Cloud as identified by the SMO at cloud genesis.
 	Name string `json:"name"`
@@ -239,7 +143,7 @@ type Resource struct {
 	Elements []Resource `json:"elements"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource.
-	Extensions map[string]string `json:"extensions"`
+	Extensions map[string]interface{} `json:"extensions"`
 
 	// GlobalAssetId Identifier or serial number of the resource, if available. It is required only if the resource has been
 	// identified during its addition to the cloud as a reportable asset in the SMO inventory.
@@ -265,7 +169,7 @@ type ResourcePool struct {
 	Description string `json:"description"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
-	Extensions *map[string]string `json:"extensions,omitempty"`
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
 
 	// GlobalLocationId This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
 	GlobalLocationId openapi_types.UUID `json:"globalLocationId"`
@@ -285,13 +189,14 @@ type ResourcePool struct {
 
 // ResourceType Information about a resource type.
 type ResourceType struct {
-	AlarmDictionary map[string]interface{} `json:"alarmDictionary"`
+	// AlarmDictionary Information about an alarm dictionary.
+	AlarmDictionary *externalRef0.AlarmDictionary `json:"alarmDictionary,omitempty"`
 
 	// Description Human readable description of the resource type.
 	Description string `json:"description"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-	Extensions map[string]string `json:"extensions"`
+	Extensions map[string]interface{} `json:"extensions"`
 
 	// Model Information about the model of the resource as defined by its provider.
 	Model string `json:"model"`
@@ -355,6 +260,13 @@ type SubscriptionId = openapi_types.UUID
 
 // GetCloudInfoParams defines parameters for GetCloudInfo.
 type GetCloudInfoParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -385,6 +297,13 @@ type GetCloudInfoParams struct {
 
 // GetDeploymentManagersParams defines parameters for GetDeploymentManagers.
 type GetDeploymentManagersParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -468,38 +387,15 @@ type GetDeploymentManagersParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
-// GetDeploymentManagerParams defines parameters for GetDeploymentManager.
-type GetDeploymentManagerParams struct {
-	// ExcludeFields Comma separated list of field references to exclude from the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to exclude the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// exclude_fields=extensions/country
-	// ```
-	//
-	// When this parameter isn't used no field will be excluded.
-	//
-	// Fields in this list will be excluded even if they are explicitly included using the
-	// `fields` parameter.
-	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
-
-	// Fields Comma separated list of field references to include in the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to get the `name` field and the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// fields=name,extensions/country
-	// ```
-	//
-	// When this parameter isn't used all the fields will be returned.
-	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
-}
-
 // GetResourcePoolsParams defines parameters for GetResourcePools.
 type GetResourcePoolsParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -585,6 +481,13 @@ type GetResourcePoolsParams struct {
 
 // GetResourcesParams defines parameters for GetResources.
 type GetResourcesParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -670,6 +573,13 @@ type GetResourcesParams struct {
 
 // GetResourceTypesParams defines parameters for GetResourceTypes.
 type GetResourceTypesParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// ExcludeFields Comma separated list of field references to exclude from the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -770,6 +680,13 @@ type GetSubscriptionsParams struct {
 	// `fields` parameter.
 	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
 
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
 	// Fields Comma separated list of field references to include in the result.
 	//
 	// Each field reference is a field name, or a sequence of field names separated by slashes. For
@@ -838,36 +755,6 @@ type GetSubscriptionsParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
-// GetSubscriptionParams defines parameters for GetSubscription.
-type GetSubscriptionParams struct {
-	// ExcludeFields Comma separated list of field references to exclude from the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to exclude the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// exclude_fields=extensions/country
-	// ```
-	//
-	// When this parameter isn't used no field will be excluded.
-	//
-	// Fields in this list will be excluded even if they are explicitly included using the
-	// `fields` parameter.
-	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
-
-	// Fields Comma separated list of field references to include in the result.
-	//
-	// Each field reference is a field name, or a sequence of field names separated by slashes. For
-	// example, to get the `name` field and the `country` subfield of the `extensions` field:
-	//
-	// ```
-	// fields=name,extensions/country
-	// ```
-	//
-	// When this parameter isn't used all the fields will be returned.
-	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
-}
-
 // CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
 type CreateSubscriptionJSONRequestBody = Subscription
 
@@ -887,7 +774,7 @@ type ServerInterface interface {
 	GetDeploymentManagers(w http.ResponseWriter, r *http.Request, params GetDeploymentManagersParams)
 	// Get deployment manager
 	// (GET /o2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId})
-	GetDeploymentManager(w http.ResponseWriter, r *http.Request, deploymentManagerId DeploymentManagerId, params GetDeploymentManagerParams)
+	GetDeploymentManager(w http.ResponseWriter, r *http.Request, deploymentManagerId DeploymentManagerId)
 	// Get resource pools
 	// (GET /o2ims-infrastructureInventory/v1/resourcePools)
 	GetResourcePools(w http.ResponseWriter, r *http.Request, params GetResourcePoolsParams)
@@ -917,7 +804,7 @@ type ServerInterface interface {
 	DeleteSubscription(w http.ResponseWriter, r *http.Request, subscriptionId SubscriptionId)
 	// Get subscription
 	// (GET /o2ims-infrastructureInventory/v1/subscriptions/{subscriptionId})
-	GetSubscription(w http.ResponseWriter, r *http.Request, subscriptionId SubscriptionId, params GetSubscriptionParams)
+	GetSubscription(w http.ResponseWriter, r *http.Request, subscriptionId SubscriptionId)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -931,6 +818,12 @@ type MiddlewareFunc func(http.Handler) http.Handler
 
 // GetAllVersions operation middleware
 func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAllVersions(w, r)
@@ -948,8 +841,22 @@ func (siw *ServerInterfaceWrapper) GetCloudInfo(w http.ResponseWriter, r *http.R
 
 	var err error
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetCloudInfoParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
@@ -981,6 +888,12 @@ func (siw *ServerInterfaceWrapper) GetCloudInfo(w http.ResponseWriter, r *http.R
 // GetMinorVersions operation middleware
 func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMinorVersions(w, r)
 	}))
@@ -997,8 +910,22 @@ func (siw *ServerInterfaceWrapper) GetDeploymentManagers(w http.ResponseWriter, 
 
 	var err error
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetDeploymentManagersParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
@@ -1049,27 +976,14 @@ func (siw *ServerInterfaceWrapper) GetDeploymentManager(w http.ResponseWriter, r
 		return
 	}
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetDeploymentManagerParams
+	ctx := r.Context()
 
-	// ------------- Optional query parameter "exclude_fields" -------------
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
 
-	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "fields" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
-		return
-	}
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetDeploymentManager(w, r, deploymentManagerId, params)
+		siw.Handler.GetDeploymentManager(w, r, deploymentManagerId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1084,8 +998,22 @@ func (siw *ServerInterfaceWrapper) GetResourcePools(w http.ResponseWriter, r *ht
 
 	var err error
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetResourcePoolsParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
@@ -1136,6 +1064,12 @@ func (siw *ServerInterfaceWrapper) GetResourcePool(w http.ResponseWriter, r *htt
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetResourcePool(w, r, resourcePoolId)
 	}))
@@ -1161,8 +1095,22 @@ func (siw *ServerInterfaceWrapper) GetResources(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetResourcesParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
@@ -1222,6 +1170,12 @@ func (siw *ServerInterfaceWrapper) GetResource(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetResource(w, r, resourcePoolId, resourceId)
 	}))
@@ -1238,8 +1192,22 @@ func (siw *ServerInterfaceWrapper) GetResourceTypes(w http.ResponseWriter, r *ht
 
 	var err error
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetResourceTypesParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
@@ -1290,6 +1258,12 @@ func (siw *ServerInterfaceWrapper) GetResourceType(w http.ResponseWriter, r *htt
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetResourceType(w, r, resourceTypeId)
 	}))
@@ -1306,6 +1280,12 @@ func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *ht
 
 	var err error
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader", "role:o2ims-subscriber"})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetSubscriptionsParams
 
@@ -1314,6 +1294,14 @@ func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *ht
 	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
 		return
 	}
 
@@ -1347,6 +1335,12 @@ func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *ht
 // CreateSubscription operation middleware
 func (siw *ServerInterfaceWrapper) CreateSubscription(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-subscriber"})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateSubscription(w, r)
 	}))
@@ -1371,6 +1365,12 @@ func (siw *ServerInterfaceWrapper) DeleteSubscription(w http.ResponseWriter, r *
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subscriptionId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-subscriber"})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteSubscription(w, r, subscriptionId)
@@ -1397,27 +1397,14 @@ func (siw *ServerInterfaceWrapper) GetSubscription(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetSubscriptionParams
+	ctx := r.Context()
 
-	// ------------- Optional query parameter "exclude_fields" -------------
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader", "role:o2ims-subscriber"})
 
-	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "fields" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
-		return
-	}
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetSubscription(w, r, subscriptionId, params)
+		siw.Handler.GetSubscription(w, r, subscriptionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1591,6 +1578,24 @@ func (response GetAllVersions400ApplicationProblemPlusJSONResponse) VisitGetAllV
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetAllVersions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions401ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAllVersions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAllVersions403ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetAllVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetAllVersions500ApplicationProblemPlusJSONResponse) VisitGetAllVersionsResponse(w http.ResponseWriter) error {
@@ -1626,6 +1631,24 @@ func (response GetCloudInfo400ApplicationProblemPlusJSONResponse) VisitGetCloudI
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetCloudInfo401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetCloudInfo401ApplicationProblemPlusJSONResponse) VisitGetCloudInfoResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCloudInfo403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetCloudInfo403ApplicationProblemPlusJSONResponse) VisitGetCloudInfoResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetCloudInfo500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetCloudInfo500ApplicationProblemPlusJSONResponse) VisitGetCloudInfoResponse(w http.ResponseWriter) error {
@@ -1656,6 +1679,24 @@ type GetMinorVersions400ApplicationProblemPlusJSONResponse externalRef0.ProblemD
 func (response GetMinorVersions400ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions401ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMinorVersions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetMinorVersions403ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1695,6 +1736,24 @@ func (response GetDeploymentManagers400ApplicationProblemPlusJSONResponse) Visit
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetDeploymentManagers401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetDeploymentManagers401ApplicationProblemPlusJSONResponse) VisitGetDeploymentManagersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDeploymentManagers403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetDeploymentManagers403ApplicationProblemPlusJSONResponse) VisitGetDeploymentManagersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetDeploymentManagers500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetDeploymentManagers500ApplicationProblemPlusJSONResponse) VisitGetDeploymentManagersResponse(w http.ResponseWriter) error {
@@ -1706,7 +1765,6 @@ func (response GetDeploymentManagers500ApplicationProblemPlusJSONResponse) Visit
 
 type GetDeploymentManagerRequestObject struct {
 	DeploymentManagerId DeploymentManagerId `json:"deploymentManagerId"`
-	Params              GetDeploymentManagerParams
 }
 
 type GetDeploymentManagerResponseObject interface {
@@ -1727,6 +1785,24 @@ type GetDeploymentManager400ApplicationProblemPlusJSONResponse externalRef0.Prob
 func (response GetDeploymentManager400ApplicationProblemPlusJSONResponse) VisitGetDeploymentManagerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDeploymentManager401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetDeploymentManager401ApplicationProblemPlusJSONResponse) VisitGetDeploymentManagerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDeploymentManager403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetDeploymentManager403ApplicationProblemPlusJSONResponse) VisitGetDeploymentManagerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1775,6 +1851,24 @@ func (response GetResourcePools400ApplicationProblemPlusJSONResponse) VisitGetRe
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetResourcePools401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourcePools401ApplicationProblemPlusJSONResponse) VisitGetResourcePoolsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourcePools403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourcePools403ApplicationProblemPlusJSONResponse) VisitGetResourcePoolsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetResourcePools500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetResourcePools500ApplicationProblemPlusJSONResponse) VisitGetResourcePoolsResponse(w http.ResponseWriter) error {
@@ -1806,6 +1900,24 @@ type GetResourcePool400ApplicationProblemPlusJSONResponse externalRef0.ProblemDe
 func (response GetResourcePool400ApplicationProblemPlusJSONResponse) VisitGetResourcePoolResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourcePool401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourcePool401ApplicationProblemPlusJSONResponse) VisitGetResourcePoolResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourcePool403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourcePool403ApplicationProblemPlusJSONResponse) VisitGetResourcePoolResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1855,6 +1967,24 @@ func (response GetResources400ApplicationProblemPlusJSONResponse) VisitGetResour
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetResources401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResources401ApplicationProblemPlusJSONResponse) VisitGetResourcesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResources403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResources403ApplicationProblemPlusJSONResponse) VisitGetResourcesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetResources404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetResources404ApplicationProblemPlusJSONResponse) VisitGetResourcesResponse(w http.ResponseWriter) error {
@@ -1896,6 +2026,24 @@ type GetResource400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetail
 func (response GetResource400ApplicationProblemPlusJSONResponse) VisitGetResourceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResource401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResource401ApplicationProblemPlusJSONResponse) VisitGetResourceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResource403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResource403ApplicationProblemPlusJSONResponse) VisitGetResourceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -1944,6 +2092,24 @@ func (response GetResourceTypes400ApplicationProblemPlusJSONResponse) VisitGetRe
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetResourceTypes401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceTypes401ApplicationProblemPlusJSONResponse) VisitGetResourceTypesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceTypes403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceTypes403ApplicationProblemPlusJSONResponse) VisitGetResourceTypesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetResourceTypes500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetResourceTypes500ApplicationProblemPlusJSONResponse) VisitGetResourceTypesResponse(w http.ResponseWriter) error {
@@ -1975,6 +2141,24 @@ type GetResourceType400ApplicationProblemPlusJSONResponse externalRef0.ProblemDe
 func (response GetResourceType400ApplicationProblemPlusJSONResponse) VisitGetResourceTypeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceType401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceType401ApplicationProblemPlusJSONResponse) VisitGetResourceTypeResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceType403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceType403ApplicationProblemPlusJSONResponse) VisitGetResourceTypeResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -2023,6 +2207,24 @@ func (response GetSubscriptions400ApplicationProblemPlusJSONResponse) VisitGetSu
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetSubscriptions401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscriptions401ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSubscriptions403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscriptions403ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetSubscriptions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetSubscriptions500ApplicationProblemPlusJSONResponse) VisitGetSubscriptionsResponse(w http.ResponseWriter) error {
@@ -2058,6 +2260,24 @@ func (response CreateSubscription400ApplicationProblemPlusJSONResponse) VisitCre
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateSubscription401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response CreateSubscription401ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSubscription403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response CreateSubscription403ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateSubscription500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response CreateSubscription500ApplicationProblemPlusJSONResponse) VisitCreateSubscriptionResponse(w http.ResponseWriter) error {
@@ -2083,6 +2303,24 @@ func (response DeleteSubscription200Response) VisitDeleteSubscriptionResponse(w 
 	return nil
 }
 
+type DeleteSubscription401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response DeleteSubscription401ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSubscription403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response DeleteSubscription403ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteSubscription404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response DeleteSubscription404ApplicationProblemPlusJSONResponse) VisitDeleteSubscriptionResponse(w http.ResponseWriter) error {
@@ -2103,7 +2341,6 @@ func (response DeleteSubscription500ApplicationProblemPlusJSONResponse) VisitDel
 
 type GetSubscriptionRequestObject struct {
 	SubscriptionId SubscriptionId `json:"subscriptionId"`
-	Params         GetSubscriptionParams
 }
 
 type GetSubscriptionResponseObject interface {
@@ -2124,6 +2361,24 @@ type GetSubscription400ApplicationProblemPlusJSONResponse externalRef0.ProblemDe
 func (response GetSubscription400ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSubscription401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscription401ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSubscription403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetSubscription403ApplicationProblemPlusJSONResponse) VisitGetSubscriptionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -2325,11 +2580,10 @@ func (sh *strictHandler) GetDeploymentManagers(w http.ResponseWriter, r *http.Re
 }
 
 // GetDeploymentManager operation middleware
-func (sh *strictHandler) GetDeploymentManager(w http.ResponseWriter, r *http.Request, deploymentManagerId DeploymentManagerId, params GetDeploymentManagerParams) {
+func (sh *strictHandler) GetDeploymentManager(w http.ResponseWriter, r *http.Request, deploymentManagerId DeploymentManagerId) {
 	var request GetDeploymentManagerRequestObject
 
 	request.DeploymentManagerId = deploymentManagerId
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetDeploymentManager(ctx, request.(GetDeploymentManagerRequestObject))
@@ -2593,11 +2847,10 @@ func (sh *strictHandler) DeleteSubscription(w http.ResponseWriter, r *http.Reque
 }
 
 // GetSubscription operation middleware
-func (sh *strictHandler) GetSubscription(w http.ResponseWriter, r *http.Request, subscriptionId SubscriptionId, params GetSubscriptionParams) {
+func (sh *strictHandler) GetSubscription(w http.ResponseWriter, r *http.Request, subscriptionId SubscriptionId) {
 	var request GetSubscriptionRequestObject
 
 	request.SubscriptionId = subscriptionId
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetSubscription(ctx, request.(GetSubscriptionRequestObject))
@@ -2622,110 +2875,114 @@ func (sh *strictHandler) GetSubscription(w http.ResponseWriter, r *http.Request,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"wxx/nHo7Ym46Mvo9/W8AAAD//4SDsjNLiwAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

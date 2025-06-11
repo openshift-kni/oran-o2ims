@@ -1,4 +1,6 @@
 *
+!/hack
+!/.konflux
 !/LICENSE.txt
 !/Makefile
 !/README.md
@@ -9,5 +11,6 @@
 !/cmd
 !/api
 !/bundle
+!/catalog
 !/vendor
 !/index_build_tmp*

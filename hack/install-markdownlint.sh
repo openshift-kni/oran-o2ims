@@ -1,4 +1,9 @@
 #!/bin/bash -xe
+#
+# SPDX-FileCopyrightText: Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 # Following example of: https://github.com/openshift/enhancements/blob/master/hack/install-markdownlint.sh
 
 cat /etc/redhat-release || echo "No /etc/redhat-release"

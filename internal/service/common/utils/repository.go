@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package utils
 
 import (
@@ -26,11 +32,14 @@ var ErrNotFound = errors.New("record not found")
 // Following functions are meant to fulfill basic CRUD operations on the database. More complex queries or bulk operations
 // for Insert or Update should be built in the repository files of the specific service and called one of the Execute helper functions.
 
-// DBQuery is an abstraction to allow passing either a pool or a transaction query function to any of the utilities.
+// DBQuery is an abstraction to allow passing either a pool or a transaction query function to any of the utilities
+// and allowing for production (pgxpool) and test (mock) implementations.
+// Additional pgxpool methods can be added to this interface as they are needed in the codebase e.g SendBatch
 type DBQuery interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (commandTag pgconn.CommandTag, err error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 // Find retrieves a specific tuple from the database table specified.
@@ -101,8 +110,6 @@ func Delete[T db.Model](ctx context.Context, db DBQuery, whereExpr psql.Expressi
 		return 0, fmt.Errorf("failed to build delete query for '%s': %w", record.TableName(), err)
 	}
 
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
 	result, err := db.Exec(ctx, sql, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete '%s': %w", record.TableName(), err)
@@ -172,6 +179,41 @@ func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record 
 	return ExecuteCollectExactlyOneRow[T](ctx, db, sql, args)
 }
 
+// UpdateAll attempts to update matching records of the requested model type.
+// The `whereExpr` argument is the where clause to use as a filter
+// The `record` argument is the record which contains the updated columns to update in the database.
+// The `fields` argument is a list of columns to update. If no fields are specified only non-nil fields are updated.
+// The updated records are returned on success; otherwise an error is returned.
+func UpdateAll[T db.Model](ctx context.Context, db DBQuery, whereExpr bob.Expression, record T, fields ...string) ([]T, error) {
+	all := GetAllDBTagsFromStruct(record)
+	tags := all
+	if len(fields) > 0 {
+		tags = GetDBTagsFromStructFields(record, fields...)
+	}
+
+	// Set up the arguments to the call to psql.Update(...) by using an array because there's no obvious way to add
+	// multiple Set(..) operation without having to add them one at a time separately.
+	mods := []bob.Mod[*dialect.UpdateQuery]{
+		um.Table(record.TableName()),
+		um.Where(whereExpr),
+		um.Returning(all.Columns()...)}
+
+	// Add the individual column sets
+	columns, values := GetColumnsAndValues(record, tags)
+	for i, column := range columns {
+		mods = append(mods, um.SetCol(column).ToArg(values[i]))
+	}
+
+	// Build the query
+	query := psql.Update(mods...)
+	sql, args, err := query.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create update expression: %w", err)
+	}
+
+	return ExecuteCollectRows[T](ctx, db, sql, args)
+}
+
 // Exists checks whether a record exists in the database table specified.
 // The `uuid` argument is the primary key of the record to check.
 func Exists[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (bool, error) {
@@ -203,10 +245,11 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sq
 	var record T
 	var err error
 
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
 	// Run query
-	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	rows, err := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err) // Fake error from mocking gets stored here
+	}
 	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -216,24 +259,22 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sq
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	slog.Debug("record found", "table", record.TableName())
 	return &record, nil
 }
 
 // ExecuteCollectRows executes a query and collects result using pgx.CollectRows.
 func ExecuteCollectRows[T db.Model](ctx context.Context, db DBQuery, sql string, args []any) ([]T, error) {
-	var record T
 	var err error
 
-	slog.Debug("executing statement", "sql", sql, "args", args)
-
 	// Run query
-	rows, _ := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	rows, err := db.Query(ctx, sql, args...) // note: err is passed on to Collect* func so we can ignore this
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err) // Fake error from mocking gets stored here
+	}
 	records, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		return []T{}, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	slog.Debug("records found", "table", record.TableName(), "count", len(records))
 	return records, nil
 }

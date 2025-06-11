@@ -1,17 +1,7 @@
 /*
-Copyright 2023.
+SPDX-FileCopyrightText: Red Hat
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package controllers
@@ -24,6 +14,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sptr "k8s.io/utils/ptr"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
@@ -49,8 +42,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+//+kubebuilder:rbac:groups=hwmgr-plugin.oran.openshift.io,resources=hardwaremanagers,verbs=get;list;watch
+//+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
-//+kubebuilder:rbac:groups=view.open-cluster-management.io,resources=managedclusterviews,verbs=create
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
@@ -66,17 +60,25 @@ import (
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="cluster.open-cluster-management.io",resources=managedclusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch;update
-//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
-//+kubebuilder:rbac:groups="internal.open-cluster-management.io",resources=managedclusterinfos,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create;post
-//+kubebuilder:rbac:urls="/o2ims-infrastructureInventory/v1/resourceTypes",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusters",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/alarmDictionaries",verbs=get;list
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes/*",verbs=get
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusters/*",verbs=get
+//+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/alarmDictionaries/*",verbs=get
+//+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
+//+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
 	client.Client
-	Logger *slog.Logger
-	Image  string
+	Logger    *slog.Logger
+	Image     string
+	setupOnce sync.Once
 }
 
 // reconcilerTask contains the information and logic needed to perform a single reconciliation
@@ -87,6 +89,20 @@ type reconcilerTask struct {
 	image  string
 	client client.Client
 	object *inventoryv1alpha1.Inventory
+}
+
+const registerOnRestartAnnotation = "o2ims.oran.openshift.io/register-on-restart"
+
+var registerOnRestart = false
+
+// setRegisterOnRestart initializes the `registerOnRestart` value from an annotation.
+func setRegisterOnRestart(object *inventoryv1alpha1.Inventory) {
+	if annotation, ok := object.Annotations[registerOnRestartAnnotation]; ok {
+		if value, err := strconv.ParseBool(annotation); err == nil {
+			registerOnRestart = value
+			slog.Warn("SMO registration will be repeated on all subsequent restarts")
+		}
+	}
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -113,6 +129,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 			slog.String("error", err.Error()),
 		)
 	}
+
+	// On the first reconcile, we set the `registerOnRestart` value from an annotation.  This is a one-time operation
+	// since we don't want to repeat the registration on every reconcile loop if it was previously successful.
+	r.setupOnce.Do(func() { setRegisterOnRestart(object) })
 
 	// Create and run the task:
 	task := &reconcilerTask{
@@ -149,7 +169,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
-	err = t.createResourceServerClusterRoleBinding(ctx)
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -159,20 +179,20 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
 	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create resource server RBAC proxy cluster role binding",
+			"Failed to create resource server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
 	// Create the Service needed for the Resource server.
-	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -199,49 +219,69 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 	return nextReconcile, err
 }
 
-// setupMetadataServerConfig creates the resource necessary to start the Metadata Server.
-func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+// setupClusterServerConfig creates the resources necessary to start the Resource Server.
+func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.InventoryMetadataServerName)
+	err = t.createServiceAccount(ctx, utils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy ServiceAccount for Metadata server.",
+			"Failed to deploy ServiceAccount for the cluster server.",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryMetadataServerName)
+	err = t.createClusterServerClusterRole(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create Metadata server RBAC proxy cluster role binding",
+			"Failed to create cluster server cluster role",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the Service needed for the Metadata server.
-	err = t.createService(ctx, utils.InventoryMetadataServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy Service for Metadata server.",
+			"Failed to create cluster server cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the metadata-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryMetadataServerName)
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy the Metadata server.",
+			"Failed to create cluster server RBAC cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the cluster server.
+	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for cluster server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the cluster-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.InventoryClusterServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the cluster server.",
 			slog.String("error", err.Error()),
 		)
 		if errorReason == "" {
@@ -250,70 +290,71 @@ func (t *reconcilerTask) setupMetadataServerConfig(ctx context.Context, defaultR
 		}
 	}
 
-	return
+	return nextReconcile, err
 }
 
-// setupDeploymentManagerServerConfig creates the resources necessary to start the Deployment Manager Server.
-func (t *reconcilerTask) setupDeploymentManagerServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+// setupArtifactsServerConfig creates the resource necessary to start the Artifacts Server.
+func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.InventoryDeploymentManagerServerName)
+	err = t.createServiceAccount(ctx, utils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create deployment manager service account",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-	err = t.createDeploymentManagerClusterRole(ctx)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create deployment manager cluster role",
-			slog.String("error", err.Error()),
-		)
-		return
-	}
-	err = t.createDeploymentManagerClusterRoleBinding(ctx)
-	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create deployment manager cluster role binding",
+			"Failed to deploy ServiceAccount for the Artifacts server.",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryDeploymentManagerServerName)
+	err = t.createArtifactsServerClusterRole(ctx)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create deployment manager RBAC proxy cluster role binding",
+			"Failed to create artifacts cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryArtifactsServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create artifacts cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the Service needed for the Deployment Manager server.
-	err = t.createService(ctx, utils.InventoryDeploymentManagerServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy Service for Deployment Manager server.",
+			"Failed to create Artifacts server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
-	// Create the deployment-manager-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryDeploymentManagerServerName)
+	// Create the Service needed for the Artifacts server.
+	err = t.createService(ctx, utils.InventoryArtifactsServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to deploy the Deployment Manager server.",
+			"Failed to deploy Service for the Artifacts server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the artifacts-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.InventoryArtifactsServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the Artifacts server.",
 			slog.String("error", err.Error()),
 		)
 		if errorReason == "" {
@@ -349,7 +390,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
-	err = t.createAlarmServerClusterRoleBinding(ctx)
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -370,20 +411,20 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
-	// Create the role binding needed to allow the kube-rbac-proxy to interact with the API server to validate incoming
-	// API requests from clients.
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
 	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to create alarm server RBAC proxy cluster role binding",
+			"Failed to create alarm server RBAC cluster role binding",
 			slog.String("error", err.Error()),
 		)
 		return
 	}
 
 	// Create the Service needed for the alarm server.
-	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultTargetPort)
+	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -410,6 +451,79 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 	return nextReconcile, err
 }
 
+func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+	nextReconcile = defaultResult
+
+	err = t.createServiceAccount(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy ServiceAccount for the Provisioning server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createProvisioningServerClusterRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create provisioning cluster role",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	err = t.createServerClusterRoleBinding(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create provisioning cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
+	// requests from clients.
+	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to create Provisioning server RBAC cluster role binding",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the Service needed for the provisioning server.
+	err = t.createService(ctx, utils.InventoryProvisioningServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Service for the provisioning server.",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	// Create the provisioning-server deployment.
+	errorReason, err := t.deployServer(ctx, utils.InventoryProvisioningServerName)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy the provisioning server.",
+			slog.String("error", err.Error()),
+		)
+		if errorReason == "" {
+			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
+			return nextReconcile, err
+		}
+	}
+
+	return
+}
+
 // setupOAuthClient is a wrapper around the similarly named method in the utils package.  The purpose for this wrapper
 // is to gather the parameters required by the utils version of this function before invoking it.  The reason for the
 // two layers is that it is expected that other parts of the system will need to get these inputs parameters differently
@@ -422,14 +536,14 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get configmap: %s", err.Error())
 		}
 
-		caBundle, err = utils.GetConfigMapField(cm, "ca-bundle.pem")
+		caBundle, err = utils.GetConfigMapField(cm, utils.CABundleFilename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get certificate bundle from configmap: %s", err.Error())
 		}
 	}
 
 	config := utils.OAuthClientConfig{
-		CaBundle: []byte(caBundle),
+		TLSConfig: &utils.TLSConfig{CaBundle: []byte(caBundle)},
 	}
 
 	oAuthConfig := t.object.Spec.SmoConfig.OAuthConfig
@@ -449,23 +563,26 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get client-secret from secret: %s, %w", oAuthConfig.ClientSecretName, err)
 		}
 
-		config.ClientId = clientId
-		config.ClientSecret = clientSecret
-		config.TokenUrl = fmt.Sprintf("%s%s", oAuthConfig.Url, oAuthConfig.TokenEndpoint)
-		config.Scopes = oAuthConfig.Scopes
+		o := utils.OAuthConfig{
+			ClientID:     clientId,
+			ClientSecret: clientSecret,
+			TokenURL:     fmt.Sprintf("%s%s", oAuthConfig.URL, oAuthConfig.TokenEndpoint),
+			Scopes:       oAuthConfig.Scopes,
+		}
+		config.OAuthConfig = &o
 	}
 
-	if t.object.Spec.SmoConfig.Tls != nil && t.object.Spec.SmoConfig.Tls.ClientCertificateName != nil {
-		secretName := *t.object.Spec.SmoConfig.Tls.ClientCertificateName
-		cert, err := utils.GetCertFromSecret(ctx, t.client, secretName, t.object.Namespace)
+	if t.object.Spec.SmoConfig.TLS != nil && t.object.Spec.SmoConfig.TLS.SecretName != nil {
+		secretName := *t.object.Spec.SmoConfig.TLS.SecretName
+		cert, key, err := utils.GetKeyPairFromSecret(ctx, t.client, secretName, t.object.Namespace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get client certificate from secret: %w", err)
+			return nil, fmt.Errorf("failed to get certificate and key from secret: %w", err)
 		}
 
-		config.ClientCert = cert
+		config.TLSConfig.ClientCert = utils.NewStaticKeyPairLoader(cert, key)
 	}
 
-	httpClient, err := utils.SetupOAuthClient(ctx, config)
+	httpClient, err := utils.SetupOAuthClient(ctx, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)
 	}
@@ -485,7 +602,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 	data := utils.AvailableNotification{
 		GlobalCloudId: *t.object.Spec.CloudID,
 		OCloudId:      t.object.Status.ClusterID,
-		ImsEndpoint:   fmt.Sprintf("https://%s/o2ims-infrastructureInventory/v1", t.object.Status.IngressHost),
+		ImsEndpoint:   fmt.Sprintf("https://%s", t.object.Status.IngressHost),
 	}
 
 	body, err := json.Marshal(data)
@@ -493,13 +610,13 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal AvailableNotification: %s", err.Error())
 	}
 
-	url := fmt.Sprintf("%s%s", smo.Url, smo.RegistrationEndpoint)
+	url := fmt.Sprintf("%s%s", smo.URL, smo.RegistrationEndpoint)
 	result, err := httpClient.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to send registration request to '%s': %s", url, err.Error())
 	}
 
-	if result.StatusCode != http.StatusOK {
+	if result.StatusCode > http.StatusNoContent {
 		return fmt.Errorf("registration request failed to '%s', HTTP code=%s", url, result.Status)
 	}
 
@@ -521,7 +638,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		return nil
 	}
 
-	if !utils.IsSmoRegistrationCompleted(t.object) {
+	if !utils.IsSmoRegistrationCompleted(t.object) || registerOnRestart {
 		err = t.registerWithSmo(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -535,7 +652,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 					Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
 					Status:  metav1.ConditionFalse,
 					Reason:  err.Error(),
-					Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.Url),
+					Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.URL),
 				},
 			)
 
@@ -548,15 +665,17 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
 				Status:  metav1.ConditionTrue,
 				Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
-				Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.Url),
+				Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.URL),
 			},
 		)
 		t.logger.InfoContext(
-			ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+			ctx, fmt.Sprintf("successfully registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
 		)
+
+		registerOnRestart = false // this is a one-time registration on restarts for development/debug
 	} else {
 		t.logger.InfoContext(
-			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.Url),
+			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
 		)
 	}
 
@@ -567,7 +686,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 	// Determine our ingress domain
 	var ingressHost string
-	if t.object.Spec.IngressHost == nil {
+	if t.object.Spec.IngressConfig == nil || t.object.Spec.IngressConfig.IngressHost == nil {
 		var err error
 		ingressHost, err = utils.GetIngressDomain(ctx, t.client)
 		if err != nil {
@@ -579,7 +698,7 @@ func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 		}
 		ingressHost = utils.DefaultAppName + "." + ingressHost
 	} else {
-		ingressHost = *t.object.Spec.IngressHost
+		ingressHost = *t.object.Spec.IngressConfig.IngressHost
 	}
 
 	t.object.Status.IngressHost = ingressHost
@@ -602,23 +721,42 @@ func (t *reconcilerTask) storeClusterID(ctx context.Context) error {
 	return nil
 }
 
-// storeSearchURL stores the Search API URL onto the object status for later retrieval.
-func (t *reconcilerTask) storeSearchURL(ctx context.Context) error {
-	if t.object.Spec.ResourceServerConfig.BackendURL == "" {
-		searchURL, err := utils.GetSearchURL(ctx, t.client)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to get Search API URL.",
-				slog.String("error", err.Error()))
-			return fmt.Errorf("failed to get Search API URL: %s", err.Error())
-		}
-		t.object.Status.SearchURL = searchURL
-	} else {
-		t.object.Status.SearchURL = t.object.Spec.ResourceServerConfig.BackendURL
+// checkForPodReadyStatus checks for all server pods to be ready.  If any pod is not yet ready, the reconciler timer is
+// set to a short value so that we can try again quickly; otherwise either an error is returned without a reconciler
+// timer to indicate that an exponential backoff is required
+func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Result, error) {
+	servers := []string{utils.InventoryResourceServerName,
+		utils.InventoryClusterServerName,
+		utils.InventoryAlarmServerName,
+		utils.InventoryArtifactsServerName,
+		utils.InventoryProvisioningServerName,
+		utils.InventoryDatabaseServerName}
+
+	var list corev1.PodList
+	err := t.client.List(ctx, &list, client.InNamespace(t.object.Namespace))
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to list pods: %w", err)
 	}
 
-	return nil
+	for _, pod := range list.Items {
+		name, ok := pod.Labels["app"]
+		if !ok {
+			slog.Warn("Pod without an 'app' label in our namespace", "name", pod.Name)
+			continue
+		}
+		if !slices.Contains(servers, name) {
+			continue
+		}
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status != corev1.ConditionTrue {
+				slog.Warn("Pod is not yet ready", "name", pod.Name, "reason", condition.Reason, "message", condition.Message)
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
+		}
+	}
+
+	// No reconcile required, and no error
+	return ctrl.Result{}, nil
 }
 
 func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, err error) {
@@ -635,17 +773,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		if err != nil {
 			return
 		}
-	}
-
-	err = t.storeSearchURL(ctx)
-	if err != nil {
-		return
-	}
-
-	// Register with SMO (if necessary)
-	err = t.setupSmo(ctx)
-	if err != nil {
-		return
 	}
 
 	// Create the database
@@ -665,75 +792,80 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		return
 	}
 
-	// Create the needed Ingress if at least one server is required by the Spec.
-	if t.object.Spec.MetadataServerConfig.Enabled || t.object.Spec.DeploymentManagerServerConfig.Enabled ||
-		t.object.Spec.ResourceServerConfig.Enabled || t.object.Spec.AlarmServerConfig.Enabled {
-		err = t.createIngress(ctx)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy Ingress.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
-
-		// Create the shared cluster role for the kube-rbac-proxy
-		err = t.createSharedRbacProxyRole(ctx)
-		if err != nil {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to deploy RBAC Proxy cluster role.",
-				slog.String("error", err.Error()),
-			)
-			return
-		}
+	err = t.createIngress(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy Ingress.",
+			slog.String("error", err.Error()),
+		)
+		return
 	}
 
-	// Start the alarm server if required by the Spec.
-	if t.object.Spec.AlarmServerConfig.Enabled {
-		// Create the resources required by the alarm server
-		nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Create the shared cluster role for each of the servers
+	err = t.createSharedRbacRole(ctx)
+	if err != nil {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to deploy RBAC cluster role.",
+			slog.String("error", err.Error()),
+		)
+		return
 	}
 
-	// Start the resource server if required by the Spec.
-	if t.object.Spec.ResourceServerConfig.Enabled {
-		// Create the needed ServiceAccount.
-		nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Start the resource server
+	// Create the resources required by the resource server
+	nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
 	}
 
-	// Start the metadata server if required by the Spec.
-	if t.object.Spec.MetadataServerConfig.Enabled {
-		// Create the needed ServiceAccount.
-		nextReconcile, err = t.setupMetadataServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Start the cluster server
+	// Create the resources required by the cluster server
+	nextReconcile, err = t.setupClusterServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
 	}
 
-	// Start the deployment server if required by the Spec.
-	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
-		// Create the service account, role and binding:
-		nextReconcile, err = t.setupDeploymentManagerServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Start the alarm server
+	// Create the alarm server.
+	nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
 	}
 
-	// Start the alarm server if required by the Spec.
-	if t.object.Spec.AlarmServerConfig.Enabled {
-		// Create the alarm server.
-		nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
+	// Start the artifacts server
+	// Create the artifacts server.
+	nextReconcile, err = t.setupArtifactsServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
 	}
+
+	// Start the provisioning server
+	nextReconcile, err = t.setupProvisioningServerConfig(ctx, nextReconcile)
+	if err != nil {
+		return
+	}
+
+	// Wait for pods to become ready
+	nextReconcile, err = t.checkForPodReadyStatus(ctx)
+	if err != nil {
+		return
+	}
+
+	if !nextReconcile.IsZero() {
+		// The pods are not ready and we are going to retry
+		return
+	}
+
+	// Register with SMO (if necessary)
+	err = t.setupSmo(ctx)
+	if err != nil {
+		return
+	}
+
+	// Reset the next reconcile back to our default of 5 minutes
+	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
 	err = t.updateInventoryDeploymentStatus(ctx)
 	if err != nil {
@@ -747,22 +879,21 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	return
 }
 
-func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context) error {
+func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.InventoryDeploymentManagerServerName,
+				"%s-%s", t.object.Namespace, utils.InventoryArtifactsServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
-			// We need to read managed clusters, as that is the main source for the
-			// information about clusters.
+			// We need to read ClusterTemplates and ConfigMaps.
 			{
 				APIGroups: []string{
-					"cluster.open-cluster-management.io",
+					"o2ims.provisioning.oran.org",
 				},
 				Resources: []string{
-					"managedclusters",
+					"clustertemplates",
 				},
 				Verbs: []string{
 					"get",
@@ -770,15 +901,12 @@ func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context)
 					"watch",
 				},
 			},
-
-			// We also need to read the secrets containing the admin kubeConfigs of the
-			// clusters.
 			{
 				APIGroups: []string{
 					"",
 				},
 				Resources: []string{
-					"secrets",
+					"configmaps",
 				},
 				Verbs: []string{
 					"get",
@@ -790,57 +918,25 @@ func (t *reconcilerTask) createDeploymentManagerClusterRole(ctx context.Context)
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Deployment Manager cluster role: %w", err)
+		return fmt.Errorf("failed to create Artifacts server cluster role: %w", err)
 	}
 
 	return nil
 }
 
-func (t *reconcilerTask) createDeploymentManagerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryDeploymentManagerServerName,
-			),
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryDeploymentManagerServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryDeploymentManagerServerName,
-			},
-		},
-	}
-
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Deployment Manager cluster role binding: %w", err)
-	}
-
-	return nil
-}
-
-// createSharedRbacProxyRole creates a cluster role that is used by the kube-rbac-proxy to access the authentication and
+// createSharedRbacRole creates a cluster role that is used by each server to access the authentication and
 // authorization parts of the kubernetes API so that incoming API requests can be validated.  This same cluster role is
-// attached to each of the server service accounts since each of them has its own kube-rbac-proxy that all share the
-// exact same configuration.
-func (t *reconcilerTask) createSharedRbacProxyRole(ctx context.Context) error {
+// attached to each of the server service accounts since each of them needs to validate its own incoming tokens.
+func (t *reconcilerTask) createSharedRbacRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, "kube-rbac-proxy",
+				"%s-%s",
+				t.object.Namespace, "subject-access-reviewer",
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
-			// The kube-rbac-proxy needs access to the authentication API to validate tokens and access authorization.
+			// The servers needs access to the authentication API to validate tokens and access authorization.
 			{
 				APIGroups: []string{
 					"authentication.k8s.io",
@@ -867,7 +963,7 @@ func (t *reconcilerTask) createSharedRbacProxyRole(ctx context.Context) error {
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create RBAC Proxy cluster role: %w", err)
+		return fmt.Errorf("failed to create RBAC cluster role: %w", err)
 	}
 
 	return nil
@@ -898,21 +994,10 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"view.open-cluster-management.io",
+					"hwmgr-plugin.oran.openshift.io",
 				},
 				Resources: []string{
-					"managedclusterviews",
-				},
-				Verbs: []string{
-					"create",
-				},
-			},
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"nodes",
+					"hardwaremanagers",
 				},
 				Verbs: []string{
 					"get",
@@ -925,29 +1010,21 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 					"",
 				},
 				Resources: []string{
-					"configmaps",
+					"secrets",
 				},
 				Verbs: []string{
 					"get",
 					"list",
 					"watch",
-					"create",
-					"update",
-					"patch",
-					"delete",
 				},
 			},
 			{
-				APIGroups: []string{
-					"internal.open-cluster-management.io",
-				},
-				Resources: []string{
-					"managedclusterinfos",
+				NonResourceURLs: []string{
+					"/hardware-manager/inventory/*",
 				},
 				Verbs: []string{
 					"get",
 					"list",
-					"watch",
 				},
 			},
 		},
@@ -960,33 +1037,106 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 	return nil
 }
 
-func (t *reconcilerTask) createResourceServerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
+func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryResourceServerName,
+				"%s-%s", t.object.Namespace, utils.InventoryClusterServerName,
 			),
 		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryResourceServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
+		Rules: []rbacv1.PolicyRule{
+			// We need to read managed clusters, as that is the main source for the
+			// information about clusters.
 			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryResourceServerName,
+				APIGroups: []string{
+					"cluster.open-cluster-management.io",
+				},
+				Resources: []string{
+					"managedclusters",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"agent-install.openshift.io",
+				},
+				Resources: []string{
+					"agents",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"secrets",
+					"configmaps",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+				},
+			},
+			{
+				APIGroups: []string{
+					"monitoring.coreos.com",
+				},
+				Resources: []string{
+					"prometheusrules",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+				},
 			},
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Resource Server cluster role binding: %w", err)
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
+	}
+
+	return nil
+}
+
+func (t *reconcilerTask) createProvisioningServerClusterRole(ctx context.Context) error {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s", t.object.Namespace, utils.InventoryProvisioningServerName,
+			),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{
+					"o2ims.provisioning.oran.org",
+				},
+				Resources: []string{
+					"provisioningrequests",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"create",
+					"update",
+					"delete",
+				},
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Provisioning Server cluster role: %w", err)
 	}
 
 	return nil
@@ -1032,12 +1182,15 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 				},
 				Resources: []string{
 					"secrets",
+					"configmaps",
 				},
 				Verbs: []string{
 					"get",
 					"list",
 					"watch",
 					"update",
+					"create",
+					"delete",
 				},
 			},
 			{
@@ -1054,12 +1207,70 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 				},
 			},
 			{
-				NonResourceURLs: []string{
-					"/o2ims-infrastructureInventory/v1/resourceTypes",
+				APIGroups: []string{
+					"apps",
+				},
+				Resources: []string{
+					"deployments",
 				},
 				Verbs: []string{
 					"get",
 					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"batch",
+				},
+				Resources: []string{
+					"cronjobs",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"create",
+					"delete",
+					"update",
+					"patch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"route.openshift.io",
+				},
+				Resources: []string{
+					"routes",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+				ResourceNames: []string{
+					"alertmanager",
+				},
+			},
+			{
+				NonResourceURLs: []string{
+					"/o2ims-infrastructureCluster/v1/nodeClusterTypes",
+					"/o2ims-infrastructureCluster/v1/nodeClusters",
+					"/o2ims-infrastructureCluster/v1/alarmDictionaries",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+				},
+			},
+			{
+				NonResourceURLs: []string{
+					"/o2ims-infrastructureCluster/v1/nodeClusterTypes/*",
+					"/o2ims-infrastructureCluster/v1/nodeClusters/*",
+					"/o2ims-infrastructureCluster/v1/alarmDictionaries/*",
+				},
+				Verbs: []string{
+					"get",
 				},
 			},
 		},
@@ -1067,38 +1278,6 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Alarm Server cluster role: %w", err)
-	}
-
-	return nil
-}
-
-func (t *reconcilerTask) createAlarmServerClusterRoleBinding(ctx context.Context) error {
-	binding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryAlarmServerName,
-			),
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name: fmt.Sprintf(
-				"%s-%s",
-				t.object.Namespace, utils.InventoryAlarmServerName,
-			),
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: t.object.Namespace,
-				Name:      utils.InventoryAlarmServerName,
-			},
-		},
-	}
-
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create Alarm Server cluster role binding: %w", err)
 	}
 
 	return nil
@@ -1152,7 +1331,7 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: utils.AlertmanagerNamespace,
+				Namespace: utils.OpenClusterManagementObservabilityNamespace,
 				Name:      utils.AlertmanagerSA,
 			},
 		},
@@ -1165,14 +1344,14 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 	return nil
 }
 
-// createServerRbacClusterRoleBinding attaches the kube-rbac-proxy cluster role to the server's service account so that
-// its instance of the kube-rbac-proxy can access the kubernetes API via the service account credentials.
+// createServerRbacClusterRoleBinding attaches the subject-access-reviewer cluster role to the server's service account
+// so that it can access the kubernetes API via the service account credentials.
 func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context, serverName string) error {
 	binding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, serverName+"-kube-rbac-proxy",
+				t.object.Namespace, serverName+"-subject-access-reviewer-binding",
 			),
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -1180,7 +1359,7 @@ func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context,
 			Kind:     "ClusterRole",
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, "kube-rbac-proxy",
+				t.object.Namespace, "subject-access-reviewer",
 			),
 		},
 		Subjects: []rbacv1.Subject{
@@ -1193,9 +1372,44 @@ func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context,
 	}
 
 	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
-		return fmt.Errorf("failed to create RBAC Proxy cluster role binding: %w", err)
+		return fmt.Errorf("failed to create RBAC cluster role binding: %w", err)
 	}
 
+	return nil
+}
+
+// createServerClusterRoleBinding creates a ClusterRoleBinding for the specified server,
+// associating the server's service account with the corresponding ClusterRole.
+// The ClusterRoleBinding ensures the server has the necessary permissions defined
+// by the ClusterRole.
+func (t *reconcilerTask) createServerClusterRoleBinding(ctx context.Context, serverName string) error {
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, serverName,
+			),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name: fmt.Sprintf(
+				"%s-%s",
+				t.object.Namespace, serverName,
+			),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Namespace: t.object.Namespace,
+				Name:      serverName,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create %s cluster role binding: %w", serverName, err)
+	}
 	return nil
 }
 
@@ -1203,8 +1417,8 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	t.logger.InfoContext(ctx, "[deploy server]", "Name", serverName)
 
 	// Server variables.
-	deploymentVolumes := utils.GetDeploymentVolumes(serverName)
-	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName)
+	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
+	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName, t.object)
 
 	// Build the deployment's metadata.
 	deploymentMeta := metav1.ObjectMeta{
@@ -1237,14 +1451,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		image = *t.object.Spec.Image
 	}
 
-	rbacProxyImage := os.Getenv(utils.KubeRbacProxyImageName)
-	if rbacProxyImage == "" {
-		return "", fmt.Errorf("missing %s environment variable value", utils.KubeRbacProxyImageName)
-	}
-
-	// Disable privilege escalation for the RBAC proxy
-	privilegeEscalation := false
-
 	var envVars []corev1.EnvVar
 	if utils.HasDatabase(serverName) {
 		envVarName, err := utils.GetServerDatabasePasswordName(serverName)
@@ -1263,6 +1469,65 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 			},
 		}
 		envVars = append(envVars, envVar)
+	}
+
+	if utils.NeedsOAuthAccess(serverName) && utils.IsOAuthEnabled(t.object) {
+		envVars = append(envVars, []corev1.EnvVar{
+			{
+				Name: utils.OAuthClientIDEnvName,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: t.object.Spec.SmoConfig.OAuthConfig.ClientSecretName,
+						},
+						Key: "client-id",
+					},
+				},
+			},
+			{
+				Name: utils.OAuthClientSecretEnvName,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: t.object.Spec.SmoConfig.OAuthConfig.ClientSecretName,
+						},
+						Key: "client-secret",
+					},
+				},
+			},
+		}...)
+	}
+
+	// Common env for server deployments
+	envVars = append(envVars, []corev1.EnvVar{
+		{
+			Name: "POD_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		},
+		{
+			Name:  utils.InternalServicePortName,
+			Value: fmt.Sprintf("%d", utils.DefaultServicePort),
+		},
+		{
+			Name:  utils.HwMgrPluginNameSpace,
+			Value: utils.GetHwMgrPluginNS(),
+		},
+	}...)
+
+	// Server specific env var
+	if serverName == utils.InventoryAlarmServerName {
+		postgresImage := os.Getenv(utils.PostgresImageName)
+		if postgresImage == "" {
+			return "", fmt.Errorf("missing %s environment variable value", utils.PostgresImageName)
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  utils.PostgresImageName,
+			Value: postgresImage,
+		})
 	}
 
 	// Build the deployment's spec.
@@ -1287,53 +1552,24 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				Volumes:            deploymentVolumes,
 				Containers: []corev1.Container{
 					{
-						Name: utils.RbacContainerName,
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: &privilegeEscalation,
-							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{"ALL"},
-							},
-						},
-						Image: rbacProxyImage,
-						Args: []string{
-							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:8000/",
-							"--logtostderr=true",
-							"--tls-cert-file=/secrets/tls/tls.crt",
-							"--tls-private-key-file=/secrets/tls/tls.key",
-							"--tls-min-version=VersionTLS12",
-							"--v=0"},
+						Name:            utils.ServerContainerName,
+						Image:           image,
+						ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
+						VolumeMounts:    deploymentVolumeMounts,
+						Command:         []string{"/usr/bin/oran-o2ims"},
+						Args:            deploymentContainerArgs,
+						Env:             envVars,
 						Ports: []corev1.ContainerPort{
 							{
-								Name:          "https",
+								Name:          utils.DefaultServiceTargetPort,
 								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: 8443,
+								ContainerPort: utils.DefaultContainerPort,
 							},
 						},
 						Resources: corev1.ResourceRequirements{
-							Limits: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("500m"),
-								corev1.ResourceMemory: resource.MustParse("128Mi"),
-							},
 							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("5m"),
-								corev1.ResourceMemory: resource.MustParse("64Mi"),
-							},
-						},
-						VolumeMounts: deploymentVolumeMounts,
-					},
-					{
-						Name:         utils.ServerContainerName,
-						Image:        image,
-						VolumeMounts: deploymentVolumeMounts,
-						Command:      []string{"/usr/bin/oran-o2ims"},
-						Args:         deploymentContainerArgs,
-						Env:          envVars,
-						Ports: []corev1.ContainerPort{
-							{
-								Name:          "api",
-								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: 8000,
+								corev1.ResourceCPU:    resource.MustParse("200m"),
+								corev1.ResourceMemory: resource.MustParse("256Mi"),
 							},
 						},
 					},
@@ -1350,6 +1586,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				Command: []string{"/usr/bin/oran-o2ims"},
 				Args:    []string{serverName, "migrate"},
 				Env:     envVars,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("100m"),
+						corev1.ResourceMemory: resource.MustParse("128Mi"),
+					},
+				},
 			},
 		}
 	}
@@ -1410,7 +1652,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 		},
 		Ports: []corev1.ServicePort{
 			{
-				Name:       "api",
+				Name:       utils.IngressPortName,
 				Port:       port,
 				TargetPort: intstr.FromString(targetPort),
 			},
@@ -1433,8 +1675,9 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	t.logger.InfoContext(ctx, "[createIngress]")
 	// Build the Ingress object.
+	className := utils.IngressClassName
 	ingressMeta := metav1.ObjectMeta{
-		Name:      utils.InventoryIngressName,
+		Name:      utils.IngressName,
 		Namespace: t.object.Namespace,
 		Annotations: map[string]string{
 			"route.openshift.io/termination": "reencrypt",
@@ -1442,6 +1685,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	}
 
 	ingressSpec := networkingv1.IngressSpec{
+		IngressClassName: &className,
 		Rules: []networkingv1.IngressRule{
 			{
 				Host: t.object.Status.IngressHost,
@@ -1449,61 +1693,61 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 					HTTP: &networkingv1.HTTPIngressRuleValue{
 						Paths: []networkingv1.HTTPIngressPath{
 							{
-								Path: "/o2ims-infrastructureInventory/v1/resourcePools",
+								Path: "/o2ims-infrastructureInventory",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
+										Name: utils.InventoryResourceServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureInventory/v1/resourceTypes",
+								Path: "/o2ims-infrastructureCluster",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
+										Name: utils.InventoryClusterServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureInventory/v1/subscriptions",
+								Path: "/o2ims-infrastructureArtifacts",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "resource-server",
+										Name: utils.InventoryArtifactsServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureInventory/v1/deploymentManagers",
+								Path: "/o2ims-infrastructureProvisioning",
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "deployment-manager-server",
+										Name: utils.InventoryProvisioningServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
@@ -1516,24 +1760,9 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: "alarms-server",
+										Name: utils.InventoryAlarmServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
-										},
-									},
-								},
-							},
-							{
-								Path: "/",
-								PathType: func() *networkingv1.PathType {
-									pathType := networkingv1.PathTypePrefix
-									return &pathType
-								}(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: "metadata-server",
-										Port: networkingv1.ServiceBackendPort{
-											Name: utils.InventoryIngressName,
+											Name: utils.IngressPortName,
 										},
 									},
 								},
@@ -1545,12 +1774,21 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 		},
 	}
 
+	if t.object.Spec.IngressConfig != nil && t.object.Spec.IngressConfig.TLS != nil && t.object.Spec.IngressConfig.TLS.SecretName != nil {
+		ingressSpec.TLS = []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{t.object.Status.IngressHost},
+				SecretName: *t.object.Spec.IngressConfig.TLS.SecretName,
+			},
+		}
+	}
+
 	newIngress := &networkingv1.Ingress{
 		ObjectMeta: ingressMeta,
 		Spec:       ingressSpec,
 	}
 
-	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.InventoryIngressName)
+	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.IngressPortName)
 	if err := utils.CreateK8sCR(ctx, t.client, newIngress, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
 	}
@@ -1615,16 +1853,24 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 	errorReason utils.InventoryConditionReason, err error) error {
 	t.logger.InfoContext(ctx, "[updateInventoryUsedConfigStatus]")
 
-	if serverName == utils.InventoryMetadataServerName {
-		t.object.Status.UsedServerConfig.MetadataServerUsedConfig = deploymentArgs
-	}
-
-	if serverName == utils.InventoryDeploymentManagerServerName {
-		t.object.Status.UsedServerConfig.DeploymentManagerServerUsedConfig = deploymentArgs
-	}
-
 	if serverName == utils.InventoryResourceServerName {
 		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.InventoryClusterServerName {
+		t.object.Status.UsedServerConfig.ClusterServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.InventoryAlarmServerName {
+		t.object.Status.UsedServerConfig.AlarmsServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.InventoryArtifactsServerName {
+		t.object.Status.UsedServerConfig.ArtifactsServerUsedConfig = deploymentArgs
+	}
+
+	if serverName == utils.InventoryProvisioningServerName {
+		t.object.Status.UsedServerConfig.ProvisioningServerUsedConfig = deploymentArgs
 	}
 
 	// If there is an error passed, include it in the condition.
@@ -1658,23 +1904,12 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) error {
 
 	t.logger.InfoContext(ctx, "[updateInventoryDeploymentStatus]")
-	if t.object.Spec.AlarmServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
-	}
-
-	if t.object.Spec.MetadataServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryMetadataServerName)
-	}
-
-	if t.object.Spec.DeploymentManagerServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryDeploymentManagerServerName)
-	}
-
-	if t.object.Spec.ResourceServerConfig.Enabled {
-		t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
-	}
-
+	t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryClusterServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryArtifactsServerName)
 	t.updateInventoryStatusConditions(ctx, utils.InventoryDatabaseServerName)
+	t.updateInventoryStatusConditions(ctx, utils.InventoryProvisioningServerName)
 
 	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update inventory deployment CR status: %w", err)

@@ -1,0 +1,16 @@
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      role: reader-role
+  - matchLabels:
+      role: subscriber-role
+  - matchLabels:
+      role: maintainer-role
+  - matchLabels:
+      role: provisioner-role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: oran-o2ims-admin-role
+rules: null

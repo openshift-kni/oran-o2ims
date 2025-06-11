@@ -50,12 +50,19 @@ tags:
   description: |
     Information about resources.
 
-paths:
+security:
+- oauth2:
+  - role:o2ims-admin
 
+paths:
   /o2ims-infrastructureInventory/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the complete list of API versions implemented by the service.
       tags:
@@ -74,6 +81,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -85,9 +104,14 @@ paths:
     get:
       operationId: getCloudInfo
       summary: Get O-Cloud info
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of the O-Cloud instance.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
@@ -106,6 +130,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -117,6 +153,10 @@ paths:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of minor API versions implemented for this major version of the API.
       tags:
@@ -135,6 +175,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -146,9 +198,14 @@ paths:
     get:
       operationId: getDeploymentManagers
       summary: Get deployment managers
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of deployment managers.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -170,6 +227,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -181,12 +250,14 @@ paths:
     get:
       operationId: getDeploymentManager
       summary: Get deployment manager
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a deployment manager.
       parameters:
       - $ref: "#/components/parameters/deploymentManagerId"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - deploymentManagers
       responses:
@@ -199,6 +270,18 @@ paths:
                 $ref: "#/components/schemas/DeploymentManager"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -220,10 +303,16 @@ paths:
     get:
       operationId: getSubscriptions
       summary: Get subscriptions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+        - role:o2ims-subscriber
       description: |
         Returns the list of inventory subscriptions.
       parameters:
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
       tags:
@@ -244,6 +333,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -253,6 +354,10 @@ paths:
     post:
       operationId: createSubscription
       summary: Create subscriptions
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-subscriber
       description: |
         Creates an inventory subscriptions.
       tags:
@@ -277,6 +382,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -288,12 +405,15 @@ paths:
     get:
       operationId: getSubscription
       summary: Get subscription
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+        - role:o2ims-subscriber
       description: |
         Returns the details of a subscription.
       parameters:
       - $ref: "#/components/parameters/subscriptionId"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
-      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       tags:
       - subscriptions
       responses:
@@ -306,6 +426,18 @@ paths:
                 $ref: "#/components/schemas/Subscription"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -325,6 +457,10 @@ paths:
     delete:
       operationId: deleteSubscription
       summary: Delete subscription
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-subscriber
       description: |
         Deletes a subscription.
       parameters:
@@ -335,6 +471,18 @@ paths:
         '200':
           description: |
             Successfully deleted the subscription.
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified entity was not found.
           content:
@@ -352,9 +500,14 @@ paths:
     get:
       operationId: getResourceTypes
       summary: Get resource types
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of resource types.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -376,6 +529,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error
           content:
@@ -387,6 +552,10 @@ paths:
     get:
       operationId: getResourceType
       summary: Get a resource type
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a resource type.
       parameters:
@@ -403,6 +572,18 @@ paths:
                 $ref: "#/components/schemas/ResourceType"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -425,9 +606,14 @@ paths:
     get:
       operationId: getResourcePools
       summary: Get resource pools
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the list of resource pools.
       parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -449,6 +635,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '500':
           description: Internal server error.
           content:
@@ -460,6 +658,10 @@ paths:
     get:
       operationId: getResourcePool
       summary: Get a resource pool
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a resource pool.
       parameters:
@@ -476,6 +678,18 @@ paths:
                 $ref: "#/components/schemas/ResourcePool"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -498,10 +712,15 @@ paths:
     get:
       operationId: getResources
       summary: Get resources in a resource pool
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of resources in a resource pool.
       parameters:
       - $ref: "#/components/parameters/resourcePoolId"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
       - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
@@ -519,6 +738,18 @@ paths:
                   $ref: "#/components/schemas/Resource"
         '400':
           description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
           content:
             application/problem+json:
               schema:
@@ -541,6 +772,10 @@ paths:
     get:
       operationId: getResource
       summary: Get a resource in a resource pool
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
       description: |
         Returns the details of a resource in a resource pool.
       parameters:
@@ -562,6 +797,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
         '404':
           description: The specified entity was not found.
           content:
@@ -576,6 +823,18 @@ paths:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
 components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: This API uses OAuth 2 with the client credentials flow.
+      flows:
+        clientCredentials:
+          tokenUrl: https://keycloak.example.com/realms/oran/protocol/openid-connect/token
+          scopes:
+            role:o2ims-admin: O2IMS Admin Role
+            role:o2ims-reader: O2IMS Reader Role
+            role:o2ims-subscriber: O2IMS Subscriber Role
+
   parameters:
     deploymentManagerId:
       name: deploymentManagerId
@@ -703,6 +962,7 @@ components:
         subscriptionId:
           type: string
           format: uuid
+          readOnly: true
           description: Identifier for the Subscription. This identifier is allocated by the O-Cloud.
           example: "65221564-8b05-416a-bfc3-c250bc64e1aa"
         consumerSubscriptionId:
@@ -731,7 +991,7 @@ components:
           format: uuid
           description: Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
-        globalCloudId:
+        globalcloudId:
           type: string
           format: uuid
           description: | 
@@ -753,14 +1013,12 @@ components:
           example: "http://localhost:8000"
         extensions:
           type: object
-          additionalProperties:
-            type: string
           example:
             hub: "hub0"
             country: "ES"
       required:
       - oCloudId
-      - globalCloudId
+      - globalcloudId
       - name
       - description
       - serviceUri
@@ -813,28 +1071,9 @@ components:
           example: "COMPUTE"
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
         alarmDictionary:
-          # TODO: should define this as a model
-          type: object
-          example:
-            alarmDictionaryVersion: "v1"
-            managementInterfaceId: "O2IMS"
-            alarmDefinition: [
-              {
-                "alarmName": "Host is running out of memory.",
-                "alarmDescription": "Memory is filling up, has been above memory high utilization threshold for the last 15 minutes",
-                "proposedRepairActions": "",
-                "managementInterfaceId": "O2IMS",
-                "pkNotificationField": "alarmDefinitionID",
-                "alarmAdditionalFields": {
-                  "resourceClass": "COMPUTE"
-                },
-                "alarmDefinitionId": "NodeMemoryHighUtilization"
-              }
-            ]
+          $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
       required:
       - resourceTypeId
       - name
@@ -842,7 +1081,6 @@ components:
       - vendor
       - model
       - version
-      - alarmDictionary
       - resourceKind
       - resourceClass
       - extensions
@@ -879,8 +1117,6 @@ components:
           example: "EU"
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
       required:
       - resourcePoolId
@@ -934,8 +1170,6 @@ components:
             type: string
         extensions:
           type: object
-          additionalProperties:
-            type: string
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource.
       required:
       - resourceId
@@ -947,125 +1181,6 @@ components:
       - tags
       - groups
       - extensions
-
-    AlarmDictionary:
-      description: Information about an alarm dictionary.
-      type: object
-      properties:
-        alarmDictionaryVersion:
-          type: string
-          description: |
-            Version of the Alarm Dictionary. Version is vendor defined such that the version of the dictionary can be
-            associated with a specific version of the software delivery of this product.
-        alarmDictionarySchema:
-          type: string
-          description: |
-            Version of the Alarm Dictionary Schema to which this alarm dictionary conforms.
-        entityType:
-          type: string
-          description: |
-            O-RAN entity type emitting the alarm: This shall be unique per vendor ResourceType.model and
-            ResourceType.version
-        vendor:
-          type: string
-          description: |
-            Vendor of the Entity Type to whom this Alarm Dictionary applies. This should be the same value as in the 
-            ResourceType.vendor attribute
-        managementInterfaceId:
-          type: array
-          description: |
-            List of management interface over which alarms are transmitted for this Entity Type.  
-            RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
-          items:
-            type: string
-            enum: [ O2IMS ]
-        pkNotificationField:
-          type: array
-          description: |
-            Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
-            Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
-          items:
-            type: string
-        alarmDefinition:
-          type: array
-          items:
-            $ref: "#/components/schemas/AlarmDefinition"
-      required:
-      - alarmDictionaryVersion
-      - alarmDictionarySchema
-      - entityType
-      - vendor
-      - managementInterfaceId
-      - pkNotificationField
-      - alarmDefinition
-
-    AlarmDefinition:
-      description: Information about an alarm definition.
-      type: object
-      properties:
-        alarmDefinitionId:
-          type: string
-          format: uuid
-          description: |
-            Provides a unique identifier of the alarm being raised. This is the Primary Key into the Alarm Dictionary
-        alarmName:
-          type: string
-          description: |
-            Provides short name for the alarm
-        alarmLastChange:
-          type: string
-          description: |
-            Indicates the Alarm Dictionary Version in which this alarm last changed.
-        alarmChangeType:
-          type: string
-          enum: [ ADDED, DELETED, MODIFIED ]
-          description: |
-            Indicates the type of change that occurred during the alarm last change; added, deleted, modified.
-        alarmDescription:
-          type: string
-          description: |
-            Provides a longer descriptive meaning of the alarm condition and a description of the consequences of the
-            alarm condition. This is intended to be read by an operator to give an idea of what happened and a sense of
-            the effects, consequences, and other impacted areas of the system.
-        proposedRepairActions:
-          type: string
-          description: |
-            Provides guidance for proposed repair actions.
-        clearingType:
-          type: string
-          enum: [ AUTOMATIC, MANUAL ]
-          description: |
-            Identifies whether alarm is cleared automatically or manually.
-        managementInterfaceId:
-          type: array
-          items:
-            type: string
-            enum: [ O2IMS ]
-          description: |
-            List of management interface over which alarms are transmitted for this Entity Type.
-            RESTRICTION: For the O-Cloud IMS Services this value is limited to O2IMS.
-        pkNotificationField:
-          type: array
-          items:
-            type: string
-          description: |
-            Identifies which field or list of fields in the alarm notification contains the primary key (PK) into the
-            Alarm Dictionary for this interface; i.e. which field contains the Alarm Definition ID.
-        alarmAdditionalFields:
-          type: object
-          description: |
-            List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-      required:
-      - alarmDefinitionId
-      - alarmName
-      - alarmLastChange
-      - alarmChangeType
-      - alarmDescription
-      - proposedRepairActions
-      - clearingType
-      - managementInterfaceId
-      - pkNotificationField
-      - alarmAdditionalFields
 
     InventoryChangeNotification:
       description: Information about an inventory change notification
@@ -1093,13 +1208,13 @@ components:
             one of the following data types defined in clause 3.2.6 and the reference will match the type of objects
             supplied in priorObjectState and/or postObjectState.
         priorObjectState:
-          type: string
+          type: object
           description: |
             This is required if the notificationEventType is 1 (MODIFY) or 2 (DELETE) and is one of the following
             data types defined in clause 3.2.6 and will match the type of object in postObjectState and/or the type
             referred to in objectRef.
         postObjectState:
-          type: string
+          type: object
           description: |
             This is required if the notificationEventType is 0 (CREATE) or 1 (MODIFY) and is one of the following data
             types defined in clause 3.2.6 and will match the type of object in priorObjectState and/or the type

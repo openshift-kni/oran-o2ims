@@ -68,15 +68,13 @@ spec:
       containers:
       - name: manager
         image: controller:latest
+        imagePullPolicy: IfNotPresent
         env:
           # Note that we have a kustomization replacement that copies the above `image` into this
           # environment variable.  It is used as a default value for the --image command line argument
           # since it and all other arguments are implemented as CLI arguments.
         - name: IMAGE
           value: controller:latest
-        - name: KUBE_RBAC_PROXY_IMAGE
-          # A placeholder for the replacement kustomization that will inject the rbac image from that container spec
-          value: kube-rbac-proxy:latest
         - name: POSTGRES_IMAGE
           value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
         - name: HWMGR_PLUGIN_NAMESPACE
@@ -86,13 +84,17 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: IMAGE_PULL_POLICY
+          # Default value which is overwritten by the replacement kustomization
+          value: IfNotPresent
         command:
           - /usr/bin/oran-o2ims
           -  start
           -  controller-manager
           -  --leader-elect
           - --health-probe-bind-address=:8081
-          - --metrics-bind-address=127.0.0.1:8080
+          - --metrics-bind-address=:6443
+          - --metrics-tls-cert-dir=/secrets/tls/metrics
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -113,11 +115,22 @@ spec:
         # TODO(user): Configure the resources accordingly based on the project requirements.
         # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
         resources:
-          limits:
-            cpu: 500m
-            memory: 256Mi
+          # No CPU and memory limits for now.
           requests:
             cpu: 10m
             memory: 64Mi
+        ports:
+        - containerPort: 6443
+          protocol: TCP
+          name: https
+        volumeMounts:
+        - name: metrics-tls
+          mountPath: /secrets/tls/metrics
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - name: metrics-tls
+        secret:
+          defaultMode: 420
+          secretName: controller-manager-metrics-tls
+

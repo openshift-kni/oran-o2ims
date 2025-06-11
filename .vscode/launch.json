@@ -102,25 +102,6 @@
                         ]
                 },
                 {
-                        "name": "start alarm-server",
-                        "type": "go",
-                        "request": "launch",
-                        "mode": "auto",
-                        "program": "${workspaceFolder}",
-                        "env": {
-                                "INSECURE_SKIP_VERIFY": "true"
-                        },
-                        "args": [
-                                "start",
-                                "alarm-server",
-                                "--log-level=debug",
-                                "--cloud-id=6575154c-72fc-4ed8-9a87-a81885ab38bb",
-                                "--backend-url=${env:BACKEND_URL}",
-                                "--backend-token=${env:BACKEND_TOKEN}",
-                                "--resource-server-url=${env:RESOURCE_SERVER_URL}"
-                        ]
-                },
-                {
                         "name": "start infrastructure-inventory-subscription-server",
                         "type": "go",
                         "request": "launch",
@@ -134,27 +115,40 @@
                         ]
                 },
                 {
-                        "name": "test",
-                        "type": "go",
-                        "request": "launch",
-                        "mode": "test",
-                        "program": "${fileDirname}"
-                },
-                {
-                        "name": "start controller",
-                        "type": "go",
-                        "request": "launch",
-                        "mode": "auto",
-                        "program": "${workspaceFolder}",
-                        "env": {
-                                "KUBECONFIG": "${env:KUBECONFIG}",
-                                "IMAGE": "quay.io/openshift-kni/oran-o2ims-operator:latest",
-                                "HWMGR_PLUGIN_NAMESPACE": "oran-hwmgr-plugin"
-                        },
-                        "args": [
-                                "start",
-                                "controller-manager"
-                        ]
-                }
+                    "name": "artifacts-server",
+                    "type": "go",
+                    "request": "launch",
+                    "mode": "auto",
+                    "program": "${workspaceFolder}",
+                    "args": [
+                            "artifacts-server",
+                            "serve"
+                    ]
+            },
+            {
+                    "name": "test",
+                    "type": "go",
+                    "request": "launch",
+                    "mode": "test",
+                    "program": "${fileDirname}"
+            },
+            {
+                    "name": "start controller",
+                    "type": "go",
+                    "request": "launch",
+                    "mode": "auto",
+                    "program": "${workspaceFolder}",
+                    "env": {
+                            "KUBECONFIG": "${env:KUBECONFIG}",
+                            "IMAGE": "quay.io/openshift-kni/oran-o2ims-operator:latest",
+                            "HWMGR_PLUGIN_NAMESPACE": "oran-hwmgr-plugin",
+                            "POSTGRES_IMAGE": "registry.redhat.io/rhel9/postgresql-16:9.5-1731610873"
+                    },
+                    "args": [
+                            "start",
+                            "controller-manager",
+                            "--enable-webhooks=false"
+                    ]
+            }
         ]
 }

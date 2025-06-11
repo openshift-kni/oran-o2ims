@@ -1,7 +1,14 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package utils
 
 import (
 	"reflect"
+	"sort"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
@@ -78,6 +85,12 @@ func GetColumnsAndValues[T db.Model](s T, tags DBTag) ([]string, []any) {
 	columns := make([]string, 0, len(tags))
 	values := make([]any, 0, len(tags))
 
+	fieldNames := make([]string, 0, len(tags))
+	for fieldName := range tags {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames) // Sort to ensure consistent order
+
 	st := reflect.TypeOf(s)
 	sv := reflect.ValueOf(s)
 	if st.Kind() != reflect.Struct {
@@ -85,7 +98,8 @@ func GetColumnsAndValues[T db.Model](s T, tags DBTag) ([]string, []any) {
 		sv = sv.Elem()
 	}
 
-	for fieldName, columnName := range tags {
+	for _, fieldName := range fieldNames {
+		columnName := tags[fieldName]
 		if field, ok := st.FieldByName(fieldName); ok {
 			if field.Type.Kind() != reflect.Pointer {
 				columns = append(columns, columnName)
@@ -173,4 +187,22 @@ func CompareObjects[T db.Model](a, b T, excluded ...string) DBTag {
 	}
 
 	return tags
+}
+
+// GetColumns gets the DB column names for the given fields
+func GetColumns[T db.Model](record T, fields []string) []string {
+	tags := GetDBTagsFromStructFields(record, fields...)
+	columns := make([]string, len(fields))
+	for i, field := range fields {
+		columns[i] = tags[field]
+	}
+	return columns
+}
+
+func GetColumnsAsAny(slice []string) []any {
+	result := make([]any, len(slice))
+	for i, v := range slice {
+		result[i] = v
+	}
+	return result
 }

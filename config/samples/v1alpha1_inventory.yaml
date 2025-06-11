@@ -21,8 +21,12 @@ spec:
       scopes:
         - openid
         - profile
-        - roles
-        - smo-audience
+        - role:ocloud-manager
+      usernameClaim: preferred_username
+      groupsClaim: roles
     tls:
-      clientCertificateName: o2ims-client-tls-certificate
+      secretName: oran-o2ims-tls-certificate
+  ingress:
+    tls:
+      secretName: oran-o2ims-tls-certificate
   caBundleName: o2ims-custom-ca-certs

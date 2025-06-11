@@ -1,4 +1,9 @@
 #!/bin/bash -ex
+#
+# SPDX-FileCopyrightText: Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 # Following example of: https://github.com/openshift/enhancements/blob/master/hack/markdownlint.sh
 
 # trap errors, including the exit code from the command failed

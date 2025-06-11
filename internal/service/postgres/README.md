@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Postgres for O-CLOUD-DB
 
 ## IMPORTANT NOTE: Only an operator will finally manage PG service. Files here are simply here to unblock any work with api implementation and test. Please delete these static k8s files once we have this integrated. Update anything else as needed (e.g makefile)

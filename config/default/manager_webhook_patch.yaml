@@ -1,0 +1,19 @@
+- path: /spec/template/spec/volumes/0
+  op: add
+  value:
+    name: cert
+    secret:
+      defaultMode: 420
+      secretName: oran-o2ims-webhook-server-cert
+- path: /spec/template/spec/containers/0/ports/0
+  op: add
+  value:
+    containerPort: 9443
+    name: webhook-server
+    protocol: TCP
+- path: /spec/template/spec/containers/0/volumeMounts/0
+  op: add
+  value:
+    mountPath: /tmp/k8s-webhook-server/serving-certs
+    name: cert
+    readOnly: true

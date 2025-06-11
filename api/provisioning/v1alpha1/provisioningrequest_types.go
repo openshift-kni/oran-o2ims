@@ -1,17 +1,7 @@
 /*
-Copyright 2023.
+SPDX-FileCopyrightText: Red Hat
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package v1alpha1
@@ -39,11 +29,13 @@ type ProvisioningRequestSpec struct {
 
 	// TemplateName defines the base name of the referenced ClusterTemplate.
 	// The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+	// +kubebuilder:validation:MinLength=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	TemplateName string `json:"templateName"`
 
 	// TemplateVersion defines the version of the referenced ClusterTemplate.
 	// The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+	// +kubebuilder:validation:MinLength=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Template Version",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	TemplateVersion string `json:"templateVersion"`
 
@@ -63,9 +55,9 @@ type NodePoolRef struct {
 	// Contains the namespace of the created NodePool.
 	Namespace string `json:"namespace,omitempty"`
 	// Represents the timestamp of the first status check for hardware provisioning
-	HardwareProvisioningCheckStart metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
+	HardwareProvisioningCheckStart *metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
 	// Represents the timestamp of the first status check for hardware configuring
-	HardwareConfiguringCheckStart metav1.Time `json:"hardwareConfiguringCheckStart,omitempty"`
+	HardwareConfiguringCheckStart *metav1.Time `json:"hardwareConfiguringCheckStart,omitempty"`
 }
 
 type ClusterDetails struct {
@@ -76,10 +68,10 @@ type ClusterDetails struct {
 	ZtpStatus string `json:"ztpStatus,omitempty"`
 
 	// A timestamp indicating the cluster provisoning has started
-	ClusterProvisionStartedAt metav1.Time `json:"clusterProvisionStartedAt,omitempty"`
+	ClusterProvisionStartedAt *metav1.Time `json:"clusterProvisionStartedAt,omitempty"`
 
 	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
-	NonCompliantAt metav1.Time `json:"nonCompliantAt,omitempty"`
+	NonCompliantAt *metav1.Time `json:"nonCompliantAt,omitempty"`
 }
 
 type Extensions struct {
@@ -106,26 +98,32 @@ type PolicyDetails struct {
 	RemediationAction string `json:"remediationAction,omitempty"`
 }
 
-// ProvisioningState defines the various states of the provisioning process.
-type ProvisioningState string
+// ProvisioningPhase defines the various phases of the provisioning process.
+type ProvisioningPhase string
 
 const (
+	// StatePending indicates that the provisioning process is either waiting to start
+	// or is preparing to apply new changes. This state is set when the ProvisioningRequest
+	// is observed with new spec changes, during validation and resource preparation,
+	// before the actual provisioning begins.
+	StatePending ProvisioningPhase = "pending"
+
 	// StateProgressing means the provisioning process is currently in progress.
 	// It could be in progress during hardware provisioning, cluster installation, or cluster configuration.
-	StateProgressing ProvisioningState = "progressing"
+	StateProgressing ProvisioningPhase = "progressing"
 
 	// StateFulfilled means the provisioning process has been successfully completed for all stages.
-	StateFulfilled ProvisioningState = "fulfilled"
+	StateFulfilled ProvisioningPhase = "fulfilled"
 
 	// StateFailed means the provisioning process has failed at any stage, including resource validation
 	// and preparation prior to provisioning, hardware provisioning, cluster installation, or cluster configuration.
-	StateFailed ProvisioningState = "failed"
+	StateFailed ProvisioningPhase = "failed"
 
 	// StateDeleting indicates that the provisioning resources are in the process of being deleted.
 	// This state is set when the deletion process for the ProvisioningRequest and its resources
 	// has started, ensuring that all dependent resources are removed before finalizing the
 	// ProvisioningRequest deletion.
-	StateDeleting ProvisioningState = "deleting"
+	StateDeleting ProvisioningPhase = "deleting"
 )
 
 // ProvisionedResources contains the resources that were provisioned as part of the provisioning process.
@@ -136,14 +134,17 @@ type ProvisionedResources struct {
 
 type ProvisioningStatus struct {
 	// The current state of the provisioning process.
-	// +kubebuilder:validation:Enum=progressing;fulfilled;failed;deleting
-	ProvisioningState ProvisioningState `json:"provisioningState,omitempty"`
+	// +kubebuilder:validation:Enum=pending;progressing;fulfilled;failed;deleting
+	ProvisioningPhase ProvisioningPhase `json:"provisioningPhase,omitempty"`
 
 	// The details about the current state of the provisioning process.
 	ProvisioningDetails string `json:"provisioningDetails,omitempty"`
 
 	// The resources that have been successfully provisioned as part of the provisioning process.
 	ProvisionedResources *ProvisionedResources `json:"provisionedResources,omitempty"`
+
+	// The timestamp of the last update to the provisioning status.
+	UpdateTime metav1.Time `json:"updateTime,omitempty"`
 }
 
 // ProvisioningRequestStatus defines the observed state of ProvisioningRequest
@@ -159,13 +160,17 @@ type ProvisioningRequestStatus struct {
 	Extensions Extensions `json:"extensions,omitempty"`
 
 	ProvisioningStatus ProvisioningStatus `json:"provisioningStatus,omitempty"`
+
+	// ObservedGeneration is the most recent generation observed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster,shortName=oranpr
+//+kubebuilder:printcolumn:name="DisplayName",type="string",JSONPath=".spec.name"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-//+kubebuilder:printcolumn:name="ProvisionState",type="string",JSONPath=".status.provisioningStatus.provisioningState"
+//+kubebuilder:printcolumn:name="ProvisionPhase",type="string",JSONPath=".status.provisioningStatus.provisioningPhase"
 //+kubebuilder:printcolumn:name="ProvisionDetails",type="string",JSONPath=".status.provisioningStatus.provisioningDetails"
 
 // ProvisioningRequest is the Schema for the provisioningrequests API

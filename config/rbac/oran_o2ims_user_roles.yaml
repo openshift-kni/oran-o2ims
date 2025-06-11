@@ -1,0 +1,126 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: reader-role
+  labels:
+    role: reader-role
+rules:
+- nonResourceURLs:
+  - /o2ims-infrastructureInventory/*
+  - /o2ims-infrastructureInventory/api_versions
+  - /o2ims-infrastructureMonitoring/*
+  - /o2ims-infrastructureMonitoring/api_versions
+  - /o2ims-infrastructureCluster/*
+  - /o2ims-infrastructureCluster/api_versions
+  - /o2ims-infrastructureArtifacts/*
+  - /o2ims-infrastructureArtifacts/api_versions
+  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates
+  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/*
+  - /o2ims-infrastructureProvisioning/*
+  - /o2ims-infrastructureProvisioning/api_versions
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
+  - /o2ims-infrastructureInventory/v1/subscriptions
+  - /o2ims-infrastructureCluster/v1/subscriptions
+  - /o2ims-infrastructureProvisioning/v1/provisioningRequests
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /o2ims-infrastructureInventory/v1/subscriptions/*
+  - /o2ims-infrastructureCluster/v1/subscriptions/*
+  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: maintainer-role
+  labels:
+    role: maintainer-role
+rules:
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarms/*
+  verbs:
+  - patch
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: subscriber-role
+  labels:
+    role: subscriber-role
+rules:
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
+  - /o2ims-infrastructureInventory/v1/subscriptions
+  - /o2ims-infrastructureCluster/v1/subscriptions
+  verbs:
+  - get
+  - create
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /o2ims-infrastructureInventory/v1/subscriptions/*
+  - /o2ims-infrastructureCluster/v1/subscriptions/*
+  verbs:
+  - get
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: provisioner-role
+  labels:
+    role: provisioner-role
+rules:
+- nonResourceURLs:
+  - /o2ims-infrastructureArtifacts/*
+  - /o2ims-infrastructureArtifacts/api_versions
+  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates
+  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/*
+  - /o2ims-infrastructureProvisioning/*
+  - /o2ims-infrastructureProvisioning/api_versions
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureProvisioning/v1/provisioningRequests
+  verbs:
+  - get
+  - create
+- nonResourceURLs:
+  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  verbs:
+  - get
+  - delete
+- nonResourceURLs:
+  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  verbs:
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: admin-role
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      role: reader-role
+  - matchLabels:
+      role: subscriber-role
+  - matchLabels:
+      role: maintainer-role
+  - matchLabels:
+      role: provisioner-role

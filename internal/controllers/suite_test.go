@@ -1,15 +1,7 @@
 /*
-Copyright 2024 Red Hat Inc.
+SPDX-FileCopyrightText: Red Hat
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
-compliance with the License. You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is
-distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-implied. See the License for the specific language governing permissions and limitations under the
-License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package controllers
@@ -28,6 +20,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -37,9 +31,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 )
 
 func TestControllers(t *testing.T) {
@@ -47,10 +44,25 @@ func TestControllers(t *testing.T) {
 	RunSpecs(t, "Controllers")
 }
 
+const testHwMgrPluginNameSpace = "hwmgr"
+const testHwMgrId = "hwmgr"
+
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
+	// Add fake hardwaremanager CR
+	hwmgr := &pluginv1alpha1.HardwareManager{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testHwMgrPluginNameSpace,
+			Name:      testHwMgrId,
+		},
+		Spec: pluginv1alpha1.HardwareManagerSpec{
+			AdaptorID: "loopback",
+		},
+	}
+
 	return fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
+		WithObjects([]client.Object{hwmgr}...).
 		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
 		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
@@ -63,6 +75,10 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
+		WithStatusSubresource(&pluginv1alpha1.HardwareManager{}).
+		WithIndex(&hwv1alpha1.Node{}, "spec.nodePool", func(obj client.Object) []string {
+			return []string{obj.(*hwv1alpha1.Node).Spec.NodePool}
+		}).
 		Build()
 }
 
@@ -86,7 +102,7 @@ var _ = BeforeSuite(func() {
 	ctrl.SetLogger(adapter)
 	klog.SetLogger(adapter)
 
-	os.Setenv("HWMGR_PLUGIN_NAMESPACE", "hwmgr")
+	os.Setenv(utils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
 
 	// Add all the required types to the scheme used by the tests:
 	scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.Inventory{})
@@ -105,9 +121,10 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
-	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.HardwareTemplate{})
-	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.NodePool{})
-	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &hwv1alpha1.Node{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.HardwareTemplate{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodePool{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.Node{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodeList{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
@@ -115,4 +132,8 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.ClusterVersion{})
 	scheme.AddKnownTypes(openshiftoperatorv1.SchemeGroupVersion, &openshiftoperatorv1.IngressController{})
 	scheme.AddKnownTypes(ibguv1alpha1.SchemeGroupVersion, &ibguv1alpha1.ImageBasedGroupUpgrade{})
+	scheme.AddKnownTypes(pluginv1alpha1.GroupVersion, &pluginv1alpha1.HardwareManager{})
+	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.Agent{})
+	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.AgentList{})
+	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
 })

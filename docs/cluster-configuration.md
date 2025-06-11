@@ -1,12 +1,49 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Cluster Configuration
 
 ## Preparation
 
-TO DO
+For a proper cluster configuration, the ACM PolicyGenerator CRs have to be prepared in git.
+The namespace of the parent policies will be `ztp-<cluster-template-namespace>` (see [here](./samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/ns.yaml)). This is generally created through ArgoCD and Kustomize.
+
+The source-crs need to be extracted.
+
+For details about setting up the Git repo, please refer to the the Gitops setup [README.md](./samples/git-setup/README.md).
+
+**Note:** Make sure all the values used in hub templates in the PGs are exposed in the corresponding ClusterTemplate,
+under `spec.templateParameterSchema.policyTemplateParameters` and are present either in the `spec.templates.policyTemplateDefaults` ConfigMap or are specified through the ProvisioningRequest (`spec.templateParameters.policyTemplateParameters`).
 
 ## Initial install and configuration
 
-TO DO
+Before creating a ProvisioningRequest, make sure the namespace destined for the ACM policies has been created and that the ACM policies
+have been synced to the hub cluster.
+This should all be achieved through ArgoCD.
+
+## Full DU profile
+
+For configuring an SNO with a full DU profile according to the [4.17 RAN RDS](https://docs.openshift.com/container-platform/4.17/scalability_and_performance/telco_ref_design_specs/ran/telco-ran-ref-du-crs.html), the following main samples can be used as a starting example:
+
+* [ClusterInstance defaults ConfigMap](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/clusterinstance-defaults-full-du-v1.yaml)
+* [PolicyTemplate defaults ConfigMap](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/policytemplates-defaults-full-du-v1.yaml)
+* [ClusterTemplate](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/sno-ran-full-du-v4-Y-Z-1.yaml)
+* [Full DU profile ACM Policy Generator](./samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-full-du/sno-ran-full-du-pg-v4-Y-Z-v1.yaml)
+* Observability configuration. This requires the creation of an ACM policy in the
+`open-cluster-management-observability` namespace, as seen in [copy-acm-route-observability-v1.yaml](./samples/git-setup/policytemplates/common/copy-acm-route-observability-v1.yaml).
+This policy will create a ConfigMap containing the acm-route in the same namespace as the ACM policies such that it can be used in the hub templates.
+  * A custom source-cr ([source-cr-observability.yaml](./samples/git-setup/policytemplates/common/source-cr-observability.yaml)) is used. Currently **the namespaces where ACM policies are created need to be manually added to the namespace list.**
+  * For allowing the creation of this policy in the `open-cluster-management-observability` namespace,
+  the `AppProject` associated to the desired ACM policies needs to also contain the following in
+  its `spec.destinations`:
+
+  ```yaml
+    - namespace: open-cluster-management-observability
+      server: '*'
+  ```
 
 ## Day 2 configuration
 
@@ -22,7 +59,7 @@ kind: ProvisioningRequest
 metadata:
   finalizers:
     - provisioningrequest.o2ims.provisioning.oran.org/finalizer
-  name: sno-ran-du-1
+  name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
   name: Dev-main-SNO-Provisioning-sno-ran-du-1
@@ -48,7 +85,7 @@ kind: ProvisioningRequest
 metadata:
   finalizers:
     - provisioningrequest.o2ims.provisioning.oran.org/finalizer
-  name: sno-ran-du-1
+  name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
   name: Dev-main-SNO-Provisioning-sno-ran-du-1
@@ -85,7 +122,7 @@ kind: ProvisioningRequest
 metadata:
   finalizers:
     - provisioningrequest.o2ims.provisioning.oran.org/finalizer
-  name: sno-ran-du-1
+  name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
   name: Dev-main-SNO-Provisioning-sno-ran-du-1

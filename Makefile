@@ -20,7 +20,13 @@ ginkgo_flags:=
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 4.16.0
+VERSION ?= 4.18.0
+
+PACKAGE_NAME ?= oran-o2ims
+
+PACKAGE_NAME_KONFLUX = o-cloud-manager
+CATALOG_TEMPLATE_KONFLUX = .konflux/catalog/catalog-template.in.yaml
+CATALOG_KONFLUX = .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
 
 # Development/Debug passwords for database.  This requires that the operator be deployed in DEBUG=yes mode or for the
 # developer to override these values with the current passwords
@@ -79,6 +85,7 @@ IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.0
+ENVTEST_VERSION = release-0.19
 
 # OCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
@@ -91,6 +98,14 @@ ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
+endif
+
+# IMAGE_PULL_POLICY sets the value that is patched into the CSV for the manager container imagePullPolicy.
+# If the IMAGE_TAG_BASE is a user repo, the default value is updated to imagePullPolicy=Always.
+ifneq (,$(findstring openshift-kni,$(IMAGE_TAG_BASE)))
+IMAGE_PULL_POLICY ?= IfNotPresent
+else
+IMAGE_PULL_POLICY ?= Always
 endif
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
@@ -145,14 +160,16 @@ build: manifests generate fmt vet ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet binary ## Run a controller from your host.
-	IMAGE=$(IMAGE_TAG_BASE):$(VERSION) $(LOCALBIN)/$(BINARY_NAME) start controller-manager
+	IMAGE=$(IMAGE_TAG_BASE):$(VERSION) $(LOCALBIN)/$(BINARY_NAME) start controller-manager --enable-webhooks=false
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
+
+PLATFORM ?= linux/amd64
 .PHONY: docker-build
 docker-build: manifests generate fmt vet ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile --target ${DOCKER_TARGET} --build-arg "GOBUILD_GCFLAGS=${GOBUILD_GCFLAGS}" .
+	$(CONTAINER_TOOL) build -t ${IMG} -f Dockerfile --platform=$(PLATFORM) --target ${DOCKER_TARGET} --build-arg "GOBUILD_GCFLAGS=${GOBUILD_GCFLAGS}" .
 
 .PHONY: docker-push
 docker-push: docker-build ## Push docker image with the manager.
@@ -191,8 +208,12 @@ uninstall: manifests kustomize kubectl ## Uninstall CRDs from the K8s cluster sp
 
 .PHONY: deploy
 deploy: install manifests kustomize kubectl ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	@$(KUBECTL) create configmap env-config --from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) --dry-run=client -o yaml > config/manager/env-config.yaml
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	@$(KUBECTL) create configmap env-config \
+		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
+		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
+		--dry-run=client -o yaml > config/manager/env-config.yaml
+	cd config/manager \
+		&& $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) apply -f -
 
 .PHONY: undeploy
@@ -246,7 +267,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	@chmod u+w $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
@@ -267,8 +288,12 @@ endif
 .PHONY: bundle
 bundle: operator-sdk manifests kustomize kubectl ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK) generate kustomize manifests --apis-dir api/ -q
-	@$(KUBECTL) create configmap env-config --from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) --dry-run=client -o yaml > config/manager/env-config.yaml
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	@$(KUBECTL) create configmap env-config \
+		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
+		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
+		--dry-run=client -o yaml > config/manager/env-config.yaml
+	cd config/manager \
+		&& $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	@rm bundle/manifests/oran-o2ims-env-config_v1_configmap.yaml ## Clean up the temporary file for bundle validate
 	$(OPERATOR_SDK) bundle validate ./bundle
@@ -297,11 +322,12 @@ bundle-upgrade: # Upgrade bundle on cluster using operator sdk.
 
 .PHONY: bundle-clean
 bundle-clean: # Uninstall bundle on cluster using operator sdk.
-	$(OPERATOR_SDK) cleanup oran-o2ims -n $(OCLOUD_MANAGER_NAMESPACE)
+	$(OPERATOR_SDK) cleanup $(PACKAGE_NAME) -n $(OCLOUD_MANAGER_NAMESPACE)
 	oc delete ns $(OCLOUD_MANAGER_NAMESPACE)
 
+
 .PHONY: opm
-OPM = ./bin/opm
+OPM ?= ./bin/opm
 opm: ## Download opm locally if necessary.
 ifeq (,$(wildcard $(OPM)))
 ifeq (,$(shell which opm 2>/dev/null))
@@ -309,7 +335,7 @@ ifeq (,$(shell which opm 2>/dev/null))
 	set -e ;\
 	mkdir -p $(dir $(OPM)) ;\
 	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
-	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.28.0/$${OS}-$${ARCH}-opm ;\
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.54.0/$${OS}-$${ARCH}-opm ;\
 	chmod +x $(OPM) ;\
 	}
 else
@@ -332,14 +358,37 @@ endif
 # Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
 # This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
+.PHONY: catalog
+catalog: opm ## Build a catalog.
+	@mkdir -p catalog
+	hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
+	$(OPM) render --output=yaml $(BUNDLE_IMG) > catalog/$(PACKAGE_NAME).yaml
+	$(OPM) validate catalog
+
 .PHONY: catalog-build
-catalog-build: opm ## Build a catalog image.
-		$(OPM) index add --container-tool $(CONTAINER_TOOL) --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
+catalog-build: catalog ## Build a catalog image.
+	$(CONTAINER_TOOL) build -f catalog.Dockerfile -t $(CATALOG_IMG) .
 
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-		$(MAKE) docker-push IMG=$(CATALOG_IMG)
+	$(CONTAINER_TOOL) push $(CATALOG_IMG)
+
+# Deploy from catalog image.
+.PHONY: catalog-deploy
+catalog-deploy: ## Deploy from catalog image.
+	hack/generate-catalog-deploy.sh \
+		--package $(PACKAGE_NAME) \
+		--namespace $(OCLOUD_MANAGER_NAMESPACE) \
+		--catalog-image $(CATALOG_IMG) \
+		--channel alpha \
+		--install-mode AllNamespaces \
+		| oc create -f -
+
+# Undeploy from catalog image.
+.PHONY: catalog-undeploy
+catalog-undeploy: ## Undeploy from catalog image.
+	hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search "o2ims.*oran"
 
 ##@ Binary
 .PHONY: binary
@@ -361,7 +410,14 @@ go-generate:
 .PHONY: test tests
 test tests:
 	@echo "Run ginkgo"
-	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r $(ginkgo_flags)
+	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api $(ginkgo_flags)
+
+.PHONY: test-e2e
+test-e2e: envtest kubectl
+ifeq ($(shell uname -s),Linux)
+	@chmod -R u+w $(LOCALBIN)
+endif
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v ginkgo.v
 
 .PHONY: fmt
 fmt:
@@ -394,7 +450,7 @@ deps-update:
 	hack/install_test_deps.sh
 
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-e2e bundle-check
 
 .PHONY: clean
 clean:
@@ -433,7 +489,7 @@ markdownlint: markdownlint-image  ## run the markdown linter
 
 .PHNOY: alarms
 alarms: ##Run full alarms stack
-	IMG=$(IMAGE_TAG_BASE):latest make bundle deploy clean-am-service connect-postgres connect-resource-server run-alarms-migrate create-am-service run-alarms
+	IMG=$(IMAGE_TAG_BASE):latest make bundle deploy clean-am-service connect-postgres connect-cluster-server run-alarms-migrate create-am-service run-alarms
 
 create-am-service: ##Creates alarm manager service and endpoint to expose a DNS entry.
 	oc apply -k ./internal/service/alarms/k8s/base --wait=true
@@ -458,11 +514,64 @@ run-resources-migrate: binary ##Migrate all the way up
 
 .PHONY: connect-postgres
 connect-postgres: ##Connect to O-RAN postgres
-	oc wait --for=condition=Ready pod -l app=postgres-server -n oran-o2ims --timeout=30s
-	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace oran-o2ims"
-	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n oran-o2ims > pgproxy.log 2>&1 &
+	oc wait --for=condition=Ready pod -l app=postgres-server -n $(OCLOUD_MANAGER_NAMESPACE) --timeout=30s
+	@echo "Starting port-forward in background on port 5432:5432 to postgres-server in namespace $(OCLOUD_MANAGER_NAMESPACE)"
+	nohup oc port-forward --address localhost svc/postgres-server 5432:5432 -n $(OCLOUD_MANAGER_NAMESPACE) > pgproxy.log 2>&1 &
 
-.PHONY: connect-resource-server
-connect-resource-server: ##Connect to resource server svc
-	@echo "Starting port-forward in background on port 8001:8000 to resource server svc in namespace oran-o2ims"
-	nohup oc port-forward --address localhost svc/resource-server 8001:8000 -n oran-o2ims > pgproxy_resource.log 2>&1 &
+.PHONY: connect-cluster-server
+connect-cluster-server: ##Connect to resource server svc
+	@echo "Starting port-forward in background on port 8001:8000 to cluster server svc in namespace $(OCLOUD_MANAGER_NAMESPACE)"
+	nohup oc port-forward --address localhost svc/cluster-server 8001:8000 -n $(OCLOUD_MANAGER_NAMESPACE) > pgproxy_resource.log 2>&1 &
+
+##@ Konflux
+
+.PHONY: yq
+YQ ?= ./bin/yq
+yq: ## download yq if not in the path
+ifeq (,$(wildcard $(YQ)))
+ifeq (,$(shell which yq 2>/dev/null))
+	@{ \
+	set -e ;\
+	mkdir -p $(dir $(YQ)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(YQ) https://github.com/mikefarah/yq/releases/download/v4.45.4/yq_$${OS}_$${ARCH} ;\
+	chmod +x $(YQ) ;\
+	}
+else
+YQ = $(shell which yq)
+endif
+endif
+
+.PHONY: konflux-update-task-refs ## update task images
+konflux-update-task-refs: yq
+	hack/konflux-update-task-refs.sh .tekton/$(PACKAGE_NAME_KONFLUX)-4-19-build.yaml
+
+.PHONY: konflux-validate-catalog-template-bundle ## validate the last bundle entry on the catalog template file
+konflux-validate-catalog-template-bundle: yq operator-sdk
+	@{ \
+	set -e ;\
+	bundle=$(shell $(YQ) ".entries[-1].image" $(CATALOG_TEMPLATE_KONFLUX)) ;\
+	echo "validating the last bundle entry: $${bundle} on catalog template: $(CATALOG_TEMPLATE_KONFLUX)" ;\
+	$(OPERATOR_SDK) bundle validate $${bundle} ;\
+	}
+
+.PHONY: konflux-validate-catalog
+konflux-validate-catalog: opm ## validate the current catalog file
+	@echo "validating catalog: .konflux/catalog/$(PACKAGE_NAME_KONFLUX)"
+	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/
+
+.PHONY: konflux-generate-catalog ## generate a quay.io catalog
+konflux-generate-catalog: yq opm
+	hack/konflux-update-catalog-template.sh --set-catalog-template-file $(CATALOG_TEMPLATE_KONFLUX) --set-bundle-builds-file .konflux/catalog/bundle.builds.in.yaml
+        # CAVEAT: for < ocp 4.17, use this opm render instead:
+        # (OPM) alpha render-template basic --output yaml ./konflux/catalog/catalog-template.yaml > .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
+	$(OPM) alpha render-template basic --output yaml --migrate-level bundle-object-to-csv-metadata $(CATALOG_TEMPLATE_KONFLUX) > $(CATALOG_KONFLUX)
+	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/
+
+.PHONY: konflux-generate-catalog-production ## generate a registry.redhat.io catalog
+konflux-generate-catalog-production: konflux-generate-catalog
+        # overlay the bundle image for production
+	sed -i 's|quay.io/redhat-user-workloads/telco-5g-tenant/$(PACKAGE_NAME_KONFLUX)-bundle-4-19|registry.redhat.io/openshift4/$(PACKAGE_NAME_KONFLUX)-operator-bundle|g' $(CATALOG_KONFLUX)
+        # From now on, all the related images must reference production (registry.redhat.io) exclusively
+	./hack/konflux-validate-related-images-production.sh --set-catalog-file $(CATALOG_KONFLUX)
+	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/

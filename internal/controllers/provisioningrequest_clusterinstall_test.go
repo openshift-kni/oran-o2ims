@@ -1,7 +1,15 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package controllers
 
 import (
 	"context"
+	"reflect"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -9,12 +17,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
 
 var _ = Describe("handleRenderClusterInstance", func() {
@@ -42,7 +51,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 				TemplateName:    tName,
 				TemplateVersion: tVersion,
 				TemplateParameters: runtime.RawExtension{
-					Raw: []byte(testFullTemplateParameters),
+					Raw: []byte(testutils.TestFullTemplateParameters),
 				},
 			},
 		}
@@ -50,7 +59,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		// Define the cluster template.
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -76,6 +85,7 @@ templateRefs:
     namespace: "siteconfig-operator"
 nodes:
 - hostname: "node1"
+  role: master
   ironicInspect: ""
   nodeNetwork:
     interfaces:
@@ -106,7 +116,7 @@ nodes:
 			},
 		}
 
-		clusterInstanceInputParams, err := utils.ExtractMatchingInput(
+		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
 			cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		mergedClusterInstanceData, err := task.getMergedClusterInputData(
@@ -120,14 +130,50 @@ nodes:
 		Expect(err).ToNot(HaveOccurred())
 		Expect(renderedClusterInstance).ToNot(BeNil())
 
+		// Verify the disable-auto-import annotation is added to the ManagedCluster
+		// when cluster provisioning has not started yet.
+		Expect(renderedClusterInstance.Spec.ExtraAnnotations).To(HaveKey("ManagedCluster"))
+		Expect(renderedClusterInstance.Spec.ExtraAnnotations["ManagedCluster"]).To(HaveKey(disableAutoImportAnnotation))
+
 		// Check if status condition was updated correctly
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(utils.PRconditionTypes.ClusterInstanceRendered))
+			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
-		verifyStatusCondition(*cond, metav1.Condition{
-			Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+		testutils.VerifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionTrue,
-			Reason:  string(utils.CRconditionReasons.Completed),
+			Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
+			Message: "ClusterInstance rendered and passed dry-run validation",
+		})
+	})
+
+	It("should not contain disable-auto-import annotation for ManagedCluster in the "+
+		"rendered ClusterInstance if cluster provisioning has completed", func() {
+		// Simulate that the ClusterInstance has started provisioning
+		task.object.Status.Conditions = []metav1.Condition{
+			{
+				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
+				Message: "Provisioned cluster",
+			},
+		}
+		renderedClusterInstance, err := task.handleRenderClusterInstance(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(renderedClusterInstance).ToNot(BeNil())
+
+		// Verify the disable-auto-import annotation is not added to the ManagedCluster
+		// when cluster provisioning has completed.
+		Expect(renderedClusterInstance.Spec.ExtraAnnotations).ToNot(HaveKey("ManagedCluster"))
+
+		// Check if status condition was updated correctly
+		cond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
+		Expect(cond).ToNot(BeNil())
+		testutils.VerifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
 			Message: "ClusterInstance rendered and passed dry-run validation",
 		})
 	})
@@ -140,64 +186,401 @@ nodes:
 
 		// Check if status condition was updated correctly
 		cond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(utils.PRconditionTypes.ClusterInstanceRendered))
+			string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
 		Expect(cond).ToNot(BeNil())
-		verifyStatusCondition(*cond, metav1.Condition{
-			Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
+		testutils.VerifyStatusCondition(*cond, metav1.Condition{
+			Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.CRconditionReasons.Failed),
+			Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
 			Message: "spec.clusterName cannot be empty",
 		})
 	})
-
-	It("should detect updates to immutable fields and fail rendering", func() {
-		// Simulate that the ClusterInstance has been provisioned
-		task.object.Status.Conditions = []metav1.Condition{
-			{
-				Type:   string(utils.PRconditionTypes.ClusterProvisioned),
-				Status: metav1.ConditionTrue,
-				Reason: string(utils.CRconditionReasons.Completed),
-			},
-		}
-
-		oldSpec := make(map[string]any)
-		newSpec := make(map[string]any)
-		data, err := yaml.Marshal(task.clusterInput.clusterInstanceData)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(yaml.Unmarshal(data, &oldSpec)).To(Succeed())
-		Expect(yaml.Unmarshal(data, &newSpec)).To(Succeed())
-
-		clusterInstanceObj := map[string]any{
-			"Cluster": task.clusterInput.clusterInstanceData,
-		}
-		oldClusterInstance, err := utils.RenderTemplateForK8sCR(
-			utils.ClusterInstanceTemplateName, utils.ClusterInstanceTemplatePath, clusterInstanceObj)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(c.Create(ctx, oldClusterInstance)).To(Succeed())
-
-		// Update the cluster data with modified field
-		// Change an immutable field at the cluster-level
-		newSpec["baseDomain"] = "newdomain.example.com"
-		task.clusterInput.clusterInstanceData = newSpec
-
-		_, err = task.handleRenderClusterInstance(ctx)
-		Expect(err).To(HaveOccurred())
-
-		// Note that the detected changed fields in this unittest include nodes.0.ironicInspect, baseDomain,
-		// and holdInstallation, even though nodes.0.ironicInspect and holdInstallation were not actually changed.
-		// This is due to the difference between the fakeclient and a real cluster. When applying a manifest
-		// to a cluster, the API server preserves the full resource, including optional fields with empty values.
-		// However, the fakeclient in unittests behaves differently, as it uses an in-memory store and
-		// does not go through the API server. As a result, fields with empty values like false or "" are
-		// stripped from the retrieved ClusterInstance CR (existing ClusterInstance) in the fakeclient.
-		cond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(utils.PRconditionTypes.ClusterInstanceRendered))
-		Expect(cond).ToNot(BeNil())
-		verifyStatusCondition(*cond, metav1.Condition{
-			Type:    string(utils.PRconditionTypes.ClusterInstanceRendered),
-			Status:  metav1.ConditionFalse,
-			Reason:  string(utils.CRconditionReasons.Failed),
-			Message: "Failed to render and validate ClusterInstance: detected changes in immutable fields",
-		})
-	})
 })
+
+// ptr is a helper function to create pointers
+func ptr[T any](v T) *T {
+	return &v
+}
+
+func TestExtractNodeDetails(t *testing.T) {
+	tests := []struct {
+		name       string
+		existingCI *unstructured.Unstructured
+		expected   map[string]nodeInfo
+	}{
+		{
+			name: "Valid Input - Extract Node Details",
+			existingCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{
+								"hostName":       "node1",
+								"bmcAddress":     "192.168.1.1",
+								"bootMACAddress": "AA:BB:CC:DD:EE:FF",
+								"bmcCredentialsName": map[string]any{
+									"name": "bmc-secret",
+								},
+								"nodeNetwork": map[string]any{
+									"interfaces": []any{
+										map[string]any{
+											"name":       "eth0",
+											"macAddress": "00:11:22:33:44:55",
+										},
+										map[string]any{
+											"name":       "eth1",
+											"macAddress": "00:11:22:33:44:66",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]nodeInfo{
+				"node1": {
+					bmcAddress:         ptr("192.168.1.1"),
+					bootMACAddress:     ptr("AA:BB:CC:DD:EE:FF"),
+					bmcCredentialsName: ptr("bmc-secret"),
+					interfaceMACAddress: map[string]string{
+						"eth0": "00:11:22:33:44:55",
+						"eth1": "00:11:22:33:44:66",
+					},
+				},
+			},
+		},
+		{
+			name: "Missing hostName - Should be skipped",
+			existingCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{ // No hostName
+								"bmcAddress": "192.168.1.1",
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]nodeInfo{}, // No nodes extracted
+		},
+		{
+			name: "Missing bmcAddress and bootMACAddress",
+			existingCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{
+								"hostName": "node1",
+								"bmcCredentialsName": map[string]any{
+									"name": "bmc-secret",
+								},
+								"nodeNetwork": map[string]any{
+									"interfaces": []any{
+										map[string]any{
+											"name":       "eth0",
+											"macAddress": "00:11:22:33:44:55",
+										},
+										map[string]any{
+											"name":       "eth1",
+											"macAddress": "00:11:22:33:44:66",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]nodeInfo{
+				"node1": {
+					bmcCredentialsName: ptr("bmc-secret"),
+					interfaceMACAddress: map[string]string{
+						"eth0": "00:11:22:33:44:55",
+						"eth1": "00:11:22:33:44:66",
+					},
+				},
+			},
+		},
+		{
+			name: "Missing bmcCredentialsName or bmcCredentialsName.name",
+			existingCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{
+								"hostName":           "node1",
+								"bmcCredentialsName": map[string]any{
+									// "name" key is missing
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]nodeInfo{
+				"node1": {},
+			},
+		},
+		{
+			name: "Missing nodeNetwork.interfaces",
+			existingCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{
+								"hostName":       "node1",
+								"bmcAddress":     "192.168.1.1",
+								"bootMACAddress": "AA:BB:CC:DD:EE:FF",
+								"bmcCredentialsName": map[string]any{
+									"name": "bmc-secret",
+								},
+								"nodeNetwork": map[string]any{
+									// "interfaces" key is missing
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]nodeInfo{
+				"node1": {
+					bmcAddress:         ptr("192.168.1.1"),
+					bootMACAddress:     ptr("AA:BB:CC:DD:EE:FF"),
+					bmcCredentialsName: ptr("bmc-secret"),
+				},
+			},
+		},
+		{
+			name: "Invalid Interface Data (missing name or macAddress)",
+			existingCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{
+								"hostName": "node1",
+								"nodeNetwork": map[string]any{
+									"interfaces": []any{
+										map[string]any{ // Missing name
+											"macAddress": "00:11:22:33:44:55",
+										},
+										map[string]any{ // Missing macAddress
+											"name": "eth1",
+										},
+										map[string]any{ // Valid entry
+											"name":       "eth2",
+											"macAddress": "00:11:22:33:44:77",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]nodeInfo{
+				"node1": {
+					interfaceMACAddress: map[string]string{
+						"eth2": "00:11:22:33:44:77", // Only the valid entry should be included
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractNodeDetails(tt.existingCI)
+
+			// Compare the extracted result with expected output
+			if !reflect.DeepEqual(tt.expected, result) {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestAssignNodeDetails(t *testing.T) {
+	tests := []struct {
+		name       string
+		renderedCI *unstructured.Unstructured
+		nodesInfo  map[string]nodeInfo
+		expected   map[string]any
+	}{
+		{
+			name: "Valid Input - Assign Node Details",
+			renderedCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{
+								"hostName": "node1",
+								"nodeNetwork": map[string]any{
+									"interfaces": []any{
+										map[string]any{
+											"name":       "eth0",
+											"macAddress": "old-mac",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			nodesInfo: map[string]nodeInfo{
+				"node1": {
+					bmcAddress:         ptr("192.168.1.1"),
+					bootMACAddress:     ptr("AA:BB:CC:DD:EE:FF"),
+					bmcCredentialsName: ptr("bmc-secret"),
+					interfaceMACAddress: map[string]string{
+						"eth0": "00:11:22:33:44:55",
+					},
+				},
+			},
+			expected: map[string]any{
+				"spec": map[string]any{
+					"nodes": []any{
+						map[string]any{
+							"hostName":       "node1",
+							"bmcAddress":     "192.168.1.1",
+							"bootMACAddress": "AA:BB:CC:DD:EE:FF",
+							"bmcCredentialsName": map[string]any{
+								"name": "bmc-secret",
+							},
+							"nodeNetwork": map[string]any{
+								"interfaces": []any{
+									map[string]any{
+										"name":       "eth0",
+										"macAddress": "00:11:22:33:44:55", // Updated MAC
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Missing spec.nodes - Should not panic",
+			renderedCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{},
+				},
+			},
+			nodesInfo: map[string]nodeInfo{
+				"node1": {
+					bmcAddress:         ptr("192.168.1.1"),
+					bootMACAddress:     ptr("AA:BB:CC:DD:EE:FF"),
+					bmcCredentialsName: ptr("bmc-secret"),
+					interfaceMACAddress: map[string]string{
+						"eth0": "00:11:22:33:44:55",
+					},
+				},
+			},
+			expected: map[string]any{
+				"spec": map[string]any{}, // No changes
+			},
+		},
+		{
+			name: "Node with missing hostName - Should be skipped",
+			renderedCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{ // No hostName
+								"nodeNetwork": map[string]any{
+									"interfaces": []any{
+										map[string]any{
+											"name":       "eth0",
+											"macAddress": "old-mac",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			nodesInfo: map[string]nodeInfo{
+				"node1": {
+					bmcAddress:         ptr("192.168.1.1"),
+					bootMACAddress:     ptr("AA:BB:CC:DD:EE:FF"),
+					bmcCredentialsName: ptr("bmc-secret"),
+					interfaceMACAddress: map[string]string{
+						"eth0": "00:11:22:33:44:55",
+					},
+				},
+			},
+			expected: map[string]any{
+				"spec": map[string]any{
+					"nodes": []any{ // No changes, since hostName is missing
+						map[string]any{
+							"nodeNetwork": map[string]any{
+								"interfaces": []any{
+									map[string]any{
+										"name":       "eth0",
+										"macAddress": "old-mac",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Missing interfacesMACAddress in the nodeInfo",
+			renderedCI: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"nodes": []any{
+							map[string]any{
+								"hostName": "node1",
+							},
+						},
+					},
+				},
+			},
+			nodesInfo: map[string]nodeInfo{
+				"node1": {
+					bmcCredentialsName: ptr("bmc-secret"),
+					bootMACAddress:     ptr("AA:BB:CC:DD:EE:FF"),
+					bmcAddress:         ptr("192.168.1.1"),
+					HwMgrNodeId:        "test",
+					HwMgrNodeNs:        "test",
+				},
+			},
+			expected: map[string]any{
+				"spec": map[string]any{
+					"nodes": []any{
+						map[string]any{
+							"hostName":       "node1",
+							"bootMACAddress": "AA:BB:CC:DD:EE:FF",
+							"bmcAddress":     "192.168.1.1",
+							"bmcCredentialsName": map[string]any{
+								"name": "bmc-secret",
+							},
+							"hostRef": map[string]string{
+								"name":      "test",
+								"namespace": "test",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assignNodeDetails(tt.renderedCI, tt.nodesInfo)
+
+			// Compare modified renderedCI with expected output
+			if !reflect.DeepEqual(tt.expected, tt.renderedCI.Object) {
+				t.Errorf("expected %v, got %v", tt.expected, tt.renderedCI.Object)
+			}
+		})
+	}
+}

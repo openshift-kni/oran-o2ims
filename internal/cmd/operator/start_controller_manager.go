@@ -1,25 +1,21 @@
 /*
-Copyright 2024 Red Hat Inc.
+SPDX-FileCopyrightText: Red Hat
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
-compliance with the License. You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is
-distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-implied. See the License for the specific language governing permissions and limitations under the
-License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package operator
 
 import (
+	"crypto/tls"
+	"flag"
 	"log/slog"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	openshiftv1 "github.com/openshift/api/config/v1"
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -32,19 +28,24 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/go-logr/logr"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	"github.com/spf13/cobra"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
+
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
-	"github.com/spf13/cobra"
-	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
-	clusterv1 "open-cluster-management.io/api/cluster/v1"
-	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 )
 
 // ControllerManager creates and returns the `start controller-manager` command.
@@ -64,10 +65,21 @@ func ControllerManager() *cobra.Command {
 		"The address the metric endpoint binds to.",
 	)
 	flags.StringVar(
+		&c.metricsCertDir,
+		"metrics-tls-cert-dir",
+		"",
+		"The directory containing the tls.crt and tls.key.",
+	)
+	flags.StringVar(
 		&c.probeAddr,
 		"health-probe-bind-address",
 		":8081",
 		"The address the probe endpoint binds to.",
+	)
+	flag.BoolVar(
+		&c.enableHTTP2,
+		"enable-http2", false,
+		"If set, HTTP/2 will be enabled for the metrics and webhook servers",
 	)
 	flags.BoolVar(
 		&c.enableLeaderElection,
@@ -76,6 +88,10 @@ func ControllerManager() *cobra.Command {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.",
 	)
+	flags.BoolVar(&c.enableWebhooks,
+		"enable-webhooks",
+		true,
+		"Enable the o2ims validating webhooks")
 	flags.StringVar(
 		&c.image,
 		imageFlagName,
@@ -91,7 +107,10 @@ func ControllerManager() *cobra.Command {
 // command.
 type ControllerManagerCommand struct {
 	metricsAddr          string
+	metricsCertDir       string
+	enableHTTP2          bool
 	enableLeaderElection bool
+	enableWebhooks       bool
 	probeAddr            string
 	image                string
 }
@@ -117,6 +136,9 @@ func init() {
 	utilruntime.Must(openshiftv1.AddToScheme(scheme))
 	utilruntime.Must(openshiftoperatorv1.AddToScheme(scheme))
 	utilruntime.Must(ibguv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(pluginv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(assistedservicev1beta1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.
@@ -142,27 +164,37 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	// Restrict to the following namespaces - subject to change.
-	// nolint: gocritic
-	//namespaces := [...]string{"default", "oran", "o2ims", "oran-o2ims"} // List of Namespaces
-	//defaultNamespaces := make(map[string]cache.Config)
-
-	// nolint: gocritic
-	//for _, ns := range namespaces {
-	//	defaultNamespaces[ns] = cache.Config{}
-	//}
+	// Set the TLS options.
+	// If the enable-http2 flag is false (the default), http/2 will be disabled due to its vulnerabilities.
+	// More specifically, disabling http/2 will prevent from being vulnerable to the HTTP/2 Stream
+	// Cancelation and Rapid Reset CVEs. For more information see:
+	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
+	// - https://github.com/advisories/GHSA-4374-p667-p6c8
+	tlsOpts := []func(*tls.Config){}
+	if !c.enableHTTP2 {
+		tlsOpts = append(tlsOpts, func(c *tls.Config) {
+			logger.InfoContext(ctx, "disabling http/2")
+			c.NextProtos = []string{"http/1.1"}
+		})
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: c.metricsAddr},
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			SecureServing:  c.metricsCertDir != "",
+			CertDir:        c.metricsCertDir,
+			BindAddress:    c.metricsAddr,
+			TLSOpts:        tlsOpts,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
+		},
 		HealthProbeBindAddress: c.probeAddr,
 		LeaderElection:         c.enableLeaderElection,
 		LeaderElectionID:       "a73bc4d2.openshift.io",
-
-		// nolint: gocritic
-		//Cache: cache.Options{
-		//	DefaultNamespaces: defaultNamespaces,
-		//},
+		WebhookServer: webhook.NewServer(
+			webhook.Options{
+				TLSOpts: tlsOpts,
+			},
+		),
 
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
@@ -237,6 +269,19 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
+	}
+
+	if c.enableWebhooks {
+		if err = (&provisioningv1alpha1.ProvisioningRequest{}).SetupWebhookWithManager(mgr); err != nil {
+			logger.ErrorContext(
+				ctx,
+				"Unable to create webhook",
+				slog.String("webhook", "ProvisioningRequest"),
+				slog.String("error", err.Error()),
+			)
+			return exit.Error(1)
+		}
+
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

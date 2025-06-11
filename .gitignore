@@ -3,6 +3,7 @@
 /__debug*
 /oran-o2ims
 /bin/*
+/catalog/*
 
 # Folders
 .idea/
@@ -12,3 +13,6 @@
 
 # ginkgo generated binary
 *.test
+
+# ginkgo code coverage
+coverprofile.out

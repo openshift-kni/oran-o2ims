@@ -1,17 +1,7 @@
 /*
-Copyright 2023.
+SPDX-FileCopyrightText: Red Hat
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package controllers
@@ -84,6 +74,7 @@ func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
 	return ctrl.Result{RequeueAfter: interval}
 }
 
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates/finalizers,verbs=update
@@ -224,7 +215,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 	// Validation for upgrade defaults confimap
 	if t.object.Spec.Templates.UpgradeDefaults != "" {
-		err = validateUpgradeDefaultsConfigmap(
+		err = t.validateUpgradeDefaultsConfigmap(
 			ctx, t.client, t.object.Spec.Templates.UpgradeDefaults,
 			t.object.Namespace, utils.UpgradeDefaultsConfigmapKey,
 		)
@@ -253,7 +244,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	return validationErrsMsg == "", nil
 }
 
-func validateUpgradeDefaultsConfigmap(
+func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
 	ctx context.Context, c client.Client, name, namespace, key string,
 ) error {
 
@@ -261,6 +252,14 @@ func validateUpgradeDefaultsConfigmap(
 	if err != nil {
 		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
 	}
+
+	if t.object.Spec.Release != ibgu.Spec.IBUSpec.SeedImageRef.Version {
+		return utils.NewInputError(
+			"The ClusterTemplate spec.release (%s) does not match the seedImageRef version (%s) from the upgrade configmap",
+			t.object.Spec.Release, ibgu.Spec.IBUSpec.SeedImageRef.Version)
+	}
+
+	// Verify IBGU CR with dry-run
 	opts := []client.CreateOption{}
 	opts = append(opts, client.DryRunAll)
 	err = c.Create(ctx, ibgu, opts...)
@@ -307,6 +306,10 @@ func validateConfigmapReference[T any](
 
 	if templateDataKey == utils.ClusterInstanceTemplateDefaultsConfigmapKey {
 		if err = utils.ValidateDefaultInterfaces(data); err != nil {
+			return utils.NewInputError("failed to validate the default ConfigMap: %w", err)
+		}
+
+		if err = utils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, c, data); err != nil {
 			return utils.NewInputError("failed to validate the default ConfigMap: %w", err)
 		}
 	}
@@ -419,7 +422,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	for _, param := range mandatoryParams {
 		expectedName := param[0]
 		expectedType := param[1]
-		aSubschema, err := utils.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
+		aSubschema, err := provisioningv1alpha1.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
 		if err != nil {
 			if strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema '%s' does not exist:", expectedName)) {
 				missingParameter = append(missingParameter, expectedName)
@@ -588,15 +591,15 @@ func checkSchemaContains(actual, expected map[string]any, currentPath string) er
 func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx context.Context, errMsg string) error {
 	if errMsg != "" {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.CTconditionTypes.Validated,
-			utils.CTconditionReasons.Failed,
+			provisioningv1alpha1.CTconditionTypes.Validated,
+			provisioningv1alpha1.CTconditionReasons.Failed,
 			metav1.ConditionFalse,
 			errMsg,
 		)
 	} else {
 		utils.SetStatusCondition(&t.object.Status.Conditions,
-			utils.CTconditionTypes.Validated,
-			utils.CTconditionReasons.Completed,
+			provisioningv1alpha1.CTconditionTypes.Validated,
+			provisioningv1alpha1.CTconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"The cluster template validation succeeded",
 		)
@@ -662,17 +665,8 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 		if clusterTemplate.Namespace == obj.GetNamespace() {
 			if clusterTemplate.Spec.Templates.ClusterInstanceDefaults == obj.GetName() ||
 				clusterTemplate.Spec.Templates.PolicyTemplateDefaults == obj.GetName() ||
-				clusterTemplate.Spec.Templates.HwTemplate == obj.GetName() {
+				clusterTemplate.Spec.Templates.UpgradeDefaults == obj.GetName() {
 				// The configmap is referenced in this cluster template , enqueue it
-				requests = append(requests, reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Namespace: clusterTemplate.Namespace,
-						Name:      clusterTemplate.Name,
-					},
-				})
-			}
-		} else if obj.GetNamespace() == utils.InventoryNamespace {
-			if clusterTemplate.Spec.Templates.HwTemplate == obj.GetName() {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: types.NamespacedName{
 						Namespace: clusterTemplate.Namespace,

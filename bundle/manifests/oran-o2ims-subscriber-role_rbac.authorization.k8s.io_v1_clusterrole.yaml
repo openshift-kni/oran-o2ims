@@ -1,0 +1,22 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    role: subscriber-role
+  name: oran-o2ims-subscriber-role
+rules:
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
+  - /o2ims-infrastructureInventory/v1/subscriptions
+  - /o2ims-infrastructureCluster/v1/subscriptions
+  verbs:
+  - get
+  - create
+- nonResourceURLs:
+  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /o2ims-infrastructureInventory/v1/subscriptions/*
+  - /o2ims-infrastructureCluster/v1/subscriptions/*
+  verbs:
+  - get
+  - delete

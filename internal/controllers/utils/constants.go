@@ -1,6 +1,15 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package utils
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Default namespace
 const (
@@ -9,11 +18,12 @@ const (
 
 // Base resource names
 const (
-	InventoryDatabase          = "postgres"
-	InventoryMetadata          = "metadata"
-	InventoryDeploymentManager = "deployment-manager"
-	InventoryResource          = "resource"
-	InventoryAlarms            = "alarms"
+	InventoryDatabase     = "postgres"
+	InventoryResource     = "resource"
+	InventoryAlarms       = "alarms"
+	InventoryCluster      = "cluster"
+	InventoryArtifacts    = "artifacts"
+	InventoryProvisioning = "provisioning"
 )
 
 // Suffix for server names
@@ -21,15 +31,24 @@ const serverSuffix = "-server"
 
 // Deployment names
 const (
-	InventoryDatabaseServerName          = InventoryDatabase + serverSuffix
-	InventoryMetadataServerName          = InventoryMetadata + serverSuffix
-	InventoryDeploymentManagerServerName = InventoryDeploymentManager + serverSuffix
-	InventoryResourceServerName          = InventoryResource + serverSuffix
-	InventoryAlarmServerName             = InventoryAlarms + serverSuffix
+	InventoryDatabaseServerName     = InventoryDatabase + serverSuffix
+	InventoryResourceServerName     = InventoryResource + serverSuffix
+	InventoryAlarmServerName        = InventoryAlarms + serverSuffix
+	InventoryClusterServerName      = InventoryCluster + serverSuffix
+	InventoryArtifactsServerName    = InventoryArtifacts + serverSuffix
+	InventoryProvisioningServerName = InventoryProvisioning + serverSuffix
 )
 
-// InventoryIngressName the name of our Ingress controller instance
-const InventoryIngressName = "api"
+// IngressName defines the name of our ingress controller
+const IngressName = "oran-o2ims-ingress"
+
+// IngressClassName defines the ingress controller class to be used
+const IngressClassName = "openshift-default"
+
+// IngressPortName defines the name of service port to which our ingress controller directs traffic to
+const IngressPortName = "api"
+
+const Metal3PluginName = "metal3"
 
 // Resource operations
 const (
@@ -42,28 +61,41 @@ var (
 	AlarmServerArgs = []string{
 		"alarms-server",
 		"serve",
-		"--api-listener-address=127.0.0.1:8000",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
-	MetadataServerArgs = []string{
-		"start",
-		"metadata-server",
-		"--log-level=debug",
-		"--log-file=stdout",
-		"--api-listener-address=127.0.0.1:8000",
+
+	ArtifactsServerArgs = []string{
+		"artifacts-server",
+		"serve",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
-	DeploymentManagerServerArgs = []string{
-		"start",
-		"deployment-manager-server",
-		"--log-level=debug",
-		"--log-file=stdout",
-		"--api-listener-address=127.0.0.1:8000",
-	}
+
 	ResourceServerArgs = []string{
-		"start",
 		"resource-server",
-		"--log-level=debug",
-		"--log-file=stdout",
-		"--api-listener-address=127.0.0.1:8000",
+		"serve",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+	}
+
+	ClusterServerArgs = []string{
+		"cluster-server",
+		"serve",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+	}
+
+	ProvisioningServerArgs = []string{
+		"provisioning-server",
+		"serve",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
 	}
 )
 
@@ -78,6 +110,7 @@ const (
 	DefaultInventoryCR      = "default"
 	DefaultNamespace        = "oran-o2ims"
 	DefaultNamespaceEnvName = "OCLOUD_MANAGER_NAMESPACE"
+	ImagePullPolicyEnvName  = "IMAGE_PULL_POLICY"
 )
 
 // Search API attributes
@@ -121,8 +154,8 @@ const (
 // ClusterInstance template constants
 const (
 	ClusterInstanceTemplateName                 = "ClusterInstance"
-	ClusterInstanceTemplatePath                 = "controllers/clusterinstance-template.yaml"
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
+	ClusterInstanceCrdName                      = "clusterinstances"
 )
 
 var (
@@ -144,7 +177,10 @@ var (
 		{"nodes", "*", "bmcAddress"},
 		{"nodes", "*", "bmcCredentialsName"},
 		{"nodes", "*", "bootMACAddress"},
+		{"nodes", "*", "hostRef"},
 		{"nodes", "*", "nodeNetwork", "interfaces", "*", "macAddress"},
+		// The interface labels are not part of the ClusterInstance.
+		{"nodes", "*", "nodeNetwork", "interfaces", "*", "label"},
 		// modified for upgrade
 		{"suppressedManifests"},
 	}
@@ -199,15 +235,14 @@ const (
 // POD Container Names
 const (
 	MigrationContainerName = "migration"
-	RbacContainerName      = "rbac"
 	ServerContainerName    = "server"
 )
 
 // POD Port Values
 const (
-	DefaultServicePort   = 8000
-	DefaultTargetPort    = "https"
-	DefaultContainerPort = 8000
+	DefaultServicePort       = 8443
+	DefaultServiceTargetPort = "https"
+	DefaultContainerPort     = 8443
 
 	DatabaseServicePort = 5432
 	DatabaseTargetPort  = "database"
@@ -215,10 +250,10 @@ const (
 
 // Environment values
 const (
-	ServerImageName        = "IMAGE"
-	KubeRbacProxyImageName = "KUBE_RBAC_PROXY_IMAGE"
-	PostgresImageName      = "POSTGRES_IMAGE"
-	HwMgrPluginNameSpace   = "HWMGR_PLUGIN_NAMESPACE"
+	ServerImageName         = "IMAGE"
+	PostgresImageName       = "POSTGRES_IMAGE"
+	HwMgrPluginNameSpace    = "HWMGR_PLUGIN_NAMESPACE"
+	InternalServicePortName = "INTERNAL_SERVICE_PORT"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
@@ -241,13 +276,51 @@ const (
 	AdminPasswordEnvName     = "POSTGRESQL_ADMIN_PASSWORD"     // nolint: gosec
 	AlarmsPasswordEnvName    = "ORAN_O2IMS_ALARMS_PASSWORD"    // nolint: gosec
 	ResourcesPasswordEnvName = "ORAN_O2IMS_RESOURCES_PASSWORD" // nolint: gosec
+	ClustersPasswordEnvName  = "ORAN_O2IMS_CLUSTERS_PASSWORD"  // nolint: gosec
 
 	DatabaseHostnameEnvVar = "POSTGRES_HOSTNAME"
 )
 
+// NodeCluster/ClusterResource extensions
+const (
+	ClusterModelExtension             = "model"
+	ClusterVersionExtension           = "version"
+	ClusterVendorExtension            = "vendor"
+	ClusterAlarmDictionaryIDExtension = "alarmDictionaryID"
+
+	ClusterModelHubCluster     = "hub-cluster"
+	ClusterModelManagedCluster = "managed-cluster"
+
+	OpenshiftVersionLabelName = "openshiftVersion"
+	ClusterIDLabelName        = "clusterID"
+	LocalClusterLabelName     = "local-cluster"
+
+	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
+	HardwareManagerIdLabel        = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId"
+	HardwareManagerNodeIdLabel    = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId"
+)
+
+// AlarmDefinitionSeverityField severity field within additional fields of alarm definition
+const AlarmDefinitionSeverityField = "severity"
+
 // Alertmanager values
 const (
-	AlertmanagerObjectName = "alertmanager"
-	AlertmanagerNamespace  = "open-cluster-management-observability"
-	AlertmanagerSA         = "alertmanager"
+	AlertmanagerObjectName                      = "alertmanager"
+	OpenClusterManagementObservabilityNamespace = "open-cluster-management-observability"
+	AlertmanagerSA                              = "alertmanager"
+)
+
+// TLS Mount Paths
+const (
+	TLSServerMountPath = "/secrets/tls"
+	TLSClientMountPath = "/secrets/smo/tls"
+	CABundleMountPath  = "/secrets/smo/certs"
+	CABundleFilename   = "ca-bundle.crt"
+)
+
+// SMO OAuth specific environment variables.  These values are stored in environment variables to
+// avoid them being visible in the command line arguments.
+const (
+	OAuthClientIDEnvName     = "SMO_OAUTH_CLIENT_ID"
+	OAuthClientSecretEnvName = "SMO_OAUTH_CLIENT_SECRET" // nolint: gosec
 )

@@ -1,7 +1,14 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -18,6 +25,8 @@ import (
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -40,6 +49,8 @@ var _ = Describe("policyManagement", func() {
 
 	BeforeEach(func() {
 		// Define the needed resources.
+		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
 		crs := []client.Object{
 			// Cluster Template Namespace.
 			&corev1.Namespace{
@@ -50,7 +61,7 @@ var _ = Describe("policyManagement", func() {
 			// Cluster Template.
 			&provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      getClusterTemplateRefName(tName, tVersion),
+					Name:      GetClusterTemplateRefName(tName, tVersion),
 					Namespace: ctNamespace,
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
@@ -62,13 +73,13 @@ var _ = Describe("policyManagement", func() {
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwTemplate:              hwTemplate,
 					},
-					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testFullTemplateSchema)},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 				},
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(utils.CTconditionTypes.Validated),
-							Reason: string(utils.CTconditionReasons.Completed),
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -89,7 +100,11 @@ templateRefs:
 - name: "ai-cluster-templates-v1"
   namespace: "siteconfig-operator"
 nodes:
-- hostname: "node1"
+- hostName: "node1"
+  role: master
+  ironicInspect: ""
+  automatedCleaningMode: "disabled"
+  bootMode: "UEFI"
   nodeNetwork:
     interfaces:
     - name: eno1
@@ -156,25 +171,33 @@ defaultHugepagesSize: "1G"`,
 					Namespace: ctNamespace,
 				},
 			},
+			// ClusterInstance CRD.
+			clusterInstanceCRD,
 			// Provisioning Requests.
 			&provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "cluster-1",
-					Finalizers: []string{provisioningRequestFinalizer},
+					Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
 				},
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
 					TemplateParameters: runtime.RawExtension{
-						Raw: []byte(testFullTemplateParameters),
+						Raw: []byte(testutils.TestFullTemplateParameters),
 					},
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
 					// Fake the hw provision status
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(utils.PRconditionTypes.HardwareProvisioned),
+							Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 							Status: metav1.ConditionTrue,
+						},
+					},
+					Extensions: provisioningv1alpha1.Extensions{
+						NodePoolRef: &provisioningv1alpha1.NodePoolRef{
+							Name:      "cluster-1",
+							Namespace: utils.UnitTestHwmgrNamespace,
 						},
 					},
 				},
@@ -191,6 +214,7 @@ defaultHugepagesSize: "1G"`,
 		}
 
 		c = getFakeClientFromObjects(crs...)
+
 		// Reconcile the ClusterTemplate.
 		CTReconciler = &ClusterTemplateReconciler{
 			Client: c,
@@ -199,12 +223,12 @@ defaultHugepagesSize: "1G"`,
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
 
-		_, err := CTReconciler.Reconcile(ctx, req)
+		_, err = CTReconciler.Reconcile(ctx, req)
 		Expect(err).ToNot(HaveOccurred())
 
 		CRReconciler = &ProvisioningRequestReconciler{
@@ -221,7 +245,7 @@ defaultHugepagesSize: "1G"`,
 				Name:      "cluster-1",
 				Namespace: utils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
-					utils.HwTemplateBootIfaceLabel: "bootable-interface",
+					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
 			Spec: hwv1alpha1.NodePoolSpec{
@@ -229,15 +253,19 @@ defaultHugepagesSize: "1G"`,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
 						NodePoolData: hwv1alpha1.NodePoolData{
-							Name:      "controller",
-							HwProfile: "profile-spr-single-processor-64G",
+							Name:           "controller",
+							Role:           "master",
+							HwProfile:      "profile-spr-single-processor-64G",
+							ResourcePoolId: "xyz",
 						},
 						Size: 1,
 					},
 					{
 						NodePoolData: hwv1alpha1.NodePoolData{
-							Name:      "worker",
-							HwProfile: "profile-spr-dual-processor-128G",
+							Name:           "worker",
+							Role:           "worker",
+							HwProfile:      "profile-spr-dual-processor-128G",
+							ResourcePoolId: "xyz",
 						},
 						Size: 0,
 					},
@@ -252,12 +280,12 @@ defaultHugepagesSize: "1G"`,
 					},
 				},
 				Properties: hwv1alpha1.Properties{
-					NodeNames: []string{masterNodeName},
+					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
 		}
 		Expect(c.Create(ctx, nodePool)).To(Succeed())
-		createNodeResources(ctx, c, nodePool.Name)
+		testutils.CreateNodeResources(ctx, c, nodePool.Name)
 
 		// Update the managedCluster cluster-1 to be available, joined and accepted.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -266,19 +294,19 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionTrue,
 			"Managed cluster is available",
 		)
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
 			"HubClusterAdminAccepted",
 			metav1.ConditionTrue,
 			"Accepted by hub cluster admin",
 		)
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionJoined),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionJoined),
 			"ManagedClusterJoined",
 			metav1.ConditionTrue,
 			"Managed cluster joined",
@@ -369,7 +397,7 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).To(BeNil())
 
 		// Add the ClusterProvisioned condition.
@@ -392,12 +420,13 @@ defaultHugepagesSize: "1G"`,
 		}
 
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ClusterProvisioned,
-			utils.CRconditionReasons.InProgress,
+			provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"",
 		)
-		CRTask.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = metav1.Now()
+		currentTime := metav1.Now()
+		CRTask.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
 		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
 
 		// Call the Reconciliation function.
@@ -462,8 +491,8 @@ defaultHugepagesSize: "1G"`,
 
 		// Update the ProvisioningRequest ConfigurationApplied condition to TimedOut.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.TimedOut,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.TimedOut,
 			metav1.ConditionFalse,
 			"The configuration is still being applied, but it timed out",
 		)
@@ -535,11 +564,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Completed)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is up to date"))
 	})
 
@@ -640,11 +669,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -662,11 +691,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -688,11 +717,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.OutOfDate)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is out of date"))
 	})
@@ -788,11 +817,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 
 		// Step 2: Update the managed cluster to make it not ready.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -800,7 +829,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionFalse,
 			"Managed cluster is not available",
@@ -827,15 +856,15 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.ClusterNotReady)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady)))
 
 		// Step 3: Update the managed cluster to make it ready again.
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionTrue,
 			"Managed cluster is available",
@@ -862,11 +891,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 	})
 
 	It("It sets ClusterNotReady if the cluster is unstable/not ready", func() {
@@ -904,7 +933,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
 		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
-			utils.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionFalse,
 			"Managed cluster is not available",
@@ -953,11 +982,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.ClusterNotReady)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady)))
 	})
 
 	It("Sets the NonCompliantAt timestamp and times out", func() {
@@ -1067,11 +1096,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.OutOfDate)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.OutOfDate)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is out of date"))
 
 		// Enforce the NonCompliant policy.
@@ -1115,11 +1144,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -1137,11 +1166,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -1156,11 +1185,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 	})
@@ -1267,11 +1296,11 @@ defaultHugepagesSize: "1G"`,
 		// Verify that the ConfigurationApplied condition is set to InProgress.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 
 		// Take 2 minutes to the NonCompliantAt timestamp to mock timeout.
@@ -1290,11 +1319,11 @@ defaultHugepagesSize: "1G"`,
 		// Verify that the ConfigurationApplied condition is set to TimedOut.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 
@@ -1309,11 +1338,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions = CRTask.object.Status.Conditions
 		configAppliedCond = meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.TimedOut)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
 		Expect(configAppliedCond.Message).To(
 			Equal("The configuration is still being applied, but it timed out"))
 	})
@@ -1361,11 +1390,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
-		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Missing)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Missing)))
 	})
 
 	It("It handles updated/deleted policies for matched clusters", func() {
@@ -1458,7 +1487,7 @@ defaultHugepagesSize: "1G"`,
 		err := CRReconciler.Client.Get(
 			context.TODO(),
 			types.NamespacedName{
-				Name: getClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
+				Name: GetClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
 			clusterTemplate,
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -1583,11 +1612,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.Completed)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Completed)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is up to date"))
 	})
 
@@ -1690,11 +1719,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 
@@ -1797,11 +1826,11 @@ defaultHugepagesSize: "1G"`,
 		// Check the status conditions.
 		conditions := CRTask.object.Status.Conditions
 		configAppliedCond := meta.FindStatusCondition(
-			conditions, string(utils.PRconditionTypes.ConfigurationApplied))
+			conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
 		Expect(configAppliedCond).ToNot(BeNil())
-		Expect(configAppliedCond.Type).To(Equal(string(utils.PRconditionTypes.ConfigurationApplied)))
+		Expect(configAppliedCond.Type).To(Equal(string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied)))
 		Expect(configAppliedCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(configAppliedCond.Reason).To(Equal(string(utils.CRconditionReasons.InProgress)))
+		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 		Expect(configAppliedCond.Message).To(Equal("The configuration is still being applied"))
 	})
 })
@@ -1831,13 +1860,13 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			&provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "cluster-1",
-					Finalizers: []string{provisioningRequestFinalizer},
+					Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
 				},
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    tName,
 					TemplateVersion: tVersion,
 					TemplateParameters: runtime.RawExtension{
-						Raw: []byte(testFullTemplateParameters),
+						Raw: []byte(testutils.TestFullTemplateParameters),
 					},
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
@@ -1857,7 +1886,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      getClusterTemplateRefName(tName, tVersion),
+				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			},
 		}
@@ -1885,78 +1914,78 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 	It("Returns false if the status is unexpected and NonCompliantAt is not set", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Unknown,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Unknown,
 			metav1.ConditionFalse,
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 	})
 
 	It("Returns false if the status is Completed and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Completed,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 
 	It("Returns false if the status is OutOfDate and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.OutOfDate,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.OutOfDate,
 			metav1.ConditionFalse,
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 
 	It("Returns false if the status is Missing and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.Missing,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.Missing,
 			metav1.ConditionFalse,
 			"",
 		)
 		// Start from empty NonCompliantAt.
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).To(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt was set and that the return is false.
 		Expect(policyTimedOut).To(BeFalse())
-		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time).ToNot(BeZero())
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
 	})
 
 	It("Returns true if the status is InProgress and the timeout has passed", func() {
 		// Set the status to InProgress.
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
-			utils.PRconditionTypes.ConfigurationApplied,
-			utils.CRconditionReasons.InProgress,
+			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"",
 		)
 		// Set NonCompliantAt.
 		nonCompliantAt := metav1.Now().Add(-2 * time.Minute)
-		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time = nonCompliantAt
+		CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: nonCompliantAt}
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		// Check that NonCompliantAt wasn't changed and that the return is true.
 		Expect(policyTimedOut).To(BeTrue())
@@ -1967,5 +1996,438 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		policyTimedOut := CRTask.hasPolicyConfigurationTimedOut(ctx)
 		Expect(policyTimedOut).To(BeFalse())
 		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).ToNot(BeZero())
+	})
+})
+
+var _ = Describe("addPostProvisioningLabels", func() {
+	var (
+		c                 client.Client
+		ctx               context.Context
+		ctNamespace       = "clustertemplate-a-v4-16"
+		ciDefaultsCm      = "clusterinstance-defaults-v1"
+		ptDefaultsCm      = "policytemplate-defaults-v1"
+		mclName           = "cluster-1"
+		AgentName         = "agent-for-cluster-1"
+		ProvReqReconciler *ProvisioningRequestReconciler
+		ProvReqTask       *provisioningRequestReconcilerTask
+		hwTemplate        = "hwTemplate-v1"
+		managedCluster    = &clusterv1.ManagedCluster{}
+		nodePool          = &hwv1alpha1.NodePool{}
+	)
+
+	BeforeEach(func() {
+		// Define the needed resources.
+		provisioningRequest := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       mclName,
+				Finalizers: []string{provisioningv1alpha1.ProvisioningRequestFinalizer},
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testutils.TestFullTemplateParameters),
+				},
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				// Fake the hw provision status
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		}
+
+		managedCluster = &clusterv1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mclName,
+			},
+			Spec: clusterv1.ManagedClusterSpec{
+				HubAcceptsClient: true,
+			},
+		}
+
+		hwPluginNs := &corev1.Namespace{}
+		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+
+		crs := []client.Object{
+			// Cluster Template Namespace.
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: ctNamespace,
+				},
+			},
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: utils.UnitTestHwmgrNamespace,
+				},
+			},
+			// ManagedCluster Namespace.
+			&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: mclName,
+				},
+			},
+			// Cluster Template.
+			&provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      GetClusterTemplateRefName(tName, tVersion),
+					Namespace: ctNamespace,
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:       tName,
+					Version:    tVersion,
+					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+					Templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: ciDefaultsCm,
+						PolicyTemplateDefaults:  ptDefaultsCm,
+						HwTemplate:              hwTemplate,
+					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			provisioningRequest,
+			// Managed clusters
+			managedCluster,
+		}
+
+		c = getFakeClientFromObjects(crs...)
+
+		// Populate the NodePool without creating it.
+		nodePool = &hwv1alpha1.NodePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      mclName,
+				Namespace: utils.UnitTestHwmgrNamespace,
+				Annotations: map[string]string{
+					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
+				},
+			},
+			Spec: hwv1alpha1.NodePoolSpec{
+				HwMgrId: utils.UnitTestHwmgrID,
+				NodeGroup: []hwv1alpha1.NodeGroup{
+					{
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name:           "controller",
+							Role:           "master",
+							HwProfile:      "profile-spr-single-processor-64G",
+							ResourcePoolId: "xyz",
+						},
+						Size: 1,
+					},
+					{
+						NodePoolData: hwv1alpha1.NodePoolData{
+							Name:           "worker",
+							Role:           "worker",
+							HwProfile:      "profile-spr-dual-processor-128G",
+							ResourcePoolId: "xyz",
+						},
+						Size: 0,
+					},
+				},
+			},
+			Status: hwv1alpha1.NodePoolStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(hwv1alpha1.Provisioned),
+						Status: metav1.ConditionTrue,
+						Reason: string(hwv1alpha1.Completed),
+					},
+				},
+				Properties: hwv1alpha1.Properties{
+					NodeNames: []string{testutils.MasterNodeName},
+				},
+			},
+		}
+
+		// Get the ProvisioningRequest Task.
+		ProvReqReconciler = &ProvisioningRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		ProvReqTask = &provisioningRequestReconcilerTask{
+			logger: ProvReqReconciler.Logger,
+			client: ProvReqReconciler.Client,
+			object: provisioningRequest,
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+			},
+		}
+	})
+
+	Context("When the HW template is provided and the HW CRs do not exist", func() {
+		It("Returns error for the NodePool missing", func() {
+			// Run the function.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				fmt.Sprintf("expected NodePool %s not found in the %s namespace", mclName, utils.UnitTestHwmgrNamespace)))
+		})
+
+		It("Returns error for missing Nodes", func() {
+			// Create the NodePool, but not the nodes.
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
+			// Run the function.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				fmt.Sprintf(
+					"the expected o2ims-hardwaremanagement.oran.openshift.io Nodes were not found in the %s namespace",
+					utils.UnitTestHwmgrNamespace)))
+		})
+	})
+
+	Context("When the HW template is provided and the expected HW CRs exist", func() {
+		BeforeEach(func() {
+			hwPluginNs := &corev1.Namespace{}
+			hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+
+			// Create the NodePool.
+			Expect(c.Create(ctx, nodePool)).To(Succeed())
+			testutils.CreateNodeResources(ctx, c, nodePool.Name)
+		})
+
+		It("Updates Agent and ManagedCluster labels as expected", func() {
+			// Create an Agent CR with the expected label.
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      AgentName,
+					Namespace: mclName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      mclName,
+						Namespace: mclName,
+					},
+				},
+			}
+			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+			// Run the function.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the new label was added for the ManagedCluster CR.
+			mclUpdated := &clusterv1.ManagedCluster{}
+			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: mclName}, mclUpdated)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(mclUpdated.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+			}))
+
+			// Check that the new label was added and the old label was kept for the Agent CR.
+			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(agent.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+			}))
+		})
+
+		It("Fails to get a ClusterTemplate", func() {
+			// Update the ClusterTemplate to be invalid.
+			oranct := &provisioningv1alpha1.ClusterTemplate{}
+
+			err := ProvReqTask.client.Get(
+				ctx,
+				types.NamespacedName{Name: GetClusterTemplateRefName(tName, tVersion), Namespace: ctNamespace},
+				oranct,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			oranct.Status.Conditions[0].Status = "False"
+			Expect(ProvReqTask.client.Status().Update(ctx, oranct)).To(Succeed())
+			Expect(err).ToNot(HaveOccurred())
+
+			err = ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				"failed to get ClusterTemplate: a valid ClusterTemplate (%s) does not exist in any namespace",
+				fmt.Sprintf("%s.%s", tName, tVersion)))
+		})
+
+		It("Sets the label for MNO when there are multiple Agents", func() {
+			// Create 2 Agents in the expected namespace
+			agent2Name := "agent-2-for-cluster-1"
+			agent2Hostname := "some-other-cluster.lab.example.com"
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      AgentName,
+					Namespace: mclName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      mclName,
+						Namespace: mclName,
+					},
+					Hostname: fmt.Sprintf("%s.lab.example.com", mclName),
+				},
+			}
+			agent2 := agent.DeepCopy()
+			agent2.Name = agent2Name
+			agent2.Spec.Hostname = agent2Hostname
+			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+			Expect(ProvReqTask.client.Create(ctx, agent2)).To(Succeed())
+
+			// Create the corresponding Node for the 2nd Agent only.
+			masterNodeName2 := "master-node-2"
+			// #nosec G101
+			bmcSecretName2 := "bmc-secret-2"
+			node := testutils.CreateNode(
+				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
+				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
+			node.Status.Hostname = agent2Hostname
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+
+			// Run the function.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).To(Not(HaveOccurred()))
+			// Check that both agents have the expected labels.
+			listOpts := []client.ListOption{
+				client.MatchingLabels{
+					"agent-install.openshift.io/clusterdeployment-namespace": managedCluster.Name,
+				},
+				client.InNamespace(managedCluster.Name),
+			}
+			agents := &assistedservicev1beta1.AgentList{}
+			err = ProvReqTask.client.List(ctx, agents, listOpts...)
+			Expect(err).To(Not(HaveOccurred()))
+			Expect(len(agents.Items)).To(Equal(2))
+			checkedAgents := 0
+			for _, agent := range agents.Items {
+				if agent.Name == agent2Name {
+					checkedAgents += 1
+					Expect(agent.Labels).To(Equal(map[string]string{
+						utils.ClusterTemplateArtifactsLabel:                           "57b39bda-ac56-4143-9b10-d1a71517d04f",
+						"agent-install.openshift.io/clusterdeployment-namespace":      mclName,
+						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId":     utils.UnitTestHwmgrID,
+						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId": masterNodeName2,
+					}))
+				}
+				if agent.Name == AgentName {
+					checkedAgents += 1
+					Expect(agents.Items[1].Labels).To(Equal(map[string]string{
+						utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+					}))
+				}
+			}
+			Expect(checkedAgents).To(Equal(len(agents.Items)))
+		})
+
+		It("Fails for multiple Agents with unexpected labels", func() {
+			// Create 2 Agents in the expected namespace
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      AgentName,
+					Namespace: mclName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": "some-other-cluster",
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      mclName,
+						Namespace: mclName,
+					},
+					Hostname: "some-other-cluster.lab.example.com",
+				},
+			}
+			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+
+			// Create the corresponding Node.
+			masterNodeName2 := "master-node-2"
+			// #nosec G101
+			bmcSecretName2 := "bmc-secret-2"
+			node := testutils.CreateNode(
+				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
+				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
+			node.Status.Hostname = "some-other-cluster.lab.example.com"
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+
+			// Run the function.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				fmt.Sprintf("the expected Agents were not found in the %s namespace", mclName)))
+		})
+	})
+
+	Context("When the HW template is not provided", func() {
+		BeforeEach(func() {
+			// Remove the HW template from the ClusterTemplate.
+			ct := &provisioningv1alpha1.ClusterTemplate{}
+			Expect(c.Get(ctx, types.NamespacedName{
+				Name:      GetClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			}, ct)).To(Succeed())
+			ct.Spec.Templates.HwTemplate = ""
+			Expect(c.Update(ctx, ct)).To(Succeed())
+		})
+
+		It("Does not add hwMgrId and hwMgrNodeId labels to the Agents", func() {
+			// Create an Agent CR with the expected label.
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      AgentName,
+					Namespace: mclName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      mclName,
+						Namespace: mclName,
+					},
+					Hostname: fmt.Sprintf("%s.lab.example.com", mclName),
+				},
+			}
+			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+
+			// Run the function.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the new label was added for the ManagedCluster CR.
+			mclUpdated := &clusterv1.ManagedCluster{}
+			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: mclName}, mclUpdated)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(mclUpdated.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+			}))
+
+			// Check that the templateArtifacts label is present and hwMgrId and hwMgrNodeId labels are not present.
+			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(agent.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+			}))
+			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId")))
+			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId")))
+		})
 	})
 })

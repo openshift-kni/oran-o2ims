@@ -1,16 +1,10 @@
 /*
-Copyright (c) 2023 Red Hat, Inc.
+SPDX-FileCopyrightText: Red Hat
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
-compliance with the License. You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is
-distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-implied. See the License for the specific language governing permissions and limitations under the
-License.
+SPDX-License-Identifier: Apache-2.0
 */
+
+//go:debug http2server=0
 
 package main
 
@@ -21,6 +15,9 @@ import (
 	"os"
 
 	alarmscmd "github.com/openshift-kni/oran-o2ims/internal/service/alarms/cmd"
+	artifactscmd "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/cmd"
+	clustercmd "github.com/openshift-kni/oran-o2ims/internal/service/cluster/cmd"
+	provisioningcmd "github.com/openshift-kni/oran-o2ims/internal/service/provisioning/cmd"
 	inventorycmd "github.com/openshift-kni/oran-o2ims/internal/service/resources/cmd"
 
 	"github.com/openshift-kni/oran-o2ims/internal"
@@ -40,8 +37,11 @@ func main() {
 		SetErr(os.Stderr).
 		AddCommand(cmd.Start).
 		AddCommand(cmd.Version).
-		AddCommand(alarmscmd.GetAlarmRootCmd).        // TODO: all server should have same root to share init info
-		AddCommand(inventorycmd.GetResourcesRootCmd). // TODO: all server should have same root to share init info
+		AddCommand(alarmscmd.GetAlarmRootCmd).              // TODO: all server should have same root to share init info
+		AddCommand(clustercmd.GetClusterRootCmd).           // TODO: all server should have same root to share init info
+		AddCommand(inventorycmd.GetResourcesRootCmd).       // TODO: all server should have same root to share init info
+		AddCommand(artifactscmd.GetArtifactsRootCmd).       // TODO: all server should have same root to share init info
+		AddCommand(provisioningcmd.GetProvisioningRootCmd). // TODO: all server should have same root to share init info
 		Build()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())

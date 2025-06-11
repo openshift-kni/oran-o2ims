@@ -17,11 +17,14 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.name
+      name: DisplayName
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.provisioningStatus.provisioningState
-      name: ProvisionState
+    - jsonPath: .status.provisioningStatus.provisioningPhase
+      name: ProvisionPhase
       type: string
     - jsonPath: .status.provisioningStatus.provisioningDetails
       name: ProvisionDetails
@@ -69,6 +72,7 @@ spec:
                 description: |-
                   TemplateName defines the base name of the referenced ClusterTemplate.
                   The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+                minLength: 1
                 type: string
               templateParameters:
                 description: TemplateParameters provides the input data that conforms
@@ -80,6 +84,7 @@ spec:
                 description: |-
                   TemplateVersion defines the version of the referenced ClusterTemplate.
                   The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+                minLength: 1
                 type: string
             required:
             - templateName
@@ -226,6 +231,11 @@ spec:
                       type: object
                     type: array
                 type: object
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller.
+                format: int64
+                type: integer
               provisioningStatus:
                 properties:
                   provisionedResources:
@@ -241,13 +251,19 @@ spec:
                     description: The details about the current state of the provisioning
                       process.
                     type: string
-                  provisioningState:
+                  provisioningPhase:
                     description: The current state of the provisioning process.
                     enum:
+                    - pending
                     - progressing
                     - fulfilled
                     - failed
                     - deleting
+                    type: string
+                  updateTime:
+                    description: The timestamp of the last update to the provisioning
+                      status.
+                    format: date-time
                     type: string
                 type: object
             type: object

@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package notifier
 
 import (
@@ -10,22 +16,28 @@ import (
 )
 
 // DefaultBufferedChannelSize defines the default size for buffered channels used across the notifier.
-const DefaultBufferedChannelSize = 10
+const DefaultBufferedChannelSize = 100
+
+// CompletionChannelSize defines the buffer size of the completion channel.  We keep this small to ensure that we don't
+// process a large number of notifications without first updating the subscription cursor so workers will block until
+// completions are processed before sending more notifications.
+const CompletionChannelSize = 1
 
 // Notification defines a generic notification object.  The payload should support JSON marshaling.
 type Notification struct {
 	NotificationID uuid.UUID
 	SequenceID     int
-	Payload        any
+	Payload        interface{}
 }
 
 // SubscriptionInfo defines a generic subscription object.  The intent is to abstract away the differences between the
 // alarm and resource server subscription models.
 type SubscriptionInfo struct {
-	SubscriptionID uuid.UUID
-	Callback       string
-	Filter         *string
-	EventCursor    int
+	SubscriptionID         uuid.UUID
+	ConsumerSubscriptionID *uuid.UUID
+	Callback               string
+	Filter                 *string
+	EventCursor            int
 }
 
 // NotificationProvider must be implemented by a domain specific model implementor so that the notifier can manage
@@ -41,6 +53,7 @@ type SubscriptionProvider interface {
 	GetSubscriptions(ctx context.Context) ([]SubscriptionInfo, error)
 	Matches(subscription *SubscriptionInfo, notification *Notification) bool
 	UpdateSubscription(ctx context.Context, subscription *SubscriptionInfo) error
+	Transform(subscription *SubscriptionInfo, notification *Notification) (*Notification, error)
 }
 
 // SubscriptionEvent defines the information sent to the notifier when a subscription is added/removed
@@ -54,11 +67,14 @@ type SubscriptionEvent struct {
 // SubscriptionEventHandler is an interfaces which defines the operations required to be supported by a component that
 // is prepared to handle subscription events.
 type SubscriptionEventHandler interface {
-	SubscriptionEvent(event *SubscriptionEvent)
+	SubscriptionEvent(ctx context.Context, event *SubscriptionEvent)
+	GetClientFactory() ClientProvider
 }
 
 // Notifier represents the data required by the notification process
 type Notifier struct {
+	// oauthConfig defines the oauth related attributes used to establish connections to subscribers
+	clientProvider ClientProvider
 	// notificationChannel is used to receive notifications about new events from the collector
 	notificationChannel chan *Notification
 	// subscriptionChannel is used to receive notifications about new/deleted subscriptions
@@ -69,20 +85,22 @@ type Notifier struct {
 	// workers is the list of workers started to service subscriptions.  It is mapped by
 	// subscription uuid value.
 	workers map[uuid.UUID]*SubscriptionWorker
-	// NotificationProvider is a plugable interface which provides persistence handling for notifications
-	NotificationProvider NotificationProvider
-	// SubscriptionProvider is a plugable interface which provides persistence handling for subscriptions
-	SubscriptionProvider SubscriptionProvider
+	// notificationProvider is a plugable interface which provides persistence handling for notifications
+	notificationProvider NotificationProvider
+	// subscriptionProvider is a plugable interface which provides persistence handling for subscriptions
+	subscriptionProvider SubscriptionProvider
 }
 
 // NewNotifier creates a new instance of a Notifier
-func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider NotificationProvider) *Notifier {
+func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider NotificationProvider,
+	clientProvider ClientProvider) *Notifier {
 	eventChannel := make(chan *Notification, DefaultBufferedChannelSize)
 	subscriptionChannel := make(chan *SubscriptionEvent, DefaultBufferedChannelSize)
-	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, DefaultBufferedChannelSize)
+	subscriberJobCompleteChannel := make(chan *SubscriptionJobComplete, CompletionChannelSize)
 	return &Notifier{
-		SubscriptionProvider:           subscriptionProvider,
-		NotificationProvider:           notificationProvider,
+		clientProvider:                 clientProvider,
+		subscriptionProvider:           subscriptionProvider,
+		notificationProvider:           notificationProvider,
 		notificationChannel:            eventChannel,
 		subscriptionChannel:            subscriptionChannel,
 		subscriptionJobCompleteChannel: subscriberJobCompleteChannel,
@@ -142,7 +160,7 @@ func (n *Notifier) init(ctx context.Context) error {
 func (n *Notifier) loadEvents(ctx context.Context) error {
 	slog.Info("loading events")
 
-	notifications, err := n.NotificationProvider.GetNotifications(ctx)
+	notifications, err := n.notificationProvider.GetNotifications(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get notifications: %w", err)
 	}
@@ -167,19 +185,19 @@ func (n *Notifier) loadEvents(ctx context.Context) error {
 func (n *Notifier) loadSubscriptions(ctx context.Context) error {
 	slog.Info("loading subscriptions")
 
-	subscriptions, err := n.SubscriptionProvider.GetSubscriptions(ctx)
+	subscriptions, err := n.subscriptionProvider.GetSubscriptions(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get subscriptions: %w", err)
 	}
 
 	for _, s := range subscriptions {
 		subscriptionID := s.SubscriptionID
-		n.workers[subscriptionID], err = NewSubscriptionWorker(ctx, n.subscriptionJobCompleteChannel, &s)
+		n.workers[subscriptionID], err = NewSubscriptionWorker(ctx, n.clientProvider, n.subscriptionJobCompleteChannel, &s)
 		if err != nil {
 			return fmt.Errorf("failed to create subscription worker: %w", err)
 		}
 
-		n.workers[subscriptionID].Run()
+		go n.workers[subscriptionID].Run()
 	}
 
 	slog.Info("subscriptions loaded", "count", len(n.workers))
@@ -188,8 +206,12 @@ func (n *Notifier) loadSubscriptions(ctx context.Context) error {
 }
 
 // Notify should be used to signal that a database change has occurred
-func (n *Notifier) Notify(event *Notification) {
-	n.notificationChannel <- event
+func (n *Notifier) Notify(ctx context.Context, event *Notification) {
+	select {
+	case n.notificationChannel <- event:
+	case <-ctx.Done():
+		slog.Info("context terminated; aborting Notify attempt")
+	}
 }
 
 // handleNotification handles an incoming notification
@@ -198,8 +220,13 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 
 	count := 0
 	for _, worker := range n.workers {
-		if n.SubscriptionProvider.Matches(worker.subscription, event) {
-			worker.NewNotification(event)
+		if n.subscriptionProvider.Matches(worker.subscription, event) {
+			clone, err := n.subscriptionProvider.Transform(worker.subscription, event)
+			if err != nil {
+				slog.Error("failed to transform notification", "subscription", worker.subscription.SubscriptionID, "error", err)
+				continue
+			}
+			worker.NewNotification(clone)
 			count++
 		}
 	}
@@ -208,7 +235,7 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 		// No subscriptions matched just delete the event
 		slog.Debug("no matching subscriptions; deleting event",
 			"NotificationID", event.NotificationID, "sequenceID", event.SequenceID)
-		if err := n.NotificationProvider.DeleteNotification(ctx, event.NotificationID); err != nil {
+		if err := n.notificationProvider.DeleteNotification(ctx, event.NotificationID); err != nil {
 			return fmt.Errorf("failed to delete notification: %w", err)
 		}
 		return nil
@@ -222,14 +249,52 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 }
 
 // SubscriptionEvent should be used to signal that a change to a subscription has occurred
-func (n *Notifier) SubscriptionEvent(event *SubscriptionEvent) {
-	n.subscriptionChannel <- event
+func (n *Notifier) SubscriptionEvent(ctx context.Context, event *SubscriptionEvent) {
+	select {
+	case n.subscriptionChannel <- event:
+	case <-ctx.Done():
+		slog.Info("context terminated; aborting SubscriptionEvent attempt")
+	}
+}
+
+// GetClientFactory return the underlying factory to create httpclient that can be used reach callback url
+func (n *Notifier) GetClientFactory() ClientProvider {
+	return n.clientProvider
+}
+
+// releaseNotification deletes a notification if it does not match any active subscriptions.
+func (n *Notifier) releaseNotification(ctx context.Context, notificationID uuid.UUID, sequenceID int) error {
+	done := true
+	for _, worker := range n.workers {
+		if worker.subscription.EventCursor < sequenceID {
+			done = false
+			break
+		}
+	}
+
+	if done {
+		if err := n.notificationProvider.DeleteNotification(ctx, notificationID); err != nil {
+			return fmt.Errorf("failed to delete completed notification: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// releaseNotifications deletes all notifications that do not match any active subscriptions.
+func (n *Notifier) releaseNotifications(ctx context.Context, events []*Notification) {
+	for _, event := range events {
+		err := n.releaseNotification(ctx, event.NotificationID, event.SequenceID)
+		if err != nil {
+			slog.Error("failed to release event", "error", err)
+		}
+	}
 }
 
 // handleSubscriptionEvent handles an incoming subscription change event
 func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *SubscriptionEvent) error {
 	subscriptionID := event.Subscription.SubscriptionID
-	slog.Info("handling subscription event", "removed", event.Removed, "subscription", event.Subscription)
+	slog.Info("Handling subscription event", "removed", event.Removed, "subscription", event.Subscription)
 
 	if event.Removed {
 		// The subscription has been removed.  Cleanup any associated data.
@@ -239,12 +304,13 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 			return nil
 		}
 
-		// shutdown the worker.  This will cause it to release all of its pending work which will lead to cleaning up
-		// any data events that it was holding.
+		// shutdown the worker.
 		worker.Shutdown()
 		delete(n.workers, event.Subscription.SubscriptionID)
+		// attempt to release any notifications that were queued by this worker.
+		n.releaseNotifications(ctx, worker.GetNotifications())
 	} else {
-		worker, err := NewSubscriptionWorker(ctx, n.subscriptionJobCompleteChannel, event.Subscription)
+		worker, err := NewSubscriptionWorker(ctx, n.clientProvider, n.subscriptionJobCompleteChannel, event.Subscription)
 		if err != nil {
 			return fmt.Errorf("failed to create subscription worker: %w", err)
 		}
@@ -254,7 +320,6 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 	}
 
 	slog.Info("subscription event handled", "workers", len(n.workers))
-
 	return nil
 }
 
@@ -263,37 +328,18 @@ func (n *Notifier) handleSubscriptionJobCompleteEvent(ctx context.Context, event
 	slog.Debug("handling subscription job complete event",
 		"NotificationID", event.notificationID, "subscriptionID", event.subscriptionID)
 
-	// Lookup the subscription/worker for this event
+	// Lookup the subscription worker for this event
 	if worker, found := n.workers[event.subscriptionID]; found {
-		// Update the subscriptions event cursor.
+		// Update the subscription's event cursor.
 		subscription := worker.subscription
 		subscription.EventCursor = event.sequenceID
-		if err := n.SubscriptionProvider.UpdateSubscription(ctx, subscription); err != nil {
+		if err := n.subscriptionProvider.UpdateSubscription(ctx, subscription); err != nil {
 			return fmt.Errorf("failed to update subscription: %w", err)
 		}
 	} else {
-		// Likely has been deleted and this is a race condition
+		// Likely has been deleted and this is a race condition.
 		slog.Debug("subscription worker not found", "subscriptionID", event.subscriptionID)
-		// continue to check for other matching subscriptions for this event
 	}
 
-	done := true
-	for _, worker := range n.workers {
-		if worker.subscription.EventCursor < event.sequenceID {
-			done = false
-			break
-		}
-	}
-
-	if done {
-		// This event has been consumed by all subscriptions
-		slog.Debug("notification sent to all subscribers; deleting",
-			"NotificationID", event.notificationID, "sequenceID", event.sequenceID)
-
-		if err := n.NotificationProvider.DeleteNotification(ctx, event.notificationID); err != nil {
-			return fmt.Errorf("failed to delete completed notification: %w", err)
-		}
-	}
-
-	return nil
+	return n.releaseNotification(ctx, event.notificationID, event.sequenceID)
 }

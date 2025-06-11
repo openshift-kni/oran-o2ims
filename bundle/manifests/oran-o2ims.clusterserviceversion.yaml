@@ -22,13 +22,14 @@ metadata:
               {
                 "hwProfile": "profile-spr-single-processor-64G",
                 "name": "controller",
-                "resourcePoolID": "master-pool",
+                "resourcePoolId": "master-pool",
+                "resourceSelector": "selector-here",
                 "role": "master"
               },
               {
                 "hwProfile": "profile-spr-dual-processor-128G",
                 "name": "worker",
-                "resourcePoolID": "worker-pool",
+                "resourcePoolId": "worker-pool",
                 "role": "worker"
               }
             ]
@@ -164,21 +165,27 @@ metadata:
           "spec": {
             "caBundleName": "o2ims-custom-ca-certs",
             "cloudID": "b7dcb3ff-583d-42d9-abb5-f484386fc688",
+            "ingress": {
+              "tls": {
+                "secretName": "oran-o2ims-tls-certificate"
+              }
+            },
             "smo": {
               "oauth": {
                 "clientSecretName": "oauth-client-secrets",
+                "groupsClaim": "roles",
                 "scopes": [
                   "openid",
                   "profile",
-                  "roles",
-                  "smo-audience"
+                  "role:ocloud-manager"
                 ],
                 "tokenEndpoint": "/protocol/openid-connect/token",
-                "url": "https://oauth.example.com:8443/realms/oran"
+                "url": "https://oauth.example.com:8443/realms/oran",
+                "usernameClaim": "preferred_username"
               },
               "registrationEndpoint": "/smo/v1/registration",
               "tls": {
-                "clientCertificateName": "o2ims-client-tls-certificate"
+                "secretName": "oran-o2ims-tls-certificate"
               },
               "url": "https://smo.example.com"
             }
@@ -430,11 +437,11 @@ metadata:
               "app.kubernetes.io/name": "provisioningrequest",
               "app.kubernetes.io/part-of": "oran-o2ims"
             },
-            "name": "provisioningrequest-sample"
+            "name": "123e4567-e89b-12d3-a456-426614174000"
           },
           "spec": {
             "description": "Provisioning request for setting up a Single Node OpenShift (SNO) in the test environment.",
-            "name": "TestEnv-SNO-Provisioning",
+            "name": "TestEnv-SNO-Provisioning-site-sno-du-1",
             "templateName": "clustertemplate-sample",
             "templateParameters": {
               "clusterInstanceParameters": {
@@ -613,6 +620,8 @@ metadata:
     features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.16.0 <4.18'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
+    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
+      Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.36.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     provider: Red Hat
@@ -620,7 +629,7 @@ metadata:
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.16.0
+  name: oran-o2ims.v4.18.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -742,10 +751,17 @@ spec:
         path: alarmServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: ArtifactsServerConfig contains the configuration for the artifacts
+          server.
+        displayName: Artifacts Server Configuration
+        path: artifactsServerConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
           with any outside entity (e.g., the SMO, the authorization server, etc.) that has its TLS certificate signed by
-          a non-public CA certificate.
+          a non-public CA certificate.  The config map is expected to contain a single file called 'ca-bundle.crt'
+          containing all trusted CA certificates in PEM format.
         displayName: Custom CA Certificates
         path: caBundleName
         x-descriptors:
@@ -756,8 +772,10 @@ spec:
         path: cloudID
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Deployment Manager Server Configuration
-        path: deploymentManagerServerConfig
+      - description: ClusterServerConfig contains the configuration for the resource
+          server.
+        displayName: Cluster Server Configuration
+        path: clusterServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
@@ -768,33 +786,47 @@ spec:
         path: image
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: IngressHost defines the FQDN for the IMS endpoints.
-        displayName: Ingress Host
-        path: ingressHost
+      - description: IngressConfig defines configuration attributes related to the
+          Ingress endpoint.
+        displayName: Ingress Configuration
+        path: ingress
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Metadata Server Configuration
-        path: metadataServerConfig
+      - description: |-
+          IngressHost defines the FQDN for the IMS endpoints.  By default, it is assumed to be "o2ims.apps.<cluster domain name>".
+          If a different DNS domain is used, then it should be customized here.
+        displayName: Ingress Host
+        path: ingress.ingressHost
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          TLS defines the TLS configuration for the IMS endpoints.  The certificate CN and DNS SAN values must match exactly
+          the value provided by the `IngressHost` value.  If the `IngressHost` value is not provided, then the CN and SAN
+          must match the expected default value.  If the TLS configuration is not provided, then the TLS configuration of
+          the default IngressController will be used.
+        displayName: TLS Configuration
+        path: ingress.tls
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
+          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
+          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
+          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
+          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
+          used as the ingress certificate as well as the outgoing client certificate.
+        displayName: TLS certificate
+        path: ingress.tls.secretName
+      - description: ProvisioningServerConfig contains the configuration for the provisioning
+          server.
+        displayName: Provisioning Server Configuration
+        path: provisioningServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: ResourceServerConfig contains the configuration for the resource
           server.
         displayName: Resource Server Configuration
         path: resourceServerConfig
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Backend Token
-        path: resourceServerConfig.backendToken
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - displayName: Backend URL
-        path: resourceServerConfig.backendURL
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: This field allows the addition of extra O-Cloud information for
-          the resource server.
-        displayName: Extensions
-        path: resourceServerConfig.extensions
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: SmoConfig defines the configurable attributes to represent the
@@ -806,10 +838,26 @@ spec:
         displayName: SMO OAuth Configuration
         path: smo.oauth
       - description: |-
+          ClientBindingClaim represents the claim contained within the OAuth JWT token which holds the certificate SHA256
+          fingerprint.  This is expected to be a CEL mapper expression.  It should only be changed in advanced scenarios.
+        displayName: OAuth Client Binding Claim
+        path: smo.oauth.clientBindingClaim
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
           ClientSecretName represents the name of a secret (in the current namespace) which contains the client-id and
           client-secret values used by the OAuth client.
         displayName: Client Secret
         path: smo.oauth.clientSecretName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          GroupsClaim represents the claim contained within the OAuth JWT token which holds the list of groups/roles. This
+          must be a list/array and not a space separated list of names.  It must also be a top level attribute rather than
+          a nested field in the JSON structure of the JWT object.
+             i.e., {"roles": ["a", "b"]} rather than {"realm": {"roles": ["a", "b"}}.
+        displayName: OAuth Groups Claim
+        path: smo.oauth.groupsClaim
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
@@ -827,10 +875,16 @@ spec:
         path: smo.oauth.tokenEndpoint
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Url represents the base URL of the authorization server. (e.g.,
+      - description: URL represents the base URL of the authorization server. (e.g.,
           https://keycloak.example.com/realms/oran)
         displayName: OAuth URL
         path: smo.oauth.url
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: UsernameClaim represents the claim contained within the OAuth
+          JWT token which holds the username
+        displayName: OAuth Username Claim
+        path: smo.oauth.usernameClaim
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: RegistrationEndpoint represents the API endpoint used to register
@@ -839,19 +893,22 @@ spec:
         path: smo.registrationEndpoint
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: TlsConfig defines the TLS attributes specific to the SMO and
-          OAuth servers
-        displayName: TLS Configuration
+      - description: |-
+          TLSConfig defines the TLS attributes specific to enabling mTLS communication to the SMO and OAuth servers.  If
+          a configuration is provided, then an mTLS connection will be established to the destination; otherwise, a regular
+          TLS connection will be used.
+        displayName: Client TLS Configuration
         path: smo.tls
       - description: |-
-          ClientCertificateName represents the name of a secret (in the current namespace) which contains an X.509
-          certificate and private key to be used when initiating connections to the SMO and OAuth servers.  The secret is
-          expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by intermediate CA certificate(s)
-          then it is expected that the full chain is to be appended to the certificate file with the device certificate
-          being first and the root CA being last.
-        displayName: TLS client certificate
-        path: smo.tls.clientCertificateName
-      - description: Url represents the base URL of the SMO instance
+          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
+          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
+          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
+          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
+          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
+          used as the ingress certificate as well as the outgoing client certificate.
+        displayName: TLS certificate
+        path: smo.tls.secretName
+      - description: URL represents the base URL of the SMO instance
         displayName: SMO URL
         path: smo.url
         x-descriptors:
@@ -865,22 +922,12 @@ spec:
           Important: Run "make" to regenerate code after modifying this file
         displayName: Conditions
         path: conditions
-      - displayName: Deployments Status
-        path: deploymentStatus
-      - displayName: Alarm Server Status
-        path: deploymentStatus.alarmServerStatus
-      - displayName: Deployment Server Status
-        path: deploymentStatus.deploymentServerStatus
-      - displayName: Metadata Server Status
-        path: deploymentStatus.metadataServerStatus
-      - displayName: Resource Server Status
-        path: deploymentStatus.resourceServerStatus
       - description: |-
           Stores the ingress host domain resolved at runtime; either from a user override or automatically computed from
           the default ingress controller.
         displayName: Resolved Ingress Host Address
         path: ingressHost
-      - displayName: Deployments Status
+      - displayName: Deployed Server Configurations
         path: usedServerConfig
       version: v1alpha1
     - description: NodePool is the schema for an allocation request of nodes
@@ -929,6 +976,8 @@ spec:
       - description: Properties represent the node properties in the pool
         displayName: Properties
         path: properties
+      - displayName: Selected Pools
+        path: selectedPools
       version: v1alpha1
     - description: Node is the schema for an allocated node
       displayName: Node
@@ -954,6 +1003,11 @@ spec:
       - description: HwMgrNodeId is the node identifier from the hardware manager.
         displayName: Hardware Manager Node ID
         path: hwMgrNodeId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrNodeNs is the node namespace from the hardware manager.
+        displayName: Hardware Manager Node Namespace
+        path: hwMgrNodeNs
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: HwProfile
@@ -1051,15 +1105,42 @@ spec:
       clusterPermissions:
       - rules:
         - nonResourceURLs:
+          - /hardware-manager/inventory/*
+          verbs:
+          - get
+          - list
+        - nonResourceURLs:
           - /internal/v1/caas-alerts/alertmanager
           verbs:
           - create
           - post
         - nonResourceURLs:
-          - /o2ims-infrastructureInventory/v1/resourceTypes
+          - /o2ims-infrastructureCluster/v1/alarmDictionaries
           verbs:
           - get
           - list
+        - nonResourceURLs:
+          - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
+          verbs:
+          - get
+        - nonResourceURLs:
+          - /o2ims-infrastructureCluster/v1/nodeClusterTypes
+          verbs:
+          - get
+          - list
+        - nonResourceURLs:
+          - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
+          verbs:
+          - get
+        - nonResourceURLs:
+          - /o2ims-infrastructureCluster/v1/nodeClusters
+          verbs:
+          - get
+          - list
+        - nonResourceURLs:
+          - /o2ims-infrastructureCluster/v1/nodeClusters/*
+          verbs:
+          - get
         - apiGroups:
           - ""
           resources:
@@ -1087,7 +1168,7 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - nodes
+          - pods
           verbs:
           - get
           - list
@@ -1129,6 +1210,24 @@ spec:
           - update
           - watch
         - apiGroups:
+          - agent-install.openshift.io
+          resources:
+          - agents
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - customresourcedefinitions
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - apps
           resources:
           - deployments
@@ -1153,12 +1252,26 @@ spec:
           verbs:
           - create
         - apiGroups:
+          - batch
+          resources:
+          - cronjobs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - cluster.open-cluster-management.io
           resources:
           - managedclusters
           verbs:
           - get
           - list
+          - patch
+          - update
           - watch
         - apiGroups:
           - config.openshift.io
@@ -1169,9 +1282,9 @@ spec:
           - list
           - watch
         - apiGroups:
-          - internal.open-cluster-management.io
+          - hwmgr-plugin.oran.openshift.io
           resources:
-          - managedclusterinfos
+          - hardwaremanagers
           verbs:
           - get
           - list
@@ -1392,6 +1505,14 @@ spec:
           - update
           - watch
         - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - siteconfig.open-cluster-management.io
           resources:
           - clusterinstances
@@ -1403,24 +1524,6 @@ spec:
           - patch
           - update
           - watch
-        - apiGroups:
-          - view.open-cluster-management.io
-          resources:
-          - managedclusterviews
-          verbs:
-          - create
-        - apiGroups:
-          - authentication.k8s.io
-          resources:
-          - tokenreviews
-          verbs:
-          - create
-        - apiGroups:
-          - authorization.k8s.io
-          resources:
-          - subjectaccessreviews
-          verbs:
-          - create
         serviceAccountName: oran-o2ims-controller-manager
       deployments:
       - label:
@@ -1446,41 +1549,17 @@ spec:
                 control-plane: controller-manager
             spec:
               containers:
-              - args:
-                - --secure-listen-address=0.0.0.0:8443
-                - --upstream=http://127.0.0.1:8080/
-                - --logtostderr=true
-                - --v=0
-                image: quay.io/openshift/origin-kube-rbac-proxy:4.18
-                name: kube-rbac-proxy
-                ports:
-                - containerPort: 8443
-                  name: https
-                  protocol: TCP
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 5m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
               - command:
                 - /usr/bin/oran-o2ims
                 - start
                 - controller-manager
                 - --leader-elect
                 - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
+                - --metrics-bind-address=:6443
+                - --metrics-tls-cert-dir=/secrets/tls/metrics
                 env:
                 - name: IMAGE
-                  value: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
-                - name: KUBE_RBAC_PROXY_IMAGE
-                  value: quay.io/openshift/origin-kube-rbac-proxy:4.18
+                  value: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
                 - name: HWMGR_PLUGIN_NAMESPACE
@@ -1489,7 +1568,10 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
-                image: quay.io/openshift-kni/oran-o2ims-operator:4.16.0
+                - name: IMAGE_PULL_POLICY
+                  value: IfNotPresent
+                image: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
+                imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -1497,6 +1579,13 @@ spec:
                   initialDelaySeconds: 15
                   periodSeconds: 20
                 name: manager
+                ports:
+                - containerPort: 9443
+                  name: webhook-server
+                  protocol: TCP
+                - containerPort: 6443
+                  name: https
+                  protocol: TCP
                 readinessProbe:
                   httpGet:
                     path: /readyz
@@ -1504,9 +1593,6 @@ spec:
                   initialDelaySeconds: 5
                   periodSeconds: 10
                 resources:
-                  limits:
-                    cpu: 500m
-                    memory: 256Mi
                   requests:
                     cpu: 10m
                     memory: 64Mi
@@ -1515,10 +1601,25 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                volumeMounts:
+                - mountPath: /tmp/k8s-webhook-server/serving-certs
+                  name: cert
+                  readOnly: true
+                - mountPath: /secrets/tls/metrics
+                  name: metrics-tls
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: oran-o2ims-controller-manager
               terminationGracePeriodSeconds: 10
+              volumes:
+              - name: cert
+                secret:
+                  defaultMode: 420
+                  secretName: oran-o2ims-webhook-server-cert
+              - name: metrics-tls
+                secret:
+                  defaultMode: 420
+                  secretName: controller-manager-metrics-tls
       permissions:
       - rules:
         - apiGroups:
@@ -1581,4 +1682,25 @@ spec:
   provider:
     name: Red Hat
   replaces: oran-o2ims.v0.0.0
-  version: 4.16.0
+  version: 4.18.0
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: oran-o2ims-controller-manager
+    failurePolicy: Fail
+    generateName: provisioningrequests.o2ims.provisioning.oran.org
+    rules:
+    - apiGroups:
+      - o2ims.provisioning.oran.org
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - provisioningrequests
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-o2ims-provisioning-oran-org-v1alpha1-provisioningrequest

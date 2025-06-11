@@ -1,9 +1,21 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package k8s
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+
+	agentv1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,6 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	hwmgrv1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
@@ -28,13 +42,13 @@ const (
 )
 
 // NewClientForHub creates a new client for the hub cluster
-func NewClientForHub() (client.Client, error) {
+func NewClientForHub() (client.WithWatch, error) {
 	conf, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config: %w", err)
 	}
 
-	c, err := client.New(conf, client.Options{Scheme: GetSchemeForHub()})
+	c, err := client.NewWithWatch(conf, client.Options{Scheme: GetSchemeForHub()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
@@ -50,6 +64,11 @@ func GetSchemeForHub() *runtime.Scheme {
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta2.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+	utilruntime.Must(agentv1beta1.AddToScheme(scheme))
+	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(appsv1.AddToScheme(scheme))
+	utilruntime.Must(batchv1.AddToScheme(scheme))
+	utilruntime.Must(hwmgrv1.AddToScheme(scheme))
 
 	return scheme
 }
@@ -105,4 +124,30 @@ func GetSchemeForCluster() *runtime.Scheme {
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 
 	return scheme
+}
+
+// CreateOrUpdate attempts to update an existing Kubernetes object, or creates it if it doesn't exist.
+// This implements an "upsert" operation for Kubernetes resources.
+func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object) error {
+	// Try to get existing object
+	existing := obj.DeepCopyObject().(client.Object)
+	key := client.ObjectKey{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}
+
+	if err := c.Get(ctx, key, existing); err != nil {
+		if errors.IsNotFound(err) { // Create if not found, otherwise return error
+			slog.Info("Creating a new resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
+				"namespace", obj.GetNamespace(), "name", obj.GetName())
+			return c.Create(ctx, obj) //nolint:wrapcheck
+		}
+		return fmt.Errorf("failed to get existing object: %w", err)
+	}
+
+	// Update existing object
+	obj.SetResourceVersion(existing.GetResourceVersion())
+	slog.Info("Updating an existing resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
+		"namespace", obj.GetNamespace(), "name", obj.GetName())
+	return c.Update(ctx, obj) //nolint:wrapcheck
 }

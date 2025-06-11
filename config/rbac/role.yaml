@@ -5,15 +5,42 @@ metadata:
   name: manager-role
 rules:
 - nonResourceURLs:
+  - /hardware-manager/inventory/*
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
   - /internal/v1/caas-alerts/alertmanager
   verbs:
   - create
   - post
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v1/resourceTypes
+  - /o2ims-infrastructureCluster/v1/alarmDictionaries
   verbs:
   - get
   - list
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusterTypes
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusters
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusters/*
+  verbs:
+  - get
 - apiGroups:
   - ""
   resources:
@@ -41,7 +68,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - nodes
+  - pods
   verbs:
   - get
   - list
@@ -83,6 +110,24 @@ rules:
   - update
   - watch
 - apiGroups:
+  - agent-install.openshift.io
+  resources:
+  - agents
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apps
   resources:
   - deployments
@@ -107,12 +152,26 @@ rules:
   verbs:
   - create
 - apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - cluster.open-cluster-management.io
   resources:
   - managedclusters
   verbs:
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - config.openshift.io
@@ -123,9 +182,9 @@ rules:
   - list
   - watch
 - apiGroups:
-  - internal.open-cluster-management.io
+  - hwmgr-plugin.oran.openshift.io
   resources:
-  - managedclusterinfos
+  - hardwaremanagers
   verbs:
   - get
   - list
@@ -346,6 +405,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - siteconfig.open-cluster-management.io
   resources:
   - clusterinstances
@@ -357,9 +424,3 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - view.open-cluster-management.io
-  resources:
-  - managedclusterviews
-  verbs:
-  - create
