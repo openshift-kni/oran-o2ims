@@ -214,7 +214,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	defer cancel()
 	go func() {
 		logger.Info("Starting Loopback HardwarePlugin API server")
-		err = loopbackserver.Serve(ctx, c.CommonServerConfig)
+		err = loopbackserver.Serve(ctx, c.CommonServerConfig, mgr.GetClient())
 	}()
 
 	go func() {
