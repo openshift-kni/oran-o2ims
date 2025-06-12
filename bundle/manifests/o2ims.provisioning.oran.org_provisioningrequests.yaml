@@ -201,11 +201,8 @@ spec:
                           check for hardware provisioning
                         format: date-time
                         type: string
-                      name:
-                        description: Contains the name of the created NodeAllocationRequest.
-                        type: string
-                      namespace:
-                        description: Contains the namespace of the created NodeAllocationRequest.
+                      nodeAllocationRequestID:
+                        description: Contains the identifier of the created NodeAllocationRequest.
                         type: string
                     type: object
                   policies:

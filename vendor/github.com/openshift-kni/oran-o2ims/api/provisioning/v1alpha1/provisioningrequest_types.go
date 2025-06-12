@@ -50,10 +50,8 @@ type ProvisioningRequestSpec struct {
 
 // NodeAllocationRequestRef references a node allocation request.
 type NodeAllocationRequestRef struct {
-	// Contains the name of the created NodeAllocationRequest.
-	Name string `json:"name,omitempty"`
-	// Contains the namespace of the created NodeAllocationRequest.
-	Namespace string `json:"namespace,omitempty"`
+	// Contains the identifier of the created NodeAllocationRequest.
+	NodeAllocationRequestID string `json:"nodeAllocationRequestID,omitempty"`
 	// Represents the timestamp of the first status check for hardware provisioning
 	HardwareProvisioningCheckStart *metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
 	// Represents the timestamp of the first status check for hardware configuring

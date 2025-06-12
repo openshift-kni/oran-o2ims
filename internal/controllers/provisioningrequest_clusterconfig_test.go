@@ -145,7 +145,7 @@ defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:                     utils.UnitTestHwmgrID,
+					HardwarePluginRef:           utils.UnitTestHwPluginRef,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
 					NodeGroupData: []hwv1alpha1.NodeGroupData{
@@ -196,8 +196,7 @@ defaultHugepagesSize: "1G"`,
 					},
 					Extensions: provisioningv1alpha1.Extensions{
 						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-							Name:      "cluster-1",
-							Namespace: utils.UnitTestHwmgrNamespace,
+							NodeAllocationRequestID: "cluster-1",
 						},
 					},
 				},
@@ -249,7 +248,7 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 			Spec: hwv1alpha1.NodeAllocationRequestSpec{
-				HwMgrId: utils.UnitTestHwmgrID,
+				HardwarePluginRef: utils.UnitTestHwPluginRef,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwv1alpha1.NodeGroupData{
@@ -2114,7 +2113,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				},
 			},
 			Spec: hwv1alpha1.NodeAllocationRequestSpec{
-				HwMgrId: utils.UnitTestHwmgrID,
+				HardwarePluginRef: utils.UnitTestHwPluginRef,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwv1alpha1.NodeGroupData{
@@ -2317,10 +2316,10 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				if agent.Name == agent2Name {
 					checkedAgents += 1
 					Expect(agent.Labels).To(Equal(map[string]string{
-						utils.ClusterTemplateArtifactsLabel:                           "57b39bda-ac56-4143-9b10-d1a71517d04f",
-						"agent-install.openshift.io/clusterdeployment-namespace":      mclName,
-						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId":     utils.UnitTestHwmgrID,
-						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId": masterNodeName2,
+						utils.ClusterTemplateArtifactsLabel:                                 "57b39bda-ac56-4143-9b10-d1a71517d04f",
+						"agent-install.openshift.io/clusterdeployment-namespace":            mclName,
+						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hardwarePluginRef": utils.UnitTestHwPluginRef,
+						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId":       masterNodeName2,
 					}))
 				}
 				if agent.Name == AgentName {
@@ -2386,7 +2385,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Expect(c.Update(ctx, ct)).To(Succeed())
 		})
 
-		It("Does not add hwMgrId and hwMgrNodeId labels to the Agents", func() {
+		It("Does not add hardwarePluginRef and hwMgrNodeId labels to the Agents", func() {
 			// Create an Agent CR with the expected label.
 			agent := &assistedservicev1beta1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2419,14 +2418,14 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 			}))
 
-			// Check that the templateArtifacts label is present and hwMgrId and hwMgrNodeId labels are not present.
+			// Check that the templateArtifacts label is present and hardwarePluginRef and hwMgrNodeId labels are not present.
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(agent.GetLabels()).To(Equal(map[string]string{
 				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 			}))
-			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId")))
+			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hardwarePluginRef")))
 			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId")))
 		})
 	})

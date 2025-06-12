@@ -319,7 +319,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 
 	// Add the needed label to the Agent(s) associated to the current ProvisioningRequest:
 	//   clustertemplates.o2ims.provisioning.oran.org/templateIds
-	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId
+	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hardwarePluginRef
 	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId
 	agentNs := mcl.Name
 	if bmhNs != "" {
@@ -350,7 +350,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		}
 
 		if oranct.Spec.Templates.HwTemplate == "" {
-			// Skip adding hwMgrId and hwMgrNodeId labels if hardware provisioning is skipped.
+			// Skip adding hardwarePluginRef and hwMgrNodeId labels if hardware provisioning is skipped.
 			continue
 		}
 
@@ -365,7 +365,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			if node.Status.Hostname == agent.Spec.Hostname {
 				foundNode = true
 
-				err = t.setLabelValue(ctx, &agent, utils.HardwareManagerIdLabel, node.Spec.HwMgrId)
+				err = t.setLabelValue(ctx, &agent, utils.HardwarePluginRefLabel, node.Spec.HardwarePluginRef)
 				if err != nil {
 					return err
 				}
