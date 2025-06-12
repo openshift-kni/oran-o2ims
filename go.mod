@@ -10,7 +10,7 @@ replace github.com/openshift/assisted-service/models => github.com/openshift/ass
 require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/getkin/kin-openapi v0.132.0
-	github.com/go-logr/logr v1.4.2
+	github.com/go-logr/logr v1.4.3
 	github.com/golang-migrate/migrate/v4 v4.18.2
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
