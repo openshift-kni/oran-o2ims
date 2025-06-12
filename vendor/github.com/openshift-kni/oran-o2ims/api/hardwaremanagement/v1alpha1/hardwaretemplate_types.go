@@ -28,10 +28,10 @@ type NodeGroupData struct {
 // HardwareTemplateSpec defines the desired state of HardwareTemplate
 type HardwareTemplateSpec struct {
 
-	// HwMgrId is the identifier for the hardware manager plugin adaptor.
+	// HardwarePluginRef is the name of the HardwarePlugin.
 	// +kubebuilder:validation:MinLength=1
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	HwMgrId string `json:"hwMgrId"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Plugin Reference",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HardwarePluginRef string `json:"hardwarePluginRef"`
 
 	// BootInterfaceLabel is the label of the boot interface.
 	// +kubebuilder:validation:MinLength=1

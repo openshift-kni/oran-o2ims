@@ -217,7 +217,7 @@ func createNode(ctx context.Context,
 			NodeAllocationRequest: nodeAllocationRequest.Name,
 			GroupName:             groupname,
 			HwProfile:             hwprofile,
-			HwMgrId:               nodeAllocationRequest.Spec.HwMgrId,
+			HardwarePluginRef:     nodeAllocationRequest.Spec.HardwarePluginRef,
 			HwMgrNodeNs:           nodeNs,
 			HwMgrNodeId:           nodeId,
 		},
@@ -621,8 +621,18 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	nodeName := bmh.Annotations[NodeNameAnnotation]
 	if nodeName == "" {
 		nodeName = hwpluginutils.GenerateNodeName()
-		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, "annotation", NodeNameAnnotation, nodeName, OpAdd); err != nil {
-			return fmt.Errorf("failed to save node name annotation to BMH (%s): %w", bmh.Name, err)
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, NodeNameAnnotation,
+			nodeName, OpAdd); err != nil {
+			return fmt.Errorf("failed to save AllocatedNode name annotation to BMH (%s): %w", bmh.Name, err)
+		}
+	}
+
+	// Set AllocatedNode label
+	allocatedNodeLbl := bmh.Labels[utils.AllocatedNodeLabel]
+	if allocatedNodeLbl != nodeName {
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeLabel, utils.AllocatedNodeLabel,
+			nodeName, OpAdd); err != nil {
+			return fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
 		}
 	}
 

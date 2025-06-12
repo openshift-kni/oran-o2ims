@@ -17,8 +17,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.hwMgrId
-      name: HwMgr Id
+    - jsonPath: .spec.hardwarePluginRef
+      name: HardwarePlugin
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -52,6 +52,10 @@ spec:
           spec:
             description: NodeAllocationRequestSpec describes a group of nodes to allocate
             properties:
+              bootInterfaceLabel:
+                description: BootInterfaceLabel is the label of the boot interface.
+                minLength: 1
+                type: string
               cloudID:
                 description: |-
                   CloudID is the identifier of the O-Cloud that generated this request. The hardware
@@ -62,9 +66,8 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
-              hwMgrId:
-                description: HwMgrId is the identifier for the hardware manager plugin
-                  instance.
+              hardwarePluginRef:
+                description: HardwarePluginRef is the name of the HardwarePlugin.
                 type: string
               location:
                 description: Location
@@ -109,6 +112,7 @@ spec:
                 description: Site
                 type: string
             required:
+            - bootInterfaceLabel
             - cloudID
             - nodeGroup
             - site

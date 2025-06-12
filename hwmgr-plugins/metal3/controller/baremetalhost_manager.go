@@ -23,6 +23,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -268,8 +269,7 @@ func buildInterfacesFromBMH(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocation
 		label := ""
 
 		if strings.EqualFold(nic.MAC, bmh.Spec.BootMACAddress) {
-			// For the boot interface, use the label from the bootInterfaceLabel annotation on the NodeAllocationRequest CR
-			label = nodeAllocationRequest.Annotations[hwmgmtv1alpha1.BootInterfaceLabelAnnotation]
+			label = nodeAllocationRequest.Spec.BootInterfaceLabel
 		} else {
 			// Interface labels with MACs use - instead of :
 			hyphenatedMac := strings.ReplaceAll(nic.MAC, ":", "-")
@@ -846,7 +846,16 @@ func unmarkBMHAllocated(ctx context.Context,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost) error {
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-	return updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, BmhAllocatedLabel, "", OpRemove)
+
+	if err := updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, BmhAllocatedLabel, "", OpRemove); err != nil {
+		return fmt.Errorf("failed to remove allocated label from BareMetalHost '%s': %w", bmh.Name, err)
+	}
+
+	if err := updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, utils.AllocatedNodeLabel, "", OpRemove); err != nil {
+		return fmt.Errorf("failed to remove allocated node name label from BareMetalHost '%s': %w", bmh.Name, err)
+	}
+
+	return nil
 }
 
 // removeMetal3Finalizer removes the Metal3 finalizer from the corresponding PreprovisioningImage resource.

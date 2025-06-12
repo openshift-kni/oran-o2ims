@@ -97,8 +97,6 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 					"o2ims-hardwaremanagement.oran.openshift.io",
 				},
 				Resources: []string{
-					"nodeallocationrequests",
-					"allocatednodes",
 					"hardwareprofiles",
 				},
 				Verbs: []string{
@@ -108,6 +106,24 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 					"patch",
 					"update",
 					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"o2ims-hardwaremanagement.oran.openshift.io",
+				},
+				Resources: []string{
+					"nodeallocationrequests",
+					"allocatednodes",
+				},
+				Verbs: []string{
+					"create",
+					"get",
+					"list",
+					"patch",
+					"update",
+					"watch",
+					"delete",
 				},
 			},
 			{
