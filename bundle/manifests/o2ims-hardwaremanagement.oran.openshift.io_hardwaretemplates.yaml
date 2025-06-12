@@ -61,14 +61,13 @@ spec:
                 description: Extensions holds additional custom key-value pairs that
                   can be used to extend the node allocation request's configuration.
                 type: object
+              hardwarePluginRef:
+                description: HardwarePluginRef is the name of the HardwarePlugin.
+                minLength: 1
+                type: string
               hardwareProvisioningTimeout:
                 description: HardwareProvisioningTimeout defines the timeout duration
                   string for the hardware provisioning.
-                type: string
-              hwMgrId:
-                description: HwMgrId is the identifier for the hardware manager plugin
-                  adaptor.
-                minLength: 1
                 type: string
               nodeGroupData:
                 description: NodeGroupData defines a collection of NodeGroupData items
@@ -102,7 +101,7 @@ spec:
                 type: array
             required:
             - bootInterfaceLabel
-            - hwMgrId
+            - hardwarePluginRef
             - nodeGroupData
             type: object
           status:

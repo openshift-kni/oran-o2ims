@@ -14,7 +14,7 @@ metadata:
   namespace: oran-hwmgr-plugin
 spec:
   cloudID: sample
-  hwMgrId: loopback-1
+  hardwarePluginRef: loopback-1
   nodeGroup:
   - nodeGroupData:
       hwProfile: sample-master-profile

@@ -88,18 +88,6 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
 			})).
-		Owns(
-			&hwv1alpha1.NodeAllocationRequest{},
-			builder.WithPredicates(predicate.Funcs{
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Watch on status changes.
-					// TODO: Filter on further conditions that the ProvisioningRequest is interested in
-					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
-				},
-				CreateFunc:  func(ce event.CreateEvent) bool { return false },
-				GenericFunc: func(ge event.GenericEvent) bool { return false },
-				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
-			})).
 		Watches(
 			&provisioningv1alpha1.ClusterTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForClusterTemplate),

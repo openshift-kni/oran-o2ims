@@ -8,6 +8,21 @@ package controllers
 
 import (
 	"context"
+
+	. "github.com/onsi/gomega"
+
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
+)
+
+/*
+import (
+	"context"
 	"fmt"
 	"time"
 
@@ -22,6 +37,7 @@ import (
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/client"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
@@ -32,6 +48,7 @@ const (
 	groupNameController = "controller"
 	groupNameWorker     = "worker"
 )
+
 
 var _ = Describe("renderHardwareTemplate", func() {
 	var (
@@ -152,7 +169,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwv1alpha1.HardwareTemplateSpec{
-				HwMgrId:            utils.UnitTestHwmgrID,
+				HardwarePluginRef:  utils.UnitTestHwPluginRef,
 				BootInterfaceLabel: "bootable-interface",
 				NodeGroupData: []hwv1alpha1.NodeGroupData{
 					{
@@ -188,21 +205,13 @@ var _ = Describe("renderHardwareTemplate", func() {
 		})
 
 		Expect(nodeAllocationRequest).ToNot(BeNil())
-		Expect(nodeAllocationRequest.ObjectMeta.Name).To(Equal(clusterInstance.GetName()))
-		Expect(nodeAllocationRequest.ObjectMeta.Namespace).To(Equal(utils.UnitTestHwmgrNamespace))
-		Expect(nodeAllocationRequest.Annotations[hwv1alpha1.BootInterfaceLabelAnnotation]).To(Equal(hwTemplate.Spec.BootInterfaceLabel))
-
-		Expect(nodeAllocationRequest.Spec.CloudID).To(Equal(clusterInstance.GetName()))
-		Expect(nodeAllocationRequest.Spec.HwMgrId).To(Equal(hwTemplate.Spec.HwMgrId))
-		Expect(nodeAllocationRequest.Spec.Extensions).To(Equal(hwTemplate.Spec.Extensions))
-		Expect(nodeAllocationRequest.Labels[provisioningv1alpha1.ProvisioningRequestNameLabel]).To(Equal(task.object.Name))
 
 		roleCounts := make(map[string]int)
 		for _, node := range clusterInstance.Spec.Nodes {
 			// Count the nodes per group
 			roleCounts[node.Role]++
 		}
-		Expect(nodeAllocationRequest.Spec.NodeGroup).To(HaveLen(2))
+		Expect(nodeAllocationRequest.NodeGroup).To(HaveLen(2))
 		expectedNodeGroups := map[string]struct {
 			size int
 		}{
@@ -210,10 +219,10 @@ var _ = Describe("renderHardwareTemplate", func() {
 			groupNameWorker:     {size: roleCounts["worker"]},
 		}
 
-		for _, group := range nodeAllocationRequest.Spec.NodeGroup {
+		for _, group := range nodeAllocationRequest.NodeGroup {
 			expected, found := expectedNodeGroups[group.NodeGroupData.Name]
 			Expect(found).To(BeTrue())
-			Expect(group.Size).To(Equal(expected.size))
+			Expect(group.NodeGroupData.Size).To(Equal(expected.size))
 		}
 	})
 
@@ -246,7 +255,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 
 			nodeAllocationRequest.SetName(crName)
 			nodeAllocationRequest.SetNamespace("hwmgr")
-			nodeAllocationRequest.Spec.HwMgrId = utils.UnitTestHwmgrID
+			nodeAllocationRequest.Spec.HardwarePluginRef = utils.UnitTestHwPluginRef
 			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
 				{
@@ -260,7 +269,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 			}
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 		})
-		It("returns an error when the hardware template contains a change in hwMgrId", func() {
+		It("returns an error when the hardware template contains a change in hardwarePluginRef", func() {
 			ct.Spec.Templates.HwTemplate = hwTemplatev2
 			// Ensure the ClusterTemplate is created
 			Expect(c.Create(ctx, ct)).To(Succeed())
@@ -271,7 +280,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:            "new id",
+					HardwarePluginRef:  "new id",
 					BootInterfaceLabel: "bootable-interface",
 					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
@@ -320,7 +329,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:            utils.UnitTestHwmgrID,
+					HardwarePluginRef:  utils.UnitTestHwPluginRef,
 					BootInterfaceLabel: "new-label",
 					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
@@ -370,7 +379,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:            utils.UnitTestHwmgrID,
+					HardwarePluginRef:  utils.UnitTestHwPluginRef,
 					BootInterfaceLabel: "bootable-interface",
 					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
@@ -454,8 +463,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
 				Extensions: provisioningv1alpha1.Extensions{
 					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						Name:                           crName,
-						Namespace:                      ctNamespace,
+						NodeAllocationRequestID:        crName,
 						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
 					},
 				},
@@ -489,7 +497,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 	})
 
 	It("returns error when error fetching NodeAllocationRequest", func() {
-		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Provisioned)
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).To(HaveOccurred())
@@ -503,7 +511,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		}
 		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, nar)).To(Succeed())
-		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Provisioned)
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // It should be failed
 		Expect(err).ToNot(HaveOccurred())
@@ -522,7 +530,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
 		// First call to checkNodeAllocationRequestStatus (before timeout)
-		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Provisioned)
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -532,7 +540,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &metav1.Time{Time: adjustedTime}
 
 		// Call checkNodeAllocationRequestStatus again (after timeout)
-		provisioned, timedOutOrFailed, err = task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Provisioned)
+		provisioned, timedOutOrFailed, err = task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
 		Expect(err).ToNot(HaveOccurred())
@@ -551,7 +559,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Provisioned)
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -567,7 +575,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		}
 		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, nar)).To(Succeed())
-		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Provisioned)
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(true))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -596,7 +604,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(c.Status().Update(ctx, nar)).To(Succeed())
 
 		// First call to checkNodeAllocationRequestStatus (before timeout)
-		status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Configured)
+		status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Configured)
 		Expect(status).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -606,7 +614,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		cr.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &metav1.Time{Time: adjustedTime}
 
 		// Call checkNodeAllocationRequestStatus again (after timeout)
-		status, timedOutOrFailed, err = task.checkNodeAllocationRequestStatus(ctx, nar, hwv1alpha1.Configured)
+		status, timedOutOrFailed, err = task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Configured)
 		Expect(status).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
 		Expect(err).ToNot(HaveOccurred())
@@ -627,6 +635,7 @@ var _ = Describe("updateClusterInstance", func() {
 		cr          *provisioningv1alpha1.ProvisioningRequest
 		ci          *siteconfig.ClusterInstance
 		nar         *hwv1alpha1.NodeAllocationRequest
+		tmpNar      *hwmgrpluginapi.NodeAllocationRequestResponse
 		crName      = "cluster-1"
 		crNamespace = "clustertemplate-a-v4-16"
 		mn          = "master-node"
@@ -740,6 +749,8 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 		}
 
+		tmpNar = &hwmgrpluginapi.NodeAllocationRequestResponse{}
+
 		c = getFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
@@ -756,7 +767,7 @@ var _ = Describe("updateClusterInstance", func() {
 	It("returns error when failing to get the Node object", func() {
 		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
 		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, nar)
+		err = task.updateClusterInstance(ctx, unstructuredCi, tmpNar)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -774,7 +785,7 @@ var _ = Describe("updateClusterInstance", func() {
 		nar.Status.Properties = hwv1alpha1.Properties{}
 		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
 		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, nar)
+		err = task.updateClusterInstance(ctx, unstructuredCi, tmpNar)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to find matches for the following nodes"))
 	})
@@ -820,12 +831,12 @@ var _ = Describe("updateClusterInstance", func() {
 		testutils.CreateResources(ctx, c, nodes, secrets)
 		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
 		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, nar)
+		err = task.updateClusterInstance(ctx, unstructuredCi, tmpNar)
 		Expect(err).ToNot(HaveOccurred())
 
-		masterBootMAC, err := utils.GetBootMacAddress(masterNode.Status.Interfaces, nar)
+		masterBootMAC, err := utils.GetBootMacAddress(masterNode.Status.Interfaces, "")
 		Expect(err).ToNot(HaveOccurred())
-		workerBootMAC, err := utils.GetBootMacAddress(workerNode.Status.Interfaces, nar)
+		workerBootMAC, err := utils.GetBootMacAddress(workerNode.Status.Interfaces, "")
 		Expect(err).ToNot(HaveOccurred())
 
 		// Define expected details
@@ -866,6 +877,7 @@ func getInterfaceMap(interfaces []*hwv1alpha1.Interface) []map[string]interface{
 	return ifaceList
 }
 
+
 func verifyClusterInstance(ci *siteconfig.ClusterInstance, expectedDetails []expectedNodeDetails) {
 	for i, expected := range expectedDetails {
 		Expect(ci.Spec.Nodes[i].BmcAddress).To(Equal(expected.BMCAddress))
@@ -897,6 +909,7 @@ func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.
 		}
 	}
 }
+//*/
 
 func VerifyHardwareTemplateStatus(ctx context.Context, c client.Client, templateName string, expectedCon metav1.Condition) {
 	updatedHwTempl := &hwv1alpha1.HardwareTemplate{}

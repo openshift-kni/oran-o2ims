@@ -76,7 +76,7 @@ properties:
                 "resourceTypeId": "ResourceGroup~2.1.1"
               },
               "hardwareProvisioningTimeout": "60m",
-              "hwMgrId": "hwmgr-1",
+              "hardwarePluginRef": "hwmgr-1",
               "nodeGroupData": [
                 {
                   "hwProfile": "profile-spr-single-processor-64G",
@@ -166,7 +166,7 @@ properties:
             "spec": {
               "cloudID": "sample",
               "extensions": [],
-              "hwMgrId": "loopback-1",
+              "hardwarePluginRef": "loopback-1",
               "nodeGroup": [
                 {
                   "nodeGroupData": {
@@ -779,9 +779,9 @@ properties:
           path: hardwareProvisioningTimeout
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
+        - description: HardwarePluginRef is the identifier for the hardware manager plugin adaptor.
           displayName: Hardware Manager ID
-          path: hwMgrId
+          path: hardwarePluginRef
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: nodeGroupData defines a collection of nodeGroupData items
@@ -1004,9 +1004,9 @@ properties:
           - urn:alm:descriptor:com.tectonic.ui:text
         - displayName: Extensions
           path: extensions
-        - description: HwMgrId is the identifier for the hardware manager plugin instance.
+        - description: HardwarePluginRef is the identifier for the hardware manager plugin instance.
           displayName: Hardware Manager ID
-          path: hwMgrId
+          path: hardwarePluginRef
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: Location
@@ -1050,9 +1050,9 @@ properties:
           path: groupName
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: HwMgrId is the identifier for the hardware manager instance.
+        - description: HardwarePluginRef is the identifier for the hardware manager instance.
           displayName: Hardware Manager ID
-          path: hwMgrId
+          path: hardwarePluginRef
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: HwMgrNodeId is the node identifier from the hardware manager.

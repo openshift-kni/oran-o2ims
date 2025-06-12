@@ -211,14 +211,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - hwmgr-plugin.oran.openshift.io
-  resources:
-  - hardwaremanagers
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - lcm.openshift.io
   resources:
   - imagebasedgroupupgrades

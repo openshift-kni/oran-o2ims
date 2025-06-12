@@ -17,7 +17,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.hwMgrId
+    - jsonPath: .spec.hardwarePluginRef
       name: HwMgr Id
       type: string
     - jsonPath: .spec.nodeAllocationRequest
@@ -64,8 +64,9 @@ spec:
               groupName:
                 description: GroupName
                 type: string
-              hwMgrId:
-                description: HwMgrId is the identifier for the hardware manager instance.
+              hardwarePluginRef:
+                description: HardwarePluginRef is the identifier for the HardwarePlugin
+                  instance.
                 type: string
               hwMgrNodeId:
                 description: HwMgrNodeId is the node identifier from the hardware
