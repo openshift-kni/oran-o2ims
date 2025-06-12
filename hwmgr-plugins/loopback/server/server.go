@@ -158,9 +158,9 @@ func (s *LoopbackPluginServer) CreateNodeAllocationRequest(
 		},
 		Spec: hwv1alpha1.NodeAllocationRequestSpec{
 			// CloudID:      request.Body.CloudID,
-			HwMgrId:      loopbackctrl.LoopbackHardwarePlugingID,
-			NodeGroup:    nodeGroups,
-			LocationSpec: hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			HardwarePluginRef: loopbackctrl.LoopbackHardwarePlugingID,
+			NodeGroup:         nodeGroups,
+			LocationSpec:      hwv1alpha1.LocationSpec{Site: request.Body.Site},
 		},
 	}
 
@@ -186,7 +186,7 @@ func (s *LoopbackPluginServer) UpdateNodeAllocationRequest(
 	if !exist {
 		return generated.UpdateNodeAllocationRequest404ApplicationProblemPlusJSONResponse(
 			generated.ProblemDetails{
-				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s', err: %s", request.NodeAllocationRequestId, err.Error()),
+				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s'", request.NodeAllocationRequestId),
 				Status: http.StatusNotFound,
 			}), nil
 	}
@@ -214,9 +214,9 @@ func (s *LoopbackPluginServer) UpdateNodeAllocationRequest(
 		},
 		Spec: hwv1alpha1.NodeAllocationRequestSpec{
 			// CloudID:      request.Body.CloudID,
-			HwMgrId:      existingNodeAllocationRequest.Spec.HwMgrId,
-			NodeGroup:    nodeGroups,
-			LocationSpec: hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			HardwarePluginRef: existingNodeAllocationRequest.Spec.HardwarePluginRef,
+			NodeGroup:         nodeGroups,
+			LocationSpec:      hwv1alpha1.LocationSpec{Site: request.Body.Site},
 		},
 	}
 
@@ -242,7 +242,7 @@ func (s *LoopbackPluginServer) DeleteNodeAllocationRequest(
 	if !exist {
 		return generated.DeleteNodeAllocationRequest404ApplicationProblemPlusJSONResponse(
 			generated.ProblemDetails{
-				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s', err: %s", request.NodeAllocationRequestId, err.Error()),
+				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s'", request.NodeAllocationRequestId),
 				Status: http.StatusNotFound,
 			}), nil
 	}

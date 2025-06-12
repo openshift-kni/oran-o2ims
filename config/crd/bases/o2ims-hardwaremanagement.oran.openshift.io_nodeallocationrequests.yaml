@@ -17,8 +17,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.hwMgrId
-      name: HwMgr Id
+    - jsonPath: .spec.hardwarePluginRef
+      name: HardwarePlugin
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -62,9 +62,8 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
-              hwMgrId:
-                description: HwMgrId is the identifier for the hardware manager plugin
-                  instance.
+              hardwarePluginRef:
+                description: HardwarePluginRef is the name of the HardwarePlugin.
                 type: string
               location:
                 description: Location
