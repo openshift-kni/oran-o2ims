@@ -82,25 +82,6 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldOb
 		return nil, nil
 	}
 
-	// Check if spec.templateName or spec.templateVersion is changed
-	if oldPr.Spec.TemplateName != newPr.Spec.TemplateName || oldPr.Spec.TemplateVersion != newPr.Spec.TemplateVersion {
-		switch newPr.Status.ProvisioningStatus.ProvisioningPhase {
-		case StatePending, StateProgressing:
-			return nil, fmt.Errorf(
-				"updates to spec.templateName or spec.templateVersion are not allowed if the ProvisioningRequest is %s",
-				newPr.Status.ProvisioningStatus.ProvisioningPhase)
-		case StateFailed:
-			// Check if the ProvisioningRequest has failed with a disallowed error
-			if HasFatalProvisioningFailure(newPr.Status.Conditions) {
-				return nil, fmt.Errorf(
-					"updates to spec.templateName or spec.templateVersion are not allowed " +
-						"because the ProvisioningRequest has failed with a disallowed error")
-			}
-		default:
-			// ProvisioningRequest is fulfilled, allow the change
-		}
-	}
-
 	if err := v.validateCreateOrUpdate(ctx, oldPr, newPr); err != nil {
 		provisioningrequestlog.Error(err, "failed to validate the ProvisioningRequest")
 		return nil, err

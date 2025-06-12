@@ -19,6 +19,8 @@ metadata:
     features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.16.0 <4.18'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
+    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
+      Platform Plus"]'
     provider: Red Hat
     repository: https://github.com/openshift-kni/oran-o2ims
     support: Red Hat

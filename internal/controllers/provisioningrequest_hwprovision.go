@@ -400,6 +400,10 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		// If the condition is Configured and it's completed, reset the configuring check start time.
 		if hwCondition.Type == string(hwv1alpha1.Configured) && status == metav1.ConditionTrue {
 			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = nil
+		} else if hwCondition.Type == string(hwv1alpha1.Configured) && t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart == nil {
+			// HardwareConfiguringCheckStart is nil, so reset it to current time
+			currentTime := metav1.Now()
+			t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = &currentTime
 		}
 
 		// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
