@@ -40,6 +40,10 @@ type NodeSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager Node ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HwMgrNodeId string `json:"hwMgrNodeId,omitempty"`
 
+	// HwMgrNodeNs is the node namespace from the hardware manager.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager Node Namespace",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HwMgrNodeNs string `json:"hwMgrNodeNs,omitempty"`
+
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
 }

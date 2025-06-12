@@ -1,0 +1,13 @@
+# idms
+apiVersion: operator.openshift.io/v1alpha1
+kind: ImageDigestMirrorSet
+metadata:
+  name: o-cloud-image-digest-mirror-set
+spec:
+  imageDigestMirrors:
+  - mirrors:
+    - quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19
+    source: registry.redhat.io/openshift4/o-cloud-manager-rhel9-operator
+  - mirrors:
+    - quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19
+    source: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle

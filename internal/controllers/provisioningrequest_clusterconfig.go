@@ -277,6 +277,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		return err
 	}
 
+	var bmhNs string
 	nodes := &hwv1alpha1.NodeList{}
 	// If the HW template is provided, get the NodePool and the corresponding o2ims-hardwaremanagement Nodes.
 	if oranct.Spec.Templates.HwTemplate != "" {
@@ -313,18 +314,23 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 				nodePoolNs,
 			)
 		}
+		bmhNs = utils.GetBMHNamespace(&nodes.Items[0])
 	}
 
 	// Add the needed label to the Agent(s) associated to the current ProvisioningRequest:
 	//   clustertemplates.o2ims.provisioning.oran.org/templateIds
 	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId
 	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId
+	agentNs := mcl.Name
+	if bmhNs != "" {
+		agentNs = bmhNs
+	}
 	agents := &assistedservicev1beta1.AgentList{}
 	listOpts := []client.ListOption{
 		client.MatchingLabels{
 			"agent-install.openshift.io/clusterdeployment-namespace": mcl.Name,
 		},
-		client.InNamespace(mcl.Name),
+		client.InNamespace(agentNs),
 	}
 
 	err = t.client.List(ctx, agents, listOpts...)
