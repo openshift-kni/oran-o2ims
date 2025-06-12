@@ -8,8 +8,16 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "main"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "pull_request" &&
+      target_branch == "main" &&
+      (
+        '.tekton/o-cloud-manager-fbc-4-19-pull-request.yaml'.pathChanged() ||
+        '.tekton/o-cloud-manager-fbc-4-19-push.yaml'.pathChanged() ||
+        '.tekton/images-mirror-set.yaml'.pathChanged() ||
+        '.konflux/Dockerfile.catalog'.pathChanged() ||
+        '.konflux/catalog/bundle.builds.in.yaml'.pathChanged()
+      )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: o-cloud-manager-fbc-4-19
@@ -32,6 +40,9 @@ spec:
     - linux/x86_64
   - name: dockerfile
     value: .konflux/Dockerfile.catalog
+  # We have configured an fbc exception for hermetic builds on the release repo.
+  - name: hermetic
+    value: "false"
   pipelineSpec:
     description: |
       This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
@@ -233,6 +244,8 @@ spec:
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: IMAGE_APPEND_PLATFORM
         value: "true"
+      - name: ADDITIONAL_SECRET
+        value: telco-5g-redhat-pull-secret
       runAfter:
       - clone-repository
       taskRef:

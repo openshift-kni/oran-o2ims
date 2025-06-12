@@ -112,11 +112,6 @@ func CollectNodeDetails(ctx context.Context, c client.Client,
 			return nil, fmt.Errorf("the Node %s status in namespace %s does not have BMC details",
 				nodeName, nodePool.Namespace)
 		}
-		// Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
-		bmhNs, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]
-		if !ok {
-			bmhNs = node.Spec.HwMgrNodeNs
-		}
 
 		// Store the nodeInfo per group
 		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], NodeInfo{
@@ -124,7 +119,7 @@ func CollectNodeDetails(ctx context.Context, c client.Client,
 			BmcCredentials: node.Status.BMC.CredentialsName,
 			NodeName:       node.Name,
 			HwMgrNodeId:    node.Spec.HwMgrNodeId,
-			HwMgrNodeNs:    bmhNs,
+			HwMgrNodeNs:    GetBMHNamespace(node),
 			Interfaces:     node.Status.Interfaces,
 		})
 	}
@@ -590,4 +585,14 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 	}
 
 	return 0, nil
+}
+
+// GetBMHNamespace returns the BMH namespace for the given node.
+// Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
+func GetBMHNamespace(node *hwv1alpha1.Node) string {
+
+	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {
+		return ns
+	}
+	return node.Spec.HwMgrNodeNs
 }

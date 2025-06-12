@@ -1,4 +1,5 @@
 # Do not modify the manager 'key' value: 'manager'
+---
 - key: manager
   staging: registry.stage.redhat.io/openshift4/o-cloud-manager-rhel9-operator
   production: registry.redhat.io/openshift4/o-cloud-manager-rhel9-operator
