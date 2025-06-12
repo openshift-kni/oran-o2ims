@@ -48,6 +48,8 @@ const (
 const (
 	LoopbackPlugin           = "loopback-hardwareplugin"
 	LoopbackPluginServerName = LoopbackPlugin + serverSuffix
+	Metal3Plugin             = "metal3-hardwareplugin"
+	Metal3PluginServerName   = Metal3Plugin + serverSuffix
 )
 
 // IngressName defines the name of our ingress controller
@@ -120,6 +122,18 @@ var (
 
 	LoopbackPluginServerArgs = []string{
 		"loopback-hardwareplugin-manager",
+		"start",
+		"--health-probe-bind-address=:8081",
+		"--metrics-bind-address=:8080",
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
+		"--leader-elect",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+	}
+
+	Metal3PluginServerArgs = []string{
+		"metal3-hardwareplugin-manager",
 		"start",
 		"--health-probe-bind-address=:8081",
 		"--metrics-bind-address=:8080",
