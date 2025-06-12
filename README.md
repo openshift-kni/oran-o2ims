@@ -5,8 +5,11 @@ SPDX-License-Identifier: Apache-2.0
 -->
 
 <!-- vscode-markdown-toc -->
-
 # O-RAN O-Cloud Manager
+
+<!-- markdownlint-disable MD033 -->
+<a href="https://github.com/o-ran-sc/it-test/tree/master/test_scripts/O2IMS_Compliance_Test"><img src="https://img.shields.io/badge/O--RAN_SC_O2_IMS_Automated_Test_Compliance-100%25-green"/></a>
+<!-- markdownlint-enable MD033 -->
 
 <!-- TOC -->
 * [O-RAN O-Cloud Manager](#o-ran-o-cloud-manager)
