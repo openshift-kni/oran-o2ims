@@ -4,8 +4,11 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package controller
-
-const LoopbackHardwarePlugingID = "loopback-hwplugin"
+package utils
 
 const HardwarePluginLabel = "o2ims-hardwaremanagement.oran.openshift.io/hardware-plugin"
+
+const (
+	LoopbackHardwarePluginID = "loopback-hwplugin"
+	Metal3HardwarePluginID   = "metal3-hwplugin"
+)
