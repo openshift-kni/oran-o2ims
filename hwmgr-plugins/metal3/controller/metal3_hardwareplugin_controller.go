@@ -25,8 +25,8 @@ import (
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
-// LoopbackPluginReconciler reconciles NodeAllocationRequest objects associated with the loopback H/W plugin
-type LoopbackPluginReconciler struct {
+// Metal3PluginReconciler reconciles NodeAllocationRequest objects associated with the Metal3 H/W plugin
+type Metal3PluginReconciler struct {
 	ctrl.Manager
 	client.Client
 	NoncachedClient client.Reader
@@ -35,7 +35,7 @@ type LoopbackPluginReconciler struct {
 	indexerEnabled  bool
 }
 
-func (r *LoopbackPluginReconciler) SetupIndexer(ctx context.Context) error {
+func (r *Metal3PluginReconciler) SetupIndexer(ctx context.Context) error {
 	// Setup AllocatedNode CRD indexer. This field indexer allows us to query a list of AllocatedNode CRs, filtered by the spec.nodeAllocationRequest field.
 	nodeIndexFunc := func(obj client.Object) []string {
 		return []string{obj.(*pluginv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
@@ -59,7 +59,7 @@ func (r *LoopbackPluginReconciler) SetupIndexer(ctx context.Context) error {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch;delete
 
-func (r *LoopbackPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+func (r *Metal3PluginReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
 
 	// Add logging context with the NodeAllocationRequest name
@@ -127,16 +127,16 @@ func (r *LoopbackPluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *LoopbackPluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Metal3PluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
-	// Create a label selector for filtering NodeAllocationRequests pertaining to the Loopback HardwarePlugin
+	// Create a label selector for filtering NodeAllocationRequests pertaining to the Metal3 HardwarePlugin
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			hwpluginutils.HardwarePluginLabel: hwpluginutils.LoopbackHardwarePluginID,
+			hwpluginutils.HardwarePluginLabel: hwpluginutils.Metal3HardwarePluginID,
 		},
 	}
 
-	// Create a predicate to filter NodeAllocationRequests with the specified label
+	// Create a predicate to filter NodeAllocationRequests with the specified metal3 H/W plugin label
 	pred, err := predicate.LabelSelectorPredicate(labelSelector)
 	if err != nil {
 		return fmt.Errorf("failed to create label selector predicate: %w", err)
@@ -153,7 +153,7 @@ func (r *LoopbackPluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // HandleNodeAllocationRequest processes the NodeAllocationRequest CR
-func (r *LoopbackPluginReconciler) HandleNodeAllocationRequest(
+func (r *Metal3PluginReconciler) HandleNodeAllocationRequest(
 	ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 	result := hwpluginutils.DoNotRequeue()
 
@@ -164,121 +164,22 @@ func (r *LoopbackPluginReconciler) HandleNodeAllocationRequest(
 		}
 	}
 
-	switch determineAction(ctx, r.Logger, nodeAllocationRequest) {
-	case NodeAllocationRequestFSMCreate:
-		return r.handleNewNodeAllocationRequestCreate(ctx, nodeAllocationRequest)
-	case NodeAllocationRequestFSMProcessing:
-		return r.handleNodeAllocationRequestProcessing(ctx, nodeAllocationRequest)
-	case NodeAllocationRequestFSMSpecChanged:
-		return r.handleNodeAllocationRequestSpecChanged(ctx, nodeAllocationRequest)
-	case NodeAllocationRequestFSMNoop:
-		// Nothing to do
-		return result, nil
-	}
+	// TODO
 
 	return result, nil
-}
-
-func (r *LoopbackPluginReconciler) handleNewNodeAllocationRequestCreate(
-	ctx context.Context,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
-
-	conditionType := pluginv1alpha1.Provisioned
-	var conditionReason pluginv1alpha1.ConditionReason
-	var conditionStatus metav1.ConditionStatus
-	var message string
-
-	if err := processNewNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
-		r.Logger.InfoContext(ctx, "failed processNewNodeAllocationRequest", slog.String("err", err.Error()))
-		conditionReason = pluginv1alpha1.Failed
-		conditionStatus = metav1.ConditionFalse
-		message = "Creation request failed: " + err.Error()
-	} else {
-		conditionReason = pluginv1alpha1.InProgress
-		conditionStatus = metav1.ConditionFalse
-		message = "Handling creation"
-	}
-
-	if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
-		conditionType, conditionReason, conditionStatus, message); err != nil {
-		return hwpluginutils.RequeueWithMediumInterval(),
-			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
-	}
-	// Update the NodeAllocationRequest hwMgrPlugin status
-	if err := hwpluginutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
-		return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
-	}
-
-	return hwpluginutils.DoNotRequeue(), nil
-}
-
-func (r *LoopbackPluginReconciler) handleNodeAllocationRequestProcessing(
-	ctx context.Context,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest,
-) (ctrl.Result, error) {
-
-	full, err := checkNodeAllocationRequestProgress(ctx, r.Client, r.Logger, nodeAllocationRequest)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed checkNodeAllocationRequestProgress: %w", err)
-	}
-
-	allocatedNodes, err := getAllocatedNodes(ctx, r.Client, r.Logger, nodeAllocationRequest)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get allocated nodes for %s: %w", nodeAllocationRequest.Name, err)
-	}
-	nodeAllocationRequest.Status.Properties.NodeNames = allocatedNodes
-
-	if err := hwpluginutils.UpdateNodeAllocationRequestProperties(ctx, r.Client, nodeAllocationRequest); err != nil {
-		return hwpluginutils.RequeueWithMediumInterval(),
-			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
-	}
-
-	var result ctrl.Result
-
-	if full {
-		r.Logger.InfoContext(ctx, "NodeAllocationRequest request is fully allocated")
-
-		if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
-			pluginv1alpha1.Provisioned, pluginv1alpha1.Completed, metav1.ConditionTrue, "Created"); err != nil {
-			return hwpluginutils.RequeueWithMediumInterval(),
-				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
-		}
-
-		result = hwpluginutils.DoNotRequeue()
-	} else {
-		r.Logger.InfoContext(ctx, "NodeAllocationRequest request in progress")
-		result = hwpluginutils.RequeueWithShortInterval()
-	}
-
-	return result, nil
-}
-
-func (r *LoopbackPluginReconciler) handleNodeAllocationRequestSpecChanged(
-	ctx context.Context,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
-
-	if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(
-		ctx,
-		r.Client,
-		nodeAllocationRequest,
-		pluginv1alpha1.Configured,
-		pluginv1alpha1.ConfigUpdate,
-		metav1.ConditionFalse,
-		string(pluginv1alpha1.AwaitConfig)); err != nil {
-		return hwpluginutils.RequeueWithMediumInterval(),
-			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
-	}
-
-	return handleNodeAllocationRequestConfiguring(ctx, r.Client, r.Logger, nodeAllocationRequest)
 }
 
 // handleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion
-func (r *LoopbackPluginReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (bool, error) {
+func (r *Metal3PluginReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (bool, error) {
+
 	r.Logger.InfoContext(ctx, "Finalizing NodeAllocationRequest")
 
-	if err := releaseNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
-		return false, fmt.Errorf("failed to release NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	//  TODO: remove this conditional which is added to to appease the linter Gods
+	if nodeAllocationRequest.Name == "" {
+		return false, fmt.Errorf("nodeAllocationRequest.name is empty: resource version: %s", nodeAllocationRequest.ResourceVersion)
 	}
+
+	// TODO
 
 	return true, nil
 }

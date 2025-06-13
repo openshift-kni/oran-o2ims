@@ -873,6 +873,12 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		}
 	}
 
+	// Start the Metal3 HardwarePlugin server
+	nextReconcile, err = t.setupMetal3PluginServer(ctx, nextReconcile)
+	if err != nil {
+		return
+	}
+
 	// Wait for pods to become ready
 	nextReconcile, err = t.checkForPodReadyStatus(ctx)
 	if err != nil {

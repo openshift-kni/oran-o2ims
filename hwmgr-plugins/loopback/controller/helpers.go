@@ -467,7 +467,7 @@ func createNode(ctx context.Context,
 			Name:      nodename,
 			Namespace: nodeAllocationRequest.Namespace,
 			Labels: map[string]string{
-				HardwarePluginLabel: LoopbackHardwarePlugingID,
+				hwpluginutils.HardwarePluginLabel: hwpluginutils.LoopbackHardwarePluginID,
 			},
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion:         nodeAllocationRequest.APIVersion,

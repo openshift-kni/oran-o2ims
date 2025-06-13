@@ -23,11 +23,15 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
-func getLoopbackHWPLuginNamespace() string {
+func GetLoopbackHWPluginNamespace() string {
 	return utils.GetHwMgrPluginNS()
 }
 
-func generateResourceIdentifier(baseName string) (string, error) {
+func GetMetal3HWPluginNamespace() string {
+	return utils.GetHwMgrPluginNS()
+}
+
+func GenerateResourceIdentifier(baseName string) (string, error) {
 	// Generate a new UUID
 	uuid, err := uuid.NewRandom()
 	if err != nil {
@@ -97,19 +101,19 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.N
 	}, nil
 }
 
-func getNodeAllocationRequest(ctx context.Context,
+func GetNodeAllocationRequest(ctx context.Context,
 	c client.Client,
-	nodeAllocationRequestId string,
+	namespace, nodeAllocationRequestId string,
 ) (*hwv1alpha1.NodeAllocationRequest, error) {
 
 	nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
-	err := c.Get(ctx, types.NamespacedName{Namespace: getLoopbackHWPLuginNamespace(), Name: nodeAllocationRequestId}, nodeAllocationRequest)
+	err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: nodeAllocationRequestId}, nodeAllocationRequest)
 	// nolint: wrapcheck
 	return nodeAllocationRequest, err
 }
 
-// createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
-func createOrUpdateNodeAllocationRequest(
+// CreateOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
+func CreateOrUpdateNodeAllocationRequest(
 	ctx context.Context, c client.Client, logger *slog.Logger, nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest) error {
 
 	existingNodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
@@ -200,10 +204,10 @@ func AllocatedNodeCRToAllocatedNodeObject(node *hwv1alpha1.AllocatedNode) (gener
 	return nodeObject, nil
 }
 
-func getAllocatedNode(ctx context.Context, c client.Client, nodeId string) (*hwv1alpha1.AllocatedNode, error) {
+func GetAllocatedNode(ctx context.Context, c client.Client, namespace, nodeId string) (*hwv1alpha1.AllocatedNode, error) {
 	allocatedNode := &hwv1alpha1.AllocatedNode{}
 	err := c.Get(ctx,
-		types.NamespacedName{Namespace: getLoopbackHWPLuginNamespace(), Name: nodeId},
+		types.NamespacedName{Namespace: namespace, Name: nodeId},
 		allocatedNode)
 	// nolint: wrapcheck
 	return allocatedNode, err

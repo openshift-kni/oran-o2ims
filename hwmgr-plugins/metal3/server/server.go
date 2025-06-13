@@ -17,30 +17,30 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
-const LoopbackResourcePrefix = "loopback"
+const Metal3ResourcePrefix = "metal3"
 
-// LoopbackPluginServer implements StricerServerInterface.
+// Metal3PluginServer implements StricerServerInterface.
 // This ensures that we've conformed to the `StrictServerInterface` with a compile-time check.
-var _ generated.StrictServerInterface = (*LoopbackPluginServer)(nil)
+var _ generated.StrictServerInterface = (*Metal3PluginServer)(nil)
 
-type LoopbackPluginServer struct {
+type Metal3PluginServer struct {
 	hwpluginserver.HardwarePluginServer
 }
 
-// NewLoopbackPluginServer creates a Loopback HardwarePlugin server
-func NewLoopbackPluginServer(
+// NewMetal3PluginServer creates a Metal3 HardwarePlugin server
+func NewMetal3PluginServer(
 	config utils.CommonServerConfig,
 	hubClient client.Client,
 	logger *slog.Logger,
-) (*LoopbackPluginServer, error) {
-	return &LoopbackPluginServer{
+) (*Metal3PluginServer, error) {
+	return &Metal3PluginServer{
 		HardwarePluginServer: hwpluginserver.HardwarePluginServer{
 			CommonServerConfig: config,
 			HubClient:          hubClient,
 			Logger:             logger,
-			Namespace:          hwpluginserver.GetLoopbackHWPluginNamespace(),
-			HardwarePluginID:   hwpluginutils.LoopbackHardwarePluginID,
-			ResourcePrefix:     LoopbackResourcePrefix,
+			Namespace:          hwpluginserver.GetMetal3HWPluginNamespace(),
+			HardwarePluginID:   hwpluginutils.Metal3HardwarePluginID,
+			ResourcePrefix:     Metal3ResourcePrefix,
 		},
 	}, nil
 }
