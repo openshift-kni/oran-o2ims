@@ -28,16 +28,16 @@ import (
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
-// Loopback HardwarePlugin Server config values
+// Metal3 HardwarePlugin Server config values
 const (
 	readTimeout  = 5 * time.Second
 	writeTimeout = 10 * time.Second
 	idleTimeout  = 120 * time.Second
 )
 
-// Serve starts the Loopback HardwarePlugin API server and blocks until it terminates or context is canceled.
+// Serve starts the Metal3 HardwarePlugin API server and blocks until it terminates or context is canceled.
 func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient client.Client) error {
-	slog.Info("Initializing the Loopback HardwarePlugin server")
+	slog.Info("Initializing the Metal3 HardwarePlugin server")
 
 	// Retrieve the OpenAPI spec file
 	swagger, err := hwpluginserver.GetSwagger()
@@ -58,8 +58,8 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 		cancel()
 	}()
 
-	// Init loopbackServer
-	loopbackServer, err := NewLoopbackPluginServer(
+	// Init metal3Server
+	metal3Server, err := NewMetal3PluginServer(
 		config,
 		hubClient,
 		slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -67,10 +67,10 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 			Level:     slog.LevelDebug,
 		})))
 	if err != nil {
-		return fmt.Errorf("failed to build Loopback HardwarePlugin server: %w", err)
+		return fmt.Errorf("failed to build Metal3 HardwarePlugin server: %w", err)
 	}
 
-	serverStrictHandler := hwpluginserver.NewStrictHandlerWithOptions(loopbackServer, nil,
+	serverStrictHandler := hwpluginserver.NewStrictHandlerWithOptions(metal3Server, nil,
 		hwpluginserver.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  api.GetRequestErrorFunc(),
 			ResponseErrorHandlerFunc: api.GetResponseErrorFunc(),
@@ -84,12 +84,12 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 	// Create authn/authz middleware
 	authn, err := auth.GetAuthenticator(ctx, &config)
 	if err != nil {
-		return fmt.Errorf("error setting up Loopback HardwarePlugin authenticator middleware: %w", err)
+		return fmt.Errorf("error setting up Metal3 HardwarePlugin authenticator middleware: %w", err)
 	}
 
 	authz, err := auth.GetAuthorizer()
 	if err != nil {
-		return fmt.Errorf("error setting up Loopback HardwarePlugin authorizer middleware: %w", err)
+		return fmt.Errorf("error setting up Metal3 HardwarePlugin authorizer middleware: %w", err)
 	}
 
 	opt := hwpluginserver.StdHTTPServerOptions{
@@ -114,7 +114,7 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 
 	serverTLSConfig, err := utils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {
-		return fmt.Errorf("failed to get Loopback HardwarePlugin server TLS config: %w", err)
+		return fmt.Errorf("failed to get Metal3 HardwarePlugin server TLS config: %w", err)
 	}
 
 	srv := &http.Server{
@@ -140,19 +140,19 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 	defer func() {
 		// Cancel the context in case it wasn't already canceled
 		cancel()
-		// Shutdown the Loopback HardwarePlugin server
-		slog.Info("Shutting down Loopback HardwarePlugin server")
+		// Shutdown the Metal3 HardwarePlugin server
+		slog.Info("Shutting down Metal3 HardwarePlugin server")
 		if err := common.GracefulShutdown(srv); err != nil {
-			slog.Error("error shutting down Loopback HardwarePlugin server", "error", err)
+			slog.Error("error shutting down Metal3 HardwarePlugin server", "error", err)
 		}
 	}()
 
 	// Blocking select
 	select {
 	case err := <-serverErrors:
-		return fmt.Errorf("error starting Loopback HardwarePlugin server: %w", err)
+		return fmt.Errorf("error starting Metal3 HardwarePlugin server: %w", err)
 	case <-ctx.Done():
-		slog.Info("Process shutting down Loopback HardwarePlugin server")
+		slog.Info("Process shutting down Metal3 HardwarePlugin server")
 	}
 
 	return nil
