@@ -237,6 +237,67 @@ rules:
   verbs:
   - get
 - apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - firmwareschemas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwarecomponents
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwaresettings
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostupdatepolicies
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - preprovisioningimages
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - monitoring.coreos.com
   resources:
   - prometheusrules
@@ -306,6 +367,25 @@ rules:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
   - hardwareplugins/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - hardwareprofiles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - hardwareprofiles/status
   verbs:
   - get
   - patch
