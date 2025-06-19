@@ -13,6 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,7 +31,7 @@ const (
 func GetNode(
 	ctx context.Context,
 	logger *slog.Logger,
-	c client.Client,
+	c client.Reader,
 	namespace, nodename string) (*pluginv1alpha1.AllocatedNode, error) {
 
 	logger.InfoContext(ctx, "Getting AllocatedNode", slog.String("nodename", nodename))
@@ -42,6 +44,17 @@ func GetNode(
 		return node, fmt.Errorf("failed to get AllocatedNode for update: %w", err)
 	}
 	return node, nil
+}
+
+// GetNodeList retrieves the node list
+func GetNodeList(ctx context.Context, c client.Client) (*pluginv1alpha1.AllocatedNodeList, error) {
+
+	nodeList := &pluginv1alpha1.AllocatedNodeList{}
+	if err := c.List(ctx, nodeList); err != nil {
+		return nodeList, fmt.Errorf("failed to list AllocatedNodes: %w", err)
+	}
+
+	return nodeList, nil
 }
 
 // GenerateNodeName
@@ -68,7 +81,7 @@ func GetChildNodes(
 	nodelist := &pluginv1alpha1.AllocatedNodeList{}
 
 	opts := []client.ListOption{
-		client.MatchingFields{"spec.allocatedNodeRequest": nodeAllocationRequest.Name},
+		client.MatchingFields{"spec.nodeAllocationRequest": nodeAllocationRequest.Name},
 	}
 
 	if err := sharedutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
@@ -79,4 +92,59 @@ func GetChildNodes(
 	}
 
 	return nodelist, nil
+}
+
+// SetNodeConditionStatus sets a condition on the AllocatedNode status with the provided condition type
+func SetNodeConditionStatus(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	nodename, namespace string,
+	conditionType string,
+	conditionStatus metav1.ConditionStatus,
+	reason, message string,
+) error {
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		node := &pluginv1alpha1.AllocatedNode{}
+		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node); err != nil {
+			return fmt.Errorf("failed to fetch Node: %w", err)
+		}
+
+		SetStatusCondition(
+			&node.Status.Conditions,
+			conditionType,
+			reason,
+			conditionStatus,
+			message,
+		)
+
+		return c.Status().Update(ctx, node)
+	})
+}
+
+func SetNodeFailedStatus(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	node *pluginv1alpha1.AllocatedNode,
+	conditionType string,
+	message string,
+) error {
+
+	SetStatusCondition(&node.Status.Conditions, conditionType, string(pluginv1alpha1.Failed), metav1.ConditionFalse, message)
+
+	if err := c.Status().Update(ctx, node); err != nil {
+		logger.ErrorContext(ctx, "Failed to update node status with failure",
+			slog.String("node", node.Name),
+			slog.String("conditionType", conditionType),
+			slog.String("error", err.Error()))
+		return fmt.Errorf("failed to set node failed status: %w", err)
+	}
+
+	logger.InfoContext(ctx, "Node status set to failed",
+		slog.String("node", node.Name),
+		slog.String("conditionType", conditionType),
+		slog.String("reason", string(pluginv1alpha1.Failed)))
+	return nil
 }

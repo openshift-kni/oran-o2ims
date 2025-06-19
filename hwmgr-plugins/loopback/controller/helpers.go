@@ -15,7 +15,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -27,42 +26,6 @@ import (
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
-
-// Loopback HardwarePlugin FSM
-type fsmAction int
-
-const (
-	NodeAllocationRequestFSMCreate = iota
-	NodeAllocationRequestFSMProcessing
-	NodeAllocationRequestFSMSpecChanged
-	NodeAllocationRequestFSMNoop
-)
-
-func determineAction(ctx context.Context, logger *slog.Logger, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) fsmAction {
-	if len(nodeAllocationRequest.Status.Conditions) == 0 {
-		logger.InfoContext(ctx, "Handling Create NodeAllocationRequest request")
-		return NodeAllocationRequestFSMCreate
-	}
-
-	provisionedCondition := meta.FindStatusCondition(
-		nodeAllocationRequest.Status.Conditions,
-		string(pluginv1alpha1.Provisioned))
-	if provisionedCondition != nil {
-		if provisionedCondition.Status == metav1.ConditionTrue {
-			// Check if the generation has changed
-			if nodeAllocationRequest.ObjectMeta.Generation != nodeAllocationRequest.Status.HwMgrPlugin.ObservedGeneration {
-				logger.InfoContext(ctx, "Handling NodeAllocationRequest Spec change")
-				return NodeAllocationRequestFSMSpecChanged
-			}
-			logger.InfoContext(ctx, "NodeAllocationRequest request in Provisioned state")
-			return NodeAllocationRequestFSMNoop
-		}
-
-		return NodeAllocationRequestFSMProcessing
-	}
-
-	return NodeAllocationRequestFSMNoop
-}
 
 // processNewNodeAllocationRequest processes a new NodeAllocationRequest CR, verifying that there are enough free resources
 // to satisfy the request
