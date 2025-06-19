@@ -164,14 +164,14 @@ func (r *LoopbackPluginReconciler) HandleNodeAllocationRequest(
 		}
 	}
 
-	switch determineAction(ctx, r.Logger, nodeAllocationRequest) {
-	case NodeAllocationRequestFSMCreate:
+	switch hwpluginutils.DetermineAction(ctx, r.Logger, nodeAllocationRequest) {
+	case hwpluginutils.NodeAllocationRequestFSMCreate:
 		return r.handleNewNodeAllocationRequestCreate(ctx, nodeAllocationRequest)
-	case NodeAllocationRequestFSMProcessing:
+	case hwpluginutils.NodeAllocationRequestFSMProcessing:
 		return r.handleNodeAllocationRequestProcessing(ctx, nodeAllocationRequest)
-	case NodeAllocationRequestFSMSpecChanged:
+	case hwpluginutils.NodeAllocationRequestFSMSpecChanged:
 		return r.handleNodeAllocationRequestSpecChanged(ctx, nodeAllocationRequest)
-	case NodeAllocationRequestFSMNoop:
+	case hwpluginutils.NodeAllocationRequestFSMNoop:
 		// Nothing to do
 		return result, nil
 	}

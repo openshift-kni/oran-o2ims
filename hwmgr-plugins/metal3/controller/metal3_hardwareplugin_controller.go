@@ -12,7 +12,9 @@ import (
 	"log/slog"
 
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
@@ -33,15 +35,16 @@ type Metal3PluginReconciler struct {
 	Scheme          *runtime.Scheme
 	Logger          *slog.Logger
 	indexerEnabled  bool
+	PluginNamespace string
 }
 
 func (r *Metal3PluginReconciler) SetupIndexer(ctx context.Context) error {
 	// Setup AllocatedNode CRD indexer. This field indexer allows us to query a list of AllocatedNode CRs, filtered by the spec.nodeAllocationRequest field.
 	nodeIndexFunc := func(obj client.Object) []string {
-		return []string{obj.(*pluginv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+		return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 	}
 
-	if err := r.Manager.GetFieldIndexer().IndexField(ctx, &pluginv1alpha1.AllocatedNode{}, hwpluginutils.AllocatedNodeSpecNodeAllocationRequestKey, nodeIndexFunc); err != nil {
+	if err := r.Manager.GetFieldIndexer().IndexField(ctx, &hwmgmtv1alpha1.AllocatedNode{}, hwpluginutils.AllocatedNodeSpecNodeAllocationRequestKey, nodeIndexFunc); err != nil {
 		return fmt.Errorf("failed to setup node indexer: %w", err)
 	}
 
@@ -56,6 +59,14 @@ func (r *Metal3PluginReconciler) SetupIndexer(ctx context.Context) error {
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/finalizers,verbs=update
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=preprovisioningimages,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings,verbs=get;create;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;create;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;create;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch;delete
 
@@ -74,7 +85,7 @@ func (r *Metal3PluginReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Fetch the nodeAllocationRequest, using non-caching client
-	nodeAllocationRequest := &pluginv1alpha1.NodeAllocationRequest{}
+	nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 	if err := hwpluginutils.GetNodeAllocationRequest(ctx, r.NoncachedClient, req.NamespacedName, nodeAllocationRequest); err != nil {
 		if errors.IsNotFound(err) {
 			// The NodeAllocationRequest object has likely been deleted
@@ -143,7 +154,7 @@ func (r *Metal3PluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&pluginv1alpha1.NodeAllocationRequest{}).
+		For(&hwmgmtv1alpha1.NodeAllocationRequest{}).
 		WithEventFilter(pred).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
@@ -154,7 +165,7 @@ func (r *Metal3PluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // HandleNodeAllocationRequest processes the NodeAllocationRequest CR
 func (r *Metal3PluginReconciler) HandleNodeAllocationRequest(
-	ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+	ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 	result := hwpluginutils.DoNotRequeue()
 
 	if !controllerutil.ContainsFinalizer(nodeAllocationRequest, hwpluginutils.NodeAllocationRequestFinalizer) {
@@ -164,22 +175,145 @@ func (r *Metal3PluginReconciler) HandleNodeAllocationRequest(
 		}
 	}
 
-	// TODO
+	switch hwpluginutils.DetermineAction(ctx, r.Logger, nodeAllocationRequest) {
+	case hwpluginutils.NodeAllocationRequestFSMCreate:
+		return r.handleNewNodeAllocationRequestCreate(ctx, nodeAllocationRequest)
+	case hwpluginutils.NodeAllocationRequestFSMProcessing:
+		return r.handleNodeAllocationRequestProcessing(ctx, nodeAllocationRequest)
+	case hwpluginutils.NodeAllocationRequestFSMSpecChanged:
+		return r.handleNodeAllocationRequestSpecChanged(ctx, nodeAllocationRequest)
+	case hwpluginutils.NodeAllocationRequestFSMNoop:
+		// Nothing to do
+		return result, nil
+	}
+
+	return result, nil
+}
+
+func (r *Metal3PluginReconciler) handleNewNodeAllocationRequestCreate(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+
+	conditionType := hwmgmtv1alpha1.Provisioned
+	var conditionReason hwmgmtv1alpha1.ConditionReason
+	var conditionStatus metav1.ConditionStatus
+	var message string
+
+	if err := processNewNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
+		r.Logger.ErrorContext(ctx, "failed processNewNodeAllocationRequest", slog.String("error", err.Error()))
+		conditionReason = hwmgmtv1alpha1.Failed
+		conditionStatus = metav1.ConditionFalse
+		message = "Creation request failed: " + err.Error()
+	} else {
+		conditionReason = hwmgmtv1alpha1.InProgress
+		conditionStatus = metav1.ConditionFalse
+		message = "Handling creation"
+	}
+
+	if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+		conditionType, conditionReason, conditionStatus, message); err != nil {
+		return hwpluginutils.RequeueWithMediumInterval(),
+			fmt.Errorf("failed to update status for NodePool %s: %w", nodeAllocationRequest.Name, err)
+	}
+	// Update the NodeAllocationRequest hwMgrPlugin status
+	if err := hwpluginutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+		return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+	}
+
+	return hwpluginutils.DoNotRequeue(), nil
+}
+
+func (r *Metal3PluginReconciler) handleNodeAllocationRequestSpecChanged(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+
+	configuredCondition := meta.FindStatusCondition(
+		nodeAllocationRequest.Status.Conditions,
+		string(hwmgmtv1alpha1.Configured))
+	// Set a default status that will be updated during the configuration process
+	if configuredCondition == nil {
+		if result, err := setAwaitConfigCondition(ctx, r.Client, nodeAllocationRequest); err != nil {
+			return result, err
+		}
+	}
+
+	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest)
+	if nodelist != nil {
+		status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, r.NoncachedClient, r.Logger, nodelist)
+
+		if updateErr := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); updateErr != nil {
+
+			r.Logger.ErrorContext(ctx, "Failed to update aggregated NodeAllocationRequest status",
+				slog.String("NodeAllocationRequest", nodeAllocationRequest.Name),
+				slog.String("error", updateErr.Error()))
+
+			if err == nil {
+				err = updateErr
+			}
+		}
+		if status == metav1.ConditionTrue && reason == string(hwmgmtv1alpha1.ConfigApplied) {
+			if err := hwpluginutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+				return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+			}
+		}
+	}
+
+	return result, err
+}
+
+func (r *Metal3PluginReconciler) handleNodeAllocationRequestProcessing(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+
+	var result ctrl.Result
+
+	full, err := checkNodeAllocationRequestProgress(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace,
+		nodeAllocationRequest)
+	if err != nil {
+		reason := hwmgmtv1alpha1.Failed
+		if typederrors.IsInputError(err) {
+			reason = hwmgmtv1alpha1.InvalidInput
+		}
+		if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest, hwmgmtv1alpha1.Provisioned,
+			reason, metav1.ConditionFalse, err.Error()); err != nil {
+			return hwpluginutils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+		}
+		return hwpluginutils.DoNotRequeue(), fmt.Errorf("failed to check NodeAllocationRequest progress %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	if full {
+		r.Logger.InfoContext(ctx, "NodePool request is fully allocated")
+
+		if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed, metav1.ConditionTrue, "Created"); err != nil {
+			return hwpluginutils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodePool %s: %w", nodeAllocationRequest.Name, err)
+		}
+		result = hwpluginutils.DoNotRequeue()
+	} else {
+		r.Logger.InfoContext(ctx, "NodeAllocationRequest request in progress")
+		if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress, metav1.ConditionFalse,
+			string(hwmgmtv1alpha1.AwaitConfig)); err != nil {
+			return hwpluginutils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodePool %s: %w", nodeAllocationRequest.Name, err)
+		}
+		result = hwpluginutils.RequeueWithShortInterval()
+	}
 
 	return result, nil
 }
 
 // handleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion
-func (r *Metal3PluginReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (bool, error) {
+func (r *Metal3PluginReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
 	r.Logger.InfoContext(ctx, "Finalizing NodeAllocationRequest")
 
-	//  TODO: remove this conditional which is added to to appease the linter Gods
-	if nodeAllocationRequest.Name == "" {
-		return false, fmt.Errorf("nodeAllocationRequest.name is empty: resource version: %s", nodeAllocationRequest.ResourceVersion)
+	if err := releaseNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
+		return false, fmt.Errorf("failed to release NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
-
-	// TODO
 
 	return true, nil
 }

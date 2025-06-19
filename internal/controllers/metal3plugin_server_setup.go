@@ -99,6 +99,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 				Resources: []string{
 					"nodeallocationrequests",
 					"allocatednodes",
+					"hardwareprofiles",
 				},
 				Verbs: []string{
 					"create",
@@ -116,6 +117,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 				Resources: []string{
 					"nodeallocationrequests/status",
 					"allocatednodes/status",
+					"hardwareprofiles/status",
 				},
 				Verbs: []string{
 					"get",
@@ -163,6 +165,54 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 					"create",
 					"patch",
 					"update",
+				},
+			},
+			// Metal3
+			{
+				APIGroups: []string{
+					"metal3.io",
+				},
+				Resources: []string{
+					"baremetalhosts",
+					"preprovisioningimages",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"update",
+					"patch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"metal3.io",
+				},
+				Resources: []string{
+					"hostfirmwaresettings",
+					"hostfirmwarecomponents",
+					"hostupdatepolicies",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+					"create",
+					"update",
+					"patch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"metal3.io",
+				},
+				Resources: []string{
+					"firmwareschemas",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
 				},
 			},
 			// Provisioning URL

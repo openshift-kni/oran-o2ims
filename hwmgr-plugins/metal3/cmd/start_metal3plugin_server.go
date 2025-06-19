@@ -24,7 +24,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwpluginserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	metal3ctrl "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	metal3server "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/server"
@@ -42,6 +44,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(bmhv1alpha1.AddToScheme(scheme))
 }
 
 // Create creates and returns the `start` command.
@@ -176,7 +179,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		},
 		HealthProbeBindAddress: c.probeAddr,
 		LeaderElection:         c.enableLeaderElection,
-		LeaderElectionID:       "d5b3dd24.openshift.io",
+		LeaderElectionID:       "a3c1dd20.openshift.io",
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to start manager", slog.String("error", err.Error()))
@@ -189,6 +192,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
 		Logger:          slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "Metal3HWPlugin")),
+		PluginNamespace: hwpluginserver.GetMetal3HWPluginNamespace(),
 	}
 
 	// Start the Metal3 HardwarePlugin controller
