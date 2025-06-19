@@ -244,7 +244,7 @@ func (h *HardwarePluginServer) DeleteNodeAllocationRequest(
 	if !exist {
 		return generated.DeleteNodeAllocationRequest404ApplicationProblemPlusJSONResponse(
 			generated.ProblemDetails{
-				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s', err: %s", request.NodeAllocationRequestId, err.Error()),
+				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s'", request.NodeAllocationRequestId),
 				Status: http.StatusNotFound,
 			}), nil
 	}

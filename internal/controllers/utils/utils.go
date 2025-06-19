@@ -1118,3 +1118,8 @@ func DetermineAuthType(callback string) commonapi.AuthType {
 	}
 	return authType
 }
+
+func IsValidURL(u string) bool {
+	parsed, err := url.ParseRequestURI(u)
+	return err == nil && parsed.Scheme != "" && parsed.Host != ""
+}
