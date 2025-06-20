@@ -46,12 +46,14 @@ spec:
       value: "true"
     - name: skip-sast-coverity
       value: "true"
+    - name: additional-tags
+      value: ['latest']
   pipelineRef:
     name: o-cloud-manager-4-19-build
   taskRunTemplate:
     serviceAccountName: build-pipeline-o-cloud-manager-bundle-4-19
   workspaces:
-  - name: git-auth
-    secret:
-      secretName: '{{ git_auth_secret }}'
+    - name: git-auth
+      secret:
+        secretName: '{{ git_auth_secret }}'
 status: {}
