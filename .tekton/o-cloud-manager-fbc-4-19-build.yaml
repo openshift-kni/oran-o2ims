@@ -81,6 +81,10 @@ spec:
       description: List of platforms to build the container images on. The available set of values is determined by the configuration of the multi-platform-controller.
       name: build-platforms
       type: array
+    - default: []
+      description: Additional tags to apply to the built container image
+      name: additional-tags
+      type: array
   results:
     - description: ""
       name: IMAGE_URL
@@ -272,6 +276,8 @@ spec:
       params:
         - name: IMAGE
           value: $(tasks.build-image-index.results.IMAGE_URL)
+        - name: ADDITIONAL_TAGS
+          value: $(params.additional-tags[*])
       runAfter:
         - build-image-index
       taskRef:

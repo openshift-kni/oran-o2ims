@@ -51,6 +51,8 @@ spec:
       value: "true"
     - name: skip-sast-coverity
       value: "true"
+    - name: additional-tags
+      value: []
   pipelineRef:
     name: o-cloud-manager-4-19-build
   taskRunTemplate:

@@ -44,6 +44,8 @@ spec:
     # We have configured an fbc exception for hermetic builds on the release repo.
     - name: hermetic
       value: "false"
+    - name: additional-tags
+      value: []
   pipelineRef:
     name: o-cloud-manager-fbc-4-19-build
   taskRunTemplate:
