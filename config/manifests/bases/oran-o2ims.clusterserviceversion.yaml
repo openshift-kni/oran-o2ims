@@ -48,9 +48,9 @@ spec:
         path: groupName
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrId is the identifier for the hardware manager instance.
-        displayName: Hardware Manager ID
-        path: hwMgrId
+      - description: HardwarePluginRef is the identifier for the HardwarePlugin instance.
+        displayName: Hardware Plugin Reference
+        path: hardwarePluginRef
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: HwMgrNodeId is the node identifier from the hardware manager.
@@ -172,15 +172,15 @@ spec:
           used to extend the node allocation request's configuration.
         displayName: Extensions
         path: extensions
+      - description: HardwarePluginRef is the name of the HardwarePlugin.
+        displayName: Hardware Plugin Reference
+        path: hardwarePluginRef
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: HardwareProvisioningTimeout defines the timeout duration string
           for the hardware provisioning.
         displayName: Hardware Provisioning Timeout
         path: hardwareProvisioningTimeout
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
-        displayName: Hardware Manager ID
-        path: hwMgrId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: NodeGroupData defines a collection of NodeGroupData items
@@ -393,6 +393,11 @@ spec:
         name: ""
         version: v1
       specDescriptors:
+      - description: BootInterfaceLabel is the label of the boot interface.
+        displayName: Boot Interface Label
+        path: bootInterfaceLabel
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           CloudID is the identifier of the O-Cloud that generated this request. The hardware
           manager may want to use this to tag the nodes in its database, and to generate
@@ -403,9 +408,9 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Extensions
         path: extensions
-      - description: HwMgrId is the identifier for the hardware manager plugin instance.
-        displayName: Hardware Manager ID
-        path: hwMgrId
+      - description: HardwarePluginRef is the name of the HardwarePlugin.
+        displayName: Hardware Plugin Reference
+        path: hardwarePluginRef
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Location

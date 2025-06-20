@@ -246,7 +246,7 @@ const (
 
 // Hardeware template constants
 const (
-	HwTemplatePluginMgr             = "hwMgrId"
+	HwTemplatePluginMgr             = "hardwarePluginRef"
 	HwTemplateNodeAllocationRequest = "node-group-data"
 	HwTemplateBootIfaceLabel        = "bootInterfaceLabel"
 	HwTemplateExtensions            = "extensions"
@@ -273,7 +273,7 @@ const (
 
 // Hardware Manager plugin constants
 const (
-	UnitTestHwmgrID        = "hwmgr"
+	UnitTestHwPluginRef    = "hwmgr"
 	UnitTestHwmgrNamespace = "hwmgr"
 	DefaultPluginNamespace = "oran-o2ims"
 )
@@ -349,8 +349,8 @@ const (
 	LocalClusterLabelName     = "local-cluster"
 
 	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
-	HardwareManagerIdLabel        = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId"
-	HardwareManagerNodeIdLabel    = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId"
+	HardwarePluginRefLabel        = "o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef"
+	HardwareManagerNodeIdLabel    = "o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId"
 )
 
 // AlarmDefinitionSeverityField severity field within additional fields of alarm definition

@@ -268,8 +268,7 @@ func buildInterfacesFromBMH(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocation
 		label := ""
 
 		if strings.EqualFold(nic.MAC, bmh.Spec.BootMACAddress) {
-			// For the boot interface, use the label from the bootInterfaceLabel annotation on the NodeAllocationRequest CR
-			label = nodeAllocationRequest.Annotations[hwmgmtv1alpha1.BootInterfaceLabelAnnotation]
+			label = nodeAllocationRequest.Spec.BootInterfaceLabel
 		} else {
 			// Interface labels with MACs use - instead of :
 			hyphenatedMac := strings.ReplaceAll(nic.MAC, ":", "-")

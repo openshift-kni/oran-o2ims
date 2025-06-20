@@ -42,7 +42,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-//+kubebuilder:rbac:groups=hwmgr-plugin.oran.openshift.io,resources=hardwaremanagers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
@@ -77,7 +76,7 @@ import (
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
@@ -1034,10 +1033,10 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"hwmgr-plugin.oran.openshift.io",
+					"o2ims-hardwaremanagement.oran.openshift.io",
 				},
 				Resources: []string{
-					"hardwaremanagers",
+					"hardwareplugins",
 				},
 				Verbs: []string{
 					"get",
