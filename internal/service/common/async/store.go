@@ -39,6 +39,8 @@ type AsyncChangeEvent struct {
 	Keys         []uuid.UUID
 }
 
+//go:generate mockgen -source=store.go -destination=store_mock.go -package=async
+
 // AsyncEventHandler is intended to be implemented by the Collector so that it can receive data from the Reflector via
 // the Store interface.
 type AsyncEventHandler interface {
