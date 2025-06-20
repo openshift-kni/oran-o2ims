@@ -27,26 +27,26 @@ metadata:
   namespace: telco-5g-tenant
 spec:
   params:
-  - name: git-url
-    value: '{{source_url}}'
-  - name: revision
-    value: '{{revision}}'
-  - name: output-image
-    value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-fbc-4-19:{{revision}}
-  - name: build-platforms
-    value:
-    - linux/x86_64
-  - name: dockerfile
-    value: .konflux/Dockerfile.catalog
-  # We have configured an fbc exception for hermetic builds on the release repo.
-  - name: hermetic
-    value: "false"
+    - name: git-url
+      value: '{{source_url}}'
+    - name: revision
+      value: '{{revision}}'
+    - name: output-image
+      value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-fbc-4-19:{{revision}}
+    - name: build-platforms
+      value:
+        - linux/x86_64
+    - name: dockerfile
+      value: .konflux/Dockerfile.catalog
+    # We have configured an fbc exception for hermetic builds on the release repo.
+    - name: hermetic
+      value: "false"
   pipelineRef:
     name: o-cloud-manager-fbc-4-19-build
   taskRunTemplate:
     serviceAccountName: build-pipeline-o-cloud-manager-fbc-4-19
   workspaces:
-  - name: git-auth
-    secret:
-      secretName: '{{ git_auth_secret }}'
+    - name: git-auth
+      secret:
+        secretName: '{{ git_auth_secret }}'
 status: {}
