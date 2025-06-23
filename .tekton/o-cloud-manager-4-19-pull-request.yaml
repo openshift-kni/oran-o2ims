@@ -33,30 +33,32 @@ metadata:
   namespace: telco-5g-tenant
 spec:
   params:
-  - name: git-url
-    value: '{{source_url}}'
-  - name: revision
-    value: '{{revision}}'
-  - name: output-image
-    value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19:on-pr-{{revision}}
-  - name: image-expires-after
-    value: 5d
-  - name: dockerfile
-    value: .konflux/Dockerfile
-  - name: hermetic
-    value: "true"
-  - name: prefetch-input
-    value: ""
-  - name: build-source-image
-    value: "true"
-  - name: skip-sast-coverity
-    value: "true"
+    - name: git-url
+      value: '{{source_url}}'
+    - name: revision
+      value: '{{revision}}'
+    - name: output-image
+      value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-19:on-pr-{{revision}}
+    - name: image-expires-after
+      value: 5d
+    - name: dockerfile
+      value: .konflux/Dockerfile
+    - name: hermetic
+      value: "true"
+    - name: prefetch-input
+      value: ""
+    - name: build-source-image
+      value: "true"
+    - name: skip-sast-coverity
+      value: "true"
+    - name: additional-tags
+      value: []
   pipelineRef:
     name: o-cloud-manager-4-19-build
   taskRunTemplate:
     serviceAccountName: build-pipeline-o-cloud-manager-4-19
   workspaces:
-  - name: git-auth
-    secret:
-      secretName: '{{ git_auth_secret }}'
+    - name: git-auth
+      secret:
+        secretName: '{{ git_auth_secret }}'
 status: {}
