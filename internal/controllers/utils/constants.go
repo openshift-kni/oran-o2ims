@@ -61,8 +61,6 @@ const IngressClassName = "openshift-default"
 // IngressPortName defines the name of service port to which our ingress controller directs traffic to
 const IngressPortName = "api"
 
-const Metal3PluginName = "metal3"
-
 // Resource operations
 const (
 	UPDATE = "Update"
@@ -246,7 +244,7 @@ const (
 
 // Hardeware template constants
 const (
-	HwTemplatePluginMgr             = "hwMgrId"
+	HwTemplatePluginMgr             = "hardwarePluginRef"
 	HwTemplateNodeAllocationRequest = "node-group-data"
 	HwTemplateBootIfaceLabel        = "bootInterfaceLabel"
 	HwTemplateExtensions            = "extensions"
@@ -273,7 +271,7 @@ const (
 
 // Hardware Manager plugin constants
 const (
-	UnitTestHwmgrID        = "hwmgr"
+	UnitTestHwPluginRef    = "hwmgr"
 	UnitTestHwmgrNamespace = "hwmgr"
 	DefaultPluginNamespace = "oran-o2ims"
 )
@@ -349,8 +347,8 @@ const (
 	LocalClusterLabelName     = "local-cluster"
 
 	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
-	HardwareManagerIdLabel        = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId"
-	HardwareManagerNodeIdLabel    = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId"
+	HardwarePluginRefLabel        = "o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef"
+	HardwareManagerNodeIdLabel    = "o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId"
 )
 
 // AlarmDefinitionSeverityField severity field within additional fields of alarm definition
@@ -387,3 +385,5 @@ const (
 // HardwarePluginValidationEndpoint is the endpoint that the HardwarePlugin manager will try to reach for the plugin being
 // registered.
 const HardwarePluginValidationEndpoint = "/hardware-manager/provisioning/api_versions"
+
+const AllocatedNodeLabel = "o2ims-hardwaremanagement.oran.openshift.io/allocated-node"

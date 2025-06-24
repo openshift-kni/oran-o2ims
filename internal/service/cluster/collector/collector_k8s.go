@@ -185,7 +185,7 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 func (d *K8SDataSource) getInventoryResourceID(agent *v1beta1.Agent) uuid.UUID {
 	var hwMgrID, hwMgrNodeID string
 	var found bool
-	if hwMgrID, found = agent.Labels[utils.HardwareManagerIdLabel]; !found {
+	if hwMgrID, found = agent.Labels[utils.HardwarePluginRefLabel]; !found {
 		return uuid.Nil
 	}
 	if hwMgrNodeID, found = agent.Labels[utils.HardwareManagerNodeIdLabel]; !found {
