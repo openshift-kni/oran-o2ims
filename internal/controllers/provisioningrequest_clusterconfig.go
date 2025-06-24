@@ -329,7 +329,10 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 				continue
 			}
 
-			bmh := utils.GetBareMetalHostForAllocatedNode(ctx, t.client, node.Id)
+			bmh, err := utils.GetBareMetalHostFromHostname(ctx, t.client, hostName)
+			if err != nil {
+				return fmt.Errorf("failed to retrieve BareMetalHost corresponding with hostname '%s': %w", hostName, err)
+			}
 			if bmh == nil {
 				continue
 			}
