@@ -18,28 +18,28 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	k8sptr "k8s.io/utils/ptr"
-	"k8s.io/utils/strings/slices"
-
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-
-	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	k8sptr "k8s.io/utils/ptr"
+	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
@@ -1962,6 +1962,18 @@ func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) er
 	}
 
 	return nil
+}
+
+// SetupBareMetalHostIndexes registers field indexes for BareMetalHost resources.
+func SetupBareMetalHostIndexer(ctx context.Context, mgr ctrl.Manager) error {
+	// nolint: wrapcheck
+	return mgr.GetFieldIndexer().IndexField(ctx, &metal3v1alpha1.BareMetalHost{}, "status.hardware.hostname", func(obj client.Object) []string {
+		bmh := obj.(*metal3v1alpha1.BareMetalHost)
+		if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname != "" {
+			return []string{bmh.Status.HardwareDetails.Hostname}
+		}
+		return nil
+	})
 }
 
 // SetupWithManager sets up the controller with the Manager.
