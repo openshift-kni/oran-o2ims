@@ -62,9 +62,9 @@ func GenerateNodeName() string {
 	return uuid.NewString()
 }
 
-func FindNodeInList(nodelist pluginv1alpha1.AllocatedNodeList, hwMgrId, nodeId string) string {
+func FindNodeInList(nodelist pluginv1alpha1.AllocatedNodeList, hardwarePluginRef, nodeId string) string {
 	for _, node := range nodelist.Items {
-		if node.Spec.HwMgrId == hwMgrId && node.Spec.HwMgrNodeId == nodeId {
+		if node.Spec.HardwarePluginRef == hardwarePluginRef && node.Spec.HwMgrNodeId == nodeId {
 			return node.Name
 		}
 	}
