@@ -74,8 +74,9 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.N
 
 	// Create generated.NodeAllocationRequest object
 	nodeAllocationRequestObject := generated.NodeAllocationRequest{
-		NodeGroup: nodeGroups,
-		Site:      nodeAllocationRequest.Spec.Site,
+		NodeGroup:          nodeGroups,
+		Site:               nodeAllocationRequest.Spec.Site,
+		BootInterfaceLabel: nodeAllocationRequest.Spec.BootInterfaceLabel,
 	}
 
 	nodeAllocationRequestStatus := generated.NodeAllocationRequestStatus{}
@@ -190,6 +191,7 @@ func AllocatedNodeCRToAllocatedNodeObject(node *hwv1alpha1.AllocatedNode) (gener
 	}
 
 	nodeObject := generated.AllocatedNode{
+		Id: node.Name,
 		Bmc: generated.BMC{
 			Address:         node.Status.BMC.Address,
 			CredentialsName: node.Status.BMC.CredentialsName,

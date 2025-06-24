@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
@@ -277,60 +276,16 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		return err
 	}
 
-	var bmhNs string
-	nodes := &hwv1alpha1.AllocatedNodeList{}
-	// If the HW template is provided, get the NodeAllocationRequest and the corresponding o2ims-hardwaremanagement Nodes.
-	if oranct.Spec.Templates.HwTemplate != "" {
-		// Get the NodeAllocationRequest associated to the current ProvisioningRequest.
-		nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
-		// The NodeAllocationRequest was created in the HW Manager Plugin Namespace.
-		narNs := utils.GetHwMgrPluginNS()
-		// The NodeAllocationRequest, ClusterInstance, ClusterDeployment and ManagedCluster share the same name.
-		narName := mcl.Name
-
-		exist, err := utils.DoesK8SResourceExist(ctx, t.client, narName, narNs, nodeAllocationRequest)
-		if err != nil {
-			return fmt.Errorf("failed to get NodeAllocationRequest %s in namespace %s: %w", narName, nodeAllocationRequest.GetNamespace(), err)
-		}
-		if !exist {
-			return fmt.Errorf("expected NodeAllocationRequest %s not found in the %s namespace", narName, narNs)
-		}
-
-		// Get the o2ims-hardwaremanagement Nodes corresponding to the above NodeAllocationRequest.
-		listOpts := []client.ListOption{
-			client.MatchingFields{"spec.nodeAllocationRequest": narName},
-			client.InNamespace(narNs),
-		}
-		err = t.client.List(ctx, nodes, listOpts...)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to list o2ims-hardwaremanagement.oran.openshift.io Nodes in the %s namespace: %w",
-				narNs, err,
-			)
-		}
-		if len(nodes.Items) == 0 {
-			return fmt.Errorf(
-				"the expected o2ims-hardwaremanagement.oran.openshift.io Nodes were not found in the %s namespace",
-				narNs,
-			)
-		}
-		bmhNs = utils.GetBMHNamespace(&nodes.Items[0])
-	}
-
 	// Add the needed label to the Agent(s) associated to the current ProvisioningRequest:
 	//   clustertemplates.o2ims.provisioning.oran.org/templateIds
-	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId
-	//   hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId
-	agentNs := mcl.Name
-	if bmhNs != "" {
-		agentNs = bmhNs
-	}
+	//   o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef
+	//   o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId
+
 	agents := &assistedservicev1beta1.AgentList{}
 	listOpts := []client.ListOption{
 		client.MatchingLabels{
 			"agent-install.openshift.io/clusterdeployment-namespace": mcl.Name,
 		},
-		client.InNamespace(agentNs),
 	}
 
 	err = t.client.List(ctx, agents, listOpts...)
@@ -342,6 +297,13 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		return fmt.Errorf("the expected Agents were not found in the %s namespace", mcl.Name)
 	}
 
+	// Get AllocatedNodes
+	nodeAllocationRequestID := t.getNodeAllocationRequestID()
+	nodes, err := t.hwpluginClient.GetAllocatedNodesFromNodeAllocationRequest(ctx, nodeAllocationRequestID)
+	if err != nil {
+		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
+	}
+
 	// Go through all the obtained agents and apply the above labels.
 	for _, agent := range agents.Items {
 		err = t.setLabelValue(ctx, &agent, utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
@@ -350,27 +312,42 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		}
 
 		if oranct.Spec.Templates.HwTemplate == "" {
-			// Skip adding hwMgrId and hwMgrNodeId labels if hardware provisioning is skipped.
+			// Skip adding hardwarePluginRef and hwMgrNodeId labels if hardware provisioning is skipped.
 			continue
 		}
 
 		// Get the corresponding o2ims-hardwaremanagement.oran.openshift.io and add the needed labels.
 		// Map by hostname.
 		foundNode := false
-		for _, node := range nodes.Items {
+
+		for _, node := range *nodes {
+
+			// Get the Hostname
+			hostName := t.object.Status.Extensions.AllocatedNodeHostMap[node.Id]
 			// Skip the Node if its hostname status is empty.
-			if node.Status.Hostname == "" {
+			if hostName == "" {
 				continue
 			}
-			if node.Status.Hostname == agent.Spec.Hostname {
+
+			bmh := utils.GetBareMetalHostForAllocatedNode(ctx, t.client, node.Id)
+			if bmh == nil {
+				continue
+			}
+
+			if bmh.Status.HardwareDetails.Hostname != hostName {
+				return fmt.Errorf("bareMetalHost Hostname '%s' is different from the ProvisioningRequest's Hostname: '%s'",
+					bmh.Status.HardwareDetails.Hostname, hostName)
+			}
+
+			if hostName == agent.Spec.Hostname {
 				foundNode = true
 
-				err = t.setLabelValue(ctx, &agent, utils.HardwareManagerIdLabel, node.Spec.HwMgrId)
+				err = t.setLabelValue(ctx, &agent, utils.HardwarePluginRefLabel, t.hwpluginClient.GetHardwarePluginRef())
 				if err != nil {
 					return err
 				}
 
-				err = t.setLabelValue(ctx, &agent, utils.HardwareManagerNodeIdLabel, node.Spec.HwMgrNodeId)
+				err = t.setLabelValue(ctx, &agent, utils.HardwareManagerNodeIdLabel, bmh.Name)
 				if err != nil {
 					return err
 				}

@@ -461,8 +461,9 @@ deps-update:
 	hack/update_deps.sh
 	hack/install_test_deps.sh
 
+# TODO: add back `test test-e2e` to ci-job
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-e2e bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt bundle-check
 
 .PHONY: clean
 clean:

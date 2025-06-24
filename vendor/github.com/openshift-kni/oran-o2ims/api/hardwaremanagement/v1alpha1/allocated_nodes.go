@@ -32,9 +32,9 @@ type AllocatedNodeSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Profile",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HwProfile string `json:"hwProfile"`
 
-	// HwMgrId is the identifier for the hardware manager instance.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	HwMgrId string `json:"hwMgrId,omitempty"`
+	// HardwarePluginRef is the identifier for the HardwarePlugin instance.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Plugin Reference",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HardwarePluginRef string `json:"hardwarePluginRef,omitempty"`
 
 	// HwMgrNodeId is the node identifier from the hardware manager.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager Node ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -84,7 +84,7 @@ type AllocatedNodeStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=allocatednodes,shortName=allocatednode
-// +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hwMgrId"
+// +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hardwarePluginRef"
 // +kubebuilder:printcolumn:name="NodeAllocationRequest",type="string",JSONPath=".spec.nodeAllocationRequest"
 // +kubebuilder:printcolumn:name="HwMgr AllocatedNode Id",type="string",JSONPath=".spec.hwMgrNodeId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

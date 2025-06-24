@@ -50,10 +50,8 @@ type ProvisioningRequestSpec struct {
 
 // NodeAllocationRequestRef references a node allocation request.
 type NodeAllocationRequestRef struct {
-	// Contains the name of the created NodeAllocationRequest.
-	Name string `json:"name,omitempty"`
-	// Contains the namespace of the created NodeAllocationRequest.
-	Namespace string `json:"namespace,omitempty"`
+	// Contains the identifier of the created NodeAllocationRequest.
+	NodeAllocationRequestID string `json:"nodeAllocationRequestID,omitempty"`
 	// Represents the timestamp of the first status check for hardware provisioning
 	HardwareProvisioningCheckStart *metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
 	// Represents the timestamp of the first status check for hardware configuring
@@ -80,6 +78,9 @@ type Extensions struct {
 
 	// NodeAllocationRequestRef references to the NodeAllocationRequest.
 	NodeAllocationRequestRef *NodeAllocationRequestRef `json:"nodeAllocationRequestRef,omitempty"`
+
+	// AllocatedNodeHostMap stores the mapping of AllocatedNode IDs to Hostnames
+	AllocatedNodeHostMap map[string]string `json:"allocatedNodeHostMap,omitempty"`
 
 	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
 	Policies []PolicyDetails `json:"policies,omitempty"`

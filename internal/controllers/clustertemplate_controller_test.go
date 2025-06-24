@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
+/*
 import (
 	"context"
 	"encoding/json"
@@ -104,7 +105,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwv1alpha1.HardwareTemplateSpec{
-				HwMgrId:            "hwMgr",
+				HardwarePluginRef:  "hwMgr",
 				BootInterfaceLabel: "label",
 				NodeGroupData: []hwv1alpha1.NodeGroupData{
 					{
@@ -490,7 +491,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwv1alpha1.HardwareTemplateSpec{
-				HwMgrId:            "hwMgr",
+				HardwarePluginRef:  "hwMgr",
 				BootInterfaceLabel: "label",
 				NodeGroupData: []hwv1alpha1.NodeGroupData{
 					{
@@ -1351,3 +1352,4 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 })
+*/

@@ -160,10 +160,10 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 			},
 		},
 		Spec: hwv1alpha1.NodeAllocationRequestSpec{
-			// CloudID:      request.Body.CloudID,
-			HwMgrId:      h.HardwarePluginID,
-			NodeGroup:    nodeGroups,
-			LocationSpec: hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			HardwarePluginRef:  h.HardwarePluginID,
+			NodeGroup:          nodeGroups,
+			LocationSpec:       hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			BootInterfaceLabel: request.Body.BootInterfaceLabel,
 		},
 	}
 
@@ -216,10 +216,10 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 			Namespace: existingNodeAllocationRequest.Namespace,
 		},
 		Spec: hwv1alpha1.NodeAllocationRequestSpec{
-			// CloudID:      request.Body.CloudID,
-			HwMgrId:      existingNodeAllocationRequest.Spec.HwMgrId,
-			NodeGroup:    nodeGroups,
-			LocationSpec: hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			HardwarePluginRef:  existingNodeAllocationRequest.Spec.HardwarePluginRef,
+			NodeGroup:          nodeGroups,
+			LocationSpec:       hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			BootInterfaceLabel: request.Body.BootInterfaceLabel,
 		},
 	}
 

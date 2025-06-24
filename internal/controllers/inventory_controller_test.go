@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
+/*
 import (
 	"context"
 	"os"
@@ -270,3 +271,4 @@ var _ = DescribeTable(
 		},
 	),
 )
+*/

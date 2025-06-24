@@ -168,6 +168,12 @@ spec:
                   Extensions contain extra details about the resources and the configuration used for/by
                   the ProvisioningRequest.
                 properties:
+                  allocatedNodeHostMap:
+                    additionalProperties:
+                      type: string
+                    description: AllocatedNodeHostMap stores the mapping of AllocatedNode
+                      IDs to Hostnames
+                    type: object
                   clusterDetails:
                     description: ClusterDetails references to the ClusterInstance.
                     properties:
@@ -201,11 +207,8 @@ spec:
                           check for hardware provisioning
                         format: date-time
                         type: string
-                      name:
-                        description: Contains the name of the created NodeAllocationRequest.
-                        type: string
-                      namespace:
-                        description: Contains the namespace of the created NodeAllocationRequest.
+                      nodeAllocationRequestID:
+                        description: Contains the identifier of the created NodeAllocationRequest.
                         type: string
                     type: object
                   policies:

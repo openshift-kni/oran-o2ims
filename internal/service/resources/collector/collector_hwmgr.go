@@ -226,8 +226,8 @@ func (d *HwMgrDataSource) convertResourcePool(pool *inventoryclient.ResourcePool
 
 // MakeResourceID calculates a UUID value to be used as the ResourceID.  The cloudID and HwMgrID are added to the node
 // id value to ensure we get a globally unique value.
-func MakeResourceID(cloudID uuid.UUID, hwMgrID, hwMgrNodeID string) uuid.UUID {
-	return utils.MakeUUIDFromNames(ResourceUUIDNamespace, cloudID, hwMgrID, hwMgrNodeID)
+func MakeResourceID(cloudID uuid.UUID, hwPluginRef, hwMgrNodeID string) uuid.UUID {
+	return utils.MakeUUIDFromNames(ResourceUUIDNamespace, cloudID, hwPluginRef, hwMgrNodeID)
 }
 
 func (d *HwMgrDataSource) convertResource(resource *inventoryclient.ResourceInfo) *models.Resource {

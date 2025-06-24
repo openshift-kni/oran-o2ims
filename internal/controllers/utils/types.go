@@ -109,7 +109,7 @@ type AvailableNotification struct {
 type NodeInfo struct {
 	BmcAddress     string
 	BmcCredentials string
-	NodeName       string
+	NodeID         string
 	HwMgrNodeId    string
 	HwMgrNodeNs    string
 	Interfaces     []*hwv1alpha1.Interface
