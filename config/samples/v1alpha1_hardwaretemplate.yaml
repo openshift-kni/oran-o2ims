@@ -8,7 +8,7 @@ spec:
   # The value should be a duration string
   # (e.g., "60m" for 60 minutes)
   hardwareProvisioningTimeout: "60m"
-  hwMgrId: hwmgr-1
+  hardwarePluginRef: hwmgr-1
   bootInterfaceLabel: bootable-interface
   nodeGroupData:
     - name: controller

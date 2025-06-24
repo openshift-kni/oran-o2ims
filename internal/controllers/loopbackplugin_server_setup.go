@@ -107,6 +107,7 @@ func (t *reconcilerTask) createLoopbackPluginServerClusterRole(ctx context.Conte
 					"patch",
 					"update",
 					"watch",
+					"delete",
 				},
 			},
 			{

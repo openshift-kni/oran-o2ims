@@ -44,7 +44,7 @@ import (
 )
 
 const testHwMgrPluginNameSpace = "hwmgr"
-const testHwMgrId = "hwmgr"
+const testHardwarePluginRef = "hwmgr"
 
 var (
 	K8SClient                     client.Client
@@ -177,7 +177,7 @@ var _ = BeforeSuite(func() {
 		&pluginv1alpha1.HardwareManager{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: testHwMgrPluginNameSpace,
-				Name:      testHwMgrId,
+				Name:      testHardwarePluginRef,
 			},
 			Spec: pluginv1alpha1.HardwareManagerSpec{
 				AdaptorID: "loopback",
@@ -330,7 +330,7 @@ defaultHugepagesSize: "1G"`,
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwv1alpha1.HardwareTemplateSpec{
-				HwMgrId:                     utils.UnitTestHwmgrID,
+				HardwarePluginRef:           utils.UnitTestHwPluginRef,
 				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "1m",
 				NodeGroupData: []hwv1alpha1.NodeGroupData{

@@ -39,15 +39,20 @@ type NodeAllocationRequestSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	LocationSpec `json:",inline"`
 
-	// HwMgrId is the identifier for the hardware manager plugin instance.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	HwMgrId string `json:"hwMgrId,omitempty"`
+	// HardwarePluginRef is the name of the HardwarePlugin.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Plugin Reference",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HardwarePluginRef string `json:"hardwarePluginRef,omitempty"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeGroup []NodeGroup `json:"nodeGroup"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
+
+	// BootInterfaceLabel is the label of the boot interface.
+	// +kubebuilder:validation:MinLength=1
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Boot Interface Label",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	BootInterfaceLabel string `json:"bootInterfaceLabel"`
 }
 
 type NodeGroup struct {
@@ -90,7 +95,7 @@ type NodeAllocationRequestStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=nodeallocationrequests,shortName=orannar
-// +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hwMgrId"
+// +kubebuilder:printcolumn:name="HardwarePlugin",type="string",JSONPath=".spec.hardwarePluginRef"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
 // +operator-sdk:csv:customresourcedefinitions:displayName="Node Allocation Request",resources={{Namespace, v1}}

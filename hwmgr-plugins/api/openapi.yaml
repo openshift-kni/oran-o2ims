@@ -555,9 +555,14 @@ components:
           type: string
           description: |
             Site identifier associated with the NodeAllocationRequest.
+        bootInterfaceLabel:
+          type: string
+          description: |
+            BootInterfaceLabel is the label of the boot interface.
       required:
         - nodeGroup
         - site
+        - bootInterfaceLabel
 
     NodeGroup:
       description: |
@@ -611,6 +616,10 @@ components:
         Information about an allocated node resource.
       type: object
       properties:
+        id:
+          type: string
+          description: |
+            Unique AllocatedNode identifier.
         bmc:
           $ref: "#/components/schemas/BMC"
         interfaces:
@@ -630,6 +639,7 @@ components:
         status:
           $ref: '#/components/schemas/AllocatedNodeStatus'
       required:
+        - id
         - bmc
         - interfaces
         - groupName

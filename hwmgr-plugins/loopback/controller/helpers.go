@@ -444,7 +444,7 @@ func createNode(ctx context.Context,
 			NodeAllocationRequest: cloudID,
 			GroupName:             groupname,
 			HwProfile:             hwprofile,
-			HwMgrId:               nodeAllocationRequest.Spec.HwMgrId,
+			HardwarePluginRef:     nodeAllocationRequest.Spec.HardwarePluginRef,
 			HwMgrNodeId:           nodeId,
 		},
 	}

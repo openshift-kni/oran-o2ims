@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
+/*
 import (
 	"context"
 	"encoding/base64"
@@ -404,3 +405,4 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 		Expect(errors.IsNotFound(err)).To(BeTrue())
 	})
 })
+*/

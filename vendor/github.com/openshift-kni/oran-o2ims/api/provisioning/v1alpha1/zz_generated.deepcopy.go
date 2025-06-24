@@ -163,6 +163,13 @@ func (in *Extensions) DeepCopyInto(out *Extensions) {
 		*out = new(NodeAllocationRequestRef)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.AllocatedNodeHostMap != nil {
+		in, out := &in.AllocatedNodeHostMap, &out.AllocatedNodeHostMap
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.Policies != nil {
 		in, out := &in.Policies, &out.Policies
 		*out = make([]PolicyDetails, len(*in))

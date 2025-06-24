@@ -219,7 +219,7 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName strin
 		Spec: hwv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: narName,
 			GroupName:             groupName,
-			HwMgrId:               utils.UnitTestHwmgrID,
+			HardwarePluginRef:     utils.UnitTestHwPluginRef,
 			HwMgrNodeId:           name,
 		},
 		Status: hwv1alpha1.AllocatedNodeStatus{
