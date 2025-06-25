@@ -24,7 +24,6 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/client"
 )
 
 const (
@@ -113,43 +112,6 @@ func GetBareMetalHostForAllocatedNode(ctx context.Context, c client.Client, allo
 
 	// return the first BareMetalHost item
 	return &bmhList.Items[0]
-}
-
-// CollectNodeDetails collects BMC and node interfaces details
-func CollectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrpluginapi.AllocatedNode) (map[string][]NodeInfo, error) {
-	// hwNodes maps a group name to a slice of NodeInfo
-	hwNodes := make(map[string][]NodeInfo)
-	for _, node := range *nodes {
-		if node.Bmc.CredentialsName == "" {
-			return nil, fmt.Errorf("the AllocatedNode does not have BMC details")
-		}
-
-		interfaces := []*hwv1alpha1.Interface{}
-		for _, ifc := range node.Interfaces {
-			interfaces = append(interfaces, &hwv1alpha1.Interface{
-				Name:       ifc.Name,
-				MACAddress: ifc.MacAddress,
-				Label:      ifc.Label,
-			})
-		}
-
-		tmpNode := NodeInfo{
-			BmcAddress:     node.Bmc.Address,
-			BmcCredentials: node.Bmc.CredentialsName,
-			NodeID:         node.Id,
-			Interfaces:     interfaces,
-		}
-
-		if bmh := GetBareMetalHostForAllocatedNode(ctx, c, node.Id); bmh != nil {
-			tmpNode.HwMgrNodeId = bmh.Name
-			tmpNode.HwMgrNodeNs = bmh.Namespace
-		}
-
-		// Store the nodeInfo per group
-		hwNodes[node.GroupName] = append(hwNodes[node.GroupName], tmpNode)
-	}
-
-	return hwNodes, nil
 }
 
 // copyHwMgrPluginBMCSecret copies the BMC secret from the plugin namespace to the cluster namespace
@@ -435,54 +397,12 @@ func HandleHardwareTimeout(
 	return timedOutOrFailed, reason, message
 }
 
-// CompareHardwareTemplateWithNodeAllocationRequest checks if there are any changes in the hardware template resource
-func CompareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) (bool, error) {
-
-	changesDetected := false
-
-	// Check each group, allowing only hwProfile to be changed
-	for _, specNodeGroup := range nodeAllocationRequest.NodeGroup {
-		var found bool
-		for _, ng := range hardwareTemplate.Spec.NodeGroupData {
-
-			if specNodeGroup.NodeGroupData.Name == ng.Name {
-				found = true
-
-				// Check for changes in HwProfile
-				if specNodeGroup.NodeGroupData.HwProfile != ng.HwProfile {
-					changesDetected = true
-				}
-				break
-			}
-		}
-
-		// If no match was found for the current specNodeGroup, return an error
-		if !found {
-			return true, fmt.Errorf("node group %s found in NodeAllocationRequest but not in Hardware Template", specNodeGroup.NodeGroupData.Name)
-		}
-	}
-
-	return changesDetected, nil
-}
-
 // GetStatusMessage returns a status message based on the given condition typ
 func GetStatusMessage(condition hwv1alpha1.ConditionType) string {
 	if condition == hwv1alpha1.Configured {
 		return "configuring"
 	}
 	return "provisioning"
-}
-
-// GetRoleToGroupNameMap creates a mapping of Role to Group Name from NodeAllocationRequest
-func GetRoleToGroupNameMap(nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) map[string]string {
-	roleToNodeGroupName := make(map[string]string)
-	for _, nodeGroup := range nodeAllocationRequest.NodeGroup {
-
-		if _, exists := roleToNodeGroupName[nodeGroup.NodeGroupData.Role]; !exists {
-			roleToNodeGroupName[nodeGroup.NodeGroupData.Role] = nodeGroup.NodeGroupData.Name
-		}
-	}
-	return roleToNodeGroupName
 }
 
 // GetHardwareTemplate retrieves the hardware template resource for a given name
@@ -555,21 +475,6 @@ func GetHardwarePluginFromProvisioningRequest(ctx context.Context,
 	}
 
 	return hwPlugin, nil
-}
-
-// NewNodeGroup populates NodeGroup
-func NewNodeGroup(group hwmgrpluginapi.NodeGroupData, roleCounts map[string]int) hwmgrpluginapi.NodeGroup {
-	var nodeGroup hwmgrpluginapi.NodeGroup
-
-	// Populate embedded NodeAllocationRequestData fields
-	nodeGroup.NodeGroupData = group
-
-	// Assign size if available in roleCounts
-	if count, ok := roleCounts[group.Role]; ok {
-		nodeGroup.NodeGroupData.Size = count
-	}
-
-	return nodeGroup
 }
 
 // UpdateHardwareTemplateStatusCondition updates the status condition of the HardwareTemplate resource
