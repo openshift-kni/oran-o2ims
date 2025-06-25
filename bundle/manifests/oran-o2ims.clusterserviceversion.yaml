@@ -1128,8 +1128,7 @@ spec:
           - delete
           - get
           - list
-          - post
-          - put
+          - update
         - nonResourceURLs:
           - /internal/v1/caas-alerts/alertmanager
           verbs:
