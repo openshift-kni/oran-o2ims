@@ -342,7 +342,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return doNotRequeue(), false, err
 	}
 	if !exists {
-		return requeueWithMediumInterval(), false, nil
+		return requeueWithShortInterval(), false, nil
 	}
 
 	// Wait for the NodeAllocationRequest to be provisioned and update BMC details if necessary
@@ -355,7 +355,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	}
 	if !provisioned {
 		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be provisioned", nodeAllocationRequestID))
-		return requeueWithMediumInterval(), false, nil
+		return requeueWithShortInterval(), false, nil
 	}
 
 	// If the NodeAllocationRequest was updated but the configuration hasn’t been set yet,
@@ -364,7 +364,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	configuringStarted := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart
 	if (configured == nil && !configuringStarted.IsZero()) || (configured != nil && !*configured) {
 		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be configured", nodeAllocationRequestID))
-		return requeueWithMediumInterval(), false, nil
+		return requeueWithShortInterval(), false, nil
 	}
 
 	// Provisioning completed successfully; proceed with further processing
@@ -392,7 +392,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 			return doNotRequeue(), nil
 		}
 		if !hwProvisioned {
-			return requeueWithMediumInterval(), nil
+			return requeueWithShortInterval(), nil
 		}
 	}
 
