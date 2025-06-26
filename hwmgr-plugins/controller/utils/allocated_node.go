@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -55,6 +56,40 @@ func GetNodeList(ctx context.Context, c client.Client) (*pluginv1alpha1.Allocate
 	}
 
 	return nodeList, nil
+}
+
+// GetBMHToNodeMap get a list of nodes, mapped to BMH namespace/name
+func GetBMHToNodeMap(ctx context.Context,
+	logger *slog.Logger,
+	c client.Client) (map[string]pluginv1alpha1.AllocatedNode, error) {
+	nodes := make(map[string]pluginv1alpha1.AllocatedNode)
+
+	nodelist, err := GetNodeList(ctx, c)
+	if err != nil {
+		logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))
+		return nodes, fmt.Errorf("failed to query node list: %w", err)
+	}
+
+	for _, node := range nodelist.Items {
+		bmhName := node.Spec.HwMgrNodeId
+		bmhNamespace := node.Spec.HwMgrNodeNs
+
+		if bmhName != "" && bmhNamespace != "" {
+			nodes[bmhNamespace+"/"+bmhName] = node
+		}
+	}
+
+	return nodes, nil
+}
+
+func GetNodeForBMH(nodes map[string]pluginv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) *pluginv1alpha1.AllocatedNode {
+	bmhName := bmh.Name
+	bmhNamespace := bmh.Namespace
+
+	if node, exists := nodes[bmhNamespace+"/"+bmhName]; exists {
+		return &node
+	}
+	return nil
 }
 
 // GenerateNodeName
