@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package client
+package provisioning
 
 import (
 	"context"
@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/client"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -123,7 +122,7 @@ func buildTokenURL(baseURL, tokenEndpoint string) string {
 // handleErrorResponse processes error responses and returns a formatted error
 func (h *HardwarePluginClient) handleErrorResponse(
 	responseStatus string,
-	problem *hwmgrpluginapi.ProblemDetails,
+	problem *ProblemDetails,
 	resourceType, resourceID, action string,
 ) error {
 	logger := h.logger.With(
@@ -148,47 +147,16 @@ func (h *HardwarePluginClient) handleErrorResponse(
 func (h *HardwarePluginClient) getProblemDetails(
 	response interface{},
 	statusCode int,
-) (*hwmgrpluginapi.ProblemDetails, string) {
+) (*ProblemDetails, string) {
 	switch resp := response.(type) {
-	case *hwmgrpluginapi.GetAllVersionsResponse:
+	case *GetAllVersionsResponse:
 		switch statusCode {
 		case http.StatusBadRequest:
 			return resp.ApplicationProblemJSON400, MsgBadRequest
 		case http.StatusInternalServerError:
 			return resp.ApplicationProblemJSON500, MsgInternalServerError
 		}
-	case *hwmgrpluginapi.GetAllocatedNodesResponse:
-		switch statusCode {
-		case http.StatusBadRequest:
-			return resp.ApplicationProblemJSON400, MsgBadRequest
-		case http.StatusUnauthorized:
-			return resp.ApplicationProblemJSON401, MsgUnauthorized
-		case http.StatusForbidden:
-			return resp.ApplicationProblemJSON403, MsgForbidden
-		case http.StatusInternalServerError:
-			return resp.ApplicationProblemJSON500, MsgInternalServerError
-		}
-	case *hwmgrpluginapi.GetAllocatedNodeResponse:
-		switch statusCode {
-		case http.StatusBadRequest:
-			return resp.ApplicationProblemJSON400, MsgBadRequest
-		case http.StatusUnauthorized:
-			return resp.ApplicationProblemJSON401, MsgUnauthorized
-		case http.StatusForbidden:
-			return resp.ApplicationProblemJSON403, MsgForbidden
-		case http.StatusNotFound:
-			return resp.ApplicationProblemJSON404, MsgNotFound
-		case http.StatusInternalServerError:
-			return resp.ApplicationProblemJSON500, MsgInternalServerError
-		}
-	case *hwmgrpluginapi.GetMinorVersionsResponse:
-		switch statusCode {
-		case http.StatusBadRequest:
-			return resp.ApplicationProblemJSON400, MsgBadRequest
-		case http.StatusInternalServerError:
-			return resp.ApplicationProblemJSON500, MsgInternalServerError
-		}
-	case *hwmgrpluginapi.GetNodeAllocationRequestsResponse:
+	case *GetAllocatedNodesResponse:
 		switch statusCode {
 		case http.StatusBadRequest:
 			return resp.ApplicationProblemJSON400, MsgBadRequest
@@ -199,18 +167,7 @@ func (h *HardwarePluginClient) getProblemDetails(
 		case http.StatusInternalServerError:
 			return resp.ApplicationProblemJSON500, MsgInternalServerError
 		}
-	case *hwmgrpluginapi.CreateNodeAllocationRequestResponse:
-		switch statusCode {
-		case http.StatusBadRequest:
-			return resp.ApplicationProblemJSON400, MsgBadRequest
-		case http.StatusUnauthorized:
-			return resp.ApplicationProblemJSON401, MsgUnauthorized
-		case http.StatusForbidden:
-			return resp.ApplicationProblemJSON403, MsgForbidden
-		case http.StatusInternalServerError:
-			return resp.ApplicationProblemJSON500, MsgInternalServerError
-		}
-	case *hwmgrpluginapi.DeleteNodeAllocationRequestResponse:
+	case *GetAllocatedNodeResponse:
 		switch statusCode {
 		case http.StatusBadRequest:
 			return resp.ApplicationProblemJSON400, MsgBadRequest
@@ -223,7 +180,36 @@ func (h *HardwarePluginClient) getProblemDetails(
 		case http.StatusInternalServerError:
 			return resp.ApplicationProblemJSON500, MsgInternalServerError
 		}
-	case *hwmgrpluginapi.GetNodeAllocationRequestResponse:
+	case *GetMinorVersionsResponse:
+		switch statusCode {
+		case http.StatusBadRequest:
+			return resp.ApplicationProblemJSON400, MsgBadRequest
+		case http.StatusInternalServerError:
+			return resp.ApplicationProblemJSON500, MsgInternalServerError
+		}
+	case *GetNodeAllocationRequestsResponse:
+		switch statusCode {
+		case http.StatusBadRequest:
+			return resp.ApplicationProblemJSON400, MsgBadRequest
+		case http.StatusUnauthorized:
+			return resp.ApplicationProblemJSON401, MsgUnauthorized
+		case http.StatusForbidden:
+			return resp.ApplicationProblemJSON403, MsgForbidden
+		case http.StatusInternalServerError:
+			return resp.ApplicationProblemJSON500, MsgInternalServerError
+		}
+	case *CreateNodeAllocationRequestResponse:
+		switch statusCode {
+		case http.StatusBadRequest:
+			return resp.ApplicationProblemJSON400, MsgBadRequest
+		case http.StatusUnauthorized:
+			return resp.ApplicationProblemJSON401, MsgUnauthorized
+		case http.StatusForbidden:
+			return resp.ApplicationProblemJSON403, MsgForbidden
+		case http.StatusInternalServerError:
+			return resp.ApplicationProblemJSON500, MsgInternalServerError
+		}
+	case *DeleteNodeAllocationRequestResponse:
 		switch statusCode {
 		case http.StatusBadRequest:
 			return resp.ApplicationProblemJSON400, MsgBadRequest
@@ -236,7 +222,7 @@ func (h *HardwarePluginClient) getProblemDetails(
 		case http.StatusInternalServerError:
 			return resp.ApplicationProblemJSON500, MsgInternalServerError
 		}
-	case *hwmgrpluginapi.UpdateNodeAllocationRequestResponse:
+	case *GetNodeAllocationRequestResponse:
 		switch statusCode {
 		case http.StatusBadRequest:
 			return resp.ApplicationProblemJSON400, MsgBadRequest
@@ -249,7 +235,20 @@ func (h *HardwarePluginClient) getProblemDetails(
 		case http.StatusInternalServerError:
 			return resp.ApplicationProblemJSON500, MsgInternalServerError
 		}
-	case *hwmgrpluginapi.GetAllocatedNodesFromNodeAllocationRequestResponse:
+	case *UpdateNodeAllocationRequestResponse:
+		switch statusCode {
+		case http.StatusBadRequest:
+			return resp.ApplicationProblemJSON400, MsgBadRequest
+		case http.StatusUnauthorized:
+			return resp.ApplicationProblemJSON401, MsgUnauthorized
+		case http.StatusForbidden:
+			return resp.ApplicationProblemJSON403, MsgForbidden
+		case http.StatusNotFound:
+			return resp.ApplicationProblemJSON404, MsgNotFound
+		case http.StatusInternalServerError:
+			return resp.ApplicationProblemJSON500, MsgInternalServerError
+		}
+	case *GetAllocatedNodesFromNodeAllocationRequestResponse:
 		switch statusCode {
 		case http.StatusBadRequest:
 			return resp.ApplicationProblemJSON400, MsgBadRequest
