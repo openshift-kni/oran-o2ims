@@ -9,12 +9,15 @@ package controller
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"regexp"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
+	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
 const (
@@ -25,6 +28,12 @@ const (
 	LabelPrefixResourceSelector = "resourceselector.oran.openshift.io/"
 
 	LabelPrefixInterfaces = "interfacelabel.oran.openshift.io/"
+
+	AnnotationPrefixResourceInfo        = "resourceinfo.oran.openshift.io/"
+	AnnotationResourceInfoDescription   = AnnotationPrefixResourceInfo + "description"
+	AnnotationResourceInfoPartNumber    = AnnotationPrefixResourceInfo + "partNumber"
+	AnnotationResourceInfoGlobalAssetId = AnnotationPrefixResourceInfo + "globalAssetId"
+	AnnotationsResourceInfoGroups       = AnnotationPrefixResourceInfo + "groups"
 )
 
 // The following regex pattern is used to find interface labels
@@ -33,21 +42,40 @@ var REPatternInterfaceLabel = regexp.MustCompile(`^` + LabelPrefixInterfaces + `
 // The following regex pattern is used to check resourceselector label pattern
 var REPatternResourceSelectorLabel = regexp.MustCompile(`^` + LabelPrefixResourceSelector)
 
+var REPatternResourceSelectorLabelMatch = regexp.MustCompile(`^` + LabelPrefixResourceSelector + `(.*)`)
 var emptyString = ""
 
 func getResourceInfoAdminState() inventory.ResourceInfoAdminState {
 	return inventory.ResourceInfoAdminStateUNKNOWN
 }
 
-func getResourceInfoDescription() string {
+func getResourceInfoDescription(bmh metal3v1alpha1.BareMetalHost) string {
+	if bmh.Annotations != nil {
+		return bmh.Annotations[AnnotationResourceInfoDescription]
+	}
+
 	return emptyString
 }
 
-func getResourceInfoGlobalAssetId() *string {
+func getResourceInfoGlobalAssetId(bmh metal3v1alpha1.BareMetalHost) *string {
+	if bmh.Annotations != nil {
+		annotation := bmh.Annotations[AnnotationResourceInfoGlobalAssetId]
+		return &annotation
+	}
+
 	return &emptyString
 }
 
-func getResourceInfoGroups() *[]string {
+func getResourceInfoGroups(bmh metal3v1alpha1.BareMetalHost) *[]string {
+	if bmh.Annotations != nil {
+		annotation, exists := bmh.Annotations[AnnotationsResourceInfoGroups]
+		if exists {
+			// Split by comma, removing leading or trailing whitespace around the comma
+			re := regexp.MustCompile(` *, *`)
+			groups := re.Split(annotation, -1)
+			return &groups
+		}
+	}
 	return nil
 }
 
@@ -85,7 +113,11 @@ func getResourceInfoOperationalState() inventory.ResourceInfoOperationalState {
 	return inventory.ResourceInfoOperationalStateUNKNOWN
 }
 
-func getResourceInfoPartNumber() string {
+func getResourceInfoPartNumber(bmh metal3v1alpha1.BareMetalHost) string {
+	if bmh.Annotations != nil {
+		return bmh.Annotations[AnnotationResourceInfoPartNumber]
+	}
+
 	return emptyString
 }
 
@@ -138,16 +170,19 @@ func getResourceInfoProcessors(bmh *metal3v1alpha1.BareMetalHost) []inventory.Pr
 	return processors
 }
 
-func getResourceInfoResourceId() string {
-	return emptyString
+func getResourceInfoResourceId(bmh metal3v1alpha1.BareMetalHost) string {
+	return fmt.Sprintf("%s/%s", bmh.Namespace, bmh.Name)
 }
 
 func getResourceInfoResourcePoolId(bmh *metal3v1alpha1.BareMetalHost) string {
 	return bmh.Labels[LabelResourcePoolID]
 }
 
-func getResourceInfoResourceProfileId(bmh *metal3v1alpha1.BareMetalHost) string {
-	return bmh.Status.HardwareProfile
+func getResourceInfoResourceProfileId(node *hwv1alpha1.AllocatedNode) string {
+	if node != nil {
+		return node.Status.HwProfile
+	}
+	return emptyString
 }
 
 func getResourceInfoSerialNumber(bmh *metal3v1alpha1.BareMetalHost) string {
@@ -157,8 +192,19 @@ func getResourceInfoSerialNumber(bmh *metal3v1alpha1.BareMetalHost) string {
 	return emptyString
 }
 
-func getResourceInfoTags() *[]string {
-	return nil
+func getResourceInfoTags(bmh *metal3v1alpha1.BareMetalHost) *[]string {
+	var tags []string
+
+	for fullLabel, value := range bmh.Labels {
+		match := REPatternResourceSelectorLabelMatch.FindStringSubmatch(fullLabel)
+		if len(match) != 2 {
+			continue
+		}
+
+		tags = append(tags, fmt.Sprintf("%s: %s", match[1], value))
+	}
+
+	return &tags
 }
 
 func getResourceInfoUsageState() inventory.ResourceInfoUsageState {
@@ -188,25 +234,25 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
-func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost) inventory.ResourceInfo {
+func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwv1alpha1.AllocatedNode) inventory.ResourceInfo {
 	return inventory.ResourceInfo{
 		AdminState:       getResourceInfoAdminState(),
-		Description:      getResourceInfoDescription(),
-		GlobalAssetId:    getResourceInfoGlobalAssetId(),
-		Groups:           getResourceInfoGroups(),
-		HwProfile:        getResourceInfoResourceProfileId(bmh),
+		Description:      getResourceInfoDescription(*bmh),
+		GlobalAssetId:    getResourceInfoGlobalAssetId(*bmh),
+		Groups:           getResourceInfoGroups(*bmh),
+		HwProfile:        getResourceInfoResourceProfileId(node),
 		Labels:           getResourceInfoLabels(bmh),
 		Memory:           getResourceInfoMemory(bmh),
 		Model:            getResourceInfoModel(bmh),
 		Name:             getResourceInfoName(bmh),
 		OperationalState: getResourceInfoOperationalState(),
-		PartNumber:       getResourceInfoPartNumber(),
+		PartNumber:       getResourceInfoPartNumber(*bmh),
 		PowerState:       getResourceInfoPowerState(bmh),
 		Processors:       getResourceInfoProcessors(bmh),
-		ResourceId:       getResourceInfoResourceId(),
+		ResourceId:       getResourceInfoResourceId(*bmh),
 		ResourcePoolId:   getResourceInfoResourcePoolId(bmh),
 		SerialNumber:     getResourceInfoSerialNumber(bmh),
-		Tags:             getResourceInfoTags(),
+		Tags:             getResourceInfoTags(bmh),
 		UsageState:       getResourceInfoUsageState(),
 		Vendor:           getResourceInfoVendor(bmh),
 	}
@@ -223,39 +269,40 @@ func GetResourcePools(ctx context.Context, c client.Client) (inventory.GetResour
 		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
 	}
 
-	pools := make(map[string]string)
-
 	for _, bmh := range bmhList.Items {
 		if includeInInventory(&bmh) {
-			pools[bmh.Labels[LabelSiteID]] = bmh.Labels[LabelResourcePoolID]
+			siteID := bmh.Labels[LabelSiteID]
+			poolID := bmh.Labels[LabelResourcePoolID]
+			resp = append(resp, inventory.ResourcePoolInfo{
+				ResourcePoolId: poolID,
+				Description:    poolID,
+				Name:           poolID,
+				SiteId:         &siteID,
+			})
 		}
-	}
-
-	for siteId, poolID := range pools {
-		resp = append(resp, inventory.ResourcePoolInfo{
-			ResourcePoolId: poolID,
-			Description:    poolID,
-			Name:           poolID,
-			SiteId:         &siteId,
-		})
 	}
 
 	return inventory.GetResourcePools200JSONResponse(resp), nil
 }
 
-func GetResources(ctx context.Context, c client.Client) (inventory.GetResourcesResponseObject, error) {
+func GetResources(ctx context.Context,
+	logger *slog.Logger,
+	c client.Client) (inventory.GetResourcesResponseObject, error) {
 	var resp []inventory.ResourceInfo
 
-	var bmhList metal3v1alpha1.BareMetalHostList
-	var opts []client.ListOption
+	nodes, err := utils.GetBMHToNodeMap(ctx, logger, c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query current nodes: %w", err)
+	}
 
-	if err := c.List(ctx, &bmhList, opts...); err != nil {
+	var bmhList metal3v1alpha1.BareMetalHostList
+	if err := c.List(ctx, &bmhList); err != nil {
 		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
 	}
 
 	for _, bmh := range bmhList.Items {
 		if includeInInventory(&bmh) {
-			resp = append(resp, getResourceInfo(&bmh))
+			resp = append(resp, getResourceInfo(&bmh, utils.GetNodeForBMH(nodes, &bmh)))
 		}
 	}
 
