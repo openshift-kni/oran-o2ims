@@ -24,8 +24,7 @@ import (
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/client"
+	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -41,7 +40,7 @@ type ProvisioningRequestReconciler struct {
 type provisioningRequestReconcilerTask struct {
 	logger         *slog.Logger
 	client         client.Client
-	hwpluginClient *hwmgrpluginclient.HardwarePluginClient
+	hwpluginClient *hwmgrpluginapi.HardwarePluginClient
 	object         *provisioningv1alpha1.ProvisioningRequest
 	clusterInput   *clusterInput
 	ctDetails      *clusterTemplateDetails
@@ -771,7 +770,7 @@ func getHardwarePluginClient(
 	c client.Client,
 	logger *slog.Logger,
 	pr *provisioningv1alpha1.ProvisioningRequest,
-) (*hwmgrpluginclient.HardwarePluginClient, error) {
+) (*hwmgrpluginapi.HardwarePluginClient, error) {
 	// Get the HardwarePlugin CR
 	hwplugin, err := utils.GetHardwarePluginFromProvisioningRequest(ctx, c, pr)
 	if err != nil {
@@ -786,7 +785,7 @@ func getHardwarePluginClient(
 
 	// Get hwplugin client for the HardwarePlugin
 	// nolint: wrapcheck
-	return hwmgrpluginclient.NewHardwarePluginClient(ctx, c, logger, hwplugin)
+	return hwmgrpluginapi.NewHardwarePluginClient(ctx, c, logger, hwplugin)
 }
 
 // getNodeAllocationRequestID returns the NodeAllocationRequest identifier associated with the ProvisioningRequest CR.

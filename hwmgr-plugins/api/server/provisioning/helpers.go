@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package server
+package provisioning
 
 import (
 	"context"
@@ -19,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	generated "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/server"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -55,12 +54,12 @@ func GenerateResourceIdentifier(baseName string) (string, error) {
 }
 
 // NodeAllocationRequestCRToResponseObject Converts a NodeAllocationRequest CR to NodeAllocationRequestResponse object
-func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest) (generated.NodeAllocationRequestResponse, error) {
+func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest) (NodeAllocationRequestResponse, error) {
 	// Convert NodeGroup slice
-	nodeGroups := []generated.NodeGroup{}
+	nodeGroups := []NodeGroup{}
 	for _, ng := range nodeAllocationRequest.Spec.NodeGroup {
-		nodeGroup := generated.NodeGroup{
-			NodeGroupData: generated.NodeGroupData{
+		nodeGroup := NodeGroup{
+			NodeGroupData: NodeGroupData{
 				Name:             ng.NodeGroupData.Name,
 				Role:             ng.NodeGroupData.Role,
 				HwProfile:        ng.NodeGroupData.HwProfile,
@@ -73,16 +72,16 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.N
 	}
 
 	// Create generated.NodeAllocationRequest object
-	nodeAllocationRequestObject := generated.NodeAllocationRequest{
+	nodeAllocationRequestObject := NodeAllocationRequest{
 		NodeGroup:          nodeGroups,
 		Site:               nodeAllocationRequest.Spec.Site,
 		BootInterfaceLabel: nodeAllocationRequest.Spec.BootInterfaceLabel,
 	}
 
-	nodeAllocationRequestStatus := generated.NodeAllocationRequestStatus{}
-	conditions := []generated.Condition{}
+	nodeAllocationRequestStatus := NodeAllocationRequestStatus{}
+	conditions := []Condition{}
 	for _, condition := range nodeAllocationRequest.Status.Conditions {
-		conditions = append(conditions, generated.Condition{
+		conditions = append(conditions, Condition{
 			Type:               condition.Type,
 			Reason:             condition.Reason,
 			Status:             string(condition.Status),
@@ -92,11 +91,11 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.N
 	}
 	nodeAllocationRequestStatus.Conditions = &conditions
 	nodeAllocationRequestStatus.SelectedGroups = &nodeAllocationRequest.Status.SelectedGroups
-	nodeAllocationRequestStatus.Properties = &generated.Properties{
+	nodeAllocationRequestStatus.Properties = &Properties{
 		NodeNames: &nodeAllocationRequest.Status.Properties.NodeNames,
 	}
 
-	return generated.NodeAllocationRequestResponse{
+	return NodeAllocationRequestResponse{
 		NodeAllocationRequest: &nodeAllocationRequestObject,
 		Status:                &nodeAllocationRequestStatus,
 	}, nil
@@ -169,19 +168,19 @@ func CreateOrUpdateNodeAllocationRequest(
 	return nil
 }
 
-func AllocatedNodeCRToAllocatedNodeObject(node *hwv1alpha1.AllocatedNode) (generated.AllocatedNode, error) {
-	interfaces := []generated.Interface{}
+func AllocatedNodeCRToAllocatedNodeObject(node *hwv1alpha1.AllocatedNode) (AllocatedNode, error) {
+	interfaces := []Interface{}
 	for _, ifc := range node.Status.Interfaces {
-		interfaces = append(interfaces, generated.Interface{
+		interfaces = append(interfaces, Interface{
 			Label:      ifc.Label,
 			MacAddress: ifc.MACAddress,
 			Name:       ifc.Name,
 		})
 	}
 
-	conditions := []generated.Condition{}
+	conditions := []Condition{}
 	for _, cond := range node.Status.Conditions {
-		conditions = append(conditions, generated.Condition{
+		conditions = append(conditions, Condition{
 			Type:               cond.Type,
 			Status:             string(cond.Status),
 			Reason:             cond.Reason,
@@ -190,16 +189,16 @@ func AllocatedNodeCRToAllocatedNodeObject(node *hwv1alpha1.AllocatedNode) (gener
 		})
 	}
 
-	nodeObject := generated.AllocatedNode{
+	nodeObject := AllocatedNode{
 		Id: node.Name,
-		Bmc: generated.BMC{
+		Bmc: BMC{
 			Address:         node.Status.BMC.Address,
 			CredentialsName: node.Status.BMC.CredentialsName,
 		},
 		HwProfile:  node.Status.HwProfile,
 		GroupName:  node.Spec.GroupName,
 		Interfaces: interfaces,
-		Status: generated.AllocatedNodeStatus{
+		Status: AllocatedNodeStatus{
 			Conditions: &conditions,
 		},
 	}

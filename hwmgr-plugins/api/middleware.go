@@ -18,7 +18,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 
-	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/server"
+	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
 )
 
 type Middleware = func(http.Handler) http.Handler
@@ -65,7 +65,7 @@ func GetOpenAPIValidationFunc(swagger *openapi3.T) Middleware {
 func ProblemDetails(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.WriteHeader(code)
-	body, _ := json.Marshal(server.ProblemDetails{
+	body, _ := json.Marshal(provisioning.ProblemDetails{
 		Detail: message,
 		Status: code,
 	})

@@ -20,7 +20,7 @@ import (
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/client"
+	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -145,7 +145,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
 	}
 
-	hwNodes, err := utils.CollectNodeDetails(ctx, t.client, nodes)
+	hwNodes, err := collectNodeDetails(ctx, t.client, nodes)
 	if err != nil {
 		return fmt.Errorf("failed to collect hardware node %s details for node allocation request: %w", nodeAllocationRequestID, err)
 	}
@@ -269,7 +269,7 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 	// Create a map to track unmatched nodes
 	unmatchedNodes := make(map[int]string)
 
-	roleToNodeGroupName := utils.GetRoleToGroupNameMap(nar.NodeAllocationRequest)
+	roleToNodeGroupName := getRoleToGroupNameMap(nar.NodeAllocationRequest)
 
 	// Extract the nodes slice
 	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
@@ -524,7 +524,7 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestId, err)
 	}
 	if exist {
-		_, err := utils.CompareHardwareTemplateWithNodeAllocationRequest(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest)
+		_, err := compareHardwareTemplateWithNodeAllocationRequest(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest)
 		if err != nil {
 			return nil, utils.NewInputError("%w", err)
 		}
@@ -565,7 +565,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 			ResourceSelector: group.ResourceSelector,
 			Role:             group.Role,
 		}
-		nodeGroup := utils.NewNodeGroup(ngd, roleCounts)
+		nodeGroup := newNodeGroup(ngd, roleCounts)
 		nodeGroups = append(nodeGroups, nodeGroup)
 	}
 

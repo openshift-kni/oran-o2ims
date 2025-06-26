@@ -11,8 +11,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	generated "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/server"
-	hwpluginserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server"
+	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -21,10 +20,10 @@ const Metal3ResourcePrefix = "metal3"
 
 // Metal3PluginServer implements StricerServerInterface.
 // This ensures that we've conformed to the `StrictServerInterface` with a compile-time check.
-var _ generated.StrictServerInterface = (*Metal3PluginServer)(nil)
+var _ provisioning.StrictServerInterface = (*Metal3PluginServer)(nil)
 
 type Metal3PluginServer struct {
-	hwpluginserver.HardwarePluginServer
+	provisioning.HardwarePluginServer
 }
 
 // NewMetal3PluginServer creates a Metal3 HardwarePlugin server
@@ -34,11 +33,11 @@ func NewMetal3PluginServer(
 	logger *slog.Logger,
 ) (*Metal3PluginServer, error) {
 	return &Metal3PluginServer{
-		HardwarePluginServer: hwpluginserver.HardwarePluginServer{
+		HardwarePluginServer: provisioning.HardwarePluginServer{
 			CommonServerConfig: config,
 			HubClient:          hubClient,
 			Logger:             logger,
-			Namespace:          hwpluginserver.GetMetal3HWPluginNamespace(),
+			Namespace:          provisioning.GetMetal3HWPluginNamespace(),
 			HardwarePluginID:   hwpluginutils.Metal3HardwarePluginID,
 			ResourcePrefix:     Metal3ResourcePrefix,
 		},

@@ -1,0 +1,753 @@
+openapi: 3.0.3
+info:
+  title: Hardware Manager Inventory API
+  version: 1.0.0
+  description: API for serving Hardware Manager inventory resources
+  contact:
+    name: Red Hat
+    url: https://www.redhat.com
+
+servers:
+  - url: http://localhost:8080
+    description: O-Cloud Hardware Manager API Server
+
+tags:
+  - name: metadata
+    description: API metadata information
+  - name: inventory
+    description: Inventory Resources
+
+paths:
+  /hardware-manager/inventory/api_versions:
+    get:
+      operationId: getAllVersions
+      summary: Get API versions
+      description: |
+        Returns the complete list of API versions implemented by the service.
+      tags:
+        - metadata
+      responses:
+        '200':
+          description: |
+            Successfully obtained the complete list of versions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/api_versions:
+    get:
+      operationId: getMinorVersions
+      summary: Get minor API versions
+      description: |
+        Returns the list of minor API versions implemented for this major version of the API.
+      tags:
+        - metadata
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+
+  /hardware-manager/inventory/v1/resourcePools:
+    get:
+      operationId: GetResourcePools
+      summary: Retrieve the list of resource pools
+      tags:
+        - inventory
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourcePoolInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified hardware manager was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: The specified hardware manager was unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/resourcePools/{resourcePoolId}:
+    get:
+      operationId: GetResourcePool
+      summary: Retrieve exactly one resource pool
+      tags:
+        - inventory
+      parameters:
+        - in: path
+          name: resourcePoolId
+          required: true
+          schema:
+            type: string
+          example: rh-pool-cnfdg22
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourcePoolInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified resource pool was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/resourcePools/{resourcePoolId}/resources:
+    get:
+      operationId: GetResourcePoolResources
+      summary: Retrieve the list of resources for a given resource pool
+      tags:
+        - inventory
+      parameters:
+        - in: path
+          name: resourcePoolId
+          required: true
+          schema:
+            type: string
+          example: rh-pool-cnfdg22
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/resources:
+    get:
+      operationId: GetResources
+      summary: Retrieve the list of resources
+      tags:
+        - inventory
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified hardware manager was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: The specified hardware manager was unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/resources/{resourceId}:
+    get:
+      operationId: GetResource
+      summary: Retrieve exactly one resource
+      tags:
+        - subscriptions
+      parameters:
+        - in: path
+          name: resourceId
+          required: true
+          schema:
+            type: string
+          example: xr860txcnfdg22
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/subscriptions:
+    get:
+      operationId: GetSubscriptions
+      summary: Retrieve the list of inventory subscriptions
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    post:
+      operationId: CreateSubscription
+      summary: Create subscription
+      description: |
+        Creates a resource subscription.
+      tags:
+      - subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subscription'
+      responses:
+        '201':
+          description: |
+            Successfully created the subscription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /hardware-manager/inventory/v1/subscriptions/{subscriptionId}:
+    get:
+      operationId: GetSubscription
+      summary: Get subscription
+      description: |
+        Returns the details of a subscription.
+      parameters:
+      - $ref: "#/components/parameters/subscriptionId"
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the subscription.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'    
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                                
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    delete:
+      operationId: DeleteSubscription
+      summary: Delete subscription
+      description: |
+        Deletes a subscription.
+      parameters:
+      - $ref: "#/components/parameters/subscriptionId"
+      tags:
+      - subscriptions
+      responses:
+        '200':
+          description: |
+            Successfully deleted the subscription.
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'                
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  parameters:
+    subscriptionId:
+      name: subscriptionId
+      description: |
+        Unique identifier of a subscription.
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: aa83d0ba-a5ee-4f1f-be84-f334b21166cf  
+
+  schemas:
+    APIVersion:
+      description: |
+        Information about a version of the API.
+      type: object
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+
+    APIVersions:
+      description: |
+        Information about a list of versions of the API.
+      type: object
+      properties:
+        uriPrefix:
+          type: string
+          example: "/hardware-manager/inventory/v1"
+        apiVersions:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIVersion"
+          example:
+            - version: "1.0.0"
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            A URI reference according to IETF RFC 3986 [3] that identifies the problem type. It is encouraged that the URI provides
+            human-readable documentation for the problem (e.g. usingHTML) when dereferenced. When this member is not present,
+            its value is assumed to be "about:blank".
+          example: 'https://problem.description.com'
+        title:
+          type: string
+          description: |
+            A short, human-readable summary of the problem type. It should not change from occurrence to occurrence of the problem,
+            except for purposes of localization. If type is given and other than "about:blank", this attribute shall also be provided.
+        status:
+          type: integer
+          format: int
+          description: The HTTP status code for this occurrence of the problem.
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence of the problem.
+          example: Connection to database timed out
+        instance:
+          type: string
+          format: uri
+          description: |
+            A URI reference that identifies the specific occurrence of the problem.
+            It may yield further information if dereferenced.
+        additionalAttributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Any number of additional attributes, as defined in a specification or by an implementation.
+      required:
+        - status
+        - detail
+
+    ResourcePoolInfo:
+      description:
+        Information about a resource pool.
+      type: object
+      properties:
+        resourcePoolId:
+          type: string
+          description: Identifier for the Resource Pool in the hardware manager instance.
+          example: "rh-pool-cnfdg22"
+        siteId:
+          type: string
+          description: Identifier for the location of the resource pool.
+          example: "rdu3"
+        name:
+          type: string
+          description: Human readable name of the resource pool.
+          example: "rh-pool-cnfdg22"
+        description:
+          type: string
+          description: Human readable description of the resource pool.
+          example: "Some description about this resource"
+      required:
+        - resourcePoolId
+        - name
+        - description
+
+    ProcessorInfo:
+      description:
+        Information about a processor
+      type: object
+      properties:
+        manufacturer:
+          type: string
+          description:
+            The manufacturer of the processor
+          example: "Intel"
+        model:
+          type: string
+          description:
+            The manufacturer's processor model name
+          example: "Intel(R) Xeon(R) Gold 6433N"
+        architecture:
+          type: string
+          description:
+            The processor architecture
+          example: "x86-64"
+        cores:
+          type: integer
+          description:
+            The total number of physical cores
+          example: 32
+
+    ResourceInfo:
+      description:
+        Information about a resource.
+      type: object
+      properties:
+        resourceId:
+          type: string
+          description: Identifier for the Resource.
+          example: "xr860txcnfdg22"
+        resourcePoolId:
+          type: string
+          example: "rh-pool-cnfdg22"
+        hwProfile:
+          type: string
+          example: "rh-profile-test-basic"
+        description:
+          type: string
+          description: Human readable description of the resource.
+          example: "Some description about this resource"
+        name:
+          type: string
+          description: Short name for the resource.
+          example: "xr860txcnfdg22"
+        globalAssetId:
+          type: string
+          description:
+            Identifier or serial number of the resource, if available.
+          example: "xr860txcnfdg22"
+        serialNumber:
+          type: string
+          description:
+            The vendor serial number of the resource
+        partNumber:
+          type: string
+          description:
+            The vendor part number of the resource
+        model:
+          type: string
+          description:
+            The vendor model name of the resource
+          example: "PowerEdge XR860t"
+        vendor:
+          type: string
+          description:
+            Vendor or manufacturer name
+          example: "Dell Inc."
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description:
+            Optional labels applied to this resource
+          example: |
+            {"label-a": "value-a",
+             "label-b": "value-b"}
+        tags:
+          type: array
+          description: Keywords describing or classifying the resource instance
+          items:
+            type: string
+        groups:
+          type: array
+          description: Keywords denoting groups a resource belongs to.
+          items:
+            type: string
+        memory:
+          type: integer
+          description: The total physical memory in MiB
+        processors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcessorInfo"
+        powerState:
+          type: string
+          enum:
+          - ON
+          - OFF
+          description: The power state of the resource
+        adminState:
+          type: string
+          enum:
+          - UNLOCKED
+          - SHUTTING_DOWN
+          - LOCKED
+          - UNKNOWN
+          description: The administrative state of the resource
+        operationalState:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+            - UNKNOWN
+          description: The operational state of the resource
+        usageState:
+          type: string
+          enum:
+            - IDLE
+            - ACTIVE
+            - BUSY
+            - UNKNOWN
+      required:
+        - resourceId
+        - resourcePoolId
+        - hwProfile
+        - description
+        - name
+        - vendor
+        - model
+        - serialNumber
+        - partNumber
+        - memory
+        - processors
+        - adminState
+        - operationalState
+        - usageState
+
+    Subscription:
+      description: |
+        Information about an inventory subscription.
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Identifier for the Subscription. This identifier is allocated by the Hardware Manager.
+        consumerSubscriptionId:
+          type: string
+          format: uuid
+          description: Identifier for the consumer of events sent due to the Subscription request.
+        filter:
+          type: string
+          description: |
+            Criteria for events which do not need to be reported or will be filtered by the subscription 
+            notification service. Therefore, if a filter is not provided then all events are reported.
+        callback:
+          type: string
+          description: |
+            The fully qualified URI to a consumer procedure which can process a Post of the 
+            ResourceChangeNotification.
+      required:
+      - callback
+
+    ResourceChangeNotification:
+      description: Information about a resource change notification
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+          description: |
+            A unique identifier to represent this notification event
+        consumerSubscriptionId:
+          type: string
+          format: uuid
+          description: |
+            The value provided by the consumer in the subscription
+        notificationEventType:
+          type: integer
+          enum: [ 0, 1, 2 ]
+          description: |
+            One of the following values: 0 - create, 1 - modify, 2 - delete
+        objectRef:
+          type: string
+          description: |
+            The URL to the object. This is not required if the notificationEventType is 2 (DELETE).
+        object:
+          type: object
+          description: |
+            The changed resource object.
+      required:
+      - notificationId
+      - notificationEventType
