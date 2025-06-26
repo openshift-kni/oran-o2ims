@@ -132,7 +132,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
 	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
-	hwMgrDataSourceLoader, err := collector.NewHwMgrDataSourceLoader(cloudID, globalCloudID)
+	hwMgrDataSourceLoader, err := collector.NewHwPluginDataSourceLoader(cloudID, globalCloudID)
 	if err != nil {
 		return fmt.Errorf("failed to create hardware manager data source: %w", err)
 	}
