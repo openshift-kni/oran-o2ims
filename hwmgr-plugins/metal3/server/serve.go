@@ -20,7 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api"
-	hwpluginserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/server"
+	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
+	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
@@ -40,9 +41,14 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 	slog.Info("Initializing the Metal3 HardwarePlugin server")
 
 	// Retrieve the OpenAPI spec file
-	swagger, err := hwpluginserver.GetSwagger()
+	provisioningAPIswagger, err := provisioning.GetSwagger()
 	if err != nil {
-		return fmt.Errorf("failed to get swagger: %w", err)
+		return fmt.Errorf("failed to get provisioning swagger: %w", err)
+	}
+
+	inventoryAPIswagger, err := inventory.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("failed to get inventory swagger: %w", err)
 	}
 
 	// Channel for shutdown signals
@@ -58,8 +64,8 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 		cancel()
 	}()
 
-	// Init metal3Server
-	metal3Server, err := NewMetal3PluginServer(
+	// Init metal3ProvisioningServer
+	metal3ProvisioningServer, err := NewMetal3PluginServer(
 		config,
 		hubClient,
 		slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -67,17 +73,39 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 			Level:     slog.LevelDebug,
 		})))
 	if err != nil {
-		return fmt.Errorf("failed to build Metal3 HardwarePlugin server: %w", err)
+		return fmt.Errorf("failed to build Metal3 HardwarePlugin provisioning server: %w", err)
 	}
 
-	serverStrictHandler := hwpluginserver.NewStrictHandlerWithOptions(metal3Server, nil,
-		hwpluginserver.StrictHTTPServerOptions{
+	// Create strict handler for provisioning server
+	provisioningServerStrictHandler := provisioning.NewStrictHandlerWithOptions(metal3ProvisioningServer, nil,
+		provisioning.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  api.GetRequestErrorFunc(),
 			ResponseErrorHandlerFunc: api.GetResponseErrorFunc(),
 		},
 	)
 
+	// Init metal3InventoryServer
+	metal3InventoryServer, err := NewMetal3PluginInventoryServer(
+		hubClient,
+		slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			AddSource: true,
+			Level:     slog.LevelDebug,
+		})))
+	if err != nil {
+		return fmt.Errorf("failed to build Metal3 HardwarePlugin inventory server: %w", err)
+	}
+
+	// Create strict handler for inventory server
+	inventoryStrictHandler := inventory.NewStrictHandlerWithOptions(metal3InventoryServer, nil,
+		inventory.StrictHTTPServerOptions{
+			RequestErrorHandlerFunc:  api.GetRequestErrorFunc(),
+			ResponseErrorHandlerFunc: api.GetResponseErrorFunc(),
+		},
+	)
+
+	// Create base router
 	baseRouter := http.NewServeMux()
+
 	// Register a default handler that replies with 404 so that we can override the response format
 	baseRouter.HandleFunc("/", api.GetNotFoundFunc())
 
@@ -92,20 +120,37 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 		return fmt.Errorf("error setting up Metal3 HardwarePlugin authorizer middleware: %w", err)
 	}
 
-	opt := hwpluginserver.StdHTTPServerOptions{
-		BaseRouter: baseRouter,
-		Middlewares: []hwpluginserver.MiddlewareFunc{
-			api.GetOpenAPIValidationFunc(swagger),
+	// Create subrouters for provisioning and inventory
+	provisioningRouter := http.NewServeMux()
+	inventoryRouter := http.NewServeMux()
+
+	// Register handlers with subrouters
+	provisioning.HandlerWithOptions(provisioningServerStrictHandler, provisioning.StdHTTPServerOptions{
+		BaseRouter: provisioningRouter,
+		Middlewares: []provisioning.MiddlewareFunc{
+			api.GetOpenAPIValidationFunc(provisioningAPIswagger),
 			authz,
 			authn,
 			api.GetLogDurationFunc(),
 		},
 		ErrorHandlerFunc: api.GetRequestErrorFunc(),
-	}
+	})
+	inventory.HandlerWithOptions(inventoryStrictHandler, inventory.StdHTTPServerOptions{
+		BaseRouter: inventoryRouter,
+		Middlewares: []inventory.MiddlewareFunc{
+			api.GetOpenAPIValidationFunc(inventoryAPIswagger),
+			authz,
+			authn,
+			api.GetLogDurationFunc(),
+		},
+		ErrorHandlerFunc: api.GetRequestErrorFunc(),
+	})
 
-	// Register the handler
-	hwpluginserver.HandlerWithOptions(serverStrictHandler, opt)
+	// Mount subrouters to base router with path prefixes
+	baseRouter.Handle("/hardware-manager/provisioning/", provisioningRouter)
+	baseRouter.Handle("/hardware-manager/inventory/", inventoryRouter)
 
+	// Apply global middleware chain
 	handler := middleware.ChainHandlers(
 		baseRouter,
 		middleware.ErrorJsonifier(),

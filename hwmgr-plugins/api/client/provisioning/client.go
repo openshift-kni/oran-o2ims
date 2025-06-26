@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package client
+package provisioning
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/client"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
@@ -31,7 +30,7 @@ const (
 
 // HardwarePluginClient provides functions for calling the HardwarePlugin APIs
 type HardwarePluginClient struct {
-	client   *hwmgrpluginapi.ClientWithResponses
+	client   *ClientWithResponses
 	logger   *slog.Logger
 	hwPlugin *hwv1alpha1.HardwarePlugin
 }
@@ -56,9 +55,9 @@ func NewHardwarePluginClient(
 		return nil, fmt.Errorf("failed to build HTTP client: %w", err)
 	}
 
-	hClient, err := hwmgrpluginapi.NewClientWithResponses(
+	hClient, err := NewClientWithResponses(
 		hwPlugin.Spec.ApiRoot,
-		hwmgrpluginapi.WithHTTPClient(httpClient),
+		WithHTTPClient(httpClient),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client with responses: %w", err)
@@ -76,7 +75,7 @@ func NewHardwarePluginClient(
 func (h *HardwarePluginClient) GetNodeAllocationRequest(
 	ctx context.Context,
 	nodeAllocationRequestID string,
-) (*hwmgrpluginapi.NodeAllocationRequestResponse, bool, error) {
+) (*NodeAllocationRequestResponse, bool, error) {
 	response, err := h.client.GetNodeAllocationRequestWithResponse(ctx, nodeAllocationRequestID)
 	if err != nil {
 		h.logger.Error("Failed to get NodeAllocationRequest", slog.String("id", nodeAllocationRequestID), slog.Any("error", err))
@@ -101,7 +100,7 @@ func (h *HardwarePluginClient) GetNodeAllocationRequest(
 }
 
 // GetAllVersions retrieves all API versions
-func (h *HardwarePluginClient) GetAllVersions(ctx context.Context) (*hwmgrpluginapi.APIVersions, error) {
+func (h *HardwarePluginClient) GetAllVersions(ctx context.Context) (*APIVersions, error) {
 	response, err := h.client.GetAllVersionsWithResponse(ctx)
 	if err != nil {
 		h.logger.Error("Failed to get API versions", slog.Any("error", err))
@@ -123,7 +122,7 @@ func (h *HardwarePluginClient) GetAllVersions(ctx context.Context) (*hwmgrplugin
 }
 
 // GetMinorVersions retrieves minor API versions
-func (h *HardwarePluginClient) GetMinorVersions(ctx context.Context) (*hwmgrpluginapi.APIVersions, error) {
+func (h *HardwarePluginClient) GetMinorVersions(ctx context.Context) (*APIVersions, error) {
 	response, err := h.client.GetMinorVersionsWithResponse(ctx)
 	if err != nil {
 		h.logger.Error("Failed to get minor API versions", slog.Any("error", err))
@@ -145,7 +144,7 @@ func (h *HardwarePluginClient) GetMinorVersions(ctx context.Context) (*hwmgrplug
 }
 
 // GetAllocatedNodes retrieves all AllocatedNodes
-func (h *HardwarePluginClient) GetAllocatedNodes(ctx context.Context) (*[]hwmgrpluginapi.AllocatedNode, error) {
+func (h *HardwarePluginClient) GetAllocatedNodes(ctx context.Context) (*[]AllocatedNode, error) {
 	response, err := h.client.GetAllocatedNodesWithResponse(ctx)
 	if err != nil {
 		h.logger.Error("Failed to get AllocatedNodes", slog.Any("error", err))
@@ -167,7 +166,7 @@ func (h *HardwarePluginClient) GetAllocatedNodes(ctx context.Context) (*[]hwmgrp
 }
 
 // GetAllocatedNode retrieves a specific allocated node by ID
-func (h *HardwarePluginClient) GetAllocatedNode(ctx context.Context, allocatedNodeID string) (*hwmgrpluginapi.AllocatedNode, error) {
+func (h *HardwarePluginClient) GetAllocatedNode(ctx context.Context, allocatedNodeID string) (*AllocatedNode, error) {
 	response, err := h.client.GetAllocatedNodeWithResponse(ctx, allocatedNodeID)
 	if err != nil {
 		h.logger.Error("Failed to get allocated node", slog.String("id", allocatedNodeID), slog.Any("error", err))
@@ -189,7 +188,7 @@ func (h *HardwarePluginClient) GetAllocatedNode(ctx context.Context, allocatedNo
 }
 
 // GetNodeAllocationRequests retrieves all NodeAllocationRequests
-func (h *HardwarePluginClient) GetNodeAllocationRequests(ctx context.Context) (*[]hwmgrpluginapi.NodeAllocationRequestResponse, error) {
+func (h *HardwarePluginClient) GetNodeAllocationRequests(ctx context.Context) (*[]NodeAllocationRequestResponse, error) {
 	response, err := h.client.GetNodeAllocationRequestsWithResponse(ctx)
 	if err != nil {
 		h.logger.Error("Failed to get NodeAllocationRequests", slog.Any("error", err))
@@ -213,7 +212,7 @@ func (h *HardwarePluginClient) GetNodeAllocationRequests(ctx context.Context) (*
 // CreateNodeAllocationRequest creates a new NodeAllocationRequest
 func (h *HardwarePluginClient) CreateNodeAllocationRequest(
 	ctx context.Context,
-	body hwmgrpluginapi.CreateNodeAllocationRequestJSONRequestBody,
+	body CreateNodeAllocationRequestJSONRequestBody,
 ) (string, error) {
 	response, err := h.client.CreateNodeAllocationRequestWithResponse(ctx, body)
 	if err != nil {
@@ -275,7 +274,7 @@ func (h *HardwarePluginClient) DeleteNodeAllocationRequest(
 func (h *HardwarePluginClient) UpdateNodeAllocationRequest(
 	ctx context.Context,
 	nodeAllocationRequestID string,
-	body hwmgrpluginapi.UpdateNodeAllocationRequestJSONRequestBody,
+	body UpdateNodeAllocationRequestJSONRequestBody,
 ) (string, error) {
 	response, err := h.client.UpdateNodeAllocationRequestWithResponse(ctx, nodeAllocationRequestID, body)
 	if err != nil {
@@ -301,7 +300,7 @@ func (h *HardwarePluginClient) UpdateNodeAllocationRequest(
 func (h *HardwarePluginClient) GetAllocatedNodesFromNodeAllocationRequest(
 	ctx context.Context,
 	nodeAllocationRequestID string,
-) (*[]hwmgrpluginapi.AllocatedNode, error) {
+) (*[]AllocatedNode, error) {
 	response, err := h.client.GetAllocatedNodesFromNodeAllocationRequestWithResponse(ctx, nodeAllocationRequestID)
 	if err != nil {
 		h.logger.Error("Failed to get AllocatedNodes from NodeAllocationRequest", slog.String("id", nodeAllocationRequestID), slog.Any("error", err))
