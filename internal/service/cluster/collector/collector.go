@@ -27,7 +27,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
-const pollingDelay = 10 * time.Minute
+const pollingDelay = 1 * time.Minute
 
 // asyncEventBufferSize defines the number of buffered entries in the async handleWatchEvent channel
 const asyncEventBufferSize = 10
