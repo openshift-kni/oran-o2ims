@@ -66,6 +66,10 @@ func requeueWithMediumInterval() ctrl.Result {
 	return requeueWithCustomInterval(1 * time.Minute)
 }
 
+func requeueWithShortInterval() ctrl.Result {
+	return requeueWithCustomInterval(15 * time.Second)
+}
+
 func requeueImmediately() ctrl.Result {
 	return ctrl.Result{Requeue: true}
 }
