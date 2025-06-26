@@ -12,47 +12,47 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	hwmgrv1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
-type HwMgrDataSourceLoader struct {
+type HwPluginDataSourceLoader struct {
 	cloudID       uuid.UUID
 	globalCloudID uuid.UUID
 	hubClient     client.WithWatch
 }
 
-func NewHwMgrDataSourceLoader(cloudID, globalCloudID uuid.UUID) (DataSourceLoader, error) {
+func NewHwPluginDataSourceLoader(cloudID, globalCloudID uuid.UUID) (DataSourceLoader, error) {
 	hubClient, err := k8s.NewClientForHub()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create k8s client: %w", err)
 	}
 
-	return &HwMgrDataSourceLoader{
+	return &HwPluginDataSourceLoader{
 		cloudID:       cloudID,
 		globalCloudID: globalCloudID,
 		hubClient:     hubClient,
 	}, nil
 }
 
-func (l *HwMgrDataSourceLoader) Load(ctx context.Context) ([]DataSource, error) {
-	slog.Info("Loading hardware manager data sources")
+func (l *HwPluginDataSourceLoader) Load(ctx context.Context) ([]DataSource, error) {
+	slog.Info("Loading hardware plugin data sources")
 
-	var hwMgrs hwmgrv1.HardwareManagerList
-	err := l.hubClient.List(ctx, &hwMgrs)
+	var hwPlugins hwv1alpha1.HardwarePluginList
+	err := l.hubClient.List(ctx, &hwPlugins)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list hardware managers: %w", err)
+		return nil, fmt.Errorf("failed to list hardware plugins: %w", err)
 	}
 
 	var result []DataSource
-	for _, hwMgr := range hwMgrs.Items {
+	for _, hwPlugin := range hwPlugins.Items {
 		// TODO: check connectivity status
 
-		ds, err := NewHwMgrDataSource(hwMgr.Name, l.cloudID, l.globalCloudID)
+		ds, err := NewHwPluginDataSource(ctx, l.hubClient, &hwPlugin, l.cloudID, l.globalCloudID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load hardware manager data sources: %w", err)
+			return nil, fmt.Errorf("failed to load HardwarePlugin '%s' data sources: %w", hwPlugin.Name, err)
 		}
 		result = append(result, ds)
 	}

@@ -34,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
@@ -89,8 +88,6 @@ var _ = BeforeSuite(func() {
 	err := provisioningv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = hwv1alpha1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = pluginv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = corev1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -173,14 +170,14 @@ var _ = BeforeSuite(func() {
 				Name: "oran-o2ims",
 			},
 		},
-		// HardwareManager CRs
-		&pluginv1alpha1.HardwareManager{
+		// HardwarePlugin CRs
+		&hwv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: testHwMgrPluginNameSpace,
 				Name:      testHardwarePluginRef,
 			},
-			Spec: pluginv1alpha1.HardwareManagerSpec{
-				AdaptorID: "loopback",
+			Spec: hwv1alpha1.HardwarePluginSpec{
+				ApiRoot: "todo",
 			},
 		},
 	}

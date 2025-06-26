@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	hwmgrv1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -68,7 +68,7 @@ func GetSchemeForHub() *runtime.Scheme {
 	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(appsv1.AddToScheme(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
-	utilruntime.Must(hwmgrv1.AddToScheme(scheme))
+	utilruntime.Must(hwv1alpha1.AddToScheme(scheme))
 
 	return scheme
 }

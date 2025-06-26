@@ -23,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	oranhwmgrplugintestutils "github.com/openshift-kni/oran-hwmgr-plugin/test/utils"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -100,11 +99,11 @@ func GetExternalCrdFiles(destDir string) error {
 	for _, externalCrd := range ExternalCrdData {
 		// Get the commit sha from the go.mod of the IMS repo.
 		policyMod := externalCrd["modName"] + "/" + externalCrd["repoName"]
-		_, policyModPseudoVersionNew, err := oranhwmgrplugintestutils.GetModuleFromGoMod(policyMod)
+		_, policyModPseudoVersionNew, err := GetModuleFromGoMod(policyMod)
 		if err != nil {
 			return fmt.Errorf("error getting module from go.mod: %w", err)
 		}
-		commitSha := oranhwmgrplugintestutils.GetGitCommitFromPseudoVersion(policyModPseudoVersionNew)
+		commitSha := GetGitCommitFromPseudoVersion(policyModPseudoVersionNew)
 
 		// Get the full sha of the commit by calling the github API.
 		url := fmt.Sprintf(GithubCommitsAPI, externalCrd["owner"], externalCrd["repoName"], commitSha)
