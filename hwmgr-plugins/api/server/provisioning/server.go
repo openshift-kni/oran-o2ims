@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package server
+package provisioning
 
 import (
 	"context"
@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	generated "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/server"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -26,7 +25,7 @@ import (
 
 // HardwarePluginServer implements StricerServerInterface.
 // This ensures that we've conformed to the `StrictServerInterface` with a compile-time check.
-var _ generated.StrictServerInterface = (*HardwarePluginServer)(nil)
+var _ StrictServerInterface = (*HardwarePluginServer)(nil)
 
 type HardwarePluginServer struct {
 	utils.CommonServerConfig
@@ -41,30 +40,30 @@ var baseURL = "/hardware-manager/provisioning/v1"
 var currentVerion = "1.0.0"
 
 // GetAllVersions handles an API request to fetch all versions
-func (h *HardwarePluginServer) GetAllVersions(_ context.Context, _ generated.GetAllVersionsRequestObject,
-) (generated.GetAllVersionsResponseObject, error) {
+func (h *HardwarePluginServer) GetAllVersions(_ context.Context, _ GetAllVersionsRequestObject,
+) (GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
-	versions := []generated.APIVersion{
+	versions := []APIVersion{
 		{
 			Version: &currentVerion,
 		},
 	}
-	return generated.GetAllVersions200JSONResponse(generated.APIVersions{
+	return GetAllVersions200JSONResponse(APIVersions{
 		ApiVersions: &versions,
 		UriPrefix:   &baseURL,
 	}), nil
 }
 
 // GetMinorVersions handles an API request to fetch minor versions
-func (h *HardwarePluginServer) GetMinorVersions(_ context.Context, _ generated.GetMinorVersionsRequestObject,
-) (generated.GetMinorVersionsResponseObject, error) {
+func (h *HardwarePluginServer) GetMinorVersions(_ context.Context, _ GetMinorVersionsRequestObject,
+) (GetMinorVersionsResponseObject, error) {
 	// We currently support a single version
-	versions := []generated.APIVersion{
+	versions := []APIVersion{
 		{
 			Version: &currentVerion,
 		},
 	}
-	return generated.GetMinorVersions200JSONResponse(generated.APIVersions{
+	return GetMinorVersions200JSONResponse(APIVersions{
 		ApiVersions: &versions,
 		UriPrefix:   &baseURL,
 	}), nil
@@ -72,8 +71,8 @@ func (h *HardwarePluginServer) GetMinorVersions(_ context.Context, _ generated.G
 
 func (h *HardwarePluginServer) GetNodeAllocationRequests(
 	ctx context.Context,
-	request generated.GetNodeAllocationRequestsRequestObject,
-) (generated.GetNodeAllocationRequestsResponseObject, error) {
+	request GetNodeAllocationRequestsRequestObject,
+) (GetNodeAllocationRequestsResponseObject, error) {
 
 	// List NodeAllocationRequests with the HardwarePlugin label
 	nodeAllocationRequestList := &hwv1alpha1.NodeAllocationRequestList{}
@@ -84,7 +83,7 @@ func (h *HardwarePluginServer) GetNodeAllocationRequests(
 		return nil, fmt.Errorf("failed to list all NodeAllocationRequests: %w", err)
 	}
 
-	nodeAllocationRequestResponse := []generated.NodeAllocationRequestResponse{}
+	nodeAllocationRequestResponse := []NodeAllocationRequestResponse{}
 	for _, nodeAllocationRequest := range nodeAllocationRequestList.Items {
 		// Convert NodeAllocationRequest CR to NodeAllocationRequestResponse object
 		resp, err := NodeAllocationRequestCRToResponseObject(&nodeAllocationRequest)
@@ -95,17 +94,17 @@ func (h *HardwarePluginServer) GetNodeAllocationRequests(
 		nodeAllocationRequestResponse = append(nodeAllocationRequestResponse, resp)
 	}
 
-	return generated.GetNodeAllocationRequests200JSONResponse(nodeAllocationRequestResponse), nil
+	return GetNodeAllocationRequests200JSONResponse(nodeAllocationRequestResponse), nil
 }
 
 func (h *HardwarePluginServer) GetNodeAllocationRequest(
 	ctx context.Context,
-	request generated.GetNodeAllocationRequestRequestObject,
-) (generated.GetNodeAllocationRequestResponseObject, error) {
+	request GetNodeAllocationRequestRequestObject,
+) (GetNodeAllocationRequestResponseObject, error) {
 
 	nodeAllocationRequest, err := GetNodeAllocationRequest(ctx, h.HubClient, h.Namespace, request.NodeAllocationRequestId)
 	if errors.IsNotFound(err) {
-		return generated.GetNodeAllocationRequest404ApplicationProblemPlusJSONResponse(generated.ProblemDetails{
+		return GetNodeAllocationRequest404ApplicationProblemPlusJSONResponse(ProblemDetails{
 			Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s', err: %s", request.NodeAllocationRequestId, err.Error()),
 			Status: http.StatusNotFound,
 		}), nil
@@ -120,14 +119,14 @@ func (h *HardwarePluginServer) GetNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to parse convert NodeAllocationRequest CR to object, err: %w", err)
 	}
 
-	return generated.GetNodeAllocationRequest200JSONResponse(nodeAllocationRequestResponse), nil
+	return GetNodeAllocationRequest200JSONResponse(nodeAllocationRequestResponse), nil
 }
 
 // CreateNodeAllocationRequest creates a NodeAllocationRequest object
 func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 	ctx context.Context,
-	request generated.CreateNodeAllocationRequestRequestObject,
-) (generated.CreateNodeAllocationRequestResponseObject, error) {
+	request CreateNodeAllocationRequestRequestObject,
+) (CreateNodeAllocationRequestResponseObject, error) {
 
 	// construct nodeGroups object
 	nodeGroups := []hwv1alpha1.NodeGroup{}
@@ -171,13 +170,13 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to create NodeAllocationRequest resource, err: %w", err)
 	}
 
-	return generated.CreateNodeAllocationRequest202JSONResponse(nodeAllocationRequestID), nil
+	return CreateNodeAllocationRequest202JSONResponse(nodeAllocationRequestID), nil
 }
 
 func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 	ctx context.Context,
-	request generated.UpdateNodeAllocationRequestRequestObject,
-) (generated.UpdateNodeAllocationRequestResponseObject, error) {
+	request UpdateNodeAllocationRequestRequestObject,
+) (UpdateNodeAllocationRequestResponseObject, error) {
 
 	// Check that NodeAllocationRequest object exists
 	existingNodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
@@ -187,8 +186,8 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest %s, err: %w", request.NodeAllocationRequestId, err)
 	}
 	if !exist {
-		return generated.UpdateNodeAllocationRequest404ApplicationProblemPlusJSONResponse(
-			generated.ProblemDetails{
+		return UpdateNodeAllocationRequest404ApplicationProblemPlusJSONResponse(
+			ProblemDetails{
 				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s'", request.NodeAllocationRequestId),
 				Status: http.StatusNotFound,
 			}), nil
@@ -227,13 +226,13 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to update NodeAllocationRequest resource '%s', err: %w", request.NodeAllocationRequestId, err)
 	}
 
-	return generated.UpdateNodeAllocationRequest202JSONResponse(request.NodeAllocationRequestId), nil
+	return UpdateNodeAllocationRequest202JSONResponse(request.NodeAllocationRequestId), nil
 }
 
 func (h *HardwarePluginServer) DeleteNodeAllocationRequest(
 	ctx context.Context,
-	request generated.DeleteNodeAllocationRequestRequestObject,
-) (generated.DeleteNodeAllocationRequestResponseObject, error) {
+	request DeleteNodeAllocationRequestRequestObject,
+) (DeleteNodeAllocationRequestResponseObject, error) {
 
 	// Check that NodeAllocationRequest object exists
 	existingNodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
@@ -242,8 +241,8 @@ func (h *HardwarePluginServer) DeleteNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s', err: %w", request.NodeAllocationRequestId, err)
 	}
 	if !exist {
-		return generated.DeleteNodeAllocationRequest404ApplicationProblemPlusJSONResponse(
-			generated.ProblemDetails{
+		return DeleteNodeAllocationRequest404ApplicationProblemPlusJSONResponse(
+			ProblemDetails{
 				Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s'", request.NodeAllocationRequestId),
 				Status: http.StatusNotFound,
 			}), nil
@@ -254,13 +253,13 @@ func (h *HardwarePluginServer) DeleteNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to delete NodeAllocationRequest '%s', err: %w", request.NodeAllocationRequestId, err)
 	}
 
-	return generated.DeleteNodeAllocationRequest202JSONResponse(request.NodeAllocationRequestId), nil
+	return DeleteNodeAllocationRequest202JSONResponse(request.NodeAllocationRequestId), nil
 }
 
 func (h *HardwarePluginServer) GetAllocatedNodes(
 	ctx context.Context,
-	request generated.GetAllocatedNodesRequestObject,
-) (generated.GetAllocatedNodesResponseObject, error) {
+	request GetAllocatedNodesRequestObject,
+) (GetAllocatedNodesResponseObject, error) {
 
 	// List AllocatedNodes with the HardwarePlugin label
 	allocatedNodeList := &hwv1alpha1.AllocatedNodeList{}
@@ -272,7 +271,7 @@ func (h *HardwarePluginServer) GetAllocatedNodes(
 		return nil, fmt.Errorf("failed to get AllocatedNodes, err: %w", err)
 	}
 
-	allocatedNodeObjects := []generated.AllocatedNode{}
+	allocatedNodeObjects := []AllocatedNode{}
 	for _, node := range allocatedNodeList.Items {
 		// Convert AllocatedNode CR to AllocatedNode object
 		allocatedNodeObject, err := AllocatedNodeCRToAllocatedNodeObject(&node)
@@ -282,29 +281,29 @@ func (h *HardwarePluginServer) GetAllocatedNodes(
 		allocatedNodeObjects = append(allocatedNodeObjects, allocatedNodeObject)
 	}
 
-	return generated.GetAllocatedNodes200JSONResponse(allocatedNodeObjects), nil
+	return GetAllocatedNodes200JSONResponse(allocatedNodeObjects), nil
 }
 
 func (h *HardwarePluginServer) GetAllocatedNode(
 	ctx context.Context,
-	request generated.GetAllocatedNodeRequestObject,
-) (generated.GetAllocatedNodeResponseObject, error) {
+	request GetAllocatedNodeRequestObject,
+) (GetAllocatedNodeResponseObject, error) {
 
 	allocatedNode := &hwv1alpha1.AllocatedNode{}
 	if err := h.HubClient.Get(ctx, types.NamespacedName{Namespace: h.Namespace, Name: request.AllocatedNodeId},
 		allocatedNode,
 	); err != nil {
 		if errors.IsNotFound(err) {
-			return generated.GetAllocatedNode404ApplicationProblemPlusJSONResponse(
-				generated.ProblemDetails{
+			return GetAllocatedNode404ApplicationProblemPlusJSONResponse(
+				ProblemDetails{
 					Detail: fmt.Sprintf("could not find AllocatedNode '%s', err: %s", request.AllocatedNodeId, err.Error()),
 					Status: http.StatusNotFound,
 				},
 			), nil
 		}
 
-		return generated.GetAllocatedNode500ApplicationProblemPlusJSONResponse(
-			generated.ProblemDetails{
+		return GetAllocatedNode500ApplicationProblemPlusJSONResponse(
+			ProblemDetails{
 				Detail: fmt.Sprintf("failed to get AllocatedNode '%s', err: %s", request.AllocatedNodeId, err.Error()),
 				Status: http.StatusInternalServerError,
 			},
@@ -317,13 +316,13 @@ func (h *HardwarePluginServer) GetAllocatedNode(
 		return nil, fmt.Errorf("encountered an error converting AllocatedNode resource to response object, err: %w", err)
 	}
 
-	return generated.GetAllocatedNode200JSONResponse(allocatedNodeObject), nil
+	return GetAllocatedNode200JSONResponse(allocatedNodeObject), nil
 }
 
 func (h *HardwarePluginServer) GetAllocatedNodesFromNodeAllocationRequest(
 	ctx context.Context,
-	request generated.GetAllocatedNodesFromNodeAllocationRequestRequestObject,
-) (generated.GetAllocatedNodesFromNodeAllocationRequestResponseObject, error) {
+	request GetAllocatedNodesFromNodeAllocationRequestRequestObject,
+) (GetAllocatedNodesFromNodeAllocationRequestResponseObject, error) {
 
 	nodeAllocationRequest, err := GetNodeAllocationRequest(ctx, h.HubClient, h.Namespace, request.NodeAllocationRequestId)
 	if err != nil {
@@ -331,7 +330,7 @@ func (h *HardwarePluginServer) GetAllocatedNodesFromNodeAllocationRequest(
 	}
 
 	allocatedNodeList := nodeAllocationRequest.Status.Properties.NodeNames
-	allocatedNodeObjects := []generated.AllocatedNode{}
+	allocatedNodeObjects := []AllocatedNode{}
 
 	// Get the AllocatedNodes corresponding to the NodeAllocationRequest.
 	for _, nodeId := range allocatedNodeList {
@@ -349,5 +348,5 @@ func (h *HardwarePluginServer) GetAllocatedNodesFromNodeAllocationRequest(
 		allocatedNodeObjects = append(allocatedNodeObjects, allocatedNodeObject)
 	}
 
-	return generated.GetAllocatedNodesFromNodeAllocationRequest200JSONResponse(allocatedNodeObjects), nil
+	return GetAllocatedNodesFromNodeAllocationRequest200JSONResponse(allocatedNodeObjects), nil
 }
