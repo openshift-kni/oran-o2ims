@@ -8,6 +8,7 @@ resources:
 - v1alpha1_nodeallocationrequest.yaml
 - v1alpha1_hardwaretemplate.yaml
 - v1alpha1_hardwareprofile.yaml
+- v1alpha1_hardwareplugin.yaml
 
 # Provisioning:
 - v1alpha1_clustertemplate.yaml

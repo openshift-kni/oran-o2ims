@@ -54,6 +54,43 @@ metadata:
         },
         {
           "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "HardwarePlugin",
+          "metadata": {
+            "name": "metal3-hwplugin",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "apiRoot": "https://metal3-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
+            "authClientConfig": {
+              "type": "ServiceAccount"
+            }
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "HardwareProfile",
+          "metadata": {
+            "name": "hardwareprofile-sample",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "bios": {
+              "attributes": {
+                "SriovGlobalEnable": "Enabled",
+                "SysProfile": "Custom",
+                "WorkloadProfile": "TelcoOptimizedProfile"
+              }
+            }
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
           "kind": "HardwareTemplate",
           "metadata": {
             "name": "sample-hwtemplate-v1",
@@ -189,6 +226,9 @@ metadata:
               },
               "url": "https://smo.example.com"
             }
+          },
+          "status": {
+            "conditions": []
           }
         },
         {
@@ -757,11 +797,96 @@ spec:
       - displayName: Conditions
         path: conditions
       version: v1alpha1
-    - kind: HardwarePlugin
+    - description: HardwarePlugin is the Schema for the hardwareplugins API
+      displayName: Hardware Plugin
+      kind: HardwarePlugin
       name: hardwareplugins.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: ApiRoot is the root URL for the Hardware Plugin.
+        displayName: Hardware Plugin API root
+        path: apiRoot
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: AuthClientConfig defines the configurable client attributes required
+          to access the OAuth2 authorization server
+        displayName: SMO OAuth Configuration
+        path: authClientConfig
+      - description: |-
+          BasicAuthSecret represents the name of a secret (in the current namespace) containing the username
+          and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
+          This field is required when Type is set to "Basic".
+        displayName: Basic Auth Secret
+        path: authClientConfig.basicAuthSecret
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          OAuthConfig holds the configuration for OAuth2-based authentication, including the authorization server
+          URL, token endpoint, and client credentials. This field is required when Type is set to "OAuth".
+        displayName: OAuth Configuration
+        path: authClientConfig.oauthConfig
+      - description: |-
+          TLSConfig specifies the TLS configuration for secure communication, including the certificate and private
+          key. This field is optional and can be used with any authentication type to enable TLS for the connection.
+        displayName: TLS Configuration
+        path: authClientConfig.tlsConfig
+      - description: Type specifies the authentication type to be used (e.g., ServiceAccount,
+          Basic, or OAuth).
+        displayName: Authentication Type
+        path: authClientConfig.type
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:select:ServiceAccount
+        - urn:alm:descriptor:com.tectonic.ui:select:Basic
+        - urn:alm:descriptor:com.tectonic.ui:select:OAuth
+      - description: |-
+          CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
+          with any outside HardwarePlugin server that has its TLS certificate signed by a non-public CA certificate.
+          The config map is expected to contain a single file called 'ca-bundle.crt' containing all trusted CA certificates
+          in PEM format.
+        displayName: Custom CA Certificates
+        path: caBundleName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions describe the state of the UpdateService resource.
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
       version: v1alpha1
-    - kind: HardwareProfile
+    - description: HardwareProfile is the Schema for the hardwareprofiles API
+      displayName: Hardware Profile
+      kind: HardwareProfile
       name: hardwareprofiles.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Service
+        name: policy-engine-service
+        version: v1
+      specDescriptors:
+      - description: Bios defines a set of bios attributes
+        displayName: Bios
+        path: bios
+      - displayName: Attributes
+        path: bios.attributes
+      - description: BIOS firmware information
+        displayName: BIOS Firmware
+        path: biosFirmware
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: BMC firmware information
+        displayName: BMC Firmware
+        path: bmcFirmware
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Represents the observations of a HardwareProfile's current state
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
       version: v1alpha1
     - description: HardwareTemplate is the Schema for the hardwaretemplates API
       displayName: ORAN O2IMS Hardware Template

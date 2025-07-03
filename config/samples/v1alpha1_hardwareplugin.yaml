@@ -1,0 +1,11 @@
+apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+kind: HardwarePlugin
+metadata:
+  name: metal3-hwplugin
+  namespace: oran-o2ims
+spec:
+  apiRoot: https://metal3-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443
+  authClientConfig:
+    type: ServiceAccount
+status:
+  conditions: []

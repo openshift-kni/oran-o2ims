@@ -64,10 +64,12 @@ type HardwarePluginStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
+// HardwarePlugin is the Schema for the hardwareplugins API
+//
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-
-// HardwarePlugin is the Schema for the hardwareplugins API
+// +kubebuilder:resource:path=hardwareplugins,shortName=hwplugin
+// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Plugin",resources={{Namespace, v1}}
 type HardwarePlugin struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -76,9 +78,9 @@ type HardwarePlugin struct {
 	Status HardwarePluginStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
-
 // HardwarePluginList contains a list of HardwarePlugin
+//
+// +kubebuilder:object:root=true
 type HardwarePluginList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

@@ -11,6 +11,8 @@ spec:
     kind: HardwarePlugin
     listKind: HardwarePluginList
     plural: hardwareplugins
+    shortNames:
+    - hwplugin
     singular: hardwareplugin
   scope: Namespaced
   versions:
