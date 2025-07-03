@@ -69,7 +69,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: openshift.io
+  domain: oran.openshift.io
   group: o2ims-hardwaremanagement
   kind: HardwarePlugin
   path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
@@ -78,7 +78,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: openshift.io
+  domain: oran.openshift.io
   group: o2ims-hardwaremanagement
   kind: HardwareProfile
   path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1

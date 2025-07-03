@@ -30,3 +30,5 @@ spec:
     tls:
       secretName: oran-o2ims-tls-certificate
   caBundleName: o2ims-custom-ca-certs
+status:
+  conditions: []
