@@ -10,7 +10,7 @@ set -e
 # Define an associative array of service names based on matching variables fitting this pattern:
 #   ORAN_O2IMS_SERVICE_PASSWORD
 declare -A services
-# Capture all of the ORAN O2IMS service database credentials
+# Capture all of the O-Cloud Manager service database credentials
 for var in "${!ORAN_O2IMS@}"; do
     if [[ $var =~ ^ORAN_O2IMS_(.*)_PASSWORD ]]; then
         service_name="${BASH_REMATCH[1]}"

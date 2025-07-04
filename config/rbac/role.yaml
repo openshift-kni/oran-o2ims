@@ -10,6 +10,14 @@ rules:
   - get
   - list
 - nonResourceURLs:
+  - /hardware-manager/provisioning/*
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+- nonResourceURLs:
   - /internal/v1/caas-alerts/alertmanager
   verbs:
   - create
@@ -53,6 +61,14 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
 - apiGroups:
   - ""
   resources:
@@ -182,12 +198,16 @@ rules:
   - list
   - watch
 - apiGroups:
-  - hwmgr-plugin.oran.openshift.io
+  - coordination.k8s.io
   resources:
-  - hardwaremanagers
+  - leases
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - lcm.openshift.io
@@ -207,6 +227,67 @@ rules:
   - imagebasedgroupupgrades/status
   verbs:
   - get
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - firmwareschemas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwarecomponents
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwaresettings
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostupdatepolicies
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - preprovisioningimages
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - monitoring.coreos.com
   resources:
@@ -230,6 +311,79 @@ rules:
 - apiGroups:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
+  - allocatednodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - allocatednodes/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - allocatednodes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - hardwareplugins
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - hardwareplugins/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - hardwareplugins/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - hardwareprofiles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - hardwareprofiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
   - hardwaretemplates
   verbs:
   - create
@@ -250,7 +404,7 @@ rules:
 - apiGroups:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
-  - nodepools
+  - nodeallocationrequests
   verbs:
   - create
   - delete
@@ -262,7 +416,14 @@ rules:
 - apiGroups:
   - o2ims-hardwaremanagement.oran.openshift.io
   resources:
-  - nodepools/status
+  - nodeallocationrequests/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - o2ims-hardwaremanagement.oran.openshift.io
+  resources:
+  - nodeallocationrequests/status
   verbs:
   - get
   - patch

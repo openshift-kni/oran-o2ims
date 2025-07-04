@@ -6,41 +6,7 @@ metadata:
       [
         {
           "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "HardwareTemplate",
-          "metadata": {
-            "name": "sample-hwtemplate-v1",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "bootInterfaceLabel": "bootable-interface",
-            "extensions": {
-              "resourceTypeId": "ResourceGroup~2.1.1"
-            },
-            "hardwareProvisioningTimeout": "60m",
-            "hwMgrId": "hwmgr-1",
-            "nodePoolData": [
-              {
-                "hwProfile": "profile-spr-single-processor-64G",
-                "name": "controller",
-                "resourcePoolId": "master-pool",
-                "resourceSelector": "selector-here",
-                "role": "master"
-              },
-              {
-                "hwProfile": "profile-spr-dual-processor-128G",
-                "name": "worker",
-                "resourcePoolId": "worker-pool",
-                "role": "worker"
-              }
-            ]
-          },
-          "status": {
-            "conditions": []
-          }
-        },
-        {
-          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "Node",
+          "kind": "AllocatedNode",
           "metadata": {
             "labels": {
               "app.kubernetes.io/created-by": "oran-o2ims",
@@ -55,7 +21,7 @@ metadata:
           "spec": {
             "groupName": "master",
             "hwProfile": "sample-profile",
-            "nodePool": "sample-nodepool"
+            "nodeAllocationRequest": "sample-nodeallocationrequest"
           },
           "status": {
             "bmc": {
@@ -88,7 +54,78 @@ metadata:
         },
         {
           "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "NodePool",
+          "kind": "HardwarePlugin",
+          "metadata": {
+            "name": "metal3-hwplugin",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "apiRoot": "https://metal3-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
+            "authClientConfig": {
+              "type": "ServiceAccount"
+            }
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "HardwareProfile",
+          "metadata": {
+            "name": "hardwareprofile-sample",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "bios": {
+              "attributes": {
+                "SriovGlobalEnable": "Enabled",
+                "SysProfile": "Custom",
+                "WorkloadProfile": "TelcoOptimizedProfile"
+              }
+            }
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "HardwareTemplate",
+          "metadata": {
+            "name": "sample-hwtemplate-v1",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "bootInterfaceLabel": "bootable-interface",
+            "extensions": {
+              "resourceTypeId": "ResourceGroup~2.1.1"
+            },
+            "hardwarePluginRef": "hwmgr-1",
+            "hardwareProvisioningTimeout": "60m",
+            "nodeGroupData": [
+              {
+                "hwProfile": "profile-spr-single-processor-64G",
+                "name": "controller",
+                "resourcePoolId": "master-pool",
+                "resourceSelector": "selector-here",
+                "role": "master"
+              },
+              {
+                "hwProfile": "profile-spr-dual-processor-128G",
+                "name": "worker",
+                "resourcePoolId": "worker-pool",
+                "role": "worker"
+              }
+            ]
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+          "kind": "NodeAllocationRequest",
           "metadata": {
             "annotations": {
               "bootInterfaceLabel": "bootable-interface"
@@ -101,16 +138,16 @@ metadata:
               "app.kubernetes.io/name": "inventory",
               "app.kubernetes.io/part-of": "oran-o2ims"
             },
-            "name": "sample-nodepool",
+            "name": "sample-nodeallocationrequest",
             "namespace": "oran-hwmgr-plugin"
           },
           "spec": {
             "cloudID": "sample",
             "extensions": [],
-            "hwMgrId": "loopback-1",
+            "hardwarePluginRef": "loopback-1",
             "nodeGroup": [
               {
-                "nodePoolData": {
+                "nodeGroupData": {
                   "hwProfile": "sample-master-profile",
                   "name": "controller",
                   "resourcePoolId": "master-pool",
@@ -119,7 +156,7 @@ metadata:
                 "size": 1
               },
               {
-                "nodePoolData": {
+                "nodeGroupData": {
                   "hwProfile": "sample-worker-profile",
                   "name": "worker",
                   "resourcePoolId": "worker-pool",
@@ -189,6 +226,9 @@ metadata:
               },
               "url": "https://smo.example.com"
             }
+          },
+          "status": {
+            "conditions": []
           }
         },
         {
@@ -606,7 +646,7 @@ metadata:
       ]
     capabilities: Basic Install
     containerImage: quay.io/openshift-kni/oran-o2ims-operator
-    description: The O-RAN O2IMS operator provides an implementation of the O-RAN
+    description: The O-Cloud Manager operator provides an implementation of the O-RAN
       O2 IMS API on top of OpenShift and ACM.
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -635,8 +675,64 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: AllocatedNode is the schema for an allocated node
+      displayName: Allocated Node
+      kind: AllocatedNode
+      name: allocatednodes.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - displayName: Extensions
+        path: extensions
+      - description: GroupName
+        displayName: Group Name
+        path: groupName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HardwarePluginRef is the identifier for the HardwarePlugin instance.
+        displayName: Hardware Plugin Reference
+        path: hardwarePluginRef
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrNodeId is the node identifier from the hardware manager.
+        displayName: Hardware Manager Node ID
+        path: hwMgrNodeId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwMgrNodeNs is the node namespace from the hardware manager.
+        displayName: Hardware Manager Node Namespace
+        path: hwMgrNodeNs
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: HwProfile
+        displayName: Hardware Profile
+        path: hwProfile
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: NodeAllocationRequest
+        displayName: Node Allocation Request
+        path: nodeAllocationRequest
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - displayName: BMC
+        path: bmc
+      - description: |-
+          Conditions represent the observations of the AllocatedNodeStatus's current state.
+          Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
+        displayName: Conditions
+        path: conditions
+      - displayName: Hostname
+        path: hostname
+      - displayName: Hw Profile
+        path: hwProfile
+      - displayName: Interfaces
+        path: interfaces
+      version: v1alpha1
     - description: ClusterTemplate is the Schema for the clustertemplates API
-      displayName: ORAN O2IMS Cluster Template
+      displayName: Cluster Template
       kind: ClusterTemplate
       name: clustertemplates.o2ims.provisioning.oran.org
       resources:
@@ -701,8 +797,99 @@ spec:
       - displayName: Conditions
         path: conditions
       version: v1alpha1
+    - description: HardwarePlugin is the Schema for the hardwareplugins API
+      displayName: Hardware Plugin
+      kind: HardwarePlugin
+      name: hardwareplugins.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Namespace
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: ApiRoot is the root URL for the Hardware Plugin.
+        displayName: Hardware Plugin API root
+        path: apiRoot
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: AuthClientConfig defines the configurable client attributes required
+          to access the OAuth2 authorization server
+        displayName: SMO OAuth Configuration
+        path: authClientConfig
+      - description: |-
+          BasicAuthSecret represents the name of a secret (in the current namespace) containing the username
+          and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
+          This field is required when Type is set to "Basic".
+        displayName: Basic Auth Secret
+        path: authClientConfig.basicAuthSecret
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          OAuthConfig holds the configuration for OAuth2-based authentication, including the authorization server
+          URL, token endpoint, and client credentials. This field is required when Type is set to "OAuth".
+        displayName: OAuth Configuration
+        path: authClientConfig.oauthConfig
+      - description: |-
+          TLSConfig specifies the TLS configuration for secure communication, including the certificate and private
+          key. This field is optional and can be used with any authentication type to enable TLS for the connection.
+        displayName: TLS Configuration
+        path: authClientConfig.tlsConfig
+      - description: Type specifies the authentication type to be used (e.g., ServiceAccount,
+          Basic, or OAuth).
+        displayName: Authentication Type
+        path: authClientConfig.type
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:select:ServiceAccount
+        - urn:alm:descriptor:com.tectonic.ui:select:Basic
+        - urn:alm:descriptor:com.tectonic.ui:select:OAuth
+      - description: |-
+          CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
+          with any outside HardwarePlugin server that has its TLS certificate signed by a non-public CA certificate.
+          The config map is expected to contain a single file called 'ca-bundle.crt' containing all trusted CA certificates
+          in PEM format.
+        displayName: Custom CA Certificates
+        path: caBundleName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions describe the state of the UpdateService resource.
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
+      version: v1alpha1
+    - description: HardwareProfile is the Schema for the hardwareprofiles API
+      displayName: Hardware Profile
+      kind: HardwareProfile
+      name: hardwareprofiles.o2ims-hardwaremanagement.oran.openshift.io
+      resources:
+      - kind: Service
+        name: policy-engine-service
+        version: v1
+      specDescriptors:
+      - description: Bios defines a set of bios attributes
+        displayName: Bios
+        path: bios
+      - displayName: Attributes
+        path: bios.attributes
+      - description: BIOS firmware information
+        displayName: BIOS Firmware
+        path: biosFirmware
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: BMC firmware information
+        displayName: BMC Firmware
+        path: bmcFirmware
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Represents the observations of a HardwareProfile's current state
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
+      version: v1alpha1
     - description: HardwareTemplate is the Schema for the hardwaretemplates API
-      displayName: ORAN O2IMS Hardware Template
+      displayName: Hardware Template
       kind: HardwareTemplate
       name: hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io
       resources:
@@ -716,29 +903,29 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Extensions holds additional custom key-value pairs that can be
-          used to extend the node pool's configuration.
+          used to extend the node allocation request's configuration.
         displayName: Extensions
         path: extensions
+      - description: HardwarePluginRef is the name of the HardwarePlugin.
+        displayName: Hardware Plugin Reference
+        path: hardwarePluginRef
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: HardwareProvisioningTimeout defines the timeout duration string
           for the hardware provisioning.
         displayName: Hardware Provisioning Timeout
         path: hardwareProvisioningTimeout
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
-        displayName: Hardware Manager ID
-        path: hwMgrId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodePoolData defines a collection of NodePoolData items
-        displayName: Node Pool Data
-        path: nodePoolData
+      - description: NodeGroupData defines a collection of NodeGroupData items
+        displayName: Node Group Data
+        path: nodeGroupData
       statusDescriptors:
       - displayName: Conditions
         path: conditions
       version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
-      displayName: ORAN O2IMS Inventory
+      displayName: O-Cloud Manager Inventory
       kind: Inventory
       name: inventories.o2ims.oran.openshift.io
       resources:
@@ -809,13 +996,13 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
-          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
-          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
-          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
-          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
-          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
-          used as the ingress certificate as well as the outgoing client certificate.
-        displayName: TLS certificate
+          SecretName specifies the name of a secret (in the current namespace) containing an X.509 certificate and
+          private key. The secret must include 'tls.key' and 'tls.crt' keys. If the certificate is signed by
+          intermediate CA(s), the full certificate chain should be included in the certificate file, with the
+          leaf certificate first and the root CA last. The certificate's Common Name (CN) or Subject Alternative
+          Name (SAN) should align with the service's fully qualified domain name to support both ingress and
+          outgoing client certificate use cases.
+        displayName: TLS Certificate
         path: ingress.tls.secretName
       - description: ProvisioningServerConfig contains the configuration for the provisioning
           server.
@@ -888,7 +1075,7 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: RegistrationEndpoint represents the API endpoint used to register
-          the O2IMS with the SMO.
+          the O-Cloud Manager with the SMO.
         displayName: Registration API Endpoint
         path: smo.registrationEndpoint
         x-descriptors:
@@ -900,13 +1087,13 @@ spec:
         displayName: Client TLS Configuration
         path: smo.tls
       - description: |-
-          SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
-          private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
-          intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
-          the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
-          to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
-          used as the ingress certificate as well as the outgoing client certificate.
-        displayName: TLS certificate
+          SecretName specifies the name of a secret (in the current namespace) containing an X.509 certificate and
+          private key. The secret must include 'tls.key' and 'tls.crt' keys. If the certificate is signed by
+          intermediate CA(s), the full certificate chain should be included in the certificate file, with the
+          leaf certificate first and the root CA last. The certificate's Common Name (CN) or Subject Alternative
+          Name (SAN) should align with the service's fully qualified domain name to support both ingress and
+          outgoing client certificate use cases.
+        displayName: TLS Certificate
         path: smo.tls.secretName
       - description: URL represents the base URL of the SMO instance
         displayName: SMO URL
@@ -930,15 +1117,21 @@ spec:
       - displayName: Deployed Server Configurations
         path: usedServerConfig
       version: v1alpha1
-    - description: NodePool is the schema for an allocation request of nodes
-      displayName: Node Pool
-      kind: NodePool
-      name: nodepools.o2ims-hardwaremanagement.oran.openshift.io
+    - description: NodeAllocationRequest is the schema for an allocation request of
+        nodes
+      displayName: Node Allocation Request
+      kind: NodeAllocationRequest
+      name: nodeallocationrequests.o2ims-hardwaremanagement.oran.openshift.io
       resources:
       - kind: Namespace
         name: ""
         version: v1
       specDescriptors:
+      - description: BootInterfaceLabel is the label of the boot interface.
+        displayName: Boot Interface Label
+        path: bootInterfaceLabel
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           CloudID is the identifier of the O-Cloud that generated this request. The hardware
           manager may want to use this to tag the nodes in its database, and to generate
@@ -949,9 +1142,9 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       - displayName: Extensions
         path: extensions
-      - description: HwMgrId is the identifier for the hardware manager plugin instance.
-        displayName: Hardware Manager ID
-        path: hwMgrId
+      - description: HardwarePluginRef is the name of the HardwarePlugin.
+        displayName: Hardware Plugin Reference
+        path: hardwarePluginRef
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Location
@@ -968,7 +1161,7 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - description: Conditions represent the latest available observations of an
-          NodePool's state.
+          NodeAllocationRequest's state.
         displayName: Conditions
         path: conditions
       - displayName: Hw Mgr Plugin
@@ -976,68 +1169,12 @@ spec:
       - description: Properties represent the node properties in the pool
         displayName: Properties
         path: properties
-      - displayName: Selected Pools
-        path: selectedPools
-      version: v1alpha1
-    - description: Node is the schema for an allocated node
-      displayName: Node
-      kind: Node
-      name: nodes.o2ims-hardwaremanagement.oran.openshift.io
-      resources:
-      - kind: Namespace
-        name: ""
-        version: v1
-      specDescriptors:
-      - displayName: Extensions
-        path: extensions
-      - description: GroupName
-        displayName: Group Name
-        path: groupName
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrId is the identifier for the hardware manager instance.
-        displayName: Hardware Manager ID
-        path: hwMgrId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrNodeId is the node identifier from the hardware manager.
-        displayName: Hardware Manager Node ID
-        path: hwMgrNodeId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwMgrNodeNs is the node namespace from the hardware manager.
-        displayName: Hardware Manager Node Namespace
-        path: hwMgrNodeNs
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HwProfile
-        displayName: Hardware Profile
-        path: hwProfile
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodePool
-        displayName: Node Pool
-        path: nodePool
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      statusDescriptors:
-      - displayName: BMC
-        path: bmc
-      - description: |-
-          Conditions represent the observations of the NodeStatus's current state.
-          Possible values of the condition type are `Provisioned`, `Unprovisioned`, `Updating` and `Failed`.
-        displayName: Conditions
-        path: conditions
-      - displayName: Hostname
-        path: hostname
-      - displayName: Hw Profile
-        path: hwProfile
-      - displayName: Interfaces
-        path: interfaces
+      - displayName: Selected Groups
+        path: selectedGroups
       version: v1alpha1
     - description: ProvisioningRequest is the Schema for the provisioningrequests
         API
-      displayName: ORAN O2IMS Provisioning Request
+      displayName: Provisioning Request
       kind: ProvisioningRequest
       name: provisioningrequests.o2ims.provisioning.oran.org
       resources:
@@ -1091,12 +1228,12 @@ spec:
         path: conditions
       version: v1alpha1
   description: |
-    # O-RAN O2IMS operator
-    The O-RAN O2IMS operator provides an implementation of the O-RAN O2 IMS API on top of OpenShift and ACM.
+    # O-Cloud Manager operator
+    The O-Cloud Manager operator provides an implementation of the O-RAN O2 IMS API on top of OpenShift and ACM.
 
     ## Where to find more information
     You can find additional guidance in the [oran-o2ims repository](https://github.com/openshift-kni/oran-o2ims).
-  displayName: ORAN O2IMS Operator
+  displayName: O-Cloud Manager Operator
   icon:
   - base64data: PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTQ1Ij48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6I2UwMDt9PC9zdHlsZT48L2RlZnM+PHRpdGxlPlJlZEhhdC1Mb2dvLUhhdC1Db2xvcjwvdGl0bGU+PHBhdGggZD0iTTE1Ny43Nyw2Mi42MWExNCwxNCwwLDAsMSwuMzEsMy40MmMwLDE0Ljg4LTE4LjEsMTcuNDYtMzAuNjEsMTcuNDZDNzguODMsODMuNDksNDIuNTMsNTMuMjYsNDIuNTMsNDRhNi40Myw2LjQzLDAsMCwxLC4yMi0xLjk0bC0zLjY2LDkuMDZhMTguNDUsMTguNDUsMCwwLDAtMS41MSw3LjMzYzAsMTguMTEsNDEsNDUuNDgsODcuNzQsNDUuNDgsMjAuNjksMCwzNi40My03Ljc2LDM2LjQzLTIxLjc3LDAtMS4wOCwwLTEuOTQtMS43My0xMC4xM1oiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0xMjcuNDcsODMuNDljMTIuNTEsMCwzMC42MS0yLjU4LDMwLjYxLTE3LjQ2YTE0LDE0LDAsMCwwLS4zMS0zLjQybC03LjQ1LTMyLjM2Yy0xLjcyLTcuMTItMy4yMy0xMC4zNS0xNS43My0xNi42QzEyNC44OSw4LjY5LDEwMy43Ni41LDk3LjUxLjUsOTEuNjkuNSw5MCw4LDgzLjA2LDhjLTYuNjgsMC0xMS42NC01LjYtMTcuODktNS42LTYsMC05LjkxLDQuMDktMTIuOTMsMTIuNSwwLDAtOC40MSwyMy43Mi05LjQ5LDI3LjE2QTYuNDMsNi40MywwLDAsMCw0Mi41Myw0NGMwLDkuMjIsMzYuMywzOS40NSw4NC45NCwzOS40NU0xNjAsNzIuMDdjMS43Myw4LjE5LDEuNzMsOS4wNSwxLjczLDEwLjEzLDAsMTQtMTUuNzQsMjEuNzctMzYuNDMsMjEuNzdDNzguNTQsMTA0LDM3LjU4LDc2LjYsMzcuNTgsNTguNDlhMTguNDUsMTguNDUsMCwwLDEsMS41MS03LjMzQzIyLjI3LDUyLC41LDU1LC41LDc0LjIyYzAsMzEuNDgsNzQuNTksNzAuMjgsMTMzLjY1LDcwLjI4LDQ1LjI4LDAsNTYuNy0yMC40OCw1Ni43LTM2LjY1LDAtMTIuNzItMTEtMjcuMTYtMzAuODMtMzUuNzgiLz48L3N2Zz4=
     mediatype: image/svg+xml
@@ -1109,6 +1246,14 @@ spec:
           verbs:
           - get
           - list
+        - nonResourceURLs:
+          - /hardware-manager/provisioning/*
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - update
         - nonResourceURLs:
           - /internal/v1/caas-alerts/alertmanager
           verbs:
@@ -1153,6 +1298,14 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
         - apiGroups:
           - ""
           resources:
@@ -1282,12 +1435,16 @@ spec:
           - list
           - watch
         - apiGroups:
-          - hwmgr-plugin.oran.openshift.io
+          - coordination.k8s.io
           resources:
-          - hardwaremanagers
+          - leases
           verbs:
+          - create
+          - delete
           - get
           - list
+          - patch
+          - update
           - watch
         - apiGroups:
           - lcm.openshift.io
@@ -1307,6 +1464,67 @@ spec:
           - imagebasedgroupupgrades/status
           verbs:
           - get
+        - apiGroups:
+          - metal3.io
+          resources:
+          - baremetalhosts
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - firmwareschemas
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - hostfirmwarecomponents
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - hostfirmwaresettings
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - hostupdatepolicies
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - preprovisioningimages
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - monitoring.coreos.com
           resources:
@@ -1330,6 +1548,79 @@ spec:
         - apiGroups:
           - o2ims-hardwaremanagement.oran.openshift.io
           resources:
+          - allocatednodes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - allocatednodes/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - allocatednodes/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareplugins
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareplugins/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareplugins/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareprofiles
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - hardwareprofiles/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
           - hardwaretemplates
           verbs:
           - create
@@ -1350,7 +1641,7 @@ spec:
         - apiGroups:
           - o2ims-hardwaremanagement.oran.openshift.io
           resources:
-          - nodepools
+          - nodeallocationrequests
           verbs:
           - create
           - delete
@@ -1362,7 +1653,14 @@ spec:
         - apiGroups:
           - o2ims-hardwaremanagement.oran.openshift.io
           resources:
-          - nodepools/status
+          - nodeallocationrequests/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - o2ims-hardwaremanagement.oran.openshift.io
+          resources:
+          - nodeallocationrequests/status
           verbs:
           - get
           - patch
@@ -1563,7 +1861,9 @@ spec:
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
                 - name: HWMGR_PLUGIN_NAMESPACE
-                  value: oran-hwmgr-plugin
+                  value: oran-o2ims
+                - name: DEPLOY_LOOPBACK_HW_PLUGIN
+                  value: "false"
                 - name: OCLOUD_MANAGER_NAMESPACE
                   valueFrom:
                     fieldRef:
@@ -1671,10 +1971,6 @@ spec:
   - name: Oran O2ims
     url: https://oran-o2ims.domain
   maintainers:
-  - email: jhernand@redhat.com
-    name: JuanHernandez
-  - email: derez@redhat.com
-    name: DanielErez
   - email: imihai@redhat.com
     name: IrinaMihai
   maturity: alpha

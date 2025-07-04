@@ -18,31 +18,30 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	k8sptr "k8s.io/utils/ptr"
-	"k8s.io/utils/strings/slices"
-
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-
-	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	k8sptr "k8s.io/utils/ptr"
+	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
-//+kubebuilder:rbac:groups=hwmgr-plugin.oran.openshift.io,resources=hardwaremanagers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
@@ -72,6 +71,26 @@ import (
 //+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
 //+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch;update
+//+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=preprovisioningimages,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings,verbs=get;create;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;create;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;create;list;watch;update;patch
+//+kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch
+//+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get;list;create;update;delete
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -847,6 +866,26 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		return
 	}
 
+	// Start the HardwarePlugin manager
+	nextReconcile, err = t.setupHardwarePluginManager(ctx, nextReconcile)
+	if err != nil {
+		return
+	}
+
+	// Start the Loopback HardwarePlugin server
+	if utils.ShouldDeployLoopbackHWPlugin() {
+		nextReconcile, err = t.setupLoopbackPluginServer(ctx, nextReconcile)
+		if err != nil {
+			return
+		}
+	}
+
+	// Start the Metal3 HardwarePlugin server
+	nextReconcile, err = t.setupMetal3PluginServer(ctx, nextReconcile)
+	if err != nil {
+		return
+	}
+
 	// Wait for pods to become ready
 	nextReconcile, err = t.checkForPodReadyStatus(ctx)
 	if err != nil {
@@ -994,10 +1033,10 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"hwmgr-plugin.oran.openshift.io",
+					"o2ims-hardwaremanagement.oran.openshift.io",
 				},
 				Resources: []string{
-					"hardwaremanagers",
+					"hardwareplugins",
 				},
 				Verbs: []string{
 					"get",
@@ -1530,6 +1569,13 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		})
 	}
 
+	if serverName == utils.LoopbackPluginServerName {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  utils.DeployLoopbackHWPluginEnvVar,
+			Value: utils.GetDeployLoopbackHWPlugin(),
+		})
+	}
+
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
 		Replicas: k8sptr.To(int32(1)),
@@ -1821,7 +1867,7 @@ func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, de
 				Type:    string(utils.InventoryConditionTypes.Ready),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(utils.InventoryConditionReasons.DeploymentsReady),
-				Message: "The ORAN O2IMS Deployments are not yet ready",
+				Message: "The O-Cloud Manager Deployments are not yet ready",
 			},
 		)
 	} else {
@@ -1916,6 +1962,18 @@ func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) er
 	}
 
 	return nil
+}
+
+// SetupBareMetalHostIndexes registers field indexes for BareMetalHost resources.
+func SetupBareMetalHostIndexer(ctx context.Context, mgr ctrl.Manager) error {
+	// nolint: wrapcheck
+	return mgr.GetFieldIndexer().IndexField(ctx, &metal3v1alpha1.BareMetalHost{}, "status.hardware.hostname", func(obj client.Object) []string {
+		bmh := obj.(*metal3v1alpha1.BareMetalHost)
+		if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname != "" {
+			return []string{bmh.Status.HardwareDetails.Hostname}
+		}
+		return nil
+	})
 }
 
 // SetupWithManager sets up the controller with the Manager.

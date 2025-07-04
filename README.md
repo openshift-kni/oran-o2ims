@@ -214,8 +214,8 @@ clusterserviceversion.operators.coreos.com "oran-o2ims.v4.18.0" deleted
 customresourcedefinition.apiextensions.k8s.io "clustertemplates.o2ims.provisioning.oran.org" deleted
 customresourcedefinition.apiextensions.k8s.io "hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "inventories.o2ims.oran.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "nodepools.o2ims-hardwaremanagement.oran.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "nodes.o2ims-hardwaremanagement.oran.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "nodeallocationrequests.o2ims-hardwaremanagement.oran.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "allocatednodes.o2ims-hardwaremanagement.oran.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "provisioningrequests.o2ims.provisioning.oran.org" deleted
 namespace "oran-o2ims" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-alarms-server" deleted

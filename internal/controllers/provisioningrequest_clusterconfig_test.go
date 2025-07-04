@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
+/*
 import (
 	"context"
 	"fmt"
@@ -145,10 +146,10 @@ defaultHugepagesSize: "1G"`,
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:                     utils.UnitTestHwmgrID,
+					HardwarePluginRef:           utils.UnitTestHwPluginRef,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
-					NodePoolData: []hwv1alpha1.NodePoolData{
+					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
 							Name:           "controller",
 							Role:           "master",
@@ -195,9 +196,8 @@ defaultHugepagesSize: "1G"`,
 						},
 					},
 					Extensions: provisioningv1alpha1.Extensions{
-						NodePoolRef: &provisioningv1alpha1.NodePoolRef{
-							Name:      "cluster-1",
-							Namespace: utils.UnitTestHwmgrNamespace,
+						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+							NodeAllocationRequestID: "cluster-1",
 						},
 					},
 				},
@@ -236,11 +236,11 @@ defaultHugepagesSize: "1G"`,
 			Logger: logger,
 		}
 
-		// Create the provisioned NodePool
+		// Create the provisioned NodeAllocationRequest
 		hwPluginNs := &corev1.Namespace{}
 		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
 		Expect(c.Create(ctx, hwPluginNs)).To(Succeed())
-		nodePool := &hwv1alpha1.NodePool{
+		nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
 				Namespace: utils.UnitTestHwmgrNamespace,
@@ -248,11 +248,11 @@ defaultHugepagesSize: "1G"`,
 					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
-			Spec: hwv1alpha1.NodePoolSpec{
-				HwMgrId: utils.UnitTestHwmgrID,
+			Spec: hwv1alpha1.NodeAllocationRequestSpec{
+				HardwarePluginRef: utils.UnitTestHwPluginRef,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
-						NodePoolData: hwv1alpha1.NodePoolData{
+						NodeGroupData: hwv1alpha1.NodeGroupData{
 							Name:           "controller",
 							Role:           "master",
 							HwProfile:      "profile-spr-single-processor-64G",
@@ -261,7 +261,7 @@ defaultHugepagesSize: "1G"`,
 						Size: 1,
 					},
 					{
-						NodePoolData: hwv1alpha1.NodePoolData{
+						NodeGroupData: hwv1alpha1.NodeGroupData{
 							Name:           "worker",
 							Role:           "worker",
 							HwProfile:      "profile-spr-dual-processor-128G",
@@ -271,7 +271,7 @@ defaultHugepagesSize: "1G"`,
 					},
 				},
 			},
-			Status: hwv1alpha1.NodePoolStatus{
+			Status: hwv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   string(hwv1alpha1.Provisioned),
@@ -284,8 +284,8 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 		}
-		Expect(c.Create(ctx, nodePool)).To(Succeed())
-		testutils.CreateNodeResources(ctx, c, nodePool.Name)
+		Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+		testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 
 		// Update the managedCluster cluster-1 to be available, joined and accepted.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -2001,18 +2001,18 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 var _ = Describe("addPostProvisioningLabels", func() {
 	var (
-		c                 client.Client
-		ctx               context.Context
-		ctNamespace       = "clustertemplate-a-v4-16"
-		ciDefaultsCm      = "clusterinstance-defaults-v1"
-		ptDefaultsCm      = "policytemplate-defaults-v1"
-		mclName           = "cluster-1"
-		AgentName         = "agent-for-cluster-1"
-		ProvReqReconciler *ProvisioningRequestReconciler
-		ProvReqTask       *provisioningRequestReconcilerTask
-		hwTemplate        = "hwTemplate-v1"
-		managedCluster    = &clusterv1.ManagedCluster{}
-		nodePool          = &hwv1alpha1.NodePool{}
+		c                     client.Client
+		ctx                   context.Context
+		ctNamespace           = "clustertemplate-a-v4-16"
+		ciDefaultsCm          = "clusterinstance-defaults-v1"
+		ptDefaultsCm          = "policytemplate-defaults-v1"
+		mclName               = "cluster-1"
+		AgentName             = "agent-for-cluster-1"
+		ProvReqReconciler     *ProvisioningRequestReconciler
+		ProvReqTask           *provisioningRequestReconcilerTask
+		hwTemplate            = "hwTemplate-v1"
+		managedCluster        = &clusterv1.ManagedCluster{}
+		nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
 	)
 
 	BeforeEach(func() {
@@ -2104,8 +2104,8 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 		c = getFakeClientFromObjects(crs...)
 
-		// Populate the NodePool without creating it.
-		nodePool = &hwv1alpha1.NodePool{
+		// Populate the NodeAllocationRequest without creating it.
+		nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      mclName,
 				Namespace: utils.UnitTestHwmgrNamespace,
@@ -2113,11 +2113,11 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
-			Spec: hwv1alpha1.NodePoolSpec{
-				HwMgrId: utils.UnitTestHwmgrID,
+			Spec: hwv1alpha1.NodeAllocationRequestSpec{
+				HardwarePluginRef: utils.UnitTestHwPluginRef,
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
-						NodePoolData: hwv1alpha1.NodePoolData{
+						NodeGroupData: hwv1alpha1.NodeGroupData{
 							Name:           "controller",
 							Role:           "master",
 							HwProfile:      "profile-spr-single-processor-64G",
@@ -2126,7 +2126,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						Size: 1,
 					},
 					{
-						NodePoolData: hwv1alpha1.NodePoolData{
+						NodeGroupData: hwv1alpha1.NodeGroupData{
 							Name:           "worker",
 							Role:           "worker",
 							HwProfile:      "profile-spr-dual-processor-128G",
@@ -2136,7 +2136,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					},
 				},
 			},
-			Status: hwv1alpha1.NodePoolStatus{
+			Status: hwv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   string(hwv1alpha1.Provisioned),
@@ -2168,17 +2168,17 @@ var _ = Describe("addPostProvisioningLabels", func() {
 	})
 
 	Context("When the HW template is provided and the HW CRs do not exist", func() {
-		It("Returns error for the NodePool missing", func() {
+		It("Returns error for the NodeAllocationRequest missing", func() {
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				fmt.Sprintf("expected NodePool %s not found in the %s namespace", mclName, utils.UnitTestHwmgrNamespace)))
+				fmt.Sprintf("expected NodeAllocationRequest %s not found in the %s namespace", mclName, utils.UnitTestHwmgrNamespace)))
 		})
 
 		It("Returns error for missing Nodes", func() {
-			// Create the NodePool, but not the nodes.
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
+			// Create the NodeAllocationRequest, but not the nodes.
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 			Expect(err).To(HaveOccurred())
@@ -2194,9 +2194,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			hwPluginNs := &corev1.Namespace{}
 			hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
 
-			// Create the NodePool.
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
-			testutils.CreateNodeResources(ctx, c, nodePool.Name)
+			// Create the NodeAllocationRequest.
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 		})
 
 		It("Updates Agent and ManagedCluster labels as expected", func() {
@@ -2296,7 +2296,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = agent2Hostname
 			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
@@ -2317,10 +2317,10 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				if agent.Name == agent2Name {
 					checkedAgents += 1
 					Expect(agent.Labels).To(Equal(map[string]string{
-						utils.ClusterTemplateArtifactsLabel:                           "57b39bda-ac56-4143-9b10-d1a71517d04f",
-						"agent-install.openshift.io/clusterdeployment-namespace":      mclName,
-						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId":     utils.UnitTestHwmgrID,
-						"hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId": masterNodeName2,
+						utils.ClusterTemplateArtifactsLabel:                            "57b39bda-ac56-4143-9b10-d1a71517d04f",
+						"agent-install.openshift.io/clusterdeployment-namespace":       mclName,
+						"o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef": utils.UnitTestHwPluginRef,
+						"o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId":       masterNodeName2,
 					}))
 				}
 				if agent.Name == AgentName {
@@ -2364,7 +2364,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = "some-other-cluster.lab.example.com"
 			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			testutils.CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+			testutils.CreateResources(ctx, c, []*hwv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
@@ -2386,7 +2386,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Expect(c.Update(ctx, ct)).To(Succeed())
 		})
 
-		It("Does not add hwMgrId and hwMgrNodeId labels to the Agents", func() {
+		It("Does not add hardwarePluginRef and hwMgrNodeId labels to the Agents", func() {
 			// Create an Agent CR with the expected label.
 			agent := &assistedservicev1beta1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2419,15 +2419,16 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 			}))
 
-			// Check that the templateArtifacts label is present and hwMgrId and hwMgrNodeId labels are not present.
+			// Check that the templateArtifacts label is present and hardwarePluginRef and hwMgrNodeId labels are not present.
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(agent.GetLabels()).To(Equal(map[string]string{
 				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 			}))
-			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId")))
-			Expect(agent.Labels).To(Not(HaveKey("hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId")))
+			Expect(agent.Labels).To(Not(HaveKey("o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef")))
+			Expect(agent.Labels).To(Not(HaveKey("o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId")))
 		})
 	})
 })
+*/

@@ -14,6 +14,10 @@ import (
 	"fmt"
 	"os"
 
+	hwpluginscmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/cmd"
+	loopbackplugincmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/loopback/cmd"
+	metal3plugincmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/cmd"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	alarmscmd "github.com/openshift-kni/oran-o2ims/internal/service/alarms/cmd"
 	artifactscmd "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/cmd"
 	clustercmd "github.com/openshift-kni/oran-o2ims/internal/service/cluster/cmd"
@@ -29,20 +33,29 @@ func main() {
 	// Create a context:
 	ctx := context.Background()
 
-	// Create the tool:
-	tool, err := internal.NewTool().
+	// Create the toolbuilder:
+	toolBuilder := internal.NewTool().
 		AddArgs(os.Args...).
 		SetIn(os.Stdin).
 		SetOut(os.Stdout).
 		SetErr(os.Stderr).
 		AddCommand(cmd.Start).
 		AddCommand(cmd.Version).
-		AddCommand(alarmscmd.GetAlarmRootCmd).              // TODO: all server should have same root to share init info
-		AddCommand(clustercmd.GetClusterRootCmd).           // TODO: all server should have same root to share init info
-		AddCommand(inventorycmd.GetResourcesRootCmd).       // TODO: all server should have same root to share init info
-		AddCommand(artifactscmd.GetArtifactsRootCmd).       // TODO: all server should have same root to share init info
-		AddCommand(provisioningcmd.GetProvisioningRootCmd). // TODO: all server should have same root to share init info
-		Build()
+		AddCommand(hwpluginscmd.Start).
+		AddCommand(metal3plugincmd.Start).
+		AddCommand(alarmscmd.GetAlarmRootCmd).             // TODO: all server should have same root to share init info
+		AddCommand(clustercmd.GetClusterRootCmd).          // TODO: all server should have same root to share init info
+		AddCommand(inventorycmd.GetResourcesRootCmd).      // TODO: all server should have same root to share init info
+		AddCommand(artifactscmd.GetArtifactsRootCmd).      // TODO: all server should have same root to share init info
+		AddCommand(provisioningcmd.GetProvisioningRootCmd) // TODO all server should have same root to share init info
+
+	// Determine if the Loopback HardwarePlugin manager should be deployed
+	if utils.ShouldDeployLoopbackHWPlugin() {
+		toolBuilder.AddCommand(loopbackplugincmd.Start)
+	}
+
+	// Build out the tool:
+	tool, err := toolBuilder.Build()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(1)

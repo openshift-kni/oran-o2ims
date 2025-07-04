@@ -8,9 +8,9 @@ spec:
   # The value should be a duration string
   # (e.g., "30m" for 30 minutes)
   # hardwareProvisioningTimeout: "30m"
-  hwMgrId: oran-hwmgr-plugin-test
+  hardwarePluginRef: oran-hwmgr-plugin-test
   bootInterfaceLabel: bootable-interface
-  nodePoolData:
+  nodeGroupData:
     - name: controller
       role: master
       hwProfile: profile-proliant-gen11-dual-processor-256G-v1

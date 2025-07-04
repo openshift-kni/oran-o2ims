@@ -10,19 +10,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
-	ctrl "sigs.k8s.io/controller-runtime"
-
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/util/retry"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 )
 
 const (
@@ -52,30 +53,8 @@ func IsConditionDoesNotExistsErr(err error) bool {
 	return errors.As(err, &customErr)
 }
 
-// getBootInterfaceLabel extracts the boot interface label from the NodePool annotations
-func getBootInterfaceLabel(nodePool *hwv1alpha1.NodePool) (string, error) {
-	// Get the annotations from the NodePool
-	annotation := nodePool.GetAnnotations()
-	if annotation == nil {
-		return "", fmt.Errorf("annotations are missing from nodePool %s in namespace %s", nodePool.Name, nodePool.Namespace)
-	}
-
-	// Ensure the boot interface label annotation exists and is not empty
-	bootIfaceLabel, exists := annotation[hwv1alpha1.BootInterfaceLabelAnnotation]
-	if !exists || bootIfaceLabel == "" {
-		return "", fmt.Errorf("%s annotation is missing or empty from nodePool %s in namespace %s",
-			hwv1alpha1.BootInterfaceLabelAnnotation, nodePool.Name, nodePool.Namespace)
-	}
-	return bootIfaceLabel, nil
-}
-
 // GetBootMacAddress selects the boot interface based on label and return the interface MAC address
-func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, nodePool *hwv1alpha1.NodePool) (string, error) {
-	// Get the boot interface label from annotation
-	bootIfaceLabel, err := getBootInterfaceLabel(nodePool)
-	if err != nil {
-		return "", fmt.Errorf("error getting boot interface label: %w", err)
-	}
+func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, bootIfaceLabel string) (string, error) {
 	for _, iface := range interfaces {
 		if iface.Label == bootIfaceLabel {
 			return iface.MACAddress, nil
@@ -84,47 +63,55 @@ func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, nodePool *hwv1alpha1.
 	return "", fmt.Errorf("no boot interface found; missing interface with label %q", bootIfaceLabel)
 }
 
-// CollectNodeDetails collects BMC and node interfaces details
-func CollectNodeDetails(ctx context.Context, c client.Client,
-	nodePool *hwv1alpha1.NodePool) (map[string][]NodeInfo, error) {
+// GetBareMetalHostFromHostname retrieves the BareMetalHost that matches the given hostname
+func GetBareMetalHostFromHostname(ctx context.Context, c client.Client, hostname string) (*metal3v1alpha1.BareMetalHost, error) {
 
-	// hwNodes maps a group name to a slice of NodeInfo
-	hwNodes := make(map[string][]NodeInfo)
-
-	for _, nodeName := range nodePool.Status.Properties.NodeNames {
-		node := &hwv1alpha1.Node{}
-		exists, err := DoesK8SResourceExist(ctx, c, nodeName, nodePool.Namespace, node)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get the Node object %s in namespace %s: %w",
-				nodeName, nodePool.Namespace, err)
-		}
-		if !exists {
-			return nil, fmt.Errorf("the Node object %s in namespace %s does not exist: %w",
-				nodeName, nodePool.Namespace, err)
-		}
-		// Verify the node object is generated from the expected pool
-		if node.Spec.NodePool != nodePool.GetName() {
-			return nil, fmt.Errorf("the Node object %s in namespace %s is not from the expected NodePool : %w",
-				nodeName, nodePool.Namespace, err)
-		}
-
-		if node.Status.BMC == nil {
-			return nil, fmt.Errorf("the Node %s status in namespace %s does not have BMC details",
-				nodeName, nodePool.Namespace)
-		}
-
-		// Store the nodeInfo per group
-		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], NodeInfo{
-			BmcAddress:     node.Status.BMC.Address,
-			BmcCredentials: node.Status.BMC.CredentialsName,
-			NodeName:       node.Name,
-			HwMgrNodeId:    node.Spec.HwMgrNodeId,
-			HwMgrNodeNs:    GetBMHNamespace(node),
-			Interfaces:     node.Status.Interfaces,
-		})
+	bmhList := &metal3v1alpha1.BareMetalHostList{}
+	opts := []client.ListOption{
+		client.MatchingFields{"status.hardware.hostname": hostname},
 	}
 
-	return hwNodes, nil
+	if err := RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		return c.List(ctx, bmhList, opts...)
+	}); err != nil {
+		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
+	}
+
+	var matchedBMH *metal3v1alpha1.BareMetalHost
+	for _, bmh := range bmhList.Items {
+		if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname == hostname {
+			if matchedBMH != nil {
+				return nil, fmt.Errorf("multiple BareMetalHosts found with hostname %s", hostname)
+			}
+			matchedBMH = bmh.DeepCopy()
+		}
+	}
+
+	if matchedBMH == nil {
+		return nil, fmt.Errorf("no BareMetalHost found with hostname %s", hostname)
+	}
+
+	return matchedBMH, nil
+}
+
+func GetBareMetalHostForAllocatedNode(ctx context.Context, c client.Client, allocatedNodeID string) *metal3v1alpha1.BareMetalHost {
+	if allocatedNodeID == "" {
+		return nil
+	}
+
+	listOpts := []client.ListOption{
+		client.MatchingLabels{
+			AllocatedNodeLabel: allocatedNodeID,
+		},
+	}
+
+	bmhList := &metal3v1alpha1.BareMetalHostList{}
+	if err := c.List(ctx, bmhList, listOpts...); err != nil || len(bmhList.Items) == 0 {
+		return nil
+	}
+
+	// return the first BareMetalHost item
+	return &bmhList.Items[0]
 }
 
 // copyHwMgrPluginBMCSecret copies the BMC secret from the plugin namespace to the cluster namespace
@@ -152,14 +139,18 @@ func copyHwMgrPluginBMCSecret(ctx context.Context, c client.Client, name, source
 
 // CopyBMCSecrets copies BMC secrets from the plugin namespace to the cluster namespace.
 func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]NodeInfo,
-	nodePool *hwv1alpha1.NodePool) error {
+	clusterNamespace string) error {
 
+	sourceNamespace := GetHwMgrPluginNS()
 	for _, nodeInfos := range hwNodes {
 		for _, node := range nodeInfos {
-			err := copyHwMgrPluginBMCSecret(ctx, c, node.BmcCredentials, nodePool.GetNamespace(), nodePool.GetName())
+
+			// TODO: change the copying of secrets functionality -> create secret with BMC.Username, BMC.Password
+
+			err := copyHwMgrPluginBMCSecret(ctx, c, node.BmcCredentials, sourceNamespace, clusterNamespace)
 			if err != nil {
-				return fmt.Errorf("copy BMC secret %s from the plugin namespace %s to the cluster namespace%s failed: %w",
-					node.BmcCredentials, nodePool.GetNamespace(), nodePool.GetName(), err)
+				return fmt.Errorf("copy BMC secret %s from the plugin namespace %s to the cluster namespace %s failed: %w",
+					node.BmcCredentials, sourceNamespace, clusterNamespace, err)
 			}
 		}
 	}
@@ -220,27 +211,8 @@ func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Obj
 	return nil
 }
 
-// UpdateNodeStatusWithHostname updates the Node status with the hostname after BMC information has been assigned.
-func UpdateNodeStatusWithHostname(ctx context.Context, c client.Client, nodeName, hostname, namespace string) error {
-	err := RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		node := &hwv1alpha1.Node{}
-		exists, err := DoesK8SResourceExist(ctx, c, nodeName, namespace, node)
-		if err != nil || !exists {
-			return fmt.Errorf("failed to get the Node object %s in namespace %s: %w, exists %v", nodeName, namespace, err, exists)
-		}
-
-		node.Status.Hostname = hostname
-		err = c.Status().Update(ctx, node)
-		if err != nil {
-			return fmt.Errorf("failed to update the Node object %s in namespace %s: %w", nodeName, namespace, err)
-		}
-		return nil
-	})
-	return err
-}
-
 // CreateHwMgrPluginNamespace creates the namespace of the hardware manager plugin
-// where the node pools resource resides
+// where the node allocation requests resource resides
 func CreateHwMgrPluginNamespace(ctx context.Context, c client.Client, name string) error {
 
 	// Create the namespace.
@@ -425,70 +397,12 @@ func HandleHardwareTimeout(
 	return timedOutOrFailed, reason, message
 }
 
-// CompareHardwareTemplateWithNodePool checks if there are any changes in the hardware template resource
-func CompareHardwareTemplateWithNodePool(hardwareTemplate *hwv1alpha1.HardwareTemplate, nodePool *hwv1alpha1.NodePool) (bool, error) {
-
-	changesDetected := false
-
-	// Check for changes in hwMgrId
-	if hardwareTemplate.Spec.HwMgrId != nodePool.Spec.HwMgrId {
-		return true, fmt.Errorf("unallowed change detected in '%s': Hardware Template has %s, but NodePool has %s",
-			HwTemplatePluginMgr, hardwareTemplate.Spec.HwMgrId, nodePool.Spec.HwMgrId)
-	}
-
-	// Check for changes in bootInterfaceLabel
-	bootIfaceLabel, err := getBootInterfaceLabel(nodePool)
-	if err != nil {
-		return false, err
-	}
-	if hardwareTemplate.Spec.BootInterfaceLabel != bootIfaceLabel {
-		return true, fmt.Errorf("unallowed change detected in '%s': Hardware Template has %s, but NodePool has %s",
-			HwTemplateBootIfaceLabel, hardwareTemplate.Spec.BootInterfaceLabel, bootIfaceLabel)
-	}
-
-	// Check each group, allowing only hwProfile to be changed
-	for _, specNodeGroup := range nodePool.Spec.NodeGroup {
-		var found bool
-		for _, ng := range hardwareTemplate.Spec.NodePoolData {
-
-			if specNodeGroup.NodePoolData.Name == ng.Name {
-				found = true
-
-				// Check for changes in HwProfile
-				if specNodeGroup.NodePoolData.HwProfile != ng.HwProfile {
-					changesDetected = true
-				}
-				break
-			}
-		}
-
-		// If no match was found for the current specNodeGroup, return an error
-		if !found {
-			return true, fmt.Errorf("node group %s found in NodePool spec but not in Hardware Template", specNodeGroup.NodePoolData.Name)
-		}
-	}
-
-	return changesDetected, nil
-}
-
 // GetStatusMessage returns a status message based on the given condition typ
 func GetStatusMessage(condition hwv1alpha1.ConditionType) string {
 	if condition == hwv1alpha1.Configured {
 		return "configuring"
 	}
 	return "provisioning"
-}
-
-// GetRoleToGroupNameMap creates a mapping of Role to Group Name from NodePool
-func GetRoleToGroupNameMap(nodePool *hwv1alpha1.NodePool) map[string]string {
-	roleToNodeGroupName := make(map[string]string)
-	for _, nodeGroup := range nodePool.Spec.NodeGroup {
-
-		if _, exists := roleToNodeGroupName[nodeGroup.NodePoolData.Role]; !exists {
-			roleToNodeGroupName[nodeGroup.NodePoolData.Role] = nodeGroup.NodePoolData.Name
-		}
-	}
-	return roleToNodeGroupName
 }
 
 // GetHardwareTemplate retrieves the hardware template resource for a given name
@@ -505,39 +419,62 @@ func GetHardwareTemplate(ctx context.Context, c client.Client, hwTemplateName st
 	return hwTemplate, nil
 }
 
-// NewNodeGroup populates NodeGroup
-func NewNodeGroup(group hwv1alpha1.NodePoolData, roleCounts map[string]int) hwv1alpha1.NodeGroup {
-	var nodeGroup hwv1alpha1.NodeGroup
+// GetHardwarePluginRefFromProvisioningRequest retrieves the HardwarePlugin Reference from the ProvisioningRequest.
+// The HardwarePluginRef is stored in the HardwareTemplate which can be obtained by fetching the ClusterTemplate
+// associated with the given ProvisioningRequest.
+func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.Client,
+	pr *provisioningv1alpha1.ProvisioningRequest) (string, error) {
 
-	// Populate embedded NodePoolData fields
-	nodeGroup.NodePoolData = group
-
-	// Assign size if available in roleCounts
-	if count, ok := roleCounts[group.Role]; ok {
-		nodeGroup.Size = count
+	// Get the ClusterTemplate used by the current ProvisioningRequest.
+	clusterTemplate, err := pr.GetClusterTemplateRef(ctx, c)
+	if err != nil {
+		return "", fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
 
-	return nodeGroup
+	// Get the HardwarePluginRef from the HardwareTemplate
+	if clusterTemplate.Spec.Templates.HwTemplate == "" {
+		return "", fmt.Errorf("missing HardwareTemplate reference in ClusterTemplate")
+	}
+
+	hwTemplate, err := GetHardwareTemplate(ctx, c, clusterTemplate.Spec.Templates.HwTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to get HardwareTemplate: %w", err)
+	}
+
+	return hwTemplate.Spec.HardwarePluginRef, nil
 }
 
-// SetNodePoolAnnotations sets annotations on the NodePool
-func SetNodePoolAnnotations(nodePool *hwv1alpha1.NodePool, name, value string) {
-	annotations := nodePool.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
+// GetHardwarePlugin retrieves the HardwarePlugin resource for a given name
+func GetHardwarePlugin(ctx context.Context, c client.Client, hwPluginName string) (*hwv1alpha1.HardwarePlugin, error) {
+	hwPlugin := &hwv1alpha1.HardwarePlugin{}
+
+	exists, err := DoesK8SResourceExist(ctx, c, hwPluginName, GetHwMgrPluginNS(), hwPlugin)
+	if err != nil {
+		return hwPlugin, fmt.Errorf("failed to retrieve HardwarePlugin resource %s: %w", hwPluginName, err)
 	}
-	annotations[name] = value
-	nodePool.SetAnnotations(annotations)
+	if !exists {
+		return hwPlugin, fmt.Errorf("hardwarePlugin resource %s does not exist", hwPluginName)
+	}
+	return hwPlugin, nil
 }
 
-// SetNodePoolLabels sets labels on the NodePool
-func SetNodePoolLabels(nodePool *hwv1alpha1.NodePool, label, value string) {
-	labels := nodePool.GetLabels()
-	if labels == nil {
-		labels = make(map[string]string)
+// GetHardwarePluginFromProvisioningRequest retrieves the HardwarePlugin resource associated with a given ProvisioningRequest resource
+func GetHardwarePluginFromProvisioningRequest(ctx context.Context,
+	c client.Client,
+	pr *provisioningv1alpha1.ProvisioningRequest) (*hwv1alpha1.HardwarePlugin, error) {
+
+	hwpluginRef, err := GetHardwarePluginRefFromProvisioningRequest(ctx, c, pr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve the HardwarePluginRef from the ProvisioningRequest '%s': %w", pr.Name, err)
 	}
-	labels[label] = value
-	nodePool.SetLabels(labels)
+
+	// Get and return the HardwarePlugin CR from the HardwarePluginRef
+	hwPlugin, err := GetHardwarePlugin(ctx, c, hwpluginRef)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get HardwarePlugin: %w", err)
+	}
+
+	return hwPlugin, nil
 }
 
 // UpdateHardwareTemplateStatusCondition updates the status condition of the HardwareTemplate resource
@@ -589,10 +526,20 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 
 // GetBMHNamespace returns the BMH namespace for the given node.
 // Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
-func GetBMHNamespace(node *hwv1alpha1.Node) string {
+func GetBMHNamespace(node *hwv1alpha1.AllocatedNode) string {
 
 	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {
 		return ns
 	}
 	return node.Spec.HwMgrNodeNs
+}
+
+// GetDeployLoopbackHWPlugin returns the value of environment variable DEPLOY_LOOPBACK_HW_PLUGIN
+func GetDeployLoopbackHWPlugin() string {
+	return GetEnvOrDefault(DeployLoopbackHWPluginEnvVar, DefaultDeployLoopbackHWPlugin)
+}
+
+// ShouldDeployLoopbackHWPlugin returns a boolean value indiciating if the Loopback HardwarePlugin should be installed
+func ShouldDeployLoopbackHWPlugin() bool {
+	return strings.EqualFold(GetDeployLoopbackHWPlugin(), DeployLoopbackHWPluginOk)
 }

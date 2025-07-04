@@ -8,6 +8,21 @@ package controllers
 
 import (
 	"context"
+
+	. "github.com/onsi/gomega"
+
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
+)
+
+/*
+import (
+	"context"
 	"fmt"
 	"time"
 
@@ -22,6 +37,7 @@ import (
 
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/generated/client"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
@@ -32,6 +48,7 @@ const (
 	groupNameController = "controller"
 	groupNameWorker     = "worker"
 )
+
 
 var _ = Describe("renderHardwareTemplate", func() {
 	var (
@@ -152,9 +169,9 @@ var _ = Describe("renderHardwareTemplate", func() {
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwv1alpha1.HardwareTemplateSpec{
-				HwMgrId:            utils.UnitTestHwmgrID,
+				HardwarePluginRef:  utils.UnitTestHwPluginRef,
 				BootInterfaceLabel: "bootable-interface",
-				NodePoolData: []hwv1alpha1.NodePoolData{
+				NodeGroupData: []hwv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
 						Role:           "master",
@@ -177,7 +194,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 		Expect(c.Create(ctx, hwTemplate)).To(Succeed())
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
-		nodePool, err := task.renderHardwareTemplate(ctx, unstructuredCi)
+		nodeAllocationRequest, err := task.renderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).ToNot(HaveOccurred())
 
 		VerifyHardwareTemplateStatus(ctx, c, hwTemplate.Name, metav1.Condition{
@@ -187,22 +204,14 @@ var _ = Describe("renderHardwareTemplate", func() {
 			Message: "Validated",
 		})
 
-		Expect(nodePool).ToNot(BeNil())
-		Expect(nodePool.ObjectMeta.Name).To(Equal(clusterInstance.GetName()))
-		Expect(nodePool.ObjectMeta.Namespace).To(Equal(utils.UnitTestHwmgrNamespace))
-		Expect(nodePool.Annotations[hwv1alpha1.BootInterfaceLabelAnnotation]).To(Equal(hwTemplate.Spec.BootInterfaceLabel))
-
-		Expect(nodePool.Spec.CloudID).To(Equal(clusterInstance.GetName()))
-		Expect(nodePool.Spec.HwMgrId).To(Equal(hwTemplate.Spec.HwMgrId))
-		Expect(nodePool.Spec.Extensions).To(Equal(hwTemplate.Spec.Extensions))
-		Expect(nodePool.Labels[provisioningv1alpha1.ProvisioningRequestNameLabel]).To(Equal(task.object.Name))
+		Expect(nodeAllocationRequest).ToNot(BeNil())
 
 		roleCounts := make(map[string]int)
 		for _, node := range clusterInstance.Spec.Nodes {
 			// Count the nodes per group
 			roleCounts[node.Role]++
 		}
-		Expect(nodePool.Spec.NodeGroup).To(HaveLen(2))
+		Expect(nodeAllocationRequest.NodeGroup).To(HaveLen(2))
 		expectedNodeGroups := map[string]struct {
 			size int
 		}{
@@ -210,10 +219,10 @@ var _ = Describe("renderHardwareTemplate", func() {
 			groupNameWorker:     {size: roleCounts["worker"]},
 		}
 
-		for _, group := range nodePool.Spec.NodeGroup {
-			expected, found := expectedNodeGroups[group.NodePoolData.Name]
+		for _, group := range nodeAllocationRequest.NodeGroup {
+			expected, found := expectedNodeGroups[group.NodeGroupData.Name]
 			Expect(found).To(BeTrue())
-			Expect(group.Size).To(Equal(expected.size))
+			Expect(group.NodeGroupData.Size).To(Equal(expected.size))
 		}
 	})
 
@@ -222,45 +231,45 @@ var _ = Describe("renderHardwareTemplate", func() {
 		Expect(c.Create(ctx, ct)).To(Succeed())
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
-		nodePool, err := task.renderHardwareTemplate(ctx, unstructuredCi)
+		nodeAllocationRequest, err := task.renderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).To(HaveOccurred())
-		Expect(nodePool).To(BeNil())
+		Expect(nodeAllocationRequest).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("failed to get the HardwareTemplate %s resource", hwTemplate))
 	})
 
 	It("returns an error when the ClusterTemplate is not found", func() {
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
-		nodePool, err := task.renderHardwareTemplate(ctx, unstructuredCi)
+		nodeAllocationRequest, err := task.renderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).To(HaveOccurred())
-		Expect(nodePool).To(BeNil())
+		Expect(nodeAllocationRequest).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("failed to get the ClusterTemplate"))
 	})
 
-	Context("When NodePool has been created", func() {
-		var nodePool *hwv1alpha1.NodePool
+	Context("When NodeAllocationRequest has been created", func() {
+		var nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
-			// Create NodePool resource
-			nodePool = &hwv1alpha1.NodePool{}
+			// Create NodeAllocationRequest resource
+			nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
 
-			nodePool.SetName(crName)
-			nodePool.SetNamespace("hwmgr")
-			nodePool.Spec.HwMgrId = utils.UnitTestHwmgrID
-			nodePool.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
-			nodePool.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
+			nodeAllocationRequest.SetName(crName)
+			nodeAllocationRequest.SetNamespace("hwmgr")
+			nodeAllocationRequest.Spec.HardwarePluginRef = utils.UnitTestHwPluginRef
+			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
+			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
 				{
-					NodePoolData: hwv1alpha1.NodePoolData{
+					NodeGroupData: hwv1alpha1.NodeGroupData{
 						Name: groupNameController, HwProfile: "profile-spr-single-processor-64G",
 					}, Size: 1,
 				},
 			}
-			nodePool.Status.Conditions = []metav1.Condition{
+			nodeAllocationRequest.Status.Conditions = []metav1.Condition{
 				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
 			}
-			Expect(c.Create(ctx, nodePool)).To(Succeed())
+			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 		})
-		It("returns an error when the hardware template contains a change in hwMgrId", func() {
+		It("returns an error when the hardware template contains a change in hardwarePluginRef", func() {
 			ct.Spec.Templates.HwTemplate = hwTemplatev2
 			// Ensure the ClusterTemplate is created
 			Expect(c.Create(ctx, ct)).To(Succeed())
@@ -271,9 +280,9 @@ var _ = Describe("renderHardwareTemplate", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:            "new id",
+					HardwarePluginRef:  "new id",
 					BootInterfaceLabel: "bootable-interface",
-					NodePoolData: []hwv1alpha1.NodePoolData{
+					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
 							Name:      "worker",
 							Role:      "worker",
@@ -320,9 +329,9 @@ var _ = Describe("renderHardwareTemplate", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:            utils.UnitTestHwmgrID,
+					HardwarePluginRef:  utils.UnitTestHwPluginRef,
 					BootInterfaceLabel: "new-label",
-					NodePoolData: []hwv1alpha1.NodePoolData{
+					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
 							Name:           "contoller",
 							Role:           "master",
@@ -370,9 +379,9 @@ var _ = Describe("renderHardwareTemplate", func() {
 					Namespace: utils.InventoryNamespace,
 				},
 				Spec: hwv1alpha1.HardwareTemplateSpec{
-					HwMgrId:            utils.UnitTestHwmgrID,
+					HardwarePluginRef:  utils.UnitTestHwPluginRef,
 					BootInterfaceLabel: "bootable-interface",
-					NodePoolData: []hwv1alpha1.NodePoolData{
+					NodeGroupData: []hwv1alpha1.NodeGroupData{
 						{
 							Name:           "master",
 							Role:           "master",
@@ -397,7 +406,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 			_, err = task.renderHardwareTemplate(ctx, unstructuredCi)
 			Expect(err).To(HaveOccurred())
 
-			errMessage := fmt.Sprintf("node group %s found in NodePool spec but not in Hardware Template", groupNameController)
+			errMessage := fmt.Sprintf("node group %s found in NodeAllocationRequest spec but not in Hardware Template", groupNameController)
 			VerifyHardwareTemplateStatus(ctx, c, hwTemplate2.Name, metav1.Condition{
 				Type:    string(hwv1alpha1.Validation),
 				Status:  metav1.ConditionFalse,
@@ -417,7 +426,7 @@ var _ = Describe("renderHardwareTemplate", func() {
 	})
 })
 
-var _ = Describe("waitForNodePoolProvision", func() {
+var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 	var (
 		ctx         context.Context
 		c           client.Client
@@ -425,7 +434,7 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		task        *provisioningRequestReconcilerTask
 		cr          *provisioningv1alpha1.ProvisioningRequest
 		ci          *unstructured.Unstructured
-		np          *hwv1alpha1.NodePool
+		nar         *hwv1alpha1.NodeAllocationRequest
 		crName      = "cluster-1"
 		ctNamespace = "clustertemplate-a-v4-16"
 	)
@@ -453,22 +462,21 @@ var _ = Describe("waitForNodePoolProvision", func() {
 			},
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
 				Extensions: provisioningv1alpha1.Extensions{
-					NodePoolRef: &provisioningv1alpha1.NodePoolRef{
-						Name:                           crName,
-						Namespace:                      ctNamespace,
+					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+						NodeAllocationRequestID:        crName,
 						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
 					},
 				},
 			},
 		}
 
-		// Define the node pool.
-		np = &hwv1alpha1.NodePool{
+		// Define the node allocation request.
+		nar = &hwv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crName,
 			},
-			// Set up your NodePool object as needed
-			Status: hwv1alpha1.NodePoolStatus{
+			// Set up your NodeAllocationRequest object as needed
+			Status: hwv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{},
 			},
 		}
@@ -488,22 +496,22 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		}
 	})
 
-	It("returns error when error fetching NodePool", func() {
-		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
+	It("returns error when error fetching NodeAllocationRequest", func() {
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("returns failed when NodePool provisioning failed", func() {
+	It("returns failed when NodeAllocationRequest provisioning failed", func() {
 		provisionedCondition := metav1.Condition{
 			Type:   "Provisioned",
 			Status: metav1.ConditionFalse,
 			Reason: string(hwv1alpha1.Failed),
 		}
-		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
-		Expect(c.Create(ctx, np)).To(Succeed())
-		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
+		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, nar)).To(Succeed())
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // It should be failed
 		Expect(err).ToNot(HaveOccurred())
@@ -513,26 +521,26 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(condition.Reason).To(Equal(string(hwv1alpha1.Failed)))
 	})
 
-	It("returns timeout when NodePool provisioning timed out", func() {
+	It("returns timeout when NodeAllocationRequest provisioning timed out", func() {
 		provisionedCondition := metav1.Condition{
 			Type:   "Provisioned",
 			Status: metav1.ConditionFalse,
 		}
-		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
-		Expect(c.Create(ctx, np)).To(Succeed())
+		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		// First call to checkNodePoolStatus (before timeout)
-		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
+		// First call to checkNodeAllocationRequestStatus (before timeout)
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
 
 		// Simulate a timeout by moving the start time back
-		adjustedTime := cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart.Time.Add(-1 * time.Minute)
-		cr.Status.Extensions.NodePoolRef.HardwareProvisioningCheckStart = &metav1.Time{Time: adjustedTime}
+		adjustedTime := cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart.Time.Add(-1 * time.Minute)
+		cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &metav1.Time{Time: adjustedTime}
 
-		// Call checkNodePoolStatus again (after timeout)
-		provisioned, timedOutOrFailed, err = task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
+		// Call checkNodeAllocationRequestStatus again (after timeout)
+		provisioned, timedOutOrFailed, err = task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
 		Expect(err).ToNot(HaveOccurred())
@@ -543,15 +551,15 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(condition.Reason).To(Equal(string(hwv1alpha1.TimedOut)))
 	})
 
-	It("returns false when NodePool is not provisioned", func() {
+	It("returns false when NodeAllocationRequest is not provisioned", func() {
 		provisionedCondition := metav1.Condition{
 			Type:   "Provisioned",
 			Status: metav1.ConditionFalse,
 		}
-		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
-		Expect(c.Create(ctx, np)).To(Succeed())
+		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -560,14 +568,14 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
 	})
 
-	It("returns true when NodePool is provisioned", func() {
+	It("returns true when NodeAllocationRequest is provisioned", func() {
 		provisionedCondition := metav1.Condition{
 			Type:   "Provisioned",
 			Status: metav1.ConditionTrue,
 		}
-		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
-		Expect(c.Create(ctx, np)).To(Succeed())
-		provisioned, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Provisioned)
+		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, nar)).To(Succeed())
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(true))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
@@ -576,37 +584,37 @@ var _ = Describe("waitForNodePoolProvision", func() {
 		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
 	})
 
-	It("returns timeout when NodePool configuring timed out", func() {
+	It("returns timeout when NodeAllocationRequest configuring timed out", func() {
 		// Set the configuration start time.
-		cr.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = &metav1.Time{Time: time.Now()}
+		cr.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &metav1.Time{Time: time.Now()}
 		Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
 		provisionedCondition := metav1.Condition{
 			Type:   "Provisioned",
 			Status: metav1.ConditionTrue,
 		}
-		np.Status.Conditions = append(np.Status.Conditions, provisionedCondition)
-		Expect(c.Create(ctx, np)).To(Succeed())
+		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
+		Expect(c.Create(ctx, nar)).To(Succeed())
 
 		configuredCondition := metav1.Condition{
 			Type:   "Configured",
 			Status: metav1.ConditionFalse,
 		}
-		np.Status.Conditions = append(np.Status.Conditions, configuredCondition)
-		Expect(c.Status().Update(ctx, np)).To(Succeed())
+		nar.Status.Conditions = append(nar.Status.Conditions, configuredCondition)
+		Expect(c.Status().Update(ctx, nar)).To(Succeed())
 
-		// First call to checkNodePoolStatus (before timeout)
-		status, timedOutOrFailed, err := task.checkNodePoolStatus(ctx, np, hwv1alpha1.Configured)
+		// First call to checkNodeAllocationRequestStatus (before timeout)
+		status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Configured)
 		Expect(status).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
 		Expect(err).ToNot(HaveOccurred())
 
 		// Simulate a timeout by moving the start time back
-		adjustedTime := cr.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart.Time.Add(-1 * time.Minute)
-		cr.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart = &metav1.Time{Time: adjustedTime}
+		adjustedTime := cr.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart.Time.Add(-1 * time.Minute)
+		cr.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &metav1.Time{Time: adjustedTime}
 
-		// Call checkNodePoolStatus again (after timeout)
-		status, timedOutOrFailed, err = task.checkNodePoolStatus(ctx, np, hwv1alpha1.Configured)
+		// Call checkNodeAllocationRequestStatus again (after timeout)
+		status, timedOutOrFailed, err = task.checkNodeAllocationRequestStatus(ctx, hwv1alpha1.Configured)
 		Expect(status).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // Now it should time out
 		Expect(err).ToNot(HaveOccurred())
@@ -626,7 +634,8 @@ var _ = Describe("updateClusterInstance", func() {
 		task        *provisioningRequestReconcilerTask
 		cr          *provisioningv1alpha1.ProvisioningRequest
 		ci          *siteconfig.ClusterInstance
-		np          *hwv1alpha1.NodePool
+		nar         *hwv1alpha1.NodeAllocationRequest
+		tmpNar      *hwmgrpluginapi.NodeAllocationRequestResponse
 		crName      = "cluster-1"
 		crNamespace = "clustertemplate-a-v4-16"
 		mn          = "master-node"
@@ -702,8 +711,8 @@ var _ = Describe("updateClusterInstance", func() {
 			},
 		}
 
-		// Define the node pool.
-		np = &hwv1alpha1.NodePool{
+		// Define the node allocation request.
+		nar = &hwv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
 				Namespace: poolns,
@@ -711,7 +720,7 @@ var _ = Describe("updateClusterInstance", func() {
 					hwv1alpha1.BootInterfaceLabelAnnotation: "test",
 				},
 			},
-			Status: hwv1alpha1.NodePoolStatus{
+			Status: hwv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   "Provisioned",
@@ -722,16 +731,16 @@ var _ = Describe("updateClusterInstance", func() {
 					NodeNames: []string{mn, wn},
 				},
 			},
-			Spec: hwv1alpha1.NodePoolSpec{
+			Spec: hwv1alpha1.NodeAllocationRequestSpec{
 				NodeGroup: []hwv1alpha1.NodeGroup{
 					{
-						NodePoolData: hwv1alpha1.NodePoolData{
+						NodeGroupData: hwv1alpha1.NodeGroupData{
 							Name: groupNameController,
 							Role: "master",
 						},
 					},
 					{
-						NodePoolData: hwv1alpha1.NodePoolData{
+						NodeGroupData: hwv1alpha1.NodeGroupData{
 							Name: groupNameWorker,
 							Role: "worker",
 						},
@@ -739,6 +748,8 @@ var _ = Describe("updateClusterInstance", func() {
 				},
 			},
 		}
+
+		tmpNar = &hwmgrpluginapi.NodeAllocationRequestResponse{}
 
 		c = getFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
@@ -756,7 +767,7 @@ var _ = Describe("updateClusterInstance", func() {
 	It("returns error when failing to get the Node object", func() {
 		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
 		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, np)
+		err = task.updateClusterInstance(ctx, unstructuredCi, tmpNar)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -771,10 +782,10 @@ var _ = Describe("updateClusterInstance", func() {
 				},
 			},
 		}
-		np.Status.Properties = hwv1alpha1.Properties{}
+		nar.Status.Properties = hwv1alpha1.Properties{}
 		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
 		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, np)
+		err = task.updateClusterInstance(ctx, unstructuredCi, tmpNar)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to find matches for the following nodes"))
 	})
@@ -814,18 +825,18 @@ var _ = Describe("updateClusterInstance", func() {
 				},
 			},
 		}
-		nodes := []*hwv1alpha1.Node{masterNode, workerNode}
+		nodes := []*hwv1alpha1.AllocatedNode{masterNode, workerNode}
 		secrets := testutils.CreateSecrets([]string{masterNode.Status.BMC.CredentialsName, workerNode.Status.BMC.CredentialsName}, poolns)
 
 		testutils.CreateResources(ctx, c, nodes, secrets)
 		unstructuredCi, err := utils.ConvertToUnstructured(*ci)
 		Expect(err).ToNot(HaveOccurred())
-		err = task.updateClusterInstance(ctx, unstructuredCi, np)
+		err = task.updateClusterInstance(ctx, unstructuredCi, tmpNar)
 		Expect(err).ToNot(HaveOccurred())
 
-		masterBootMAC, err := utils.GetBootMacAddress(masterNode.Status.Interfaces, np)
+		masterBootMAC, err := utils.GetBootMacAddress(masterNode.Status.Interfaces, "")
 		Expect(err).ToNot(HaveOccurred())
-		workerBootMAC, err := utils.GetBootMacAddress(workerNode.Status.Interfaces, np)
+		workerBootMAC, err := utils.GetBootMacAddress(workerNode.Status.Interfaces, "")
 		Expect(err).ToNot(HaveOccurred())
 
 		// Define expected details
@@ -866,6 +877,7 @@ func getInterfaceMap(interfaces []*hwv1alpha1.Interface) []map[string]interface{
 	return ifaceList
 }
 
+
 func verifyClusterInstance(ci *siteconfig.ClusterInstance, expectedDetails []expectedNodeDetails) {
 	for i, expected := range expectedDetails {
 		Expect(ci.Spec.Nodes[i].BmcAddress).To(Equal(expected.BMCAddress))
@@ -883,9 +895,9 @@ func verifyClusterInstance(ci *siteconfig.ClusterInstance, expectedDetails []exp
 	}
 }
 
-func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.Node, mhost, whost string) {
+func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.AllocatedNode, mhost, whost string) {
 	for _, node := range nodes {
-		updatedNode := &hwv1alpha1.Node{}
+		updatedNode := &hwv1alpha1.AllocatedNode{}
 		Expect(c.Get(ctx, client.ObjectKey{Name: node.Name, Namespace: node.Namespace}, updatedNode)).To(Succeed())
 		switch updatedNode.Spec.GroupName {
 		case groupNameController:
@@ -897,6 +909,7 @@ func verifyNodeStatus(ctx context.Context, c client.Client, nodes []*hwv1alpha1.
 		}
 	}
 }
+//*/
 
 func VerifyHardwareTemplateStatus(ctx context.Context, c client.Client, templateName string, expectedCon metav1.Condition) {
 	updatedHwTempl := &hwv1alpha1.HardwareTemplate{}

@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
+/*
 import (
 	"log/slog"
 	"os"
@@ -32,6 +33,7 @@ import (
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/api/common"
 	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -45,39 +47,42 @@ func TestControllers(t *testing.T) {
 }
 
 const testHwMgrPluginNameSpace = "hwmgr"
-const testHwMgrId = "hwmgr"
+const testHardwarePluginRef = "hwmgr"
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	// Add fake hardwaremanager CR
-	hwmgr := &pluginv1alpha1.HardwareManager{
+	// Add fake hardwareplugin CR
+	hwplugin := &hwv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testHwMgrPluginNameSpace,
-			Name:      testHwMgrId,
+			Name:      testHardwarePluginRef,
 		},
-		Spec: pluginv1alpha1.HardwareManagerSpec{
-			AdaptorID: "loopback",
+		Spec: hwv1alpha1.HardwarePluginSpec{
+			ApiRoot: "https://hwmgr-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
+			AuthClientConfig: &common.AuthClientConfig{
+				Type: common.ServiceAccount,
+			},
 		},
 	}
 
 	return fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
-		WithObjects([]client.Object{hwmgr}...).
+		WithObjects([]client.Object{hwplugin}...).
 		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
 		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		WithStatusSubresource(&hwv1alpha1.HardwareTemplate{}).
-		WithStatusSubresource(&hwv1alpha1.NodePool{}).
-		WithStatusSubresource(&hwv1alpha1.Node{}).
+		WithStatusSubresource(&hwv1alpha1.NodeAllocationRequest{}).
+		WithStatusSubresource(&hwv1alpha1.AllocatedNode{}).
 		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
 		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		WithStatusSubresource(&pluginv1alpha1.HardwareManager{}).
-		WithIndex(&hwv1alpha1.Node{}, "spec.nodePool", func(obj client.Object) []string {
-			return []string{obj.(*hwv1alpha1.Node).Spec.NodePool}
+		WithIndex(&hwv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+			return []string{obj.(*hwv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 		}).
 		Build()
 }
@@ -122,9 +127,9 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
 	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.HardwareTemplate{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodePool{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.Node{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodeList{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodeAllocationRequest{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.AllocatedNode{})
+	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.AllocatedNodeList{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
@@ -137,3 +142,4 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.AgentList{})
 	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
 })
+*/

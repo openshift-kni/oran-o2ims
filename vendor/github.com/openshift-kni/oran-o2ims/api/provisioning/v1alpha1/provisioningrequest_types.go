@@ -48,12 +48,10 @@ type ProvisioningRequestSpec struct {
 	Extensions runtime.RawExtension `json:"extensions,omitempty"`
 }
 
-// NodePoolRef references a node pool.
-type NodePoolRef struct {
-	// Contains the name of the created NodePool.
-	Name string `json:"name,omitempty"`
-	// Contains the namespace of the created NodePool.
-	Namespace string `json:"namespace,omitempty"`
+// NodeAllocationRequestRef references a node allocation request.
+type NodeAllocationRequestRef struct {
+	// Contains the identifier of the created NodeAllocationRequest.
+	NodeAllocationRequestID string `json:"nodeAllocationRequestID,omitempty"`
 	// Represents the timestamp of the first status check for hardware provisioning
 	HardwareProvisioningCheckStart *metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
 	// Represents the timestamp of the first status check for hardware configuring
@@ -78,8 +76,11 @@ type Extensions struct {
 	// ClusterDetails references to the ClusterInstance.
 	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
 
-	// NodePoolRef references to the NodePool.
-	NodePoolRef *NodePoolRef `json:"nodePoolRef,omitempty"`
+	// NodeAllocationRequestRef references to the NodeAllocationRequest.
+	NodeAllocationRequestRef *NodeAllocationRequestRef `json:"nodeAllocationRequestRef,omitempty"`
+
+	// AllocatedNodeHostMap stores the mapping of AllocatedNode IDs to Hostnames
+	AllocatedNodeHostMap map[string]string `json:"allocatedNodeHostMap,omitempty"`
 
 	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
 	Policies []PolicyDetails `json:"policies,omitempty"`
@@ -174,7 +175,7 @@ type ProvisioningRequestStatus struct {
 //+kubebuilder:printcolumn:name="ProvisionDetails",type="string",JSONPath=".status.provisioningStatus.provisioningDetails"
 
 // ProvisioningRequest is the Schema for the provisioningrequests API
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Provisioning Request",resources={{Namespace, v1},{ClusterInstance, siteconfig.open-cluster-management.io/v1alpha1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Provisioning Request",resources={{Namespace, v1},{ClusterInstance, siteconfig.open-cluster-management.io/v1alpha1}}
 type ProvisioningRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

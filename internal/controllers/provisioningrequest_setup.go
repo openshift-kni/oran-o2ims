@@ -35,13 +35,13 @@ import (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Setup Node CRD indexer. This field indexer allows us to query a list of Node CRs, filtered by the spec.nodePool field.
+	// Setup Node CRD indexer. This field indexer allows us to query a list of Node CRs, filtered by the spec.nodeAllocationRequest field.
 	nodeIndexFunc := func(obj client.Object) []string {
-		return []string{obj.(*hwv1alpha1.Node).Spec.NodePool}
+		return []string{obj.(*hwv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &hwv1alpha1.Node{}, "spec.nodePool", nodeIndexFunc); err != nil {
-		return fmt.Errorf("failed to setup indexer for o2ims-hardwaremanagement.oran.openshift.io/v1alpha Node: %w", err)
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &hwv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", nodeIndexFunc); err != nil {
+		return fmt.Errorf("failed to setup indexer for o2ims-hardwaremanagement.oran.openshift.io/v1alpha1 AllocatedNode: %w", err)
 	}
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
@@ -83,18 +83,6 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 						}
 					}
 					return false
-				},
-				CreateFunc:  func(ce event.CreateEvent) bool { return false },
-				GenericFunc: func(ge event.GenericEvent) bool { return false },
-				DeleteFunc:  func(de event.DeleteEvent) bool { return true },
-			})).
-		Owns(
-			&hwv1alpha1.NodePool{},
-			builder.WithPredicates(predicate.Funcs{
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Watch on status changes.
-					// TODO: Filter on further conditions that the ProvisioningRequest is interested in
-					return e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration()
 				},
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },

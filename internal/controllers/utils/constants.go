@@ -39,6 +39,19 @@ const (
 	InventoryProvisioningServerName = InventoryProvisioning + serverSuffix
 )
 
+const (
+	HardwarePluginManager           = "hardwareplugin-manager"
+	HardwarePluginManagerServerName = HardwarePluginManager + serverSuffix
+)
+
+// HardwarePlugins
+const (
+	LoopbackPlugin           = "loopback-hardwareplugin"
+	LoopbackPluginServerName = LoopbackPlugin + serverSuffix
+	Metal3Plugin             = "metal3-hardwareplugin"
+	Metal3PluginServerName   = Metal3Plugin + serverSuffix
+)
+
 // IngressName defines the name of our ingress controller
 const IngressName = "oran-o2ims-ingress"
 
@@ -47,8 +60,6 @@ const IngressClassName = "openshift-default"
 
 // IngressPortName defines the name of service port to which our ingress controller directs traffic to
 const IngressPortName = "api"
-
-const Metal3PluginName = "metal3"
 
 // Resource operations
 const (
@@ -93,6 +104,39 @@ var (
 	ProvisioningServerArgs = []string{
 		"provisioning-server",
 		"serve",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+	}
+
+	HardwarePluginManagerArgs = []string{
+		"hardwareplugin-manager",
+		"start",
+		"--health-probe-bind-address=:8081",
+		"--metrics-bind-address=:8080",
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
+		"--leader-elect",
+	}
+
+	LoopbackPluginServerArgs = []string{
+		"loopback-hardwareplugin-manager",
+		"start",
+		"--health-probe-bind-address=:8081",
+		"--metrics-bind-address=:8080",
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
+		"--leader-elect",
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
+		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+	}
+
+	Metal3PluginServerArgs = []string{
+		"metal3-hardwareplugin-manager",
+		"start",
+		"--health-probe-bind-address=:8081",
+		"--metrics-bind-address=:8080",
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
+		"--leader-elect",
 		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
 		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
 		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
@@ -200,10 +244,10 @@ const (
 
 // Hardeware template constants
 const (
-	HwTemplatePluginMgr      = "hwMgrId"
-	HwTemplateNodePool       = "node-pools-data"
-	HwTemplateBootIfaceLabel = "bootInterfaceLabel"
-	HwTemplateExtensions     = "extensions"
+	HwTemplatePluginMgr             = "hardwarePluginRef"
+	HwTemplateNodeAllocationRequest = "node-group-data"
+	HwTemplateBootIfaceLabel        = "bootInterfaceLabel"
+	HwTemplateExtensions            = "extensions"
 )
 
 const (
@@ -227,9 +271,9 @@ const (
 
 // Hardware Manager plugin constants
 const (
-	UnitTestHwmgrID        = "hwmgr"
+	UnitTestHwPluginRef    = "hwmgr"
 	UnitTestHwmgrNamespace = "hwmgr"
-	DefaultPluginNamespace = "oran-hwmgr-plugin"
+	DefaultPluginNamespace = "oran-o2ims"
 )
 
 // POD Container Names
@@ -254,6 +298,13 @@ const (
 	PostgresImageName       = "POSTGRES_IMAGE"
 	HwMgrPluginNameSpace    = "HWMGR_PLUGIN_NAMESPACE"
 	InternalServicePortName = "INTERNAL_SERVICE_PORT"
+)
+
+// Deploy Loopback HardwarePlugin constants
+const (
+	DeployLoopbackHWPluginEnvVar  = "DEPLOY_LOOPBACK_HW_PLUGIN"
+	DefaultDeployLoopbackHWPlugin = "false"
+	DeployLoopbackHWPluginOk      = "true"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
@@ -296,8 +347,8 @@ const (
 	LocalClusterLabelName     = "local-cluster"
 
 	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
-	HardwareManagerIdLabel        = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrId"
-	HardwareManagerNodeIdLabel    = "hardwaremanagers.hwmgr-plugin.oran.openshift.io/hwMgrNodeId"
+	HardwarePluginRefLabel        = "o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef"
+	HardwareManagerNodeIdLabel    = "o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId"
 )
 
 // AlarmDefinitionSeverityField severity field within additional fields of alarm definition
@@ -324,3 +375,15 @@ const (
 	OAuthClientIDEnvName     = "SMO_OAUTH_CLIENT_ID"
 	OAuthClientSecretEnvName = "SMO_OAUTH_CLIENT_SECRET" // nolint: gosec
 )
+
+// OAuth Secret fields
+const (
+	OAuthClientIDField     = "client-id"
+	OAuthClientSecretField = "client-secret"
+)
+
+// HardwarePluginValidationEndpoint is the endpoint that the HardwarePlugin manager will try to reach for the plugin being
+// registered.
+const HardwarePluginValidationEndpoint = "/hardware-manager/provisioning/api_versions"
+
+const AllocatedNodeLabel = "o2ims-hardwaremanagement.oran.openshift.io/allocated-node"

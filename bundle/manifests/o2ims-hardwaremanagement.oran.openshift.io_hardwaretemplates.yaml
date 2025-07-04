@@ -59,22 +59,21 @@ spec:
                 additionalProperties:
                   type: string
                 description: Extensions holds additional custom key-value pairs that
-                  can be used to extend the node pool's configuration.
+                  can be used to extend the node allocation request's configuration.
                 type: object
+              hardwarePluginRef:
+                description: HardwarePluginRef is the name of the HardwarePlugin.
+                minLength: 1
+                type: string
               hardwareProvisioningTimeout:
                 description: HardwareProvisioningTimeout defines the timeout duration
                   string for the hardware provisioning.
                 type: string
-              hwMgrId:
-                description: HwMgrId is the identifier for the hardware manager plugin
-                  adaptor.
-                minLength: 1
-                type: string
-              nodePoolData:
-                description: NodePoolData defines a collection of NodePoolData items
+              nodeGroupData:
+                description: NodeGroupData defines a collection of NodeGroupData items
                 items:
-                  description: NodePoolData provides the necessary information for
-                    populating a node pool
+                  description: NodeGroupData provides the necessary information for
+                    populating a node allocation request
                   properties:
                     hwProfile:
                       minLength: 1
@@ -102,8 +101,8 @@ spec:
                 type: array
             required:
             - bootInterfaceLabel
-            - hwMgrId
-            - nodePoolData
+            - hardwarePluginRef
+            - nodeGroupData
             type: object
           status:
             description: HardwareTemplateStatus defines the observed state of HardwareTemplate

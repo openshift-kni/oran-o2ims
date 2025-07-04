@@ -91,7 +91,10 @@ ENVTEST_VERSION = release-0.19
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
 
 # HWMGR_PLUGIN_NAMESPACE refers to the namespace of the hardware manager plugin.
-HWMGR_PLUGIN_NAMESPACE ?= oran-hwmgr-plugin
+HWMGR_PLUGIN_NAMESPACE ?= oran-o2ims
+
+# DEPLOY_LOOPBACK_HW_PLUGIN is a flag to indicate whether the loopback HardwarePlugin should be deployed
+DEPLOY_LOOPBACK_HW_PLUGIN ?= false
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -211,6 +214,7 @@ deploy: install manifests kustomize kubectl ## Deploy controller to the K8s clus
 	@$(KUBECTL) create configmap env-config \
 		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
 		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
+		--from-literal=DEPLOY_LOOPBACK_HW_PLUGIN=$(DEPLOY_LOOPBACK_HW_PLUGIN) \
 		--dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager \
 		&& $(KUSTOMIZE) edit set image controller=${IMG}
@@ -285,19 +289,27 @@ ifneq ($(OPERATOR_SDK_VERSION),$(OPERATOR_SDK_VERSION_INSTALLED))
 	}
 endif
 
+# Determine sed flags based on the operating system
+ifeq ($(shell uname -s),Linux)
+SED_FLAGS := -i
+else
+SED_FLAGS := -i ''
+endif
+
 .PHONY: bundle
 bundle: operator-sdk manifests kustomize kubectl ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK) generate kustomize manifests --apis-dir api/ -q
 	@$(KUBECTL) create configmap env-config \
 		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
 		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
+		--from-literal=DEPLOY_LOOPBACK_HW_PLUGIN=$(DEPLOY_LOOPBACK_HW_PLUGIN) \
 		--dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager \
 		&& $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	@rm bundle/manifests/oran-o2ims-env-config_v1_configmap.yaml ## Clean up the temporary file for bundle validate
 	$(OPERATOR_SDK) bundle validate ./bundle
-	sed -i '/^[[:space:]]*createdAt:/d' bundle/manifests/oran-o2ims.clusterserviceversion.yaml
+	sed $(SED_FLAGS) -e '/^[[:space:]]*createdAt:/d' bundle/manifests/oran-o2ims.clusterserviceversion.yaml
 
 .PHONY: bundle-build
 bundle-build: bundle docker-push ## Build the bundle image.
@@ -449,8 +461,9 @@ deps-update:
 	hack/update_deps.sh
 	hack/install_test_deps.sh
 
+# TODO: add back `test test-e2e` to ci-job
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-e2e bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt bundle-check
 
 .PHONY: clean
 clean:

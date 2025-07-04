@@ -32,6 +32,7 @@ import (
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
@@ -164,7 +165,10 @@ func HasApiEndpoints(serverName string) bool {
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryResourceServerName ||
 		serverName == InventoryArtifactsServerName ||
-		serverName == InventoryProvisioningServerName
+		serverName == InventoryProvisioningServerName ||
+		serverName == HardwarePluginManagerServerName ||
+		serverName == LoopbackPluginServerName ||
+		serverName == Metal3PluginServerName
 }
 
 // HasDatabase determines whether a server owns a logical database instance
@@ -180,7 +184,10 @@ func HasDatabase(serverName string) bool {
 func RequiresInternalListener(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
 		serverName == InventoryClusterServerName ||
-		serverName == InventoryAlarmServerName
+		serverName == InventoryAlarmServerName ||
+		serverName == HardwarePluginManagerServerName ||
+		serverName == LoopbackPluginServerName ||
+		serverName == Metal3PluginServerName
 }
 
 // IsOAuthEnabled determines if the Inventory CR has OAuth attributes provided.
@@ -196,7 +203,10 @@ func NeedsOAuthAccess(serverName string) bool {
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryArtifactsServerName ||
-		serverName == InventoryProvisioningServerName
+		serverName == InventoryProvisioningServerName ||
+		serverName == HardwarePluginManagerServerName ||
+		serverName == LoopbackPluginServerName ||
+		serverName == Metal3PluginServerName
 }
 
 // getTLSClientCertificateSecret determines whether there is a TLS secret configured.
@@ -477,6 +487,24 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 
 		// Add OAuth command line arguments
 		result = addArgsForOAuth(inventory, result)
+		return
+	}
+
+	// HwMgr Plugin Controller
+	if serverName == HardwarePluginManagerServerName {
+		result = slices.Clone(HardwarePluginManagerArgs)
+		return
+	}
+
+	// Loopback Plugin Server
+	if serverName == LoopbackPluginServerName {
+		result = slices.Clone(LoopbackPluginServerArgs)
+		return
+	}
+
+	// Metal3 Hardware Plugin Server
+	if serverName == Metal3PluginServerName {
+		result = slices.Clone(Metal3PluginServerArgs)
 		return
 	}
 
@@ -1079,4 +1107,19 @@ func GenerateSecretName(nodeMap map[string]interface{}, provisioningRequest stri
 	}
 	secretName := ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) + "-bmc-secret"
 	return secretName, nil
+}
+
+func DetermineAuthType(callback string) commonapi.AuthType {
+	// At this time, only the OAuth and ServiceAccount authTypes are supported
+	// Set authType to OAuth
+	authType := commonapi.OAuth
+	if strings.Contains(callback, "svc.cluster.local") {
+		authType = commonapi.ServiceAccount
+	}
+	return authType
+}
+
+func IsValidURL(u string) bool {
+	parsed, err := url.ParseRequestURI(u)
+	return err == nil && parsed.Scheme != "" && parsed.Host != ""
 }

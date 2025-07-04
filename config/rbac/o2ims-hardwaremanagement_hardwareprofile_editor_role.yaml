@@ -1,0 +1,27 @@
+# permissions for end users to edit hardwareprofiles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: o2ims-hardwaremanagement-hardwareprofile-editor-role
+rules:
+- apiGroups:
+  - o2ims-hardwaremanagement.openshift.io
+  resources:
+  - hardwareprofiles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - o2ims-hardwaremanagement.openshift.io
+  resources:
+  - hardwareprofiles/status
+  verbs:
+  - get

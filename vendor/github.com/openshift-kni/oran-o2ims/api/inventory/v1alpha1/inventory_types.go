@@ -8,6 +8,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift-kni/oran-o2ims/api/common"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -50,25 +52,12 @@ type OAuthConfig struct {
 	ClientBindingClaim string `json:"clientBindingClaim"`
 }
 
-// TLSConfig defines the TLS specific attributes specific to the SMO and OAuth servers
-type TLSConfig struct {
-	// SecretName represents the name of a secret (in the current namespace) which contains an X.509 certificate and
-	// private key.  The secret is expected to contain a 'tls.key' and 'tls.crt' keys.  If the client is signed by
-	// intermediate CA certificate(s), then it is expected that the full chain is appended to the certificate file with
-	// the device certificate being first and the root CA being last.  It is expected that the certificate CN and DNS SAN configured be equal
-	// to the O2IMS DNS FQDN (e.g., o2ims.apps.<cluster domain name>).  This is to ensure that the certificate can be
-	// used as the ingress certificate as well as the outgoing client certificate.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS certificate"
-	SecretName *string `json:"secretName"`
-}
-
 // SmoConfig defines the configurable attributes to represent the SMO instance
 type SmoConfig struct {
 	// URL represents the base URL of the SMO instance
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO URL",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	URL string `json:"url"`
-	// RegistrationEndpoint represents the API endpoint used to register the O2IMS with the SMO.
+	// RegistrationEndpoint represents the API endpoint used to register the O-Cloud Manager with the SMO.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Registration API Endpoint",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	RegistrationEndpoint string `json:"registrationEndpoint"`
 	// OAuthConfig defines the configurable attributes required to access the OAuth2 authorization server
@@ -80,7 +69,7 @@ type SmoConfig struct {
 	// TLS connection will be used.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Client TLS Configuration"
-	TLS *TLSConfig `json:"tls"`
+	TLS *common.TLSConfig `json:"tls"`
 }
 
 type ServerConfig struct {
@@ -126,7 +115,7 @@ type IngressConfig struct {
 	// the default IngressController will be used.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TLS Configuration",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	TLS *TLSConfig `json:"tls,omitempty"`
+	TLS *common.TLSConfig `json:"tls,omitempty"`
 }
 
 // InventorySpec defines the desired state of Inventory
@@ -206,7 +195,7 @@ type InventoryStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // Inventory is the Schema for the Inventory API
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Inventory",resources={{Deployment,apps/v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="O-Cloud Manager Inventory",resources={{Deployment,apps/v1}}
 type Inventory struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
