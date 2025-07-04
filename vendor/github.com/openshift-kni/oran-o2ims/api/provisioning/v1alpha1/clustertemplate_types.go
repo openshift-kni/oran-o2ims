@@ -87,7 +87,7 @@ type ClusterTemplateStatus struct {
 // ClusterTemplate is the Schema for the clustertemplates API
 // +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a ClusterTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='ClusterTemplateValidated' && c.status=='False') || oldSelf.spec == self.spec"
 // +kubebuilder:validation:XValidation:message="metadata.name must be in the form of spec.name + '.' + spec.version", rule="self.metadata.name == (self.spec.name + '.' + self.spec.version)"
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Cluster Template",resources={{ConfigMap, v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Cluster Template",resources={{ConfigMap, v1}}
 type ClusterTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
