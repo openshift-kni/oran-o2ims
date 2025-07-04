@@ -57,7 +57,7 @@ type SmoConfig struct {
 	// URL represents the base URL of the SMO instance
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="SMO URL",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	URL string `json:"url"`
-	// RegistrationEndpoint represents the API endpoint used to register the O2IMS with the SMO.
+	// RegistrationEndpoint represents the API endpoint used to register the O-Cloud Manager with the SMO.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Registration API Endpoint",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	RegistrationEndpoint string `json:"registrationEndpoint"`
 	// OAuthConfig defines the configurable attributes required to access the OAuth2 authorization server
@@ -195,7 +195,7 @@ type InventoryStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // Inventory is the Schema for the Inventory API
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Inventory",resources={{Deployment,apps/v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="O-Cloud Manager Inventory",resources={{Deployment,apps/v1}}
 type Inventory struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
