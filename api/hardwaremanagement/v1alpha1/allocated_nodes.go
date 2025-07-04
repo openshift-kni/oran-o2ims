@@ -84,12 +84,12 @@ type AllocatedNodeStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=allocatednodes,shortName=allocatednode
-// +kubebuilder:printcolumn:name="HwMgr Id",type="string",JSONPath=".spec.hardwarePluginRef"
+// +kubebuilder:printcolumn:name="Plugin",type="string",JSONPath=".spec.hardwarePluginRef"
 // +kubebuilder:printcolumn:name="NodeAllocationRequest",type="string",JSONPath=".spec.nodeAllocationRequest"
-// +kubebuilder:printcolumn:name="HwMgr AllocatedNode Id",type="string",JSONPath=".spec.hwMgrNodeId"
+// +kubebuilder:printcolumn:name="HwMgr Node ID",type="string",JSONPath=".spec.hwMgrNodeId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
-// +operator-sdk:csv:customresourcedefinitions:displayName="AllocatedNode",resources={{Namespace, v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Allocated Node",resources={{Namespace, v1}}
 type AllocatedNode struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
