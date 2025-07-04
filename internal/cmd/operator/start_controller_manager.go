@@ -229,16 +229,16 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	// Start the O2IMS controller.
+	// Start the O-Cloud Manager controller.
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
-		Logger: slog.With("controller", "ORAN-O2IMS"),
+		Logger: slog.With("controller", "O-Cloud Manager"),
 		Image:  c.image,
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Unable to create controller",
-			slog.String("controller", "ORANO2IMS"),
+			slog.String("controller", "O-Cloud Manager"),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)

@@ -59,7 +59,7 @@ func makePod(namespace, serverName string) *corev1.Pod {
 var _ = DescribeTable(
 	"Reconciler",
 	func(objs []client.Object, request reconcile.Request, validate func(result ctrl.Result, reconciler *Reconciler)) {
-		// Declare the Namespace for the O-RAN O2IMS resource.
+		// Declare the Namespace for the O-Cloud Manager resource.
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "oran-o2ims",
@@ -116,7 +116,7 @@ var _ = DescribeTable(
 		// Get the fake client.
 		fakeClient := getFakeClientFromObjects(objs...)
 
-		// Initialize the O-RAN O2IMS reconciler.
+		// Initialize the O-Cloud Manager reconciler.
 		r := &Reconciler{
 			Client: fakeClient,
 			Logger: logger,

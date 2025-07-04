@@ -70,7 +70,7 @@ type HardwareTemplateStatus struct {
 
 // HardwareTemplate is the Schema for the hardwaretemplates API
 // +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a HardwareTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='Validation' && c.status=='False') || oldSelf.spec == self.spec"
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Hardware Template",resources={{ConfigMap, v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Template",resources={{ConfigMap, v1}}
 type HardwareTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
