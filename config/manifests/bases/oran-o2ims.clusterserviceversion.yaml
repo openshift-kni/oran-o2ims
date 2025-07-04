@@ -5,7 +5,7 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     containerImage: quay.io/openshift-kni/oran-o2ims-operator
-    description: The O-RAN O2IMS operator provides an implementation of the O-RAN
+    description: The O-Cloud Manager operator provides an implementation of the O-RAN
       O2 IMS API on top of OpenShift and ACM.
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -33,7 +33,7 @@ spec:
   customresourcedefinitions:
     owned:
     - description: AllocatedNode is the schema for an allocated node
-      displayName: AllocatedNode
+      displayName: Allocated Node
       kind: AllocatedNode
       name: allocatednodes.o2ims-hardwaremanagement.oran.openshift.io
       resources:
@@ -89,7 +89,7 @@ spec:
         path: interfaces
       version: v1alpha1
     - description: ClusterTemplate is the Schema for the clustertemplates API
-      displayName: ORAN O2IMS Cluster Template
+      displayName: Cluster Template
       kind: ClusterTemplate
       name: clustertemplates.o2ims.provisioning.oran.org
       resources:
@@ -246,7 +246,7 @@ spec:
         path: observedGeneration
       version: v1alpha1
     - description: HardwareTemplate is the Schema for the hardwaretemplates API
-      displayName: ORAN O2IMS Hardware Template
+      displayName: Hardware Template
       kind: HardwareTemplate
       name: hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io
       resources:
@@ -282,7 +282,7 @@ spec:
         path: conditions
       version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
-      displayName: ORAN O2IMS Inventory
+      displayName: O-Cloud Manager Inventory
       kind: Inventory
       name: inventories.o2ims.oran.openshift.io
       resources:
@@ -432,7 +432,7 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: RegistrationEndpoint represents the API endpoint used to register
-          the O2IMS with the SMO.
+          the O-Cloud Manager with the SMO.
         displayName: Registration API Endpoint
         path: smo.registrationEndpoint
         x-descriptors:
@@ -531,7 +531,7 @@ spec:
       version: v1alpha1
     - description: ProvisioningRequest is the Schema for the provisioningrequests
         API
-      displayName: ORAN O2IMS Provisioning Request
+      displayName: Provisioning Request
       kind: ProvisioningRequest
       name: provisioningrequests.o2ims.provisioning.oran.org
       resources:
@@ -585,12 +585,12 @@ spec:
         path: conditions
       version: v1alpha1
   description: |
-    # O-RAN O2IMS operator
-    The O-RAN O2IMS operator provides an implementation of the O-RAN O2 IMS API on top of OpenShift and ACM.
+    # O-Cloud Manager operator
+    The O-Cloud Manager operator provides an implementation of the O-RAN O2 IMS API on top of OpenShift and ACM.
 
     ## Where to find more information
     You can find additional guidance in the [oran-o2ims repository](https://github.com/openshift-kni/oran-o2ims).
-  displayName: ORAN O2IMS Operator
+  displayName: O-Cloud Manager Operator
   icon:
   - base64data: PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTQ1Ij48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6I2UwMDt9PC9zdHlsZT48L2RlZnM+PHRpdGxlPlJlZEhhdC1Mb2dvLUhhdC1Db2xvcjwvdGl0bGU+PHBhdGggZD0iTTE1Ny43Nyw2Mi42MWExNCwxNCwwLDAsMSwuMzEsMy40MmMwLDE0Ljg4LTE4LjEsMTcuNDYtMzAuNjEsMTcuNDZDNzguODMsODMuNDksNDIuNTMsNTMuMjYsNDIuNTMsNDRhNi40Myw2LjQzLDAsMCwxLC4yMi0xLjk0bC0zLjY2LDkuMDZhMTguNDUsMTguNDUsMCwwLDAtMS41MSw3LjMzYzAsMTguMTEsNDEsNDUuNDgsODcuNzQsNDUuNDgsMjAuNjksMCwzNi40My03Ljc2LDM2LjQzLTIxLjc3LDAtMS4wOCwwLTEuOTQtMS43My0xMC4xM1oiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0xMjcuNDcsODMuNDljMTIuNTEsMCwzMC42MS0yLjU4LDMwLjYxLTE3LjQ2YTE0LDE0LDAsMCwwLS4zMS0zLjQybC03LjQ1LTMyLjM2Yy0xLjcyLTcuMTItMy4yMy0xMC4zNS0xNS43My0xNi42QzEyNC44OSw4LjY5LDEwMy43Ni41LDk3LjUxLjUsOTEuNjkuNSw5MCw4LDgzLjA2LDhjLTYuNjgsMC0xMS42NC01LjYtMTcuODktNS42LTYsMC05LjkxLDQuMDktMTIuOTMsMTIuNSwwLDAtOC40MSwyMy43Mi05LjQ5LDI3LjE2QTYuNDMsNi40MywwLDAsMCw0Mi41Myw0NGMwLDkuMjIsMzYuMywzOS40NSw4NC45NCwzOS40NU0xNjAsNzIuMDdjMS43Myw4LjE5LDEuNzMsOS4wNSwxLjczLDEwLjEzLDAsMTQtMTUuNzQsMjEuNzctMzYuNDMsMjEuNzdDNzguNTQsMTA0LDM3LjU4LDc2LjYsMzcuNTgsNTguNDlhMTguNDUsMTguNDUsMCwwLDEsMS41MS03LjMzQzIyLjI3LDUyLC41LDU1LC41LDc0LjIyYzAsMzEuNDgsNzQuNTksNzAuMjgsMTMzLjY1LDcwLjI4LDQ1LjI4LDAsNTYuNy0yMC40OCw1Ni43LTM2LjY1LDAtMTIuNzItMTEtMjcuMTYtMzAuODMtMzUuNzgiLz48L3N2Zz4=
     mediatype: image/svg+xml
@@ -614,10 +614,6 @@ spec:
   - name: Oran O2ims
     url: https://oran-o2ims.domain
   maintainers:
-  - email: jhernand@redhat.com
-    name: JuanHernandez
-  - email: derez@redhat.com
-    name: DanielErez
   - email: imihai@redhat.com
     name: IrinaMihai
   maturity: alpha

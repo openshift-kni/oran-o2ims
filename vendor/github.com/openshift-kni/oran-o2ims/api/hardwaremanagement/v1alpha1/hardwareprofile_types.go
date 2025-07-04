@@ -57,7 +57,7 @@ type HardwareProfileStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// +operator-sdk:csv:customresourcedefinitions:resources={{Service,v1,policy-engine-service}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Profile",resources={{Service,v1,policy-engine-service}}
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=hardwareprofiles,scope=Namespaced

@@ -18,13 +18,13 @@ spec:
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.hardwarePluginRef
-      name: HwMgr Id
+      name: Plugin
       type: string
     - jsonPath: .spec.nodeAllocationRequest
       name: NodeAllocationRequest
       type: string
     - jsonPath: .spec.hwMgrNodeId
-      name: HwMgr AllocatedNode Id
+      name: HwMgr Node ID
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age

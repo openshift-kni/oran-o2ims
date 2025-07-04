@@ -1867,7 +1867,7 @@ func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, de
 				Type:    string(utils.InventoryConditionTypes.Ready),
 				Status:  metav1.ConditionFalse,
 				Reason:  string(utils.InventoryConditionReasons.DeploymentsReady),
-				Message: "The ORAN O2IMS Deployments are not yet ready",
+				Message: "The O-Cloud Manager Deployments are not yet ready",
 			},
 		)
 	} else {

@@ -163,7 +163,7 @@ spec:
                     type: object
                   registrationEndpoint:
                     description: RegistrationEndpoint represents the API endpoint
-                      used to register the O2IMS with the SMO.
+                      used to register the O-Cloud Manager with the SMO.
                     type: string
                   tls:
                     description: |-

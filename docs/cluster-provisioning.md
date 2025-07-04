@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Overview
 
-The ORAN O2IMS Operator serves as an O-Cloud Manager, orchestrating the complete lifecycle of cluster provisioning via the `ProvisioningRequest` CR, starting from hardware provisioning and cluster installation to cluster configuration.
+The O-Cloud Manager Operator serves as an O-Cloud Manager, orchestrating the complete lifecycle of cluster provisioning via the `ProvisioningRequest` CR, starting from hardware provisioning and cluster installation to cluster configuration.
 
 The operator leverages several key components to achieve this:
 
