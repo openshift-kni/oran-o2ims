@@ -193,10 +193,13 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	if err != nil {
 		return requeueWithError(err)
 	}
-	if !utils.IsClusterProvisionPresent(t.object) ||
-		utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+	if !utils.IsClusterProvisionPresent(t.object) {
+		t.logger.InfoContext(ctx, "ClusterProvision not present, requeueing", slog.String("name", t.object.Name))
+		return requeueWithShortInterval(), nil
+	} else if utils.IsClusterProvisionTimedOutOrFailed(t.object) {
 		// If the cluster installation has not started due to
 		// processing issue, failed or timed out, do not requeue.
+		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, do not requeue", slog.String("name", t.object.Name))
 		return doNotRequeue(), nil
 	}
 
