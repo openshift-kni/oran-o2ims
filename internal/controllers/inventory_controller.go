@@ -693,7 +693,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 
 		registerOnRestart = false // this is a one-time registration on restarts for development/debug
 	} else {
-		t.logger.InfoContext(
+		t.logger.DebugContext(
 			ctx, fmt.Sprintf("already registered with the SMO at: %s", t.object.Spec.SmoConfig.URL),
 		)
 	}
@@ -1453,7 +1453,7 @@ func (t *reconcilerTask) createServerClusterRoleBinding(ctx context.Context, ser
 }
 
 func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (utils.InventoryConditionReason, error) {
-	t.logger.InfoContext(ctx, "[deploy server]", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deploy server]", "Name", serverName)
 
 	// Server variables.
 	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
@@ -1648,7 +1648,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		Spec:       deploymentSpec,
 	}
 
-	t.logger.InfoContext(ctx, "[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
 	if err := utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE); err != nil {
 		return "", fmt.Errorf("failed to deploy ManagerServer: %w", err)
 	}
@@ -1657,7 +1657,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 }
 
 func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName string) error {
-	t.logger.InfoContext(ctx, "[createServiceAccount]")
+	t.logger.DebugContext(ctx, "[createServiceAccount]")
 	// Build the ServiceAccount object.
 	serviceAccountMeta := metav1.ObjectMeta{
 		Name:      resourceName,
@@ -1670,7 +1670,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 		ObjectMeta: serviceAccountMeta,
 	}
 
-	t.logger.InfoContext(ctx, "[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
+	t.logger.DebugContext(ctx, "[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
 	if err := utils.CreateK8sCR(ctx, t.client, newServiceAccount, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create ServiceAccount for deployment: %w", err)
 	}
@@ -1679,7 +1679,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 }
 
 func (t *reconcilerTask) createService(ctx context.Context, resourceName string, port int32, targetPort string) error {
-	t.logger.InfoContext(ctx, "[createService]")
+	t.logger.DebugContext(ctx, "[createService]")
 	// Build the Service object.
 	serviceMeta := metav1.ObjectMeta{
 		Name:      resourceName,
@@ -1710,7 +1710,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 		Spec:       serviceSpec,
 	}
 
-	t.logger.InfoContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
+	t.logger.DebugContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
 	if err := utils.CreateK8sCR(ctx, t.client, newService, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Service for deployment: %w", err)
 	}
@@ -1719,7 +1719,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 }
 
 func (t *reconcilerTask) createIngress(ctx context.Context) error {
-	t.logger.InfoContext(ctx, "[createIngress]")
+	t.logger.DebugContext(ctx, "[createIngress]")
 	// Build the Ingress object.
 	className := utils.IngressClassName
 	ingressMeta := metav1.ObjectMeta{
@@ -1834,7 +1834,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 		Spec:       ingressSpec,
 	}
 
-	t.logger.InfoContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.IngressPortName)
+	t.logger.DebugContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.IngressPortName)
 	if err := utils.CreateK8sCR(ctx, t.client, newIngress, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
 	}
@@ -1897,7 +1897,7 @@ func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, de
 func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 	ctx context.Context, serverName string, deploymentArgs []string,
 	errorReason utils.InventoryConditionReason, err error) error {
-	t.logger.InfoContext(ctx, "[updateInventoryUsedConfigStatus]")
+	t.logger.DebugContext(ctx, "[updateInventoryUsedConfigStatus]")
 
 	if serverName == utils.InventoryResourceServerName {
 		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
@@ -1949,7 +1949,7 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 
 func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) error {
 
-	t.logger.InfoContext(ctx, "[updateInventoryDeploymentStatus]")
+	t.logger.DebugContext(ctx, "[updateInventoryDeploymentStatus]")
 	t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
 	t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
 	t.updateInventoryStatusConditions(ctx, utils.InventoryClusterServerName)
