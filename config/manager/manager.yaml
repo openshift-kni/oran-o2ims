@@ -24,6 +24,7 @@ metadata:
     app.kubernetes.io/created-by: oran-o2ims
     app.kubernetes.io/part-of: oran-o2ims
     app.kubernetes.io/managed-by: kustomize
+    app: o-cloud-manager
 spec:
   selector:
     matchLabels:
@@ -35,6 +36,7 @@ spec:
         kubectl.kubernetes.io/default-container: manager
       labels:
         control-plane: controller-manager
+        app: o-cloud-manager
     spec:
       # TODO(user): Uncomment the following code to configure the nodeAffinity expression
       # according to the platforms which are supported by your solution.

@@ -197,6 +197,11 @@ func (c *Config) generateCronJob(configMap corev1.ConfigMap) batchv1.CronJob {
 				Spec: batchv1.JobSpec{
 					BackoffLimit: ptr.To(jobBackoffLimit),
 					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": cleanupCronJobName,
+							},
+						},
 						Spec: corev1.PodSpec{
 							RestartPolicy: corev1.RestartPolicyOnFailure,
 							Containers: []corev1.Container{

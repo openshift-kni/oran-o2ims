@@ -27,7 +27,7 @@ import (
 // deployPostgresServer deploys the actual Postgres database server instance.  Prior to invoking this method the other
 // required resources must have already been created (i.e., configmaps, secrets, service accounts, etc...).
 func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName string) error {
-	t.logger.InfoContext(ctx, "[deploy postgres server]", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deploy postgres server]", "Name", serverName)
 
 	// Default server volumes.
 	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
@@ -151,7 +151,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		Spec:       deploymentSpec,
 	}
 
-	t.logger.InfoContext(ctx, "[deployDatabase] Create/Update/Patch Server", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deployDatabase] Create/Update/Patch Server", "Name", serverName)
 	if err := utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to deploy database: %w", err)
 	}
@@ -161,7 +161,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 
 // createPasswords sets up the admin and service passwords for the Postgres database.
 func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string) error {
-	t.logger.InfoContext(ctx, "[createPasswords]")
+	t.logger.DebugContext(ctx, "[createPasswords]")
 
 	// Create the passwords secret
 	passwordSecretName := fmt.Sprintf("%s-passwords", serverName)
@@ -212,7 +212,7 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 
 // createDatabase sets up all necessary resources to instantiate a Postgres database server.
 func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
-	t.logger.InfoContext(ctx, "[createDatabase]")
+	t.logger.DebugContext(ctx, "[createDatabase]")
 
 	err = t.createServiceAccount(ctx, utils.InventoryDatabaseServerName)
 	if err != nil {
@@ -235,7 +235,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 	}
 
 	// Create the config volume
-	t.logger.InfoContext(ctx, "[createDatabase] creating database config volume")
+	t.logger.DebugContext(ctx, "[createDatabase] creating database config volume")
 	configVolumeName := fmt.Sprintf("%s-config", utils.InventoryDatabaseServerName)
 	err = utils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
 		postgres.Artifacts, postgres.ConfigFilePath, t.object.Namespace, configVolumeName, postgres.ConfigFileName)
@@ -249,7 +249,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 	}
 
 	// Create the startup volume
-	t.logger.InfoContext(ctx, "[createDatabase] creating database startup volume")
+	t.logger.DebugContext(ctx, "[createDatabase] creating database startup volume")
 	startupVolumeName := fmt.Sprintf("%s-startup", utils.InventoryDatabaseServerName)
 	err = utils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
 		postgres.Artifacts, postgres.StartupFilePath, t.object.Namespace, startupVolumeName, postgres.StartupFileName)
@@ -263,7 +263,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 	}
 
 	// Create the service passwords
-	t.logger.InfoContext(ctx, "[createDatabase] creating database service passwords")
+	t.logger.DebugContext(ctx, "[createDatabase] creating database service passwords")
 	err = t.createPasswords(ctx, utils.InventoryDatabaseServerName)
 	if err != nil {
 		t.logger.ErrorContext(
