@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
@@ -26,6 +27,7 @@ import (
 
 const (
 	AllocatedNodeSpecNodeAllocationRequestKey = "spec.nodeAllocationRequest"
+	AllocatedNodeFinalizer                    = "o2ims-hardwaremanagement.oran.openshift.io/allocatednode-finalizer"
 )
 
 // GetNode get a node resource for a provided name
@@ -181,5 +183,53 @@ func SetNodeFailedStatus(
 		slog.String("node", node.Name),
 		slog.String("conditionType", conditionType),
 		slog.String("reason", string(pluginv1alpha1.Failed)))
+	return nil
+}
+
+func AllocatedNodeAddFinalizer(
+	ctx context.Context,
+	noncachedClient client.Reader,
+	c client.Client,
+	allocatedNode *pluginv1alpha1.AllocatedNode,
+) error {
+	// nolint: wrapcheck
+	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		newAllocatedNode := &pluginv1alpha1.AllocatedNode{}
+		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
+			return err
+		}
+		controllerutil.AddFinalizer(newAllocatedNode, AllocatedNodeFinalizer)
+		if err := c.Update(ctx, newAllocatedNode); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add finalizer to NodeAllocationRequest: %w", err)
+	}
+	return nil
+}
+
+func AllocatedNodeRemoveFinalizer(
+	ctx context.Context,
+	noncachedClient client.Reader,
+	c client.Client,
+	allocatedNode *pluginv1alpha1.AllocatedNode,
+) error {
+	// nolint: wrapcheck
+	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		newAllocatedNode := &pluginv1alpha1.AllocatedNode{}
+		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
+			return err
+		}
+		controllerutil.RemoveFinalizer(newAllocatedNode, AllocatedNodeFinalizer)
+		if err := c.Update(ctx, newAllocatedNode); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to remove finalizer from AllocatedNode: %w", err)
+	}
 	return nil
 }
