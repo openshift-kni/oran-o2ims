@@ -205,6 +205,9 @@ func createNode(ctx context.Context,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodename,
 			Namespace: pluginNamespace,
+			Labels: map[string]string{
+				hwpluginutils.HardwarePluginLabel: hwpluginutils.Metal3HardwarePluginID,
+			},
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion:         nodeAllocationRequest.APIVersion,
 				Kind:               nodeAllocationRequest.Kind,
@@ -568,7 +571,7 @@ func setAwaitConfigCondition(
 func releaseNodeAllocationRequest(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
 	cloudID := nodeAllocationRequest.Spec.CloudID
 
@@ -579,22 +582,14 @@ func releaseNodeAllocationRequest(ctx context.Context,
 	// remove the allocated label from BMHs and finalizer from the corresponding PreprovisioningImage resources
 	nodelist, err := hwpluginutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
-		return fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+		return false, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
-	for _, node := range nodelist.Items {
-		bmh, err := getBMHForNode(ctx, c, &node)
-		if err != nil {
-			return fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
-		}
-		if err = unmarkBMHAllocated(ctx, c, logger, bmh); err != nil {
-			return fmt.Errorf("failed to unmarkBMHAllocated: %w", err)
-		}
-		if err = removeMetal3Finalizer(ctx, c, logger, bmh.Name, bmh.Namespace); err != nil {
-			return fmt.Errorf("failed to remove finalizer: %w", err)
-		}
+	if len(nodelist.Items) == 0 {
+		logger.InfoContext(ctx, "All nodes have been deleted")
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 func contains(slice []string, value string) bool {

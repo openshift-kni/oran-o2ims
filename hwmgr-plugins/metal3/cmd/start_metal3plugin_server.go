@@ -33,7 +33,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
-	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
@@ -186,18 +185,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	metal3HWPluginReconciler := &metal3ctrl.Metal3PluginReconciler{
-		Manager:         mgr,
-		Client:          mgr.GetClient(),
-		NoncachedClient: mgr.GetAPIReader(),
-		Scheme:          mgr.GetScheme(),
-		Logger:          slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "Metal3HWPlugin")),
-		PluginNamespace: hwpluginserver.GetMetal3HWPluginNamespace(),
-	}
-
-	// Start the Metal3 HardwarePlugin controller
-	if err := metal3HWPluginReconciler.SetupWithManager(mgr); err != nil {
-		logger.ErrorContext(ctx, "Unable to create controller",
+	if err := metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace()); err != nil {
+		logger.ErrorContext(ctx, "Unable to create metal3 plugin controller",
 			slog.String("controller", "Metal3HWPlugin"), slog.String("error", err.Error()))
 		return exit.Error(1)
 	}

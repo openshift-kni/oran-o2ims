@@ -18,12 +18,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -41,10 +39,13 @@ const (
 	BmhDetachedAnnotation          = "baremetalhost.metal3.io/detached"
 	BmhPausedAnnotation            = "baremetalhost.metal3.io/paused"
 	BmhRebootAnnotation            = "reboot.metal3.io"
+	BmhNetworkDataPrefx            = "network-data"
 	BiosUpdateNeededAnnotation     = "o2ims-hardwaremanagement.oran.openshift.io/bios-update-needed"
 	FirmwareUpdateNeededAnnotation = "o2ims-hardwaremanagement.oran.openshift.io/firmware-update-needed"
 	BmhAllocatedLabel              = "o2ims-hardwaremanagement.oran.openshift.io/allocated"
 	NodeNameAnnotation             = "o2ims-hardwaremanagement.oran.openshift.io/node-name"
+	BmhInfraEnvLabel               = "infraenvs.agent-install.openshift.io"
+	SiteConfigOwnedByLabel         = "siteconfig.open-cluster-management.io/owned-by"
 	Metal3Finalizer                = "preprovisioningimage.metal3.io"
 	UpdateReasonBIOSSettings       = "bios-settings-update"
 	UpdateReasonFirmware           = "firmware-update"
@@ -829,6 +830,126 @@ func getBMHForNode(ctx context.Context, c client.Client, node *hwmgmtv1alpha1.Al
 	return &bmh, nil
 }
 
+func removeInfraEnvLabelFromPreprovisioningImage(ctx context.Context, c client.Client, logger *slog.Logger, name types.NamespacedName) error {
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		image := &metal3v1alpha1.PreprovisioningImage{}
+		if err := c.Get(ctx, name, image); err != nil {
+			logger.ErrorContext(ctx, "Failed to get PreprovisioningImage",
+				slog.String("bmh", name.String()),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		patched := image.DeepCopy()
+		delete(patched.Labels, BmhInfraEnvLabel)
+
+		// Patch changes
+		patch := client.MergeFrom(image)
+		if err := c.Patch(ctx, patched, patch); err != nil {
+			logger.ErrorContext(ctx, "Failed to patch PreprovisioningImage",
+				slog.String("bmh", name.String()),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to patch PreprovisioningImage %s: %w", name.String(), err)
+		}
+
+		logger.InfoContext(ctx, "Successfully removed InfraEnv label from PreprovisioningImage",
+			slog.String("bmh", name.String()))
+		return nil
+	})
+
+}
+
+// removeInfraEnvLabel removes InfraEnvLabel from BMH and the corresponding PreprovisioningImage resource.
+func removeInfraEnvLabel(ctx context.Context, c client.Client, logger *slog.Logger, name types.NamespacedName) error {
+	// Remove BmhInfraEnvLabel from BMH
+	err := updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, BmhInfraEnvLabel, "", OpRemove)
+	if err != nil {
+		return fmt.Errorf("failed to remove %s label from BMH %v: %w", BmhInfraEnvLabel, name, err)
+	}
+
+	// Remove BmhInfraEnvLabel from preprovisioningImage
+	err = removeInfraEnvLabelFromPreprovisioningImage(ctx, c, logger, name)
+	if err != nil {
+		return fmt.Errorf("failed to remove %s label from PreprovisioningImage %v: %w", BmhInfraEnvLabel, name, err)
+	}
+	return nil
+}
+
+// finalizeBMHDeallocation deallocates a BareMetalHost that is no longer associated with a cluster deployment.
+func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		// Fetch the latest version of the BMH
+		var current metal3v1alpha1.BareMetalHost
+		if err := c.Get(ctx, name, &current); err != nil {
+			logger.ErrorContext(ctx, "Failed to get BMH",
+				slog.String("bmh", name.String()),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		patched := current.DeepCopy()
+
+		// Remove allocation-related labels
+		for _, key := range []string{SiteConfigOwnedByLabel, BmhAllocatedLabel} {
+			delete(patched.Labels, key)
+		}
+
+		// Remove configuration-related annotations
+		for _, key := range []string{BiosUpdateNeededAnnotation, FirmwareUpdateNeededAnnotation} {
+			delete(patched.Annotations, key)
+		}
+
+		patched.Spec.Online = false
+
+		// Clear CustomDeploy entirely
+		patched.Spec.CustomDeploy = nil
+
+		if bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned {
+			// Wipe partition tables using automated cleaning
+			patched.Spec.AutomatedCleaningMode = metal3v1alpha1.CleaningModeMetadata
+		}
+
+		// Reset pre-provisioning data
+		patched.Spec.PreprovisioningNetworkDataName = BmhNetworkDataPrefx + "-" + bmh.Name
+
+		// Clear image reference
+		patched.Spec.Image = nil
+
+		// Patch changes
+		patch := client.MergeFrom(&current)
+		if err := c.Patch(ctx, patched, patch); err != nil {
+			logger.ErrorContext(ctx, "Failed to patch BMH",
+				slog.String("bmh", name.String()),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to patch BMH %s: %w", name.String(), err)
+		}
+
+		logger.InfoContext(ctx, "Successfully deallocated BMH",
+			slog.String("bmh", name.String()))
+		return nil
+	})
+}
+
+// deallocateBMH deallocates a BareMetalHost that is no longer associated with a cluster deployment.
+func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+
+	// Remove InfraEnvLabel: ensure the assisted-service is no longer managing PreprovisioningImage
+	if err := removeInfraEnvLabel(ctx, c, logger, name); err != nil {
+		return fmt.Errorf("unable to removeInfraEnvLabel: %w", err)
+	}
+
+	// Clean up BMH
+	if err := finalizeBMHDeallocation(ctx, c, logger, bmh); err != nil {
+		return fmt.Errorf("unable to finalizeBMHDeallocation: %w", err)
+	}
+
+	return nil
+}
+
 // markBMHAllocated sets the "allocated" label to "true" on a BareMetalHost.
 func markBMHAllocated(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	// Check if the BMH is already allocated to avoid unnecessary patching
@@ -838,49 +959,4 @@ func markBMHAllocated(ctx context.Context, c client.Client, logger *slog.Logger,
 	}
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	return updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, BmhAllocatedLabel, ValueTrue, OpAdd)
-}
-
-// unmarkBMHAllocated removes the "allocated" label from a BareMetalHost if it exists.
-func unmarkBMHAllocated(ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost) error {
-	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-
-	if err := updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, BmhAllocatedLabel, "", OpRemove); err != nil {
-		return fmt.Errorf("failed to remove allocated label from BareMetalHost '%s': %w", bmh.Name, err)
-	}
-
-	if err := updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, utils.AllocatedNodeLabel, "", OpRemove); err != nil {
-		return fmt.Errorf("failed to remove allocated node name label from BareMetalHost '%s': %w", bmh.Name, err)
-	}
-
-	return nil
-}
-
-// removeMetal3Finalizer removes the Metal3 finalizer from the corresponding PreprovisioningImage resource.
-// This is necessary because BMO will not remove the finalizer when the assisted-service is managing the resource.
-func removeMetal3Finalizer(ctx context.Context, c client.Client, logger *slog.Logger, bmhName, bmhNamespace string) error {
-	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}
-
-	// Retrieve the PreprovisioningImage resource
-	image := &metal3v1alpha1.PreprovisioningImage{}
-	if err := c.Get(ctx, name, image); err != nil {
-		return fmt.Errorf("unable to find PreprovisioningImage (%v): %w", name, err)
-	}
-
-	// Check if the Metal3 finalizer is present
-	if !controllerutil.ContainsFinalizer(image, Metal3Finalizer) {
-		return nil
-	}
-
-	controllerutil.RemoveFinalizer(image, Metal3Finalizer)
-	if err := c.Update(ctx, image); err != nil {
-		return fmt.Errorf("failed to remove finalizer %s from PreprovisioningImage %s: %w",
-			Metal3Finalizer, image.Name, err)
-	}
-
-	logger.InfoContext(ctx, "Successfully removed Metal3 finalizer from PreprovisioningImage",
-		slog.String("PreprovisioningImage", image.Name))
-	return nil
 }
