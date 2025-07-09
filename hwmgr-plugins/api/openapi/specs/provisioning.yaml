@@ -555,6 +555,15 @@ components:
           type: string
           description: |
             Site identifier associated with the NodeAllocationRequest.
+        clusterId:
+          type: string
+          description: |
+            Cluster identifier associated with the NodeAllocationRequest.
+        configTransactionId:
+          type: integer
+          format: int64
+          description: |
+            ConfigTransactionId is the identifier of the configuration transaction.
         bootInterfaceLabel:
           type: string
           description: |
@@ -562,6 +571,8 @@ components:
       required:
         - nodeGroup
         - site
+        - clusterId
+        - configTransactionId
         - bootInterfaceLabel
 
     NodeGroup:
@@ -632,6 +643,11 @@ components:
           type: string
           description: |
             Hardware profile of the node.
+        configTransactionId:
+          type: integer
+          format: int64
+          description: |
+            ConfigTransactionId is the identifier of the configuration transaction.
         groupName:
           type: string
           description: |
@@ -644,6 +660,7 @@ components:
         - interfaces
         - groupName
         - hwProfile
+        - configTransactionId
         - status
 
     BMC:
@@ -711,6 +728,11 @@ components:
           additionalProperties:
             type: string
           description: SelectedGroups is a map of group identifiers to their selected values
+        observedConfigTransactionId:
+          type: integer
+          format: int64
+          description: |
+            ObservedConfigTransactionId is the identifier of the observed configuration transaction.
       required: []
 
     AllocatedNodeStatus:
@@ -723,6 +745,11 @@ components:
           description: Conditions represent the latest available observations of an AllocatedNode's state.
           items:
             $ref: '#/components/schemas/Condition'    
+        observedConfigTransactionId:
+          type: integer
+          format: int64
+          description: |
+            ObservedConfigTransactionId is the identifier of the observed configuration transaction.
 
     Properties:
       type: object

@@ -151,11 +151,18 @@ func UpdateNodeAllocationRequestStatusCondition(
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
+
 		SetStatusCondition(&newNodeAllocationRequest.Status.Conditions,
 			string(conditionType),
 			string(conditionReason),
 			conditionStatus,
 			message)
+
+		// Update the observed config transaction id if the condition is Configured
+		if conditionType == pluginv1alpha1.Configured {
+			newNodeAllocationRequest.Status.ObservedConfigTransactionId = nodeAllocationRequest.Spec.ConfigTransactionId
+		}
+
 		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
 			return err
 		}

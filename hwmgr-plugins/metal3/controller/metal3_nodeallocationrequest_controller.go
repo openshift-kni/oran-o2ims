@@ -96,7 +96,7 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 	}
 
 	// Add logging context with data from the CR
-	ctx = logging.AppendCtx(ctx, slog.String("CloudID", nodeAllocationRequest.Spec.CloudID))
+	ctx = logging.AppendCtx(ctx, slog.String("ClusterID", nodeAllocationRequest.Spec.ClusterId))
 	ctx = logging.AppendCtx(ctx, slog.String("startingResourceVersion", nodeAllocationRequest.ResourceVersion))
 
 	r.Logger.InfoContext(ctx, "Reconciling NodeAllocationRequest")
@@ -231,7 +231,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 		nodeAllocationRequest.Status.Conditions,
 		string(hwmgmtv1alpha1.Configured))
 	// Set a default status that will be updated during the configuration process
-	if configuredCondition == nil {
+	if configuredCondition == nil || configuredCondition.Status == metav1.ConditionTrue {
 		if result, err := setAwaitConfigCondition(ctx, r.Client, nodeAllocationRequest); err != nil {
 			return result, err
 		}
