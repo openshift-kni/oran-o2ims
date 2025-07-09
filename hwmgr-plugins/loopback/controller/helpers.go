@@ -34,8 +34,8 @@ func processNewNodeAllocationRequest(ctx context.Context,
 	logger *slog.Logger,
 	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) error {
 
-	cloudID := nodeAllocationRequest.Spec.CloudID
-	logger.InfoContext(ctx, "Processing New NodeAllocationRequest:", slog.String("cloudID", cloudID))
+	clusterID := nodeAllocationRequest.Spec.ClusterId
+	logger.InfoContext(ctx, "Processing New NodeAllocationRequest:", slog.String("clusterID", clusterID))
 
 	_, resources, allocations, err := getCurrentResources(ctx, c, logger, nodeAllocationRequest.Namespace)
 	if err != nil {
@@ -60,7 +60,7 @@ func checkNodeAllocationRequestProgress(
 	logger *slog.Logger,
 	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (full bool, err error) {
 
-	cloudID := nodeAllocationRequest.Spec.CloudID
+	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	if full, err = isNodeAllocationRequestFullyAllocated(ctx, c, logger, nodeAllocationRequest); err != nil {
 		err = fmt.Errorf("failed to check NodeAllocationRequest allocation: %w", err)
@@ -72,7 +72,7 @@ func checkNodeAllocationRequestProgress(
 
 	for _, nodegroup := range nodeAllocationRequest.Spec.NodeGroup {
 		logger.InfoContext(ctx, "Allocating node for checkNodeAllocationRequestProgress request:",
-			slog.String("cloudID", cloudID),
+			slog.String("clusterID", clusterID),
 			slog.String("nodegroup name", nodegroup.NodeGroupData.Name),
 		)
 
@@ -92,7 +92,7 @@ func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest,
 ) (bool, error) {
 
-	cloudID := nodeAllocationRequest.Spec.CloudID
+	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	_, resources, allocations, err := getCurrentResources(ctx, c, logger, nodeAllocationRequest.Namespace)
 	if err != nil {
@@ -101,7 +101,7 @@ func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 
 	var cloud *cmAllocatedCloud
 	for i, iter := range allocations.Clouds {
-		if iter.CloudID == cloudID {
+		if iter.CloudID == clusterID {
 			cloud = &allocations.Clouds[i]
 			break
 		}
@@ -238,10 +238,10 @@ func releaseNodeAllocationRequest(ctx context.Context,
 	logger *slog.Logger,
 	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) error {
 
-	cloudID := nodeAllocationRequest.Spec.CloudID
+	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	logger.InfoContext(ctx, "Processing releaseNodeAllocationRequest request:",
-		slog.String("cloudID", cloudID),
+		slog.String("clusterID", clusterID),
 	)
 
 	cm, _, allocations, err := getCurrentResources(ctx, c, logger, nodeAllocationRequest.Namespace)
@@ -251,18 +251,18 @@ func releaseNodeAllocationRequest(ctx context.Context,
 
 	index := -1
 	for i, cloud := range allocations.Clouds {
-		if cloud.CloudID == cloudID {
+		if cloud.CloudID == clusterID {
 			index = i
 			break
 		}
 	}
 
 	if index == -1 {
-		logger.InfoContext(ctx, "no allocated nodes found", slog.String("cloudID", cloudID))
+		logger.InfoContext(ctx, "no allocated nodes found", slog.String("clusterID", clusterID))
 		return nil
 	}
 
-	allocations.Clouds = slices.Delete[[]cmAllocatedCloud](allocations.Clouds, index, index+1)
+	allocations.Clouds = slices.Delete(allocations.Clouds, index, index+1)
 
 	// Update the configmap
 	yamlString, err := yaml.Marshal(&allocations)
@@ -283,7 +283,7 @@ func allocateNode(ctx context.Context,
 	logger *slog.Logger,
 	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) error {
 
-	cloudID := nodeAllocationRequest.Spec.CloudID
+	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	// Inject a delay before allocating node
 	time.Sleep(10 * time.Second)
@@ -295,14 +295,14 @@ func allocateNode(ctx context.Context,
 
 	var cloud *cmAllocatedCloud
 	for i, iter := range allocations.Clouds {
-		if iter.CloudID == cloudID {
+		if iter.CloudID == clusterID {
 			cloud = &allocations.Clouds[i]
 			break
 		}
 	}
 	if cloud == nil {
 		// The cloud wasn't found in the list, so create a new entry
-		allocations.Clouds = append(allocations.Clouds, cmAllocatedCloud{CloudID: cloudID, Nodegroups: make(map[string][]cmAllocatedNode)})
+		allocations.Clouds = append(allocations.Clouds, cmAllocatedCloud{CloudID: clusterID, Nodegroups: make(map[string][]cmAllocatedNode)})
 		cloud = &allocations.Clouds[len(allocations.Clouds)-1]
 	}
 
@@ -348,7 +348,7 @@ func allocateNode(ctx context.Context,
 			return fmt.Errorf("failed to update configmap: %w", err)
 		}
 
-		if err := createNode(ctx, c, logger, nodeAllocationRequest, cloudID, nodename, nodeId, nodegroup.NodeGroupData.Name, nodegroup.NodeGroupData.HwProfile); err != nil {
+		if err := createNode(ctx, c, logger, nodeAllocationRequest, clusterID, nodename, nodeId, nodegroup.NodeGroupData.Name, nodegroup.NodeGroupData.HwProfile); err != nil {
 			return fmt.Errorf("failed to create allocated node (%s): %w", nodename, err)
 		}
 

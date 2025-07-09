@@ -20,6 +20,9 @@ spec:
     - jsonPath: .spec.hardwarePluginRef
       name: HardwarePlugin
       type: string
+    - jsonPath: .spec.clusterId
+      name: Cluster ID
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -56,12 +59,15 @@ spec:
                 description: BootInterfaceLabel is the label of the boot interface.
                 minLength: 1
                 type: string
-              cloudID:
+              clusterId:
                 description: |-
-                  CloudID is the identifier of the O-Cloud that generated this request. The hardware
+                  ClusterID is the identifier of the O-Cloud that generated this request. The hardware
                   manager may want to use this to tag the nodes in its database, and to generate
                   statistics.
                 type: string
+              configTransactionId:
+                format: int64
+                type: integer
               extensions:
                 additionalProperties:
                   type: string
@@ -113,7 +119,8 @@ spec:
                 type: string
             required:
             - bootInterfaceLabel
-            - cloudID
+            - clusterId
+            - configTransactionId
             - nodeGroup
             - site
             type: object
@@ -201,6 +208,9 @@ spec:
                     format: int64
                     type: integer
                 type: object
+              observedConfigTransactionId:
+                format: int64
+                type: integer
               properties:
                 description: Properties represent the node properties in the pool
                 properties:
@@ -213,6 +223,8 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
+            required:
+            - observedConfigTransactionId
             type: object
         type: object
     served: true
