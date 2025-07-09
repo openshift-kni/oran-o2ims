@@ -142,7 +142,7 @@ metadata:
             "namespace": "oran-hwmgr-plugin"
           },
           "spec": {
-            "cloudID": "sample",
+            "clusterId": "sample",
             "extensions": [],
             "hardwarePluginRef": "loopback-1",
             "nodeGroup": [
@@ -1133,13 +1133,15 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
-          CloudID is the identifier of the O-Cloud that generated this request. The hardware
+          ClusterID is the identifier of the O-Cloud that generated this request. The hardware
           manager may want to use this to tag the nodes in its database, and to generate
           statistics.
-        displayName: Cloud ID
-        path: cloudID
+        displayName: Cluster ID
+        path: clusterId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - displayName: Config Transaction Id
+        path: configTransactionId
       - displayName: Extensions
         path: extensions
       - description: HardwarePluginRef is the name of the HardwarePlugin.
@@ -1166,6 +1168,8 @@ spec:
         path: conditions
       - displayName: Hw Mgr Plugin
         path: hwMgrPlugin
+      - displayName: Observed Config Transaction Id
+        path: observedConfigTransactionId
       - description: Properties represent the node properties in the pool
         displayName: Properties
         path: properties

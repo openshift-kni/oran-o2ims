@@ -130,7 +130,7 @@ func getCurrentResources(ctx context.Context, c client.Client, logger *slog.Logg
 func getAllocatedNodes(ctx context.Context,
 	c client.Client, logger *slog.Logger,
 	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (allocatedNodes []string, err error) {
-	cloudID := nodeAllocationRequest.Spec.CloudID
+	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	_, _, allocations, err := getCurrentResources(ctx, c, logger, nodeAllocationRequest.Namespace)
 	if err != nil {
@@ -140,7 +140,7 @@ func getAllocatedNodes(ctx context.Context,
 
 	var cloud *cmAllocatedCloud
 	for i, iter := range allocations.Clouds {
-		if iter.CloudID == cloudID {
+		if iter.CloudID == clusterID {
 			cloud = &allocations.Clouds[i]
 			break
 		}

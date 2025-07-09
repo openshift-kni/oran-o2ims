@@ -27,13 +27,13 @@ type LocationSpec struct {
 
 // NodeAllocationRequestSpec describes a group of nodes to allocate
 type NodeAllocationRequestSpec struct {
-	// CloudID is the identifier of the O-Cloud that generated this request. The hardware
+	// ClusterID is the identifier of the O-Cloud that generated this request. The hardware
 	// manager may want to use this to tag the nodes in its database, and to generate
 	// statistics.
 	//
 	// +kubebuilder:validation:Required
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	CloudID string `json:"cloudID"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	ClusterId string `json:"clusterId"`
 
 	// LocationSpec is the geographical location of the requested node.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Location Spec",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -48,6 +48,9 @@ type NodeAllocationRequestSpec struct {
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
+
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	ConfigTransactionId int64 `json:"configTransactionId"`
 
 	// BootInterfaceLabel is the label of the boot interface.
 	// +kubebuilder:validation:MinLength=1
@@ -87,6 +90,9 @@ type NodeAllocationRequestStatus struct {
 	HwMgrPlugin GenerationStatus `json:"hwMgrPlugin,omitempty"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=status
+	ObservedConfigTransactionId int64 `json:"observedConfigTransactionId"`
+
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	SelectedGroups map[string]string `json:"selectedGroups,omitempty"`
 }
 
@@ -96,6 +102,7 @@ type NodeAllocationRequestStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=nodeallocationrequests,shortName=orannar
 // +kubebuilder:printcolumn:name="HardwarePlugin",type="string",JSONPath=".spec.hardwarePluginRef"
+// +kubebuilder:printcolumn:name="Cluster ID",type="string",JSONPath=".spec.clusterId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.conditions[-1:].reason"
 // +operator-sdk:csv:customresourcedefinitions:displayName="Node Allocation Request",resources={{Namespace, v1}}

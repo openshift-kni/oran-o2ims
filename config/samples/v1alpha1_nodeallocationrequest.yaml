@@ -13,7 +13,7 @@ metadata:
   name: sample-nodeallocationrequest
   namespace: oran-hwmgr-plugin
 spec:
-  cloudID: sample
+  clusterId: sample
   hardwarePluginRef: loopback-1
   nodeGroup:
   - nodeGroupData:

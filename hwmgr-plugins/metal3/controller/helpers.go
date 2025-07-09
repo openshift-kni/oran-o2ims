@@ -573,10 +573,10 @@ func releaseNodeAllocationRequest(ctx context.Context,
 	logger *slog.Logger,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
-	cloudID := nodeAllocationRequest.Spec.CloudID
+	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	logger.InfoContext(ctx, "Processing releaseNodeAllocationRequest request:",
-		slog.String("cloudID", cloudID),
+		slog.String("clusterID", clusterID),
 	)
 
 	// remove the allocated label from BMHs and finalizer from the corresponding PreprovisioningImage resources

@@ -241,7 +241,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestProvisionS
 	return provisioned, timedOutOrFailed, err
 }
 
-// checkNodeAllocationRequestConfigStatus checks the configured status of the node allocation request.
+// checkNodeAllocationRequestConfigStatus checks the Configured status of the node allocation request.
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStatus(
 	ctx context.Context,
 	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse,
@@ -253,7 +253,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStat
 			// Condition does not exist, return nil (acceptable case)
 			return nil, timedOutOrFailed, nil
 		}
-		return nil, timedOutOrFailed, fmt.Errorf("failed to check NodeAllocationRequest configured status: %w", err)
+		return nil, timedOutOrFailed, fmt.Errorf("failed to check NodeAllocationRequest Configured status: %w", err)
 	}
 	return &status, timedOutOrFailed, nil
 }
@@ -430,11 +430,15 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		}
 	}
 
-	if hwCondition == nil {
+	waitingForConfigStart := condition == hwv1alpha1.Configured &&
+		(nodeAllocationRequest.Status.ObservedConfigTransactionId == nil ||
+			*nodeAllocationRequest.Status.ObservedConfigTransactionId != t.object.Generation)
+
+	if hwCondition == nil || waitingForConfigStart {
 		// Condition does not exist
 		status = metav1.ConditionUnknown
 		reason = string(provisioningv1alpha1.CRconditionReasons.Unknown)
-		message = fmt.Sprintf("Waiting for NodeAllocationRequest (%s) to be processed", nodeAllocationRequestID)
+		message = fmt.Sprintf("Hardware %s is in progress", utils.GetStatusMessage(condition))
 
 		if condition == hwv1alpha1.Configured {
 			// If there was no hardware configuration update initiated, return a custom error to
@@ -575,10 +579,18 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamOCloudSiteId, err)
 	}
 
+	clusterId, err := provisioningv1alpha1.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamNodeClusterName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamNodeClusterName, err)
+	}
+
 	nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{}
 	nodeAllocationRequest.Site = siteID.(string)
+	nodeAllocationRequest.ClusterId = clusterId.(string)
 	nodeAllocationRequest.NodeGroup = nodeGroups
 	nodeAllocationRequest.BootInterfaceLabel = hwTemplate.Spec.BootInterfaceLabel
+	nodeAllocationRequest.ConfigTransactionId = t.object.Generation
 
 	return nodeAllocationRequest, nil
 }
