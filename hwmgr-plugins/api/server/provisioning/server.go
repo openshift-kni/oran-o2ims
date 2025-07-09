@@ -159,10 +159,12 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 			},
 		},
 		Spec: hwv1alpha1.NodeAllocationRequestSpec{
-			HardwarePluginRef:  h.HardwarePluginID,
-			NodeGroup:          nodeGroups,
-			LocationSpec:       hwv1alpha1.LocationSpec{Site: request.Body.Site},
-			BootInterfaceLabel: request.Body.BootInterfaceLabel,
+			HardwarePluginRef:   h.HardwarePluginID,
+			NodeGroup:           nodeGroups,
+			LocationSpec:        hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			BootInterfaceLabel:  request.Body.BootInterfaceLabel,
+			ClusterId:           request.Body.ClusterId,
+			ConfigTransactionId: request.Body.ConfigTransactionId,
 		},
 	}
 
@@ -215,10 +217,12 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 			Namespace: existingNodeAllocationRequest.Namespace,
 		},
 		Spec: hwv1alpha1.NodeAllocationRequestSpec{
-			HardwarePluginRef:  existingNodeAllocationRequest.Spec.HardwarePluginRef,
-			NodeGroup:          nodeGroups,
-			LocationSpec:       hwv1alpha1.LocationSpec{Site: request.Body.Site},
-			BootInterfaceLabel: request.Body.BootInterfaceLabel,
+			HardwarePluginRef:   existingNodeAllocationRequest.Spec.HardwarePluginRef,
+			NodeGroup:           nodeGroups,
+			LocationSpec:        hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			BootInterfaceLabel:  request.Body.BootInterfaceLabel,
+			ClusterId:           request.Body.ClusterId,
+			ConfigTransactionId: request.Body.ConfigTransactionId,
 		},
 	}
 
