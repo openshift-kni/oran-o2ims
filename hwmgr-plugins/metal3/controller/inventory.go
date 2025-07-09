@@ -228,7 +228,8 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	case metal3v1alpha1.StateAvailable,
 		metal3v1alpha1.StateProvisioning,
 		metal3v1alpha1.StateProvisioned,
-		metal3v1alpha1.StatePreparing:
+		metal3v1alpha1.StatePreparing,
+		metal3v1alpha1.StateDeprovisioning:
 		return true
 	}
 	return false

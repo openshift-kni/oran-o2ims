@@ -27,8 +27,8 @@ import (
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
-// Metal3PluginReconciler reconciles NodeAllocationRequest objects associated with the Metal3 H/W plugin
-type Metal3PluginReconciler struct {
+// NodeAllocationRequestReconciler reconciles NodeAllocationRequest objects associated with the Metal3 H/W plugin
+type NodeAllocationRequestReconciler struct {
 	ctrl.Manager
 	client.Client
 	NoncachedClient client.Reader
@@ -38,7 +38,8 @@ type Metal3PluginReconciler struct {
 	PluginNamespace string
 }
 
-func (r *Metal3PluginReconciler) SetupIndexer(ctx context.Context) error {
+func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) error {
+	r.Logger.Info("SetupIndexer Start")
 	// Setup AllocatedNode CRD indexer. This field indexer allows us to query a list of AllocatedNode CRs, filtered by the spec.nodeAllocationRequest field.
 	nodeIndexFunc := func(obj client.Object) []string {
 		return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
@@ -47,7 +48,6 @@ func (r *Metal3PluginReconciler) SetupIndexer(ctx context.Context) error {
 	if err := r.Manager.GetFieldIndexer().IndexField(ctx, &hwmgmtv1alpha1.AllocatedNode{}, hwpluginutils.AllocatedNodeSpecNodeAllocationRequestKey, nodeIndexFunc); err != nil {
 		return fmt.Errorf("failed to setup node indexer: %w", err)
 	}
-
 	return nil
 }
 
@@ -70,7 +70,7 @@ func (r *Metal3PluginReconciler) SetupIndexer(ctx context.Context) error {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch;delete
 
-func (r *Metal3PluginReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
 
 	// Add logging context with the NodeAllocationRequest name
@@ -138,7 +138,7 @@ func (r *Metal3PluginReconciler) Reconcile(ctx context.Context, req ctrl.Request
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Metal3PluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *NodeAllocationRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Create a label selector for filtering NodeAllocationRequests pertaining to the Metal3 HardwarePlugin
 	labelSelector := metav1.LabelSelector{
@@ -164,7 +164,7 @@ func (r *Metal3PluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // HandleNodeAllocationRequest processes the NodeAllocationRequest CR
-func (r *Metal3PluginReconciler) HandleNodeAllocationRequest(
+func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 	result := hwpluginutils.DoNotRequeue()
 
@@ -190,7 +190,7 @@ func (r *Metal3PluginReconciler) HandleNodeAllocationRequest(
 	return result, nil
 }
 
-func (r *Metal3PluginReconciler) handleNewNodeAllocationRequestCreate(
+func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
@@ -223,7 +223,7 @@ func (r *Metal3PluginReconciler) handleNewNodeAllocationRequestCreate(
 	return hwpluginutils.DoNotRequeue(), nil
 }
 
-func (r *Metal3PluginReconciler) handleNodeAllocationRequestSpecChanged(
+func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
@@ -262,7 +262,7 @@ func (r *Metal3PluginReconciler) handleNodeAllocationRequestSpecChanged(
 	return result, err
 }
 
-func (r *Metal3PluginReconciler) handleNodeAllocationRequestProcessing(
+func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
@@ -307,13 +307,9 @@ func (r *Metal3PluginReconciler) handleNodeAllocationRequestProcessing(
 }
 
 // handleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion
-func (r *Metal3PluginReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
+func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
 	r.Logger.InfoContext(ctx, "Finalizing NodeAllocationRequest")
 
-	if err := releaseNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
-		return false, fmt.Errorf("failed to release NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
-	}
-
-	return true, nil
+	return releaseNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest)
 }

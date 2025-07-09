@@ -247,9 +247,11 @@ func (h *HardwarePluginServer) DeleteNodeAllocationRequest(
 				Status: http.StatusNotFound,
 			}), nil
 	}
+	deletePolicy := metav1.DeletePropagationForeground
+	deleteOptions := &client.DeleteOptions{PropagationPolicy: &deletePolicy}
 
 	// Delete the NodeAllocationRequest resource
-	if err := h.HubClient.Delete(ctx, existingNodeAllocationRequest); err != nil {
+	if err := h.HubClient.Delete(ctx, existingNodeAllocationRequest, deleteOptions); err != nil {
 		return nil, fmt.Errorf("failed to delete NodeAllocationRequest '%s', err: %w", request.NodeAllocationRequestId, err)
 	}
 
