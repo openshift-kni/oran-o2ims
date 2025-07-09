@@ -110,10 +110,10 @@ spec:
         multi-platform-controller.
       name: build-platforms
       type: array
-   - default: []
-     description: Additional tags to apply to the built container image
-     name: additional-tags
-     type: array
+    - default: []
+      description: Additional tags to apply to the built container image
+      name: additional-tags
+      type: array
   results:
     - description: ''
       name: IMAGE_URL
@@ -178,23 +178,23 @@ spec:
           workspace: git-auth
     - name: generate-labels
       params:
-      - name: label-templates
-        value:
-        - build-date=$SOURCE_DATE
-        - short-commit=$(tasks.clone-repository.results.short-commit)
-        - version=v4.20-$SOURCE_DATE_EPOCH
-      - name: source-date-epoch
-        value: $(tasks.clone-repository.results.commit-timestamp)
+        - name: label-templates
+          value:
+            - build-date=$SOURCE_DATE
+            - short-commit=$(tasks.clone-repository.results.short-commit)
+            - version=v4.20-$SOURCE_DATE_EPOCH
+        - name: source-date-epoch
+          value: $(tasks.clone-repository.results.commit-timestamp)
       runAfter:
-      - clone-repository
+        - clone-repository
       taskRef:
         params:
-        - name: name
-          value: generate-labels
-        - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-generate-labels:0.1@sha256:e1f4746dc33206a17867ead8f5c82a569cd925d352a19d108f205f54efc5589d
-        - name: kind
-          value: task
+          - name: name
+            value: generate-labels
+          - name: bundle
+            value: quay.io/konflux-ci/tekton-catalog/task-generate-labels:0.1@sha256:e1f4746dc33206a17867ead8f5c82a569cd925d352a19d108f205f54efc5589d
+          - name: kind
+            value: task
         resolver: bundles
     - name: prefetch-dependencies
       params:
@@ -257,6 +257,21 @@ spec:
           value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
         - name: IMAGE_APPEND_PLATFORM
           value: 'true'
+        - name: LABELS
+          value:
+            - '$(tasks.generate-labels.results.labels[*])'
+            - com.redhat.component=o-cloud-manager-operator-container
+            - description=o-cloud-manager
+            - distribution-scope=public
+            - io.k8s.description=o-cloud-manager
+            - name=openshift4/o-cloud-manager-rhel9-operator
+            - release=4.20
+            - 'url=https://github.com/openshift-kni/oran-o2ims'
+            - 'vendor=Red Hat, Inc.'
+            - io.k8s.display-name=o-cloud-manager
+            - io.openshift.tags=o-cloud-manager
+            - summary=o-cloud-manager
+            - 'maintainer=sskeard@redhat.com,rauherna@redhat.com'
       runAfter:
         - prefetch-dependencies
       taskRef:
@@ -574,6 +589,8 @@ spec:
             - 'false'
     - name: apply-tags
       params:
+        - name: ADDITIONAL_TAGS
+          value: $(params.additional-tags[*])
         - name: IMAGE_URL
           value: $(tasks.build-image-index.results.IMAGE_URL)
         - name: IMAGE_DIGEST
