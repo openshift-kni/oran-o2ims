@@ -18,7 +18,8 @@ import (
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	lcav1 "github.com/openshift-kni/lifecycle-agent/api/imagebasedupgrade/v1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
@@ -123,16 +124,16 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 			},
 			// hardware template
-			&hwv1alpha1.HardwareTemplate{
+			&hwmgmtv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplate,
 					Namespace: utils.InventoryNamespace,
 				},
-				Spec: hwv1alpha1.HardwareTemplateSpec{
+				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 					HardwarePluginRef:           utils.UnitTestHwPluginRef,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
-					NodeGroupData: []hwv1alpha1.NodeGroupData{
+					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
 							Name:           "controller",
 							Role:           "master",
@@ -305,7 +306,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			conditions := reconciledCR.Status.Conditions
 
 			// Verify NodeAllocationRequest was created
-			nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
+			nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 			Expect(c.Get(ctx, types.NamespacedName{
 				Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, nodeAllocationRequest)).To(Succeed())
 
@@ -345,17 +346,17 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 	})
 
 	Context("When NodeAllocationRequest has been created", func() {
-		var nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest
+		var nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
 			// Create NodeAllocationRequest resource
-			nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
+			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
 			nodeAllocationRequest.SetName(crName)
 			nodeAllocationRequest.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodeAllocationRequest.Spec.HardwarePluginRef = utils.UnitTestHwPluginRef
 			// Ensure that the NodeGroup matches the data in the hwTemplate
-			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{NodeGroupData: hwv1alpha1.NodeGroupData{
+			nodeAllocationRequest.Spec.NodeGroup = []pluginsv1alpha1.NodeGroup{
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 					Name:           "controller",
 					Role:           "master",
 					HwProfile:      "profile-spr-single-processor-64G",
@@ -363,7 +364,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 					Size: 1,
 				},
-				{NodeGroupData: hwv1alpha1.NodeGroupData{
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 					Name:           "worker",
 					Role:           "worker",
 					HwProfile:      "profile-spr-dual-processor-128G",
@@ -373,10 +374,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 			}
 			nodeAllocationRequest.Status.Conditions = []metav1.Condition{
-				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwv1alpha1.InProgress)},
+				{Type: string(hwmgmtv1alpha1.Provisioned), Status: metav1.ConditionFalse, Reason: string(hwmgmtv1alpha1.InProgress)},
 			}
-			nodeAllocationRequest.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
+			nodeAllocationRequest.Status.Properties = hwmgmtv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
+			nodeAllocationRequest.Annotations = map[string]string{hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 
@@ -420,10 +421,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		It("Verify ClusterInstance should be created when NodeAllocationRequest has provisioned", func() {
 			// Patch NodeAllocationRequest provision status to Completed
 			narProvisionedCond := meta.FindStatusCondition(
-				nodeAllocationRequest.Status.Conditions, string(hwv1alpha1.Provisioned),
+				nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Provisioned),
 			)
 			narProvisionedCond.Status = metav1.ConditionTrue
-			narProvisionedCond.Reason = string(hwv1alpha1.Completed)
+			narProvisionedCond.Reason = string(hwmgmtv1alpha1.Completed)
 			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
 
 			// Start reconciliation
@@ -466,10 +467,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		It("Verify status when HW provision has failed", func() {
 			// Patch NodeAllocationRequest provision status to Completed
 			narProvisionedCond := meta.FindStatusCondition(
-				nodeAllocationRequest.Status.Conditions, string(hwv1alpha1.Provisioned),
+				nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Provisioned),
 			)
 			narProvisionedCond.Status = metav1.ConditionFalse
-			narProvisionedCond.Reason = string(hwv1alpha1.Failed)
+			narProvisionedCond.Reason = string(hwmgmtv1alpha1.Failed)
 			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
 
 			// Start reconciliation again
@@ -537,13 +538,13 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Patch NodeAllocationRequest provision status to Completed
-			currentNar := &hwv1alpha1.NodeAllocationRequest{}
+			currentNar := &pluginsv1alpha1.NodeAllocationRequest{}
 			Expect(c.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNar)).To(Succeed())
 			narProvisionedCond := meta.FindStatusCondition(
-				currentNar.Status.Conditions, string(hwv1alpha1.Provisioned),
+				currentNar.Status.Conditions, string(hwmgmtv1alpha1.Provisioned),
 			)
 			narProvisionedCond.Status = metav1.ConditionFalse
-			narProvisionedCond.Reason = string(hwv1alpha1.Failed)
+			narProvisionedCond.Reason = string(hwmgmtv1alpha1.Failed)
 			narProvisionedCond.Message = "NodeAllocationRequest failed"
 			Expect(c.Status().Update(ctx, currentNar)).To(Succeed())
 
@@ -587,20 +588,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 
 	Context("When ClusterInstance has been created", func() {
 		var (
-			nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest
+			nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
 			clusterInstance       *siteconfig.ClusterInstance
 			managedCluster        *clusterv1.ManagedCluster
 			policy                *policiesv1.Policy
 		)
 		BeforeEach(func() {
 			// Create NodeAllocationRequest resource that has provisioned
-			nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
+			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
 			nodeAllocationRequest.SetName(crName)
 			nodeAllocationRequest.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodeAllocationRequest.Spec.HardwarePluginRef = utils.UnitTestHwPluginRef
 			// Ensure that the NodeGroup matches the data in the hwTemplate
-			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{NodeGroupData: hwv1alpha1.NodeGroupData{
+			nodeAllocationRequest.Spec.NodeGroup = []pluginsv1alpha1.NodeGroup{
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 					Name:           "controller",
 					Role:           "master",
 					HwProfile:      "profile-spr-single-processor-64G",
@@ -608,7 +609,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 					Size: 1,
 				},
-				{NodeGroupData: hwv1alpha1.NodeGroupData{
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 					Name:           "worker",
 					Role:           "worker",
 					HwProfile:      "profile-spr-dual-processor-128G",
@@ -618,10 +619,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 			}
 			nodeAllocationRequest.Status.Conditions = []metav1.Condition{
-				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
+				{Type: string(hwmgmtv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwmgmtv1alpha1.Completed)},
 			}
-			nodeAllocationRequest.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
+			nodeAllocationRequest.Status.Properties = hwmgmtv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
+			nodeAllocationRequest.Annotations = map[string]string{hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 			// Set the provisioningRequest extensions.nodeAllocationRequestRef
@@ -1343,22 +1344,22 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 	Context("When hw template is updated", func() {
 		var (
 			hwTemplateName        = "hw-template-updated"
-			hwTemplate            *hwv1alpha1.HardwareTemplate
-			nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest
+			hwTemplate            *hwmgmtv1alpha1.HardwareTemplate
+			nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
 			tVersion              = "v1.0.0-1"
 		)
 
 		BeforeEach(func() {
-			hwTemplate = &hwv1alpha1.HardwareTemplate{
+			hwTemplate = &hwmgmtv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplateName,
 					Namespace: utils.InventoryNamespace,
 				},
-				Spec: hwv1alpha1.HardwareTemplateSpec{
+				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 					HardwarePluginRef:           utils.UnitTestHwPluginRef,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
-					NodeGroupData: []hwv1alpha1.NodeGroupData{
+					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
 							Name:           "controller",
 							Role:           "master",
@@ -1409,12 +1410,12 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			Expect(c.Create(ctx, ct)).To(Succeed())
 
 			// Create NodeAllocationRequest resource that has provisioned
-			nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
+			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
 			nodeAllocationRequest.SetName(crName)
 			nodeAllocationRequest.SetNamespace(utils.UnitTestHwmgrNamespace)
 			nodeAllocationRequest.Spec.HardwarePluginRef = utils.UnitTestHwPluginRef
-			nodeAllocationRequest.Spec.NodeGroup = []hwv1alpha1.NodeGroup{
-				{NodeGroupData: hwv1alpha1.NodeGroupData{
+			nodeAllocationRequest.Spec.NodeGroup = []pluginsv1alpha1.NodeGroup{
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 					Name:           "controller",
 					Role:           "master",
 					HwProfile:      "profile-spr-single-processor-64G",
@@ -1422,7 +1423,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 					Size: 1,
 				},
-				{NodeGroupData: hwv1alpha1.NodeGroupData{
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 					Name:           "worker",
 					Role:           "worker",
 					HwProfile:      "profile-spr-dual-processor-128G",
@@ -1432,10 +1433,10 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 				},
 			}
 			nodeAllocationRequest.Status.Conditions = []metav1.Condition{
-				{Type: string(hwv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwv1alpha1.Completed)},
+				{Type: string(hwmgmtv1alpha1.Provisioned), Status: metav1.ConditionTrue, Reason: string(hwmgmtv1alpha1.Completed)},
 			}
-			nodeAllocationRequest.Status.Properties = hwv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
-			nodeAllocationRequest.Annotations = map[string]string{hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
+			nodeAllocationRequest.Status.Properties = hwmgmtv1alpha1.Properties{NodeNames: []string{testutils.MasterNodeName}}
+			nodeAllocationRequest.Annotations = map[string]string{hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface"}
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 			cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
@@ -1475,9 +1476,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		It("should update the status to InProgress when nodeAllocationRequest has configured condition in progress", func() {
 			// Set the configured condition to in progress
 			nodeAllocationRequest.Status.Conditions = append(nodeAllocationRequest.Status.Conditions, metav1.Condition{
-				Type:    string(hwv1alpha1.Configured),
+				Type:    string(hwmgmtv1alpha1.Configured),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(hwv1alpha1.InProgress),
+				Reason:  string(hwmgmtv1alpha1.InProgress),
 				Message: "Hardware configuring is in progress",
 			})
 			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
@@ -1507,9 +1508,9 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 		It("should update the status to completed when nodeAllocationRequest has configured condition completed", func() {
 			// Set the configured condition to completed
 			nodeAllocationRequest.Status.Conditions = append(nodeAllocationRequest.Status.Conditions, metav1.Condition{
-				Type:    string(hwv1alpha1.Configured),
+				Type:    string(hwmgmtv1alpha1.Configured),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(hwv1alpha1.ConfigApplied),
+				Reason:  string(hwmgmtv1alpha1.ConfigApplied),
 				Message: "Configuration has been applied successfully",
 			})
 			Expect(c.Status().Update(ctx, nodeAllocationRequest)).To(Succeed())
@@ -1531,7 +1532,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			testutils.VerifyStatusCondition(*hwConfiguredCond, metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(hwv1alpha1.ConfigApplied),
+				Reason:  string(hwmgmtv1alpha1.ConfigApplied),
 				Message: "Configuration has been applied successfully",
 			})
 		})
@@ -1607,20 +1608,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			}
 			Expect(c.Create(ctx, agent)).To(Succeed())
 
-			nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
+			nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
 					Namespace: utils.UnitTestHwmgrNamespace,
 					Annotations: map[string]string{
-						hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
+						hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 					},
 				},
-				Spec: hwv1alpha1.NodeAllocationRequestSpec{
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					HardwarePluginRef: utils.UnitTestHwPluginRef,
 					// Ensure that the NodeGroup matches the data in the hwTemplate
-					NodeGroup: []hwv1alpha1.NodeGroup{
+					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{
-							NodeGroupData: hwv1alpha1.NodeGroupData{
+							NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 								Name:           "controller",
 								Role:           "master",
 								HwProfile:      "profile-spr-single-processor-64G",
@@ -1629,7 +1630,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 							Size: 1,
 						},
 						{
-							NodeGroupData: hwv1alpha1.NodeGroupData{
+							NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 								Name:           "worker",
 								Role:           "worker",
 								HwProfile:      "profile-spr-dual-processor-128G",
@@ -1639,15 +1640,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						},
 					},
 				},
-				Status: hwv1alpha1.NodeAllocationRequestStatus{
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(hwv1alpha1.Provisioned),
+							Type:   string(hwmgmtv1alpha1.Provisioned),
 							Status: metav1.ConditionTrue,
-							Reason: string(hwv1alpha1.Completed),
+							Reason: string(hwmgmtv1alpha1.Completed),
 						},
 					},
-					Properties: hwv1alpha1.Properties{
+					Properties: hwmgmtv1alpha1.Properties{
 						NodeNames: []string{testutils.MasterNodeName},
 					},
 				},
@@ -2015,20 +2016,20 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 			}
 			Expect(c.Create(ctx, clusterInstanceDefaultsV2)).To(Succeed())
 
-			nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
+			nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
 					Namespace: utils.UnitTestHwmgrNamespace,
 					Annotations: map[string]string{
-						hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
+						hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 					},
 				},
-				Spec: hwv1alpha1.NodeAllocationRequestSpec{
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					HardwarePluginRef: utils.UnitTestHwPluginRef,
 					// Ensure that the NodeGroup matches the data in the hwTemplate
-					NodeGroup: []hwv1alpha1.NodeGroup{
+					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{
-							NodeGroupData: hwv1alpha1.NodeGroupData{
+							NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 								Name:           "controller",
 								Role:           "master",
 								HwProfile:      "profile-spr-single-processor-64G",
@@ -2037,7 +2038,7 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 							Size: 1,
 						},
 						{
-							NodeGroupData: hwv1alpha1.NodeGroupData{
+							NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 								Name:           "worker",
 								Role:           "worker",
 								HwProfile:      "profile-spr-dual-processor-128G",
@@ -2047,15 +2048,15 @@ var _ = Describe("ProvisioningRequestReconcile", func() {
 						},
 					},
 				},
-				Status: hwv1alpha1.NodeAllocationRequestStatus{
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(hwv1alpha1.Provisioned),
+							Type:   string(hwmgmtv1alpha1.Provisioned),
 							Status: metav1.ConditionTrue,
-							Reason: string(hwv1alpha1.Completed),
+							Reason: string(hwmgmtv1alpha1.Completed),
 						},
 					},
-					Properties: hwv1alpha1.Properties{
+					Properties: hwmgmtv1alpha1.Properties{
 						NodeNames: []string{testutils.MasterNodeName},
 					},
 				},

@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
@@ -202,7 +202,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	ctx context.Context,
 	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse,
-	condition hwv1alpha1.ConditionType) (bool, bool, error) {
+	condition hwmgmtv1alpha1.ConditionType) (bool, bool, error) {
 
 	// Update the provisioning request Status with status from the NodeAllocationRequest object.
 	status, timedOutOrFailed, err := t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
@@ -230,7 +230,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestProvisionS
 		return false, false, fmt.Errorf("missing NodeAllocationRequest identifier")
 	}
 
-	provisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwv1alpha1.Provisioned)
+	provisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
 	if provisioned && err == nil {
 		t.logger.InfoContext(ctx, fmt.Sprintf("NodeAllocationRequest (%s) is provisioned", nodeAllocationRequestID))
 		if err = t.updateClusterInstance(ctx, clusterInstance, nodeAllocationRequestResponse); err != nil {
@@ -247,7 +247,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStat
 	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse,
 ) (*bool, bool, error) {
 
-	status, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwv1alpha1.Configured)
+	status, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Configured)
 	if err != nil {
 		if utils.IsConditionDoesNotExistsErr(err) {
 			// Condition does not exist, return nil (acceptable case)
@@ -404,7 +404,7 @@ func (t *provisioningRequestReconcilerTask) updateAllocatedNodeHostMap(ctx conte
 func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequestResponse,
-	condition hwv1alpha1.ConditionType,
+	condition hwmgmtv1alpha1.ConditionType,
 ) (bool, bool, error) {
 
 	nodeAllocationRequestID := t.getNodeAllocationRequestID()
@@ -430,7 +430,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		}
 	}
 
-	waitingForConfigStart := condition == hwv1alpha1.Configured &&
+	waitingForConfigStart := condition == hwmgmtv1alpha1.Configured &&
 		(nodeAllocationRequest.Status.ObservedConfigTransactionId == nil ||
 			*nodeAllocationRequest.Status.ObservedConfigTransactionId != t.object.Generation)
 
@@ -440,7 +440,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		reason = string(provisioningv1alpha1.CRconditionReasons.Unknown)
 		message = fmt.Sprintf("Hardware %s is in progress", utils.GetStatusMessage(condition))
 
-		if condition == hwv1alpha1.Configured {
+		if condition == hwmgmtv1alpha1.Configured {
 			// If there was no hardware configuration update initiated, return a custom error to
 			// indicate that the configured condition does not exist.
 			if t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart.IsZero() {
@@ -455,9 +455,9 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		message = hwCondition.Message
 
 		// If the condition is Configured and it's completed, reset the configuring check start time.
-		if hwCondition.Type == string(hwv1alpha1.Configured) && status == metav1.ConditionTrue {
+		if hwCondition.Type == string(hwmgmtv1alpha1.Configured) && status == metav1.ConditionTrue {
 			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = nil
-		} else if hwCondition.Type == string(hwv1alpha1.Configured) && t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart == nil {
+		} else if hwCondition.Type == string(hwmgmtv1alpha1.Configured) && t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart == nil {
 			// HardwareConfiguringCheckStart is nil, so reset it to current time
 			currentTime := metav1.Now()
 			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
@@ -468,7 +468,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 			message = fmt.Sprintf("Hardware %s is in progress", utils.GetStatusMessage(condition))
 			utils.SetProvisioningStateInProgress(t.object, message)
 
-			if reason == string(hwv1alpha1.Failed) {
+			if reason == string(hwmgmtv1alpha1.Failed) {
 				timedOutOrFailed = true
 				message = fmt.Sprintf("Hardware %s failed", utils.GetStatusMessage(condition))
 				utils.SetProvisioningStateFailed(t.object, message)
@@ -477,7 +477,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	}
 
 	// Unknown or in progress hardware status, check if it timed out
-	if status != metav1.ConditionTrue && reason != string(hwv1alpha1.Failed) {
+	if status != metav1.ConditionTrue && reason != string(hwmgmtv1alpha1.Failed) {
 		// Handle timeout logic
 		timedOutOrFailed, reason, message = utils.HandleHardwareTimeout(
 			condition,
@@ -493,7 +493,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	}
 
 	conditionType := provisioningv1alpha1.PRconditionTypes.HardwareProvisioned
-	if condition == hwv1alpha1.Configured {
+	if condition == hwmgmtv1alpha1.Configured {
 		conditionType = provisioningv1alpha1.PRconditionTypes.HardwareConfigured
 	}
 
@@ -516,7 +516,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 // checkExistingNodeAllocationRequest checks for an existing NodeAllocationRequest and verifies changes if necessary
 func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	ctx context.Context,
-	hwTemplate *hwv1alpha1.HardwareTemplate,
+	hwTemplate *hwmgmtv1alpha1.HardwareTemplate,
 	nodeAllocationRequestId string) (*hwmgrpluginapi.NodeAllocationRequestResponse, error) {
 
 	if t.hwpluginClient == nil {
@@ -539,7 +539,7 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 
 // buildNodeAllocationRequestSpec builds the NodeAllocationRequest based on the templates and cluster instance
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterInstance *unstructured.Unstructured,
-	hwTemplate *hwv1alpha1.HardwareTemplate) (*hwmgrpluginapi.NodeAllocationRequest, error) {
+	hwTemplate *hwmgmtv1alpha1.HardwareTemplate) (*hwmgrpluginapi.NodeAllocationRequest, error) {
 
 	roleCounts := make(map[string]int)
 	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
@@ -613,8 +613,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 		nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
 		if _, err := t.checkExistingNodeAllocationRequest(ctx, hwTemplate, nodeAllocationRequestID); err != nil {
 			if utils.IsInputError(err) {
-				updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
-					provisioningv1alpha1.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, err.Error())
+				updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
+					provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse, err.Error())
 				if updateErr != nil {
 					// nolint: wrapcheck
 					return nil, updateErr
@@ -624,10 +624,10 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 		}
 	}
 
-	hwplugin := &hwv1alpha1.HardwarePlugin{}
+	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
 	if err := t.client.Get(ctx, types.NamespacedName{Namespace: utils.GetHwMgrPluginNS(), Name: hwTemplate.Spec.HardwarePluginRef}, hwplugin); err != nil {
-		updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
-			provisioningv1alpha1.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse,
+		updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
+			provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse,
 			"Unable to find specified HardwarePlugin: "+hwTemplate.Spec.HardwarePluginRef)
 		if updateErr != nil {
 			return nil, fmt.Errorf("failed to update hwtemplate %s status: %w", hwTemplateName, updateErr)
@@ -636,8 +636,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	}
 
 	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed
-	updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
-		provisioningv1alpha1.ConditionReason(hwv1alpha1.Completed), metav1.ConditionTrue, "Validated")
+	updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
+		provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Completed), metav1.ConditionTrue, "Validated")
 	if updateErr != nil {
 		// nolint: wrapcheck
 		return nil, updateErr

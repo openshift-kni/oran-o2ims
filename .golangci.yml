@@ -149,6 +149,14 @@ linters-settings:
         alias: $1$2
       - pkg: k8s.io/apimachinery/pkg/apis/(\w+)/(v[\w\d]+)
         alias: $1$2
+      - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
+        alias: hwmgmtv1alpha1
+      - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
+        alias: pluginsv1alpha1
+      - pkg: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
+        alias: inventoryv1alpha1
+      - pkg: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
+        alias: provisioningv1alpha1
   goheader:
     # Supports two types 'const` and `regexp`.
     # Values can be used recursively.

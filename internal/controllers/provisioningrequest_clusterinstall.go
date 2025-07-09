@@ -24,7 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -416,7 +416,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 
 	// Search for ClusterInstance Provisioned condition
 	ciProvisionedCondition := meta.FindStatusCondition(
-		ci.Status.Conditions, string(hwv1alpha1.Provisioned))
+		ci.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
 
 	if ciProvisionedCondition == nil {
 		crClusterInstanceProcessedCond := meta.FindStatusCondition(

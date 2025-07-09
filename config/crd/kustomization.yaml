@@ -1,18 +1,18 @@
 resources:
 
 # Inventory:
-- bases/o2ims.oran.openshift.io_inventories.yaml
+- bases/ocloud.openshift.io_inventories.yaml
 
 # Hardware management:
-- bases/o2ims-hardwaremanagement.oran.openshift.io_hardwareplugins.yaml
-- bases/o2ims-hardwaremanagement.oran.openshift.io_hardwaretemplates.yaml
-- bases/o2ims-hardwaremanagement.oran.openshift.io_hardwareprofiles.yaml
-- bases/o2ims-hardwaremanagement.oran.openshift.io_nodeallocationrequests.yaml
-- bases/o2ims-hardwaremanagement.oran.openshift.io_allocatednodes.yaml
+- bases/clcm.openshift.io_hardwareplugins.yaml
+- bases/clcm.openshift.io_hardwaretemplates.yaml
+- bases/clcm.openshift.io_hardwareprofiles.yaml
+- bases/plugins.clcm.openshift.io_nodeallocationrequests.yaml
+- bases/plugins.clcm.openshift.io_allocatednodes.yaml
 
 # Provisioning:
-- bases/o2ims.provisioning.oran.org_clustertemplates.yaml
-- bases/o2ims.provisioning.oran.org_provisioningrequests.yaml
+- bases/clcm.openshift.io_clustertemplates.yaml
+- bases/clcm.openshift.io_provisioningrequests.yaml
 
 #patchesStrategicMerge:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.

@@ -180,6 +180,144 @@ rules:
   - update
   - watch
 - apiGroups:
+  - clcm.openshift.io
+  resources:
+  - clustertemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - clustertemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - clustertemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareplugins
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareplugins/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareplugins/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareprofiles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareprofiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwaretemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwaretemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - nodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - nodes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - provisioningrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - provisioningrequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - provisioningrequests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - cluster.open-cluster-management.io
   resources:
   - managedclusters
@@ -309,147 +447,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - allocatednodes
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - allocatednodes/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - allocatednodes/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - hardwareplugins
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - hardwareplugins/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - hardwareplugins/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - hardwareprofiles
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - hardwareprofiles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - hardwaretemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - hardwaretemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - nodeallocationrequests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - nodeallocationrequests/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - nodeallocationrequests/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - nodes
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims-hardwaremanagement.oran.openshift.io
-  resources:
-  - nodes/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims.oran.openshift.io
+  - ocloud.openshift.io
   resources:
   - inventories
   verbs:
@@ -461,67 +459,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - o2ims.oran.openshift.io
+  - ocloud.openshift.io
   resources:
   - inventories/finalizers
   verbs:
   - update
 - apiGroups:
-  - o2ims.oran.openshift.io
+  - ocloud.openshift.io
   resources:
   - inventories/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - clustertemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - clustertemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - clustertemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - provisioningrequests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - provisioningrequests/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - o2ims.provisioning.oran.org
-  resources:
-  - provisioningrequests/status
   verbs:
   - get
   - patch
@@ -534,6 +480,60 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - plugins.clcm.openshift.io
+  resources:
+  - allocatednodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - plugins.clcm.openshift.io
+  resources:
+  - allocatednodes/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - plugins.clcm.openshift.io
+  resources:
+  - allocatednodes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - plugins.clcm.openshift.io
+  resources:
+  - nodeallocationrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - plugins.clcm.openshift.io
+  resources:
+  - nodeallocationrequests/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - plugins.clcm.openshift.io
+  resources:
+  - nodeallocationrequests/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - policy.open-cluster-management.io
   resources:

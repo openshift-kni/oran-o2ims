@@ -16,7 +16,7 @@ import (
 
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/inventory"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
@@ -30,7 +30,7 @@ var _ ResourceDataSource = (*HwPluginDataSource)(nil)
 type HwPluginDataSource struct {
 	dataSourceID  uuid.UUID
 	generationID  int
-	hwplugin      *hwv1alpha1.HardwarePlugin
+	hwplugin      *hwmgmtv1alpha1.HardwarePlugin
 	cloudID       uuid.UUID
 	globalCloudID uuid.UUID
 	client        *inventoryclient.InventoryClient
@@ -62,7 +62,7 @@ const (
 
 // NewHwPluginDataSource creates a new instance of an ACM data source collector whose purpose is to collect data from the
 // ACM search API to be included in the resource, resource pool, and resource type tables.
-func NewHwPluginDataSource(ctx context.Context, hubClient rtclient.Client, hwplugin *hwv1alpha1.HardwarePlugin, cloudID, globalCloudID uuid.UUID) (DataSource, error) {
+func NewHwPluginDataSource(ctx context.Context, hubClient rtclient.Client, hwplugin *hwmgmtv1alpha1.HardwarePlugin, cloudID, globalCloudID uuid.UUID) (DataSource, error) {
 	slog.Info("Creating inventory API client", "name", hwplugin.Name)
 	inventoryClient, err := inventoryclient.NewInventoryClient(ctx, hubClient, hwplugin)
 	if err != nil {
