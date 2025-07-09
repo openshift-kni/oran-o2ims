@@ -85,7 +85,7 @@ func (r *LoopbackPluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Add logging context with data from the CR
-	ctx = logging.AppendCtx(ctx, slog.String("CloudID", nodeAllocationRequest.Spec.CloudID))
+	ctx = logging.AppendCtx(ctx, slog.String("ClusterID", nodeAllocationRequest.Spec.ClusterId))
 	ctx = logging.AppendCtx(ctx, slog.String("startingResourceVersion", nodeAllocationRequest.ResourceVersion))
 
 	r.Logger.InfoContext(ctx, "Reconciling NodeAllocationRequest")

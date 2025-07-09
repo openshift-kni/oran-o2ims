@@ -73,9 +73,11 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.N
 
 	// Create generated.NodeAllocationRequest object
 	nodeAllocationRequestObject := NodeAllocationRequest{
-		NodeGroup:          nodeGroups,
-		Site:               nodeAllocationRequest.Spec.Site,
-		BootInterfaceLabel: nodeAllocationRequest.Spec.BootInterfaceLabel,
+		NodeGroup:           nodeGroups,
+		Site:                nodeAllocationRequest.Spec.Site,
+		BootInterfaceLabel:  nodeAllocationRequest.Spec.BootInterfaceLabel,
+		ClusterId:           nodeAllocationRequest.Spec.ClusterId,
+		ConfigTransactionId: nodeAllocationRequest.Spec.ConfigTransactionId,
 	}
 
 	nodeAllocationRequestStatus := NodeAllocationRequestStatus{}
@@ -94,6 +96,7 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.N
 	nodeAllocationRequestStatus.Properties = &Properties{
 		NodeNames: &nodeAllocationRequest.Status.Properties.NodeNames,
 	}
+	nodeAllocationRequestStatus.ObservedConfigTransactionId = &nodeAllocationRequest.Status.ObservedConfigTransactionId
 
 	return NodeAllocationRequestResponse{
 		NodeAllocationRequest: &nodeAllocationRequestObject,
