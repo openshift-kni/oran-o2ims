@@ -193,7 +193,7 @@ hack/generate-catalog-deploy.sh \
         --namespace oran-o2ims \
         --catalog-image quay.io/${MY_REPO}/oran-o2ims-catalog:v4.18.0 \
         --channel alpha \
-        --install-mode AllNamespaces \
+        --install-mode OwnNamespace \
         | oc create -f -
 catalogsource.operators.coreos.com/oran-o2ims created
 namespace/oran-o2ims created
