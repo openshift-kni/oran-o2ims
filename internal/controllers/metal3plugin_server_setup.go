@@ -16,6 +16,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/openshift-kni/oran-o2ims/api/common"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -61,6 +64,12 @@ func (t *reconcilerTask) setupMetal3PluginServer(ctx context.Context, defaultRes
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
 		}
+	}
+
+	if err = t.createMetal3PluginHardwarePluginCR(ctx); err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create Metal3 Hardware Plugin CR.",
+			slog.String("error", err.Error()))
+		return
 	}
 
 	return nextReconcile, err
@@ -261,6 +270,29 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 
 	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
+	}
+
+	return nil
+}
+
+// createMetal3PluginHardwarePluginCR creates the Metal3 Hardware Plugin CR
+func (t *reconcilerTask) createMetal3PluginHardwarePluginCR(ctx context.Context) error {
+	t.logger.InfoContext(ctx, "Creating Metal3 Hardware Plugin CR")
+	hardwarePlugin := &hwmgmtv1alpha1.HardwarePlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hwpluginutils.Metal3HardwarePluginID,
+			Namespace: t.object.Namespace,
+		},
+		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
+			ApiRoot: fmt.Sprintf("https://%s.%s.svc.cluster.local:8443", utils.Metal3PluginServerName, t.object.Namespace),
+			AuthClientConfig: &common.AuthClientConfig{
+				Type: common.ServiceAccount,
+			},
+		},
+	}
+
+	if err := utils.CreateK8sCR(ctx, t.client, hardwarePlugin, t.object, utils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create Metal3 Hardware Plugin CR: %w", err)
 	}
 
 	return nil

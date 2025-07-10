@@ -45,7 +45,7 @@ type HardwarePluginReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
-	result = utils.DoNotRequeue()
+	result = utils.RequeueWithLongInterval()
 
 	// Fetch the CR:
 	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
@@ -59,12 +59,6 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			"Unable to fetch HardwarePlugin",
 			slog.String("error", err.Error()),
 		)
-		return
-	}
-
-	// Make sure this is an instance for this adaptor and that this generation hasn't already been handled
-	if hwplugin.Status.ObservedGeneration == hwplugin.Generation {
-		// Nothing to do
 		return
 	}
 
@@ -83,6 +77,7 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		err = fmt.Errorf("encountered an error while attempting to validate HardwarePlugin (%s): %w", hwplugin.Name, err)
 		condMessage = err.Error()
 
+		result = utils.RequeueWithMediumInterval()
 	} else {
 		if isValid {
 			condReason = hwmgmtv1alpha1.ConditionReasons.Completed
@@ -92,6 +87,9 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			condReason = hwmgmtv1alpha1.ConditionReasons.Failed
 			condStatus = metav1.ConditionFalse
 			condMessage = fmt.Sprintf("Failed to validate connection to %s", hwplugin.Spec.ApiRoot)
+
+			r.Logger.InfoContext(ctx, fmt.Sprintf("Failed to validate connection to %s", hwplugin.Spec.ApiRoot))
+			result = utils.RequeueWithMediumInterval()
 		}
 	}
 
