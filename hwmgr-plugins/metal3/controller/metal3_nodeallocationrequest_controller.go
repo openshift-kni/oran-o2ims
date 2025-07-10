@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
@@ -42,10 +43,10 @@ func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) erro
 	r.Logger.Info("SetupIndexer Start")
 	// Setup AllocatedNode CRD indexer. This field indexer allows us to query a list of AllocatedNode CRs, filtered by the spec.nodeAllocationRequest field.
 	nodeIndexFunc := func(obj client.Object) []string {
-		return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+		return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 	}
 
-	if err := r.Manager.GetFieldIndexer().IndexField(ctx, &hwmgmtv1alpha1.AllocatedNode{}, hwpluginutils.AllocatedNodeSpecNodeAllocationRequestKey, nodeIndexFunc); err != nil {
+	if err := r.Manager.GetFieldIndexer().IndexField(ctx, &pluginsv1alpha1.AllocatedNode{}, hwpluginutils.AllocatedNodeSpecNodeAllocationRequestKey, nodeIndexFunc); err != nil {
 		return fmt.Errorf("failed to setup node indexer: %w", err)
 	}
 	return nil
@@ -53,14 +54,14 @@ func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) erro
 
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/finalizers,verbs=update
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles,verbs=get;list;watch;create;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes/finalizers,verbs=update
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=preprovisioningimages,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings,verbs=get;create;list;watch;update;patch
@@ -85,7 +86,7 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 	}
 
 	// Fetch the nodeAllocationRequest, using non-caching client
-	nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
+	nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 	if err := hwpluginutils.GetNodeAllocationRequest(ctx, r.NoncachedClient, req.NamespacedName, nodeAllocationRequest); err != nil {
 		if errors.IsNotFound(err) {
 			// The NodeAllocationRequest object has likely been deleted
@@ -154,7 +155,7 @@ func (r *NodeAllocationRequestReconciler) SetupWithManager(mgr ctrl.Manager) err
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&hwmgmtv1alpha1.NodeAllocationRequest{}).
+		For(&pluginsv1alpha1.NodeAllocationRequest{}).
 		WithEventFilter(pred).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
@@ -165,7 +166,7 @@ func (r *NodeAllocationRequestReconciler) SetupWithManager(mgr ctrl.Manager) err
 
 // HandleNodeAllocationRequest processes the NodeAllocationRequest CR
 func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
-	ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+	ctx context.Context, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 	result := hwpluginutils.DoNotRequeue()
 
 	if !controllerutil.ContainsFinalizer(nodeAllocationRequest, hwpluginutils.NodeAllocationRequestFinalizer) {
@@ -192,7 +193,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 
 func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	ctx context.Context,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
 	conditionType := hwmgmtv1alpha1.Provisioned
 	var conditionReason hwmgmtv1alpha1.ConditionReason
@@ -225,7 +226,7 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 
 func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged(
 	ctx context.Context,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
 	configuredCondition := meta.FindStatusCondition(
 		nodeAllocationRequest.Status.Conditions,
@@ -264,7 +265,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 
 func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 	ctx context.Context,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
 	var result ctrl.Result
 
@@ -307,7 +308,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 }
 
 // handleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion
-func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
+func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (bool, error) {
 
 	r.Logger.InfoContext(ctx, "Finalizing NodeAllocationRequest")
 

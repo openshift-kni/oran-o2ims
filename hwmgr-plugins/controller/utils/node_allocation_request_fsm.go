@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
@@ -26,7 +27,7 @@ const (
 	NodeAllocationRequestFSMNoop
 )
 
-func DetermineAction(ctx context.Context, logger *slog.Logger, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) fsmAction {
+func DetermineAction(ctx context.Context, logger *slog.Logger, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) fsmAction {
 	if len(nodeAllocationRequest.Status.Conditions) == 0 {
 		logger.InfoContext(ctx, "Handling Create NodeAllocationRequest request")
 		return NodeAllocationRequestFSMCreate

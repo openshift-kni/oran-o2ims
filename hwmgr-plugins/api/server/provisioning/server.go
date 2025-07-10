@@ -17,7 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -75,7 +76,7 @@ func (h *HardwarePluginServer) GetNodeAllocationRequests(
 ) (GetNodeAllocationRequestsResponseObject, error) {
 
 	// List NodeAllocationRequests with the HardwarePlugin label
-	nodeAllocationRequestList := &hwv1alpha1.NodeAllocationRequestList{}
+	nodeAllocationRequestList := &pluginsv1alpha1.NodeAllocationRequestList{}
 	listOptions := client.MatchingLabels{
 		hwpluginutils.HardwarePluginLabel: h.HardwarePluginID,
 	}
@@ -129,11 +130,11 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 ) (CreateNodeAllocationRequestResponseObject, error) {
 
 	// construct nodeGroups object
-	nodeGroups := []hwv1alpha1.NodeGroup{}
+	nodeGroups := []pluginsv1alpha1.NodeGroup{}
 	for _, group := range request.Body.NodeGroup {
-		nodeGroups = append(nodeGroups, hwv1alpha1.NodeGroup{
+		nodeGroups = append(nodeGroups, pluginsv1alpha1.NodeGroup{
 			Size: group.NodeGroupData.Size,
-			NodeGroupData: hwv1alpha1.NodeGroupData{
+			NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 				Name:             group.NodeGroupData.Name,
 				Role:             group.NodeGroupData.Role,
 				HwProfile:        group.NodeGroupData.HwProfile,
@@ -150,7 +151,7 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to generate unique NodeAllocationRequest identifier, err: %w", err)
 	}
 
-	nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
+	nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodeAllocationRequestID,
 			Namespace: h.Namespace,
@@ -158,10 +159,10 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 				hwpluginutils.HardwarePluginLabel: h.HardwarePluginID,
 			},
 		},
-		Spec: hwv1alpha1.NodeAllocationRequestSpec{
+		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 			HardwarePluginRef:   h.HardwarePluginID,
 			NodeGroup:           nodeGroups,
-			LocationSpec:        hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			LocationSpec:        pluginsv1alpha1.LocationSpec{Site: request.Body.Site},
 			BootInterfaceLabel:  request.Body.BootInterfaceLabel,
 			ClusterId:           request.Body.ClusterId,
 			ConfigTransactionId: request.Body.ConfigTransactionId,
@@ -181,7 +182,7 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 ) (UpdateNodeAllocationRequestResponseObject, error) {
 
 	// Check that NodeAllocationRequest object exists
-	existingNodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
+	existingNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 	exist, err := sharedutils.DoesK8SResourceExist(ctx, h.HubClient,
 		request.NodeAllocationRequestId, h.Namespace, existingNodeAllocationRequest)
 	if err != nil {
@@ -196,11 +197,11 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 	}
 
 	// Construct nodeGroups object
-	nodeGroups := []hwv1alpha1.NodeGroup{}
+	nodeGroups := []pluginsv1alpha1.NodeGroup{}
 	for _, ng := range request.Body.NodeGroup {
-		nodeGroups = append(nodeGroups, hwv1alpha1.NodeGroup{
+		nodeGroups = append(nodeGroups, pluginsv1alpha1.NodeGroup{
 			Size: ng.NodeGroupData.Size,
-			NodeGroupData: hwv1alpha1.NodeGroupData{
+			NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 				Name:             ng.NodeGroupData.Name,
 				Role:             ng.NodeGroupData.Role,
 				HwProfile:        ng.NodeGroupData.HwProfile,
@@ -211,15 +212,15 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 	}
 
 	// construct NodeAllocationRequest resource
-	nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
+	nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      existingNodeAllocationRequest.Name,
 			Namespace: existingNodeAllocationRequest.Namespace,
 		},
-		Spec: hwv1alpha1.NodeAllocationRequestSpec{
+		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 			HardwarePluginRef:   existingNodeAllocationRequest.Spec.HardwarePluginRef,
 			NodeGroup:           nodeGroups,
-			LocationSpec:        hwv1alpha1.LocationSpec{Site: request.Body.Site},
+			LocationSpec:        pluginsv1alpha1.LocationSpec{Site: request.Body.Site},
 			BootInterfaceLabel:  request.Body.BootInterfaceLabel,
 			ClusterId:           request.Body.ClusterId,
 			ConfigTransactionId: request.Body.ConfigTransactionId,
@@ -239,7 +240,7 @@ func (h *HardwarePluginServer) DeleteNodeAllocationRequest(
 ) (DeleteNodeAllocationRequestResponseObject, error) {
 
 	// Check that NodeAllocationRequest object exists
-	existingNodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
+	existingNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 	exist, err := sharedutils.DoesK8SResourceExist(ctx, h.HubClient, request.NodeAllocationRequestId, h.Namespace, existingNodeAllocationRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s', err: %w", request.NodeAllocationRequestId, err)
@@ -268,7 +269,7 @@ func (h *HardwarePluginServer) GetAllocatedNodes(
 ) (GetAllocatedNodesResponseObject, error) {
 
 	// List AllocatedNodes with the HardwarePlugin label
-	allocatedNodeList := &hwv1alpha1.AllocatedNodeList{}
+	allocatedNodeList := &pluginsv1alpha1.AllocatedNodeList{}
 	listOptions := client.MatchingLabels{
 		hwpluginutils.HardwarePluginLabel: h.HardwarePluginID,
 	}
@@ -295,7 +296,7 @@ func (h *HardwarePluginServer) GetAllocatedNode(
 	request GetAllocatedNodeRequestObject,
 ) (GetAllocatedNodeResponseObject, error) {
 
-	allocatedNode := &hwv1alpha1.AllocatedNode{}
+	allocatedNode := &pluginsv1alpha1.AllocatedNode{}
 	if err := h.HubClient.Get(ctx, types.NamespacedName{Namespace: h.Namespace, Name: request.AllocatedNodeId},
 		allocatedNode,
 	); err != nil {

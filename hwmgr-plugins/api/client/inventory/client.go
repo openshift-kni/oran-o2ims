@@ -12,7 +12,7 @@ import (
 
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	clientutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/utils"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -21,14 +21,14 @@ import (
 // InventoryClient provides functions for calling the HardwarePlugin APIs
 type InventoryClient struct {
 	client   *ClientWithResponses
-	hwPlugin *hwv1alpha1.HardwarePlugin
+	hwPlugin *hwmgmtv1alpha1.HardwarePlugin
 }
 
 // NewInventoryClient creates an authenticated client connected to the Hardware plugin Inventory server.
 func NewInventoryClient(
 	ctx context.Context,
 	c rtclient.Client,
-	hwPlugin *hwv1alpha1.HardwarePlugin,
+	hwPlugin *hwmgmtv1alpha1.HardwarePlugin,
 ) (*InventoryClient, error) {
 	// Construct OAuth client configuration
 	config, err := clientutils.SetupOAuthClientConfig(ctx, c, hwPlugin)

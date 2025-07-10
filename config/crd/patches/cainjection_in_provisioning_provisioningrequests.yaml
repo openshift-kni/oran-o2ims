@@ -4,4 +4,4 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: CERTIFICATE_NAMESPACE/CERTIFICATE_NAME
-  name: provisioningrequests.o2ims.provisioning.oran.org
+  name: provisioningrequests.clcm.openshift.io

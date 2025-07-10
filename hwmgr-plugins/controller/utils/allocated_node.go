@@ -21,13 +21,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 const (
 	AllocatedNodeSpecNodeAllocationRequestKey = "spec.nodeAllocationRequest"
-	AllocatedNodeFinalizer                    = "o2ims-hardwaremanagement.oran.openshift.io/allocatednode-finalizer"
+	AllocatedNodeFinalizer                    = "clcm.openshift.io/allocatednode-finalizer"
 )
 
 // GetNode get a node resource for a provided name
@@ -35,11 +36,11 @@ func GetNode(
 	ctx context.Context,
 	logger *slog.Logger,
 	c client.Reader,
-	namespace, nodename string) (*pluginv1alpha1.AllocatedNode, error) {
+	namespace, nodename string) (*pluginsv1alpha1.AllocatedNode, error) {
 
 	logger.InfoContext(ctx, "Getting AllocatedNode", slog.String("nodename", nodename))
 
-	node := &pluginv1alpha1.AllocatedNode{}
+	node := &pluginsv1alpha1.AllocatedNode{}
 
 	if err := sharedutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return c.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node)
@@ -50,9 +51,9 @@ func GetNode(
 }
 
 // GetNodeList retrieves the node list
-func GetNodeList(ctx context.Context, c client.Client) (*pluginv1alpha1.AllocatedNodeList, error) {
+func GetNodeList(ctx context.Context, c client.Client) (*pluginsv1alpha1.AllocatedNodeList, error) {
 
-	nodeList := &pluginv1alpha1.AllocatedNodeList{}
+	nodeList := &pluginsv1alpha1.AllocatedNodeList{}
 	if err := c.List(ctx, nodeList); err != nil {
 		return nodeList, fmt.Errorf("failed to list AllocatedNodes: %w", err)
 	}
@@ -63,8 +64,8 @@ func GetNodeList(ctx context.Context, c client.Client) (*pluginv1alpha1.Allocate
 // GetBMHToNodeMap get a list of nodes, mapped to BMH namespace/name
 func GetBMHToNodeMap(ctx context.Context,
 	logger *slog.Logger,
-	c client.Client) (map[string]pluginv1alpha1.AllocatedNode, error) {
-	nodes := make(map[string]pluginv1alpha1.AllocatedNode)
+	c client.Client) (map[string]pluginsv1alpha1.AllocatedNode, error) {
+	nodes := make(map[string]pluginsv1alpha1.AllocatedNode)
 
 	nodelist, err := GetNodeList(ctx, c)
 	if err != nil {
@@ -84,7 +85,7 @@ func GetBMHToNodeMap(ctx context.Context,
 	return nodes, nil
 }
 
-func GetNodeForBMH(nodes map[string]pluginv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) *pluginv1alpha1.AllocatedNode {
+func GetNodeForBMH(nodes map[string]pluginsv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) *pluginsv1alpha1.AllocatedNode {
 	bmhName := bmh.Name
 	bmhNamespace := bmh.Namespace
 
@@ -99,7 +100,7 @@ func GenerateNodeName() string {
 	return uuid.NewString()
 }
 
-func FindNodeInList(nodelist pluginv1alpha1.AllocatedNodeList, hardwarePluginRef, nodeId string) string {
+func FindNodeInList(nodelist pluginsv1alpha1.AllocatedNodeList, hardwarePluginRef, nodeId string) string {
 	for _, node := range nodelist.Items {
 		if node.Spec.HardwarePluginRef == hardwarePluginRef && node.Spec.HwMgrNodeId == nodeId {
 			return node.Name
@@ -113,9 +114,9 @@ func GetChildNodes(
 	ctx context.Context,
 	logger *slog.Logger,
 	c client.Client,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (*pluginv1alpha1.AllocatedNodeList, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (*pluginsv1alpha1.AllocatedNodeList, error) {
 
-	nodelist := &pluginv1alpha1.AllocatedNodeList{}
+	nodelist := &pluginsv1alpha1.AllocatedNodeList{}
 
 	opts := []client.ListOption{
 		client.MatchingFields{"spec.nodeAllocationRequest": nodeAllocationRequest.Name},
@@ -143,7 +144,7 @@ func SetNodeConditionStatus(
 ) error {
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-		node := &pluginv1alpha1.AllocatedNode{}
+		node := &pluginsv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node); err != nil {
 			return fmt.Errorf("failed to fetch Node: %w", err)
 		}
@@ -164,12 +165,12 @@ func SetNodeFailedStatus(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	node *pluginv1alpha1.AllocatedNode,
+	node *pluginsv1alpha1.AllocatedNode,
 	conditionType string,
 	message string,
 ) error {
 
-	SetStatusCondition(&node.Status.Conditions, conditionType, string(pluginv1alpha1.Failed), metav1.ConditionFalse, message)
+	SetStatusCondition(&node.Status.Conditions, conditionType, string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse, message)
 
 	if err := c.Status().Update(ctx, node); err != nil {
 		logger.ErrorContext(ctx, "Failed to update node status with failure",
@@ -182,7 +183,7 @@ func SetNodeFailedStatus(
 	logger.InfoContext(ctx, "Node status set to failed",
 		slog.String("node", node.Name),
 		slog.String("conditionType", conditionType),
-		slog.String("reason", string(pluginv1alpha1.Failed)))
+		slog.String("reason", string(hwmgmtv1alpha1.Failed)))
 	return nil
 }
 
@@ -190,11 +191,11 @@ func AllocatedNodeAddFinalizer(
 	ctx context.Context,
 	noncachedClient client.Reader,
 	c client.Client,
-	allocatedNode *pluginv1alpha1.AllocatedNode,
+	allocatedNode *pluginsv1alpha1.AllocatedNode,
 ) error {
 	// nolint: wrapcheck
 	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newAllocatedNode := &pluginv1alpha1.AllocatedNode{}
+		newAllocatedNode := &pluginsv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
 			return err
 		}
@@ -214,11 +215,11 @@ func AllocatedNodeRemoveFinalizer(
 	ctx context.Context,
 	noncachedClient client.Reader,
 	c client.Client,
-	allocatedNode *pluginv1alpha1.AllocatedNode,
+	allocatedNode *pluginsv1alpha1.AllocatedNode,
 ) error {
 	// nolint: wrapcheck
 	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newAllocatedNode := &pluginv1alpha1.AllocatedNode{}
+		newAllocatedNode := &pluginsv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
 			return err
 		}

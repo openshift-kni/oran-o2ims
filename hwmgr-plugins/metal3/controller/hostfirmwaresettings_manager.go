@@ -21,12 +21,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
 // convertBiosSettingsToHostFirmware converts BiosSettings to HostFirmwareSettings CR
-func convertBiosSettingsToHostFirmware(bmh metal3v1alpha1.BareMetalHost, biosSettings pluginv1alpha1.Bios) metal3v1alpha1.HostFirmwareSettings {
+func convertBiosSettingsToHostFirmware(bmh metal3v1alpha1.BareMetalHost, biosSettings hwmgmtv1alpha1.Bios) metal3v1alpha1.HostFirmwareSettings {
 	return metal3v1alpha1.HostFirmwareSettings{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      bmh.Name,
@@ -62,7 +62,7 @@ func updateHostFirmwareSettings(ctx context.Context, c client.Client, name types
 func IsBiosUpdateRequired(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost, biosSettings pluginv1alpha1.Bios) (bool, error) {
+	bmh *metal3v1alpha1.BareMetalHost, biosSettings hwmgmtv1alpha1.Bios) (bool, error) {
 	hfs := convertBiosSettingsToHostFirmware(*bmh, biosSettings)
 
 	existingHFS, err := getOrCreateHostFirmwareSettings(ctx, c, logger, &hfs)
