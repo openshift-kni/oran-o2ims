@@ -15,7 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -34,22 +34,22 @@ type processorInfo struct {
 }
 
 type cmNodeInfo struct {
-	ResourcePoolID   string                      `json:"poolID,omitempty"`
-	BMC              *cmBmcInfo                  `json:"bmc,omitempty"`
-	Interfaces       []*pluginv1alpha1.Interface `json:"interfaces,omitempty"`
-	Description      string                      `json:"description,omitempty"`
-	GlobalAssetID    string                      `json:"globalAssetId,omitempty"`
-	Vendor           string                      `json:"vendor,omitempty"`
-	Model            string                      `json:"model,omitempty"`
-	Memory           int                         `json:"memory,omitempty"`
-	AdminState       string                      `json:"adminState,omitempty"`
-	OperationalState string                      `json:"operationalState,omitempty"`
-	UsageState       string                      `json:"usageState,omitempty"`
-	PowerState       string                      `json:"powerState,omitempty"`
-	SerialNumber     string                      `json:"serialNumber,omitempty"`
-	PartNumber       string                      `json:"partNumber,omitempty"`
-	Labels           map[string]string           `json:"labels,omitempty"`
-	Processors       []processorInfo             `json:"processors,omitempty"`
+	ResourcePoolID   string                       `json:"poolID,omitempty"`
+	BMC              *cmBmcInfo                   `json:"bmc,omitempty"`
+	Interfaces       []*pluginsv1alpha1.Interface `json:"interfaces,omitempty"`
+	Description      string                       `json:"description,omitempty"`
+	GlobalAssetID    string                       `json:"globalAssetId,omitempty"`
+	Vendor           string                       `json:"vendor,omitempty"`
+	Model            string                       `json:"model,omitempty"`
+	Memory           int                          `json:"memory,omitempty"`
+	AdminState       string                       `json:"adminState,omitempty"`
+	OperationalState string                       `json:"operationalState,omitempty"`
+	UsageState       string                       `json:"usageState,omitempty"`
+	PowerState       string                       `json:"powerState,omitempty"`
+	SerialNumber     string                       `json:"serialNumber,omitempty"`
+	PartNumber       string                       `json:"partNumber,omitempty"`
+	Labels           map[string]string            `json:"labels,omitempty"`
+	Processors       []processorInfo              `json:"processors,omitempty"`
 }
 
 type cmResources struct {
@@ -129,7 +129,7 @@ func getCurrentResources(ctx context.Context, c client.Client, logger *slog.Logg
 // getAllocatedNodes gets a list of nodes allocated for the specified NodeAllocationRequest CR
 func getAllocatedNodes(ctx context.Context,
 	c client.Client, logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (allocatedNodes []string, err error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (allocatedNodes []string, err error) {
 	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	_, _, allocations, err := getCurrentResources(ctx, c, logger, nodeAllocationRequest.Namespace)

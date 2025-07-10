@@ -1,4 +1,4 @@
-apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+apiVersion: plugins.clcm.openshift.io/v1alpha1
 kind: AllocatedNode
 metadata:
   labels:

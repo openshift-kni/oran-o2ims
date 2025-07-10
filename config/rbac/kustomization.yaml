@@ -18,18 +18,18 @@ resources:
 # Pre-canned roles to allow binding to users that require specific access to our CRs
 # (uncomment these lines to have RBAC roles created to test access to our CRs... similar ones
 #  get created if testing with `make bundle-run`, therefore they are unneeded by default)
-#- o2ims.oran.openshift.io_inventories_editor_role.yaml
-#- o2ims.oran.openshift.io_inventories_viewer_role.yaml
-#- o2ims.provisioning.oran.org_clustertemplate_editor_role.yaml
-#- o2ims.provisioning.oran.org_clustertemplate_viewer_role.yaml
-#- o2ims.provisioning.oran.org_provisioningrequest_editor_role.yaml
-#- o2ims.provisioning.oran.org_provisioningrequest_viewer_role.yaml
+#- ocloud.openshift.io_inventories_editor_role.yaml
+#- ocloud.openshift.io_inventories_viewer_role.yaml
+#- clcm.openshift.io_clustertemplate_editor_role.yaml
+#- clcm.openshift.io_clustertemplate_viewer_role.yaml
+#- clcm.openshift.io_provisioningrequest_editor_role.yaml
+#- clcm.openshift.io_provisioningrequest_viewer_role.yaml
 # For each CRD, "Editor" and "Viewer" roles are scaffolded by
 # default, aiding admins in cluster management. Those roles are
 # not used by the Project itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- o2ims-hardwaremanagement_hardwareprofile_editor_role.yaml
-- o2ims-hardwaremanagement_hardwareprofile_viewer_role.yaml
-- hardwaremanagement_hardwareplugin_editor_role.yaml
-- hardwaremanagement_hardwareplugin_viewer_role.yaml
+- clcm_hardwareprofile_editor_role.yaml
+- clcm_hardwareprofile_viewer_role.yaml
+- clcm_hardwareplugin_editor_role.yaml
+- clcm_hardwareplugin_viewer_role.yaml
 

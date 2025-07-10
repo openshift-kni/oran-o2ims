@@ -23,7 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
@@ -140,16 +141,16 @@ defaultHugepagesSize: "1G"`,
 				},
 			},
 			// hardware template
-			&hwv1alpha1.HardwareTemplate{
+			&hwmgmtv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplate,
 					Namespace: utils.InventoryNamespace,
 				},
-				Spec: hwv1alpha1.HardwareTemplateSpec{
+				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 					HardwarePluginRef:           utils.UnitTestHwPluginRef,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
-					NodeGroupData: []hwv1alpha1.NodeGroupData{
+					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
 							Name:           "controller",
 							Role:           "master",
@@ -240,19 +241,19 @@ defaultHugepagesSize: "1G"`,
 		hwPluginNs := &corev1.Namespace{}
 		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
 		Expect(c.Create(ctx, hwPluginNs)).To(Succeed())
-		nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{
+		nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
 				Namespace: utils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
-					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
+					hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
-			Spec: hwv1alpha1.NodeAllocationRequestSpec{
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 				HardwarePluginRef: utils.UnitTestHwPluginRef,
-				NodeGroup: []hwv1alpha1.NodeGroup{
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
-						NodeGroupData: hwv1alpha1.NodeGroupData{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name:           "controller",
 							Role:           "master",
 							HwProfile:      "profile-spr-single-processor-64G",
@@ -261,7 +262,7 @@ defaultHugepagesSize: "1G"`,
 						Size: 1,
 					},
 					{
-						NodeGroupData: hwv1alpha1.NodeGroupData{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name:           "worker",
 							Role:           "worker",
 							HwProfile:      "profile-spr-dual-processor-128G",
@@ -271,15 +272,15 @@ defaultHugepagesSize: "1G"`,
 					},
 				},
 			},
-			Status: hwv1alpha1.NodeAllocationRequestStatus{
+			Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:   string(hwv1alpha1.Provisioned),
+						Type:   string(hwmgmtv1alpha1.Provisioned),
 						Status: metav1.ConditionTrue,
-						Reason: string(hwv1alpha1.Completed),
+						Reason: string(hwmgmtv1alpha1.Completed),
 					},
 				},
-				Properties: hwv1alpha1.Properties{
+				Properties: hwmgmtv1alpha1.Properties{
 					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
@@ -2012,7 +2013,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		ProvReqTask           *provisioningRequestReconcilerTask
 		hwTemplate            = "hwTemplate-v1"
 		managedCluster        = &clusterv1.ManagedCluster{}
-		nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{}
+		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
 	)
 
 	BeforeEach(func() {
@@ -2105,19 +2106,19 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		c = getFakeClientFromObjects(crs...)
 
 		// Populate the NodeAllocationRequest without creating it.
-		nodeAllocationRequest = &hwv1alpha1.NodeAllocationRequest{
+		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      mclName,
 				Namespace: utils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
-					hwv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
+					hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
-			Spec: hwv1alpha1.NodeAllocationRequestSpec{
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 				HardwarePluginRef: utils.UnitTestHwPluginRef,
-				NodeGroup: []hwv1alpha1.NodeGroup{
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
-						NodeGroupData: hwv1alpha1.NodeGroupData{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name:           "controller",
 							Role:           "master",
 							HwProfile:      "profile-spr-single-processor-64G",
@@ -2126,7 +2127,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						Size: 1,
 					},
 					{
-						NodeGroupData: hwv1alpha1.NodeGroupData{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name:           "worker",
 							Role:           "worker",
 							HwProfile:      "profile-spr-dual-processor-128G",
@@ -2136,15 +2137,15 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					},
 				},
 			},
-			Status: hwv1alpha1.NodeAllocationRequestStatus{
+			Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:   string(hwv1alpha1.Provisioned),
+						Type:   string(hwmgmtv1alpha1.Provisioned),
 						Status: metav1.ConditionTrue,
-						Reason: string(hwv1alpha1.Completed),
+						Reason: string(hwmgmtv1alpha1.Completed),
 					},
 				},
-				Properties: hwv1alpha1.Properties{
+				Properties: hwmgmtv1alpha1.Properties{
 					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
@@ -2184,7 +2185,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
 				fmt.Sprintf(
-					"the expected o2ims-hardwaremanagement.oran.openshift.io Nodes were not found in the %s namespace",
+					"the expected clcm.openshift.io Nodes were not found in the %s namespace",
 					utils.UnitTestHwmgrNamespace)))
 		})
 	})
@@ -2296,7 +2297,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = agent2Hostname
 			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			testutils.CreateResources(ctx, c, []*hwv1alpha1.AllocatedNode{node}, secrets)
+			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
@@ -2319,8 +2320,8 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					Expect(agent.Labels).To(Equal(map[string]string{
 						utils.ClusterTemplateArtifactsLabel:                            "57b39bda-ac56-4143-9b10-d1a71517d04f",
 						"agent-install.openshift.io/clusterdeployment-namespace":       mclName,
-						"o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef": utils.UnitTestHwPluginRef,
-						"o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId":       masterNodeName2,
+						"clcm.openshift.io/hardwarePluginRef": utils.UnitTestHwPluginRef,
+						"clcm.openshift.io/hwMgrNodeId":       masterNodeName2,
 					}))
 				}
 				if agent.Name == AgentName {
@@ -2364,7 +2365,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = "some-other-cluster.lab.example.com"
 			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
-			testutils.CreateResources(ctx, c, []*hwv1alpha1.AllocatedNode{node}, secrets)
+			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
@@ -2426,8 +2427,8 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 			}))
-			Expect(agent.Labels).To(Not(HaveKey("o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef")))
-			Expect(agent.Labels).To(Not(HaveKey("o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId")))
+			Expect(agent.Labels).To(Not(HaveKey("clcm.openshift.io/hardwarePluginRef")))
+			Expect(agent.Labels).To(Not(HaveKey("clcm.openshift.io/hwMgrNodeId")))
 		})
 	})
 })

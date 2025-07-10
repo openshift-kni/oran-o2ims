@@ -22,7 +22,8 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -32,7 +33,7 @@ import (
 func processNewNodeAllocationRequest(ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	clusterID := nodeAllocationRequest.Spec.ClusterId
 	logger.InfoContext(ctx, "Processing New NodeAllocationRequest:", slog.String("clusterID", clusterID))
@@ -58,7 +59,7 @@ func checkNodeAllocationRequestProgress(
 	ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (full bool, err error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (full bool, err error) {
 
 	clusterID := nodeAllocationRequest.Spec.ClusterId
 
@@ -89,7 +90,7 @@ func checkNodeAllocationRequestProgress(
 func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 ) (bool, error) {
 
 	clusterID := nodeAllocationRequest.Spec.ClusterId
@@ -137,9 +138,9 @@ func handleNodeAllocationRequestConfiguring(
 	ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
-	var nodesToCheck []*pluginv1alpha1.AllocatedNode // To track nodes that we actually attempted to upgrade
+	var nodesToCheck []*pluginsv1alpha1.AllocatedNode // To track nodes that we actually attempted to upgrade
 	var result ctrl.Result
 
 	logger.InfoContext(ctx, "Handling NodeAllocationRequest Configuring")
@@ -185,7 +186,7 @@ func handleNodeAllocationRequestConfiguring(
 	// Update NodeAllocationRequest status if all nodes are upgraded
 	if len(nodesStillUpgrading) == 0 {
 		if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, c, nodeAllocationRequest,
-			pluginv1alpha1.Configured, pluginv1alpha1.ConfigApplied, metav1.ConditionTrue, string(pluginv1alpha1.ConfigSuccess)); err != nil {
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
 			return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 		}
 		// Update the NodeAllocationRequest hwMgrPlugin status
@@ -205,10 +206,10 @@ func checkAllocatedNodeUpgradeProcess(
 	c rtclient.Client,
 	logger *slog.Logger,
 	nodeNamespace string,
-	allocatedNodes []string) ([]*pluginv1alpha1.AllocatedNode, []*pluginv1alpha1.AllocatedNode, error) {
+	allocatedNodes []string) ([]*pluginsv1alpha1.AllocatedNode, []*pluginsv1alpha1.AllocatedNode, error) {
 
-	var upgradedNodes []*pluginv1alpha1.AllocatedNode
-	var nodesStillUpgrading []*pluginv1alpha1.AllocatedNode
+	var upgradedNodes []*pluginsv1alpha1.AllocatedNode
+	var nodesStillUpgrading []*pluginsv1alpha1.AllocatedNode
 
 	for _, name := range allocatedNodes {
 		// Fetch the latest version of each node to ensure up-to-date status
@@ -236,7 +237,7 @@ func checkAllocatedNodeUpgradeProcess(
 func releaseNodeAllocationRequest(ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	clusterID := nodeAllocationRequest.Spec.ClusterId
 
@@ -281,7 +282,7 @@ func releaseNodeAllocationRequest(ctx context.Context,
 func allocateNode(ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	clusterID := nodeAllocationRequest.Spec.ClusterId
 
@@ -368,7 +369,7 @@ func bmcSecretName(nodename string) string {
 func createBMCSecret(ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	nodename, usernameBase64, passwordBase64 string,
 ) error {
 
@@ -416,7 +417,7 @@ func createBMCSecret(ctx context.Context,
 func createNode(ctx context.Context,
 	c rtclient.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginv1alpha1.NodeAllocationRequest, cloudID, nodename, nodeId, groupname, hwprofile string,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest, cloudID, nodename, nodeId, groupname, hwprofile string,
 ) error {
 
 	logger.InfoContext(ctx, "Creating node",
@@ -425,7 +426,7 @@ func createNode(ctx context.Context,
 		slog.String("nodeId", nodeId))
 
 	blockDeletion := true
-	node := &pluginv1alpha1.AllocatedNode{
+	node := &pluginsv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodename,
 			Namespace: nodeAllocationRequest.Namespace,
@@ -440,7 +441,7 @@ func createNode(ctx context.Context,
 				BlockOwnerDeletion: &blockDeletion,
 			}},
 		},
-		Spec: pluginv1alpha1.AllocatedNodeSpec{
+		Spec: pluginsv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: cloudID,
 			GroupName:             groupname,
 			HwProfile:             hwprofile,
@@ -465,7 +466,7 @@ func updateNodeStatus(ctx context.Context,
 
 	logger.InfoContext(ctx, "Updating AllocatedNode", slog.String("nodename", nodename))
 
-	node := &pluginv1alpha1.AllocatedNode{}
+	node := &pluginsv1alpha1.AllocatedNode{}
 
 	if err := sharedutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return c.Get(ctx, types.NamespacedName{Name: nodename, Namespace: nodeNamespace}, node)
@@ -476,15 +477,15 @@ func updateNodeStatus(ctx context.Context,
 	logger.InfoContext(ctx, "Adding info to AllocatedNode",
 		slog.String("nodename", nodename),
 		slog.Any("info", info))
-	node.Status.BMC = &pluginv1alpha1.BMC{
+	node.Status.BMC = &pluginsv1alpha1.BMC{
 		Address:         info.BMC.Address,
 		CredentialsName: bmcSecretName(nodename),
 	}
 	node.Status.Interfaces = info.Interfaces
 
 	hwpluginutils.SetStatusCondition(&node.Status.Conditions,
-		string(pluginv1alpha1.Provisioned),
-		string(pluginv1alpha1.Completed),
+		string(hwmgmtv1alpha1.Provisioned),
+		string(hwmgmtv1alpha1.Completed),
 		metav1.ConditionTrue,
 		"Provisioned")
 	node.Status.HwProfile = hwprofile

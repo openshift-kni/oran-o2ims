@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -34,9 +34,9 @@ type HardwarePluginReconciler struct {
 	Logger *slog.Logger
 }
 
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -48,7 +48,7 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	result = utils.DoNotRequeue()
 
 	// Fetch the CR:
-	hwplugin := &pluginv1alpha1.HardwarePlugin{}
+	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
 	if err = r.Client.Get(ctx, req.NamespacedName, hwplugin); err != nil {
 		if errors.IsNotFound(err) {
 			err = nil
@@ -73,7 +73,7 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	hwplugin.Status.ObservedGeneration = hwplugin.Generation
 
 	// Validate the HardwarePlugin
-	condReason := pluginv1alpha1.ConditionReasons.InProgress
+	condReason := hwmgmtv1alpha1.ConditionReasons.InProgress
 	condStatus := metav1.ConditionFalse
 	condMessage := ""
 
@@ -85,18 +85,18 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	} else {
 		if isValid {
-			condReason = pluginv1alpha1.ConditionReasons.Completed
+			condReason = hwmgmtv1alpha1.ConditionReasons.Completed
 			condStatus = metav1.ConditionTrue
 			condMessage = fmt.Sprintf("Validated connection to %s", hwplugin.Spec.ApiRoot)
 		} else {
-			condReason = pluginv1alpha1.ConditionReasons.Failed
+			condReason = hwmgmtv1alpha1.ConditionReasons.Failed
 			condStatus = metav1.ConditionFalse
 			condMessage = fmt.Sprintf("Failed to validate connection to %s", hwplugin.Spec.ApiRoot)
 		}
 	}
 
 	if updateErr := utils.UpdateHardwarePluginStatusCondition(ctx, r.Client, hwplugin,
-		pluginv1alpha1.ConditionTypes.Registration, condReason, condStatus, condMessage); updateErr != nil {
+		hwmgmtv1alpha1.ConditionTypes.Registration, condReason, condStatus, condMessage); updateErr != nil {
 		err = fmt.Errorf("failed to update status for HardwarePlugin (%s) with validation success: %w", hwplugin.Name, updateErr)
 	}
 
@@ -104,7 +104,7 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 // validateHardwarePlugin verifies secure connectivity to the HardwarePlugin's apiRoot using mTLS.
-func (r *HardwarePluginReconciler) validateHardwarePlugin(ctx context.Context, hwplugin *pluginv1alpha1.HardwarePlugin) (bool, error) {
+func (r *HardwarePluginReconciler) validateHardwarePlugin(ctx context.Context, hwplugin *hwmgmtv1alpha1.HardwarePlugin) (bool, error) {
 
 	if hwplugin.Spec.AuthClientConfig == nil {
 		return false, fmt.Errorf("missing authClientConfig configuration")
@@ -142,7 +142,7 @@ func (r *HardwarePluginReconciler) validateHardwarePlugin(ctx context.Context, h
 func (r *HardwarePluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Logger.Info("Setting up HardwarePlugin controller")
 	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&pluginv1alpha1.HardwarePlugin{}).
+		For(&hwmgmtv1alpha1.HardwarePlugin{}).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup HardwarePlugin controller: %w", err)
 	}

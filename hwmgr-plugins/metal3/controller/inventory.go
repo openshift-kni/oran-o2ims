@@ -15,21 +15,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
 const (
-	LabelPrefixResources = "resources.oran.openshift.io/"
+	LabelPrefixResources = "resources.clcm.openshift.io/"
 	LabelResourcePoolID  = LabelPrefixResources + "resourcePoolId"
 	LabelSiteID          = LabelPrefixResources + "siteId"
 
-	LabelPrefixResourceSelector = "resourceselector.oran.openshift.io/"
+	LabelPrefixResourceSelector = "resourceselector.clcm.openshift.io/"
 
-	LabelPrefixInterfaces = "interfacelabel.oran.openshift.io/"
+	LabelPrefixInterfaces = "interfacelabel.clcm.openshift.io/"
 
-	AnnotationPrefixResourceInfo        = "resourceinfo.oran.openshift.io/"
+	AnnotationPrefixResourceInfo        = "resourceinfo.clcm.openshift.io/"
 	AnnotationResourceInfoDescription   = AnnotationPrefixResourceInfo + "description"
 	AnnotationResourceInfoPartNumber    = AnnotationPrefixResourceInfo + "partNumber"
 	AnnotationResourceInfoGlobalAssetId = AnnotationPrefixResourceInfo + "globalAssetId"
@@ -178,7 +178,7 @@ func getResourceInfoResourcePoolId(bmh *metal3v1alpha1.BareMetalHost) string {
 	return bmh.Labels[LabelResourcePoolID]
 }
 
-func getResourceInfoResourceProfileId(node *hwv1alpha1.AllocatedNode) string {
+func getResourceInfoResourceProfileId(node *pluginsv1alpha1.AllocatedNode) string {
 	if node != nil {
 		return node.Status.HwProfile
 	}
@@ -235,7 +235,7 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
-func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwv1alpha1.AllocatedNode) inventory.ResourceInfo {
+func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.AllocatedNode) inventory.ResourceInfo {
 	return inventory.ResourceInfo{
 		AdminState:       getResourceInfoAdminState(),
 		Description:      getResourceInfoDescription(*bmh),

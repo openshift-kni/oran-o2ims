@@ -126,7 +126,7 @@ func (t *reconcilerTask) createHardwarePluginManagerClusterRole(ctx context.Cont
 			// HardwarePlugins
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"hardwareplugins",
@@ -142,7 +142,7 @@ func (t *reconcilerTask) createHardwarePluginManagerClusterRole(ctx context.Cont
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"hardwareplugins/status",
@@ -155,7 +155,7 @@ func (t *reconcilerTask) createHardwarePluginManagerClusterRole(ctx context.Cont
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"hardwareplugins/finalizers",

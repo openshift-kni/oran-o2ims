@@ -346,9 +346,9 @@ const (
 	ClusterIDLabelName        = "clusterID"
 	LocalClusterLabelName     = "local-cluster"
 
-	ClusterTemplateArtifactsLabel = "clustertemplates.o2ims.provisioning.oran.org/templateId"
-	HardwarePluginRefLabel        = "o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef"
-	HardwareManagerNodeIdLabel    = "o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId"
+	ClusterTemplateArtifactsLabel = "clustertemplates.clcm.openshift.io/templateId"
+	HardwarePluginRefLabel        = "clcm.openshift.io/hardwarePluginRef"
+	HardwareManagerNodeIdLabel    = "clcm.openshift.io/hwMgrNodeId"
 )
 
 // AlarmDefinitionSeverityField severity field within additional fields of alarm definition
@@ -386,4 +386,4 @@ const (
 // registered.
 const HardwarePluginValidationEndpoint = "/hardware-manager/provisioning/api_versions"
 
-const AllocatedNodeLabel = "o2ims-hardwaremanagement.oran.openshift.io/allocated-node"
+const AllocatedNodeLabel = "clcm.openshift.io/allocated-node"

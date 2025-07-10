@@ -34,7 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -87,7 +88,7 @@ var _ = BeforeSuite(func() {
 	testScheme := runtime.NewScheme()
 	err := provisioningv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = hwv1alpha1.AddToScheme(testScheme)
+	err = hwmgmtv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = corev1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -171,12 +172,12 @@ var _ = BeforeSuite(func() {
 			},
 		},
 		// HardwarePlugin CRs
-		&hwv1alpha1.HardwarePlugin{
+		&hwmgmtv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: testHwMgrPluginNameSpace,
 				Name:      testHardwarePluginRef,
 			},
-			Spec: hwv1alpha1.HardwarePluginSpec{
+			Spec: hwmgmtv1alpha1.HardwarePluginSpec{
 				ApiRoot: "todo",
 			},
 		},
@@ -321,16 +322,16 @@ defaultHugepagesSize: "1G"`,
 			},
 		},
 		// hardware template
-		&hwv1alpha1.HardwareTemplate{
+		&hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
 				Namespace: utils.InventoryNamespace,
 			},
-			Spec: hwv1alpha1.HardwareTemplateSpec{
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:           utils.UnitTestHwPluginRef,
 				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "1m",
-				NodeGroupData: []hwv1alpha1.NodeGroupData{
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
 						Role:           "master",
@@ -547,14 +548,14 @@ defaultHugepagesSize: "1G"`,
 				provisioningv1alpha1.StateProgressing, "Waiting for NodeAllocationRequest (cluster-2) to be processed", nil)
 
 			// Patch NodeAllocationRequest provision status to Completed.
-			currentNp := &hwv1alpha1.NodeAllocationRequest{}
+			currentNp := &pluginsv1alpha1.NodeAllocationRequest{}
 			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
 			Expect(currentNp.Status.Conditions).To(BeEmpty())
 			currentNp.Status.Conditions = []metav1.Condition{
 				{
 					Status:             metav1.ConditionTrue,
-					Reason:             string(hwv1alpha1.Completed),
-					Type:               string(hwv1alpha1.Provisioned),
+					Reason:             string(hwmgmtv1alpha1.Completed),
+					Type:               string(hwmgmtv1alpha1.Provisioned),
 					LastTransitionTime: metav1.Now(),
 				},
 			}

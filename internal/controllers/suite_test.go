@@ -32,9 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/api/common"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -51,12 +52,12 @@ const testHardwarePluginRef = "hwmgr"
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	// Add fake hardwareplugin CR
-	hwplugin := &hwv1alpha1.HardwarePlugin{
+	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testHwMgrPluginNameSpace,
 			Name:      testHardwarePluginRef,
 		},
-		Spec: hwv1alpha1.HardwarePluginSpec{
+		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
 			ApiRoot: "https://hwmgr-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
 			AuthClientConfig: &common.AuthClientConfig{
 				Type: common.ServiceAccount,
@@ -73,16 +74,16 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithStatusSubresource(&hwv1alpha1.HardwareTemplate{}).
-		WithStatusSubresource(&hwv1alpha1.NodeAllocationRequest{}).
-		WithStatusSubresource(&hwv1alpha1.AllocatedNode{}).
+		WithStatusSubresource(&hwmgmtv1alpha1.HardwareTemplate{}).
+		WithStatusSubresource(&pluginsv1alpha1.NodeAllocationRequest{}).
+		WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
 		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
 		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithStatusSubresource(&pluginv1alpha1.HardwareManager{}).
-		WithIndex(&hwv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-			return []string{obj.(*hwv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+		WithStatusSubresource(&pluginsv1alpha1.HardwareManager{}).
+		WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+			return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 		}).
 		Build()
 }
@@ -126,10 +127,10 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.HardwareTemplate{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.NodeAllocationRequest{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.AllocatedNode{})
-	scheme.AddKnownTypes(hwv1alpha1.GroupVersion, &hwv1alpha1.AllocatedNodeList{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareTemplate{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &pluginsv1alpha1.NodeAllocationRequest{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNode{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNodeList{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
@@ -137,7 +138,7 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.ClusterVersion{})
 	scheme.AddKnownTypes(openshiftoperatorv1.SchemeGroupVersion, &openshiftoperatorv1.IngressController{})
 	scheme.AddKnownTypes(ibguv1alpha1.SchemeGroupVersion, &ibguv1alpha1.ImageBasedGroupUpgrade{})
-	scheme.AddKnownTypes(pluginv1alpha1.GroupVersion, &pluginv1alpha1.HardwareManager{})
+	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.HardwareManager{})
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.Agent{})
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.AgentList{})
 	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})

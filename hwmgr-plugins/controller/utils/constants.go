@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 package utils
 
-const HardwarePluginLabel = "o2ims-hardwaremanagement.oran.openshift.io/hardware-plugin"
+const HardwarePluginLabel = "clcm.openshift.io/hardware-plugin"
 
 const (
 	LoopbackHardwarePluginID = "loopback-hwplugin"

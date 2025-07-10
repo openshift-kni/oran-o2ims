@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller"
 	"github.com/openshift-kni/oran-o2ims/internal"
@@ -36,6 +37,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(pluginsv1alpha1.AddToScheme(scheme))
 }
 
 // Create creates and returns the `start` command.

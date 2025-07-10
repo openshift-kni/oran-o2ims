@@ -1,4 +1,4 @@
-apiVersion: o2ims.provisioning.oran.org/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: ClusterTemplate
 metadata:
   name: sno-ran-du.v4-Y-Z-1-no-hwtemplate

@@ -15,7 +15,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
@@ -99,15 +99,15 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
-		hwtmpl := &hwv1alpha1.HardwareTemplate{
+		hwtmpl := &hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
 				Namespace: utils.InventoryNamespace,
 			},
-			Spec: hwv1alpha1.HardwareTemplateSpec{
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:  "hwMgr",
 				BootInterfaceLabel: "label",
-				NodeGroupData: []hwv1alpha1.NodeGroupData{
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "master",
 						Role:           "mmaster",
@@ -434,7 +434,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ciDefaultsCm = "clusterinstance-ci-defaults"
 		ptDefaultsCm = "policytemplate-ci-defaults"
 		hwTemplate   = "hwTemplate-v1"
-		hwtmpl       *hwv1alpha1.HardwareTemplate
+		hwtmpl       *hwmgmtv1alpha1.HardwareTemplate
 		t            *clusterTemplateReconcilerTask
 	)
 
@@ -485,15 +485,15 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		hwtmpl = &hwv1alpha1.HardwareTemplate{
+		hwtmpl = &hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
 				Namespace: utils.InventoryNamespace,
 			},
-			Spec: hwv1alpha1.HardwareTemplateSpec{
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:  "hwMgr",
 				BootInterfaceLabel: "label",
-				NodeGroupData: []hwv1alpha1.NodeGroupData{
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "master",
 						Role:           "master",
@@ -601,9 +601,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 
 		// Check the HardwareTemplate status condition
 		VerifyHardwareTemplateStatus(ctx, c, hwtmpl.Name, metav1.Condition{
-			Type:    string(hwv1alpha1.Validation),
+			Type:    string(hwmgmtv1alpha1.Validation),
 			Status:  metav1.ConditionFalse,
-			Reason:  string(hwv1alpha1.Failed),
+			Reason:  string(hwmgmtv1alpha1.Failed),
 			Message: errMessage,
 		})
 	})

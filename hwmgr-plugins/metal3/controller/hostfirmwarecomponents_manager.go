@@ -19,13 +19,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
 // validateFirmwareUpdateSpec checks that the BIOS and firmware URLs are valid
-func validateFirmwareUpdateSpec(spec pluginv1alpha1.HardwareProfileSpec) error {
+func validateFirmwareUpdateSpec(spec hwmgmtv1alpha1.HardwareProfileSpec) error {
 
 	if spec.BiosFirmware.Version != "" {
 		if spec.BiosFirmware.URL == "" {
@@ -47,7 +47,7 @@ func validateFirmwareUpdateSpec(spec pluginv1alpha1.HardwareProfileSpec) error {
 	return nil
 }
 
-func convertToFirmwareUpdates(spec pluginv1alpha1.HardwareProfileSpec) []metal3v1alpha1.FirmwareUpdate {
+func convertToFirmwareUpdates(spec hwmgmtv1alpha1.HardwareProfileSpec) []metal3v1alpha1.FirmwareUpdate {
 	var updates []metal3v1alpha1.FirmwareUpdate
 
 	if spec.BiosFirmware.URL != "" {
@@ -90,9 +90,9 @@ func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 }
 
 func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *metal3v1alpha1.HostFirmwareComponentsStatus,
-	spec pluginv1alpha1.HardwareProfileSpec) ([]metal3v1alpha1.FirmwareUpdate, bool) {
+	spec hwmgmtv1alpha1.HardwareProfileSpec) ([]metal3v1alpha1.FirmwareUpdate, bool) {
 
-	firmwareMap := map[string]pluginv1alpha1.Firmware{
+	firmwareMap := map[string]hwmgmtv1alpha1.Firmware{
 		"bios": spec.BiosFirmware,
 		"bmc":  spec.BmcFirmware,
 	}
@@ -136,7 +136,7 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 func createHostFirmwareComponents(ctx context.Context,
 	c client.Client,
 	bmh *metal3v1alpha1.BareMetalHost,
-	spec pluginv1alpha1.HardwareProfileSpec) (*metal3v1alpha1.HostFirmwareComponents, error) {
+	spec hwmgmtv1alpha1.HardwareProfileSpec) (*metal3v1alpha1.HostFirmwareComponents, error) {
 
 	updates := convertToFirmwareUpdates(spec)
 
@@ -174,7 +174,7 @@ func updateHostFirmwareComponents(ctx context.Context,
 func IsFirmwareUpdateRequired(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost, spec pluginv1alpha1.HardwareProfileSpec) (bool, error) {
+	bmh *metal3v1alpha1.BareMetalHost, spec hwmgmtv1alpha1.HardwareProfileSpec) (bool, error) {
 	if err := validateFirmwareUpdateSpec(spec); err != nil {
 		return false, err
 	}
@@ -210,7 +210,7 @@ func getOrCreateHostFirmwareComponents(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
-	spec pluginv1alpha1.HardwareProfileSpec) (*metal3v1alpha1.HostFirmwareComponents, bool, error) {
+	spec hwmgmtv1alpha1.HardwareProfileSpec) (*metal3v1alpha1.HostFirmwareComponents, bool, error) {
 
 	hfc, err := getHostFirmwareComponents(ctx, c, bmh.Name, bmh.Namespace)
 	if err != nil {

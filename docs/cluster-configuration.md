@@ -54,11 +54,11 @@ A ProvisioningRequest can be edited to update:
 * the cluster labels and annotations
 
 ```yaml
-apiVersion: o2ims.provisioning.oran.org/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: ProvisioningRequest
 metadata:
   finalizers:
-    - provisioningrequest.o2ims.provisioning.oran.org/finalizer
+    - provisioningrequest.clcm.openshift.io/finalizer
   name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
@@ -80,11 +80,11 @@ spec:
 * the node labels and annotations
 
 ```yaml
-apiVersion: o2ims.provisioning.oran.org/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: ProvisioningRequest
 metadata:
   finalizers:
-    - provisioningrequest.o2ims.provisioning.oran.org/finalizer
+    - provisioningrequest.clcm.openshift.io/finalizer
   name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
@@ -117,11 +117,11 @@ These changes would be rejected anyway by webhooks put in place by other operato
 These types of changes can be made under the ProvisioningRequest `spec.templateParameters` by updating the `policyTemplateParameters` entry, if it's present.
 
 ```yaml
-apiVersion: o2ims.provisioning.oran.org/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: ProvisioningRequest
 metadata:
   finalizers:
-    - provisioningrequest.o2ims.provisioning.oran.org/finalizer
+    - provisioningrequest.clcm.openshift.io/finalizer
   name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
@@ -567,7 +567,7 @@ The following steps are required:
 
     * Obtains the list of nodes from the `NodeAllocationRequest` CR for the master MCP.
     * For the SNO case that we are considering, there is only one node that cannot be cordoned and drained.
-    * Updates `spec.hwProfile` in the `Node` (`node.o2ims-hardwaremanagement.oran.openshift.io/v1alpha1`) CR.
+    * Updates `spec.hwProfile` in the `Node` (`node.clcm.openshift.io/v1alpha1`) CR.
 5. The hardware plugin requests the hardware manager to apply the new hardware profile from the `Node` `spec`.
 6. The hardware manager updates the profile.
 7. The hardware plugin waits for the result from the hardware manager.

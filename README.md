@@ -164,7 +164,7 @@ default   4m20s
 $ oc get inventory -n oran-o2ims -oyaml
 apiVersion: v1
 items:
-- apiVersion: o2ims.oran.openshift.io/v1alpha1
+- apiVersion: ocloud.openshift.io/v1alpha1
   kind: Inventory
   metadata:
     creationTimestamp: "2025-01-22T16:45:32Z"
@@ -211,12 +211,12 @@ $ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-o2ims VERSION=4.18.0 catalog-undep
 hack/catalog-undeploy.sh --package oran-o2ims --namespace oran-o2ims --crd-search "o2ims.*oran"
 subscription.operators.coreos.com "oran-o2ims" deleted
 clusterserviceversion.operators.coreos.com "oran-o2ims.v4.18.0" deleted
-customresourcedefinition.apiextensions.k8s.io "clustertemplates.o2ims.provisioning.oran.org" deleted
-customresourcedefinition.apiextensions.k8s.io "hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "inventories.o2ims.oran.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "nodeallocationrequests.o2ims-hardwaremanagement.oran.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "allocatednodes.o2ims-hardwaremanagement.oran.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "provisioningrequests.o2ims.provisioning.oran.org" deleted
+customresourcedefinition.apiextensions.k8s.io "clustertemplates.clcm.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "hardwaretemplates.clcm.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "inventories.ocloud.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "nodeallocationrequests.plugins.clcm.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "allocatednodes.plugins.clcm.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "provisioningrequests.clcm.openshift.io" deleted
 namespace "oran-o2ims" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-alarms-server" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-alertmanager" deleted
@@ -288,7 +288,7 @@ not be repeated.
 > be applied to the Inventory CR.
 >
 >```bash
-> oc annotate -n oran-o2ims inventories default o2ims.oran.openshift.io/register-on-restart=true
+> oc annotate -n oran-o2ims inventories default ocloud.openshift.io/register-on-restart=true
 >```
 
 In a production environment, this requires that an OAuth2 authorization server be available and configured with the
@@ -417,7 +417,7 @@ configuration requirements.
    registration. If an error occurred that prevented registration from completing, then the error will be noted here.
 
    ```console
-   oc describe inventories.o2ims.oran.openshift.io sample
+   oc describe inventories.ocloud.openshift.io sample
    ...
    Status:
      Deployment Status:

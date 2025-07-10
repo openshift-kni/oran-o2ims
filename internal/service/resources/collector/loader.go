@@ -12,7 +12,7 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
@@ -40,7 +40,7 @@ func NewHwPluginDataSourceLoader(cloudID, globalCloudID uuid.UUID) (DataSourceLo
 func (l *HwPluginDataSourceLoader) Load(ctx context.Context) ([]DataSource, error) {
 	slog.Info("Loading hardware plugin data sources")
 
-	var hwPlugins hwv1alpha1.HardwarePluginList
+	var hwPlugins hwmgmtv1alpha1.HardwarePluginList
 	err := l.hubClient.List(ctx, &hwPlugins)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list hardware plugins: %w", err)

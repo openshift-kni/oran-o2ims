@@ -14,7 +14,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	clientutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/utils"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -33,7 +33,7 @@ const (
 type HardwarePluginClient struct {
 	client   *ClientWithResponses
 	logger   *slog.Logger
-	hwPlugin *hwv1alpha1.HardwarePlugin
+	hwPlugin *hwmgmtv1alpha1.HardwarePlugin
 }
 
 // NewHardwarePluginClient creates an authenticated client connected to the HardwarePlugin server.
@@ -41,7 +41,7 @@ func NewHardwarePluginClient(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	hwPlugin *hwv1alpha1.HardwarePlugin,
+	hwPlugin *hwmgmtv1alpha1.HardwarePlugin,
 ) (*HardwarePluginClient, error) {
 	// Construct OAuth client configuration
 	config, err := clientutils.SetupOAuthClientConfig(ctx, c, hwPlugin)

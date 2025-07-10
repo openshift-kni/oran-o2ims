@@ -13,12 +13,12 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // SetupOAuthClientConfig constructs an OAuth client configuration from the HardwarePlugin CR.
-func SetupOAuthClientConfig(ctx context.Context, c client.Client, hwPlugin *hwv1alpha1.HardwarePlugin) (*sharedutils.OAuthClientConfig, error) {
+func SetupOAuthClientConfig(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin) (*sharedutils.OAuthClientConfig, error) {
 	config := &sharedutils.OAuthClientConfig{
 		TLSConfig: &sharedutils.TLSConfig{},
 	}
@@ -44,7 +44,7 @@ func SetupOAuthClientConfig(ctx context.Context, c client.Client, hwPlugin *hwv1
 }
 
 // setupCABundle configures the CA bundle for TLS verification
-func setupCABundle(ctx context.Context, c client.Client, hwPlugin *hwv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
+func setupCABundle(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
 	if hwPlugin.Spec.CaBundleName == nil {
 		return nil
 	}
@@ -64,7 +64,7 @@ func setupCABundle(ctx context.Context, c client.Client, hwPlugin *hwv1alpha1.Ha
 }
 
 // setupTLSClientCert configures the TLS client certificate for mutual TLS
-func setupTLSClientCert(ctx context.Context, c client.Client, hwPlugin *hwv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
+func setupTLSClientCert(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
 	if hwPlugin.Spec.AuthClientConfig.TLSConfig == nil ||
 		hwPlugin.Spec.AuthClientConfig.TLSConfig.SecretName == nil {
 		return nil
@@ -81,7 +81,7 @@ func setupTLSClientCert(ctx context.Context, c client.Client, hwPlugin *hwv1alph
 }
 
 // setupOAuthConfig configures OAuth client credentials
-func setupOAuthConfig(ctx context.Context, c client.Client, hwPlugin *hwv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
+func setupOAuthConfig(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
 	if hwPlugin.Spec.AuthClientConfig.OAuthClientConfig == nil {
 		return nil
 	}

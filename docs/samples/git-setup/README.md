@@ -45,7 +45,7 @@ Distinctions:
 * The following should be added to the [AppProject](https://github.com/openshift-kni/cnf-features-deploy/blob/master/ztp/gitops-subscriptions/argocd/deployment/app-project.yaml) for `clustertemplates`, under `spec.clusterResourceWhitelist`:
 
 ```yaml
-  - group: o2ims.provisioning.oran.org
+  - group: clcm.openshift.io
     kind: ClusterTemplate
 ```
 
