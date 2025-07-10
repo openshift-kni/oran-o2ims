@@ -12,7 +12,7 @@ SPDX-License-Identifier: Apache-2.0
 - Spoke cluster is successfully deployed and configured using a `ProvisioningRequest`:
 
 ```bash
-$ oc get provisioningrequests.o2ims.provisioning.oran.org        
+$ oc get provisioningrequests.clcm.openshift.io        
 NAME           AGE   PROVISIONSTATE   PROVISIONDETAILS
 cluster-name   37m   fulfilled        Provisioning request has completed successfully
 ```

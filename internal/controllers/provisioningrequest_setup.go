@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -37,11 +37,11 @@ import (
 func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Setup Node CRD indexer. This field indexer allows us to query a list of Node CRs, filtered by the spec.nodeAllocationRequest field.
 	nodeIndexFunc := func(obj client.Object) []string {
-		return []string{obj.(*hwv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+		return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &hwv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", nodeIndexFunc); err != nil {
-		return fmt.Errorf("failed to setup indexer for o2ims-hardwaremanagement.oran.openshift.io/v1alpha1 AllocatedNode: %w", err)
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", nodeIndexFunc); err != nil {
+		return fmt.Errorf("failed to setup indexer for clcm.openshift.io/v1alpha1 AllocatedNode: %w", err)
 	}
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).

@@ -22,7 +22,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 )
 
@@ -54,7 +55,7 @@ func IsConditionDoesNotExistsErr(err error) bool {
 }
 
 // GetBootMacAddress selects the boot interface based on label and return the interface MAC address
-func GetBootMacAddress(interfaces []*hwv1alpha1.Interface, bootIfaceLabel string) (string, error) {
+func GetBootMacAddress(interfaces []*pluginsv1alpha1.Interface, bootIfaceLabel string) (string, error) {
 	for _, iface := range interfaces {
 		if iface.Label == bootIfaceLabel {
 			return iface.MACAddress, nil
@@ -284,7 +285,7 @@ func getInterfaces(nodeMap map[string]interface{}) []map[string]interface{} {
 //
 // Returns:
 // - error: An error if any unexpected structure or data is encountered; otherwise, nil.
-func AssignMacAddress(clusterInput map[string]any, hwInterfaces []*hwv1alpha1.Interface,
+func AssignMacAddress(clusterInput map[string]any, hwInterfaces []*pluginsv1alpha1.Interface,
 	nodeSpec map[string]interface{}) error {
 
 	nodesInput, ok := clusterInput["nodes"].([]any)
@@ -366,7 +367,7 @@ OuterLoop:
 
 // HandleHardwareTimeout checks for provisioning or configuration timeout
 func HandleHardwareTimeout(
-	condition hwv1alpha1.ConditionType,
+	condition hwmgmtv1alpha1.ConditionType,
 	provisioningStartTime *metav1.Time,
 	configurationStartTime *metav1.Time,
 	timeout time.Duration,
@@ -378,16 +379,16 @@ func HandleHardwareTimeout(
 	timedOutOrFailed := false
 
 	// Handle timeout for Provisioned condition
-	if condition == hwv1alpha1.Provisioned && TimeoutExceeded(provisioningStartTime.Time, timeout) {
-		reason = string(hwv1alpha1.TimedOut)
+	if condition == hwmgmtv1alpha1.Provisioned && TimeoutExceeded(provisioningStartTime.Time, timeout) {
+		reason = string(hwmgmtv1alpha1.TimedOut)
 		message = "Hardware provisioning timed out"
 		timedOutOrFailed = true
 		return timedOutOrFailed, reason, message
 	}
 
 	// Handle timeout for Configured condition
-	if condition == hwv1alpha1.Configured && TimeoutExceeded(configurationStartTime.Time, timeout) {
-		reason = string(hwv1alpha1.TimedOut)
+	if condition == hwmgmtv1alpha1.Configured && TimeoutExceeded(configurationStartTime.Time, timeout) {
+		reason = string(hwmgmtv1alpha1.TimedOut)
 		message = "Hardware configuration timed out"
 		timedOutOrFailed = true
 		return timedOutOrFailed, reason, message
@@ -398,16 +399,16 @@ func HandleHardwareTimeout(
 }
 
 // GetStatusMessage returns a status message based on the given condition typ
-func GetStatusMessage(condition hwv1alpha1.ConditionType) string {
-	if condition == hwv1alpha1.Configured {
+func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
+	if condition == hwmgmtv1alpha1.Configured {
 		return "configuring"
 	}
 	return "provisioning"
 }
 
 // GetHardwareTemplate retrieves the hardware template resource for a given name
-func GetHardwareTemplate(ctx context.Context, c client.Client, hwTemplateName string) (*hwv1alpha1.HardwareTemplate, error) {
-	hwTemplate := &hwv1alpha1.HardwareTemplate{}
+func GetHardwareTemplate(ctx context.Context, c client.Client, hwTemplateName string) (*hwmgmtv1alpha1.HardwareTemplate, error) {
+	hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{}
 
 	exists, err := DoesK8SResourceExist(ctx, c, hwTemplateName, InventoryNamespace, hwTemplate)
 	if err != nil {
@@ -445,8 +446,8 @@ func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.C
 }
 
 // GetHardwarePlugin retrieves the HardwarePlugin resource for a given name
-func GetHardwarePlugin(ctx context.Context, c client.Client, hwPluginName string) (*hwv1alpha1.HardwarePlugin, error) {
-	hwPlugin := &hwv1alpha1.HardwarePlugin{}
+func GetHardwarePlugin(ctx context.Context, c client.Client, hwPluginName string) (*hwmgmtv1alpha1.HardwarePlugin, error) {
+	hwPlugin := &hwmgmtv1alpha1.HardwarePlugin{}
 
 	exists, err := DoesK8SResourceExist(ctx, c, hwPluginName, GetHwMgrPluginNS(), hwPlugin)
 	if err != nil {
@@ -461,7 +462,7 @@ func GetHardwarePlugin(ctx context.Context, c client.Client, hwPluginName string
 // GetHardwarePluginFromProvisioningRequest retrieves the HardwarePlugin resource associated with a given ProvisioningRequest resource
 func GetHardwarePluginFromProvisioningRequest(ctx context.Context,
 	c client.Client,
-	pr *provisioningv1alpha1.ProvisioningRequest) (*hwv1alpha1.HardwarePlugin, error) {
+	pr *provisioningv1alpha1.ProvisioningRequest) (*hwmgmtv1alpha1.HardwarePlugin, error) {
 
 	hwpluginRef, err := GetHardwarePluginRefFromProvisioningRequest(ctx, c, pr)
 	if err != nil {
@@ -478,7 +479,7 @@ func GetHardwarePluginFromProvisioningRequest(ctx context.Context,
 }
 
 // UpdateHardwareTemplateStatusCondition updates the status condition of the HardwareTemplate resource
-func UpdateHardwareTemplateStatusCondition(ctx context.Context, c client.Client, hardwareTemplate *hwv1alpha1.HardwareTemplate,
+func UpdateHardwareTemplateStatusCondition(ctx context.Context, c client.Client, hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate,
 	conditionType provisioningv1alpha1.ConditionType, conditionReason provisioningv1alpha1.ConditionReason,
 	conditionStatus metav1.ConditionStatus, message string) error {
 
@@ -510,8 +511,8 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 		if err != nil {
 			errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string: %v",
 				name, err)
-			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, provisioningv1alpha1.ConditionType(hwv1alpha1.Validation),
-				provisioningv1alpha1.ConditionReason(hwv1alpha1.Failed), metav1.ConditionFalse, errMessage)
+			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
+				provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse, errMessage)
 			if updateErr != nil {
 				// nolint: wrapcheck
 				return 0, updateErr
@@ -526,7 +527,7 @@ func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string)
 
 // GetBMHNamespace returns the BMH namespace for the given node.
 // Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
-func GetBMHNamespace(node *hwv1alpha1.AllocatedNode) string {
+func GetBMHNamespace(node *pluginsv1alpha1.AllocatedNode) string {
 
 	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {
 		return ns

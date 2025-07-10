@@ -41,7 +41,7 @@ Prepare a Git repository containing all necessary files for cluster provisioning
 
 A namespace-scoped CR managed by the O-Cloud Manager, defining the resources and parameters required for cluster provisioning. An example of ClusterTemplate can be found [here](../config/samples/v1alpha1_clustertemplate.yaml).
 
-The [CRD](../config/crd/bases/o2ims.provisioning.oran.org_clustertemplates.yaml)'s `spec` fields include:
+The [CRD](../config/crd/bases/clcm.openshift.io_clustertemplates.yaml)'s `spec` fields include:
 
 - name: Specifies the base name of the ClusterTemplate.
 - version: Defines the version of the ClusterTemplate.
@@ -91,7 +91,7 @@ A cluster-scoped CR managed by the O-Cloud Manager, providing all neccessary par
 
 The `metadata.name` of a ProvisioningRequest CR must be a valid UUID. Any attempt to create a ProvisioningRequest with an invalid `metadata.name` will be rejected by the webhook.
 
-The [CRD](../config/crd/bases/o2ims.provisioning.oran.org_provisioningrequests.yaml)'s `spec` fields include:
+The [CRD](../config/crd/bases/clcm.openshift.io_provisioningrequests.yaml)'s `spec` fields include:
 
 - name: Defines a human-readable name for the Provisioning Request.
 - description: A brief description of the Provisioning Request.

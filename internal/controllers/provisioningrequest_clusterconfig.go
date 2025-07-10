@@ -269,7 +269,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		return fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
 
-	// Add the clustertemplates.o2ims.provisioning.oran.org/templateId label to the ManagedCluster
+	// Add the clustertemplates.clcm.openshift.io/templateId label to the ManagedCluster
 	// associated to the current ProvisioningRequest.
 	err = t.setLabelValue(ctx, mcl, utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
 	if err != nil {
@@ -277,9 +277,9 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 	}
 
 	// Add the needed label to the Agent(s) associated to the current ProvisioningRequest:
-	//   clustertemplates.o2ims.provisioning.oran.org/templateIds
-	//   o2ims-hardwaremanagement.oran.openshift.io/hardwarePluginRef
-	//   o2ims-hardwaremanagement.oran.openshift.io/hwMgrNodeId
+	//   clustertemplates.clcm.openshift.io/templateIds
+	//   clcm.openshift.io/hardwarePluginRef
+	//   clcm.openshift.io/hwMgrNodeId
 
 	agents := &assistedservicev1beta1.AgentList{}
 	listOpts := []client.ListOption{
@@ -316,7 +316,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			continue
 		}
 
-		// Get the corresponding o2ims-hardwaremanagement.oran.openshift.io and add the needed labels.
+		// Get the corresponding clcm.openshift.io and add the needed labels.
 		// Map by hostname.
 		foundNode := false
 
@@ -361,7 +361,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		if !foundNode {
 			t.logger.WarnContext(
 				ctx,
-				"The corresponding o2ims-hardwaremanagement.oran.openshift.io Node not found for the %s/%s Agent",
+				"The corresponding clcm.openshift.io Node not found for the %s/%s Agent",
 				agent.Name, agent.Namespace,
 			)
 		}

@@ -94,7 +94,7 @@ func (t *reconcilerTask) createLoopbackPluginServerClusterRole(ctx context.Conte
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"plugins.clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests",
@@ -112,7 +112,7 @@ func (t *reconcilerTask) createLoopbackPluginServerClusterRole(ctx context.Conte
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"plugins.clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests/status",
@@ -126,7 +126,7 @@ func (t *reconcilerTask) createLoopbackPluginServerClusterRole(ctx context.Conte
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"plugins.clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests/finalizers",
