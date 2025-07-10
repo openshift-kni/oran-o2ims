@@ -394,7 +394,7 @@ catalog-deploy: ## Deploy from catalog image.
 		--namespace $(OCLOUD_MANAGER_NAMESPACE) \
 		--catalog-image $(CATALOG_IMG) \
 		--channel alpha \
-		--install-mode AllNamespaces \
+		--install-mode OwnNamespace \
 		| oc create -f -
 
 # Undeploy from catalog image.
