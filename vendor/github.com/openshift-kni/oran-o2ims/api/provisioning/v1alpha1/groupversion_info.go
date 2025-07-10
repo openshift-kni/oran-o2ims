@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 // Package v1alpha1 contains API Schema definitions for the oran v1alpha1 API group
 // +kubebuilder:object:generate=true
-// +groupName=o2ims.provisioning.oran.org
+// +groupName=clcm.openshift.io
 package v1alpha1
 
 import (
@@ -16,7 +16,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "o2ims.provisioning.oran.org", Version: "v1alpha1"}
+	GroupVersion = schema.GroupVersion{Group: "clcm.openshift.io", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}

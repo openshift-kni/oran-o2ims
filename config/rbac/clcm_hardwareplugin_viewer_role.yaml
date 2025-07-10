@@ -1,0 +1,23 @@
+# permissions for end users to view hardwareplugins.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: clcm-hardwareplugin-viewer-role
+rules:
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareplugins
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareplugins/status
+  verbs:
+  - get

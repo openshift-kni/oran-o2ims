@@ -10,12 +10,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-o2ims-provisioning-oran-org-v1alpha1-provisioningrequest
+      path: /validate-clcm-openshift-io-v1alpha1-provisioningrequest
   failurePolicy: Fail
-  name: provisioningrequests.o2ims.provisioning.oran.org
+  name: provisioningrequests.clcm.openshift.io
   rules:
   - apiGroups:
-    - o2ims.provisioning.oran.org
+    - clcm.openshift.io
     apiVersions:
     - v1alpha1
     operations:

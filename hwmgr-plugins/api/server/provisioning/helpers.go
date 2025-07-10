@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -54,7 +54,7 @@ func GenerateResourceIdentifier(baseName string) (string, error) {
 }
 
 // NodeAllocationRequestCRToResponseObject Converts a NodeAllocationRequest CR to NodeAllocationRequestResponse object
-func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest) (NodeAllocationRequestResponse, error) {
+func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (NodeAllocationRequestResponse, error) {
 	// Convert NodeGroup slice
 	nodeGroups := []NodeGroup{}
 	for _, ng := range nodeAllocationRequest.Spec.NodeGroup {
@@ -107,9 +107,9 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *hwv1alpha1.N
 func GetNodeAllocationRequest(ctx context.Context,
 	c client.Client,
 	namespace, nodeAllocationRequestId string,
-) (*hwv1alpha1.NodeAllocationRequest, error) {
+) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 
-	nodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
+	nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 	err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: nodeAllocationRequestId}, nodeAllocationRequest)
 	// nolint: wrapcheck
 	return nodeAllocationRequest, err
@@ -117,9 +117,9 @@ func GetNodeAllocationRequest(ctx context.Context,
 
 // CreateOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
 func CreateOrUpdateNodeAllocationRequest(
-	ctx context.Context, c client.Client, logger *slog.Logger, nodeAllocationRequest *hwv1alpha1.NodeAllocationRequest) error {
+	ctx context.Context, c client.Client, logger *slog.Logger, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
-	existingNodeAllocationRequest := &hwv1alpha1.NodeAllocationRequest{}
+	existingNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 
 	exist, err := utils.DoesK8SResourceExist(ctx, c, nodeAllocationRequest.Name, nodeAllocationRequest.Namespace, existingNodeAllocationRequest)
 	if err != nil {
@@ -171,7 +171,7 @@ func CreateOrUpdateNodeAllocationRequest(
 	return nil
 }
 
-func AllocatedNodeCRToAllocatedNodeObject(node *hwv1alpha1.AllocatedNode) (AllocatedNode, error) {
+func AllocatedNodeCRToAllocatedNodeObject(node *pluginsv1alpha1.AllocatedNode) (AllocatedNode, error) {
 	interfaces := []Interface{}
 	for _, ifc := range node.Status.Interfaces {
 		interfaces = append(interfaces, Interface{
@@ -208,8 +208,8 @@ func AllocatedNodeCRToAllocatedNodeObject(node *hwv1alpha1.AllocatedNode) (Alloc
 	return nodeObject, nil
 }
 
-func GetAllocatedNode(ctx context.Context, c client.Client, namespace, nodeId string) (*hwv1alpha1.AllocatedNode, error) {
-	allocatedNode := &hwv1alpha1.AllocatedNode{}
+func GetAllocatedNode(ctx context.Context, c client.Client, namespace, nodeId string) (*pluginsv1alpha1.AllocatedNode, error) {
+	allocatedNode := &pluginsv1alpha1.AllocatedNode{}
 	err := c.Get(ctx,
 		types.NamespacedName{Namespace: namespace, Name: nodeId},
 		allocatedNode)

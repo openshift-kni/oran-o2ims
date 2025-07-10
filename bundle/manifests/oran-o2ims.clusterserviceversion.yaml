@@ -5,234 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "AllocatedNode",
-          "metadata": {
-            "labels": {
-              "app.kubernetes.io/created-by": "oran-o2ims",
-              "app.kubernetes.io/instance": "inventory-sample",
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "inventory",
-              "app.kubernetes.io/part-of": "oran-o2ims"
-            },
-            "name": "sample-node",
-            "namespace": "oran-hwmgr-plugin"
-          },
-          "spec": {
-            "groupName": "master",
-            "hwProfile": "sample-profile",
-            "nodeAllocationRequest": "sample-nodeallocationrequest"
-          },
-          "status": {
-            "bmc": {
-              "address": "idrac-virtualmedia+https://198.51.100.1/redfish/v1/Systems/System.Embedded.1",
-              "credentialsName": "sample-node-bmc-secret"
-            },
-            "conditions": [
-              {
-                "lastTransitionTime": "2024-10-09T15:36:31Z",
-                "message": "Provisioned",
-                "reason": "Completed",
-                "status": "True",
-                "type": "Provisioned"
-              }
-            ],
-            "hostname": "sample-node.example.com",
-            "interfaces": [
-              {
-                "label": "bootable-interface",
-                "macAddress": "00:11:22:33:44:55",
-                "name": "eno1"
-              },
-              {
-                "label": "",
-                "macAddress": "00:11:22:33:44:66",
-                "name": "eno2"
-              }
-            ]
-          }
-        },
-        {
-          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "HardwarePlugin",
-          "metadata": {
-            "name": "metal3-hwplugin",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "apiRoot": "https://metal3-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
-            "authClientConfig": {
-              "type": "ServiceAccount"
-            }
-          },
-          "status": {
-            "conditions": []
-          }
-        },
-        {
-          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "HardwareProfile",
-          "metadata": {
-            "name": "hardwareprofile-sample",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "bios": {
-              "attributes": {
-                "SriovGlobalEnable": "Enabled",
-                "SysProfile": "Custom",
-                "WorkloadProfile": "TelcoOptimizedProfile"
-              }
-            }
-          },
-          "status": {
-            "conditions": []
-          }
-        },
-        {
-          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "HardwareTemplate",
-          "metadata": {
-            "name": "sample-hwtemplate-v1",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "bootInterfaceLabel": "bootable-interface",
-            "extensions": {
-              "resourceTypeId": "ResourceGroup~2.1.1"
-            },
-            "hardwarePluginRef": "hwmgr-1",
-            "hardwareProvisioningTimeout": "60m",
-            "nodeGroupData": [
-              {
-                "hwProfile": "profile-spr-single-processor-64G",
-                "name": "controller",
-                "resourcePoolId": "master-pool",
-                "resourceSelector": "selector-here",
-                "role": "master"
-              },
-              {
-                "hwProfile": "profile-spr-dual-processor-128G",
-                "name": "worker",
-                "resourcePoolId": "worker-pool",
-                "role": "worker"
-              }
-            ]
-          },
-          "status": {
-            "conditions": []
-          }
-        },
-        {
-          "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-          "kind": "NodeAllocationRequest",
-          "metadata": {
-            "annotations": {
-              "bootInterfaceLabel": "bootable-interface"
-            },
-            "generation": 1,
-            "labels": {
-              "app.kubernetes.io/created-by": "oran-o2ims",
-              "app.kubernetes.io/instance": "inventory-sample",
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "inventory",
-              "app.kubernetes.io/part-of": "oran-o2ims"
-            },
-            "name": "sample-nodeallocationrequest",
-            "namespace": "oran-hwmgr-plugin"
-          },
-          "spec": {
-            "clusterId": "sample",
-            "extensions": [],
-            "hardwarePluginRef": "loopback-1",
-            "nodeGroup": [
-              {
-                "nodeGroupData": {
-                  "hwProfile": "sample-master-profile",
-                  "name": "controller",
-                  "resourcePoolId": "master-pool",
-                  "role": "master"
-                },
-                "size": 1
-              },
-              {
-                "nodeGroupData": {
-                  "hwProfile": "sample-worker-profile",
-                  "name": "worker",
-                  "resourcePoolId": "worker-pool",
-                  "role": "worker"
-                },
-                "size": 0
-              }
-            ],
-            "site": "ottawa"
-          },
-          "status": {
-            "conditions": [
-              {
-                "lastTransitionTime": "2024-10-09T15:36:41Z",
-                "message": "Created",
-                "reason": "Completed",
-                "status": "True",
-                "type": "Provisioned"
-              }
-            ],
-            "hwMgrPlugin": {},
-            "properties": {
-              "nodeNames": [
-                "sample-node"
-              ]
-            }
-          }
-        },
-        {
-          "apiVersion": "o2ims.oran.openshift.io/v1alpha1",
-          "kind": "Inventory",
-          "metadata": {
-            "labels": {
-              "app.kubernetes.io/created-by": "oran-o2ims",
-              "app.kubernetes.io/instance": "inventory-sample",
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "inventory",
-              "app.kubernetes.io/part-of": "oran-o2ims"
-            },
-            "name": "default",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "caBundleName": "o2ims-custom-ca-certs",
-            "cloudID": "b7dcb3ff-583d-42d9-abb5-f484386fc688",
-            "ingress": {
-              "tls": {
-                "secretName": "oran-o2ims-tls-certificate"
-              }
-            },
-            "smo": {
-              "oauth": {
-                "clientSecretName": "oauth-client-secrets",
-                "groupsClaim": "roles",
-                "scopes": [
-                  "openid",
-                  "profile",
-                  "role:ocloud-manager"
-                ],
-                "tokenEndpoint": "/protocol/openid-connect/token",
-                "url": "https://oauth.example.com:8443/realms/oran",
-                "usernameClaim": "preferred_username"
-              },
-              "registrationEndpoint": "/smo/v1/registration",
-              "tls": {
-                "secretName": "oran-o2ims-tls-certificate"
-              },
-              "url": "https://smo.example.com"
-            }
-          },
-          "status": {
-            "conditions": []
-          }
-        },
-        {
-          "apiVersion": "o2ims.provisioning.oran.org/v1alpha1",
+          "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "ClusterTemplate",
           "metadata": {
             "name": "clustertemplate-sample.v1.0.0",
@@ -467,7 +240,78 @@ metadata:
           }
         },
         {
-          "apiVersion": "o2ims.provisioning.oran.org/v1alpha1",
+          "apiVersion": "clcm.openshift.io/v1alpha1",
+          "kind": "HardwarePlugin",
+          "metadata": {
+            "name": "metal3-hwplugin",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "apiRoot": "https://metal3-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
+            "authClientConfig": {
+              "type": "ServiceAccount"
+            }
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "clcm.openshift.io/v1alpha1",
+          "kind": "HardwareProfile",
+          "metadata": {
+            "name": "hardwareprofile-sample",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "bios": {
+              "attributes": {
+                "SriovGlobalEnable": "Enabled",
+                "SysProfile": "Custom",
+                "WorkloadProfile": "TelcoOptimizedProfile"
+              }
+            }
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "clcm.openshift.io/v1alpha1",
+          "kind": "HardwareTemplate",
+          "metadata": {
+            "name": "sample-hwtemplate-v1",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "bootInterfaceLabel": "bootable-interface",
+            "extensions": {
+              "resourceTypeId": "ResourceGroup~2.1.1"
+            },
+            "hardwarePluginRef": "hwmgr-1",
+            "hardwareProvisioningTimeout": "60m",
+            "nodeGroupData": [
+              {
+                "hwProfile": "profile-spr-single-processor-64G",
+                "name": "controller",
+                "resourcePoolId": "master-pool",
+                "resourceSelector": "selector-here",
+                "role": "master"
+              },
+              {
+                "hwProfile": "profile-spr-dual-processor-128G",
+                "name": "worker",
+                "resourcePoolId": "worker-pool",
+                "role": "worker"
+              }
+            ]
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "ProvisioningRequest",
           "metadata": {
             "labels": {
@@ -642,6 +486,162 @@ metadata:
           "status": {
             "conditions": []
           }
+        },
+        {
+          "apiVersion": "ocloud.openshift.io/v1alpha1",
+          "kind": "Inventory",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "oran-o2ims",
+              "app.kubernetes.io/instance": "inventory-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "inventory",
+              "app.kubernetes.io/part-of": "oran-o2ims"
+            },
+            "name": "default",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "caBundleName": "o2ims-custom-ca-certs",
+            "cloudID": "b7dcb3ff-583d-42d9-abb5-f484386fc688",
+            "ingress": {
+              "tls": {
+                "secretName": "oran-o2ims-tls-certificate"
+              }
+            },
+            "smo": {
+              "oauth": {
+                "clientSecretName": "oauth-client-secrets",
+                "groupsClaim": "roles",
+                "scopes": [
+                  "openid",
+                  "profile",
+                  "role:ocloud-manager"
+                ],
+                "tokenEndpoint": "/protocol/openid-connect/token",
+                "url": "https://oauth.example.com:8443/realms/oran",
+                "usernameClaim": "preferred_username"
+              },
+              "registrationEndpoint": "/smo/v1/registration",
+              "tls": {
+                "secretName": "oran-o2ims-tls-certificate"
+              },
+              "url": "https://smo.example.com"
+            }
+          },
+          "status": {
+            "conditions": []
+          }
+        },
+        {
+          "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
+          "kind": "AllocatedNode",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "oran-o2ims",
+              "app.kubernetes.io/instance": "inventory-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "inventory",
+              "app.kubernetes.io/part-of": "oran-o2ims"
+            },
+            "name": "sample-node",
+            "namespace": "oran-hwmgr-plugin"
+          },
+          "spec": {
+            "groupName": "master",
+            "hwProfile": "sample-profile",
+            "nodeAllocationRequest": "sample-nodeallocationrequest"
+          },
+          "status": {
+            "bmc": {
+              "address": "idrac-virtualmedia+https://198.51.100.1/redfish/v1/Systems/System.Embedded.1",
+              "credentialsName": "sample-node-bmc-secret"
+            },
+            "conditions": [
+              {
+                "lastTransitionTime": "2024-10-09T15:36:31Z",
+                "message": "Provisioned",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Provisioned"
+              }
+            ],
+            "hostname": "sample-node.example.com",
+            "interfaces": [
+              {
+                "label": "bootable-interface",
+                "macAddress": "00:11:22:33:44:55",
+                "name": "eno1"
+              },
+              {
+                "label": "",
+                "macAddress": "00:11:22:33:44:66",
+                "name": "eno2"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
+          "kind": "NodeAllocationRequest",
+          "metadata": {
+            "annotations": {
+              "bootInterfaceLabel": "bootable-interface"
+            },
+            "generation": 1,
+            "labels": {
+              "app.kubernetes.io/created-by": "oran-o2ims",
+              "app.kubernetes.io/instance": "inventory-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "inventory",
+              "app.kubernetes.io/part-of": "oran-o2ims"
+            },
+            "name": "sample-nodeallocationrequest",
+            "namespace": "oran-hwmgr-plugin"
+          },
+          "spec": {
+            "clusterId": "sample",
+            "extensions": [],
+            "hardwarePluginRef": "loopback-1",
+            "nodeGroup": [
+              {
+                "nodeGroupData": {
+                  "hwProfile": "sample-master-profile",
+                  "name": "controller",
+                  "resourcePoolId": "master-pool",
+                  "role": "master"
+                },
+                "size": 1
+              },
+              {
+                "nodeGroupData": {
+                  "hwProfile": "sample-worker-profile",
+                  "name": "worker",
+                  "resourcePoolId": "worker-pool",
+                  "role": "worker"
+                },
+                "size": 0
+              }
+            ],
+            "site": "ottawa"
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2024-10-09T15:36:41Z",
+                "message": "Created",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Provisioned"
+              }
+            ],
+            "hwMgrPlugin": {},
+            "properties": {
+              "nodeNames": [
+                "sample-node"
+              ]
+            }
+          }
         }
       ]
     capabilities: Basic Install
@@ -678,7 +678,7 @@ spec:
     - description: AllocatedNode is the schema for an allocated node
       displayName: Allocated Node
       kind: AllocatedNode
-      name: allocatednodes.o2ims-hardwaremanagement.oran.openshift.io
+      name: allocatednodes.plugins.clcm.openshift.io
       resources:
       - kind: Namespace
         name: ""
@@ -734,7 +734,7 @@ spec:
     - description: ClusterTemplate is the Schema for the clustertemplates API
       displayName: Cluster Template
       kind: ClusterTemplate
-      name: clustertemplates.o2ims.provisioning.oran.org
+      name: clustertemplates.clcm.openshift.io
       resources:
       - kind: ConfigMap
         name: ""
@@ -800,7 +800,7 @@ spec:
     - description: HardwarePlugin is the Schema for the hardwareplugins API
       displayName: Hardware Plugin
       kind: HardwarePlugin
-      name: hardwareplugins.o2ims-hardwaremanagement.oran.openshift.io
+      name: hardwareplugins.clcm.openshift.io
       resources:
       - kind: Namespace
         name: ""
@@ -860,7 +860,7 @@ spec:
     - description: HardwareProfile is the Schema for the hardwareprofiles API
       displayName: Hardware Profile
       kind: HardwareProfile
-      name: hardwareprofiles.o2ims-hardwaremanagement.oran.openshift.io
+      name: hardwareprofiles.clcm.openshift.io
       resources:
       - kind: Service
         name: policy-engine-service
@@ -891,7 +891,7 @@ spec:
     - description: HardwareTemplate is the Schema for the hardwaretemplates API
       displayName: Hardware Template
       kind: HardwareTemplate
-      name: hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io
+      name: hardwaretemplates.clcm.openshift.io
       resources:
       - kind: ConfigMap
         name: ""
@@ -927,7 +927,7 @@ spec:
     - description: Inventory is the Schema for the Inventory API
       displayName: O-Cloud Manager Inventory
       kind: Inventory
-      name: inventories.o2ims.oran.openshift.io
+      name: inventories.ocloud.openshift.io
       resources:
       - kind: Deployment
         name: ""
@@ -1121,7 +1121,7 @@ spec:
         nodes
       displayName: Node Allocation Request
       kind: NodeAllocationRequest
-      name: nodeallocationrequests.o2ims-hardwaremanagement.oran.openshift.io
+      name: nodeallocationrequests.plugins.clcm.openshift.io
       resources:
       - kind: Namespace
         name: ""
@@ -1180,7 +1180,7 @@ spec:
         API
       displayName: Provisioning Request
       kind: ProvisioningRequest
-      name: provisioningrequests.o2ims.provisioning.oran.org
+      name: provisioningrequests.clcm.openshift.io
       resources:
       - kind: ClusterInstance
         name: ""
@@ -1421,6 +1421,144 @@ spec:
           - update
           - watch
         - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - clustertemplates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - clustertemplates/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - clustertemplates/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwareplugins
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwareplugins/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwareplugins/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwareprofiles
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwareprofiles/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwaretemplates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwaretemplates/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - nodes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - nodes/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - provisioningrequests
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - provisioningrequests/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - provisioningrequests/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
           - cluster.open-cluster-management.io
           resources:
           - managedclusters
@@ -1550,147 +1688,7 @@ spec:
           - update
           - watch
         - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - allocatednodes
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - allocatednodes/finalizers
-          verbs:
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - allocatednodes/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - hardwareplugins
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - hardwareplugins/finalizers
-          verbs:
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - hardwareplugins/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - hardwareprofiles
-          verbs:
-          - create
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - hardwareprofiles/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - hardwaretemplates
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - hardwaretemplates/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - nodeallocationrequests
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - nodeallocationrequests/finalizers
-          verbs:
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - nodeallocationrequests/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - nodes
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims-hardwaremanagement.oran.openshift.io
-          resources:
-          - nodes/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims.oran.openshift.io
+          - ocloud.openshift.io
           resources:
           - inventories
           verbs:
@@ -1702,67 +1700,15 @@ spec:
           - update
           - watch
         - apiGroups:
-          - o2ims.oran.openshift.io
+          - ocloud.openshift.io
           resources:
           - inventories/finalizers
           verbs:
           - update
         - apiGroups:
-          - o2ims.oran.openshift.io
+          - ocloud.openshift.io
           resources:
           - inventories/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims.provisioning.oran.org
-          resources:
-          - clustertemplates
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims.provisioning.oran.org
-          resources:
-          - clustertemplates/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - o2ims.provisioning.oran.org
-          resources:
-          - clustertemplates/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - o2ims.provisioning.oran.org
-          resources:
-          - provisioningrequests
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - o2ims.provisioning.oran.org
-          resources:
-          - provisioningrequests/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - o2ims.provisioning.oran.org
-          resources:
-          - provisioningrequests/status
           verbs:
           - get
           - patch
@@ -1775,6 +1721,60 @@ spec:
           - get
           - list
           - watch
+        - apiGroups:
+          - plugins.clcm.openshift.io
+          resources:
+          - allocatednodes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - plugins.clcm.openshift.io
+          resources:
+          - allocatednodes/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - plugins.clcm.openshift.io
+          resources:
+          - allocatednodes/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - plugins.clcm.openshift.io
+          resources:
+          - nodeallocationrequests
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - plugins.clcm.openshift.io
+          resources:
+          - nodeallocationrequests/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
+          - plugins.clcm.openshift.io
+          resources:
+          - nodeallocationrequests/status
+          verbs:
+          - get
+          - patch
+          - update
         - apiGroups:
           - policy.open-cluster-management.io
           resources:
@@ -1991,10 +1991,10 @@ spec:
     containerPort: 443
     deploymentName: oran-o2ims-controller-manager
     failurePolicy: Fail
-    generateName: provisioningrequests.o2ims.provisioning.oran.org
+    generateName: provisioningrequests.clcm.openshift.io
     rules:
     - apiGroups:
-      - o2ims.provisioning.oran.org
+      - clcm.openshift.io
       apiVersions:
       - v1alpha1
       operations:
@@ -2005,4 +2005,4 @@ spec:
     sideEffects: None
     targetPort: 9443
     type: ValidatingAdmissionWebhook
-    webhookPath: /validate-o2ims-provisioning-oran-org-v1alpha1-provisioningrequest
+    webhookPath: /validate-clcm-openshift-io-v1alpha1-provisioningrequest

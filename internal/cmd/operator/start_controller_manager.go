@@ -34,7 +34,8 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
@@ -131,7 +132,8 @@ func init() {
 	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(siteconfig.AddToScheme(scheme))
-	utilruntime.Must(hwv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(pluginsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	utilruntime.Must(openshiftv1.AddToScheme(scheme))

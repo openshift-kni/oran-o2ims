@@ -13,8 +13,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: oran.openshift.io
-  group: o2ims
+  domain: openshift.io
+  group: ocloud
   kind: Inventory
   path: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
   version: v1alpha1
@@ -22,16 +22,16 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: provisioning.oran.org
-  group: o2ims
+  domain: openshift.io
+  group: clcm
   kind: ClusterTemplate
   path: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
   controller: true
-  domain: provisioning.oran.org
-  group: o2ims
+  domain: openshift.io
+  group: clcm
   kind: ProvisioningRequest
   path: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
   version: v1alpha1
@@ -42,26 +42,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: oran.openshift.io
-  group: o2ims-hardwaremanagement
-  kind: AllocatedNode
-  path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: oran.openshift.io
-  group: o2ims-hardwaremanagement
-  kind: NodeAllocationRequest
-  path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: oran.openshift.io
-  group: o2ims-hardwaremanagement
+  domain: openshift.io
+  group: clcm
   kind: HardwareTemplate
   path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
   version: v1alpha1
@@ -69,8 +51,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: oran.openshift.io
-  group: o2ims-hardwaremanagement
+  domain: openshift.io
+  group: clcm
   kind: HardwarePlugin
   path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
   version: v1alpha1
@@ -78,9 +60,27 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: oran.openshift.io
-  group: o2ims-hardwaremanagement
+  domain: openshift.io
+  group: clcm
   kind: HardwareProfile
   path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: plugins.clcm
+  kind: AllocatedNode
+  path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: plugins.clcm
+  kind: NodeAllocationRequest
+  path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
   version: v1alpha1
 version: "3"

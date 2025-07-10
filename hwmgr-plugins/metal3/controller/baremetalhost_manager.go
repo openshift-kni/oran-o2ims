@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
@@ -40,10 +41,10 @@ const (
 	BmhPausedAnnotation            = "baremetalhost.metal3.io/paused"
 	BmhRebootAnnotation            = "reboot.metal3.io"
 	BmhNetworkDataPrefx            = "network-data"
-	BiosUpdateNeededAnnotation     = "o2ims-hardwaremanagement.oran.openshift.io/bios-update-needed"
-	FirmwareUpdateNeededAnnotation = "o2ims-hardwaremanagement.oran.openshift.io/firmware-update-needed"
-	BmhAllocatedLabel              = "o2ims-hardwaremanagement.oran.openshift.io/allocated"
-	NodeNameAnnotation             = "o2ims-hardwaremanagement.oran.openshift.io/node-name"
+	BiosUpdateNeededAnnotation     = "clcm.openshift.io/bios-update-needed"
+	FirmwareUpdateNeededAnnotation = "clcm.openshift.io/firmware-update-needed"
+	BmhAllocatedLabel              = "clcm.openshift.io/allocated"
+	NodeNameAnnotation             = "clcm.openshift.io/node-name"
 	BmhInfraEnvLabel               = "infraenvs.agent-install.openshift.io"
 	SiteConfigOwnedByLabel         = "siteconfig.open-cluster-management.io/owned-by"
 	Metal3Finalizer                = "preprovisioningimage.metal3.io"
@@ -64,9 +65,9 @@ type bmhBmcInfo struct {
 }
 
 type bmhNodeInfo struct {
-	ResourcePoolID string                      `json:"poolID,omitempty"`
-	BMC            *bmhBmcInfo                 `json:"bmc,omitempty"`
-	Interfaces     []*hwmgmtv1alpha1.Interface `json:"interfaces,omitempty"`
+	ResourcePoolID string                       `json:"poolID,omitempty"`
+	BMC            *bmhBmcInfo                  `json:"bmc,omitempty"`
+	Interfaces     []*pluginsv1alpha1.Interface `json:"interfaces,omitempty"`
 }
 
 func updateBMHMetaWithRetry(
@@ -259,8 +260,8 @@ func GroupBMHsByResourcePool(unallocatedBMHs metal3v1alpha1.BareMetalHostList) m
 	return grouped
 }
 
-func buildInterfacesFromBMH(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest, bmh *metal3v1alpha1.BareMetalHost) ([]*hwmgmtv1alpha1.Interface, error) {
-	var interfaces []*hwmgmtv1alpha1.Interface
+func buildInterfacesFromBMH(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest, bmh *metal3v1alpha1.BareMetalHost) ([]*pluginsv1alpha1.Interface, error) {
+	var interfaces []*pluginsv1alpha1.Interface
 
 	if bmh.Status.HardwareDetails == nil {
 		return nil, fmt.Errorf("bareMetalHost.status.hardwareDetails should not be nil")
@@ -290,7 +291,7 @@ func buildInterfacesFromBMH(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocation
 			}
 		}
 
-		interfaces = append(interfaces, &hwmgmtv1alpha1.Interface{
+		interfaces = append(interfaces, &pluginsv1alpha1.Interface{
 			Name:       nic.Name,
 			MACAddress: nic.MAC,
 			Label:      label,
@@ -536,7 +537,7 @@ func annotateNodeConfigInProgress(ctx context.Context,
 	logger *slog.Logger,
 	namespace, nodeName, reason string) error {
 	// Fetch the Node object
-	node := &hwmgmtv1alpha1.AllocatedNode{}
+	node := &pluginsv1alpha1.AllocatedNode{}
 	if err := c.Get(ctx, types.NamespacedName{Name: nodeName, Namespace: namespace}, node); err != nil {
 		return fmt.Errorf("unable to get Node object (%s): %w", nodeName, err)
 	}
@@ -561,7 +562,7 @@ func handleTransitionNodes(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
 	pluginNamespace string,
-	nodelist *hwmgmtv1alpha1.AllocatedNodeList, postInstall bool) (bool, error) {
+	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (bool, error) {
 
 	for _, node := range nodelist.Items {
 		bmh, err := getBMHForNode(ctx, c, &node)
@@ -667,7 +668,7 @@ func processBMHUpdateCase(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
 	namespace string,
-	node *hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost,
+	node *pluginsv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost,
 	uc struct {
 		AnnotationKey string
 		Reason        string
@@ -744,7 +745,7 @@ func processBMHUpdateCase(ctx context.Context,
 func handleBMHCompletion(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
-	logger *slog.Logger, nodelist *hwmgmtv1alpha1.AllocatedNodeList) (bool, error) {
+	logger *slog.Logger, nodelist *pluginsv1alpha1.AllocatedNodeList) (bool, error) {
 
 	logger.InfoContext(ctx, "Checking for node with config in progress")
 	node := findNodeInProgress(nodelist)
@@ -790,7 +791,7 @@ func checkForPendingUpdate(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	namespace string,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (bool, error) {
 	// check if there are any pending work
 	nodelist, err := hwpluginutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
@@ -817,7 +818,7 @@ func checkForPendingUpdate(ctx context.Context,
 	return updating, nil
 }
 
-func getBMHForNode(ctx context.Context, c client.Client, node *hwmgmtv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
+func getBMHForNode(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
 	bmhName := node.Spec.HwMgrNodeId
 	bmhNamespace := node.Spec.HwMgrNodeNs
 	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}

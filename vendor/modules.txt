@@ -346,6 +346,7 @@ github.com/openshift-kni/lifecycle-agent/api/imagebasedupgrade/v1
 github.com/openshift-kni/oran-o2ims/api/common
 # github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-20250512185943-b6d9f68b2505 => ./api/hardwaremanagement
 ## explicit; go 1.22.0
+github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
 github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
 # github.com/openshift-kni/oran-o2ims/api/inventory v0.0.0-00010101000000-000000000000 => ./api/inventory
 ## explicit; go 1.22.0

@@ -1,0 +1,27 @@
+# permissions for end users to view provisioningrequests.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: provisioningrequest-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: provisioningrequest-viewer-role
+rules:
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - provisioningrequests
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - provisioningrequests/status
+  verbs:
+  - get

@@ -94,7 +94,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"hardwareprofiles",
@@ -110,7 +110,20 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"clcm.openshift.io",
+				},
+				Resources: []string{
+					"hardwareprofiles/status",
+				},
+				Verbs: []string{
+					"get",
+					"patch",
+					"update",
+				},
+			},
+			{
+				APIGroups: []string{
+					"plugins.clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests",
@@ -128,12 +141,11 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"plugins.clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests/status",
 					"allocatednodes/status",
-					"hardwareprofiles/status",
 				},
 				Verbs: []string{
 					"get",
@@ -143,7 +155,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"plugins.clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests/finalizers",

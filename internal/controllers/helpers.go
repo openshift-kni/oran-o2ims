@@ -12,7 +12,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -26,9 +27,9 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 			return nil, fmt.Errorf("the AllocatedNode does not have BMC details")
 		}
 
-		interfaces := []*hwv1alpha1.Interface{}
+		interfaces := []*pluginsv1alpha1.Interface{}
 		for _, ifc := range node.Interfaces {
-			interfaces = append(interfaces, &hwv1alpha1.Interface{
+			interfaces = append(interfaces, &pluginsv1alpha1.Interface{
 				Name:       ifc.Name,
 				MACAddress: ifc.MacAddress,
 				Label:      ifc.Label,
@@ -55,7 +56,7 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 }
 
 // compareHardwareTemplateWithNodeAllocationRequest checks if there are any changes in the hardware template resource
-func compareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) (bool, error) {
+func compareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) (bool, error) {
 
 	changesDetected := false
 

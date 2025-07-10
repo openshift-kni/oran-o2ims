@@ -47,9 +47,9 @@ import (
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims.oran.openshift.io,resources=inventories/finalizers,verbs=update
+//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=inventories/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=inventories/finalizers,verbs=update
 //+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="networking.k8s.io",resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -73,17 +73,17 @@ import (
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch;update
 //+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=allocatednodes/finalizers,verbs=update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles,verbs=get;list;watch;create;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwareprofiles/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=preprovisioningimages,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwaresettings,verbs=get;create;list;watch;update;patch
@@ -110,7 +110,7 @@ type reconcilerTask struct {
 	object *inventoryv1alpha1.Inventory
 }
 
-const registerOnRestartAnnotation = "o2ims.oran.openshift.io/register-on-restart"
+const registerOnRestartAnnotation = "ocloud.openshift.io/register-on-restart"
 
 var registerOnRestart = false
 
@@ -929,7 +929,7 @@ func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) e
 			// We need to read ClusterTemplates and ConfigMaps.
 			{
 				APIGroups: []string{
-					"o2ims.provisioning.oran.org",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"clustertemplates",
@@ -1033,7 +1033,7 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"o2ims-hardwaremanagement.oran.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"hardwareplugins",
@@ -1157,7 +1157,7 @@ func (t *reconcilerTask) createProvisioningServerClusterRole(ctx context.Context
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{
-					"o2ims.provisioning.oran.org",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"provisioningrequests",

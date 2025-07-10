@@ -7,8 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 package v1alpha1
 
 const (
-	ProvisioningRequestFinalizer = "provisioningrequest.o2ims.provisioning.oran.org/finalizer"
-	ProvisioningRequestNameLabel = "provisioningrequest.o2ims.provisioning.oran.org/name"
+	ProvisioningRequestFinalizer = "provisioningrequest.clcm.openshift.io/finalizer"
+	ProvisioningRequestNameLabel = "provisioningrequest.clcm.openshift.io/name"
 )
 
 // ConditionType is a string representing the condition's type
