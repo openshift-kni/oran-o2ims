@@ -6,7 +6,7 @@
 # For >= 4.15, use registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.y
 #
 # TODO: once available, migrate to: registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.y
-ARG OPM_IMAGE=brew.registry.redhat.io/rh-osbs/openshift-ose-operator-registry-rhel9:v4.19
+ARG OPM_IMAGE=brew.registry.redhat.io/rh-osbs/openshift-ose-operator-registry-rhel9:v4.20
 
 # yq
 FROM quay.io/konflux-ci/yq@sha256:4b4b57c8c532dfe083ca709a149b7e3078bd06d9ab412332cc231887550c96ed AS parser
