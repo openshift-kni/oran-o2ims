@@ -544,8 +544,8 @@ endif
 
 .PHONY: konflux-update-task-refs ## update task images
 konflux-update-task-refs: yq
-	hack/konflux-update-task-refs.sh .tekton/$(PACKAGE_NAME_KONFLUX)-4-19-build.yaml
-	hack/konflux-update-task-refs.sh .tekton/$(PACKAGE_NAME_KONFLUX)-fbc-4-19-build.yaml
+	hack/konflux-update-task-refs.sh .tekton/build-pipeline.yaml
+	hack/konflux-update-task-refs.sh .tekton/fbc-pipeline.yaml
 
 .PHONY: konflux-validate-catalog-template-bundle ## validate the last bundle entry on the catalog template file
 konflux-validate-catalog-template-bundle: yq operator-sdk
@@ -572,7 +572,7 @@ konflux-generate-catalog: yq opm
 .PHONY: konflux-generate-catalog-production ## generate a registry.redhat.io catalog
 konflux-generate-catalog-production: konflux-generate-catalog
         # overlay the bundle image for production
-	sed -i 's|quay.io/redhat-user-workloads/telco-5g-tenant/$(PACKAGE_NAME_KONFLUX)-bundle-4-19|registry.redhat.io/openshift4/$(PACKAGE_NAME_KONFLUX)-operator-bundle|g' $(CATALOG_KONFLUX)
+	sed -i 's|quay.io/redhat-user-workloads/telco-5g-tenant/$(PACKAGE_NAME_KONFLUX)-bundle-4-20|registry.redhat.io/openshift4/$(PACKAGE_NAME_KONFLUX)-operator-bundle|g' $(CATALOG_KONFLUX)
         # From now on, all the related images must reference production (registry.redhat.io) exclusively
 	./hack/konflux-validate-related-images-production.sh --set-catalog-file $(CATALOG_KONFLUX)
 	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/

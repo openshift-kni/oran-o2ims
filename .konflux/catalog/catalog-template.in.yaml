@@ -6,19 +6,19 @@ entries:
       mediatype: image/svg+xml
     name: o-cloud-manager
     schema: olm.package
-  # Add 'replaces' after we whip 4.19.0
+  # Add 'replaces' after we whip 4.20.0
   - entries:
-      - name: o-cloud-manager.v4.19.0
-        skipRange: '>=4.9.0 <4.19.0'
+      - name: o-cloud-manager.v4.20.0
+        skipRange: '>=4.9.0 <4.20.0'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
   - entries:
-      - name: o-cloud-manager.v4.19.0
-        skipRange: '>=4.9.0 <4.19.0'
-    name: "4.19"
+      - name: o-cloud-manager.v4.20.0
+        skipRange: '>=4.9.0 <4.20.0'
+    name: "4.20"
     package: o-cloud-manager
     schema: olm.channel
-  - image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-19@sha256:9bc1d19f823e60603eef52cbde59b0032e224bd23fd767399691da1c84d32a13
+  - image: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-20@sha256:9bc1d19f823e60603eef52cbde59b0032e224bd23fd767399691da1c84d32a13
     schema: olm.bundle
 schema: olm.template.basic
