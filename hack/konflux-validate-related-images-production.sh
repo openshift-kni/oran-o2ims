@@ -119,7 +119,7 @@ SYNOPSIS
 
 EXAMPLES
 
-   - Check the catalog template 'catalog.yaml'
+   - Check the catalog 'catalog.yaml'
 
      $ $SCRIPT_NAME --set-catalog-file catalog.yaml
 
