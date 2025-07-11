@@ -270,12 +270,12 @@ overlay_release()
 
     local display_name="o-cloud manager"
     local description="o-cloud-manager operator"
-    local version="4.19.0"
+    local version="4.20.0"
     local name="o-cloud-manager"
     local name_version="$name.v$version"
     local manager="o-cloud-manager"
-    local skip_range=">=4.9.0 <4.19.0"
-    local replaces="o-cloud-manager.v4.19.0"
+    local skip_range=">=4.9.0 <4.20.0"
+    local replaces="o-cloud-manager.v4.20.0"
     # min_kube_version should match ocp
     # https://access.redhat.com/solutions/4870701
     local min_kube_version="1.32.0"
@@ -288,10 +288,10 @@ overlay_release()
     yq e -i ".metadata.annotations[\"olm.skipRange\"] = \"$skip_range\"" $ARG_CSV_FILE
     yq e -i ".spec.minKubeVersion = \"$min_kube_version\"" $ARG_CSV_FILE
 
-    # dont need 'replaces' for first release in a new channel (4.19.0)
+    # dont need 'replaces' for first release in a new channel (4.20.0)
     yq e -i "del(.spec.replaces)" $ARG_CSV_FILE
 
-    # use this from 4.19.1 onwards
+    # use this from 4.20.1 onwards
     # yq e -i ".spec.replaces = \"$replaces\"" $ARG_CSV_FILE
 
     echo "Overlaying release completed!"
