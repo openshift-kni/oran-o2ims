@@ -23,6 +23,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -894,7 +895,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		patched := current.DeepCopy()
 
 		// Remove allocation-related labels
-		for _, key := range []string{SiteConfigOwnedByLabel, BmhAllocatedLabel} {
+		for _, key := range []string{SiteConfigOwnedByLabel, BmhAllocatedLabel, utils.AllocatedNodeLabel} {
 			delete(patched.Labels, key)
 		}
 
