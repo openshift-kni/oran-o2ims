@@ -8,11 +8,11 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Overview
 
-The ORAN O2IMS Operator serves as an O-Cloud Manager, orchestrating the complete lifecycle of cluster provisioning via the `ProvisioningRequest` CR, starting from hardware provisioning and cluster installation to cluster configuration.
+The O-Cloud Manager Operator serves as an O-Cloud Manager, orchestrating the complete lifecycle of cluster provisioning via the `ProvisioningRequest` CR, starting from hardware provisioning and cluster installation to cluster configuration.
 
 The operator leverages several key components to achieve this:
 
-- [ORAN Hardware Manager Plugin](https://github.com/openshift-kni/oran-hwmgr-plugin/tree/main): Manages `NodePool` CR, interacting with the hardware manager to provision and allocate nodes for the cluster.
+- [ORAN Hardware Manager Plugin](https://github.com/openshift-kni/oran-hwmgr-plugin/tree/main): Manages `NodeAllocationRequest` CR, interacting with the hardware manager to provision and allocate nodes for the cluster.
 - [SiteConfig Operator](https://github.com/stolostron/siteconfig): Manages the `ClusterInstance` CR, initiating the cluster installation process.
 - [ACM Policy Engine](https://github.com/open-cluster-management-io/governance-policy-propagator): Enforces configuration `Policies` to ensure the installed cluster is properly configured and compliant with operational requirements.
 
@@ -41,7 +41,7 @@ Prepare a Git repository containing all necessary files for cluster provisioning
 
 A namespace-scoped CR managed by the O-Cloud Manager, defining the resources and parameters required for cluster provisioning. An example of ClusterTemplate can be found [here](../config/samples/v1alpha1_clustertemplate.yaml).
 
-The [CRD](../config/crd/bases/o2ims.provisioning.oran.org_clustertemplates.yaml)'s `spec` fields include:
+The [CRD](../config/crd/bases/clcm.openshift.io_clustertemplates.yaml)'s `spec` fields include:
 
 - name: Specifies the base name of the ClusterTemplate.
 - version: Defines the version of the ClusterTemplate.
@@ -91,7 +91,7 @@ A cluster-scoped CR managed by the O-Cloud Manager, providing all neccessary par
 
 The `metadata.name` of a ProvisioningRequest CR must be a valid UUID. Any attempt to create a ProvisioningRequest with an invalid `metadata.name` will be rejected by the webhook.
 
-The [CRD](../config/crd/bases/o2ims.provisioning.oran.org_provisioningrequests.yaml)'s `spec` fields include:
+The [CRD](../config/crd/bases/clcm.openshift.io_provisioningrequests.yaml)'s `spec` fields include:
 
 - name: Defines a human-readable name for the Provisioning Request.
 - description: A brief description of the Provisioning Request.
@@ -135,7 +135,7 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
     - Copy the extra-manifests ConfigMap from the ClusterTemplate namespace to the cluster namespace
     - Copy the pull-secret from the ClusterTemplate namespace to the cluster namespace
     - Create the ConfigMap for templated ACM policies in the ClusterTemplate namespace
-4. Render the NodePool CR based on the provided hardware template in the `hwTemplate` resource.
+4. Render the NodeAllocationRequest CR based on the provided hardware template in the `hwTemplate` resource.
 
    Example status:
 
@@ -164,7 +164,7 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         type: HardwareTemplateRendered
     ```
 
-5. Create NodePool CR to start hardware provisioning. The corresponding hardware manager plugin consumes the CR and communicates with the hardware manager to allocate resources.
+5. Create NodeAllocationRequest CR to start hardware provisioning. The corresponding hardware manager plugin consumes the CR and communicates with the hardware manager to allocate resources.
 
     Example status:
 
@@ -182,7 +182,7 @@ ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreat
         provisioningState: progressing
     ```
 
-6. Wait for hardware provisioning to complete. Once it completes, the plugin sends the allocated node infomation (BMC secret, BMC url, interface MAC addresses, etc.) in the NodePool status. O-Cloud Manager retrieves this data and updates the rendered ClusterInstance CR with it.
+6. Wait for hardware provisioning to complete. Once it completes, the plugin sends the allocated node infomation (BMC secret, BMC url, interface MAC addresses, etc.) in the NodeAllocationRequest status. O-Cloud Manager retrieves this data and updates the rendered ClusterInstance CR with it.
 7. Create the rendered ClusterInstance to kick off cluster installation. The SiteConfig operator consumes the CR and starts the installation.
 
     Example status:

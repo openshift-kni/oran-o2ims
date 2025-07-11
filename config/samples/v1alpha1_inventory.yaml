@@ -1,4 +1,4 @@
-apiVersion: o2ims.oran.openshift.io/v1alpha1
+apiVersion: ocloud.openshift.io/v1alpha1
 kind: Inventory
 metadata:
   labels:
@@ -30,3 +30,5 @@ spec:
     tls:
       secretName: oran-o2ims-tls-certificate
   caBundleName: o2ims-custom-ca-certs
+status:
+  conditions: []

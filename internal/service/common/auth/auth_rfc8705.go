@@ -34,7 +34,7 @@ const (
 
 // Arbitrary key used to insert fingerprint data into the User Info object.  Authenticators are required to select keys
 // that cannot be confused with those used by other authenticators.
-const fingerprintKey = "o2ims.oran.openshift.io/fingerprint"
+const fingerprintKey = "ocloud.openshift.io/fingerprint"
 
 // getClientCertificate extracts the client certificate from the incoming request headers.  If none is found, an error
 // is returned.

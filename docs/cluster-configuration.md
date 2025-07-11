@@ -54,11 +54,11 @@ A ProvisioningRequest can be edited to update:
 * the cluster labels and annotations
 
 ```yaml
-apiVersion: o2ims.provisioning.oran.org/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: ProvisioningRequest
 metadata:
   finalizers:
-    - provisioningrequest.o2ims.provisioning.oran.org/finalizer
+    - provisioningrequest.clcm.openshift.io/finalizer
   name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
@@ -80,11 +80,11 @@ spec:
 * the node labels and annotations
 
 ```yaml
-apiVersion: o2ims.provisioning.oran.org/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: ProvisioningRequest
 metadata:
   finalizers:
-    - provisioningrequest.o2ims.provisioning.oran.org/finalizer
+    - provisioningrequest.clcm.openshift.io/finalizer
   name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
@@ -117,11 +117,11 @@ These changes would be rejected anyway by webhooks put in place by other operato
 These types of changes can be made under the ProvisioningRequest `spec.templateParameters` by updating the `policyTemplateParameters` entry, if it's present.
 
 ```yaml
-apiVersion: o2ims.provisioning.oran.org/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: ProvisioningRequest
 metadata:
   finalizers:
-    - provisioningrequest.o2ims.provisioning.oran.org/finalizer
+    - provisioningrequest.clcm.openshift.io/finalizer
   name: 123e4567-e89b-12d3-a456-426614174000
 spec:
   description: Provisioning request for basic SNO with sample ACM policies
@@ -511,13 +511,13 @@ metadata:
 
 We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` CR.
 
-In this example we are updating the `hwProfile` under `spec.nodePoolData.hwProfile` in the [placeholder-du-template-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v1.yaml) hardware template resource.
+In this example we are updating the `hwProfile` under `spec.nodeGroupData.hwProfile` in the [placeholder-du-template-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v1.yaml) hardware template resource.
 
 The following steps are required:
 
 1. Upversion the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) ClusterTemplate:
     * Create a new version of the [placeholder-du-template-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v1.yaml) hardware template resource - [placeholder-du-template-v2](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v2.yaml)
-        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `spec.nodePoolData.hwProfile` from `profile-proliant-gen11-dual-processor-256G-v1` to `profile-proliant-gen11-dual-processor-256G-v2`.
+        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `spec.nodeGroupData.hwProfile` from `profile-proliant-gen11-dual-processor-256G-v1` to `profile-proliant-gen11-dual-processor-256G-v2`.
     * Create a new version of the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` - [sno-ran-du.v4-Y-Z-5](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-5.yaml).
         * update the name from `sno-ran-du.v4-Y-Z-4` to `sno-ran-du.v4-Y-Z-5` (the namespace remains `sno-ran-du-v4-Y-Z`).
         * update `spec.version` from `v4-Y-Z-4` to `v4-Y-Z-5`.
@@ -543,7 +543,7 @@ The following steps are required:
           provisioningState: progressing
     ```
 
-    * Updates the desired hardware profile in the `nodePools` CR for that cluster and the status condition to reflect the configuration change.
+    * Updates the desired hardware profile in the `nodeAllocationRequests` CR for that cluster and the status condition to reflect the configuration change.
 
     ```yaml
     spec:
@@ -565,9 +565,9 @@ The following steps are required:
         type: Configured
     ```
 
-    * Obtains the list of nodes from the `NodePool` CR for the master MCP.
+    * Obtains the list of nodes from the `NodeAllocationRequest` CR for the master MCP.
     * For the SNO case that we are considering, there is only one node that cannot be cordoned and drained.
-    * Updates `spec.hwProfile` in the `Node` (`node.o2ims-hardwaremanagement.oran.openshift.io/v1alpha1`) CR.
+    * Updates `spec.hwProfile` in the `Node` (`node.clcm.openshift.io/v1alpha1`) CR.
 5. The hardware plugin requests the hardware manager to apply the new hardware profile from the `Node` `spec`.
 6. The hardware manager updates the profile.
 7. The hardware plugin waits for the result from the hardware manager.

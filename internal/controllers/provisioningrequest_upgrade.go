@@ -51,13 +51,15 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 		return false, fmt.Errorf("failed to parse ManagedCluster version: %w", err)
 	}
 	cmp := templateReleaseVersion.Compare(*managedClusterVersion)
-	if cmp == 1 {
+	switch cmp {
+	case 1:
 		return true, nil
-	} else if cmp == -1 {
+	case -1:
 		return false, fmt.Errorf("template version (%v) is lower then ManagedCluster version (%v), no upgrade requested",
 			templateReleaseVersion, managedClusterVersion)
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 // handleUpgrade handles the upgrade of the cluster through IBGU. It returns a ctrl.Result to indicate

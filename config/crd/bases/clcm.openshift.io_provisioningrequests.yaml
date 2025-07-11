@@ -1,0 +1,277 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.15.0
+  name: provisioningrequests.clcm.openshift.io
+spec:
+  group: clcm.openshift.io
+  names:
+    kind: ProvisioningRequest
+    listKind: ProvisioningRequestList
+    plural: provisioningrequests
+    shortNames:
+    - oranpr
+    singular: provisioningrequest
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.name
+      name: DisplayName
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.provisioningStatus.provisioningPhase
+      name: ProvisionPhase
+      type: string
+    - jsonPath: .status.provisioningStatus.provisioningDetails
+      name: ProvisionDetails
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ProvisioningRequest is the Schema for the provisioningrequests
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ProvisioningRequestSpec defines the desired state of ProvisioningRequest
+            properties:
+              description:
+                description: Description specifies a brief description of this provisioning
+                  request, providing additional context or details.
+                type: string
+              extensions:
+                description: Extensions holds additional custom key-value pairs that
+                  can be used to extend the cluster's configuration.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              name:
+                description: Name specifies a human-readable name for this provisioning
+                  request, intended for identification and descriptive purposes.
+                type: string
+              templateName:
+                description: |-
+                  TemplateName defines the base name of the referenced ClusterTemplate.
+                  The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+                minLength: 1
+                type: string
+              templateParameters:
+                description: TemplateParameters provides the input data that conforms
+                  to the OpenAPI v3 schema defined in the referenced ClusterTemplate's
+                  spec.templateParameterSchema.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              templateVersion:
+                description: |-
+                  TemplateVersion defines the version of the referenced ClusterTemplate.
+                  The full name of the ClusterTemplate is constructed as <TemplateName.TemplateVersion>.
+                minLength: 1
+                type: string
+            required:
+            - templateName
+            - templateParameters
+            - templateVersion
+            type: object
+          status:
+            description: ProvisioningRequestStatus defines the observed state of ProvisioningRequest
+            properties:
+              conditions:
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: |-
+                        type of condition in CamelCase or in foo.example.com/CamelCase.
+                        ---
+                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                        useful (see .node.status.conditions), the ability to deconflict is important.
+                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              extensions:
+                description: |-
+                  Extensions contain extra details about the resources and the configuration used for/by
+                  the ProvisioningRequest.
+                properties:
+                  allocatedNodeHostMap:
+                    additionalProperties:
+                      type: string
+                    description: AllocatedNodeHostMap stores the mapping of AllocatedNode
+                      IDs to Hostnames
+                    type: object
+                  clusterDetails:
+                    description: ClusterDetails references to the ClusterInstance.
+                    properties:
+                      clusterProvisionStartedAt:
+                        description: A timestamp indicating the cluster provisoning
+                          has started
+                        format: date-time
+                        type: string
+                      name:
+                        description: Contains the name of the created ClusterInstance.
+                        type: string
+                      nonCompliantAt:
+                        description: Holds the first timestamp when the configuration
+                          was found NonCompliant for the cluster.
+                        format: date-time
+                        type: string
+                      ztpStatus:
+                        description: Says if ZTP has complete or not.
+                        type: string
+                    type: object
+                  nodeAllocationRequestRef:
+                    description: NodeAllocationRequestRef references to the NodeAllocationRequest.
+                    properties:
+                      hardwareConfiguringCheckStart:
+                        description: Represents the timestamp of the first status
+                          check for hardware configuring
+                        format: date-time
+                        type: string
+                      hardwareProvisioningCheckStart:
+                        description: Represents the timestamp of the first status
+                          check for hardware provisioning
+                        format: date-time
+                        type: string
+                      nodeAllocationRequestID:
+                        description: Contains the identifier of the created NodeAllocationRequest.
+                        type: string
+                    type: object
+                  policies:
+                    description: Holds policies that are matched with the ManagedCluster
+                      created by the ProvisioningRequest.
+                    items:
+                      description: PolicyDetails holds information about an ACM policy.
+                      properties:
+                        compliant:
+                          description: |-
+                            The compliance of the ManagedCluster created through a ProvisioningRequest with the current
+                            policy.
+                          type: string
+                        policyName:
+                          description: The policy's name.
+                          type: string
+                        policyNamespace:
+                          description: The policy's namespace.
+                          type: string
+                        remediationAction:
+                          description: The policy's remediation action.
+                          type: string
+                      type: object
+                    type: array
+                type: object
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller.
+                format: int64
+                type: integer
+              provisioningStatus:
+                properties:
+                  provisionedResources:
+                    description: The resources that have been successfully provisioned
+                      as part of the provisioning process.
+                    properties:
+                      oCloudNodeClusterId:
+                        description: The identifier of the provisioned oCloud Node
+                          Cluster.
+                        type: string
+                    type: object
+                  provisioningDetails:
+                    description: The details about the current state of the provisioning
+                      process.
+                    type: string
+                  provisioningPhase:
+                    description: The current state of the provisioning process.
+                    enum:
+                    - pending
+                    - progressing
+                    - fulfilled
+                    - failed
+                    - deleting
+                    type: string
+                  updateTime:
+                    description: The timestamp of the last update to the provisioning
+                      status.
+                    format: date-time
+                    type: string
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

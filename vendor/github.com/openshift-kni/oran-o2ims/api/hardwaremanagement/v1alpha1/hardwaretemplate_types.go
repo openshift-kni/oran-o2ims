@@ -10,8 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// NodePoolData provides the necessary information for populating a node pool
-type NodePoolData struct {
+// NodeGroupData provides the necessary information for populating a node allocation request
+type NodeGroupData struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 	// +kubebuilder:validation:Enum=master;worker
@@ -28,10 +28,10 @@ type NodePoolData struct {
 // HardwareTemplateSpec defines the desired state of HardwareTemplate
 type HardwareTemplateSpec struct {
 
-	// HwMgrId is the identifier for the hardware manager plugin adaptor.
+	// HardwarePluginRef is the name of the HardwarePlugin.
 	// +kubebuilder:validation:MinLength=1
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Manager ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	HwMgrId string `json:"hwMgrId"`
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Plugin Reference",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HardwarePluginRef string `json:"hardwarePluginRef"`
 
 	// BootInterfaceLabel is the label of the boot interface.
 	// +kubebuilder:validation:MinLength=1
@@ -42,12 +42,12 @@ type HardwareTemplateSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Provisioning Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
 
-	// NodePoolData defines a collection of NodePoolData items
+	// NodeGroupData defines a collection of NodeGroupData items
 	// +kubebuilder:validation:MinItems=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	NodePoolData []NodePoolData `json:"nodePoolData"`
+	NodeGroupData []NodeGroupData `json:"nodeGroupData"`
 
-	// Extensions holds additional custom key-value pairs that can be used to extend the node pool's configuration.
+	// Extensions holds additional custom key-value pairs that can be used to extend the node allocation request's configuration.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
@@ -70,7 +70,7 @@ type HardwareTemplateStatus struct {
 
 // HardwareTemplate is the Schema for the hardwaretemplates API
 // +kubebuilder:validation:XValidation:message="Spec changes are not allowed for a HardwareTemplate that has passed the validation", rule="!has(oldSelf.status) || oldSelf.status.conditions.exists(c, c.type=='Validation' && c.status=='False') || oldSelf.spec == self.spec"
-// +operator-sdk:csv:customresourcedefinitions:displayName="ORAN O2IMS Hardware Template",resources={{ConfigMap, v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Template",resources={{ConfigMap, v1}}
 type HardwareTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

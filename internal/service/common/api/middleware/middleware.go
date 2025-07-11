@@ -18,7 +18,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/google/uuid"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
-	"github.com/openshift-kni/oran-hwmgr-plugin/pkg/inventory-client/generated"
+	inventoryclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/inventory"
 )
 
 type Middleware = func(http.Handler) http.Handler
@@ -105,7 +105,7 @@ func TrailingSlashStripper() Middleware {
 func ProblemDetails(w http.ResponseWriter, body string, code int) {
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.WriteHeader(code)
-	out, _ := json.Marshal(generated.ProblemDetails{
+	out, _ := json.Marshal(inventoryclient.ProblemDetails{
 		Detail: body,
 		Status: code,
 	})

@@ -1,4 +1,4 @@
-apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: HardwareTemplate
 metadata:
   name: sample-hwtemplate-v1
@@ -8,9 +8,9 @@ spec:
   # The value should be a duration string
   # (e.g., "60m" for 60 minutes)
   hardwareProvisioningTimeout: "60m"
-  hwMgrId: hwmgr-1
+  hardwarePluginRef: hwmgr-1
   bootInterfaceLabel: bootable-interface
-  nodePoolData:
+  nodeGroupData:
     - name: controller
       role: master
       hwProfile: profile-spr-single-processor-64G

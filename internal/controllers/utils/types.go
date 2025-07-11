@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package utils
 
 import (
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 )
 
 // InventoryConditionType defines conditions of an Inventory deployment.
@@ -109,8 +109,8 @@ type AvailableNotification struct {
 type NodeInfo struct {
 	BmcAddress     string
 	BmcCredentials string
-	NodeName       string
+	NodeID         string
 	HwMgrNodeId    string
 	HwMgrNodeNs    string
-	Interfaces     []*hwv1alpha1.Interface
+	Interfaces     []*pluginsv1alpha1.Interface
 }

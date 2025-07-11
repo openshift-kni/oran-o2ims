@@ -1,4 +1,4 @@
-apiVersion: o2ims-hardwaremanagement.oran.openshift.io/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: HardwareTemplate
 metadata:
   name: placeholder-du-template-v2
@@ -8,9 +8,9 @@ spec:
   # The value should be a duration string
   # (e.g., "30m" for 30 minutes)
   # hardwareProvisioningTimeout: "30m"
-  hwMgrId: oran-hwmgr-plugin-test
+  hardwarePluginRef: oran-hwmgr-plugin-test
   bootInterfaceLabel: bootable-interface
-  nodePoolData:
+  nodeGroupData:
     - name: controller
       role: master
       hwProfile: profile-proliant-gen11-dual-processor-256G-v2

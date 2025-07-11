@@ -23,8 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	oranhwmgrplugintestutils "github.com/openshift-kni/oran-hwmgr-plugin/test/utils"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -100,11 +99,11 @@ func GetExternalCrdFiles(destDir string) error {
 	for _, externalCrd := range ExternalCrdData {
 		// Get the commit sha from the go.mod of the IMS repo.
 		policyMod := externalCrd["modName"] + "/" + externalCrd["repoName"]
-		_, policyModPseudoVersionNew, err := oranhwmgrplugintestutils.GetModuleFromGoMod(policyMod)
+		_, policyModPseudoVersionNew, err := GetModuleFromGoMod(policyMod)
 		if err != nil {
 			return fmt.Errorf("error getting module from go.mod: %w", err)
 		}
-		commitSha := oranhwmgrplugintestutils.GetGitCommitFromPseudoVersion(policyModPseudoVersionNew)
+		commitSha := GetGitCommitFromPseudoVersion(policyModPseudoVersionNew)
 
 		// Get the full sha of the commit by calling the github API.
 		url := fmt.Sprintf(GithubCommitsAPI, externalCrd["owner"], externalCrd["repoName"], commitSha)
@@ -179,10 +178,10 @@ func DownloadFile(rawUrl, filename, dirpath string) error {
 func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
 	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", utils.UnitTestHwmgrNamespace, npName, nil)
 	secrets := CreateSecrets([]string{BmcSecretName}, utils.UnitTestHwmgrNamespace)
-	CreateResources(ctx, c, []*hwv1alpha1.Node{node}, secrets)
+	CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 }
 
-func CreateResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.Node, secrets []*corev1.Secret) {
+func CreateResources(ctx context.Context, c client.Client, nodes []*pluginsv1alpha1.AllocatedNode, secrets []*corev1.Secret) {
 	for _, node := range nodes {
 		Expect(c.Create(ctx, node)).To(Succeed())
 	}
@@ -191,9 +190,9 @@ func CreateResources(ctx context.Context, c client.Client, nodes []*hwv1alpha1.N
 	}
 }
 
-func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string, interfaces []*hwv1alpha1.Interface) *hwv1alpha1.Node {
+func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName string, interfaces []*pluginsv1alpha1.Interface) *pluginsv1alpha1.AllocatedNode {
 	if interfaces == nil {
-		interfaces = []*hwv1alpha1.Interface{
+		interfaces = []*pluginsv1alpha1.Interface{
 			{
 				Name:       "eno1",
 				Label:      "bootable-interface",
@@ -211,19 +210,19 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, npName string
 			},
 		}
 	}
-	return &hwv1alpha1.Node{
+	return &pluginsv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: hwv1alpha1.NodeSpec{
-			NodePool:    npName,
-			GroupName:   groupName,
-			HwMgrId:     utils.UnitTestHwmgrID,
-			HwMgrNodeId: name,
+		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+			NodeAllocationRequest: narName,
+			GroupName:             groupName,
+			HardwarePluginRef:     utils.UnitTestHwPluginRef,
+			HwMgrNodeId:           name,
 		},
-		Status: hwv1alpha1.NodeStatus{
-			BMC: &hwv1alpha1.BMC{
+		Status: pluginsv1alpha1.AllocatedNodeStatus{
+			BMC: &pluginsv1alpha1.BMC{
 				Address:         bmcAddress,
 				CredentialsName: bmcSecret,
 			},

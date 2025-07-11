@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
@@ -31,7 +32,8 @@ func ValidateCallbackURL(ctx context.Context, c notifier.ClientProvider, callbac
 	}
 
 	// A new client is created every time since the user may request a baseclient or oauthclient which we figure out at runtime
-	client, err := c.NewClient(ctx, callback)
+	authType := utils.DetermineAuthType(callback)
+	client, err := c.NewClient(ctx, authType)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}

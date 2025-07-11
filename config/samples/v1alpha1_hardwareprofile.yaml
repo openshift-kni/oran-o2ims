@@ -1,0 +1,13 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: HardwareProfile
+metadata:
+  name: hardwareprofile-sample
+  namespace: oran-o2ims
+spec:
+  bios:
+    attributes:
+      SriovGlobalEnable: Enabled
+      SysProfile: Custom
+      WorkloadProfile: TelcoOptimizedProfile
+status:
+  conditions: []

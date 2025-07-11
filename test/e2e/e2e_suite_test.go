@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -44,7 +44,7 @@ import (
 )
 
 const testHwMgrPluginNameSpace = "hwmgr"
-const testHwMgrId = "hwmgr"
+const testHardwarePluginRef = "hwmgr"
 
 var (
 	K8SClient                     client.Client
@@ -88,9 +88,7 @@ var _ = BeforeSuite(func() {
 	testScheme := runtime.NewScheme()
 	err := provisioningv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = hwv1alpha1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = pluginv1alpha1.AddToScheme(testScheme)
+	err = hwmgmtv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = corev1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -173,14 +171,14 @@ var _ = BeforeSuite(func() {
 				Name: "oran-o2ims",
 			},
 		},
-		// HardwareManager CRs
-		&pluginv1alpha1.HardwareManager{
+		// HardwarePlugin CRs
+		&hwmgmtv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: testHwMgrPluginNameSpace,
-				Name:      testHwMgrId,
+				Name:      testHardwarePluginRef,
 			},
-			Spec: pluginv1alpha1.HardwareManagerSpec{
-				AdaptorID: "loopback",
+			Spec: hwmgmtv1alpha1.HardwarePluginSpec{
+				ApiRoot: "todo",
 			},
 		},
 	}
@@ -324,16 +322,16 @@ defaultHugepagesSize: "1G"`,
 			},
 		},
 		// hardware template
-		&hwv1alpha1.HardwareTemplate{
+		&hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
 				Namespace: utils.InventoryNamespace,
 			},
-			Spec: hwv1alpha1.HardwareTemplateSpec{
-				HwMgrId:                     utils.UnitTestHwmgrID,
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+				HardwarePluginRef:           utils.UnitTestHwPluginRef,
 				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "1m",
-				NodePoolData: []hwv1alpha1.NodePoolData{
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
 						Role:           "master",
@@ -502,9 +500,9 @@ defaultHugepagesSize: "1G"`,
 		})
 	})
 
-	Context("When NodePool has been created", func() {
+	Context("When NodeAllocationRequest has been created", func() {
 
-		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodePool becomes provisioned", func() {
+		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodeAllocationRequest becomes provisioned", func() {
 			crName := "cluster-2"
 			// Make sure the needed ClusterTemplate exists.
 			oranCT := &provisioningv1alpha1.ClusterTemplate{}
@@ -531,7 +529,7 @@ defaultHugepagesSize: "1G"`,
 
 			conditions := reconciledPR.Status.Conditions
 			// Verify the ProvisioningRequest's status conditions - the last should be showing that
-			// we're waiting for the NodePool.
+			// we're waiting for the NodeAllocationRequest.
 			Expect(len(conditions)).To(Equal(5))
 
 			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
@@ -543,21 +541,21 @@ defaultHugepagesSize: "1G"`,
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status:  metav1.ConditionUnknown,
 				Reason:  string(metav1.ConditionUnknown),
-				Message: "Waiting for NodePool (cluster-2) to be processed",
+				Message: "Waiting for NodeAllocationRequest (cluster-2) to be processed",
 			})
 			// Verify the provisioningState moves to progressing.
 			testutils.VerifyProvisioningStatus(reconciledPR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for NodePool (cluster-2) to be processed", nil)
+				provisioningv1alpha1.StateProgressing, "Waiting for NodeAllocationRequest (cluster-2) to be processed", nil)
 
-			// Patch NodePool provision status to Completed.
-			currentNp := &hwv1alpha1.NodePool{}
+			// Patch NodeAllocationRequest provision status to Completed.
+			currentNp := &pluginsv1alpha1.NodeAllocationRequest{}
 			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
 			Expect(currentNp.Status.Conditions).To(BeEmpty())
 			currentNp.Status.Conditions = []metav1.Condition{
 				{
 					Status:             metav1.ConditionTrue,
-					Reason:             string(hwv1alpha1.Completed),
-					Type:               string(hwv1alpha1.Provisioned),
+					Reason:             string(hwmgmtv1alpha1.Completed),
+					Type:               string(hwmgmtv1alpha1.Provisioned),
 					LastTransitionTime: metav1.Now(),
 				},
 			}

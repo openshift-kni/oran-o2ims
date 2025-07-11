@@ -26,32 +26,32 @@ package: o-cloud-manager
 properties:
 - type: olm.gvk
   value:
-    group: o2ims-hardwaremanagement.oran.openshift.io
+    group: clcm.openshift.io
     kind: HardwareTemplate
     version: v1alpha1
 - type: olm.gvk
   value:
-    group: o2ims-hardwaremanagement.oran.openshift.io
-    kind: Node
+    group: clcm.openshift.io
+    kind: AllocatedNode
     version: v1alpha1
 - type: olm.gvk
   value:
-    group: o2ims-hardwaremanagement.oran.openshift.io
-    kind: NodePool
+    group: clcm.openshift.io
+    kind: NodeAllocationRequest
     version: v1alpha1
 - type: olm.gvk
   value:
-    group: o2ims.oran.openshift.io
+    group: ocloud.openshift.io
     kind: Inventory
     version: v1alpha1
 - type: olm.gvk
   value:
-    group: o2ims.provisioning.oran.org
+    group: clcm.openshift.io
     kind: ClusterTemplate
     version: v1alpha1
 - type: olm.gvk
   value:
-    group: o2ims.provisioning.oran.org
+    group: clcm.openshift.io
     kind: ProvisioningRequest
     version: v1alpha1
 - type: olm.package
@@ -64,7 +64,7 @@ properties:
       alm-examples: |-
         [
           {
-            "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
+            "apiVersion": "clcm.openshift.io/v1alpha1",
             "kind": "HardwareTemplate",
             "metadata": {
               "name": "sample-hwtemplate-v1",
@@ -76,8 +76,8 @@ properties:
                 "resourceTypeId": "ResourceGroup~2.1.1"
               },
               "hardwareProvisioningTimeout": "60m",
-              "hwMgrId": "hwmgr-1",
-              "nodePoolData": [
+              "hardwarePluginRef": "hwmgr-1",
+              "nodeGroupData": [
                 {
                   "hwProfile": "profile-spr-single-processor-64G",
                   "name": "controller",
@@ -98,8 +98,8 @@ properties:
             }
           },
           {
-            "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-            "kind": "Node",
+            "apiVersion": "clcm.openshift.io/v1alpha1",
+            "kind": "AllocatedNode",
             "metadata": {
               "labels": {
                 "app.kubernetes.io/created-by": "oran-o2ims",
@@ -114,7 +114,7 @@ properties:
             "spec": {
               "groupName": "master",
               "hwProfile": "sample-profile",
-              "nodePool": "sample-nodepool"
+              "nodeAllocationRequest": "sample-nodeAllocationRequest"
             },
             "status": {
               "bmc": {
@@ -146,8 +146,8 @@ properties:
             }
           },
           {
-            "apiVersion": "o2ims-hardwaremanagement.oran.openshift.io/v1alpha1",
-            "kind": "NodePool",
+            "apiVersion": "clcm.openshift.io/v1alpha1",
+            "kind": "NodeAllocationRequest",
             "metadata": {
               "annotations": {
                 "bootInterfaceLabel": "bootable-interface"
@@ -160,16 +160,16 @@ properties:
                 "app.kubernetes.io/name": "inventory",
                 "app.kubernetes.io/part-of": "oran-o2ims"
               },
-              "name": "sample-nodepool",
+              "name": "sample-nodeallocationrequest",
               "namespace": "oran-hwmgr-plugin"
             },
             "spec": {
               "cloudID": "sample",
               "extensions": [],
-              "hwMgrId": "loopback-1",
+              "hardwarePluginRef": "loopback-1",
               "nodeGroup": [
                 {
-                  "nodePoolData": {
+                  "nodeGroupData": {
                     "hwProfile": "sample-master-profile",
                     "name": "controller",
                     "resourcePoolId": "master-pool",
@@ -178,7 +178,7 @@ properties:
                   "size": 1
                 },
                 {
-                  "nodePoolData": {
+                  "nodeGroupData": {
                     "hwProfile": "sample-worker-profile",
                     "name": "worker",
                     "resourcePoolId": "worker-pool",
@@ -208,7 +208,7 @@ properties:
             }
           },
           {
-            "apiVersion": "o2ims.oran.openshift.io/v1alpha1",
+            "apiVersion": "ocloud.openshift.io/v1alpha1",
             "kind": "Inventory",
             "metadata": {
               "labels": {
@@ -251,7 +251,7 @@ properties:
             }
           },
           {
-            "apiVersion": "o2ims.provisioning.oran.org/v1alpha1",
+            "apiVersion": "clcm.openshift.io/v1alpha1",
             "kind": "ClusterTemplate",
             "metadata": {
               "name": "clustertemplate-sample.v1.0.0",
@@ -486,7 +486,7 @@ properties:
             }
           },
           {
-            "apiVersion": "o2ims.provisioning.oran.org/v1alpha1",
+            "apiVersion": "clcm.openshift.io/v1alpha1",
             "kind": "ProvisioningRequest",
             "metadata": {
               "labels": {
@@ -692,7 +692,7 @@ properties:
       - description: ClusterTemplate is the Schema for the clustertemplates API
         displayName: ORAN O2IMS Cluster Template
         kind: ClusterTemplate
-        name: clustertemplates.o2ims.provisioning.oran.org
+        name: clustertemplates.clcm.openshift.io
         resources:
         - kind: ConfigMap
           name: ""
@@ -758,7 +758,7 @@ properties:
       - description: HardwareTemplate is the Schema for the hardwaretemplates API
         displayName: ORAN O2IMS Hardware Template
         kind: HardwareTemplate
-        name: hardwaretemplates.o2ims-hardwaremanagement.oran.openshift.io
+        name: hardwaretemplates.clcm.openshift.io
         resources:
         - kind: ConfigMap
           name: ""
@@ -770,7 +770,7 @@ properties:
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: Extensions holds additional custom key-value pairs that can
-            be used to extend the node pool's configuration.
+            be used to extend the node allocation request's configuration.
           displayName: Extensions
           path: extensions
         - description: HardwareProvisioningTimeout defines the timeout duration string
@@ -779,14 +779,14 @@ properties:
           path: hardwareProvisioningTimeout
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: HwMgrId is the identifier for the hardware manager plugin adaptor.
+        - description: HardwarePluginRef is the identifier for the hardware manager plugin adaptor.
           displayName: Hardware Manager ID
-          path: hwMgrId
+          path: hardwarePluginRef
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: NodePoolData defines a collection of NodePoolData items
-          displayName: Node Pool Data
-          path: nodePoolData
+        - description: nodeGroupData defines a collection of nodeGroupData items
+          displayName: Node Group Data
+          path: nodeGroupData
         statusDescriptors:
         - displayName: Conditions
           path: conditions
@@ -794,7 +794,7 @@ properties:
       - description: Inventory is the Schema for the Inventory API
         displayName: ORAN O2IMS Inventory
         kind: Inventory
-        name: inventories.o2ims.oran.openshift.io
+        name: inventories.ocloud.openshift.io
         resources:
         - kind: Deployment
           name: ""
@@ -985,10 +985,10 @@ properties:
         - displayName: Deployed Server Configurations
           path: usedServerConfig
         version: v1alpha1
-      - description: NodePool is the schema for an allocation request of nodes
-        displayName: Node Pool
-        kind: NodePool
-        name: nodepools.o2ims-hardwaremanagement.oran.openshift.io
+      - description: NodeAllocationRequest is the schema for an allocation request of nodes
+        displayName: Node Allocation Request
+        kind: NodeAllocationRequest
+        name: nodeallocationrequests.plugins.clcm.openshift.io
         resources:
         - kind: Namespace
           name: ""
@@ -1004,9 +1004,9 @@ properties:
           - urn:alm:descriptor:com.tectonic.ui:text
         - displayName: Extensions
           path: extensions
-        - description: HwMgrId is the identifier for the hardware manager plugin instance.
+        - description: HardwarePluginRef is the identifier for the hardware manager plugin instance.
           displayName: Hardware Manager ID
-          path: hwMgrId
+          path: hardwarePluginRef
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: Location
@@ -1023,7 +1023,7 @@ properties:
           - urn:alm:descriptor:com.tectonic.ui:text
         statusDescriptors:
         - description: Conditions represent the latest available observations of an
-            NodePool's state.
+            NodeAllocationRequest's state.
           displayName: Conditions
           path: conditions
         - displayName: Hw Mgr Plugin
@@ -1036,8 +1036,8 @@ properties:
         version: v1alpha1
       - description: Node is the schema for an allocated node
         displayName: Node
-        kind: Node
-        name: nodes.o2ims-hardwaremanagement.oran.openshift.io
+        kind: AllocatedNode
+        name: allocatednodes.plugins.clcm.openshift.io
         resources:
         - kind: Namespace
           name: ""
@@ -1050,9 +1050,9 @@ properties:
           path: groupName
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: HwMgrId is the identifier for the hardware manager instance.
+        - description: HardwarePluginRef is the identifier for the hardware manager instance.
           displayName: Hardware Manager ID
-          path: hwMgrId
+          path: hardwarePluginRef
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         - description: HwMgrNodeId is the node identifier from the hardware manager.
@@ -1070,9 +1070,9 @@ properties:
           path: hwProfile
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
-        - description: NodePool
-          displayName: Node Pool
-          path: nodePool
+        - description: NodeAllocationRequest
+          displayName: Node Allocation Request
+          path: nodeAllocationRequest
           x-descriptors:
           - urn:alm:descriptor:com.tectonic.ui:text
         statusDescriptors:
@@ -1094,7 +1094,7 @@ properties:
           API
         displayName: ORAN O2IMS Provisioning Request
         kind: ProvisioningRequest
-        name: provisioningrequests.o2ims.provisioning.oran.org
+        name: provisioningrequests.clcm.openshift.io
         resources:
         - kind: ClusterInstance
           name: ""

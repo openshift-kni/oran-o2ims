@@ -10,18 +10,21 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,12 +38,13 @@ type ProvisioningRequestReconciler struct {
 }
 
 type provisioningRequestReconcilerTask struct {
-	logger       *slog.Logger
-	client       client.Client
-	object       *provisioningv1alpha1.ProvisioningRequest
-	clusterInput *clusterInput
-	ctDetails    *clusterTemplateDetails
-	timeouts     *timeouts
+	logger         *slog.Logger
+	client         client.Client
+	hwpluginClient *hwmgrpluginapi.HardwarePluginClient
+	object         *provisioningv1alpha1.ProvisioningRequest
+	clusterInput   *clusterInput
+	ctDetails      *clusterTemplateDetails
+	timeouts       *timeouts
 }
 
 // clusterInput holds the merged input data for a cluster
@@ -68,26 +72,26 @@ func GetClusterTemplateRefName(name, version string) string {
 	return fmt.Sprintf("%s.%s", name, version)
 }
 
-//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=provisioningrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=provisioningrequests/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=provisioningrequests/finalizers,verbs=update
-//+kubebuilder:rbac:groups=o2ims.provisioning.oran.org,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests/finalizers,verbs=update
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwaretemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=hardwaretemplates/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodepools/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=o2ims-hardwaremanagement.oran.openshift.io,resources=nodes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwaretemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwaretemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=list;watch
 //+kubebuilder:rbac:groups=lcm.openshift.io,resources=imagebasedgroupupgrades,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=lcm.openshift.io,resources=imagebasedgroupupgrades/status,verbs=get
-//+kubebuilder:rbac:groups=hwmgr-plugin.oran.openshift.io,resources=hardwaremanagers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;patch;update;watch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=managedclusters,verbs=get;list;patch;update;watch
+//+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get;list;create;update;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -168,9 +172,17 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		return requeueWithError(err)
 	}
 
-	// Handle hardware template and NodePool provisioning/configuring
+	// Handle hardware template and NodeAllocationRequest provisioning/configuring
 	if !t.isHardwareProvisionSkipped() {
-		res, proceed, err := t.handleNodePoolProvisioning(ctx, unstructuredClusterInstance)
+
+		// Get hwplugin client for the HardwarePlugin
+		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
+		if err != nil {
+			return requeueWithError(err)
+		}
+		t.hwpluginClient = hwclient
+
+		res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
 		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
 			return res, err
 		}
@@ -181,10 +193,13 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	if err != nil {
 		return requeueWithError(err)
 	}
-	if !utils.IsClusterProvisionPresent(t.object) ||
-		utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+	if !utils.IsClusterProvisionPresent(t.object) {
+		t.logger.InfoContext(ctx, "ClusterProvision not present, requeueing", slog.String("name", t.object.Name))
+		return requeueWithShortInterval(), nil
+	} else if utils.IsClusterProvisionTimedOutOrFailed(t.object) {
 		// If the cluster installation has not started due to
 		// processing issue, failed or timed out, do not requeue.
+		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, do not requeue", slog.String("name", t.object.Name))
 		return doNotRequeue(), nil
 	}
 
@@ -297,16 +312,16 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	return renderedClusterInstance, doNotRequeue(), nil
 }
 
-// handleNodePoolProvisioning handles the rendering, creation, and provisioning of the NodePool.
-// It first renders the hardware template for the NodePool based on the provided ClusterInstance,
-// then creates or updates the NodePool resource, and finally waits for the NodePool to be provisioned.
-// The function returns a ctrl.Result to indicate if/when to requeue, the rendered NodePool, a bool
+// handleNodeAllocationRequestProvisioning handles the rendering, creation, and provisioning of the NodeAllocationRequest.
+// It first renders the hardware template for the NodeAllocationRequest based on the provided ClusterInstance,
+// then creates or updates the NodeAllocationRequest resource, and finally waits for the NodeAllocationRequest to be provisioned.
+// The function returns a ctrl.Result to indicate if/when to requeue, the rendered NodeAllocationRequest, a bool
 // to indicate whether to process with further processing and an error if any issues occur.
-func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx context.Context,
+func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvisioning(ctx context.Context,
 	renderedClusterInstance *unstructured.Unstructured) (ctrl.Result, bool, error) {
 
-	// Render the hardware template for NodePool
-	renderedNodePool, err := t.renderHardwareTemplate(ctx, renderedClusterInstance)
+	// Render the hardware template for NodeAllocationRequest
+	renderedNodeAllocationRequest, err := t.renderHardwareTemplate(ctx, renderedClusterInstance)
 	if err != nil {
 		if utils.IsInputError(err) {
 			res, err := t.checkClusterDeployConfigState(ctx)
@@ -315,13 +330,26 @@ func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx conte
 		return doNotRequeue(), false, err
 	}
 
-	// Create/Update the NodePool
-	if err := t.createOrUpdateNodePool(ctx, renderedNodePool); err != nil {
+	// Create/Update the NodeAllocationRequest
+	if err := t.createOrUpdateNodeAllocationRequest(ctx, renderedClusterInstance.GetNamespace(), renderedNodeAllocationRequest); err != nil {
 		return doNotRequeue(), false, err
 	}
 
-	// Wait for the NodePool to be provisioned and update BMC details if necessary
-	provisioned, configured, timedOutOrFailed, err := t.waitForHardwareData(ctx, renderedClusterInstance, renderedNodePool)
+	nodeAllocationRequestID := t.getNodeAllocationRequestID()
+	if nodeAllocationRequestID == "" {
+		return doNotRequeue(), false, fmt.Errorf("missing nodeAllocationRequest identifier")
+	}
+
+	nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
+	if err != nil {
+		return doNotRequeue(), false, err
+	}
+	if !exists {
+		return requeueWithShortInterval(), false, nil
+	}
+
+	// Wait for the NodeAllocationRequest to be provisioned and update BMC details if necessary
+	provisioned, configured, timedOutOrFailed, err := t.waitForHardwareData(ctx, renderedClusterInstance, nodeAllocationRequestResponse)
 	if err != nil {
 		return doNotRequeue(), false, err
 	}
@@ -329,31 +357,17 @@ func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx conte
 		return doNotRequeue(), false, nil
 	}
 	if !provisioned {
-		t.logger.InfoContext(
-			ctx,
-			fmt.Sprintf(
-				"Waiting for NodePool %s in the namespace %s to be provisioned",
-				renderedNodePool.GetName(),
-				renderedNodePool.GetNamespace(),
-			),
-		)
-		return requeueWithMediumInterval(), false, nil
+		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be provisioned", nodeAllocationRequestID))
+		return requeueWithShortInterval(), false, nil
 	}
 
-	// If the NodePool was updated but the configuration hasn’t been set yet,
+	// If the NodeAllocationRequest was updated but the configuration hasn’t been set yet,
 	// or if the configuration is not yet complete, requeue and wait for completion.
 	// If configuration is not set and no configuration update is requested, do nothing.
-	configuringStarted := t.object.Status.Extensions.NodePoolRef.HardwareConfiguringCheckStart
+	configuringStarted := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart
 	if (configured == nil && !configuringStarted.IsZero()) || (configured != nil && !*configured) {
-		t.logger.InfoContext(
-			ctx,
-			fmt.Sprintf(
-				"Waiting for NodePool %s in the namespace %s to be configured",
-				renderedNodePool.GetName(),
-				renderedNodePool.GetNamespace(),
-			),
-		)
-		return requeueWithMediumInterval(), false, nil
+		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be configured", nodeAllocationRequestID))
+		return requeueWithShortInterval(), false, nil
 	}
 
 	// Provisioning completed successfully; proceed with further processing
@@ -361,22 +375,18 @@ func (t *provisioningRequestReconcilerTask) handleNodePoolProvisioning(ctx conte
 }
 
 // checkClusterDeployConfigState checks the current deployment and configuration state of
-// the cluster by evaluating the statuses of related resources like NodePool, ClusterInstance
+// the cluster by evaluating the statuses of related resources like NodeAllocationRequest, ClusterInstance
 // and policy configuration when applicable, and update the corresponding ProvisioningRequest
 // status conditions
 func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx context.Context) (result ctrl.Result, err error) {
 	if !t.isHardwareProvisionSkipped() {
-		// Check the NodePool status if exists
-		if t.object.Status.Extensions.NodePoolRef == nil {
-			if err = t.checkResourcePreparationStatus(ctx); err != nil {
-				return requeueWithError(err)
-			}
-			return doNotRequeue(), nil
+		// Check the NodeAllocationRequest status if exists
+		nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
+		if err != nil || !exists {
+			return requeueWithError(err)
 		}
-		nodePool := &hwv1alpha1.NodePool{}
-		nodePool.SetName(t.object.Status.Extensions.NodePoolRef.Name)
-		nodePool.SetNamespace(t.object.Status.Extensions.NodePoolRef.Namespace)
-		hwProvisioned, timedOutOrFailed, err := t.checkNodePoolStatus(ctx, nodePool, hwv1alpha1.Provisioned)
+
+		hwProvisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
 		if err != nil {
 			return requeueWithError(err)
 		}
@@ -385,7 +395,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 			return doNotRequeue(), nil
 		}
 		if !hwProvisioned {
-			return requeueWithMediumInterval(), nil
+			return requeueWithShortInterval(), nil
 		}
 	}
 
@@ -577,12 +587,12 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 }
 
 func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwv1alpha1.NodePool, error) {
-	renderedNodePool, err := t.handleRenderHardwareTemplate(ctx, clusterInstance)
+	clusterInstance *unstructured.Unstructured) (*hwmgrpluginapi.NodeAllocationRequest, error) {
+	renderedNodeAllocationRequest, err := t.handleRenderHardwareTemplate(ctx, clusterInstance)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
-			"Failed to render the Hardware template for NodePool",
+			"Failed to render the Hardware template for NodeAllocationRequest",
 			slog.String("name", t.object.Name),
 			slog.String("error", err.Error()),
 		)
@@ -596,7 +606,7 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 	} else {
 		t.logger.InfoContext(
 			ctx,
-			"Successfully rendered Hardware template for NodePool",
+			"Successfully rendered Hardware template for NodeAllocationRequest",
 			slog.String("name", t.object.Name),
 		)
 
@@ -612,7 +622,7 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 		return nil, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 	}
 
-	return renderedNodePool, err
+	return renderedNodeAllocationRequest, err
 }
 
 func (r *ProvisioningRequestReconciler) handleFinalizer(
@@ -667,34 +677,42 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		}
 	}
 
+	deleteCompleted := true
+
+	if provisioningRequest.Status.Extensions.NodeAllocationRequestRef != nil {
+		// Get hwplugin client for the HardwarePlugin
+		hwpluginClient, err := getHardwarePluginClient(ctx, r.Client, r.Logger, provisioningRequest)
+		if err != nil {
+			return false, fmt.Errorf("failed to get HardwarePlugin client: %w", err)
+		}
+
+		nodeAllocationRequestID := provisioningRequest.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
+		if nodeAllocationRequestID != "" {
+			r.Logger.Info(fmt.Sprintf("Deleting NodeAllocationRequest (%s)", nodeAllocationRequestID))
+			resp, narExists, err := hwpluginClient.DeleteNodeAllocationRequest(ctx, nodeAllocationRequestID)
+			if err != nil {
+				return false, fmt.Errorf("failed to delete NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
+			}
+
+			if resp == nodeAllocationRequestID {
+				r.Logger.Info(fmt.Sprintf("Deletion request for nodeAllocationRequest '%s' is successful", nodeAllocationRequestID))
+			}
+
+			if narExists {
+				r.Logger.Info(fmt.Sprintf("Waiting for NodeAllocationRequest (%s) to be deleted", nodeAllocationRequestID))
+				deleteCompleted = false
+			} else {
+				deleteCompleted = true
+			}
+		}
+	}
+
 	// List resources by label
 	var labels = map[string]string{
 		provisioningv1alpha1.ProvisioningRequestNameLabel: provisioningRequest.Name,
 	}
 	listOpts := []client.ListOption{
 		client.MatchingLabels(labels),
-	}
-	// Foreground deletion option
-	deletePolicy := metav1.DeletePropagationForeground
-	deleteOptions := &client.DeleteOptions{PropagationPolicy: &deletePolicy}
-
-	deleteCompleted := true
-	nodePoolList := &hwv1alpha1.NodePoolList{}
-	if err := r.Client.List(ctx, nodePoolList, listOpts...); err != nil {
-		return false, fmt.Errorf("failed to list node pools: %w", err)
-	}
-	for _, nodePool := range nodePoolList.Items {
-		// Delete nodePool if not already.
-		if nodePool.DeletionTimestamp.IsZero() {
-			r.Logger.Info(fmt.Sprintf("Deleting NodePool (%s) in the namespace %s", nodePool.Name, nodePool.Namespace))
-			copiedNodePool := nodePool
-			// With foreground deletion, ensure nodePool's dependents are fully deleted before nodePool itself is deleted.
-			if err := r.Client.Delete(ctx, &copiedNodePool, deleteOptions); client.IgnoreNotFound(err) != nil {
-				return false, fmt.Errorf("failed to delete node pool: %w", err)
-			}
-		}
-		r.Logger.Info(fmt.Sprintf("Waiting for NodePool (%s) to be deleted", nodePool.Name))
-		deleteCompleted = false
 	}
 
 	namespaceList := &corev1.NamespaceList{}
@@ -747,4 +765,71 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 	}
 
 	return nil
+}
+
+// getHardwarePluginClient is a convenience wrapper function to get the HardwarePluginClient object
+func getHardwarePluginClient(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	pr *provisioningv1alpha1.ProvisioningRequest,
+) (*hwmgrpluginapi.HardwarePluginClient, error) {
+	// Get the HardwarePlugin CR
+	hwplugin, err := utils.GetHardwarePluginFromProvisioningRequest(ctx, c, pr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve HardwarePlugin: %w", err)
+	}
+
+	// Validate that the HardwarePlugin CR is registered successfully
+	validated := meta.FindStatusCondition(hwplugin.Status.Conditions, string(hwmgmtv1alpha1.ConditionTypes.Registration))
+	if validated == nil || validated.Status != metav1.ConditionTrue {
+		return nil, fmt.Errorf("hardwarePlugin '%s' is not registered", hwplugin.Name)
+	}
+
+	// Get hwplugin client for the HardwarePlugin
+	// nolint: wrapcheck
+	return hwmgrpluginapi.NewHardwarePluginClient(ctx, c, logger, hwplugin)
+}
+
+// getNodeAllocationRequestID returns the NodeAllocationRequest identifier associated with the ProvisioningRequest CR.
+// If no identifier is set, a null string is returned.
+func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestID() string {
+	if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
+		return t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
+	}
+	return ""
+}
+
+// getNodeAllocationRequestResponse retrieves the NodeAllocationRequest from the HardwarePlugin server.
+// It returns the NodeAllocationRequestResponse, boolean value indicating whether the NodeAllocationRequest object was found (exists),
+// and any error encountered while attempting to fetch the NodeAllocationRequest.
+func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*hwmgrpluginapi.NodeAllocationRequestResponse, bool, error) {
+	nodeAllocationRequestID := t.getNodeAllocationRequestID()
+	if nodeAllocationRequestID == "" {
+		return nil, false, fmt.Errorf("missing status.nodeAllocationRequestRef.NodeAllocationRequestID")
+	}
+	var (
+		nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse
+		exists                        bool
+		err                           error
+	)
+	// Get the generated NodeAllocationRequest and its status.
+	if err = utils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		nodeAllocationRequestResponse, exists, err = t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
+		if err != nil {
+			return fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
+		}
+		if !exists {
+			return fmt.Errorf("nodeAllocationRequest '%s' does not exist", nodeAllocationRequestID)
+		}
+		return nil
+	}); err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			return nil, false, nil
+		}
+		// nolint: wrapcheck
+		return nil, false, err
+	}
+
+	return nodeAllocationRequestResponse, true, nil
 }

@@ -1,0 +1,23 @@
+# permissions for end users to view hardwareprofiles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: clcm-hardwareprofile-viewer-role
+rules:
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareprofiles
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareprofiles/status
+  verbs:
+  - get

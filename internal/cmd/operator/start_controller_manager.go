@@ -31,9 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/go-logr/logr"
+
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
-	hwv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
@@ -130,15 +132,16 @@ func init() {
 	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(siteconfig.AddToScheme(scheme))
-	utilruntime.Must(hwv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(pluginsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	utilruntime.Must(openshiftv1.AddToScheme(scheme))
 	utilruntime.Must(openshiftoperatorv1.AddToScheme(scheme))
 	utilruntime.Must(ibguv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(pluginv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(assistedservicev1beta1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.
@@ -228,18 +231,24 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	// Start the O2IMS controller.
+	// Start the O-Cloud Manager controller.
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
-		Logger: slog.With("controller", "ORAN-O2IMS"),
+		Logger: slog.With("controller", "O-Cloud Manager"),
 		Image:  c.image,
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
 			"Unable to create controller",
-			slog.String("controller", "ORANO2IMS"),
+			slog.String("controller", "O-Cloud Manager"),
 			slog.String("error", err.Error()),
 		)
+		return exit.Error(1)
+	}
+
+	// Register the field index for BareMetalHost
+	if err := controllers.SetupBareMetalHostIndexer(ctx, mgr); err != nil {
+		logger.ErrorContext(ctx, "Unable to set up BareMetalHost indexer", slog.Any("error", err))
 		return exit.Error(1)
 	}
 
