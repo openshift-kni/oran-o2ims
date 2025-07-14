@@ -55,12 +55,6 @@ spec:
                 description: BootInterfaceLabel is the label of the boot interface.
                 minLength: 1
                 type: string
-              extensions:
-                additionalProperties:
-                  type: string
-                description: Extensions holds additional custom key-value pairs that
-                  can be used to extend the node allocation request's configuration.
-                type: object
               hardwarePluginRef:
                 description: HardwarePluginRef is the name of the HardwarePlugin.
                 minLength: 1
@@ -86,7 +80,9 @@ spec:
                         Pool in the hardware manager instance.
                       type: string
                     resourceSelector:
-                      type: string
+                      additionalProperties:
+                        type: string
+                      type: object
                     role:
                       enum:
                       - master

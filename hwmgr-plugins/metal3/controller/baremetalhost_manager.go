@@ -8,7 +8,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -172,21 +171,13 @@ func fetchBMHList(
 		matchingLabels[LabelResourcePoolID] = nodeGroupData.ResourcePoolId
 	}
 
-	if nodeGroupData.ResourceSelector != "" {
-		resourceSelectors := make(map[string]string)
-
-		if err := json.Unmarshal([]byte(nodeGroupData.ResourceSelector), &resourceSelectors); err != nil {
-			return bmhList, fmt.Errorf("unable to parse resourceSelector: %s: %w", nodeGroupData.ResourceSelector, err)
+	for key, value := range nodeGroupData.ResourceSelector {
+		fullLabelName := key
+		if !REPatternResourceSelectorLabel.MatchString(fullLabelName) {
+			fullLabelName = LabelPrefixResourceSelector + key
 		}
 
-		for key, value := range resourceSelectors {
-			fullLabelName := key
-			if !REPatternResourceSelectorLabel.MatchString(fullLabelName) {
-				fullLabelName = LabelPrefixResourceSelector + key
-			}
-
-			matchingLabels[fullLabelName] = value
-		}
+		matchingLabels[fullLabelName] = value
 	}
 
 	// Add namespace filter if provided
