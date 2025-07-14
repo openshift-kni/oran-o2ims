@@ -345,9 +345,6 @@ defaultHugepagesSize: "1G"`,
 						HwProfile:      "profile-spr-dual-processor-128G",
 					},
 				},
-				Extensions: map[string]string{
-					"resourceTypeId": "ResourceGroup~2.1.1",
-				},
 			},
 		},
 		// Pull secret for ClusterInstance

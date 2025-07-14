@@ -607,9 +607,11 @@ components:
           description: |
             Identifier for the resource group.
         resourceSelector:
-          type: string
+          type: object
+          additionalProperties:
+            type: string
           description: |
-            Selector for the resource.
+            Selectors for the resource.
         size:
           type: integer
           description: |
