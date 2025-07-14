@@ -22,7 +22,7 @@ type NodeGroupData struct {
 	// +optional
 	ResourcePoolId string `json:"resourcePoolId,omitempty"`
 	// +optional
-	ResourceSelector string `json:"resourceSelector,omitempty"`
+	ResourceSelector map[string]string `json:"resourceSelector,omitempty"`
 }
 
 // HardwareTemplateSpec defines the desired state of HardwareTemplate
@@ -46,10 +46,6 @@ type HardwareTemplateSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeGroupData []NodeGroupData `json:"nodeGroupData"`
-
-	// Extensions holds additional custom key-value pairs that can be used to extend the node allocation request's configuration.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
 // HardwareTemplateStatus defines the observed state of HardwareTemplate

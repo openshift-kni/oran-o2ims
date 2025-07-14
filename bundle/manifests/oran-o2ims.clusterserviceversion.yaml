@@ -902,10 +902,6 @@ spec:
         path: bootInterfaceLabel
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Extensions holds additional custom key-value pairs that can be
-          used to extend the node allocation request's configuration.
-        displayName: Extensions
-        path: extensions
       - description: HardwarePluginRef is the name of the HardwarePlugin.
         displayName: Hardware Plugin Reference
         path: hardwarePluginRef
