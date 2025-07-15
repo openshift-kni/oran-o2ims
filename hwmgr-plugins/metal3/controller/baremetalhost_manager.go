@@ -815,7 +815,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		}
 
 		// Remove configuration-related annotations
-		for _, key := range []string{BiosUpdateNeededAnnotation, FirmwareUpdateNeededAnnotation, BmhHostMgmtAnnotation} {
+		for _, key := range []string{BiosUpdateNeededAnnotation, FirmwareUpdateNeededAnnotation} {
 			delete(patched.Annotations, key)
 		}
 
