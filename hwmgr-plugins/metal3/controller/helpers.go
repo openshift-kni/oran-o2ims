@@ -395,11 +395,6 @@ func handleInProgressUpdate(ctx context.Context,
 			return ctrl.Result{}, true, fmt.Errorf("failed to clear annotation from AllocatedNode %s: %w", node.Name, err)
 		}
 
-		// Apply the post-change annotation to indicate completion.
-		if err := removePreChangeAnnotation(ctx, c, logger, bmh); err != nil {
-			return ctrl.Result{}, true, fmt.Errorf("failed to apply post-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
-		}
-
 		return hwpluginutils.RequeueImmediately(), true, nil
 	}
 
@@ -436,11 +431,6 @@ func initiateNodeUpdate(ctx context.Context,
 		slog.String("curHwProfile", node.Spec.HwProfile),
 		slog.String("newHwProfile", newHwProfile))
 
-	// Apply the pre-change annotation to the BMH.
-	if err := applyPreChangeAnnotation(ctx, c, logger, bmh); err != nil {
-		return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to apply pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
-	}
-
 	updateRequired, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, pluginNamespace, bmh, node.Name, node.Namespace, newHwProfile, true)
 	if err != nil {
 		return hwpluginutils.DoNotRequeue(), err
@@ -458,11 +448,6 @@ func initiateNodeUpdate(ctx context.Context,
 	}
 
 	if updateRequired {
-		// Apply a pre-change annotation to the BMH.
-		if err := removeDetachedAnnotation(ctx, c, logger, bmh); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to remove detached annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
-		}
-
 		if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
@@ -477,10 +462,6 @@ func initiateNodeUpdate(ctx context.Context,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionTrue,
 			string(hwmgmtv1alpha1.ConfigApplied), string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
 			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.String("node", node.Name), slog.String("error", err.Error()))
-		}
-		// No update required, so we can remove the pre-change annotation
-		if err := removePreChangeAnnotation(ctx, c, logger, bmh); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to remove pre-change annotation for BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
 	}
 	return ctrl.Result{}, nil
@@ -651,6 +632,11 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	// Mark BMH allocated
 	if err := markBMHAllocated(ctx, c, logger, bmh); err != nil {
 		return fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
+	}
+
+	// Allow Host Management
+	if err := allowHostManagement(ctx, c, logger, bmh); err != nil {
+		return fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
