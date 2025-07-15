@@ -36,18 +36,15 @@ const (
 )
 
 const (
-	BmhDay2ConfigAnnotation        = "bmac.agent-install.openshift.io/day2-configuration-status"
-	BmhDetachedAnnotation          = "baremetalhost.metal3.io/detached"
-	BmhPausedAnnotation            = "baremetalhost.metal3.io/paused"
 	BmhRebootAnnotation            = "reboot.metal3.io"
 	BmhNetworkDataPrefx            = "network-data"
 	BiosUpdateNeededAnnotation     = "clcm.openshift.io/bios-update-needed"
 	FirmwareUpdateNeededAnnotation = "clcm.openshift.io/firmware-update-needed"
 	BmhAllocatedLabel              = "clcm.openshift.io/allocated"
 	NodeNameAnnotation             = "clcm.openshift.io/node-name"
+	BmhHostMgmtAnnotation          = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
 	BmhInfraEnvLabel               = "infraenvs.agent-install.openshift.io"
 	SiteConfigOwnedByLabel         = "siteconfig.open-cluster-management.io/owned-by"
-	Metal3Finalizer                = "preprovisioningimage.metal3.io"
 	UpdateReasonBIOSSettings       = "bios-settings-update"
 	UpdateReasonFirmware           = "firmware-update"
 	ValueTrue                      = "true"
@@ -332,88 +329,6 @@ func clearBMHNetworkData(ctx context.Context, c client.Client, name types.Namesp
 		}
 		return nil
 	})
-}
-
-func applyPreChangeAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-		var latestBMH metal3v1alpha1.BareMetalHost
-		if err := c.Get(ctx, bmhName, &latestBMH); err != nil {
-			logger.ErrorContext(ctx, "Failed to fetch BMH for pre-change annotation update",
-				slog.Any("BMH", bmhName),
-				slog.String("error", err.Error()))
-			return err
-		}
-
-		patchBase := latestBMH.DeepCopy()
-
-		if latestBMH.Annotations == nil {
-			latestBMH.Annotations = make(map[string]string)
-		}
-
-		// Remove the paused annotation
-		delete(latestBMH.Annotations, BmhPausedAnnotation)
-		// Set the Day2 config annotation to "in-progress".
-		latestBMH.Annotations[BmhDay2ConfigAnnotation] = "in-progress"
-
-		patch := client.MergeFrom(patchBase)
-
-		if err := c.Patch(ctx, &latestBMH, patch); err != nil {
-			logger.ErrorContext(ctx, "Failed to update BMH annotations in pre-change update",
-				slog.String("BMH", bmhName.Name),
-				slog.String("error", err.Error()))
-			return fmt.Errorf("failed to patch annotations on BMH %+v: %w", bmhName, err)
-		}
-
-		logger.InfoContext(ctx, "Successfully applied pre-change annotations to BMH",
-			slog.Any("BMH", bmhName))
-		return nil
-	})
-}
-
-func removeDetachedAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-		var latestBMH metal3v1alpha1.BareMetalHost
-		if err := c.Get(ctx, bmhName, &latestBMH); err != nil {
-			logger.ErrorContext(ctx, "Failed to fetch BMH for deetached annotation removal",
-				slog.Any("BMH", bmhName),
-				slog.String("error", err.Error()))
-			return err
-		}
-
-		patchBase := latestBMH.DeepCopy()
-
-		if latestBMH.Annotations == nil {
-			latestBMH.Annotations = make(map[string]string)
-		}
-
-		// Remove the detached annotation.
-		delete(latestBMH.Annotations, BmhDetachedAnnotation)
-
-		patch := client.MergeFrom(patchBase)
-
-		if err := c.Patch(ctx, &latestBMH, patch); err != nil {
-			logger.ErrorContext(ctx, "Failed to remove BMH detached annotation",
-				slog.String("BMH", bmhName.Name),
-				slog.String("error", err.Error()))
-			return fmt.Errorf("failed to remove detached annotation on BMH %+v: %w", bmhName, err)
-		}
-
-		logger.InfoContext(ctx, "Successfully applied pre-change annotations to BMH",
-			slog.Any("BMH", bmhName))
-		return nil
-	})
-}
-
-func removePreChangeAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-	if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, "annotation", BmhDay2ConfigAnnotation, "", OpRemove); err != nil {
-		return fmt.Errorf("failed to remove %s BMH %+v: %w", BmhDetachedAnnotation, bmhName, err)
-	}
-	return nil
 }
 
 func processHwProfileWithHandledError(
@@ -952,4 +867,13 @@ func markBMHAllocated(ctx context.Context, c client.Client, logger *slog.Logger,
 	}
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	return updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeLabel, BmhAllocatedLabel, ValueTrue, OpAdd)
+}
+
+// allowHostManagement sets bmac.agent-install.openshift.io/allow-provisioned-host-management annotation on a BareMetalHost.
+func allowHostManagement(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	if val, exists := bmh.Annotations[BmhHostMgmtAnnotation]; exists && val == "" {
+		return nil
+	}
+	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	return updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeAnnotation, BmhHostMgmtAnnotation, "", OpAdd)
 }
