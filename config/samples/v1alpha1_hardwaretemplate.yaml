@@ -1,26 +1,16 @@
 apiVersion: clcm.openshift.io/v1alpha1
 kind: HardwareTemplate
 metadata:
-  name: sample-hwtemplate-v1
+  name: r740-blue-basic
   namespace: oran-o2ims
 spec:
-  # hardwareProvisioningTimeout is optional.
-  # The value should be a duration string
-  # (e.g., "60m" for 60 minutes)
-  hardwareProvisioningTimeout: "60m"
-  hardwarePluginRef: hwmgr-1
-  bootInterfaceLabel: bootable-interface
+  hardwarePluginRef: metal3-hwplugin
   nodeGroupData:
     - name: controller
       role: master
-      hwProfile: profile-spr-single-processor-64G
-      resourcePoolId: master-pool
-      resourceSelector: "selector-here"
-    - name: worker
-      role: worker
-      hwProfile: profile-spr-dual-processor-128G
-      resourcePoolId: worker-pool
-  extensions:
-    resourceTypeId: ResourceGroup~2.1.1
-status:
-  conditions: []
+      hwProfile: rh-profile-r740-bios-settings
+      resourceSelector:
+        "server-type": "R740"
+        "resourceselector.clcm.openshift.io/server-colour": "blue"
+  bootInterfaceLabel: bootable-interface
+  hardwareProvisioningTimeout: "60m"
