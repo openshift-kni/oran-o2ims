@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -644,9 +645,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 		r.Logger.Info(fmt.Sprintf("ProvisioningRequest (%s) is being deleted", provisioningRequest.Name))
 		deleteComplete, err := r.handleProvisioningRequestDeletion(ctx, provisioningRequest)
 		if !deleteComplete {
-			// No need to requeue here, deletion of dependents(including their finalizer removal) will
-			// automatically trigger reconciliation.
-			return doNotRequeue(), true, err
+			return requeueWithShortInterval(), true, err
 		}
 
 		// Deletion has completed. Remove provisioningRequestFinalizer. Once all finalizers have been
@@ -677,8 +676,7 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		}
 	}
 
-	deleteCompleted := true
-
+	// Delete the NodeAllocationRequest CR first
 	if provisioningRequest.Status.Extensions.NodeAllocationRequestRef != nil {
 		// Get hwplugin client for the HardwarePlugin
 		hwpluginClient, err := getHardwarePluginClient(ctx, r.Client, r.Logger, provisioningRequest)
@@ -688,7 +686,7 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 
 		nodeAllocationRequestID := provisioningRequest.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
 		if nodeAllocationRequestID != "" {
-			r.Logger.Info(fmt.Sprintf("Deleting NodeAllocationRequest (%s)", nodeAllocationRequestID))
+			r.Logger.InfoContext(ctx, fmt.Sprintf("Deleting NodeAllocationRequest (%s)", nodeAllocationRequestID))
 			resp, narExists, err := hwpluginClient.DeleteNodeAllocationRequest(ctx, nodeAllocationRequestID)
 			if err != nil {
 				return false, fmt.Errorf("failed to delete NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
@@ -700,12 +698,37 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 
 			if narExists {
 				r.Logger.Info(fmt.Sprintf("Waiting for NodeAllocationRequest (%s) to be deleted", nodeAllocationRequestID))
-				deleteCompleted = false
-			} else {
-				deleteCompleted = true
+				return false, nil
 			}
 		}
 	}
+
+	// Delete the ClusterInstance CR next
+	if provisioningRequest.Status.Extensions.ClusterDetails != nil {
+		clusterInstanceName := provisioningRequest.Status.Extensions.ClusterDetails.Name
+
+		r.Logger.InfoContext(ctx, fmt.Sprintf("Checking ClusterInstance (%s)", clusterInstanceName))
+		clusterInstance := &siteconfig.ClusterInstance{}
+		if err := r.Client.Get(ctx, types.NamespacedName{Name: clusterInstanceName, Namespace: clusterInstanceName}, clusterInstance); err != nil {
+			if client.IgnoreNotFound(err) != nil {
+				return false, fmt.Errorf("failed to get ClusterInstance %s: %w", clusterInstanceName, err)
+			}
+			r.Logger.InfoContext(ctx, fmt.Sprintf("ClusterInstance (%s) not found, so it is already deleted", clusterInstanceName))
+		} else {
+			if clusterInstance.DeletionTimestamp.IsZero() {
+				r.Logger.InfoContext(ctx, fmt.Sprintf("Deleting ClusterInstance (%s)", clusterInstanceName))
+				if err := r.Client.Delete(ctx, clusterInstance); err != nil {
+					return false, fmt.Errorf("failed to delete ClusterInstance %s: %w", clusterInstanceName, err)
+				}
+			}
+			r.Logger.InfoContext(ctx, fmt.Sprintf("Waiting for ClusterInstance (%s) to be deleted", clusterInstanceName))
+			return false, nil
+		}
+	} else {
+		r.Logger.InfoContext(ctx, "provisioningRequest.Status.Extensions.ClusterDetails is nil")
+	}
+
+	// Delete the ClusterNamespace CR last
 
 	// List resources by label
 	var labels = map[string]string{
@@ -714,6 +737,8 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 	listOpts := []client.ListOption{
 		client.MatchingLabels(labels),
 	}
+
+	deleteCompleted := true
 
 	namespaceList := &corev1.NamespaceList{}
 	if err := r.Client.List(ctx, namespaceList, listOpts...); err != nil {
@@ -733,6 +758,7 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		r.Logger.Info(fmt.Sprintf("Waiting for Cluster Namespace (%s) to be deleted", ns.Name))
 		deleteCompleted = false
 	}
+
 	return deleteCompleted, nil
 }
 

@@ -277,7 +277,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 
 // createMetal3PluginHardwarePluginCR creates the Metal3 Hardware Plugin CR
 func (t *reconcilerTask) createMetal3PluginHardwarePluginCR(ctx context.Context) error {
-	t.logger.InfoContext(ctx, "Creating Metal3 Hardware Plugin CR")
+	t.logger.DebugContext(ctx, "Creating Metal3 Hardware Plugin CR")
 	hardwarePlugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hwpluginutils.Metal3HardwarePluginID,
