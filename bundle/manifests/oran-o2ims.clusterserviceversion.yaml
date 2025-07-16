@@ -280,34 +280,24 @@ metadata:
           "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "HardwareTemplate",
           "metadata": {
-            "name": "sample-hwtemplate-v1",
+            "name": "r740-blue-basic",
             "namespace": "oran-o2ims"
           },
           "spec": {
             "bootInterfaceLabel": "bootable-interface",
-            "extensions": {
-              "resourceTypeId": "ResourceGroup~2.1.1"
-            },
-            "hardwarePluginRef": "hwmgr-1",
+            "hardwarePluginRef": "metal3-hwplugin",
             "hardwareProvisioningTimeout": "60m",
             "nodeGroupData": [
               {
-                "hwProfile": "profile-spr-single-processor-64G",
+                "hwProfile": "rh-profile-r740-bios-settings",
                 "name": "controller",
-                "resourcePoolId": "master-pool",
-                "resourceSelector": "selector-here",
+                "resourceSelector": {
+                  "resourceselector.clcm.openshift.io/server-colour": "blue",
+                  "server-type": "R740"
+                },
                 "role": "master"
-              },
-              {
-                "hwProfile": "profile-spr-dual-processor-128G",
-                "name": "worker",
-                "resourcePoolId": "worker-pool",
-                "role": "worker"
               }
             ]
-          },
-          "status": {
-            "conditions": []
           }
         },
         {
@@ -537,46 +527,92 @@ metadata:
           "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
           "kind": "AllocatedNode",
           "metadata": {
-            "labels": {
-              "app.kubernetes.io/created-by": "oran-o2ims",
-              "app.kubernetes.io/instance": "inventory-sample",
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "inventory",
-              "app.kubernetes.io/part-of": "oran-o2ims"
-            },
-            "name": "sample-node",
-            "namespace": "oran-hwmgr-plugin"
+            "name": "91c70863-8a83-422a-ab7a-a75f744d5210",
+            "namespace": "oran-o2ims"
           },
           "spec": {
-            "groupName": "master",
-            "hwProfile": "sample-profile",
-            "nodeAllocationRequest": "sample-nodeallocationrequest"
+            "groupName": "controller",
+            "hardwarePluginRef": "metal3-hwplugin",
+            "hwMgrNodeId": "r740xserver1",
+            "hwMgrNodeNs": "r740-pool",
+            "hwProfile": "rh-profile-r740-bios-settings",
+            "nodeAllocationRequest": "metal3-b12f3e77848a4002bf40"
           },
           "status": {
             "bmc": {
-              "address": "idrac-virtualmedia+https://198.51.100.1/redfish/v1/Systems/System.Embedded.1",
-              "credentialsName": "sample-node-bmc-secret"
+              "address": "idrac-virtualmedia+https://127.0.0.1/redfish/v1/Systems/System.Embedded.1",
+              "credentialsName": "bmc-secret-r740xserver1"
             },
             "conditions": [
               {
-                "lastTransitionTime": "2024-10-09T15:36:31Z",
+                "lastTransitionTime": "2025-07-16T12:57:12Z",
                 "message": "Provisioned",
                 "reason": "Completed",
                 "status": "True",
                 "type": "Provisioned"
               }
             ],
-            "hostname": "sample-node.example.com",
+            "hwProfile": "rh-profile-r740-bios-settings",
             "interfaces": [
               {
-                "label": "bootable-interface",
-                "macAddress": "00:11:22:33:44:55",
-                "name": "eno1"
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:19",
+                "name": "ens1f0"
               },
               {
                 "label": "",
-                "macAddress": "00:11:22:33:44:66",
-                "name": "eno2"
+                "macAddress": "c3:f7:f5:b2:4d:1a",
+                "name": "ens3f1np1"
+              },
+              {
+                "label": "bootable-interface",
+                "macAddress": "c3:f7:f5:b2:4d:1b",
+                "name": "eno1np0"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:1c",
+                "name": "ens5f3"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:1d",
+                "name": "ens5f1"
+              },
+              {
+                "label": "data-interface",
+                "macAddress": "c3:f7:f5:b2:4d:1e",
+                "name": "eno2np1"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:1f",
+                "name": "ens7f0np0"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:20",
+                "name": "ens7f1np1"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:21",
+                "name": "ens1f1"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:22",
+                "name": "ens5f2"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:23",
+                "name": "ens5f0"
+              },
+              {
+                "label": "",
+                "macAddress": "c3:f7:f5:b2:4d:24",
+                "name": "ens3f0np0"
               }
             ]
           }
@@ -585,42 +621,26 @@ metadata:
           "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
           "kind": "NodeAllocationRequest",
           "metadata": {
-            "annotations": {
-              "bootInterfaceLabel": "bootable-interface"
-            },
-            "generation": 1,
-            "labels": {
-              "app.kubernetes.io/created-by": "oran-o2ims",
-              "app.kubernetes.io/instance": "inventory-sample",
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "inventory",
-              "app.kubernetes.io/part-of": "oran-o2ims"
-            },
-            "name": "sample-nodeallocationrequest",
-            "namespace": "oran-hwmgr-plugin"
+            "name": "metal3-b12f3e77848a4002bf40",
+            "namespace": "oran-o2ims"
           },
           "spec": {
-            "clusterId": "sample",
-            "extensions": [],
-            "hardwarePluginRef": "loopback-1",
+            "bootInterfaceLabel": "bootable-interface",
+            "clusterId": "cluster1",
+            "configTransactionId": 1,
+            "hardwarePluginRef": "metal3-hwplugin",
             "nodeGroup": [
               {
                 "nodeGroupData": {
-                  "hwProfile": "sample-master-profile",
+                  "hwProfile": "rh-profile-r740-bios-settings",
                   "name": "controller",
-                  "resourcePoolId": "master-pool",
+                  "resourceSelector": {
+                    "resourceselector.clcm.openshift.io/server-colour": "blue",
+                    "server-type": "R740"
+                  },
                   "role": "master"
                 },
                 "size": 1
-              },
-              {
-                "nodeGroupData": {
-                  "hwProfile": "sample-worker-profile",
-                  "name": "worker",
-                  "resourcePoolId": "worker-pool",
-                  "role": "worker"
-                },
-                "size": 0
               }
             ],
             "site": "ottawa"
@@ -628,17 +648,20 @@ metadata:
           "status": {
             "conditions": [
               {
-                "lastTransitionTime": "2024-10-09T15:36:41Z",
+                "lastTransitionTime": "2025-07-16T12:57:12Z",
                 "message": "Created",
                 "reason": "Completed",
                 "status": "True",
                 "type": "Provisioned"
               }
             ],
-            "hwMgrPlugin": {},
+            "hwMgrPlugin": {
+              "observedGeneration": 1
+            },
+            "observedConfigTransactionId": 0,
             "properties": {
               "nodeNames": [
-                "sample-node"
+                "91c70863-8a83-422a-ab7a-a75f744d5210"
               ]
             }
           }

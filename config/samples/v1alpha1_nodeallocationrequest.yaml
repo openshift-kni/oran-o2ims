@@ -1,43 +1,33 @@
 apiVersion: plugins.clcm.openshift.io/v1alpha1
 kind: NodeAllocationRequest
 metadata:
-  annotations:
-    bootInterfaceLabel: bootable-interface
-  generation: 1
-  labels:
-    app.kubernetes.io/name: inventory
-    app.kubernetes.io/instance: inventory-sample
-    app.kubernetes.io/part-of: oran-o2ims
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: oran-o2ims
-  name: sample-nodeallocationrequest
-  namespace: oran-hwmgr-plugin
+  name: metal3-b12f3e77848a4002bf40
+  namespace: oran-o2ims
 spec:
-  clusterId: sample
-  hardwarePluginRef: loopback-1
+  bootInterfaceLabel: bootable-interface
+  clusterId: cluster1
+  configTransactionId: 1
+  hardwarePluginRef: metal3-hwplugin
   nodeGroup:
   - nodeGroupData:
-      hwProfile: sample-master-profile
+      hwProfile: rh-profile-r740-bios-settings
       name: controller
-      resourcePoolId: master-pool
+      resourceSelector:
+        resourceselector.clcm.openshift.io/server-colour: blue
+        server-type: R740
       role: master
     size: 1
-  - nodeGroupData:
-      hwProfile: sample-worker-profile
-      name: worker
-      resourcePoolId: worker-pool
-      role: worker
-    size: 0
   site: ottawa
-  extensions: []
 status:
   conditions:
-  - lastTransitionTime: "2024-10-09T15:36:41Z"
+  - lastTransitionTime: "2025-07-16T12:57:12Z"
     message: Created
     reason: Completed
     status: "True"
     type: Provisioned
-  hwMgrPlugin: {}
+  hwMgrPlugin:
+    observedGeneration: 1
+  observedConfigTransactionId: 0
   properties:
     nodeNames:
-    - sample-node
+    - 91c70863-8a83-422a-ab7a-a75f744d5210
