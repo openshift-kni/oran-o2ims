@@ -200,7 +200,7 @@ func (t *reconcilerTask) createLoopbackPluginServerClusterRole(ctx context.Conte
 
 // createLoopbackPluginHardwarePluginCR creates the Loopback Hardware Plugin CR
 func (t *reconcilerTask) createLoopbackPluginHardwarePluginCR(ctx context.Context) error {
-	t.logger.InfoContext(ctx, "Creating Loopback Hardware Plugin CR")
+	t.logger.DebugContext(ctx, "Creating Loopback Hardware Plugin CR")
 	hardwarePlugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hwpluginutils.LoopbackHardwarePluginID,
