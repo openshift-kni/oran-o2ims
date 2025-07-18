@@ -26,6 +26,17 @@ func createOrUpdateHostUpdatePolicy(ctx context.Context,
 	bmh *metal3v1alpha1.BareMetalHost,
 	firmwareUpdateRequired, biosUpdateRequired bool) error {
 
+	// Validate input parameters
+	if ctx == nil {
+		return fmt.Errorf("context cannot be nil")
+	}
+	if c == nil {
+		return fmt.Errorf("client cannot be nil")
+	}
+	if bmh == nil {
+		return fmt.Errorf("BareMetalHost cannot be nil")
+	}
+
 	hup := &metal3v1alpha1.HostUpdatePolicy{}
 	key := types.NamespacedName{
 		Name:      bmh.Name,
@@ -41,10 +52,10 @@ func createOrUpdateHostUpdatePolicy(ctx context.Context,
 	desiredSpec := metal3v1alpha1.HostUpdatePolicySpec{}
 
 	if firmwareUpdateRequired {
-		desiredSpec.FirmwareUpdates = "onReboot"
+		desiredSpec.FirmwareUpdates = metal3v1alpha1.HostUpdatePolicyOnReboot
 	}
 	if biosUpdateRequired {
-		desiredSpec.FirmwareSettings = "onReboot"
+		desiredSpec.FirmwareSettings = metal3v1alpha1.HostUpdatePolicyOnReboot
 	}
 
 	if errors.IsNotFound(err) {
