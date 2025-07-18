@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
@@ -132,8 +133,19 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 		return true, fmt.Errorf("failed to get BMH for node %s: %w", allocatednode.Name, err)
 	}
 
-	if err = deallocateBMH(ctx, r.Client, r.Logger, bmh); err != nil {
+	if !isBMHDeallocated(bmh) {
+		if err = deallocateBMH(ctx, r.Client, r.Logger, bmh); err != nil {
+			return false, fmt.Errorf("failed to deallocate BMH: %w", err)
+		}
+	}
+
+	if bmh.Status.Provisioning.State != metal3v1alpha1.StateAvailable {
+		return false, nil
+	}
+
+	if err := patchOnlineFalse(ctx, r.Client, bmh); err != nil {
 		return false, fmt.Errorf("failed to deallocate BMH: %w", err)
 	}
+
 	return true, nil
 }
