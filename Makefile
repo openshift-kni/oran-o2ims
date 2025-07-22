@@ -122,6 +122,8 @@ CONTAINER_TOOL ?= docker
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# This allows all tools under '$(PWD)/bin', ie:opm,yq ... To be used by targets containing scripts
+export PATH  := $(PATH):$(PWD)/bin
 
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
