@@ -122,6 +122,8 @@ CONTAINER_TOOL ?= docker
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# This allows all tools under '$(PWD)/bin', ie:opm,yq ... To be used by targets containing scripts
+export PATH  := $(PATH):$(PWD)/bin
 
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
@@ -347,7 +349,7 @@ ifeq (,$(shell which opm 2>/dev/null))
 	set -e ;\
 	mkdir -p $(dir $(OPM)) ;\
 	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
-	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.54.0/$${OS}-$${ARCH}-opm ;\
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.52.0/$${OS}-$${ARCH}-opm ;\
 	chmod +x $(OPM) ;\
 	}
 else
@@ -577,8 +579,7 @@ konflux-validate-catalog: opm ## validate the current catalog file
 .PHONY: konflux-generate-catalog ## generate a quay.io catalog
 konflux-generate-catalog: yq opm
 	hack/konflux-update-catalog-template.sh --set-catalog-template-file $(CATALOG_TEMPLATE_KONFLUX) --set-bundle-builds-file .konflux/catalog/bundle.builds.in.yaml
-        # CAVEAT: for < ocp 4.17, use this opm render instead:
-        # (OPM) alpha render-template basic --output yaml ./konflux/catalog/catalog-template.yaml > .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
+	touch $(CATALOG_KONFLUX)
 	$(OPM) alpha render-template basic --output yaml --migrate-level bundle-object-to-csv-metadata $(CATALOG_TEMPLATE_KONFLUX) > $(CATALOG_KONFLUX)
 	$(OPM) validate .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/
 
