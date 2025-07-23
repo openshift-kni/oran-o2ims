@@ -154,5 +154,5 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 		}
 	}
 
-	return true, clearBMHDeallocationAnnotation(ctx, r.Client, r.Logger, bmh)
+	return true, clearBMHAnnotation(ctx, r.Client, r.Logger, bmh)
 }
