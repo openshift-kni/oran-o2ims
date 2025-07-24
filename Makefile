@@ -409,6 +409,10 @@ catalog-undeploy: ## Undeploy from catalog image.
 binary: $(LOCALBIN)
 	go build -o $(LOCALBIN)/$(BINARY_NAME) -mod=vendor
 
+.PHONY: crd-watcher
+crd-watcher: $(LOCALBIN) ## Build the CRD watcher binary.
+	go build -o $(LOCALBIN)/crd-watcher -mod=vendor ./cmd/crd-watcher
+
 
 .PHONY: generate
 go-generate:
