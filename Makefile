@@ -411,7 +411,7 @@ binary: $(LOCALBIN)
 
 .PHONY: crd-watcher
 crd-watcher: $(LOCALBIN) ## Build the CRD watcher binary.
-	go build -o $(LOCALBIN)/crd-watcher -mod=vendor ./cmd/crd-watcher
+	go build -o $(LOCALBIN)/crd-watcher -mod=vendor ./dev-tools/crd-watcher
 
 
 .PHONY: generate
