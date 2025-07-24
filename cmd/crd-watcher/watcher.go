@@ -109,10 +109,10 @@ func NewCRDWatcher(clientset kubernetes.Interface, restConfig *rest.Config, sche
 		inventoryClient, err := NewInventoryClient(inventoryConfig)
 		if err != nil {
 			klog.Errorf("Failed to create inventory client: %v", err)
-			klog.Warning("Continuing without inventory module")
+			klog.V(1).Info("Continuing without inventory module")
 		} else {
 			watcher.inventoryClient = inventoryClient
-			klog.Info("Inventory module enabled")
+			klog.V(1).Info("Inventory module enabled")
 		}
 	}
 
@@ -275,7 +275,7 @@ func (w *CRDWatcher) verifyKubernetesResourceExists(ctx context.Context, event W
 func (w *CRDWatcher) Start(ctx context.Context) error {
 	// Initialize the BareMetalHost tracking map with existing resources
 	if err := w.initializeBMHTracking(ctx); err != nil {
-		klog.Warningf("Failed to initialize BareMetalHost tracking: %v", err)
+		klog.V(1).Infof("Failed to initialize BareMetalHost tracking: %v", err)
 		// Don't fail, continue with empty map
 	}
 
@@ -313,7 +313,7 @@ func (w *CRDWatcher) Start(ctx context.Context) error {
 func (w *CRDWatcher) ListAndDisplay(ctx context.Context) error {
 	// Initialize the BareMetalHost tracking map with existing resources
 	if err := w.initializeBMHTracking(ctx); err != nil {
-		klog.Warningf("Failed to initialize BareMetalHost tracking: %v", err)
+		klog.V(1).Infof("Failed to initialize BareMetalHost tracking: %v", err)
 		// Don't fail, continue with empty map
 	}
 
@@ -397,7 +397,7 @@ func (w *CRDWatcher) listCRDResources(ctx context.Context, crdType string) ([]Wa
 	for _, item := range list.Items {
 		typedObj, err := w.convertToTypedObject(&item, crdType)
 		if err != nil {
-			klog.Warningf("Failed to convert object: %v", err)
+			klog.V(1).Infof("Failed to convert object: %v", err)
 			continue
 		}
 
@@ -630,7 +630,7 @@ func (w *CRDWatcher) initializeBMHTracking(ctx context.Context) error {
 	for _, item := range list.Items {
 		typedObj, err := w.convertToTypedObject(&item, CRDTypeBareMetalHosts)
 		if err != nil {
-			klog.Warningf("Failed to convert BareMetalHost: %v", err)
+			klog.V(1).Infof("Failed to convert BareMetalHost: %v", err)
 			continue
 		}
 
@@ -685,7 +685,7 @@ func (w *CRDWatcher) watchCRD(ctx context.Context, crdType string) error {
 			return nil
 		case event, ok := <-watcher.ResultChan():
 			if !ok {
-				klog.Warningf("Watch channel closed for %s, restarting...", crdType)
+				klog.V(1).Infof("Watch channel closed for %s, restarting...", crdType)
 				return w.watchCRD(ctx, crdType) // Restart the watch
 			}
 

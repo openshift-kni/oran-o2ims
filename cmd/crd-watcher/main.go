@@ -241,7 +241,7 @@ func processOAuthScopes(scopes []string) []string {
 			if splitScope != "" {
 				// Check for common OAuth scope formatting issues
 				if strings.HasPrefix(splitScope, "scope=") {
-					klog.Warningf("OAuth scope '%s' contains 'scope=' prefix which may be invalid. Consider using just '%s' instead.", splitScope, strings.TrimPrefix(splitScope, "scope="))
+					klog.V(1).Infof("OAuth scope '%s' contains 'scope=' prefix which may be invalid. Consider using just '%s' instead.", splitScope, strings.TrimPrefix(splitScope, "scope="))
 				}
 
 				klog.V(2).Infof("Adding scope part %d: '%s'", j, splitScope)
