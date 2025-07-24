@@ -35,12 +35,8 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	metal3plugincontroller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	"k8s.io/apimachinery/pkg/api/meta"
-)
-
-const (
-	// LabelPrefixResourceSelector matches the constant from hwmgr-plugins/metal3/controller/inventory.go
-	LabelPrefixResourceSelector = "resourceselector.clcm.openshift.io/"
 )
 
 type CRDWatcher struct {
@@ -886,7 +882,7 @@ func (w *CRDWatcher) shouldIncludeBareMetalHost(bmh *metal3v1alpha1.BareMetalHos
 
 	// Check if any label key starts with the resource selector prefix
 	for labelKey := range bmh.Labels {
-		if strings.HasPrefix(labelKey, LabelPrefixResourceSelector) {
+		if strings.HasPrefix(labelKey, metal3plugincontroller.LabelPrefixResourceSelector) {
 			return true
 		}
 	}
