@@ -2019,6 +2019,7 @@ spec:
       operations:
       - CREATE
       - UPDATE
+      - DELETE
       resources:
       - provisioningrequests
     sideEffects: None

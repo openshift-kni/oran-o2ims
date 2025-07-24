@@ -21,6 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+const HardwareConfigInProgress = "Hardware configuring is in progress"
+
 // log is for logging in this package.
 var provisioningrequestlog = logf.Log.WithName("provisioningrequest-webhook")
 
@@ -32,10 +34,9 @@ func (r *ProvisioningRequest) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // NOTE: The 'path' attribute must follow a specific pattern and should not be modified directly here.
 // Modifying the path for an invalid path can cause API server errors; failing to locate the webhook.
-//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-provisioningrequest,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=provisioningrequests,verbs=create;update,versions=v1alpha1,name=provisioningrequests.clcm.openshift.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-provisioningrequest,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=provisioningrequests,verbs=create;update;delete,versions=v1alpha1,name=provisioningrequests.clcm.openshift.io,admissionReviewVersions=v1
 
 // provisioningRequestValidator is a webhook validator for ProvisioningRequest
 type provisioningRequestValidator struct {
@@ -93,7 +94,25 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldOb
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 
-	// TODO(user): fill in your validation logic upon object deletion.
+	pr, casted := obj.(*ProvisioningRequest)
+	if !casted {
+		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", obj)
+	}
+
+	// Re-fetch the object to ensure status is available
+	fetched := &ProvisioningRequest{}
+	key := client.ObjectKey{Name: pr.Name, Namespace: pr.Namespace}
+	if err := v.Client.Get(ctx, key, fetched); err != nil {
+		return nil, fmt.Errorf("failed to get latest ProvisioningRequest: %w", err)
+	}
+
+	provisioningrequestlog.Info("validate delete", "name", fetched.Name)
+
+	if fetched.Status.ProvisioningStatus.ProvisioningDetails == HardwareConfigInProgress &&
+		fetched.Status.ProvisioningStatus.ProvisioningPhase == StateProgressing {
+		return nil, fmt.Errorf("deleting a ProvisioningRequest is disallowed while post-install hardware configuration is in progress")
+	}
+
 	return nil, nil
 }
 

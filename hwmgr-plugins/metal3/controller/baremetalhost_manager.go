@@ -42,6 +42,7 @@ const (
 	FirmwareUpdateNeededAnnotation = "clcm.openshift.io/firmware-update-needed"
 	BmhAllocatedLabel              = "clcm.openshift.io/allocated"
 	NodeNameAnnotation             = "clcm.openshift.io/node-name"
+	BMHDeallocationDoneAnnotation  = "clcm.openshift.io/deallocation-complete"
 	BmhHostMgmtAnnotation          = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
 	BmhInfraEnvLabel               = "infraenvs.agent-install.openshift.io"
 	SiteConfigOwnedByLabel         = "siteconfig.open-cluster-management.io/owned-by"
@@ -667,10 +668,8 @@ func handleBMHCompletion(ctx context.Context,
 	}
 
 	// Check if BMH has transitioned to "Available"
-	bmhAvailable := checkBMHStatus(ctx, logger, bmh, metal3v1alpha1.StateAvailable)
-
 	// If BMH is not available yet, update is still ongoing
-	if !bmhAvailable {
+	if !checkBMHStatus(ctx, logger, bmh, metal3v1alpha1.StateAvailable) {
 		// BMH entered an error state
 		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
 			errMessage := fmt.Errorf("bmh %s/%s in an error state %s", bmh.Namespace, bmh.Name, bmh.Status.Provisioning.State)
@@ -810,7 +809,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 			delete(patched.Annotations, key)
 		}
 
-		patched.Spec.Online = false
+		patched.Annotations[BMHDeallocationDoneAnnotation] = "true"
 
 		// Clear CustomDeploy entirely
 		patched.Spec.CustomDeploy = nil
@@ -818,6 +817,8 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		if bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned {
 			// Wipe partition tables using automated cleaning
 			patched.Spec.AutomatedCleaningMode = metal3v1alpha1.CleaningModeMetadata
+			// Power off the host
+			patched.Spec.Online = false
 		}
 
 		// Reset pre-provisioning data
@@ -876,4 +877,28 @@ func allowHostManagement(ctx context.Context, c client.Client, logger *slog.Logg
 	}
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	return updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeAnnotation, BmhHostMgmtAnnotation, "", OpAdd)
+}
+
+func isBMHDeallocated(bmh *metal3v1alpha1.BareMetalHost) bool {
+	return bmh.Annotations != nil && bmh.Annotations[BMHDeallocationDoneAnnotation] == "true"
+}
+
+func clearBMHDeallocationAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
+	return updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeAnnotation, BMHDeallocationDoneAnnotation, "", OpRemove)
+}
+
+func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost) error {
+	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		var fresh metal3v1alpha1.BareMetalHost
+		if err := c.Get(ctx, name, &fresh); err != nil {
+			return err
+		}
+		patched := fresh.DeepCopy()
+		patched.Spec.Online = false
+
+		return c.Patch(ctx, patched, client.MergeFrom(&fresh))
+	})
 }

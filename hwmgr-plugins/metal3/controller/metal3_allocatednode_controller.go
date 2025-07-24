@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
@@ -126,14 +127,32 @@ func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // CleanupForDeletedNode
 func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Context, allocatednode *pluginsv1alpha1.AllocatedNode) (bool, error) {
 
-	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion")
+	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion", slog.String("node", allocatednode.Name))
 	bmh, err := getBMHForNode(ctx, r.Client, allocatednode)
 	if err != nil {
 		return true, fmt.Errorf("failed to get BMH for node %s: %w", allocatednode.Name, err)
 	}
 
-	if err = deallocateBMH(ctx, r.Client, r.Logger, bmh); err != nil {
-		return false, fmt.Errorf("failed to deallocate BMH: %w", err)
+	if !isBMHDeallocated(bmh) {
+		if err = deallocateBMH(ctx, r.Client, r.Logger, bmh); err != nil {
+			return false, fmt.Errorf("failed to deallocate BMH: %w", err)
+		}
+		return false, nil
 	}
-	return true, nil
+
+	if isNodeProvisioningInProgress(allocatednode) {
+		// Wait for BMH to transition to Available before powering off
+		if bmh.Status.Provisioning.State != metal3v1alpha1.StateAvailable {
+			r.Logger.InfoContext(ctx, "BMH not yet Available — waiting before powering off", slog.String("bmh", bmh.Name))
+			return false, nil
+		}
+	}
+
+	if bmh.Spec.Online {
+		if err := patchOnlineFalse(ctx, r.Client, bmh); err != nil {
+			return false, fmt.Errorf("failed to patchOnlineFalse for BMH %s: %w", bmh.Name, err)
+		}
+	}
+
+	return true, clearBMHDeallocationAnnotation(ctx, r.Client, r.Logger, bmh)
 }
