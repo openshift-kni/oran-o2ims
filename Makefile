@@ -20,7 +20,7 @@ ginkgo_flags:=
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 4.18.0
+VERSION ?= 4.20.0
 
 PACKAGE_NAME ?= oran-o2ims
 
