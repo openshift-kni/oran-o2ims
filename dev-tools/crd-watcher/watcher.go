@@ -303,7 +303,7 @@ func (w *CRDWatcher) Start(ctx context.Context) error {
 	for _, crdType := range w.config.CRDTypes {
 		crdType := crdType // capture loop variable
 		g.Go(func() error {
-			return w.watchCRD(gCtx, crdType)
+			return w.watchCRDWithRetry(gCtx, crdType)
 		})
 	}
 
@@ -648,6 +648,46 @@ func (w *CRDWatcher) initializeBMHTracking(ctx context.Context) error {
 
 	klog.V(1).Infof("Initialized BareMetalHost tracking: %d/%d hosts included after filtering", filteredCount, initialCount)
 	return nil
+}
+
+func (w *CRDWatcher) watchCRDWithRetry(ctx context.Context, crdType string) error {
+	const (
+		initialDelay      = 1 * time.Second
+		maxDelay          = 60 * time.Second
+		backoffMultiplier = 2
+	)
+
+	retryDelay := initialDelay
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		err := w.watchCRD(ctx, crdType)
+		if err == nil {
+			// watchCRD returned normally (context cancelled), exit retry loop
+			return nil
+		}
+
+		// Log the error and prepare to retry
+		klog.V(1).Infof("Watcher for %s failed, retrying in %v: %v", crdType, retryDelay, err)
+
+		// Wait before retrying, but respect context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryDelay):
+		}
+
+		// Exponential backoff with cap
+		retryDelay *= backoffMultiplier
+		if retryDelay > maxDelay {
+			retryDelay = maxDelay
+		}
+	}
 }
 
 func (w *CRDWatcher) watchCRD(ctx context.Context, crdType string) error {
