@@ -380,6 +380,11 @@ func handleInProgressUpdate(ctx context.Context,
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK {
 		logger.InfoContext(ctx, "BMH update complete", slog.String("BMH", bmh.Name))
 
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+			return hwpluginutils.RequeueImmediately(), true, err
+		}
+
 		// Update the node's status to reflect the new hardware profile.
 		node.Status.HwProfile = node.Spec.HwProfile
 		hwpluginutils.SetStatusCondition(&node.Status.Conditions,
@@ -399,6 +404,10 @@ func handleInProgressUpdate(ctx context.Context,
 	}
 
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
+		tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
+		if err != nil || tolerate {
+			return hwpluginutils.RequeueWithMediumInterval(), true, err
+		}
 		logger.InfoContext(ctx, "BMH update failed", slog.String("BMH", bmh.Name))
 		if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
