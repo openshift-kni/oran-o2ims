@@ -743,6 +743,12 @@ func getAge(timestamp metav1.Time) string {
 	}
 
 	duration := time.Since(timestamp.Time)
+
+	// If duration is negative (timestamp is in the future), return empty string
+	if duration < 0 {
+		return ""
+	}
+
 	switch {
 	case duration.Hours() >= 24:
 		return fmt.Sprintf("%.0fd", duration.Hours()/24)
