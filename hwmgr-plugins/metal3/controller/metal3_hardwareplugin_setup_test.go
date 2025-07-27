@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -63,7 +63,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			// This is testing the structure without actually calling SetupWithManager
 
 			baseLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			
+
 			// Create a fake client to simulate what the manager would provide
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -88,7 +88,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 		It("should create AllocatedNodeReconciler with correct fields", func() {
 			// Test the logic of creating the second reconciler struct
 			baseLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			
+
 			// Create a fake client to simulate what the manager would provide
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -115,7 +115,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 		It("should return errors with descriptive messages for NodeAllocationRequest setup failure", func() {
 			// Test error message format
 			var testError error
-			
+
 			// The function will panic with nil manager, so we need to catch it
 			defer func() {
 				if r := recover(); r != nil {
@@ -126,9 +126,9 @@ var _ = Describe("SetupMetal3Controllers", func() {
 					Expect(panicMsg).To(ContainSubstring("nil pointer"))
 				}
 			}()
-			
+
 			testError = SetupMetal3Controllers(nil, namespace)
-			
+
 			// If we get here without panic, check the error message
 			if testError != nil {
 				// If an error is returned, it should have a descriptive message
@@ -154,7 +154,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 					Expect(r).ToNot(BeNil())
 				}
 			}()
-			
+
 			_ = SetupMetal3Controllers(nil, "")
 		})
 
@@ -166,7 +166,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 					Expect(r).ToNot(BeNil())
 				}
 			}()
-			
+
 			specialNamespace := "test-namespace_with.special-chars"
 			_ = SetupMetal3Controllers(nil, specialNamespace)
 		})
@@ -176,14 +176,14 @@ var _ = Describe("SetupMetal3Controllers", func() {
 		It("should create loggers with appropriate context", func() {
 			// Test the logger creation logic
 			baseLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			
+
 			nodeLogger := baseLogger.With(slog.String("controller", "metal3_nodeallocationrequest_controller"))
 			allocatedLogger := baseLogger.With(slog.String("controller", "metal3_allocatednode_controller"))
-			
+
 			// Verify loggers are created (we can't easily test the content without complex setup)
 			Expect(nodeLogger).ToNot(BeNil())
 			Expect(allocatedLogger).ToNot(BeNil())
 			Expect(nodeLogger).ToNot(Equal(allocatedLogger))
 		})
 	})
-}) 
+})

@@ -10,9 +10,9 @@ import (
 	"context"
 	"log/slog"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -253,7 +253,7 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				// Verify that the firmware updates field is set to exactly HostUpdatePolicyOnReboot
 				Expect(policy.Spec.FirmwareUpdates).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 				Expect(string(policy.Spec.FirmwareUpdates)).To(Equal("onReboot"))
@@ -269,7 +269,7 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				// Verify that the firmware settings field is set to exactly HostUpdatePolicyOnReboot
 				Expect(policy.Spec.FirmwareSettings).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 				Expect(string(policy.Spec.FirmwareSettings)).To(Equal("onReboot"))
@@ -278,4 +278,4 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 			})
 		})
 	})
-}) 
+})

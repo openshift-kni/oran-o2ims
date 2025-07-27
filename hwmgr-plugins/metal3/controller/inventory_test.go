@@ -11,9 +11,9 @@ import (
 	"log/slog"
 	"regexp"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -54,9 +54,9 @@ var _ = Describe("Inventory", func() {
 		bmh.Status.HardwareDetails = &metal3v1alpha1.HardwareDetails{
 			RAMMebibytes: 8192,
 			SystemVendor: metal3v1alpha1.HardwareSystemVendor{
-				Manufacturer:   "Dell Inc.",
-				ProductName:    "PowerEdge R640",
-				SerialNumber:   "ABC123456",
+				Manufacturer: "Dell Inc.",
+				ProductName:  "PowerEdge R640",
+				SerialNumber: "ABC123456",
 			},
 			CPU: metal3v1alpha1.CPU{
 				Arch:  "x86_64",
@@ -318,7 +318,7 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
 			result := getResourceInfoProcessors(bmh)
 			Expect(result).To(HaveLen(1))
-			
+
 			processor := result[0]
 			Expect(*processor.Architecture).To(Equal("x86_64"))
 			Expect(*processor.Cores).To(Equal(40))
@@ -383,7 +383,7 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
 				LabelPrefixResourceSelector + "zone":        "zone1",
 				LabelPrefixResourceSelector + "environment": "prod",
-				"other.label":                               "other-value",
+				"other.label": "other-value",
 			})
 			result := getResourceInfoTags(bmh)
 			Expect(result).ToNot(BeNil())
@@ -497,8 +497,8 @@ var _ = Describe("Inventory", func() {
 		It("should aggregate all resource information correctly", func() {
 			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
 			bmh.Labels = map[string]string{
-				LabelResourcePoolID:                      "pool123",
-				LabelPrefixResourceSelector + "zone":     "zone1",
+				LabelResourcePoolID:                  "pool123",
+				LabelPrefixResourceSelector + "zone": "zone1",
 			}
 			bmh.Annotations = map[string]string{
 				AnnotationResourceInfoDescription: "Test description",
@@ -714,4 +714,4 @@ var _ = Describe("Inventory", func() {
 			Expect(AnnotationsResourceInfoGroups).To(Equal("resourceinfo.clcm.openshift.io/groups"))
 		})
 	})
-}) 
+})

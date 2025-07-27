@@ -31,11 +31,11 @@ import (
 
 var _ = Describe("Metal3PluginInventoryServer", func() {
 	var (
-		ctrl      *gomock.Controller
+		ctrl       *gomock.Controller
 		mockClient *MockClient
-		logger    *slog.Logger
-		server    *Metal3PluginInventoryServer
-		ctx       context.Context
+		logger     *slog.Logger
+		server     *Metal3PluginInventoryServer
+		ctx        context.Context
 	)
 
 	BeforeEach(func() {
@@ -53,14 +53,14 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 		Context("with valid parameters", func() {
 			It("should create a Metal3PluginInventoryServer successfully", func() {
 				server, err := NewMetal3PluginInventoryServer(mockClient, logger)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
 			})
 
 			It("should properly initialize all fields", func() {
 				server, err := NewMetal3PluginInventoryServer(mockClient, logger)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server.InventoryServer.HubClient).To(Equal(mockClient))
 				Expect(server.InventoryServer.Logger).To(Equal(logger))
@@ -68,7 +68,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 
 			It("should return the correct type", func() {
 				server, err := NewMetal3PluginInventoryServer(mockClient, logger)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).To(BeAssignableToTypeOf(&Metal3PluginInventoryServer{}))
 			})
@@ -77,7 +77,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 		Context("with nil parameters", func() {
 			It("should handle nil client gracefully", func() {
 				server, err := NewMetal3PluginInventoryServer(nil, logger)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
 				Expect(server.InventoryServer.HubClient).To(BeNil())
@@ -85,7 +85,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 
 			It("should handle nil logger gracefully", func() {
 				server, err := NewMetal3PluginInventoryServer(mockClient, nil)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
 				Expect(server.InventoryServer.Logger).To(BeNil())
@@ -93,7 +93,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 
 			It("should handle both nil client and logger gracefully", func() {
 				server, err := NewMetal3PluginInventoryServer(nil, nil)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
 				Expect(server.InventoryServer.HubClient).To(BeNil())
@@ -104,10 +104,10 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 		Context("return value validation", func() {
 			It("should return a pointer to Metal3PluginInventoryServer", func() {
 				server, err := NewMetal3PluginInventoryServer(mockClient, logger)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
-				
+
 				// Verify it's actually a pointer
 				serverPtr := &Metal3PluginInventoryServer{}
 				Expect(server).To(BeAssignableToTypeOf(serverPtr))
@@ -115,7 +115,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 
 			It("should never return an error in current implementation", func() {
 				server, err := NewMetal3PluginInventoryServer(mockClient, logger)
-				
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
 			})
@@ -141,11 +141,11 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			var iface inventory.StrictServerInterface
 			iface = server
 			Expect(iface).ToNot(BeNil())
-			
+
 			// Verify the interface assignment worked
 			Expect(iface).To(Equal(server))
 		})
-		
+
 		It("should satisfy the interface at compile time", func() {
 			// This test ensures the compile-time check works
 			// The fact that this compiles proves interface compliance
@@ -161,7 +161,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			var err error
 			server, err = NewMetal3PluginInventoryServer(mockClient, logger)
 			Expect(err).ToNot(HaveOccurred())
-			
+
 			// Set up mock expectations for BareMetalHost List call
 			mockClient.EXPECT().
 				List(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -174,7 +174,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 				// Note: Since metal3ctrl.GetResourcePools performs actual business logic,
 				// we verify that the method exists and can be called without panic
 				request := inventory.GetResourcePoolsRequestObject{}
-				
+
 				// The function should not panic when called
 				Expect(func() {
 					_, _ = server.GetResourcePools(ctx, request)
@@ -184,7 +184,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			It("should use the correct context when calling GetResourcePools", func() {
 				testContext := context.WithValue(ctx, "test", "value")
 				request := inventory.GetResourcePoolsRequestObject{}
-				
+
 				// The function should handle the context properly without panic
 				Expect(func() {
 					_, _ = server.GetResourcePools(testContext, request)
@@ -197,7 +197,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 				// Verify the method signature matches the interface requirement
 				request := inventory.GetResourcePoolsRequestObject{}
 				result, err := server.GetResourcePools(ctx, request)
-				
+
 				// The method should return something and not panic
 				// Type checking is ensured by compilation since the method implements the interface
 				_ = result
@@ -211,7 +211,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			var err error
 			server, err = NewMetal3PluginInventoryServer(mockClient, logger)
 			Expect(err).ToNot(HaveOccurred())
-			
+
 			// Set up mock expectations for BareMetalHost and AllocatedNode List calls
 			mockClient.EXPECT().
 				List(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -224,7 +224,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 				// Note: Since metal3ctrl.GetResources performs actual business logic,
 				// we verify that the method exists and can be called without panic
 				request := inventory.GetResourcesRequestObject{}
-				
+
 				// The function should not panic when called
 				Expect(func() {
 					_, _ = server.GetResources(ctx, request)
@@ -234,7 +234,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			It("should use the correct context and logger when calling GetResources", func() {
 				testContext := context.WithValue(ctx, "test", "value")
 				request := inventory.GetResourcesRequestObject{}
-				
+
 				// The function should handle the context and logger properly without panic
 				Expect(func() {
 					_, _ = server.GetResources(testContext, request)
@@ -247,7 +247,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 				// Verify the method signature matches the interface requirement
 				request := inventory.GetResourcesRequestObject{}
 				result, err := server.GetResources(ctx, request)
-				
+
 				// The method should return something and not panic
 				// Type checking is ensured by compilation since the method implements the interface
 				_ = result
@@ -272,7 +272,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			// Since Metal3PluginInventoryServer embeds InventoryServer,
 			// we should be able to access its fields directly
 			Expect(server.InventoryServer).ToNot(BeNil())
-			
+
 			// Verify we can access the embedded struct's fields
 			Expect(server.InventoryServer.HubClient).To(Equal(mockClient))
 			Expect(server.InventoryServer.Logger).To(Equal(logger))
@@ -284,7 +284,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			const numGoroutines = 10
 			done := make(chan *Metal3PluginInventoryServer, numGoroutines)
 			errors := make(chan error, numGoroutines)
-			
+
 			// Launch multiple goroutines creating servers
 			for i := 0; i < numGoroutines; i++ {
 				go func() {
@@ -296,7 +296,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 					done <- server
 				}()
 			}
-			
+
 			// Collect results
 			servers := make([]*Metal3PluginInventoryServer, 0, numGoroutines)
 			for i := 0; i < numGoroutines; i++ {
@@ -307,7 +307,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 					Fail("Unexpected error: " + err.Error())
 				}
 			}
-			
+
 			// Verify all servers were created successfully
 			Expect(servers).To(HaveLen(numGoroutines))
 			for _, server := range servers {
@@ -322,14 +322,14 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 		It("should not cause memory leaks with multiple instantiations", func() {
 			const numInstances = 100
 			servers := make([]*Metal3PluginInventoryServer, numInstances)
-			
+
 			for i := 0; i < numInstances; i++ {
 				var err error
 				servers[i], err = NewMetal3PluginInventoryServer(mockClient, logger)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(servers[i]).ToNot(BeNil())
 			}
-			
+
 			// Verify all servers are properly initialized
 			for i := 0; i < numInstances; i++ {
 				Expect(servers[i].InventoryServer.HubClient).To(Equal(mockClient))
@@ -339,13 +339,13 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 
 		It("should properly handle server cleanup", func() {
 			server, err := NewMetal3PluginInventoryServer(mockClient, logger)
-			
+
 			Expect(err).ToNot(HaveOccurred())
 			Expect(server).ToNot(BeNil())
-			
+
 			// Set to nil to simulate cleanup
 			server = nil
-			
+
 			// Create a new server after cleanup
 			server2, err2 := NewMetal3PluginInventoryServer(mockClient, logger)
 			Expect(err2).ToNot(HaveOccurred())
@@ -358,7 +358,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			var err error
 			server, err = NewMetal3PluginInventoryServer(mockClient, logger)
 			Expect(err).ToNot(HaveOccurred())
-			
+
 			// Set up mock expectations for all List calls
 			mockClient.EXPECT().
 				List(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -370,7 +370,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			// Verify that the method delegates to the controller package
 			// by checking that it uses the embedded client
 			request := inventory.GetResourcePoolsRequestObject{}
-			
+
 			// Call the method and verify it doesn't panic
 			Expect(func() {
 				_, _ = server.GetResourcePools(ctx, request)
@@ -381,11 +381,11 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			// Verify that the method delegates to the controller package
 			// by checking that it uses the embedded client and logger
 			request := inventory.GetResourcesRequestObject{}
-			
+
 			// Call the method and verify it doesn't panic
 			Expect(func() {
 				_, _ = server.GetResources(ctx, request)
 			}).ToNot(Panic())
 		})
 	})
-}) 
+})

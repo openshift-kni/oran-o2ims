@@ -193,7 +193,7 @@ var _ = Describe("Serve", func() {
 // Helper functions for creating temporary certificate files
 func createTempCertAndKeyFiles() (string, string) {
 	certPEM, keyPEM := generateTestCertificate()
-	
+
 	// Create cert file
 	certFile, err := os.CreateTemp("", "test-cert-*.pem")
 	if err != nil {
@@ -265,4 +265,4 @@ func generateTestCertificate() (certPEM, keyPEM []byte) {
 	})
 
 	return certPEM, keyPEM
-} 
+}

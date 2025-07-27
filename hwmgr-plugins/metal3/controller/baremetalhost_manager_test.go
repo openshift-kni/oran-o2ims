@@ -10,9 +10,9 @@ import (
 	"context"
 	"log/slog"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -486,16 +486,16 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 	Describe("fetchBMHList", func() {
 		var (
-			fakeClient  client.Client
-			bmh1, bmh2  *metal3v1alpha1.BareMetalHost
-			nodeGroup   hwmgmtv1alpha1.NodeGroupData
+			fakeClient client.Client
+			bmh1, bmh2 *metal3v1alpha1.BareMetalHost
+			nodeGroup  hwmgmtv1alpha1.NodeGroupData
 		)
 
 		BeforeEach(func() {
 			bmh1 = createBMH("bmh1", "test-ns", map[string]string{
-				LabelSiteID:          "site1",
-				LabelResourcePoolID:  "pool1",
-				BmhAllocatedLabel:    ValueTrue,
+				LabelSiteID:         "site1",
+				LabelResourcePoolID: "pool1",
+				BmhAllocatedLabel:   ValueTrue,
 			}, nil, metal3v1alpha1.StateAvailable)
 
 			bmh2 = createBMH("bmh2", "test-ns", map[string]string{
@@ -504,8 +504,8 @@ var _ = Describe("BareMetalHost Manager", func() {
 			}, nil, metal3v1alpha1.StateAvailable)
 
 			nodeGroup = hwmgmtv1alpha1.NodeGroupData{
-				ResourcePoolId:     "pool1",
-				ResourceSelector:   map[string]string{},
+				ResourcePoolId:   "pool1",
+				ResourceSelector: map[string]string{},
 			}
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh1, bmh2).Build()
@@ -564,8 +564,8 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		BeforeEach(func() {
 			bmh = createBMH("test-bmh", "test-ns", map[string]string{
-				SiteConfigOwnedByLabel:    "test-cluster",
-				BmhAllocatedLabel:         ValueTrue,
+				SiteConfigOwnedByLabel:     "test-cluster",
+				BmhAllocatedLabel:          ValueTrue,
 				"utils.AllocatedNodeLabel": "test-node",
 			}, map[string]string{
 				BiosUpdateNeededAnnotation:     ValueTrue,
@@ -863,4 +863,4 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(nodeInfo.Interfaces[0].Name).To(Equal("eth0"))
 		})
 	})
-}) 
+})

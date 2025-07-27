@@ -10,9 +10,9 @@ import (
 	"context"
 	"log/slog"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -367,7 +367,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should create a new AllocatedNode successfully", func() {
-			err := createNode(ctx, fakeClient, logger, pluginNamespace, nodeAllocationRequest, 
+			err := createNode(ctx, fakeClient, logger, pluginNamespace, nodeAllocationRequest,
 				"test-node", "test-node-id", "test-node-ns", "test-group", "test-profile")
 			Expect(err).NotTo(HaveOccurred())
 
@@ -515,9 +515,9 @@ var _ = Describe("Helpers", func() {
 						{
 							Size: 2,
 							NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
-								Name:             "test-group",
-								ResourcePoolId:   "test-pool",
-								HwProfile:        "test-profile",
+								Name:           "test-group",
+								ResourcePoolId: "test-pool",
+								HwProfile:      "test-profile",
 							},
 						},
 					},
@@ -530,7 +530,7 @@ var _ = Describe("Helpers", func() {
 					Name:      "bmh-1",
 					Namespace: "test-bmh-ns",
 					Labels: map[string]string{
-						LabelSiteID:          "test-site",
+						LabelSiteID:         "test-site",
 						LabelResourcePoolID: "test-pool",
 					},
 				},
@@ -545,7 +545,7 @@ var _ = Describe("Helpers", func() {
 					Name:      "bmh-2",
 					Namespace: "test-bmh-ns",
 					Labels: map[string]string{
-						LabelSiteID:          "test-site",
+						LabelSiteID:         "test-site",
 						LabelResourcePoolID: "test-pool",
 					},
 				},
@@ -698,4 +698,4 @@ var _ = Describe("Helpers", func() {
 			})
 		})
 	})
-}) 
+})

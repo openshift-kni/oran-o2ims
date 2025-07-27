@@ -16,4 +16,4 @@ import (
 func TestController(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Metal3 Controller")
-} 
+}
