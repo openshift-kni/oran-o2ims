@@ -6,7 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
-/*
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -311,4 +310,3 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 })
-*/

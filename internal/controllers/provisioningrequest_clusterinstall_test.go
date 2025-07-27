@@ -6,7 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
-/*
 import (
 	"context"
 	"reflect"
@@ -585,4 +584,3 @@ func TestAssignNodeDetails(t *testing.T) {
 		})
 	}
 }
-*/

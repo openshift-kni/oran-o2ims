@@ -6,7 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
-/*
 import (
 	"log/slog"
 	"os"
@@ -31,15 +30,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-hwmgr-plugin/api/hwmgr-plugin/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/api/common"
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
 func TestControllers(t *testing.T) {
@@ -48,19 +48,73 @@ func TestControllers(t *testing.T) {
 }
 
 const testHwMgrPluginNameSpace = "hwmgr"
-const testHardwarePluginRef = "hwmgr"
+const testMetal3HardwarePluginRef = "hwmgr"
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	// Add fake hardwareplugin CR
-	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{
+	// Start mock hardware plugin server for tests
+	mockServer := NewMockHardwarePluginServer()
+
+	// Create a basic auth secret for test authentication
+	basicAuthSecret := "test-auth-secret"
+	authSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      basicAuthSecret,
+			Namespace: testHwMgrPluginNameSpace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"username": []byte("test-user"),
+			"password": []byte("test-password"),
+		},
+	}
+
+	// Create BMC secrets that tests expect for allocated nodes
+	bmcSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-node-1-bmc-secret",
+			Namespace: testHwMgrPluginNameSpace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"username": []byte("admin"),
+			"password": []byte("password123"),
+		},
+	}
+
+	bmcSecret2 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "master-node-2-bmc-secret",
+			Namespace: testHwMgrPluginNameSpace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"username": []byte("admin"),
+			"password": []byte("password123"),
+		},
+	}
+
+	// Add fake Metal3 hardware plugin CR pointing to mock server with Basic auth
+	metal3HwPlugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testHwMgrPluginNameSpace,
-			Name:      testHardwarePluginRef,
+			Name:      testMetal3HardwarePluginRef,
 		},
 		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-			ApiRoot: "https://hwmgr-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
+			ApiRoot: mockServer.GetURL(), // Point to mock server instead of localhost:8443
 			AuthClientConfig: &common.AuthClientConfig{
-				Type: common.ServiceAccount,
+				Type:            common.Basic,
+				BasicAuthSecret: &basicAuthSecret,
+			},
+		},
+		Status: hwmgmtv1alpha1.HardwarePluginStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(hwmgmtv1alpha1.ConditionTypes.Registration),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.Now(),
+					Reason:             string(hwmgmtv1alpha1.ConditionReasons.Completed),
+					Message:            "HardwarePlugin registered successfully",
+				},
 			},
 		},
 	}
@@ -68,7 +122,7 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	return fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
-		WithObjects([]client.Object{hwplugin}...).
+		WithObjects([]client.Object{metal3HwPlugin, authSecret, bmcSecret, bmcSecret2}...).
 		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
 		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
@@ -81,9 +135,15 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
 		WithStatusSubresource(&policiesv1.Policy{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithStatusSubresource(&pluginsv1alpha1.HardwareManager{}).
 		WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
 			return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+		}).
+		WithIndex(&bmhv1alpha1.BareMetalHost{}, "status.hardware.hostname", func(obj client.Object) []string {
+			bmh := obj.(*bmhv1alpha1.BareMetalHost)
+			if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname != "" {
+				return []string{bmh.Status.HardwareDetails.Hostname}
+			}
+			return []string{}
 		}).
 		Build()
 }
@@ -128,9 +188,11 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareTemplate{})
-	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &pluginsv1alpha1.NodeAllocationRequest{})
-	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNode{})
-	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNodeList{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwarePlugin{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwarePluginList{})
+	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.NodeAllocationRequest{})
+	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNode{})
+	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNodeList{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.Policy{})
 	scheme.AddKnownTypes(policiesv1.SchemeGroupVersion, &policiesv1.PolicyList{})
 	scheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
@@ -138,9 +200,8 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.ClusterVersion{})
 	scheme.AddKnownTypes(openshiftoperatorv1.SchemeGroupVersion, &openshiftoperatorv1.IngressController{})
 	scheme.AddKnownTypes(ibguv1alpha1.SchemeGroupVersion, &ibguv1alpha1.ImageBasedGroupUpgrade{})
-	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.HardwareManager{})
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.Agent{})
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.AgentList{})
 	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
+	utilruntime.Must(bmhv1alpha1.AddToScheme(scheme))
 })
-*/

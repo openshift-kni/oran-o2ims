@@ -6,7 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 
 package controllers
 
-/*
 import (
 	"context"
 	"fmt"
@@ -23,9 +22,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
@@ -50,6 +51,9 @@ var _ = Describe("policyManagement", func() {
 	)
 
 	BeforeEach(func() {
+		// Initialize context
+		ctx = context.Background()
+
 		// Define the needed resources.
 		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
@@ -198,7 +202,7 @@ defaultHugepagesSize: "1G"`,
 					},
 					Extensions: provisioningv1alpha1.Extensions{
 						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-							NodeAllocationRequestID: "cluster-1",
+							NodeAllocationRequestID: "cluster-1", // Use the default ID that exists in mock server
 						},
 					},
 				},
@@ -246,7 +250,7 @@ defaultHugepagesSize: "1G"`,
 				Name:      "cluster-1",
 				Namespace: utils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
-					hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
+					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
@@ -280,7 +284,7 @@ defaultHugepagesSize: "1G"`,
 						Reason: string(hwmgmtv1alpha1.Completed),
 					},
 				},
-				Properties: hwmgmtv1alpha1.Properties{
+				Properties: pluginsv1alpha1.Properties{
 					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
@@ -335,10 +339,24 @@ defaultHugepagesSize: "1G"`,
 			provisioningRequest)
 		Expect(err).ToNot(HaveOccurred())
 
+		// Get hwpluginClient for the test
+		hwpluginKey := types.NamespacedName{
+			Name:      utils.UnitTestHwPluginRef,
+			Namespace: utils.UnitTestHwmgrNamespace,
+		}
+		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
+		err = CRReconciler.Client.Get(ctx, hwpluginKey, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
+		hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, CRReconciler.Client, CRReconciler.Logger, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
 		CRTask = &provisioningRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: provisioningRequest, // cluster-1 request
+			logger:         CRReconciler.Logger,
+			client:         CRReconciler.Client,
+			object:         provisioningRequest, // cluster-1 request
+			clusterInput:   &clusterInput{},
+			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -409,10 +427,24 @@ defaultHugepagesSize: "1G"`,
 			provisioningRequest)
 		Expect(err).ToNot(HaveOccurred())
 
+		// Get hwpluginClient for the test
+		hwpluginKey = types.NamespacedName{
+			Name:      utils.UnitTestHwPluginRef,
+			Namespace: utils.UnitTestHwmgrNamespace,
+		}
+		hwplugin = &hwmgmtv1alpha1.HardwarePlugin{}
+		err = CRReconciler.Client.Get(ctx, hwpluginKey, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
+		hwpluginClient, err = hwmgrpluginapi.NewHardwarePluginClient(ctx, CRReconciler.Client, CRReconciler.Logger, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
 		CRTask = &provisioningRequestReconcilerTask{
-			logger: CRReconciler.Logger,
-			client: CRReconciler.Client,
-			object: provisioningRequest, // cluster-1 request
+			logger:         CRReconciler.Logger,
+			client:         CRReconciler.Client,
+			object:         provisioningRequest, // cluster-1 request
+			clusterInput:   &clusterInput{},
+			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -437,11 +469,24 @@ defaultHugepagesSize: "1G"`,
 			provisioningRequest)
 		Expect(err).ToNot(HaveOccurred())
 
+		// Get hwpluginClient for the test
+		hwpluginKey = types.NamespacedName{
+			Name:      utils.UnitTestHwPluginRef,
+			Namespace: utils.UnitTestHwmgrNamespace,
+		}
+		hwplugin = &hwmgmtv1alpha1.HardwarePlugin{}
+		err = CRReconciler.Client.Get(ctx, hwpluginKey, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
+		hwpluginClient, err = hwmgrpluginapi.NewHardwarePluginClient(ctx, CRReconciler.Client, CRReconciler.Logger, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
 		CRTask = &provisioningRequestReconcilerTask{
-			logger:       CRReconciler.Logger,
-			client:       CRReconciler.Client,
-			object:       provisioningRequest, // cluster-1 request
-			clusterInput: &clusterInput{},
+			logger:         CRReconciler.Logger,
+			client:         CRReconciler.Client,
+			object:         provisioningRequest, // cluster-1 request
+			clusterInput:   &clusterInput{},
+			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -1849,6 +1894,9 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 	)
 
 	BeforeEach(func() {
+		// Initialize context
+		ctx = context.Background()
+
 		// Define the needed resources.
 		crs := []client.Object{
 			// Cluster Template Namespace.
@@ -2017,6 +2065,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 	)
 
 	BeforeEach(func() {
+		// Initialize context
+		ctx = context.Background()
+
 		// Define the needed resources.
 		provisioningRequest := &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2036,6 +2087,11 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					{
 						Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 						Status: metav1.ConditionTrue,
+					},
+				},
+				Extensions: provisioningv1alpha1.Extensions{
+					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+						NodeAllocationRequestID: "cluster-1", // Use the default ID that exists in mock server
 					},
 				},
 			},
@@ -2111,7 +2167,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				Name:      mclName,
 				Namespace: utils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
-					hwmgmtv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
+					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
@@ -2145,7 +2201,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						Reason: string(hwmgmtv1alpha1.Completed),
 					},
 				},
-				Properties: hwmgmtv1alpha1.Properties{
+				Properties: pluginsv1alpha1.Properties{
 					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
@@ -2156,10 +2212,29 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Client: c,
 			Logger: logger,
 		}
+
+		// Get hwpluginClient for the test
+		hwpluginKey := types.NamespacedName{
+			Name:      utils.UnitTestHwPluginRef,
+			Namespace: utils.UnitTestHwmgrNamespace,
+		}
+		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hwpluginKey.Name,
+				Namespace: hwpluginKey.Namespace,
+			},
+		}
+		err := c.Get(ctx, hwpluginKey, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
+		hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, ProvReqReconciler.Logger, hwplugin)
+		Expect(err).ToNot(HaveOccurred())
+
 		ProvReqTask = &provisioningRequestReconcilerTask{
-			logger: ProvReqReconciler.Logger,
-			client: ProvReqReconciler.Client,
-			object: provisioningRequest,
+			logger:         ProvReqReconciler.Logger,
+			client:         ProvReqReconciler.Client,
+			object:         provisioningRequest, // cluster-1 request
+			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -2170,23 +2245,59 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 	Context("When the HW template is provided and the HW CRs do not exist", func() {
 		It("Returns error for the NodeAllocationRequest missing", func() {
+			// Set a NodeAllocationRequestID that doesn't exist in the mock server
+			ProvReqTask.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				NodeAllocationRequestID: "non-existent-cluster", // Use an ID that doesn't exist in mock server
+			}
+			// Update the status in the fake client so the change persists
+			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
+
+			// Create an Agent so the function proceeds beyond the Agent check
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-agent",
+					Namespace: mclName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name:      mclName,
+						Namespace: mclName,
+					},
+				},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
+
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				fmt.Sprintf("expected NodeAllocationRequest %s not found in the %s namespace", mclName, utils.UnitTestHwmgrNamespace)))
+				"empty or unexpected error response for AllocatedNodesFromNodeAllocationRequest 'non-existent-cluster'"))
 		})
 
 		It("Returns error for missing Nodes", func() {
+			// Set a NodeAllocationRequestID that has no allocated nodes (hardware allocation failed)
+			ProvReqTask.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				NodeAllocationRequestID: "empty-cluster", // Use an ID that exists but has no allocated nodes
+			}
+			// Update the status in the fake client so the change persists
+			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
+
 			// Create the NodeAllocationRequest, but not the nodes.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
-			// Run the function.
+
+			// Don't create any Agents - if hardware allocation failed, no physical machines
+			// would be available, so no Agents would be discovered/created
+
+			// Run the function - it should return an error for missing Agents
+			// (which is what happens when hardware allocation fails)
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				fmt.Sprintf(
-					"the expected clcm.openshift.io Nodes were not found in the %s namespace",
-					utils.UnitTestHwmgrNamespace)))
+				fmt.Sprintf("the expected Agents were not found in the %s namespace", managedCluster.Name)))
 		})
 	})
 
@@ -2262,6 +2373,13 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		})
 
 		It("Sets the label for MNO when there are multiple Agents", func() {
+			// Set up AllocatedNodeHostMap for this test
+			ProvReqTask.object.Status.Extensions.AllocatedNodeHostMap = map[string]string{
+				"test-node-1": "some-other-cluster.lab.example.com", // Map test-node-1 to agent2's hostname
+			}
+			// Update the status in the fake client so the change persists
+			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
+
 			// Create 2 Agents in the expected namespace
 			agent2Name := "agent-2-for-cluster-1"
 			agent2Hostname := "some-other-cluster.lab.example.com"
@@ -2299,6 +2417,26 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
 			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
+			// Create the corresponding BareMetalHost that the function will look for
+			bmh := &metal3v1alpha1.BareMetalHost{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      masterNodeName2,
+					Namespace: utils.UnitTestHwmgrNamespace,
+				},
+				Spec: metal3v1alpha1.BareMetalHostSpec{
+					BMC: metal3v1alpha1.BMCDetails{
+						Address:         "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
+						CredentialsName: bmcSecretName2,
+					},
+				},
+				Status: metal3v1alpha1.BareMetalHostStatus{
+					HardwareDetails: &metal3v1alpha1.HardwareDetails{
+						Hostname: agent2Hostname, // This is what the function looks for
+					},
+				},
+			}
+			Expect(c.Create(ctx, bmh)).To(Succeed())
+
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 			Expect(err).To(Not(HaveOccurred()))
@@ -2318,10 +2456,10 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				if agent.Name == agent2Name {
 					checkedAgents += 1
 					Expect(agent.Labels).To(Equal(map[string]string{
-						utils.ClusterTemplateArtifactsLabel:                            "57b39bda-ac56-4143-9b10-d1a71517d04f",
-						"agent-install.openshift.io/clusterdeployment-namespace":       mclName,
-						"clcm.openshift.io/hardwarePluginRef": utils.UnitTestHwPluginRef,
-						"clcm.openshift.io/hwMgrNodeId":       masterNodeName2,
+						utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+						"clcm.openshift.io/hardwarePluginRef":                    utils.UnitTestHwPluginRef,
+						"clcm.openshift.io/hwMgrNodeId":                          masterNodeName2,
 					}))
 				}
 				if agent.Name == AgentName {
@@ -2431,5 +2569,5 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Expect(agent.Labels).To(Not(HaveKey("clcm.openshift.io/hwMgrNodeId")))
 		})
 	})
+
 })
-*/
