@@ -8,6 +8,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"time"
@@ -32,6 +33,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
+)
+
+const (
+	testProgressing    = "test-progressing"
+	testNoCondition    = "test-no-condition"
+	testNotProgressing = "test-not-progressing"
+	testFailed         = "test-failed"
+	testMixed          = "test-mixed"
+	testSuccess        = "test-success"
+	testNoClusters     = "test-no-clusters"
 )
 
 var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
@@ -888,7 +899,10 @@ plan:
 				// Wait for namespace to be fully deleted from the fake client
 				Eventually(func() error {
 					err := c.Get(ctx, types.NamespacedName{Name: testNamespace.Name}, &corev1.Namespace{})
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get namespace %s: %w", testNamespace.Name, err)
+					}
+					return nil
 				}).Should(MatchError(ContainSubstring("not found")))
 
 				deleteCompleted, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
@@ -906,12 +920,18 @@ plan:
 				// Wait for resources to be deleted
 				Eventually(func() error {
 					err := c.Get(ctx, types.NamespacedName{Name: testNamespace.Name}, &corev1.Namespace{})
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get namespace %s: %w", testNamespace.Name, err)
+					}
+					return nil
 				}).Should(MatchError(ContainSubstring("not found")))
 
 				Eventually(func() error {
 					err := c.Get(ctx, types.NamespacedName{Name: testClusterName, Namespace: testClusterName}, &siteconfig.ClusterInstance{})
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get ClusterInstance %s/%s: %w", testClusterName, testClusterName, err)
+					}
+					return nil
 				}).Should(MatchError(ContainSubstring("not found")))
 
 				// Set ClusterDetails to nil to skip ClusterInstance deletion
@@ -3020,20 +3040,20 @@ plan:
 						}
 
 						// Test indirectly through handleUpgrade behavior
-						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-progressing"}})).To(Succeed())
-						progressingIBGU.Name = "test-progressing"
-						progressingIBGU.Namespace = "test-progressing"
+						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testProgressing}})).To(Succeed())
+						progressingIBGU.Name = testProgressing
+						progressingIBGU.Namespace = testProgressing
 						Expect(c.Create(ctx, progressingIBGU)).To(Succeed())
 
 						// Create ProvisioningRequest with the test name
 						testPR := cr.DeepCopy()
-						testPR.Name = "test-progressing"
-						testPR.Namespace = "test-progressing"
+						testPR.Name = testProgressing
+						testPR.Namespace = testProgressing
 						testPR.ResourceVersion = "" // Clear ResourceVersion for Create
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, "test-progressing")
+						result, proceed, err := task.handleUpgrade(ctx, testProgressing)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse())
@@ -3055,20 +3075,20 @@ plan:
 						}
 
 						// Create namespace and IBGU
-						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-not-progressing"}})).To(Succeed())
-						nonProgressingIBGU.Name = "test-not-progressing"
-						nonProgressingIBGU.Namespace = "test-not-progressing"
+						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNotProgressing}})).To(Succeed())
+						nonProgressingIBGU.Name = testNotProgressing
+						nonProgressingIBGU.Namespace = testNotProgressing
 						Expect(c.Create(ctx, nonProgressingIBGU)).To(Succeed())
 
 						// Create ProvisioningRequest with the test name
 						testPR := cr.DeepCopy()
-						testPR.Name = "test-not-progressing"
-						testPR.Namespace = "test-not-progressing"
+						testPR.Name = testNotProgressing
+						testPR.Namespace = testNotProgressing
 						testPR.ResourceVersion = "" // Clear ResourceVersion for Create
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, "test-not-progressing")
+						result, proceed, err := task.handleUpgrade(ctx, testNotProgressing)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeTrue()) // Should proceed when not progressing and no failures
@@ -3085,20 +3105,20 @@ plan:
 						}
 
 						// Create namespace and IBGU
-						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-no-condition"}})).To(Succeed())
-						noConditionIBGU.Name = "test-no-condition"
-						noConditionIBGU.Namespace = "test-no-condition"
+						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNoCondition}})).To(Succeed())
+						noConditionIBGU.Name = testNoCondition
+						noConditionIBGU.Namespace = testNoCondition
 						Expect(c.Create(ctx, noConditionIBGU)).To(Succeed())
 
 						// Create ProvisioningRequest with the test name
 						testPR := cr.DeepCopy()
-						testPR.Name = "test-no-condition"
-						testPR.Namespace = "test-no-condition"
+						testPR.Name = testNoCondition
+						testPR.Namespace = testNoCondition
 						testPR.ResourceVersion = "" // Clear ResourceVersion for Create
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, "test-no-condition")
+						result, proceed, err := task.handleUpgrade(ctx, testNoCondition)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Production code assumes still progressing when no condition
@@ -3131,20 +3151,20 @@ plan:
 							},
 						}
 
-						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-failed"}})).To(Succeed())
-						failedIBGU.Name = "test-failed"
-						failedIBGU.Namespace = "test-failed"
+						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testFailed}})).To(Succeed())
+						failedIBGU.Name = testFailed
+						failedIBGU.Namespace = testFailed
 						Expect(c.Create(ctx, failedIBGU)).To(Succeed())
 
 						// Create ProvisioningRequest with the test name
 						testPR := cr.DeepCopy()
-						testPR.Name = "test-failed"
-						testPR.Namespace = "test-failed"
+						testPR.Name = testFailed
+						testPR.Namespace = testFailed
 						testPR.ResourceVersion = "" // Clear ResourceVersion for Create
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, "test-failed")
+						result, proceed, err := task.handleUpgrade(ctx, testFailed)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse())                                                   // Still progressing, don't proceed
@@ -3182,20 +3202,20 @@ plan:
 							},
 						}
 
-						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-mixed"}})).To(Succeed())
-						mixedStateIBGU.Name = "test-mixed"
-						mixedStateIBGU.Namespace = "test-mixed"
+						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testMixed}})).To(Succeed())
+						mixedStateIBGU.Name = testMixed
+						mixedStateIBGU.Namespace = testMixed
 						Expect(c.Create(ctx, mixedStateIBGU)).To(Succeed())
 
 						// Create ProvisioningRequest with the test name
 						testPR := cr.DeepCopy()
-						testPR.Name = "test-mixed"
-						testPR.Namespace = "test-mixed"
+						testPR.Name = testMixed
+						testPR.Namespace = testMixed
 						testPR.ResourceVersion = "" // Clear ResourceVersion for Create
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, "test-mixed")
+						result, proceed, err := task.handleUpgrade(ctx, testMixed)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Still progressing, don't proceed
@@ -3221,20 +3241,20 @@ plan:
 							},
 						}
 
-						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-success"}})).To(Succeed())
-						successfulIBGU.Name = "test-success"
-						successfulIBGU.Namespace = "test-success"
+						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testSuccess}})).To(Succeed())
+						successfulIBGU.Name = testSuccess
+						successfulIBGU.Namespace = testSuccess
 						Expect(c.Create(ctx, successfulIBGU)).To(Succeed())
 
 						// Create ProvisioningRequest with the test name
 						testPR := cr.DeepCopy()
-						testPR.Name = "test-success"
-						testPR.Namespace = "test-success"
+						testPR.Name = testSuccess
+						testPR.Namespace = testSuccess
 						testPR.ResourceVersion = "" // Clear ResourceVersion for Create
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, "test-success")
+						result, proceed, err := task.handleUpgrade(ctx, testSuccess)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Still progressing, don't proceed
@@ -3255,20 +3275,20 @@ plan:
 							},
 						}
 
-						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-no-clusters"}})).To(Succeed())
-						noClustersIBGU.Name = "test-no-clusters"
-						noClustersIBGU.Namespace = "test-no-clusters"
+						Expect(c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNoClusters}})).To(Succeed())
+						noClustersIBGU.Name = testNoClusters
+						noClustersIBGU.Namespace = testNoClusters
 						Expect(c.Create(ctx, noClustersIBGU)).To(Succeed())
 
 						// Create ProvisioningRequest with the test name
 						testPR := cr.DeepCopy()
-						testPR.Name = "test-no-clusters"
-						testPR.Namespace = "test-no-clusters"
+						testPR.Name = testNoClusters
+						testPR.Namespace = testNoClusters
 						testPR.ResourceVersion = "" // Clear ResourceVersion for Create
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, "test-no-clusters")
+						result, proceed, err := task.handleUpgrade(ctx, testNoClusters)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Still progressing, don't proceed
@@ -3645,9 +3665,8 @@ plan:
 					Expect(isValidResult).To(BeTrue(), "Result should be doNotRequeue or requeueWithShortInterval")
 
 					// Error might occur due to missing hardware plugin dependencies
-					if err != nil {
-						// This is acceptable in test environment due to missing dependencies
-					}
+					// This is acceptable in test environment due to missing dependencies
+					_ = err // Explicitly ignore error in test environment
 
 					// Check finalizer status - may be removed if deletion completed
 					updatedCR := &provisioningv1alpha1.ProvisioningRequest{}
@@ -3812,7 +3831,7 @@ plan:
 					Expect(updatedCR.DeletionTimestamp).ToNot(BeNil())
 
 					// 4. Handle deletion
-					result, stop, err = finalizerReconciler.handleFinalizer(ctx, updatedCR)
+					result, stop, _ = finalizerReconciler.handleFinalizer(ctx, updatedCR)
 
 					// Should stop reconciliation during deletion
 					Expect(stop).To(BeTrue())

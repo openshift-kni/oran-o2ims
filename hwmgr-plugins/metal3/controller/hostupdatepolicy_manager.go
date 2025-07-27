@@ -34,7 +34,7 @@ func createOrUpdateHostUpdatePolicy(ctx context.Context,
 		return fmt.Errorf("client cannot be nil")
 	}
 	if bmh == nil {
-		return fmt.Errorf("BareMetalHost cannot be nil")
+		return fmt.Errorf("bmh cannot be nil")
 	}
 
 	hup := &metal3v1alpha1.HostUpdatePolicy{}

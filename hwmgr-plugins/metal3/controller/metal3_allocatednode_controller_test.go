@@ -304,7 +304,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 					deletingNode.DeepCopyInto(obj.(*pluginsv1alpha1.AllocatedNode))
 					return nil
 				}
-				
+
 				mockClient.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					getCallCount++
 					if getCallCount == 1 {
@@ -487,7 +487,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		Context("when node has invalid BMH reference", func() {
 			It("should return error", func() {
 				// Set invalid BMH reference
-				allocatedNode.Spec.HwMgrNodeId = "nonexistent-bmh"
+				allocatedNode.Spec.HwMgrNodeId = nonexistentBMHID
 				allocatedNode.Spec.HwMgrNodeNs = "nonexistent-namespace"
 
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
@@ -550,7 +550,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			})
 
 			It("should return error when BMH not found", func() {
-				allocatedNode.Spec.HwMgrNodeId = "nonexistent-bmh"
+				allocatedNode.Spec.HwMgrNodeId = nonexistentBMHID
 
 				_, err := getBMHForNode(ctx, fakeClient, allocatedNode)
 

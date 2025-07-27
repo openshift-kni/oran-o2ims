@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 // Package server provides unit tests for the Metal3 provisioning server implementation.
 // These tests cover:
 //   - NewMetal3PluginServer constructor function validation and parameter handling
-//   - Interface compliance verification (StrictServerInterface) 
+//   - Interface compliance verification (StrictServerInterface)
 //   - Field initialization and embedded struct configuration
 //   - Error handling scenarios
 //   - Proper setting of Metal3-specific constants and identifiers
@@ -134,7 +134,7 @@ var _ = Describe("Metal3PluginServer", func() {
 			It("should implement provisioning.StrictServerInterface at compile time", func() {
 				// This test verifies the compile-time interface check
 				var _ provisioning.StrictServerInterface = (*Metal3PluginServer)(nil)
-				
+
 				// If we reach this point, the interface is implemented correctly
 				Expect(true).To(BeTrue())
 			})
@@ -145,7 +145,7 @@ var _ = Describe("Metal3PluginServer", func() {
 				server, err := NewMetal3PluginServer(config, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
-				
+
 				// Verify that the embedded struct is properly initialized
 				hardwareServer := server.HardwarePluginServer
 				Expect(hardwareServer.CommonServerConfig).To(Equal(config))
@@ -157,4 +157,4 @@ var _ = Describe("Metal3PluginServer", func() {
 			})
 		})
 	})
-}) 
+})

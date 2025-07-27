@@ -189,11 +189,6 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 				Expect(err).To(HaveOccurred())
 			})
 
-			It("should return error when context is nil", func() {
-				err := createOrUpdateHostUpdatePolicy(nil, fakeClient, logger, bmh, true, false)
-				Expect(err).To(HaveOccurred())
-			})
-
 			It("should return error when client is nil", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, nil, logger, bmh, true, false)
 				Expect(err).To(HaveOccurred())

@@ -221,7 +221,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	if t.object.Spec.Templates.UpgradeDefaults != "" {
 		err = t.validateUpgradeDefaultsConfigmap(
 			ctx, t.client, t.object.Spec.Templates.UpgradeDefaults,
-			t.object.Namespace, utils.UpgradeDefaultsConfigmapKey,
+			t.object.Namespace,
 		)
 		if err != nil {
 			if !utils.IsInputError(err) {
@@ -249,10 +249,10 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 }
 
 func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
-	ctx context.Context, c client.Client, name, namespace, key string,
+	ctx context.Context, c client.Client, name, namespace string,
 ) error {
 
-	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, key, "name", "name", namespace)
+	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, utils.UpgradeDefaultsConfigmapKey, "name", "name", namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
 	}

@@ -29,6 +29,11 @@ import (
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 )
 
+// testContextKey is a custom type for context keys to avoid collisions
+type testContextKey string
+
+const testKey testContextKey = "test"
+
 var _ = Describe("Metal3PluginInventoryServer", func() {
 	var (
 		ctrl       *gomock.Controller
@@ -138,8 +143,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 
 		It("should be assignable to StrictServerInterface without errors", func() {
 			// Verify the server can be used as the interface
-			var iface inventory.StrictServerInterface
-			iface = server
+			iface := server
 			Expect(iface).ToNot(BeNil())
 
 			// Verify the interface assignment worked
@@ -182,7 +186,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			})
 
 			It("should use the correct context when calling GetResourcePools", func() {
-				testContext := context.WithValue(ctx, "test", "value")
+				testContext := context.WithValue(ctx, testKey, "value")
 				request := inventory.GetResourcePoolsRequestObject{}
 
 				// The function should handle the context properly without panic
@@ -232,7 +236,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			})
 
 			It("should use the correct context and logger when calling GetResources", func() {
-				testContext := context.WithValue(ctx, "test", "value")
+				testContext := context.WithValue(ctx, testKey, "value")
 				request := inventory.GetResourcesRequestObject{}
 
 				// The function should handle the context and logger properly without panic
@@ -343,10 +347,7 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(server).ToNot(BeNil())
 
-			// Set to nil to simulate cleanup
-			server = nil
-
-			// Create a new server after cleanup
+			// Create a new server to test multiple instances
 			server2, err2 := NewMetal3PluginInventoryServer(mockClient, logger)
 			Expect(err2).ToNot(HaveOccurred())
 			Expect(server2).ToNot(BeNil())

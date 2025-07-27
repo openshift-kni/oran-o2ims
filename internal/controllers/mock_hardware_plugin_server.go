@@ -16,6 +16,11 @@ import (
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 )
 
+const (
+	// Test cluster ID used throughout mock server
+	testClusterID = "cluster-1"
+)
+
 // MockHardwarePluginServer is a test HTTP server that implements hardware plugin API endpoints
 type MockHardwarePluginServer struct {
 	server                 *httptest.Server
@@ -54,7 +59,7 @@ func (m *MockHardwarePluginServer) Close() {
 // setupDefaultData creates default mock responses
 func (m *MockHardwarePluginServer) setupDefaultData() {
 	// Default NodeAllocationRequest
-	nodeAllocRequestID := "cluster-1"
+	nodeAllocRequestID := testClusterID
 	m.nodeAllocationRequests[nodeAllocRequestID] = &hwmgrpluginapi.NodeAllocationRequestResponse{
 		Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
 			Conditions: &[]hwmgrpluginapi.Condition{
@@ -76,7 +81,7 @@ func (m *MockHardwarePluginServer) setupDefaultData() {
 			ObservedConfigTransactionId: &[]int64{0}[0], // Pointer to int64(0) to match test object Generation
 		},
 		NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
-			ClusterId:           "cluster-1",
+			ClusterId:           testClusterID,
 			Site:                "test-site",
 			BootInterfaceLabel:  "bootable-interface",
 			ConfigTransactionId: 0,
@@ -182,7 +187,10 @@ func (m *MockHardwarePluginServer) handleAPIVersions(w http.ResponseWriter, r *h
 			},
 		},
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 // handleNodeAllocationRequests handles requests to the node allocation requests endpoint
@@ -196,7 +204,10 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 		for _, req := range m.nodeAllocationRequests {
 			requests = append(requests, *req)
 		}
-		json.NewEncoder(w).Encode(requests)
+		if err := json.NewEncoder(w).Encode(requests); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
 
 	case http.MethodPost:
 		// Create new NodeAllocationRequest
@@ -206,9 +217,9 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 			return
 		}
 
-		// For tests, use "cluster-1" as the default ID to match test expectations
-		// Each test should be isolated, so we can reuse cluster-1
-		requestID := "cluster-1"
+		// For tests, use testClusterID as the default ID to match test expectations
+		// Each test should be isolated, so we can reuse testClusterID
+		requestID := testClusterID
 
 		// Store the request
 		response := &hwmgrpluginapi.NodeAllocationRequestResponse{
@@ -311,7 +322,10 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 
 		// Return the ID - client expects 202 Accepted with string response
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(requestID)
+		if err := json.NewEncoder(w).Encode(requestID); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -338,7 +352,10 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 
 			// Return allocated nodes for this request
 			if nodes, exists := m.allocatedNodes[requestID]; exists {
-				json.NewEncoder(w).Encode(nodes)
+				if err := json.NewEncoder(w).Encode(nodes); err != nil {
+					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+					return
+				}
 			} else {
 				// If no specific allocated nodes exist for this request ID,
 				// return default allocated nodes to prevent test failures
@@ -382,14 +399,20 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 						},
 					},
 				}
-				json.NewEncoder(w).Encode(defaultNodes)
+				if err := json.NewEncoder(w).Encode(defaultNodes); err != nil {
+					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+					return
+				}
 			}
 			return
 		}
 
 		// Return specific NodeAllocationRequest
 		if response, exists := m.nodeAllocationRequests[requestID]; exists {
-			json.NewEncoder(w).Encode(response)
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
 		} else {
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
@@ -406,7 +429,10 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 			existing.NodeAllocationRequest = &request
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(requestID)
+			if err := json.NewEncoder(w).Encode(requestID); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
 		} else {
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
@@ -417,7 +443,10 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 			delete(m.nodeAllocationRequests, requestID)
 			delete(m.allocatedNodes, requestID)
 			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(requestID)
+			if err := json.NewEncoder(w).Encode(requestID); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
 		} else {
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
@@ -437,7 +466,10 @@ func (m *MockHardwarePluginServer) handleAllocatedNodes(w http.ResponseWriter, r
 		for _, nodes := range m.allocatedNodes {
 			allNodes = append(allNodes, nodes...)
 		}
-		json.NewEncoder(w).Encode(allNodes)
+		if err := json.NewEncoder(w).Encode(allNodes); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
 	} else {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}

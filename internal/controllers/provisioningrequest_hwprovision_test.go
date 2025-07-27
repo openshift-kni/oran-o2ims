@@ -32,6 +32,8 @@ import (
 const (
 	groupNameController = "controller"
 	groupNameWorker     = "worker"
+	testNodeID          = "node-1"
+	testHostName        = "host-1"
 )
 
 var _ = Describe("handleRenderHardwareTemplate", func() {
@@ -257,13 +259,13 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 })
 
 // createMockNodeAllocationRequestResponse creates a mock NodeAllocationRequestResponse for testing
-func createMockNodeAllocationRequestResponse(conditionType, conditionStatus, conditionReason, conditionMessage string) *hwmgrpluginapi.NodeAllocationRequestResponse {
+func createMockNodeAllocationRequestResponse(conditionStatus, conditionReason, conditionMessage string) *hwmgrpluginapi.NodeAllocationRequestResponse {
 	nodeNames := []string{"test-node-1", "test-node-2"}
 	configTransactionId := int64(1)
 
 	conditions := []hwmgrpluginapi.Condition{
 		{
-			Type:               conditionType,
+			Type:               "Provisioned",
 			Status:             conditionStatus,
 			Reason:             conditionReason,
 			Message:            conditionMessage,
@@ -385,7 +387,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
 		// Use mock with failed status
-		failedMock := createMockNodeAllocationRequestResponse("Provisioned", "False", "Failed", "Provisioning failed")
+		failedMock := createMockNodeAllocationRequestResponse("False", "Failed", "Provisioning failed")
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, failedMock, hwmgmtv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(true)) // It should be failed
@@ -405,7 +407,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
 		// First call to checkNodeAllocationRequestStatus (before timeout)
-		inProgressMock := createMockNodeAllocationRequestResponse("Provisioned", "False", "InProgress", "Provisioning in progress")
+		inProgressMock := createMockNodeAllocationRequestResponse("False", "InProgress", "Provisioning in progress")
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, inProgressMock, hwmgmtv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
@@ -436,7 +438,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
 		// Use mock with not provisioned status
-		notProvisionedMock := createMockNodeAllocationRequestResponse("Provisioned", "False", "InProgress", "Not yet provisioned")
+		notProvisionedMock := createMockNodeAllocationRequestResponse("False", "InProgress", "Not yet provisioned")
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, notProvisionedMock, hwmgmtv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
 		Expect(timedOutOrFailed).To(Equal(false))
@@ -455,7 +457,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
 		// Use mock with successful status
-		successMock := createMockNodeAllocationRequestResponse("Provisioned", "True", "Completed", "Successfully provisioned")
+		successMock := createMockNodeAllocationRequestResponse("True", "Completed", "Successfully provisioned")
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, successMock, hwmgmtv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(true))
 		Expect(timedOutOrFailed).To(Equal(false))
@@ -718,8 +720,8 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 	})
 
 	It("updates AllocatedNodeHostMap correctly", func() {
-		allocatedNodeID := "node-1"
-		hostName := "host-1"
+		allocatedNodeID := testNodeID
+		hostName := testHostName
 
 		err := task.updateAllocatedNodeHostMap(ctx, allocatedNodeID, hostName)
 		Expect(err).ToNot(HaveOccurred())
@@ -730,7 +732,7 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 
 	It("handles empty allocatedNodeID gracefully", func() {
 		allocatedNodeID := ""
-		hostName := "host-1"
+		hostName := testHostName
 
 		err := task.updateAllocatedNodeHostMap(ctx, allocatedNodeID, hostName)
 		Expect(err).ToNot(HaveOccurred())
@@ -740,7 +742,7 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 	})
 
 	It("handles empty hostName gracefully", func() {
-		allocatedNodeID := "node-1"
+		allocatedNodeID := testNodeID
 		hostName := ""
 
 		err := task.updateAllocatedNodeHostMap(ctx, allocatedNodeID, hostName)
@@ -751,8 +753,8 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 	})
 
 	It("does not update when values are the same", func() {
-		allocatedNodeID := "node-1"
-		hostName := "host-1"
+		allocatedNodeID := testNodeID
+		hostName := testHostName
 
 		// Initialize the map with the same value
 		cr.Status.Extensions.AllocatedNodeHostMap = map[string]string{

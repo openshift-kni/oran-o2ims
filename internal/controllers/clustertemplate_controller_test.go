@@ -1379,7 +1379,7 @@ var _ = Describe("validateClusterInstanceParamsSchema", func() {
 			// Add many properties to test performance/handling
 			for i := 0; i < 100; i++ {
 				properties[fmt.Sprintf("property%d", i)] = map[string]any{
-					"type": "string",
+					"type":        "string",
 					"description": fmt.Sprintf("Property number %d", i),
 				}
 			}
@@ -1417,9 +1417,9 @@ var _ = Describe("validateClusterInstanceParamsSchema", func() {
 
 			// Even completely malformed schema should pass
 			malformedSchema := map[string]any{
-				"this": "is",
+				"this":       "is",
 				"completely": []string{"wrong", "schema", "format"},
-				"123": "invalid key type",
+				"123":        "invalid key type",
 			}
 
 			err := validateClusterInstanceParamsSchema("any-hw-template", malformedSchema)
@@ -1549,13 +1549,13 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 
 var _ = Describe("validateUpgradeDefaultsConfigmap", func() {
 	var (
-		c            client.Client
-		ctx          context.Context
-		t            *clusterTemplateReconcilerTask
-		namespace    = "default"
+		c             client.Client
+		ctx           context.Context
+		t             *clusterTemplateReconcilerTask
+		namespace     = "default"
 		configmapName = "upgrade-defaults"
-		tName        = "cluster-template-test"
-		tVersion     = "v1.0.0"
+		tName         = "cluster-template-test"
+		tVersion      = "v1.0.0"
 	)
 
 	BeforeEach(func() {
@@ -1609,7 +1609,7 @@ plan:
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that the configmap was patched to be immutable
@@ -1621,7 +1621,7 @@ plan:
 
 	It("should return error when configmap does not exist", func() {
 		// No ConfigMap created
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
 		Expect(err.Error()).To(ContainSubstring("not found"))
@@ -1640,7 +1640,7 @@ plan:
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
 	})
@@ -1668,14 +1668,14 @@ plan:
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release (4.17.0) does not match the seedImageRef version (4.18.0) from the upgrade configmap"))
 	})
 
 	It("should successfully validate when IBGU spec is valid for dry-run", func() {
-		// Create a ConfigMap with a valid IBGU spec 
+		// Create a ConfigMap with a valid IBGU spec
 		// Note: The fake client doesn't perform the same validation as real K8s API server,
 		// so we test the successful path where dry-run validation passes
 		cm := &corev1.ConfigMap{
@@ -1697,7 +1697,7 @@ plan:
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -1726,7 +1726,7 @@ plan:
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).To(HaveOccurred())
 		Expect(utils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
@@ -1758,7 +1758,7 @@ plan:
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that the configmap remains immutable
@@ -1781,7 +1781,7 @@ plan:
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
 	})
@@ -1815,7 +1815,7 @@ plan:
 			}
 			Expect(c.Create(ctx, cm)).To(Succeed())
 
-			err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace, utils.UpgradeDefaultsConfigmapKey)
+			err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 			Expect(err).To(HaveOccurred())
 			Expect(utils.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade configmap"))

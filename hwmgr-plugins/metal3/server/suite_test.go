@@ -16,4 +16,4 @@ import (
 func TestServer(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Metal3 Server")
-} 
+}

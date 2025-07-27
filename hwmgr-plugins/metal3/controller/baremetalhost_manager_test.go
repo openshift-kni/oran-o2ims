@@ -23,6 +23,10 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
+const (
+	nonexistentBMHID = "nonexistent-bmh"
+)
+
 var _ = Describe("BareMetalHost Manager", func() {
 	var (
 		ctx    context.Context
@@ -477,7 +481,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should return error when BMH not found", func() {
-			node.Spec.HwMgrNodeId = "nonexistent-bmh"
+			node.Spec.HwMgrNodeId = nonexistentBMHID
 			_, err := getBMHForNode(ctx, fakeClient, node)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unable to find BMH"))
