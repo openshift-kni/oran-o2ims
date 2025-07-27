@@ -798,3 +798,10 @@ func getNodeAllocationRequestBMHNamespace(ctx context.Context,
 
 	return "", nil // No allocated BMH found, return empty namespace
 }
+
+func isNodeProvisioningInProgress(allocatednode *pluginsv1alpha1.AllocatedNode) bool {
+	condition := meta.FindStatusCondition(allocatednode.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
+	return condition != nil &&
+		condition.Status == metav1.ConditionFalse &&
+		condition.Reason == string(hwmgmtv1alpha1.InProgress)
+}
