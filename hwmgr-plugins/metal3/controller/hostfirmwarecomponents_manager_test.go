@@ -4,6 +4,67 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases for HostFirmwareComponents Manager:
+
+validateFirmwareUpdateSpec tests:
+- Validates empty firmware specifications return no error
+- Ensures BIOS firmware with version but no URL returns error
+- Validates invalid BIOS firmware URLs are rejected
+- Ensures BMC firmware with version but no URL returns error
+- Validates invalid BMC firmware URLs are rejected
+- Confirms valid firmware specifications with proper URLs pass validation
+
+convertToFirmwareUpdates tests:
+- Returns empty slice when no firmware is specified in hardware profile
+- Converts BIOS firmware specification to Metal3 firmware update format
+- Converts BMC firmware specification to Metal3 firmware update format
+- Handles both BIOS and BMC firmware specifications simultaneously
+- Excludes firmware entries with empty URLs from conversion
+
+isHostFirmwareComponentsChangeDetectedAndValid tests:
+- Returns error when HostFirmwareComponents resource does not exist
+- Returns error when change detected condition is missing from HFC status
+- Returns false when firmware change is not detected
+- Returns false when HostFirmwareComponents is marked as invalid
+- Returns false when observed generation doesn't match current generation
+- Returns true when change is detected, HFC is valid, and generation matches
+
+isVersionChangeDetected tests:
+- Returns no updates when no firmware components exist in status
+- Skips processing empty firmware specifications
+- Detects version changes when current differs from desired version
+- Returns no updates when current and desired versions match
+- Handles version detection for both BIOS and BMC components
+
+createHostFirmwareComponents tests:
+- Creates HostFirmwareComponents resource with specified firmware updates
+- Creates HostFirmwareComponents with empty updates when no firmware specified
+
+updateHostFirmwareComponents tests:
+- Updates existing HostFirmwareComponents with new firmware update specifications
+- Returns error when attempting to update non-existent HostFirmwareComponents
+
+getHostFirmwareComponents tests:
+- Successfully retrieves existing HostFirmwareComponents resource
+- Returns error when HostFirmwareComponents resource does not exist
+
+getOrCreateHostFirmwareComponents tests:
+- Returns existing HostFirmwareComponents without creating duplicate
+- Creates new HostFirmwareComponents when resource does not exist
+
+IsFirmwareUpdateRequired tests:
+- Returns error for invalid firmware specifications
+- Returns true when HostFirmwareComponents is created for the first time
+- Returns false when no firmware update is needed (versions match)
+- Returns true and updates HFC when version change is detected
+- Correctly handles multiple firmware components (BIOS and BMC)
+*/
+
 package controller
 
 import (

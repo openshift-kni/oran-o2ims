@@ -4,6 +4,10 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
 package controller
 
 import (
@@ -21,6 +25,114 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 )
+
+/*
+TEST CASE DESCRIPTIONS:
+
+This file contains comprehensive unit tests for the inventory management functionality
+in the Metal3 hardware management plugin. The tests cover:
+
+RESOURCE INFO EXTRACTION FUNCTIONS:
+- getResourceInfoAdminState: Tests admin state return (always UNKNOWN)
+- getResourceInfoDescription: Tests description extraction from annotations
+  * Returns description when annotation present
+  * Returns empty string when annotations nil or missing
+- getResourceInfoGlobalAssetId: Tests global asset ID extraction from annotations
+  * Returns global asset ID when annotation present
+  * Returns pointer to empty string when annotations nil
+- getResourceInfoGroups: Tests group parsing from comma-separated annotations
+  * Parses comma-separated groups correctly
+  * Handles spaces around commas
+  * Returns nil when annotations nil or missing
+- getResourceInfoLabels: Tests label extraction
+  * Returns all labels when present
+  * Returns nil when labels are nil
+- getResourceInfoMemory: Tests memory extraction from hardware details
+  * Returns memory from hardware details when present
+  * Returns 0 when hardware details are nil
+- getResourceInfoModel: Tests model extraction from hardware details
+  * Returns model when hardware details present
+  * Returns empty string when hardware details nil
+- getResourceInfoName: Tests BMH name extraction
+- getResourceInfoOperationalState: Tests operational state return (always UNKNOWN)
+- getResourceInfoPartNumber: Tests part number extraction from annotations
+  * Returns part number when annotation present
+  * Returns empty string when annotations nil
+- getResourceInfoPowerState: Tests power state extraction
+  * Returns ON when BMH is powered on
+  * Returns OFF when BMH is powered off
+- getResourceInfoResourceId: Tests formatted resource ID generation
+- getResourceInfoResourcePoolId: Tests resource pool ID extraction from labels
+- getResourceInfoResourceProfileId: Tests HW profile extraction from AllocatedNode
+  * Returns HW profile when node present
+  * Returns empty string when node is nil
+- getResourceInfoSerialNumber: Tests serial number extraction from hardware details
+  * Returns serial number when hardware details present
+  * Returns empty string when hardware details nil
+- getResourceInfoTags: Tests resource selector label extraction as tags
+  * Extracts resource selector labels as tags
+  * Returns empty array when no resource selector labels present
+- getResourceInfoUsageState: Tests usage state return (always UNKNOWN)
+- getResourceInfoVendor: Tests vendor extraction from hardware details
+  * Returns vendor when hardware details present
+  * Returns empty string when hardware details nil
+
+PROCESSOR INFO EXTRACTION FUNCTIONS:
+- getProcessorInfoArchitecture: Tests CPU architecture extraction
+  * Returns CPU architecture when hardware details present
+  * Returns pointer to empty string when hardware details nil
+- getProcessorInfoCores: Tests CPU core count extraction
+  * Returns CPU core count when hardware details present
+  * Returns nil when hardware details are nil
+- getProcessorInfoManufacturer: Tests processor manufacturer (always empty string)
+- getProcessorInfoModel: Tests CPU model extraction
+  * Returns CPU model when hardware details present
+  * Returns pointer to empty string when hardware details nil
+- getResourceInfoProcessors: Tests processor info array creation
+  * Returns processor info array with hardware details
+  * Returns empty array when hardware details nil
+
+INVENTORY INCLUSION LOGIC:
+- includeInInventory: Tests BMH inclusion criteria
+  * Returns false when labels are nil
+  * Returns false when resource pool ID label missing
+  * Returns false when site ID label missing
+  * Returns true for valid provisioning states (Available, Provisioning, Provisioned, Preparing, Deprovisioning)
+  * Returns false for other states
+
+AGGREGATION FUNCTIONS:
+- getResourceInfo: Tests complete resource information aggregation
+  * Aggregates all resource information correctly from BMH and AllocatedNode
+
+API ENDPOINT FUNCTIONS:
+- GetResourcePools: Tests resource pool API endpoint
+  * Returns resource pools from BMHs included in inventory
+  * Handles empty BMH list
+- GetResources: Tests resources API endpoint
+  * Returns resources from BMHs included in inventory
+  * Handles BMH without corresponding AllocatedNode
+
+REGEX PATTERN VALIDATION:
+- REPatternInterfaceLabel: Tests interface label pattern matching
+  * Matches interface labels correctly
+  * Does not match non-interface labels
+- REPatternResourceSelectorLabel: Tests resource selector label pattern matching
+- REPatternResourceSelectorLabelMatch: Tests resource selector label suffix extraction
+
+CONSTANTS VALIDATION:
+- Tests correctness of label prefixes and annotation prefixes used throughout the system
+
+HELPER FUNCTIONS:
+The tests use several helper functions to create test objects:
+- createBasicBMH: Creates a basic BareMetalHost for testing
+- createBMHWithLabels: Creates BareMetalHost with specified labels
+- createBMHWithAnnotations: Creates BareMetalHost with specified annotations
+- createBMHWithHardwareDetails: Creates BareMetalHost with hardware details
+- createAllocatedNode: Creates AllocatedNode with specified HW profile
+
+These tests ensure proper extraction and formatting of hardware inventory information
+from Metal3 BareMetalHost resources for O-RAN O2IMS inventory API compliance.
+*/
 
 var _ = Describe("Inventory", func() {
 

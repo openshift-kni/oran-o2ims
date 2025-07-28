@@ -4,6 +4,83 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Case Descriptions for HostFirmwareSettings Manager
+
+This file contains unit tests for the HostFirmwareSettings manager functionality,
+which handles BIOS settings configuration for bare metal hosts through Metal3.
+
+Test Groups:
+
+1. convertBiosSettingsToHostFirmware:
+   - Tests conversion of BIOS settings from hardware management API to Metal3 HostFirmwareSettings
+   - Validates proper mapping of attributes and metadata
+   - Handles empty attributes gracefully
+
+2. createHostFirmwareSettings:
+   - Tests creation of new HostFirmwareSettings resources in Kubernetes
+   - Verifies successful resource creation and persistence
+
+3. getHostFirmwareSettings:
+   - Tests retrieval of existing HostFirmwareSettings resources
+   - Handles cases where resources exist and don't exist
+   - Returns appropriate errors for missing resources
+
+4. getOrCreateHostFirmwareSettings:
+   - Tests the get-or-create pattern for HostFirmwareSettings
+   - Returns existing resources when found
+   - Creates new resources when not found
+
+5. validSettings:
+   - Tests validation of BIOS settings against firmware schema
+   - Validates settings exist in the host status
+   - Handles mixed valid/invalid settings scenarios
+   - Returns appropriate validation errors
+
+6. isChangeDetected:
+   - Tests change detection logic between spec and status settings
+   - Detects value changes in existing settings
+   - Detects new settings added to spec
+   - Handles empty spec maps correctly
+
+7. isFirmwareSettingsChangeDetectedAndValid:
+   - Tests checking of Metal3 condition status for firmware settings
+   - Validates both ChangeDetected and Valid conditions are true
+   - Handles missing HostFirmwareSettings resources
+
+8. updateHostFirmwareSettings:
+   - Tests updating existing HostFirmwareSettings resources
+   - Verifies settings are properly updated in Kubernetes
+   - Handles errors for non-existent resources
+
+9. validateBiosSettings:
+   - Tests comprehensive BIOS settings validation against firmware schema
+   - Validates settings against allowable values from schema
+   - Handles missing or invalid firmware schema references
+   - Returns validation errors for invalid configurations
+
+10. checkAndUpdateFirmwareSettings:
+    - Tests the complete check-and-update workflow
+    - Determines if updates are needed based on change detection
+    - Performs updates when changes are detected
+    - Skips updates when no changes are needed
+
+11. IsBiosUpdateRequired (Main Public API):
+    - Tests the main public function to determine if BIOS updates are required
+    - Handles creation of new HostFirmwareSettings when none exist
+    - Validates settings against firmware schema
+    - Returns true when settings changes are detected and valid
+    - Returns false when no changes are needed
+    - Handles error cases like missing schema or invalid settings
+
+These tests ensure reliable BIOS configuration management for bare metal hosts
+in the O-RAN O2IMS infrastructure management system.
+*/
+
 package controller
 
 import (

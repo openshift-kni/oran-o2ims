@@ -4,6 +4,30 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases in this file:
+
+1. "Resource server deployment is updated after edit"
+   - Creates an Inventory resource with test image
+   - Verifies that when a deployment's spec is manually modified, the reconciler
+     restores the original values during the next reconciliation cycle
+   - Tests the reconciler's ability to maintain desired state and handle drift
+
+2. "Check for presence of all servers"
+   - Creates an Inventory resource and verifies all required server deployments are created
+   - Checks for the existence of all inventory microservices:
+     * Resource server
+     * Cluster server
+     * Alarms server
+     * Artifacts server
+     * Provisioning server
+   - Validates complete inventory service deployment
+*/
+
 package controllers
 
 import (

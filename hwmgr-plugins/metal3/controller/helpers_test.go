@@ -4,7 +4,81 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
 package controller
+
+/*
+Test Cases Covered in this File:
+
+1. Config Annotation Functions
+   - setConfigAnnotation: Tests setting configuration annotations on AllocatedNode objects
+     * Setting annotation when annotations map is nil
+     * Setting annotation when annotations map already exists
+     * Overwriting existing config annotation
+   - getConfigAnnotation: Tests retrieving configuration annotations from AllocatedNode objects
+     * Handling nil annotations map
+     * Handling missing config annotation
+     * Retrieving existing config annotation value
+   - removeConfigAnnotation: Tests removing configuration annotations from AllocatedNode objects
+     * Handling nil annotations map gracefully
+     * Removing existing config annotation while preserving other annotations
+
+2. Node Finding Functions
+   - findNodeInProgress: Tests finding nodes that are currently in progress state
+     * Returns nil when no nodes are in progress
+     * Returns first node with InProgress status
+     * Handles nodes without provisioned condition
+   - findNextNodeToUpdate: Tests finding the next node that needs hardware profile updates
+     * Returns nil when all nodes are up-to-date
+     * Returns nodes with different hardware profiles
+     * Returns nodes with invalid input conditions
+     * Skips nodes from different groups
+   - findNodeConfigInProgress: Tests finding nodes with configuration annotations
+     * Returns nil when no nodes have config annotations
+     * Returns first node with config annotation
+
+3. Utility Functions
+   - contains: Tests checking if a value exists in a string slice
+     * Returns true when value exists
+     * Returns false when value doesn't exist
+     * Handles empty and nil slices
+
+4. Node Creation
+   - createNode: Tests creating new AllocatedNode objects
+     * Successfully creates new AllocatedNode with proper specifications
+     * Skips creation if AllocatedNode already exists
+
+5. Status Derivation
+   - deriveNodeAllocationRequestStatusFromNodes: Tests deriving NodeAllocationRequest status from node conditions
+     * Returns InProgress when nodes are missing Configured condition
+     * Returns ConfigApplied when all nodes are successfully configured
+     * Returns failure status from first failed node
+
+6. Node Allocation Processing
+   - processNewNodeAllocationRequest: Tests processing new node allocation requests
+     * Succeeds when enough resources are available
+     * Skips groups with size 0
+     * Returns error when insufficient resources are available
+
+7. Allocation Status Checking
+   - isNodeAllocationRequestFullyAllocated: Tests checking if allocation requests are fully satisfied
+     * Returns true when all groups are fully allocated
+     * Returns false when groups are not fully allocated
+
+8. Integration Test Placeholders
+   - Lists complex functions that require extensive mocking and should be tested in integration tests:
+     * setAwaitConfigCondition
+     * releaseNodeAllocationRequest
+     * getNodeAllocationRequestBMHNamespace
+     * allocateBMHToNodeAllocationRequest
+     * processNodeAllocationRequestAllocation
+     * handleInProgressUpdate
+     * initiateNodeUpdate
+     * handleNodeAllocationRequestConfiguring
+*/
 
 import (
 	"context"

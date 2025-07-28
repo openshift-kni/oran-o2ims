@@ -4,6 +4,40 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases for HostUpdatePolicy Manager
+
+This test file covers the createOrUpdateHostUpdatePolicy function with the following scenarios:
+
+1. Creation of new HostUpdatePolicy resources:
+   - Creating policy with firmware updates only
+   - Creating policy with BIOS updates only
+   - Creating policy with both firmware and BIOS updates
+   - Creating policy with empty spec when no updates required
+
+2. Updating existing HostUpdatePolicy resources:
+   - Updating policy when firmware updates requirement changes
+   - Adding BIOS updates requirement to existing policy
+   - No-op when policy spec is already correct
+   - Clearing both settings when no updates are required
+
+3. Error handling scenarios:
+   - Handling nil BareMetalHost parameter
+   - Handling nil client parameter
+
+4. Edge cases with BareMetalHost names and namespaces:
+   - Different name and namespace combinations
+   - Special characters in BareMetalHost names
+
+5. Spec validation:
+   - Correct "onReboot" value setting for firmware updates
+   - Correct "onReboot" value setting for BIOS updates
+*/
+
 package controller
 
 import (

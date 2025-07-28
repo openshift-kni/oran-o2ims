@@ -4,6 +4,55 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
+/*
+Package controllers provides MockHardwarePluginServer for testing hardware plugin interactions.
+
+This mock server enables testing of the following scenarios:
+
+API Version Testing:
+- GET /hardware-manager/provisioning/api-versions - Returns mock API version information
+- GET /hardware-manager/provisioning/v1/api-versions - Returns v1 API version details
+
+NodeAllocationRequest Lifecycle Testing:
+- POST /hardware-manager/provisioning/v1/node-allocation-requests - Create new allocation requests
+- GET /hardware-manager/provisioning/v1/node-allocation-requests - List all allocation requests
+- GET /hardware-manager/provisioning/v1/node-allocation-requests/{id} - Get specific allocation request
+- PUT /hardware-manager/provisioning/v1/node-allocation-requests/{id} - Update allocation request
+- DELETE /hardware-manager/provisioning/v1/node-allocation-requests/{id} - Delete allocation request
+
+AllocatedNodes Testing:
+- GET /hardware-manager/provisioning/v1/node-allocation-requests/{id}/allocated-nodes - Get allocated nodes for a request
+- GET /hardware-manager/provisioning/v1/allocated-nodes - Get all allocated nodes across requests
+
+Authentication Testing:
+- All endpoints support authentication middleware (accepts any auth for testing)
+
+Mock Data Scenarios:
+- Default NodeAllocationRequest with controller and worker node groups
+- Default AllocatedNodes with BMC details, network interfaces, and status conditions
+- Configurable mock responses via SetNodeAllocationRequest() and SetAllocatedNodes()
+- Automatic creation of allocated nodes when new requests are posted
+
+Status and Condition Testing:
+- NodeAllocationRequest status with Provisioned/Configured conditions
+- AllocatedNode status with Ready conditions
+- Transition time tracking for status changes
+- Configuration transaction ID tracking
+
+Error Scenario Testing:
+- 404 Not Found for non-existent resources
+- 400 Bad Request for invalid request bodies
+- 405 Method Not Allowed for unsupported HTTP methods
+- 500 Internal Server Error for encoding failures
+
+This mock server is designed to be used by controller tests that need to simulate
+hardware plugin API interactions without requiring a real hardware plugin server.
+*/
+
 package controllers
 
 import (

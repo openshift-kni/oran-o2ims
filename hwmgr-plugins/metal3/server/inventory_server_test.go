@@ -4,6 +4,10 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
 // Package server provides unit tests for the Metal3 inventory server implementation.
 // These tests cover:
 //   - Constructor function validation and parameter handling
@@ -16,6 +20,55 @@ SPDX-License-Identifier: Apache-2.0
 //
 // The tests use Ginkgo BDD framework with Gomega matchers and include mocks
 // for external dependencies like client.Client and logger.
+//
+// Test Cases Description:
+//
+// 1. NewMetal3PluginInventoryServer Constructor Tests:
+//   - Valid Parameters:
+//   - should create a Metal3PluginInventoryServer successfully
+//   - should properly initialize all fields (HubClient, Logger)
+//   - should return the correct type (*Metal3PluginInventoryServer)
+//   - Nil Parameters Handling:
+//   - should handle nil client gracefully
+//   - should handle nil logger gracefully
+//   - should handle both nil client and logger gracefully
+//   - Return Value Validation:
+//   - should return a pointer to Metal3PluginInventoryServer
+//   - should never return an error in current implementation
+//
+// 2. Interface Compliance Tests:
+//   - should implement inventory.StrictServerInterface correctly
+//   - should be assignable to StrictServerInterface without errors
+//   - should satisfy the interface at compile time
+//
+// 3. GetResourcePools Method Tests:
+//   - Successful Operation:
+//   - should call metal3ctrl.GetResourcePools with correct parameters
+//   - should use the correct context when calling GetResourcePools
+//   - Method Signature Validation:
+//   - should have the correct method signature matching interface requirements
+//
+// 4. GetResources Method Tests:
+//   - Successful Operation:
+//   - should call metal3ctrl.GetResources with correct parameters
+//   - should use the correct context and logger when calling GetResources
+//   - Method Signature Validation:
+//   - should have the correct method signature matching interface requirements
+//
+// 5. Embedded InventoryServer Tests:
+//   - should have the embedded InventoryServer properly initialized
+//   - should allow access to embedded methods through composition
+//
+// 6. Thread Safety Tests:
+//   - should be safe to create multiple servers concurrently
+//
+// 7. Memory Management Tests:
+//   - should not cause memory leaks with multiple instantiations
+//   - should properly handle server cleanup
+//
+// 8. Method Delegation Tests:
+//   - should properly delegate GetResourcePools to metal3ctrl package
+//   - should properly delegate GetResources to metal3ctrl package
 package server
 
 import (

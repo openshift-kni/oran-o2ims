@@ -4,6 +4,43 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases Overview for provisioningrequest_clusterinstall_test.go:
+
+1. handleRenderClusterInstance Tests:
+   - Tests successful rendering and validation of ClusterInstance with dry-run
+   - Verifies disable-auto-import annotation behavior for ManagedCluster:
+     * Added when cluster provisioning has not started
+     * Not added when cluster provisioning has completed
+   - Tests failure scenarios with invalid input data (empty clusterName)
+   - Validates status condition updates for ClusterInstanceRendered
+
+2. TestExtractNodeDetails Tests:
+   - Tests extraction of node details from existing ClusterInstance unstructured data
+   - Covers various scenarios:
+     * Valid input with complete node information (hostname, BMC, MAC addresses)
+     * Missing hostname (nodes should be skipped)
+     * Missing BMC address and boot MAC address
+     * Missing BMC credentials name or nested name field
+     * Missing node network interfaces
+     * Invalid interface data (missing name or MAC address fields)
+   - Validates proper handling of nodeInfo structure population
+
+3. TestAssignNodeDetails Tests:
+   - Tests assignment of node details to rendered ClusterInstance
+   - Covers scenarios:
+     * Valid assignment of BMC details, MAC addresses, and credentials
+     * Missing spec.nodes section (should not panic)
+     * Nodes with missing hostname (should be skipped)
+     * Missing interface MAC address information in nodeInfo
+     * Proper setting of hostRef fields (name and namespace)
+   - Validates that unstructured.Unstructured objects are modified correctly
+*/
+
 package controllers
 
 import (

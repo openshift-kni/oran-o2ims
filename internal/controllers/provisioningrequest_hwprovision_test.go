@@ -4,6 +4,69 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases Overview:
+
+This file contains comprehensive unit tests for hardware provisioning functionality
+in the ProvisioningRequest controller. The tests cover the complete hardware
+provisioning workflow from template rendering to node configuration.
+
+Test Suites:
+
+1. handleRenderHardwareTemplate Tests:
+   - Validates successful hardware template rendering and validation
+   - Tests error handling when HardwareTemplate is not found
+   - Tests error handling when ClusterTemplate is not found
+
+2. waitForNodeAllocationRequestProvision Tests:
+   - Tests NodeAllocationRequest provisioning failure scenarios
+   - Tests timeout handling during hardware provisioning
+   - Tests successful provisioning completion detection
+   - Tests in-progress provisioning state handling
+
+3. createOrUpdateNodeAllocationRequest Tests:
+   - Tests creation of new NodeAllocationRequest when none exists
+   - Tests updating existing NodeAllocationRequest when specifications change
+
+4. buildNodeAllocationRequest Tests:
+   - Tests correct NodeAllocationRequest construction from cluster instance and hardware template
+   - Tests error handling when cluster instance spec.nodes is missing
+
+5. updateAllocatedNodeHostMap Tests:
+   - Tests successful updating of node-to-host mapping
+   - Tests graceful handling of empty node IDs
+   - Tests graceful handling of empty host names
+   - Tests idempotent behavior when values are unchanged
+
+6. waitForHardwareData Tests:
+   - Tests detection of both provisioned and configured hardware states
+   - Tests handling of incomplete provisioning
+   - Tests handling of missing configuration conditions
+
+7. checkExistingNodeAllocationRequest Tests:
+   - Tests error handling when hardware plugin client is unavailable
+   - Tests successful retrieval of existing NodeAllocationRequest
+
+8. applyNodeConfiguration Tests:
+   - Tests successful application of hardware configuration to cluster nodes
+   - Tests error handling for malformed cluster instance specifications
+   - Tests error handling for invalid node structures
+   - Tests error handling when no matching hardware nodes are found
+   - Tests error handling when hardware provisioning is disabled
+   - Tests error handling for missing cluster templates
+   - Tests error handling for missing hardware templates
+   - Tests handling of nodes without hardware manager references
+   - Tests correct consumption and assignment of hardware nodes to cluster nodes
+
+Helper Functions:
+   - createMockNodeAllocationRequestResponse: Creates mock responses for testing
+   - VerifyHardwareTemplateStatus: Validates hardware template status conditions
+*/
+
 package controllers
 
 import (

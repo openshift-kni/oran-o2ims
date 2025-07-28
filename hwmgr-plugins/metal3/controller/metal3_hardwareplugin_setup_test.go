@@ -4,6 +4,58 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases for SetupMetal3Controllers Function
+
+This file contains comprehensive unit tests for the SetupMetal3Controllers function that validates:
+
+1. Function Structure Validation:
+   - Tests that the function exists and has the expected signature
+   - Validates that the function can be called without immediate panics (except for nil manager scenarios)
+
+2. Reconciler Creation Logic:
+   - Tests NodeAllocationRequestReconciler creation with correct field assignments:
+     * Client and NoncachedClient assignment from manager
+     * Scheme configuration with required types
+     * Logger setup with controller-specific context
+     * PluginNamespace assignment from parameter
+     * Manager reference assignment
+   - Tests AllocatedNodeReconciler creation with correct field assignments:
+     * Client and NoncachedClient assignment from manager
+     * Scheme configuration with required types
+     * Logger setup with controller-specific context
+     * PluginNamespace assignment from parameter
+     * Manager reference assignment
+
+3. Error Handling Structure:
+   - Validates error message formatting for controller setup failures
+   - Tests descriptive error messages for NodeAllocationRequest controller setup
+   - Verifies proper error propagation and panic handling with nil managers
+   - Checks that error messages contain useful debugging information
+
+4. Namespace Handling:
+   - Tests behavior with empty namespace parameter (should not cause immediate failure)
+   - Tests behavior with special characters in namespace (hyphens, underscores, dots)
+   - Validates that namespace values are properly passed to reconciler instances
+   - Ensures namespace parameter is correctly assigned to PluginNamespace field
+
+5. Logger Configuration:
+   - Tests creation of contextual loggers for each controller type
+   - Verifies loggers are properly configured with controller-specific context
+   - Ensures different loggers are created for different reconcilers (not shared)
+   - Validates logger setup with appropriate log levels and handlers
+
+Test Approach:
+- Uses fake clients to simulate manager behavior without requiring full integration
+- Handles expected panics from nil manager scenarios gracefully with defer/recover
+- Focuses on setup logic and structure validation rather than full controller lifecycle
+- Validates field assignments and configuration without invoking actual SetupWithManager calls
+*/
+
 package controller
 
 import (

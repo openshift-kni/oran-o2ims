@@ -4,6 +4,117 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Case Descriptions for ProvisioningRequest Controller
+
+This file contains comprehensive unit and integration tests for the ProvisioningRequestReconciler
+controller, covering the complete lifecycle of cluster provisioning and management.
+
+TEST SUITES:
+
+1. ProvisioningRequestReconciler Unit Tests
+   - Core reconciliation logic and workflow management
+   - Validation, rendering, and resource creation processes
+   - Hardware provisioning integration
+   - Upgrade management via Image Based Upgrades (IBU)
+   - Deletion and cleanup workflows
+   - Finalizer management
+
+2. ProvisioningRequestReconciler Policy Tests
+   - Policy compliance checking and monitoring
+   - Integration with Open Cluster Management policies
+   - ZTP (Zero Touch Provisioning) policy enforcement
+   - Policy template processing and defaults
+
+3. ProvisioningRequestReconciler Integration with Mock Hardware
+   - Hardware plugin integration testing
+   - Node allocation request processing
+   - IBU (Image Based Upgrade) workflow testing
+   - Mock hardware server interactions
+
+INDIVIDUAL TEST CASES:
+
+Core Reconciliation:
+- IsUpgradeRequested: Version comparison and upgrade decision logic
+- GetIBGUFromUpgradeDefaultsConfigmap: IBGU creation from ConfigMap data
+- Policy Labels and Selectors: Policy filtering and management
+- checkResourcePreparationStatus: Resource readiness validation
+- handleProvisioningRequestDeletion: Cleanup of provisioned resources
+- handlePreProvisioning: Pre-deployment validation and preparation
+- handleNodeAllocationRequestProvisioning: Hardware allocation workflow
+- Reconcile: Main controller reconciliation entry point
+- getNodeAllocationRequestResponse: Hardware plugin communication
+
+Hardware Integration:
+- Hardware template rendering and validation
+- Node allocation request creation and monitoring
+- Hardware configuration status checking
+- Hardware provisioning timeout and failure handling
+- Mock hardware plugin server integration
+
+Upgrade Management:
+- handleUpgrade: IBU creation and monitoring
+- IBGU status checking (progressing, failed, completed)
+- Upgrade timeout and failure scenarios
+- Version validation and compatibility checking
+- Upgrade cleanup after completion
+
+Policy Management:
+- Policy compliance state monitoring
+- Policy template defaults processing
+- ZTP integration with policy enforcement
+- Multi-policy scenarios with mixed compliance states
+- Policy lifecycle management during provisioning
+
+Deletion and Cleanup:
+- handleFinalizer: Finalizer lifecycle management
+- Resource cleanup during deletion
+- Namespace deletion and label-based cleanup
+- ClusterInstance removal
+- Hardware resource deallocation
+
+Status and State Management:
+- checkClusterDeployConfigState: Deployment configuration validation
+- Provisioning state transitions (Pending → Progressing → Fulfilled/Failed)
+- Condition management and status updates
+- Error handling and retry logic
+- API server synchronization delays
+
+Error Scenarios:
+- Missing dependencies (ClusterTemplate, ConfigMaps, etc.)
+- Hardware plugin communication failures
+- Resource creation conflicts
+- Validation failures
+- Timeout scenarios
+- Network and connectivity issues
+
+Integration Scenarios:
+- Complete provisioning workflow end-to-end
+- Hardware provisioning with software deployment
+- Upgrade workflows with policy enforcement
+- Multi-cluster scenarios
+- Resource sharing and namespace isolation
+
+Mock and Test Infrastructure:
+- Fake Kubernetes client setup
+- Mock hardware plugin servers
+- Test data creation and management
+- Parallel test execution safety
+- Resource cleanup between tests
+
+Each test case includes:
+- Setup and teardown procedures
+- Positive and negative test scenarios
+- Edge case handling
+- Error injection and recovery
+- Return value and state validation
+- Integration point verification
+*/
+
 package controllers
 
 import (

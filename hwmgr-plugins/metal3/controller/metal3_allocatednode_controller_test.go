@@ -4,6 +4,122 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Coverage for AllocatedNodeReconciler
+
+This file provides comprehensive test coverage for the Metal3 AllocatedNode controller,
+which manages the lifecycle of allocated bare metal nodes in the hardware management system.
+
+Detailed Test Case Descriptions:
+
+1. Basic Reconciliation Flow with Fake Client:
+   a) "when AllocatedNode is not found"
+      - should return without error and not requeue
+      - Validates proper handling of missing resources
+
+   b) "when AllocatedNode exists and is not being deleted"
+      - should add finalizer if not present and not requeue
+      - should not add finalizer if already present
+      - Ensures finalizer management during normal operation
+
+   c) "when AllocatedNode is being deleted"
+      - should handle deletion successfully and remove finalizer
+      - should complete without error when BMH not found during deletion
+      - Tests cleanup workflow and error resilience
+
+2. Error Scenarios with Mock Client:
+   a) Client connection and retrieval errors:
+      - should handle client.Get error for node retrieval
+      - should handle BMH retrieval failure during deletion
+      - Tests network/connectivity failure scenarios
+
+   b) Update operation failures:
+      - should handle finalizer addition failure
+      - should handle deallocateBMH failure during deletion
+      - Validates error handling during resource modification
+
+   c) Edge case handling:
+      - should handle node with empty BMH reference
+      - should handle concurrent finalizer removal
+      - Tests malformed or race condition scenarios
+
+3. Controller Setup and Configuration:
+   a) SetupWithManager validation:
+      - should create label selector predicate correctly
+      - should use correct hardware plugin label
+      - should handle manager setup failure gracefully
+      - Ensures proper controller registration and filtering
+
+4. Deletion Workflow (handleAllocatedNodeDeletion):
+   a) "when BMH exists"
+      - should handle deletion successfully
+      - Validates complete BMH deallocation process
+
+   b) "when BMH does not exist"
+      - should return error but proceed with finalizer removal
+      - Tests cleanup when referenced resources are missing
+
+   c) "when node has invalid BMH reference"
+      - should return error for invalid references
+      - Validates input validation and error reporting
+
+   d) "with mocked client for error scenarios"
+      - should handle BMH get failure
+      - should handle partial deallocateBMH failure
+      - Tests error injection and recovery mechanisms
+
+5. Helper Function Validation:
+   a) getBMHForNode functionality:
+      - should return BMH successfully for valid references
+      - should return error when BMH not found
+      - should handle empty BMH reference
+      - Tests BMH lookup and validation logic
+
+   b) deallocateBMH integration:
+      - should deallocate BMH completely (labels, annotations, spec)
+      - should handle missing PreprovisioningImage gracefully
+      - Validates complete resource cleanup workflow
+
+6. System Reliability and Observability:
+   a) Logging and Context:
+      - should log appropriate messages during reconciliation
+      - should handle context cancellation gracefully
+      - Tests operational visibility and cancellation handling
+
+   b) Resource Version and Conflicts:
+      - should handle resource version conflicts during updates
+      - Tests concurrent modification scenarios
+
+Test Infrastructure:
+- MockClient: Custom mock implementation for error injection testing
+- Fake Client: Kubernetes fake client for integration-style testing
+- Comprehensive setup/teardown with proper resource initialization
+- Context handling and cancellation testing
+- Resource version conflict simulation
+
+Key Validation Areas:
+- Finalizer lifecycle management (addition/removal)
+- BMH deallocation workflow (labels, annotations, spec cleanup)
+- PreprovisioningImage label management
+- Error handling and requeue behavior
+- Hardware plugin label filtering
+- Resource reference validation
+- Concurrent operation handling
+- Context cancellation resilience
+
+Coverage Statistics:
+- 20+ individual test cases
+- Positive and negative path testing
+- Integration and unit test approaches
+- Error injection and edge case coverage
+- Helper function validation
+- Controller setup verification
+*/
+
 package controller
 
 import (

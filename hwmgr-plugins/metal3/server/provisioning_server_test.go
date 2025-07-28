@@ -4,6 +4,10 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
 // Package server provides unit tests for the Metal3 provisioning server implementation.
 // These tests cover:
 //   - NewMetal3PluginServer constructor function validation and parameter handling

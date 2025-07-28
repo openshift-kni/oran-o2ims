@@ -4,6 +4,55 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases for ProvisioningRequest Cluster Configuration
+
+This file contains unit tests for the cluster configuration phase of ProvisioningRequest processing,
+specifically focusing on policy management, configuration timeouts, and post-provisioning labeling.
+
+Test Suites:
+
+1. policyManagement - Tests for handling ACM (Advanced Cluster Management) policies during cluster configuration:
+   • Does not handle the policy configuration without the cluster provisioning having started
+   • Moves from TimedOut to Completed if all the policies are compliant
+   • Clears the NonCompliantAt timestamp and timeout when policies are switched to inform
+   • It transitions from InProgress to ClusterNotReady to InProgress
+   • It sets ClusterNotReady if the cluster is unstable/not ready
+   • Sets the NonCompliantAt timestamp and times out
+   • Updates ProvisioningRequest ConfigurationApplied condition to InProgress when the enforce policy is Compliant but the inform policy is still NonCompliant and times out
+   • Updates ProvisioningRequest ConfigurationApplied condition to Missing if there are no policies
+   • It handles updated/deleted policies for matched clusters
+   • It does not requeue ProvisioningRequest matched by policies outside the ztp-<clustertemplate-ns> namespace
+   • It handles changes to the ClusterTemplate
+   • Updates ProvisioningRequest ConfigurationApplied condition to Completed when the cluster is Compliant with all the matched policies
+   • Updates ProvisioningRequest ConfigurationApplied condition to InProgress when the cluster is NonCompliant with at least one enforce policy
+   • Updates ProvisioningRequest ConfigurationApplied condition to InProgress when the cluster is Pending with at least one enforce policy
+
+2. hasPolicyConfigurationTimedOut - Tests for policy configuration timeout logic:
+   • Returns false if the status is unexpected and NonCompliantAt is not set
+   • Returns false if the status is Completed and sets NonCompliantAt
+   • Returns false if the status is OutOfDate and sets NonCompliantAt
+   • Returns false if the status is Missing and sets NonCompliantAt
+   • Returns true if the status is InProgress and the timeout has passed
+   • Sets NonCompliantAt if there is no ConfigurationApplied condition
+
+3. addPostProvisioningLabels - Tests for adding labels to resources after provisioning:
+   • When the HW template is provided and the HW CRs do not exist:
+     - Returns error for the NodeAllocationRequest missing
+     - Returns error for missing Nodes
+   • When the HW template is provided and the expected HW CRs exist:
+     - Updates Agent and ManagedCluster labels as expected
+     - Fails to get a ClusterTemplate
+     - Sets the label for MNO when there are multiple Agents
+     - Fails for multiple Agents with unexpected labels
+   • When the HW template is not provided:
+     - Does not add hardwarePluginRef and hwMgrNodeId labels to the Agents
+*/
+
 package controllers
 
 import (

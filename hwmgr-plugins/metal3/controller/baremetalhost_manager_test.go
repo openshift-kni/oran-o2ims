@@ -4,6 +4,55 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Generated-By: Cursor/claude-4-sonnet
+*/
+
+/*
+Package controller provides unit tests for BareMetalHost (BMH) management functionality
+in the Metal3 hardware plugin controller.
+
+This test file contains comprehensive test coverage for the following areas:
+
+BMH Status and Allocation Management:
+- Testing BMH allocation status constants and helper functions
+- Validating BMH allocation state checking and filtering
+- Testing BMH allocation marking and deallocation workflows
+
+BMH Grouping and Organization:
+- Testing BMH grouping by resource pools
+- Validating BMH filtering by availability status
+- Testing BMH list fetching with various filter criteria
+
+BMH Network and Interface Management:
+- Testing interface building from BMH hardware details
+- Validating network data clearing and configuration
+- Testing boot interface identification and labeling
+
+BMH Metadata and Annotation Management:
+- Testing label and annotation operations (add/remove)
+- Validating BMH metadata updates with retry logic
+- Testing infrastructure environment label management
+
+BMH Lifecycle Operations:
+- Testing BMH host management permission settings
+- Validating BMH finalization and cleanup procedures
+- Testing BMH reboot annotation management
+
+Node and Hardware Integration:
+- Testing AllocatedNode to BMH relationships
+- Validating node configuration progress tracking
+- Testing node grouping and counting operations
+
+Supporting Infrastructure:
+- Testing PreprovisioningImage label management
+- Validating BMC information handling
+- Testing error handling and edge cases
+
+The tests use Ginkgo/Gomega testing framework with fake Kubernetes clients
+to simulate controller operations without requiring actual cluster resources.
+*/
+
 package controller
 
 import (

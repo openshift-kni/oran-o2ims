@@ -4,6 +4,83 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
+
+/*
+Test Cases Summary for ClusterTemplate Controller
+
+This file contains comprehensive test cases for the ClusterTemplate controller and its validation functions.
+The tests are organized into the following test suites:
+
+1. ClusterTemplateReconciler Tests:
+   - Validates that a valid ClusterTemplate with all required ConfigMaps and HardwareTemplate does not requeue
+   - Validates that an invalid ClusterTemplate (missing ConfigMaps) requeues with appropriate error conditions
+
+2. enqueueClusterTemplatesForConfigmap Tests:
+   - Tests enqueueing of ClusterTemplates that reference a specific clusterinstance defaults ConfigMap
+   - Tests that ClusterTemplates not referencing the ConfigMap are not enqueued
+
+3. validatePolicyTemplateParamsSchema Tests:
+   - Tests validation of policy template parameter schema structure
+   - Covers missing properties, invalid property structures, incorrect type definitions
+   - Tests validation of nested property structures and type constraints
+
+4. validateClusterTemplateCR Tests:
+   - Tests complete ClusterTemplate validation including ConfigMaps and HardwareTemplate
+   - Tests status condition setting for both valid and invalid templates
+   - Tests validation of timeout configurations in ConfigMaps
+   - Tests hardware template timeout validation
+
+5. validateConfigmapReference Tests:
+   - Tests ConfigMap existence and structure validation
+   - Tests ClusterInstance CRD schema compliance
+   - Tests template data key presence and YAML validity
+   - Tests interface label validation in network configurations
+   - Tests timeout value parsing and validation
+   - Tests ConfigMap immutability requirements and patching
+
+6. Validate Cluster Instance Name Tests:
+   - Tests cluster template name validation rules
+   - Tests handling of templates with same names in different namespaces
+   - Tests metadata name correctness validation
+
+7. Validate Cluster Instance TemplateID Tests:
+   - Tests automatic templateID generation for empty values
+   - Tests UUID format validation for provided templateIDs
+   - Tests both valid and invalid UUID formats
+
+8. validateTemplateParameterSchema Tests (Go test function):
+   - Tests JSON schema validation for template parameters
+   - Tests required field validation and type checking
+   - Tests policy template parameter schema structure
+   - Tests error message formatting for various validation failures
+
+9. validateClusterInstanceParamsSchema Tests:
+   - Tests schema validation behavior when hardware template is provided vs not provided
+   - Tests that hardware template presence skips schema validation entirely
+   - Tests schema validation for cases without hardware template
+   - Tests edge cases including whitespace handling and large/nested schemas
+
+10. validateSchemaWithoutHWTemplate Tests:
+    - Tests detailed schema structure validation for cluster instances without hardware templates
+    - Tests required node properties and BMC credential validation
+    - Tests network interface configuration validation
+    - Tests schema structure integrity and required field presence
+
+11. validateUpgradeDefaultsConfigmap Tests:
+    - Tests validation of upgrade defaults ConfigMap for Image-Based GPU (IBGU) upgrades
+    - Tests YAML parsing and IBGU spec validation
+    - Tests release version matching between ClusterTemplate and seedImageRef
+    - Tests ConfigMap immutability requirements
+    - Tests dry-run validation of IBGU specifications
+    - Tests error handling for missing or malformed ConfigMaps
+
+Each test suite covers both positive and negative test cases to ensure comprehensive validation
+of the ClusterTemplate controller functionality.
+*/
+
 package controllers
 
 import (
