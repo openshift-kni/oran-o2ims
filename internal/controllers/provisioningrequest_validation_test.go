@@ -4,9 +4,35 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package controllers
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
 
 /*
+Test Cases Overview:
+
+This file contains unit tests for the overrideClusterInstanceLabelsOrAnnotations function
+which handles merging configuration from configmaps into provisioning request inputs.
+
+Test Cases:
+1. "should override only existing keys" - Verifies that only pre-existing keys in the
+   destination are overridden, while new keys from source are ignored.
+
+2. "should not add new resource types to dstProvisioningRequestInput" - Ensures that
+   new resource types from the source configmap are not added to the destination.
+
+3. "should not add extraLabels/extraAnnotations field if not found in ProvisioningRequestInput" -
+   Confirms that missing top-level fields in the destination are not created from the source.
+
+4. "should merge nodes and handle nested labels/annotations" - Tests the merging logic
+   for node-level configurations, ensuring proper override of existing nested values.
+
+5. "should not add the new node to dstProvisioningRequestInput" - Verifies that additional
+   nodes from the source are not added to the destination node list.
+*/
+
+package controllers
+
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -311,4 +337,3 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 })
-*/

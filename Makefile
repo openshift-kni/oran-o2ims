@@ -465,7 +465,7 @@ deps-update:
 
 # TODO: add back `test test-e2e` to ci-job
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt bundle-check test
 
 .PHONY: clean
 clean:

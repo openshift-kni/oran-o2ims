@@ -4,9 +4,35 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package controllers
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
 
 /*
+Test Cases in this file:
+
+## createPolicyTemplateConfigMap Tests
+- Validates behavior when no template data is provided (should return no error)
+- Verifies creation of policy template configmap with correct content and data mapping
+- Ensures proper error handling when template data contains non-string values
+
+## GetLabelsForPolicies Tests
+- Tests error handling when clusterInstance has no labels configured
+- Validates error when clusterInstance is missing required cluster-version label
+- Confirms successful validation when cluster-version label exists
+
+## createClusterInstanceBMCSecrets Tests
+- Verifies error handling when bmcCredentialsDetails is missing from template parameters
+- Tests creation of BMC secret with correct base64 decoded credentials
+- Validates BMC secret creation using custom bmcCredentialsName when provided
+
+## createOrUpdateClusterResources Tests
+- Confirms BMC secret creation when hwTemplate is not provided in cluster template
+- Validates that BMC secret is not created when hwTemplate is specified in cluster template
+*/
+
+package controllers
+
 import (
 	"context"
 	"encoding/base64"
@@ -405,4 +431,3 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 		Expect(errors.IsNotFound(err)).To(BeTrue())
 	})
 })
-*/
