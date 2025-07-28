@@ -137,7 +137,7 @@ func getLatestDataChangeEvent(ctx context.Context, tx pgx.Tx, highWatermark int)
 		sm.ForUpdate(m.TableName()).SkipLocked(),
 	)
 
-	sql, params, err := queryGetLatestEvents.Build()
+	sql, params, err := queryGetLatestEvents.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build queryGetLatestEvents query: %w", err)
 	}
@@ -160,7 +160,7 @@ func getHighWatermark(ctx context.Context, tx pgx.Tx) (int, error) {
 		sm.Where(psql.Quote(all["ID"]).EQ(psql.Arg(1))),
 	)
 
-	sql, params, err := queryGetHighWater.Build()
+	sql, params, err := queryGetHighWater.Build(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to build queryGetHighWater query: %w", err)
 	}
@@ -191,7 +191,7 @@ func updateHighWatermark(ctx context.Context, tx pgx.Tx, dataChangeEvents []comm
 		um.Returning(all["LastEventID"]),
 	)
 
-	sql, params, err := queryUpdateHighWater.Build()
+	sql, params, err := queryUpdateHighWater.Build(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to build queryUpdateHighWater query: %w", err)
 	}

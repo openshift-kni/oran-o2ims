@@ -6,6 +6,9 @@ metadata:
 rules:
 - nonResourceURLs:
   - /hardware-manager/inventory/*
+  - /o2ims-infrastructureCluster/v1/alarmDictionaries
+  - /o2ims-infrastructureCluster/v1/nodeClusterTypes
+  - /o2ims-infrastructureCluster/v1/nodeClusters
   verbs:
   - get
   - list
@@ -23,29 +26,8 @@ rules:
   - create
   - post
 - nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/alarmDictionaries
-  verbs:
-  - get
-  - list
-- nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
-  verbs:
-  - get
-- nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/nodeClusterTypes
-  verbs:
-  - get
-  - list
-- nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
-  verbs:
-  - get
-- nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/nodeClusters
-  verbs:
-  - get
-  - list
-- nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/nodeClusters/*
   verbs:
   - get
@@ -53,6 +35,10 @@ rules:
   - ""
   resources:
   - configmaps
+  - namespaces
+  - secrets
+  - serviceaccounts
+  - services
   verbs:
   - create
   - delete
@@ -72,58 +58,10 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - namespaces
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - pods
   verbs:
   - get
   - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - agent-install.openshift.io
@@ -183,6 +121,10 @@ rules:
   - clcm.openshift.io
   resources:
   - clustertemplates
+  - hardwareplugins
+  - hardwaretemplates
+  - nodes
+  - provisioningrequests
   verbs:
   - create
   - delete
@@ -195,41 +137,27 @@ rules:
   - clcm.openshift.io
   resources:
   - clustertemplates/finalizers
+  - provisioningrequests/finalizers
   verbs:
   - update
 - apiGroups:
   - clcm.openshift.io
   resources:
   - clustertemplates/status
+  - hardwareplugins/status
+  - hardwareprofiles/status
+  - hardwaretemplates/status
+  - nodes/status
+  - provisioningrequests/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - hardwareplugins
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - clcm.openshift.io
   resources:
   - hardwareplugins/finalizers
   verbs:
-  - patch
-  - update
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - hardwareplugins/status
-  verbs:
-  - get
   - patch
   - update
 - apiGroups:
@@ -243,80 +171,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - hardwareprofiles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - hardwaretemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - hardwaretemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - nodes
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - nodes/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - provisioningrequests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - provisioningrequests/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - provisioningrequests/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - cluster.open-cluster-management.io
   resources:
@@ -369,6 +223,7 @@ rules:
   - metal3.io
   resources:
   - baremetalhosts
+  - preprovisioningimages
   verbs:
   - get
   - list
@@ -387,40 +242,10 @@ rules:
   - metal3.io
   resources:
   - hostfirmwarecomponents
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
   - hostfirmwaresettings
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
   - hostupdatepolicies
   verbs:
   - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - preprovisioningimages
-  verbs:
   - get
   - list
   - patch
@@ -484,32 +309,6 @@ rules:
   - plugins.clcm.openshift.io
   resources:
   - allocatednodes
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - plugins.clcm.openshift.io
-  resources:
-  - allocatednodes/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - plugins.clcm.openshift.io
-  resources:
-  - allocatednodes/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - plugins.clcm.openshift.io
-  resources:
   - nodeallocationrequests
   verbs:
   - create
@@ -522,6 +321,7 @@ rules:
 - apiGroups:
   - plugins.clcm.openshift.io
   resources:
+  - allocatednodes/finalizers
   - nodeallocationrequests/finalizers
   verbs:
   - patch
@@ -529,6 +329,7 @@ rules:
 - apiGroups:
   - plugins.clcm.openshift.io
   resources:
+  - allocatednodes/status
   - nodeallocationrequests/status
   verbs:
   - get
@@ -545,17 +346,6 @@ rules:
   - rbac.authorization.k8s.io
   resources:
   - clusterrolebindings
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
   - clusterroles
   verbs:
   - create

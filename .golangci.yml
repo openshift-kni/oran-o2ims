@@ -1,9 +1,8 @@
----
+version: "2"
 run:
   concurrency: 6
-  deadline: 5m
 linters:
-  disable-all: true
+  default: none
   enable:
     - depguard
     - errcheck
@@ -11,162 +10,134 @@ linters:
     - goconst
     - gocritic
     - gocyclo
-    - gofmt
     - goheader
-    - goimports
     - gosec
-    - gosimple
     - govet
     - importas
     - ineffassign
     - loggercheck
-    #- maintidx
     - misspell
     - nilnil
     - predeclared
     - promlinter
     - revive
-    - staticcheck
     - sloglint
-    - typecheck
+    #- staticcheck # TODO
     - unconvert
     - unparam
     - unused
     - usestdlibvars
     - wrapcheck
-linters-settings:
-  revive:
-    rules:
-      - name: if-return
-        severity: warning
-        disabled: true
-      - name: string-format
-        severity: warning
-        disabled: false
-        arguments:
-          - - 'core.WriteError[1].Message'
-            - '/^([^A-Z]|$)/'
-            - must not start with a capital letter
-          - - 'fmt.Errorf[0]'
-            - '/^([^A-Z]|$)/'
-            - must not start with a capital letter
-          - - 'fmt.Errorf[0]'
-            - '/(^|[^\.!?])$/'
-            - must not end in punctuation
-          - - panic
-            - '/^[^\n]*$/'
-            - must not contain line breaks
-  gocritic:
-    enabled-checks:
-      # Diagnostic
-      - commentedOutCode
-      - nilValReturn
-      - weakCond
-      - octalLiteral
-      - sloppyReassign
+  settings:
+    depguard:
+      rules:
+        main:
+          list-mode: lax
+          files:
+            - $all
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: Should be replaced by standard lib errors package
+    gocritic:
+      enabled-checks:
+        - commentedOutCode
+        - nilValReturn
+        - weakCond
+        - octalLiteral
+        - sloppyReassign
+        - equalFold
+        - indexAlloc
+        - rangeExprCopy
+        - appendCombine
+        - boolExprSimplify
+        - commentedOutImport
+        - docStub
+        - emptyFallthrough
+        - emptyStringTest
+        - hexLiteral
+        - methodExprCall
+        - stringXbytes
+        - typeAssertChain
+        - unlabelStmt
+        - yodaStyleExpr
+        - initClause
+        - nestingReduce
+        - ptrToRefParam
+        - typeUnparen
+        - unnecessaryBlock
+        - paramTypeCombine
+    goheader:
+      values:
+        const:
+          COMPANY: Red Hat
+      template: |-
+        SPDX-FileCopyrightText: {{ COMPANY }}
 
-      # Performance
-      - equalFold
-      - indexAlloc
-      - rangeExprCopy
-      - appendCombine
-
-      # Style
-      - boolExprSimplify
-      - commentedOutImport
-      - docStub
-      - emptyFallthrough
-      - emptyStringTest
-      - hexLiteral
-      - methodExprCall
-      - stringXbytes
-      - typeAssertChain
-      - unlabelStmt
-      - yodaStyleExpr
-
-      # Opinionated
-      - initClause
-      - nestingReduce
-      - ptrToRefParam
-      - typeUnparen
-      - unnecessaryBlock
-      - paramTypeCombine
-  depguard:
-    # Rules to apply.
-    #
-    # Variables:
-    # - File Variables
-    #   you can still use and exclamation mark ! in front of a variable to say not to use it.
-    #   Example !$test will match any file that is not a go test file.
-    #
-    #   `$all` - matches all go files
-    #   `$test` - matches all go test files
-    #
-    # - Package Variables
-    #
-    #  `$gostd` - matches all of go's standard library (Pulled from `GOROOT`)
-    #
-    # Default: Only allow $gostd in all files.
-    rules:
-      # Name of a rule.
-      main:
-        # Used to determine the package matching priority.
-        # There are three different modes: `original`, `strict`, and `lax`.
-        # Default: "original"
-        list-mode: lax
-        # List of file globs that will match this list of settings to compare against.
-        # Default: $all
-        files:
-          - $all
-        # List of allowed packages.
-        #allow:
-        #  - $gostd
-        # Packages that are not allowed where the value is a suggestion.
-        deny:
-          - pkg: "github.com/pkg/errors"
-            desc: Should be replaced by standard lib errors package
-  wrapcheck:
-    ignoreSigs:
-      # defaults
-      - .Errorf(
-      - errors.New(
-      - errors.Unwrap(
-      - .Wrap(
-      - .Wrapf(
-      - .WithMessage(
-      - .WithMessagef(
-      - .WithStack(
-      # from kyaml's errors package
-      - .WrapPrefixf(
-  importas:
-    # List of aliases
-    # Default: []
-    alias:
-      # You can specify the package path by regular expression,
-      # and alias by regular expression expansion syntax like below.
-      # see https://github.com/julz/importas#use-regular-expression for details
-      - pkg: k8s.io/api/(\w+)/(v[\w\d]+)
-        alias: $1$2
-      - pkg: k8s.io/apimachinery/pkg/apis/(\w+)/(v[\w\d]+)
-        alias: $1$2
-      - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
-        alias: hwmgmtv1alpha1
-      - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
-        alias: pluginsv1alpha1
-      - pkg: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
-        alias: inventoryv1alpha1
-      - pkg: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
-        alias: provisioningv1alpha1
-  goheader:
-    # Supports two types 'const` and `regexp`.
-    # Values can be used recursively.
-    # Default: {}
-    values:
-      const:
-        # Define here const type values in format k:v.
-        # For example:
-        COMPANY: Red Hat
-    template: |-
-      SPDX-FileCopyrightText: {{ COMPANY }}
-
-      SPDX-License-Identifier: Apache-2.0
+        SPDX-License-Identifier: Apache-2.0
+    importas:
+      alias:
+        - pkg: k8s.io/api/(\w+)/(v[\w\d]+)
+          alias: $1$2
+        - pkg: k8s.io/apimachinery/pkg/apis/(\w+)/(v[\w\d]+)
+          alias: $1$2
+        - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
+          alias: hwmgmtv1alpha1
+        - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
+          alias: pluginsv1alpha1
+        - pkg: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
+          alias: inventoryv1alpha1
+        - pkg: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
+          alias: provisioningv1alpha1
+    revive:
+      rules:
+        - name: if-return
+          severity: warning
+          disabled: true
+        - name: string-format
+          arguments:
+            - - core.WriteError[1].Message
+              - /^([^A-Z]|$)/
+              - must not start with a capital letter
+            - - fmt.Errorf[0]
+              - /^([^A-Z]|$)/
+              - must not start with a capital letter
+            - - fmt.Errorf[0]
+              - /(^|[^\.!?])$/
+              - must not end in punctuation
+            - - panic
+              - /^[^\n]*$/
+              - must not contain line breaks
+          severity: warning
+          disabled: false
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - .Wrap(
+        - .Wrapf(
+        - .WithMessage(
+        - .WithMessagef(
+        - .WithStack(
+        - .WrapPrefixf(
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

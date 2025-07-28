@@ -120,7 +120,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"time"
 
@@ -173,7 +172,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
-			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Logger: slog.New(slog.DiscardHandler),
 		}
 
 		// Create basic test objects
@@ -2430,7 +2429,7 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
-			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Logger: slog.New(slog.DiscardHandler),
 		}
 
 		// Create basic test objects
@@ -2834,7 +2833,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 	BeforeEach(func() {
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
-			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Logger: slog.New(slog.DiscardHandler),
 		}
 
 		// Create more realistic integration test objects

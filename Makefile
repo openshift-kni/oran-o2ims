@@ -78,14 +78,14 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.36.1
+OPERATOR_SDK_VERSION ?= v1.41.1
 
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.28.0
-ENVTEST_VERSION = release-0.19
+ENVTEST_K8S_VERSION = 1.32.0
+ENVTEST_VERSION = release-0.21
 
 # OCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
@@ -243,8 +243,8 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.2.1
-CONTROLLER_TOOLS_VERSION ?= v0.15.0
+KUSTOMIZE_VERSION ?= v5.7.1
+CONTROLLER_TOOLS_VERSION ?= v0.18.0
 
 .PHONY: kubectl
 kubectl: $(KUBECTL) ## Use envtest to download kubectl
@@ -467,9 +467,10 @@ deps-update:
 	hack/update_deps.sh
 	hack/install_test_deps.sh
 
-# TODO: add back `test test-e2e` to ci-job
+# TODO: add back `test-e2e` to ci-job
+# NOTE: `bundle-check` should be the last job in the list for `ci-job`
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt bundle-check test
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test bundle-check
 
 .PHONY: clean
 clean:

@@ -1,6 +1,7 @@
 package dialect
 
 import (
+	"context"
 	"io"
 
 	"github.com/stephenafamo/bob"
@@ -12,49 +13,58 @@ import (
 type InsertQuery struct {
 	clause.With
 	Overriding string
-	clause.Table
+	clause.TableRef
 	clause.Values
 	clause.Conflict
 	clause.Returning
+
+	bob.Load
+	bob.EmbeddedHook
+	bob.ContextualModdable[*InsertQuery]
 }
 
-func (i InsertQuery) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (i InsertQuery) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+	var err error
 	var args []any
 
-	withArgs, err := bob.ExpressIf(w, d, start+len(args), i.With,
+	if ctx, err = i.RunContextualMods(ctx, &i); err != nil {
+		return nil, err
+	}
+
+	withArgs, err := bob.ExpressIf(ctx, w, d, start+len(args), i.With,
 		len(i.With.CTEs) > 0, "", "\n")
 	if err != nil {
 		return nil, err
 	}
 	args = append(args, withArgs...)
 
-	tableArgs, err := bob.ExpressIf(w, d, start+len(args), i.Table,
+	tableArgs, err := bob.ExpressIf(ctx, w, d, start+len(args), i.TableRef,
 		true, "INSERT INTO ", "")
 	if err != nil {
 		return nil, err
 	}
 	args = append(args, tableArgs...)
 
-	_, err = bob.ExpressIf(w, d, start+len(args), i.Overriding,
+	_, err = bob.ExpressIf(ctx, w, d, start+len(args), i.Overriding,
 		i.Overriding != "", "\nOVERRIDING ", " VALUE")
 	if err != nil {
 		return nil, err
 	}
 
-	valArgs, err := bob.ExpressIf(w, d, start+len(args), i.Values, true, "\n", "")
+	valArgs, err := bob.ExpressIf(ctx, w, d, start+len(args), i.Values, true, "\n", "")
 	if err != nil {
 		return nil, err
 	}
 	args = append(args, valArgs...)
 
-	conflictArgs, err := bob.ExpressIf(w, d, start+len(args), i.Conflict,
-		i.Conflict.Do != "", "\n", "")
+	conflictArgs, err := bob.ExpressIf(ctx, w, d, start+len(args), i.Conflict.Expression,
+		i.Conflict.Expression != nil, "\n", "")
 	if err != nil {
 		return nil, err
 	}
 	args = append(args, conflictArgs...)
 
-	retArgs, err := bob.ExpressIf(w, d, start+len(args), i.Returning,
+	retArgs, err := bob.ExpressIf(ctx, w, d, start+len(args), i.Returning,
 		len(i.Returning.Expressions) > 0, "\n", "")
 	if err != nil {
 		return nil, err

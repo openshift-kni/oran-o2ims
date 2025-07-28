@@ -17,22 +17,22 @@ func Recursive(r bool) bob.Mod[*dialect.UpdateQuery] {
 }
 
 func Only() bob.Mod[*dialect.UpdateQuery] {
-	return mods.QueryModFunc[*dialect.UpdateQuery](func(u *dialect.UpdateQuery) {
+	return bob.ModFunc[*dialect.UpdateQuery](func(u *dialect.UpdateQuery) {
 		u.Only = true
 	})
 }
 
 func Table(name any) bob.Mod[*dialect.UpdateQuery] {
-	return mods.QueryModFunc[*dialect.UpdateQuery](func(u *dialect.UpdateQuery) {
-		u.Table = clause.Table{
+	return bob.ModFunc[*dialect.UpdateQuery](func(u *dialect.UpdateQuery) {
+		u.Table = clause.TableRef{
 			Expression: name,
 		}
 	})
 }
 
 func TableAs(name any, alias string) bob.Mod[*dialect.UpdateQuery] {
-	return mods.QueryModFunc[*dialect.UpdateQuery](func(u *dialect.UpdateQuery) {
-		u.Table = clause.Table{
+	return bob.ModFunc[*dialect.UpdateQuery](func(u *dialect.UpdateQuery) {
+		u.Table = clause.TableRef{
 			Expression: name,
 			Alias:      alias,
 		}
@@ -40,7 +40,7 @@ func TableAs(name any, alias string) bob.Mod[*dialect.UpdateQuery] {
 }
 
 func Set(sets ...bob.Expression) bob.Mod[*dialect.UpdateQuery] {
-	return mods.QueryModFunc[*dialect.UpdateQuery](func(q *dialect.UpdateQuery) {
+	return bob.ModFunc[*dialect.UpdateQuery](func(q *dialect.UpdateQuery) {
 		q.Set.Set = append(q.Set.Set, internal.ToAnySlice(sets)...)
 	})
 }
@@ -83,7 +83,7 @@ func FullJoin(e any) dialect.JoinChain[*dialect.UpdateQuery] {
 	return dialect.FullJoin[*dialect.UpdateQuery](e)
 }
 
-func CrossJoin(e any) bob.Mod[*dialect.UpdateQuery] {
+func CrossJoin(e any) dialect.CrossJoinChain[*dialect.UpdateQuery] {
 	return dialect.CrossJoin[*dialect.UpdateQuery](e)
 }
 

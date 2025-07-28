@@ -1,6 +1,7 @@
 package dialect
 
 import (
+	"context"
 	"io"
 
 	"github.com/stephenafamo/bob"
@@ -13,12 +14,12 @@ type Distinct struct {
 	On []any
 }
 
-func (di Distinct) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (di Distinct) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
 	w.Write([]byte("DISTINCT"))
-	return bob.ExpressSlice(w, d, start, di.On, " ON (", ", ", ")")
+	return bob.ExpressSlice(ctx, w, d, start, di.On, " ON (", ", ", ")")
 }
 
-func With[Q interface{ AppendWith(clause.CTE) }](name string, columns ...string) CTEChain[Q] {
+func With[Q interface{ AppendCTE(bob.Expression) }](name string, columns ...string) CTEChain[Q] {
 	return CTEChain[Q](func() clause.CTE {
 		return clause.CTE{
 			Name:    name,
@@ -36,19 +37,17 @@ type fromable interface {
 }
 
 func From[Q fromable](table any) FromChain[Q] {
-	return FromChain[Q](func() clause.From {
-		return clause.From{
-			Table: table,
-		}
+	return FromChain[Q](func() clause.TableRef {
+		return clause.TableRef{Expression: table}
 	})
 }
 
-type FromChain[Q fromable] func() clause.From
+type FromChain[Q fromable] func() clause.TableRef
 
 func (f FromChain[Q]) Apply(q Q) {
 	from := f()
 
-	q.SetTable(from.Table)
+	q.SetTable(from.Expression)
 	if from.Alias != "" {
 		q.SetTableAlias(from.Alias, from.Columns...)
 	}
@@ -63,7 +62,7 @@ func (f FromChain[Q]) As(alias string, columns ...string) FromChain[Q] {
 	fr.Alias = alias
 	fr.Columns = columns
 
-	return FromChain[Q](func() clause.From {
+	return FromChain[Q](func() clause.TableRef {
 		return fr
 	})
 }
@@ -72,7 +71,7 @@ func (f FromChain[Q]) Only() FromChain[Q] {
 	fr := f()
 	fr.Only = true
 
-	return FromChain[Q](func() clause.From {
+	return FromChain[Q](func() clause.TableRef {
 		return fr
 	})
 }
@@ -81,7 +80,7 @@ func (f FromChain[Q]) Lateral() FromChain[Q] {
 	fr := f()
 	fr.Lateral = true
 
-	return FromChain[Q](func() clause.From {
+	return FromChain[Q](func() clause.TableRef {
 		return fr
 	})
 }
@@ -90,7 +89,7 @@ func (f FromChain[Q]) WithOrdinality() FromChain[Q] {
 	fr := f()
 	fr.WithOrdinality = true
 
-	return FromChain[Q](func() clause.From {
+	return FromChain[Q](func() clause.TableRef {
 		return fr
 	})
 }
@@ -101,7 +100,7 @@ func Join[Q Joinable](typ string, e any) JoinChain[Q] {
 	return JoinChain[Q](func() clause.Join {
 		return clause.Join{
 			Type: typ,
-			To:   clause.From{Table: e},
+			To:   clause.TableRef{Expression: e},
 		}
 	})
 }
@@ -122,8 +121,13 @@ func FullJoin[Q Joinable](e any) JoinChain[Q] {
 	return Join[Q](clause.FullJoin, e)
 }
 
-func CrossJoin[Q Joinable](e any) bob.Mod[Q] {
-	return Join[Q](clause.CrossJoin, e)
+func CrossJoin[Q Joinable](e any) CrossJoinChain[Q] {
+	return CrossJoinChain[Q](func() clause.Join {
+		return clause.Join{
+			Type: clause.CrossJoin,
+			To:   clause.TableRef{Expression: e},
+		}
+	})
 }
 
 type JoinChain[Q Joinable] func() clause.Join
@@ -197,7 +201,23 @@ func (j JoinChain[Q]) Using(using ...string) bob.Mod[Q] {
 	return mods.Join[Q](jo)
 }
 
-type OrderBy[Q interface{ AppendOrder(clause.OrderDef) }] func() clause.OrderDef
+type CrossJoinChain[Q Joinable] func() clause.Join
+
+func (j CrossJoinChain[Q]) Apply(q Q) {
+	q.AppendJoin(j())
+}
+
+func (j CrossJoinChain[Q]) As(alias string, columns ...string) bob.Mod[Q] {
+	jo := j()
+	jo.To.Alias = alias
+	jo.To.Columns = columns
+
+	return CrossJoinChain[Q](func() clause.Join {
+		return jo
+	})
+}
+
+type OrderBy[Q interface{ AppendOrder(bob.Expression) }] func() clause.OrderDef
 
 func (s OrderBy[Q]) Apply(q Q) {
 	q.AppendOrder(s())
@@ -248,19 +268,19 @@ func (o OrderBy[Q]) NullsLast() OrderBy[Q] {
 	})
 }
 
-func (o OrderBy[Q]) Collate(collation string) OrderBy[Q] {
+func (o OrderBy[Q]) Collate(collationName string) OrderBy[Q] {
 	order := o()
-	order.CollationName = collation
+	order.Collation = collationName
 
 	return OrderBy[Q](func() clause.OrderDef {
 		return order
 	})
 }
 
-type CTEChain[Q interface{ AppendWith(clause.CTE) }] func() clause.CTE
+type CTEChain[Q interface{ AppendCTE(bob.Expression) }] func() clause.CTE
 
 func (c CTEChain[Q]) Apply(q Q) {
-	q.AppendWith(c())
+	q.AppendCTE(c())
 }
 
 func (c CTEChain[Q]) As(q bob.Query) CTEChain[Q] {
@@ -332,16 +352,16 @@ func (c CTEChain[Q]) CycleValue(value, defaultVal any) CTEChain[Q] {
 	})
 }
 
-type LockChain[Q interface{ SetFor(clause.For) }] func() clause.For
+type LockChain[Q interface{ AppendLock(bob.Expression) }] func() clause.Lock
 
 func (l LockChain[Q]) Apply(q Q) {
-	q.SetFor(l())
+	q.AppendLock(l())
 }
 
 func (l LockChain[Q]) NoWait() LockChain[Q] {
 	lock := l()
 	lock.Wait = clause.LockWaitNoWait
-	return LockChain[Q](func() clause.For {
+	return LockChain[Q](func() clause.Lock {
 		return lock
 	})
 }
@@ -349,138 +369,7 @@ func (l LockChain[Q]) NoWait() LockChain[Q] {
 func (l LockChain[Q]) SkipLocked() LockChain[Q] {
 	lock := l()
 	lock.Wait = clause.LockWaitSkipLocked
-	return LockChain[Q](func() clause.For {
+	return LockChain[Q](func() clause.Lock {
 		return lock
 	})
-}
-
-type WindowMod[Q interface{ SetWindow(clause.Window) }] struct {
-	*WindowChain[*WindowMod[Q]]
-}
-
-func (w WindowMod[Q]) Apply(q Q) {
-	q.SetWindow(w.def)
-}
-
-type WindowsMod[Q interface{ AppendWindow(clause.NamedWindow) }] struct {
-	Name string
-	*WindowChain[*WindowsMod[Q]]
-}
-
-func (w WindowsMod[Q]) Apply(q Q) {
-	q.AppendWindow(clause.NamedWindow{
-		Name:       w.Name,
-		Definition: w.def,
-	})
-}
-
-type WindowChain[T any] struct {
-	def  clause.Window
-	Wrap T
-}
-
-func (w *WindowChain[T]) From(name string) T {
-	w.def.SetFrom(name)
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) PartitionBy(condition ...any) T {
-	w.def.AddPartitionBy(condition...)
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) OrderBy(order ...any) T {
-	w.def.AddOrderBy(order...)
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) Range() T {
-	w.def.SetMode("RANGE")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) Rows() T {
-	w.def.SetMode("ROWS")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) Groups() T {
-	w.def.SetMode("GROUPS")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) FromUnboundedPreceding() T {
-	w.def.SetStart("UNBOUNDED PRECEDING")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) FromPreceding(exp any) T {
-	w.def.SetStart(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " PRECEDING")
-		}),
-	)
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) FromCurrentRow() T {
-	w.def.SetStart("CURRENT ROW")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) FromFollowing(exp any) T {
-	w.def.SetStart(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " FOLLOWING")
-		}),
-	)
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ToPreceding(exp any) T {
-	w.def.SetEnd(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " PRECEDING")
-		}),
-	)
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ToCurrentRow(count int) T {
-	w.def.SetEnd("CURRENT ROW")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ToFollowing(exp any) T {
-	w.def.SetEnd(bob.ExpressionFunc(
-		func(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-			return bob.ExpressIf(w, d, start, exp, true, "", " FOLLOWING")
-		}),
-	)
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ToUnboundedFollowing() T {
-	w.def.SetEnd("UNBOUNDED FOLLOWING")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ExcludeNoOthers() T {
-	w.def.SetExclusion("NO OTHERS")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ExcludeCurrentRow() T {
-	w.def.SetExclusion("CURRENT ROW")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ExcludeGroup() T {
-	w.def.SetExclusion("GROUP")
-	return w.Wrap
-}
-
-func (w *WindowChain[T]) ExcludeTies() T {
-	w.def.SetExclusion("TIES")
-	return w.Wrap
 }

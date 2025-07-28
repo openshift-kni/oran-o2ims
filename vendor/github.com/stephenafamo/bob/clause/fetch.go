@@ -1,14 +1,14 @@
 package clause
 
 import (
+	"context"
 	"io"
-	"strconv"
 
 	"github.com/stephenafamo/bob"
 )
 
 type Fetch struct {
-	Count    *int64
+	Count    any
 	WithTies bool
 }
 
@@ -16,20 +16,15 @@ func (f *Fetch) SetFetch(fetch Fetch) {
 	*f = fetch
 }
 
-func (f Fetch) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (f Fetch) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
 	if f.Count == nil {
 		return nil, nil
 	}
 
-	w.Write([]byte("FETCH NEXT "))
-	w.Write([]byte(strconv.FormatInt(*f.Count, 10)))
-	w.Write([]byte(" ROWS "))
-
+	suffix := " ROWS ONLY"
 	if f.WithTies {
-		w.Write([]byte("WITH TIES"))
-	} else {
-		w.Write([]byte("ONLY"))
+		suffix = " ROWS WITH TIES"
 	}
 
-	return nil, nil
+	return bob.ExpressIf(ctx, w, d, start, f.Count, true, "FETCH NEXT ", suffix)
 }

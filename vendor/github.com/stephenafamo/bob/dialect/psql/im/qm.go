@@ -18,8 +18,8 @@ func Recursive(r bool) bob.Mod[*dialect.InsertQuery] {
 }
 
 func Into(name any, columns ...string) bob.Mod[*dialect.InsertQuery] {
-	return mods.QueryModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
-		i.Table = clause.Table{
+	return bob.ModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
+		i.TableRef = clause.TableRef{
 			Expression: name,
 			Columns:    columns,
 		}
@@ -27,8 +27,8 @@ func Into(name any, columns ...string) bob.Mod[*dialect.InsertQuery] {
 }
 
 func IntoAs(name any, alias string, columns ...string) bob.Mod[*dialect.InsertQuery] {
-	return mods.QueryModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
-		i.Table = clause.Table{
+	return bob.ModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
+		i.TableRef = clause.TableRef{
 			Expression: name,
 			Alias:      alias,
 			Columns:    columns,
@@ -37,13 +37,13 @@ func IntoAs(name any, alias string, columns ...string) bob.Mod[*dialect.InsertQu
 }
 
 func OverridingSystem() bob.Mod[*dialect.InsertQuery] {
-	return mods.QueryModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
+	return bob.ModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
 		i.Overriding = "SYSTEM"
 	})
 }
 
 func OverridingUser() bob.Mod[*dialect.InsertQuery] {
-	return mods.QueryModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
+	return bob.ModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
 		i.Overriding = "USER"
 	})
 }
@@ -58,15 +58,15 @@ func Rows(rows ...[]bob.Expression) bob.Mod[*dialect.InsertQuery] {
 
 // Insert from a query
 func Query(q bob.Query) bob.Mod[*dialect.InsertQuery] {
-	return mods.QueryModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
+	return bob.ModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
 		i.Query = q
 	})
 }
 
 // The column to target. Will auto add brackets
 func OnConflict(columns ...any) mods.Conflict[*dialect.InsertQuery] {
-	return mods.Conflict[*dialect.InsertQuery](func() clause.Conflict {
-		return clause.Conflict{
+	return mods.Conflict[*dialect.InsertQuery](func() clause.ConflictClause {
+		return clause.ConflictClause{
 			Target: clause.ConflictTarget{
 				Columns: columns,
 			},
@@ -75,8 +75,8 @@ func OnConflict(columns ...any) mods.Conflict[*dialect.InsertQuery] {
 }
 
 func OnConflictOnConstraint(constraint string) mods.Conflict[*dialect.InsertQuery] {
-	return mods.Conflict[*dialect.InsertQuery](func() clause.Conflict {
-		return clause.Conflict{
+	return mods.Conflict[*dialect.InsertQuery](func() clause.ConflictClause {
+		return clause.ConflictClause{
 			Target: clause.ConflictTarget{
 				Constraint: constraint,
 			},
@@ -92,17 +92,17 @@ func Returning(clauses ...any) bob.Mod[*dialect.InsertQuery] {
 // For use in ON CONFLICT DO UPDATE SET
 //========================================
 
-func Set(sets ...bob.Expression) bob.Mod[*clause.Conflict] {
-	return mods.QueryModFunc[*clause.Conflict](func(c *clause.Conflict) {
+func Set(sets ...bob.Expression) bob.Mod[*clause.ConflictClause] {
+	return bob.ModFunc[*clause.ConflictClause](func(c *clause.ConflictClause) {
 		c.Set.Set = append(c.Set.Set, internal.ToAnySlice(sets)...)
 	})
 }
 
-func SetCol(from string) mods.Set[*clause.Conflict] {
-	return mods.Set[*clause.Conflict]{from}
+func SetCol(from string) mods.Set[*clause.ConflictClause] {
+	return mods.Set[*clause.ConflictClause]{from}
 }
 
-func SetExcluded(cols ...string) bob.Mod[*clause.Conflict] {
+func SetExcluded(cols ...string) bob.Mod[*clause.ConflictClause] {
 	exprs := make([]any, 0, len(cols))
 	for _, col := range cols {
 		if col == "" {
@@ -115,13 +115,13 @@ func SetExcluded(cols ...string) bob.Mod[*clause.Conflict] {
 		)
 	}
 
-	return mods.QueryModFunc[*clause.Conflict](func(c *clause.Conflict) {
+	return bob.ModFunc[*clause.ConflictClause](func(c *clause.ConflictClause) {
 		c.Set.Set = append(c.Set.Set, exprs...)
 	})
 }
 
-func Where(e bob.Expression) bob.Mod[*clause.Conflict] {
-	return mods.QueryModFunc[*clause.Conflict](func(c *clause.Conflict) {
+func Where(e bob.Expression) bob.Mod[*clause.ConflictClause] {
+	return bob.ModFunc[*clause.ConflictClause](func(c *clause.ConflictClause) {
 		c.Where.Conditions = append(c.Where.Conditions, e)
 	})
 }
