@@ -1,19 +1,28 @@
 package clause
 
 import (
+	"context"
 	"errors"
 	"io"
 
 	"github.com/stephenafamo/bob"
 )
 
-var ErrNoCombinationStrategy = errors.New("Combination strategy must be set")
+var ErrNoCombinationStrategy = errors.New("combination strategy must be set")
 
 const (
 	Union     = "UNION"
 	Intersect = "INTERSECT"
 	Except    = "EXCEPT"
 )
+
+type Combines struct {
+	Queries []Combine
+}
+
+func (c *Combines) AppendCombine(combine Combine) {
+	c.Queries = append(c.Queries, combine)
+}
 
 type Combine struct {
 	Strategy string
@@ -25,7 +34,7 @@ func (s *Combine) SetCombine(c Combine) {
 	*s = c
 }
 
-func (s Combine) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (s Combine) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
 	if s.Strategy == "" {
 		return nil, ErrNoCombinationStrategy
 	}
@@ -38,7 +47,7 @@ func (s Combine) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) 
 		w.Write([]byte(" "))
 	}
 
-	args, err := bob.Express(w, d, start, s.Query)
+	args, err := s.Query.WriteQuery(ctx, w, start)
 	if err != nil {
 		return nil, err
 	}

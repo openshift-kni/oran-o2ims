@@ -7,6 +7,8 @@
 # This script uses go workspaces to sync the dependencies of the exported API submodules against the main go.mod
 #
 
+PINNED_GO="1.24.0"
+
 function cleanup {
     if [ -n "${rootdir}" ]; then
         rm -f "${rootdir}/go.work" "${rootdir}/go.work.sum"
@@ -60,8 +62,8 @@ for gomod in ./api/*/go.mod; do
         exit 1
     fi
 
-    if ! go mod tidy; then
-        echo "Command failed: go mod tidy" >&2
+    if ! go mod tidy -go="${PINNED_GO}"; then
+        echo "Command failed: go mod tidy -go=${PINNED_GO}" >&2
         exit 1
     fi
 
@@ -74,8 +76,8 @@ done
 rm -f "${rootdir}/go.work" "${rootdir}/go.work.sum"
 
 echo "Tidying main"
-if ! go mod tidy; then
-    echo "Command failed: go mod tidy" >&2
+if ! go mod tidy -go="${PINNED_GO}"; then
+    echo "Command failed: go mod tidy -go=${PINNED_GO}" >&2
     exit 1
 fi
 

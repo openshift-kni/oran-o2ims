@@ -53,7 +53,7 @@ func Find[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (*T, erro
 		sm.Columns(tags.Columns()...),
 		sm.From(record.TableName()),
 		sm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
-	).Build()
+	).Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
 	}
@@ -88,7 +88,7 @@ func Search[T db.Model](ctx context.Context, db DBQuery, whereExpr bob.Expressio
 		sm.Columns(tags.Columns()...),
 		sm.From(record.TableName()),
 		sm.Where(whereExpr),
-	).Build()
+	).Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
 	}
@@ -105,7 +105,7 @@ func Delete[T db.Model](ctx context.Context, db DBQuery, whereExpr psql.Expressi
 		dm.From(record.TableName()),
 		dm.Where(whereExpr))
 
-	sql, args, err := query.Build()
+	sql, args, err := query.Build(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to build delete query for '%s': %w", record.TableName(), err)
 	}
@@ -136,7 +136,7 @@ func Create[T db.Model](ctx context.Context, db DBQuery, record T, fields ...str
 		im.Values(psql.Arg(values...)),
 		im.Returning(all.Columns()...))
 
-	sql, args, err := query.Build()
+	sql, args, err := query.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create insert expression: %w", err)
 	}
@@ -171,7 +171,7 @@ func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record 
 
 	// Build the query
 	query := psql.Update(mods...)
-	sql, args, err := query.Build()
+	sql, args, err := query.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create update expression: %w", err)
 	}
@@ -206,7 +206,7 @@ func UpdateAll[T db.Model](ctx context.Context, db DBQuery, whereExpr bob.Expres
 
 	// Build the query
 	query := psql.Update(mods...)
-	sql, args, err := query.Build()
+	sql, args, err := query.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create update expression: %w", err)
 	}
@@ -222,7 +222,7 @@ func Exists[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (bool, 
 	query := psql.RawQuery(fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=?)",
 		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), uuid)
 
-	sql, args, err := query.Build()
+	sql, args, err := query.Build(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to build query: %w", err)
 	}

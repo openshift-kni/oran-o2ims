@@ -16,22 +16,22 @@ func Recursive(r bool) bob.Mod[*dialect.DeleteQuery] {
 }
 
 func Only() bob.Mod[*dialect.DeleteQuery] {
-	return mods.QueryModFunc[*dialect.DeleteQuery](func(d *dialect.DeleteQuery) {
+	return bob.ModFunc[*dialect.DeleteQuery](func(d *dialect.DeleteQuery) {
 		d.Only = true
 	})
 }
 
 func From(name any) bob.Mod[*dialect.DeleteQuery] {
-	return mods.QueryModFunc[*dialect.DeleteQuery](func(u *dialect.DeleteQuery) {
-		u.Table = clause.Table{
+	return bob.ModFunc[*dialect.DeleteQuery](func(u *dialect.DeleteQuery) {
+		u.Table = clause.TableRef{
 			Expression: name,
 		}
 	})
 }
 
 func FromAs(name any, alias string) bob.Mod[*dialect.DeleteQuery] {
-	return mods.QueryModFunc[*dialect.DeleteQuery](func(u *dialect.DeleteQuery) {
-		u.Table = clause.Table{
+	return bob.ModFunc[*dialect.DeleteQuery](func(u *dialect.DeleteQuery) {
+		u.Table = clause.TableRef{
 			Expression: name,
 			Alias:      alias,
 		}
@@ -58,7 +58,7 @@ func FullJoin(e any) dialect.JoinChain[*dialect.DeleteQuery] {
 	return dialect.FullJoin[*dialect.DeleteQuery](e)
 }
 
-func CrossJoin(e any) bob.Mod[*dialect.DeleteQuery] {
+func CrossJoin(e any) dialect.CrossJoinChain[*dialect.DeleteQuery] {
 	return dialect.CrossJoin[*dialect.DeleteQuery](e)
 }
 

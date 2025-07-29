@@ -172,7 +172,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 		im.Where(psql.Quote(m.TableName(), dbTags["AlarmSource"]).EQ(psql.Arg("alertmanager"))),
 	))
 
-	sql, params, err := query.Build()
+	sql, params, err := query.Build(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to build query for event upsert: %w", err)
 	}
@@ -218,7 +218,7 @@ func (ar *AlarmsRepository) ResolveStaleAlarmEventCaaSRecord(ctx context.Context
 		um.Returning(psql.Quote(alarmEventRecordID)),
 	)
 
-	sql, params, err := query.Build()
+	sql, params, err := query.Build(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to build AlarmEventRecord update query when processing AM notification: %w", err)
 	}
@@ -257,7 +257,7 @@ func (ar *AlarmsRepository) DeleteAlarmsDataChange(ctx context.Context, dataChan
 		dm.From(dataChangeModel.TableName()),
 		dm.Where(psql.Quote(dbTags["DataChangeID"]).EQ(psql.Arg(dataChangeId))),
 	)
-	sql, params, err := q.Build()
+	sql, params, err := q.Build(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to build AlarmsDataChangeEvent delete query: %w", err)
 	}

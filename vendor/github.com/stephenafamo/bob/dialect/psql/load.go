@@ -16,40 +16,36 @@ import (
 	"github.com/stephenafamo/scan"
 )
 
-// Loader builds a query mod that makes an extra query after the object is retrieved
-// it can be used to prevent N+1 queries by loading relationships in batches
-type Loader = internal.Loader[*dialect.SelectQuery]
-
 // Preloader builds a query mod that modifies the original query to retrieve related fields
 // while it can be used as a queryMod, it does not have any direct effect.
 // if using manually, the ApplyPreload method should be called
 // with the query's context AFTER other mods have been applied
-type Preloader = internal.Preloader[*dialect.SelectQuery]
+type Preloader = orm.Preloader[*dialect.SelectQuery]
 
 // Settings for preloading relationships
-type PreloadSettings = internal.PreloadSettings[*dialect.SelectQuery]
+type PreloadSettings = orm.PreloadSettings[*dialect.SelectQuery]
 
 // Modifies preloading relationships
-type PreloadOption = internal.PreloadOption[*dialect.SelectQuery]
+type PreloadOption = orm.PreloadOption[*dialect.SelectQuery]
 
 func PreloadOnly(cols ...string) PreloadOption {
-	return internal.PreloadOnly[*dialect.SelectQuery](cols)
+	return orm.PreloadOnly[*dialect.SelectQuery](cols)
 }
 
 func PreloadExcept(cols ...string) PreloadOption {
-	return internal.PreloadExcept[*dialect.SelectQuery](cols)
+	return orm.PreloadExcept[*dialect.SelectQuery](cols)
 }
 
 func PreloadWhere(f ...func(from, to string) []bob.Expression) PreloadOption {
-	return internal.PreloadWhere[*dialect.SelectQuery](f)
+	return orm.PreloadWhere[*dialect.SelectQuery](f)
 }
 
 func PreloadAs(alias string) PreloadOption {
-	return internal.PreloadAs[*dialect.SelectQuery](alias)
+	return orm.PreloadAs[*dialect.SelectQuery](alias)
 }
 
 func Preload[T any, Ts ~[]T](rel orm.Relationship, cols []string, opts ...PreloadOption) Preloader {
-	settings := internal.NewPreloadSettings[T, Ts, *dialect.SelectQuery](cols)
+	settings := orm.NewPreloadSettings[T, Ts, *dialect.SelectQuery](cols)
 	for _, o := range opts {
 		if o == nil {
 			continue
@@ -57,8 +53,7 @@ func Preload[T any, Ts ~[]T](rel orm.Relationship, cols []string, opts ...Preloa
 		o.ModifyPreloadSettings(&settings)
 	}
 
-	return buildPreloader[T](func(ctx context.Context) (string, mods.QueryMods[*dialect.SelectQuery]) {
-		parent, _ := ctx.Value(orm.CtxLoadParentAlias).(string)
+	return buildPreloader[T](func(parent string) (string, mods.QueryMods[*dialect.SelectQuery]) {
 		if parent == "" {
 			parent = rel.Sides[0].From
 		}
@@ -90,7 +85,7 @@ func Preload[T any, Ts ~[]T](rel orm.Relationship, cols []string, opts ...Preloa
 			}
 
 			queryMods = append(queryMods, sm.
-				LeftJoin(side.ToExpr(ctx)).
+				LeftJoin(orm.SchemaTable(side.To)).
 				As(alias).
 				On(on...))
 
@@ -105,17 +100,16 @@ func Preload[T any, Ts ~[]T](rel orm.Relationship, cols []string, opts ...Preloa
 	}, rel.Name, settings)
 }
 
-func buildPreloader[T any](f func(context.Context) (string, mods.QueryMods[*dialect.SelectQuery]), name string, opt PreloadSettings) Preloader {
-	return func(ctx context.Context) (bob.Mod[*dialect.SelectQuery], scan.MapperMod, []bob.Loader) {
-		alias, queryMods := f(ctx)
+func buildPreloader[T any](f func(string) (string, mods.QueryMods[*dialect.SelectQuery]), name string, opt PreloadSettings) Preloader {
+	return func(parent string) (bob.Mod[*dialect.SelectQuery], scan.MapperMod, []bob.Loader) {
+		alias, queryMods := f(parent)
 		prefix := alias + "."
 
 		var mapperMods []scan.MapperMod
 		extraLoaders := []bob.Loader{opt.ExtraLoader}
 
-		ctx = context.WithValue(ctx, orm.CtxLoadParentAlias, alias)
 		for _, l := range opt.SubLoaders {
-			queryMod, mapperMod, extraLoader := l(ctx)
+			queryMod, mapperMod, extraLoader := l(alias)
 			if queryMod != nil {
 				queryMods = append(queryMods, queryMod)
 			}
@@ -138,7 +132,7 @@ func buildPreloader[T any](f func(context.Context) (string, mods.QueryMods[*dial
 			)(ctx, cols)
 
 			return before, func(link, retrieved any) error {
-				loader, isLoader := retrieved.(internal.Preloadable)
+				loader, isLoader := retrieved.(orm.Preloadable)
 				if !isLoader {
 					return fmt.Errorf("object %T cannot pre load", retrieved)
 				}
