@@ -20,6 +20,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
@@ -101,7 +102,7 @@ func Serve(config *api.ResourceServerConfig) error {
 
 	// Convert arguments
 	var globalCloudID uuid.UUID
-	if config.GlobalCloudID != utils.DefaultOCloudID {
+	if config.GlobalCloudID != constants.DefaultOCloudID {
 		value, err := uuid.Parse(config.GlobalCloudID)
 		if err != nil {
 			return fmt.Errorf("failed to parse global cloud NotificationID '%s': %w", config.GlobalCloudID, err)
@@ -129,7 +130,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository, collector.NewNotificationTransformer())
-	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
+	clientFactory := notifier.NewClientFactory(oauthConfig, constants.DefaultBackendTokenFile)
 	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	hwMgrDataSourceLoader, err := collector.NewHwPluginDataSourceLoader(cloudID, globalCloudID)

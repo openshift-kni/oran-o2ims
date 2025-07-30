@@ -49,7 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	//+kubebuilder:scaffold:imports
 )
@@ -86,7 +86,7 @@ var _ = Describe("Inventory Controller", func() {
 			// Declare the Namespace for the O-Cloud Manager resource.
 			ns := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "oran-o2ims",
+					Name: constants.DefaultNamespace,
 				},
 			}
 
@@ -130,7 +130,7 @@ var _ = Describe("Inventory Controller", func() {
 			}
 
 			// Set up necessary env variables
-			err := os.Setenv(utils.PostgresImageName, "postgres:test")
+			err := os.Setenv(constants.PostgresImageName, "postgres:test")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Update the testcase objects to include the Namespace.
@@ -221,7 +221,7 @@ var _ = Describe("Inventory Controller", func() {
 				&inventoryv1alpha1.Inventory{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:              "oran-o2ims-sample-1",
-						Namespace:         "oran-o2ims",
+						Namespace:         constants.DefaultNamespace,
 						CreationTimestamp: metav1.Now(),
 					},
 					Spec: inventoryv1alpha1.InventorySpec{

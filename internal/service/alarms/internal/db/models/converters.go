@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
-
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
@@ -50,7 +50,7 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 
 // ConvertAlarmEventRecordModelToAlarmEventNotification converts an AlarmEventRecord to api AlarmEventNotification
 func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, globalCloudID uuid.UUID) api.AlarmEventNotification {
-	or := fmt.Sprintf("%s/alarms/%v", "/o2ims-infrastructureMonitoring/v1", aerModel.AlarmEventRecordID.String())
+	or := fmt.Sprintf("%s/alarms/%v", constants.O2IMSMonitoringBaseURL, aerModel.AlarmEventRecordID.String())
 	notification := api.AlarmEventNotification{
 		AlarmAcknowledgeTime:  aerModel.AlarmAcknowledgedTime,
 		AlarmAcknowledged:     aerModel.AlarmAcknowledged,

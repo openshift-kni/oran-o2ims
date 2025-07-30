@@ -11,12 +11,13 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/spf13/cobra"
 )
 
 // artifactsRootCmd represents the root command for working artifacts server
 var artifactsRootCmd = &cobra.Command{
-	Use:   "artifacts-server",
+	Use:   constants.ArtifactsServerCmd,
 	Short: "All things needed for the artifacts server",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		configureArtifactsLogger()

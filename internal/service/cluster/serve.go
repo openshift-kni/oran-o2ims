@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
@@ -125,7 +126,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository, collector.NewNotificationTransformer())
-	clientFactory := notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile)
+	clientFactory := notifier.NewClientFactory(oauthConfig, constants.DefaultBackendTokenFile)
 	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create the collector

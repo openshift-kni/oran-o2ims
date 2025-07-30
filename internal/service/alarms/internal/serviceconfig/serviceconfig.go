@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -208,7 +209,7 @@ func (c *Config) generateCronJob(configMap corev1.ConfigMap) batchv1.CronJob {
 								{
 									Name:    cleanupCronJobName,
 									Image:   c.PostgresImage,
-									Command: []string{"psql"},
+									Command: []string{constants.PsqlExec},
 									Args:    []string{"-f", fmt.Sprintf("%s/%s", cleanScriptDir, cleanScriptName)},
 									Env:     pgEnv,
 									Resources: corev1.ResourceRequirements{

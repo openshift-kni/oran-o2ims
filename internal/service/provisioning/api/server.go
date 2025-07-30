@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,7 +41,7 @@ type ProvisioningServerConfig struct {
 var _ api.StrictServerInterface = (*ProvisioningServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
-var baseURL = "/o2ims-infrastructureProvisioning/v1"
+var baseURL = constants.O2IMSProvisioningBaseURL
 var currentVersion = "1.0.0"
 
 // GetAllVersions handles an API request to fetch all versions

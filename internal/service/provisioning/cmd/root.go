@@ -11,12 +11,13 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/spf13/cobra"
 )
 
 // provisioningRootCmd represents the root command for working provisioning server
 var provisioningRootCmd = &cobra.Command{
-	Use:   "provisioning-server",
+	Use:   constants.ProvisioningServerCmd,
 	Short: "All things needed for the provisioning server",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		configureProvisioningLogger()

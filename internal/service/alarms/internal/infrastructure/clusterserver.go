@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/client-go/transport"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
@@ -67,7 +68,7 @@ func (r *ClusterServer) Setup() error {
 
 	hc := http.Client{Transport: tr}
 
-	tokenPath := utils.DefaultBackendTokenFile
+	tokenPath := constants.DefaultBackendTokenFile
 
 	// Use for local development
 	path := os.Getenv(tokenPathEnvName)

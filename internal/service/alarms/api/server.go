@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
@@ -62,7 +63,7 @@ type AlarmsServer struct {
 var _ api.StrictServerInterface = (*AlarmsServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
-var baseURL = "/o2ims-infrastructureMonitoring/v1"
+var baseURL = constants.O2IMSMonitoringBaseURL
 var currentVersion = "1.0.0"
 
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately

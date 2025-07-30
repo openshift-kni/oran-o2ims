@@ -20,6 +20,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -37,7 +38,7 @@ type HardwarePluginServer struct {
 	ResourcePrefix   string
 }
 
-var baseURL = "/hardware-manager/provisioning/v1"
+var baseURL = constants.HardwareManagerProvisioningBaseURL
 var currentVerion = "1.0.0"
 
 // GetAllVersions handles an API request to fetch all versions

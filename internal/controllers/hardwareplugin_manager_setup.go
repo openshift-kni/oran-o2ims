@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,7 +47,7 @@ func (t *reconcilerTask) setupHardwarePluginManager(ctx context.Context, default
 		return
 	}
 
-	if err = t.createService(ctx, utils.HardwarePluginManagerServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
+	if err = t.createService(ctx, utils.HardwarePluginManagerServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy Service for the HardwarePlugin manager.",
 			slog.String("error", err.Error()))
 		return
@@ -200,7 +201,7 @@ func (t *reconcilerTask) createHardwarePluginManagerClusterRole(ctx context.Cont
 			// HardwarePlugin registration verification
 			{
 				NonResourceURLs: []string{
-					"/hardware-manager/provisioning/*",
+					constants.HardwareManagerProvisioningAPIPath + "/*",
 				},
 				Verbs: []string{
 					"get",
