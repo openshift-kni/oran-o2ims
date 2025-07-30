@@ -14,6 +14,8 @@ metadata:
       (
         '.tekton/o-cloud-manager-4-20-pull-request.yaml'.pathChanged() ||
         '.tekton/build-pipeline.yaml'.pathChanged() ||
+        'telco5g-konflux'.pathChanged() ||
+        'telco5g-konflux/***'.pathChanged() ||
         '.konflux/Dockerfile'.pathChanged() ||
         'go.mod'.pathChanged() ||
         'go.sum'.pathChanged() ||
