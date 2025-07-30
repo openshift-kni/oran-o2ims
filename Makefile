@@ -420,6 +420,7 @@ opm: ## Download opm locally if necessary
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-opm \
 		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
 		DOWNLOAD_OPM_VERSION=$(OPM_VERSION)
+	opm version
 	@echo "Opm downloaded successfully."
 
 .PHONY: shellcheck
@@ -427,6 +428,7 @@ shellcheck: ## Download shellcheck locally if necessary and run against bash  sc
 	@echo "Downloading shellcheck..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-shellcheck DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
 	@echo "Shellcheck downloaded successfully."
+	shellcheck -V
 	@echo "Running shellcheck on repository bash files..."
 	find . -name '*.sh' \
 		-not -path './vendor/*' \
@@ -444,6 +446,7 @@ yamllint: ## Download yamllint locally if necessary and run against yaml files
 	@echo "Downloading yamllint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
 	@echo "Yamllint downloaded successfully."
+	yamllint -v
 	@echo "Running yamllint on repository YAML files..."
 	find . -name "*.yaml" -o -name "*.yml" \
 		-not -path './vendor/*' \
@@ -460,6 +463,7 @@ yamllint: ## Download yamllint locally if necessary and run against yaml files
 yq: ## Download yq locally if necessary
 	@echo "Downloading yq..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yq DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
+	yq --version
 	@echo "Yq downloaded successfully."
 
 .PHONY: yq-sort-and-format
