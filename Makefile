@@ -387,7 +387,13 @@ catalog-undeploy: ## Undeploy from catalog image.
 ##@ Tools and Linting
 
 .PHONY: lint
-lint: ./hack/golangci-lint.sh yamllint
+lint: golangci-lint yamllint
+
+.PHONY: golangci-lint
+golangci-lint: ## Run golangci-lint against code.
+	@echo "Running golangci-lint on repository go files..."
+	golangci-lint --version
+	hack/golangci-lint.sh
 
 .PHONY: tools
 tools: opm operator-sdk yq
