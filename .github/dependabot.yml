@@ -2,24 +2,24 @@
 # https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
 version: 2
 updates:
-# Go modules
-- package-ecosystem: "gomod"
-  directories:
-  - "/"
-  - "api/hardwaremanagement"
-  - "api/inventory"
-  - "api/provisioning"
-  schedule:
+ # Go modules
+ - package-ecosystem: "gomod"
+   directories:
+    - "/"
+    - "api/hardwaremanagement"
+    - "api/inventory"
+    - "api/provisioning"
+   schedule:
     interval: "daily"
-  open-pull-requests-limit: 5
-  groups:
+   open-pull-requests-limit: 5
+   groups:
     k8s:
-      patterns: [ "k8s.io/*", "sigs.k8s.io/*" ]
-      update-types: [ "major", "minor", "patch" ]
+     patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+     update-types: ["major", "minor", "patch"]
     golang:
-      patterns: [ "golang.org/*" ]
-      update-types: [ "major", "minor", "patch" ]
-  ignore:
-  #ignore:
-  #  - dependency-name: "*"
-  #    update-types: ["version-update:semver-patch"]
+     patterns: ["golang.org/*"]
+     update-types: ["major", "minor", "patch"]
+   ignore:
+   #ignore:
+   #  - dependency-name: "*"
+   #    update-types: ["version-update:semver-patch"]
