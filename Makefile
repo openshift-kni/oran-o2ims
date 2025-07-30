@@ -33,6 +33,9 @@ YQ_VERSION ?= v4.45.4
 # OPM_VERSION defines the opm version to download from GitHub releases.
 OPM_VERSION ?= v1.52.0
 
+# GOLANGCI_LINT_VERSION the opm version to download from GitHub releases.
+GOLANGCI_LINT_VERSION ?= v2.3.0
+
 PACKAGE_NAME_KONFLUX = o-cloud-manager
 CATALOG_TEMPLATE_KONFLUX = .konflux/catalog/catalog-template.in.yaml
 CATALOG_KONFLUX = .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
@@ -391,9 +394,15 @@ lint: golangci-lint yamllint
 
 .PHONY: golangci-lint
 golangci-lint: ## Run golangci-lint against code.
+	@echo "Downloading golangci-lint..."
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-golangci-lint \
+		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION)
+	@echo "Golangci-lint downloaded successfully."
 	@echo "Running golangci-lint on repository go files..."
 	golangci-lint --version
-	hack/golangci-lint.sh
+	golangci-lint run -v
+	@echo "Golangci-lint linting completed successfully."
 
 .PHONY: tools
 tools: opm operator-sdk yq
