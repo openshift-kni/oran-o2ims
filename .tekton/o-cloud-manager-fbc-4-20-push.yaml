@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "push" &&
-      target_branch == "main" &&
+      target_branch == "NOBRANCH" &&
       (
         '.tekton/fbc-pipeline.yaml'.pathChanged() ||
         '.tekton/o-cloud-manager-fbc-4-20-push.yaml'.pathChanged() ||

@@ -6,7 +6,7 @@ entries:
       mediatype: image/svg+xml
     name: o-cloud-manager
     schema: olm.package
-  # Add 'replaces' after we whip 4.20.0
+  # Add 'replaces' after we ship 4.20.0
   - entries:
       - name: o-cloud-manager.v4.20.0
         skipRange: '>=4.9.0 <4.20.0'

@@ -10,6 +10,7 @@
 PINNED_GO="1.24.0"
 
 function cleanup {
+    # shellcheck disable=SC2317
     if [ -n "${rootdir}" ]; then
         rm -f "${rootdir}/go.work" "${rootdir}/go.work.sum"
     fi

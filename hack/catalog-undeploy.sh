@@ -48,7 +48,6 @@ longopts_str=$(IFS=,; echo "${longopts[*]}")
 
 if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
     usage
-    exit 1
 fi
 
 eval set -- "${OPTS}"

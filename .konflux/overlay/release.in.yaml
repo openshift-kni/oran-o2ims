@@ -1,0 +1,10 @@
+---
+variables:
+  # PLACEHOLDER_ variables will be substituted by ad-hoc overlay logic
+  containerImage: PLACEHOLDER_CONTAINER_IMAGE
+  description: |
+      O-cloud manager operator
+  display_name: "o-cloud manager"
+  manager_version: "o-cloud-manager.v4.20.0"
+  min_kube_version: "1.32.0"
+  version: "4.20.0"
