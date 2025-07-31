@@ -15,18 +15,18 @@ import (
 	"github.com/google/uuid"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api/generated"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
-	commonutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 type ArtifactsServerConfig struct {
-	commonutils.CommonServerConfig
+	svcutils.CommonServerConfig
 }
 type ArtifactsServer struct {
 	HubClient client.Client
@@ -157,11 +157,11 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	oranct := clusterTemplatesItems[0]
 
 	// Get the response for the ClusterInstance default values.
-	clusterInstanceResults, err := utils.GetDefaultsFromConfigMap(
+	clusterInstanceResults, err := ctlrutils.GetDefaultsFromConfigMap(
 		ctx, r.HubClient,
 		oranct.Spec.Templates.ClusterInstanceDefaults,
 		oranct.Namespace,
-		utils.ClusterInstanceTemplateDefaultsConfigmapKey,
+		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,
 		provisioningv1alpha1.TemplateParamClusterInstance,
 	)
@@ -170,11 +170,11 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	}
 
 	// Get the response for the Policy default values.
-	policyTemplateResults, err := utils.GetDefaultsFromConfigMap(
+	policyTemplateResults, err := ctlrutils.GetDefaultsFromConfigMap(
 		ctx, r.HubClient,
 		oranct.Spec.Templates.PolicyTemplateDefaults,
 		oranct.Namespace,
-		utils.PolicyTemplateDefaultsConfigmapKey,
+		ctlrutils.PolicyTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,
 		provisioningv1alpha1.TemplateParamPolicyConfig,
 	)

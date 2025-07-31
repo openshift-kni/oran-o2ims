@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // Struct definitions for the nodelist configmap
@@ -104,19 +104,19 @@ func getFreeNodesInPool(resources cmResources, allocations cmAllocations, poolID
 // getCurrentResources parses the nodelist configmap to get the current available and allocated resource lists
 func getCurrentResources(ctx context.Context, c client.Client, logger *slog.Logger, namespace string) (
 	cm *corev1.ConfigMap, resources cmResources, allocations cmAllocations, err error) {
-	cm, err = sharedutils.GetConfigmap(ctx, c, cmName, namespace)
+	cm, err = ctlrutils.GetConfigmap(ctx, c, cmName, namespace)
 	if err != nil {
 		err = fmt.Errorf("unable to get configmap: %w", err)
 		return
 	}
 
-	resources, err = sharedutils.ExtractDataFromConfigMap[cmResources](cm, resourcesKey)
+	resources, err = ctlrutils.ExtractDataFromConfigMap[cmResources](cm, resourcesKey)
 	if err != nil {
 		err = fmt.Errorf("unable to parse resources from configmap: %w", err)
 		return
 	}
 
-	allocations, err = sharedutils.ExtractDataFromConfigMap[cmAllocations](cm, allocationsKey)
+	allocations, err = ctlrutils.ExtractDataFromConfigMap[cmAllocations](cm, allocationsKey)
 	if err != nil {
 		// Allocated node field may not be present
 		logger.InfoContext(ctx, "unable to parse allocations from configmap")

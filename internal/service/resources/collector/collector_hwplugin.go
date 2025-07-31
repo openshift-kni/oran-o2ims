@@ -18,7 +18,7 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/inventory"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
@@ -117,7 +117,7 @@ func (d *HwPluginDataSource) MakeResourceType(resource *models.Resource) (*model
 	vendor := resource.Extensions[vendorExtension].(string)
 	model := resource.Extensions[modelExtension].(string)
 	name := fmt.Sprintf("%s/%s", vendor, model)
-	resourceTypeID := utils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
 
 	// TODO: finish filling this in with data
 	result := models.ResourceType{
@@ -186,7 +186,7 @@ func (d *HwPluginDataSource) GetResourcePools(ctx context.Context) ([]models.Res
 
 func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourcePoolInfo) *models.ResourcePool {
 	return &models.ResourcePool{
-		ResourcePoolID:   utils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, pool.ResourcePoolId),
+		ResourcePoolID:   ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, pool.ResourcePoolId),
 		GlobalLocationID: d.globalCloudID, // TODO: spec wording is unclear about what this value should be.
 		Name:             pool.Name,
 		Description:      pool.Description,
@@ -202,21 +202,21 @@ func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourceP
 // MakeResourceID calculates a UUID value to be used as the ResourceID.  The cloudID and hwPluginRef are added to the node
 // id value to ensure we get a globally unique value.
 func MakeResourceID(cloudID uuid.UUID, hwPluginRef, hwMgrNodeID string) uuid.UUID {
-	return utils.MakeUUIDFromNames(ResourceUUIDNamespace, cloudID, hwPluginRef, hwMgrNodeID)
+	return ctlrutils.MakeUUIDFromNames(ResourceUUIDNamespace, cloudID, hwPluginRef, hwMgrNodeID)
 }
 
 func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) *models.Resource {
 	// The resourceID computed here must
 	resourceID := MakeResourceID(d.cloudID, d.hwplugin.Name, resource.ResourceId)
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
-	resourceTypeID := utils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
 
 	result := &models.Resource{
 		ResourceID:     resourceID,
 		Description:    resource.Description,
 		ResourceTypeID: resourceTypeID,
 		GlobalAssetID:  resource.GlobalAssetId,
-		ResourcePoolID: utils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, resource.ResourcePoolId),
+		ResourcePoolID: ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, resource.ResourcePoolId),
 		Extensions: map[string]interface{}{
 			modelExtension:            resource.Model,
 			vendorExtension:           resource.Vendor,

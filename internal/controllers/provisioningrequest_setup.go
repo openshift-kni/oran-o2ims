@@ -26,7 +26,7 @@ import (
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -110,7 +110,7 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Filter out updates to parent policies.
-					if _, ok := e.ObjectNew.GetLabels()[utils.ChildPolicyRootPolicyLabel]; !ok {
+					if _, ok := e.ObjectNew.GetLabels()[ctlrutils.ChildPolicyRootPolicyLabel]; !ok {
 						return false
 					}
 
@@ -125,7 +125,7 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc: func(de event.DeleteEvent) bool {
 					// Filter out updates to parent policies.
-					if _, ok := de.Object.GetLabels()[utils.ChildPolicyRootPolicyLabel]; !ok {
+					if _, ok := de.Object.GetLabels()[ctlrutils.ChildPolicyRootPolicyLabel]; !ok {
 						return false
 					}
 					return true
@@ -281,8 +281,8 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 			}
 		}
 
-		_, parentPolicyNs := utils.GetParentPolicyNameAndNamespace(obj.GetName())
-		if utils.IsParentPolicyInZtpClusterTemplateNs(parentPolicyNs, ctRefNamespace) {
+		_, parentPolicyNs := ctlrutils.GetParentPolicyNameAndNamespace(obj.GetName())
+		if ctlrutils.IsParentPolicyInZtpClusterTemplateNs(parentPolicyNs, ctRefNamespace) {
 			r.Logger.Info(
 				"[enqueueProvisioningRequestForPolicy] Add new reconcile request for ProvisioningRequest ",
 				"name", provisioningRequest, "policyName", obj.GetName())

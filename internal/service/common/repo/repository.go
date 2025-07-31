@@ -20,7 +20,7 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql"
 
 	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 // CommonRepository defines the database repository for the resource server tables
@@ -30,39 +30,39 @@ type CommonRepository struct {
 
 // GetSubscriptions retrieves all Subscription tuples or returns an empty array if no tuples are found
 func (r *CommonRepository) GetSubscriptions(ctx context.Context) ([]commonmodels.Subscription, error) {
-	return utils.FindAll[commonmodels.Subscription](ctx, r.Db)
+	return svcutils.FindAll[commonmodels.Subscription](ctx, r.Db)
 }
 
 // GetSubscription retrieves a specific Subscription tuple or returns ErrNotFound if not found
 func (r *CommonRepository) GetSubscription(ctx context.Context, id uuid.UUID) (*commonmodels.Subscription, error) {
-	return utils.Find[commonmodels.Subscription](ctx, r.Db, id)
+	return svcutils.Find[commonmodels.Subscription](ctx, r.Db, id)
 }
 
 // DeleteSubscription deletes a Subscription tuple.  The caller should ensure that it exists prior to calling this.
 func (r *CommonRepository) DeleteSubscription(ctx context.Context, id uuid.UUID) (int64, error) {
 	expr := psql.Quote(commonmodels.Subscription{}.PrimaryKey()).EQ(psql.Arg(id))
-	return utils.Delete[commonmodels.Subscription](ctx, r.Db, expr)
+	return svcutils.Delete[commonmodels.Subscription](ctx, r.Db, expr)
 }
 
 // CreateSubscription create a new Subscription tuple
 func (r *CommonRepository) CreateSubscription(ctx context.Context, subscription *commonmodels.Subscription) (*commonmodels.Subscription, error) {
-	return utils.Create[commonmodels.Subscription](ctx, r.Db, *subscription)
+	return svcutils.Create[commonmodels.Subscription](ctx, r.Db, *subscription)
 }
 
 // UpdateSubscription updates a specific Subscription tuple
 func (r *CommonRepository) UpdateSubscription(ctx context.Context, subscription *commonmodels.Subscription) (*commonmodels.Subscription, error) {
-	return utils.Update[commonmodels.Subscription](ctx, r.Db, *subscription.SubscriptionID, *subscription)
+	return svcutils.Update[commonmodels.Subscription](ctx, r.Db, *subscription.SubscriptionID, *subscription)
 }
 
 // GetDataSourceByName retrieves a specific DataSource tuple by name or returns ErrNotFound if not found
 func (r *CommonRepository) GetDataSourceByName(ctx context.Context, name string) (*commonmodels.DataSource, error) {
 	e := psql.Quote("name").EQ(psql.Arg(name))
-	records, err := utils.Search[commonmodels.DataSource](ctx, r.Db, e)
+	records, err := svcutils.Search[commonmodels.DataSource](ctx, r.Db, e)
 	if err != nil {
 		return nil, err
 	}
 	if len(records) == 0 {
-		return nil, utils.ErrNotFound
+		return nil, svcutils.ErrNotFound
 	}
 	if len(records) != 1 {
 		return nil, fmt.Errorf("expected 1 record, got %d", len(records))
@@ -72,28 +72,28 @@ func (r *CommonRepository) GetDataSourceByName(ctx context.Context, name string)
 
 // CreateDataSource creates a new DataSource tuple
 func (r *CommonRepository) CreateDataSource(ctx context.Context, dataSource *commonmodels.DataSource) (*commonmodels.DataSource, error) {
-	return utils.Create[commonmodels.DataSource](ctx, r.Db, *dataSource)
+	return svcutils.Create[commonmodels.DataSource](ctx, r.Db, *dataSource)
 }
 
 // UpdateDataSource updates a specific DataSource tuple
 func (r *CommonRepository) UpdateDataSource(ctx context.Context, dataSource *commonmodels.DataSource) (*commonmodels.DataSource, error) {
-	return utils.Update[commonmodels.DataSource](ctx, r.Db, *dataSource.DataSourceID, *dataSource)
+	return svcutils.Update[commonmodels.DataSource](ctx, r.Db, *dataSource.DataSourceID, *dataSource)
 }
 
 // CreateDataChangeEvent creates a new DataSource tuple
 func (r *CommonRepository) CreateDataChangeEvent(ctx context.Context, dataChangeEvent *commonmodels.DataChangeEvent) (*commonmodels.DataChangeEvent, error) {
-	return utils.Create[commonmodels.DataChangeEvent](ctx, r.Db, *dataChangeEvent)
+	return svcutils.Create[commonmodels.DataChangeEvent](ctx, r.Db, *dataChangeEvent)
 }
 
 // DeleteDataChangeEvent deletes a DataChangeEvent tuple.  The caller should ensure that it exists prior to calling this.
 func (r *CommonRepository) DeleteDataChangeEvent(ctx context.Context, id uuid.UUID) (int64, error) {
 	expr := psql.Quote(commonmodels.DataChangeEvent{}.PrimaryKey()).EQ(psql.Arg(id))
-	return utils.Delete[commonmodels.DataChangeEvent](ctx, r.Db, expr)
+	return svcutils.Delete[commonmodels.DataChangeEvent](ctx, r.Db, expr)
 }
 
 // GetDataChangeEvents retrieves all DataChangeEvent tuples or returns an empty array if no tuples are found
 func (r *CommonRepository) GetDataChangeEvents(ctx context.Context) ([]commonmodels.DataChangeEvent, error) {
-	return utils.FindAll[commonmodels.DataChangeEvent](ctx, r.Db)
+	return svcutils.FindAll[commonmodels.DataChangeEvent](ctx, r.Db)
 }
 
 // ClaimDataChangeEvent claims a batch of DataChangeEvent and updates the high-water mark.
@@ -127,7 +127,7 @@ func ClaimDataChangeEvent(pool *pgxpool.Pool, ctx context.Context) ([]commonmode
 
 func getLatestDataChangeEvent(ctx context.Context, tx pgx.Tx, highWatermark int) ([]commonmodels.DataChangeEvent, error) {
 	m := commonmodels.DataChangeEvent{}
-	all := utils.GetAllDBTagsFromStruct(m)
+	all := svcutils.GetAllDBTagsFromStruct(m)
 
 	queryGetLatestEvents := psql.Select(
 		sm.Columns(all.Columns()...),
@@ -142,7 +142,7 @@ func getLatestDataChangeEvent(ctx context.Context, tx pgx.Tx, highWatermark int)
 		return nil, fmt.Errorf("failed to build queryGetLatestEvents query: %w", err)
 	}
 
-	dataChangeEvents, err := utils.ExecuteCollectRows[commonmodels.DataChangeEvent](ctx, tx, sql, params)
+	dataChangeEvents, err := svcutils.ExecuteCollectRows[commonmodels.DataChangeEvent](ctx, tx, sql, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute queryGetLatestEvents: %w", err)
 	}
@@ -152,7 +152,7 @@ func getLatestDataChangeEvent(ctx context.Context, tx pgx.Tx, highWatermark int)
 // getHighWatermark from notification_cursor get last_event_id to get the highwatermark
 func getHighWatermark(ctx context.Context, tx pgx.Tx) (int, error) {
 	m := commonmodels.NotificationCursor{}
-	all := utils.GetAllDBTagsFromStruct(m)
+	all := svcutils.GetAllDBTagsFromStruct(m)
 
 	queryGetHighWater := psql.Select(
 		sm.Columns(all["LastEventID"]),
@@ -165,7 +165,7 @@ func getHighWatermark(ctx context.Context, tx pgx.Tx) (int, error) {
 		return 0, fmt.Errorf("failed to build queryGetHighWater query: %w", err)
 	}
 
-	highWatermark, err := utils.ExecuteCollectExactlyOneRow[commonmodels.NotificationCursor](ctx, tx, sql, params)
+	highWatermark, err := svcutils.ExecuteCollectExactlyOneRow[commonmodels.NotificationCursor](ctx, tx, sql, params)
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute queryGetHighWater: %w", err)
 	}
@@ -180,7 +180,7 @@ func updateHighWatermark(ctx context.Context, tx pgx.Tx, dataChangeEvents []comm
 	}
 
 	m := commonmodels.NotificationCursor{}
-	all := utils.GetAllDBTagsFromStruct(m)
+	all := svcutils.GetAllDBTagsFromStruct(m)
 
 	lastSeqProcessed := dataChangeEvents[len(dataChangeEvents)-1].SequenceID // The DataChangeEvent should come in sorted in ascending order
 	queryUpdateHighWater := psql.Update(
@@ -196,7 +196,7 @@ func updateHighWatermark(ctx context.Context, tx pgx.Tx, dataChangeEvents []comm
 		return fmt.Errorf("failed to build queryUpdateHighWater query: %w", err)
 	}
 
-	updateHighWatermark, err := utils.ExecuteCollectExactlyOneRow[commonmodels.NotificationCursor](ctx, tx, sql, params)
+	updateHighWatermark, err := svcutils.ExecuteCollectExactlyOneRow[commonmodels.NotificationCursor](ctx, tx, sql, params)
 	if err != nil {
 		return fmt.Errorf("failed to execute queryUpdateHighWater: %w", err)
 	}

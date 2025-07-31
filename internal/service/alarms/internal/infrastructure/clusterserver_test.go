@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated/mock_generated"
 	commonsgenerated "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -109,13 +109,13 @@ var _ = Describe("ClusterServer", func() {
 				{
 					NodeClusterTypeId: firstAssociation.nodeClusterTypeID,
 					Extensions: &map[string]interface{}{
-						utils.ClusterAlarmDictionaryIDExtension: firstAssociation.alarmDictionaryID,
+						ctlrutils.ClusterAlarmDictionaryIDExtension: firstAssociation.alarmDictionaryID,
 					},
 				},
 				{
 					NodeClusterTypeId: secondAssociation.nodeClusterTypeID,
 					Extensions: &map[string]interface{}{
-						utils.ClusterAlarmDictionaryIDExtension: secondAssociation.alarmDictionaryID,
+						ctlrutils.ClusterAlarmDictionaryIDExtension: secondAssociation.alarmDictionaryID,
 					},
 				},
 			}
@@ -292,7 +292,7 @@ var _ = Describe("ClusterServer", func() {
 			nodeClusterType := generated.NodeClusterType{
 				NodeClusterTypeId: nodeClusterTypeID,
 				Extensions: &map[string]interface{}{
-					utils.ClusterAlarmDictionaryIDExtension: alarmDictionaryID,
+					ctlrutils.ClusterAlarmDictionaryIDExtension: alarmDictionaryID,
 				},
 			}
 			body, err := json.Marshal(nodeClusterType)

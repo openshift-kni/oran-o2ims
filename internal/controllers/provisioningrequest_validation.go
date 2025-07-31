@@ -13,7 +13,7 @@ import (
 	"maps"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // validateProvisioningRequestCR validates the ProvisioningRequest CR
@@ -21,7 +21,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	// Check the referenced cluster template is present and valid
 	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
-		return utils.NewInputError("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
+		return ctlrutils.NewInputError("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
 	}
 	t.ctDetails = &clusterTemplateDetails{
 		namespace: clusterTemplate.Namespace,
@@ -33,7 +33,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	}
 
 	if err = t.object.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
-		return utils.NewInputError("%s", err.Error())
+		return ctlrutils.NewInputError("%s", err.Error())
 	}
 
 	if err = t.validateClusterInstanceInputMatchesSchema(ctx, clusterTemplate); err != nil {
@@ -55,14 +55,14 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
 	// Initialize with default timeouts
-	t.timeouts.clusterProvisioning = utils.DefaultClusterInstallationTimeout
-	t.timeouts.hardwareProvisioning = utils.DefaultHardwareProvisioningTimeout
-	t.timeouts.clusterConfiguration = utils.DefaultClusterConfigurationTimeout
+	t.timeouts.clusterProvisioning = ctlrutils.DefaultClusterInstallationTimeout
+	t.timeouts.hardwareProvisioning = ctlrutils.DefaultHardwareProvisioningTimeout
+	t.timeouts.clusterConfiguration = ctlrutils.DefaultClusterConfigurationTimeout
 
 	// Load hardware provisioning timeout if exists.
 	if !t.isHardwareProvisionSkipped() {
 		hwCmName := clusterTemplate.Spec.Templates.HwTemplate
-		hwTimeout, err := utils.GetTimeoutFromHWTemplate(ctx, t.client, hwCmName)
+		hwTimeout, err := ctlrutils.GetTimeoutFromHWTemplate(ctx, t.client, hwCmName)
 		if err != nil {
 			return fmt.Errorf("failed to get timeout from hardware template %s: %w", hwCmName, err)
 		}
@@ -74,13 +74,13 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 
 	// Load cluster provisioning timeout if exists.
 	ciCmName := clusterTemplate.Spec.Templates.ClusterInstanceDefaults
-	ciCm, err := utils.GetConfigmap(
+	ciCm, err := ctlrutils.GetConfigmap(
 		ctx, t.client, ciCmName, clusterTemplate.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get ConfigMap %s: %w", ciCmName, err)
 	}
-	ciTimeout, err := utils.ExtractTimeoutFromConfigMap(
-		ciCm, utils.ClusterInstallationTimeoutConfigKey)
+	ciTimeout, err := ctlrutils.ExtractTimeoutFromConfigMap(
+		ciCm, ctlrutils.ClusterInstallationTimeoutConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get timeout config for cluster provisioning: %w", err)
 	}
@@ -90,13 +90,13 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 
 	// Load configuration timeout if exists.
 	ptCmName := clusterTemplate.Spec.Templates.PolicyTemplateDefaults
-	ptCm, err := utils.GetConfigmap(
+	ptCm, err := ctlrutils.GetConfigmap(
 		ctx, t.client, ptCmName, clusterTemplate.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get ConfigMap %s: %w", ptCmName, err)
 	}
-	ptTimeout, err := utils.ExtractTimeoutFromConfigMap(
-		ptCm, utils.ClusterConfigurationTimeoutConfigKey)
+	ptTimeout, err := ctlrutils.ExtractTimeoutFromConfigMap(
+		ptCm, ctlrutils.ClusterConfigurationTimeoutConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get timeout config for cluster configuration: %w", err)
 	}
@@ -114,9 +114,9 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 
 	clusterInstanceMatchingInput, err := t.object.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)
 	if err != nil {
-		return utils.NewInputError(
+		return ctlrutils.NewInputError(
 			"the provided %s does not match the schema from ClusterTemplate (%s): %w",
-			utils.TemplateParamClusterInstance, clusterTemplate.Name, err)
+			ctlrutils.TemplateParamClusterInstance, clusterTemplate.Name, err)
 	}
 	clusterInstanceMatchingInputMap := clusterInstanceMatchingInput.(map[string]any)
 
@@ -124,7 +124,7 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 	mergedClusterInstanceData, err := t.getMergedClusterInputData(
 		ctx, clusterTemplate.Spec.Templates.ClusterInstanceDefaults,
 		clusterInstanceMatchingInputMap,
-		utils.TemplateParamClusterInstance)
+		ctlrutils.TemplateParamClusterInstance)
 	if err != nil {
 		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
@@ -141,17 +141,17 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 
 	// Get the subschema for PolicyTemplateParameters
 	policyTemplateSubSchema, err := provisioningv1alpha1.ExtractSubSchema(
-		clusterTemplate.Spec.TemplateParameterSchema.Raw, utils.TemplateParamPolicyConfig)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw, ctlrutils.TemplateParamPolicyConfig)
 	if err != nil {
-		return utils.NewInputError(
-			"failed to extract %s subschema: %s", utils.TemplateParamPolicyConfig, err.Error())
+		return ctlrutils.NewInputError(
+			"failed to extract %s subschema: %s", ctlrutils.TemplateParamPolicyConfig, err.Error())
 	}
 	// Get the matching input for PolicyTemplateParameters
 	policyTemplateMatchingInput, err := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamPolicyConfig)
+		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamPolicyConfig)
 	if err != nil {
-		return utils.NewInputError(
-			"failed to extract matching input for subschema %s: %w", utils.TemplateParamPolicyConfig, err)
+		return ctlrutils.NewInputError(
+			"failed to extract matching input for subschema %s: %w", ctlrutils.TemplateParamPolicyConfig, err)
 	}
 	policyTemplateMatchingInputMap := policyTemplateMatchingInput.(map[string]any)
 
@@ -159,7 +159,7 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	mergedPolicyTemplateData, err := t.getMergedClusterInputData(
 		ctx, clusterTemplate.Spec.Templates.PolicyTemplateDefaults,
 		policyTemplateMatchingInputMap,
-		utils.TemplateParamPolicyConfig)
+		ctlrutils.TemplateParamPolicyConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
@@ -168,9 +168,9 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(
 		policyTemplateSubSchema, mergedPolicyTemplateData)
 	if err != nil {
-		return utils.NewInputError(
+		return ctlrutils.NewInputError(
 			"spec.templateParameters.%s does not match the schema defined in ClusterTemplate (%s) spec.templateParameterSchema.%s: %w",
-			utils.TemplateParamPolicyConfig, clusterTemplate.Name, utils.TemplateParamPolicyConfig, err)
+			ctlrutils.TemplateParamPolicyConfig, clusterTemplate.Name, ctlrutils.TemplateParamPolicyConfig, err)
 	}
 
 	t.clusterInput.policyTemplateData = mergedPolicyTemplateData
@@ -183,39 +183,39 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 	var templateDefaultsCmKey string
 
 	switch templateParam {
-	case utils.TemplateParamClusterInstance:
-		templateDefaultsCmKey = utils.ClusterInstanceTemplateDefaultsConfigmapKey
-	case utils.TemplateParamPolicyConfig:
-		templateDefaultsCmKey = utils.PolicyTemplateDefaultsConfigmapKey
+	case ctlrutils.TemplateParamClusterInstance:
+		templateDefaultsCmKey = ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey
+	case ctlrutils.TemplateParamPolicyConfig:
+		templateDefaultsCmKey = ctlrutils.PolicyTemplateDefaultsConfigmapKey
 	default:
-		return nil, utils.NewInputError("unsupported template parameter")
+		return nil, ctlrutils.NewInputError("unsupported template parameter")
 	}
 
 	// Retrieve the configmap that holds the default data.
-	templateCm, err := utils.GetConfigmap(ctx, t.client, templateDefaultsCm, t.ctDetails.namespace)
+	templateCm, err := ctlrutils.GetConfigmap(ctx, t.client, templateDefaultsCm, t.ctDetails.namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", templateDefaultsCm, err)
 	}
-	clusterTemplateDefaultsMap, err := utils.ExtractTemplateDataFromConfigMap[map[string]any](
+	clusterTemplateDefaultsMap, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](
 		templateCm, templateDefaultsCmKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get template defaults from ConfigMap %s: %w", templateDefaultsCm, err)
 	}
 
-	if templateParam == utils.TemplateParamClusterInstance {
+	if templateParam == ctlrutils.TemplateParamClusterInstance {
 		// Special handling for overrides of ClusterInstance's extraLabels and extraAnnotations.
 		// The clusterTemplateInput will be overridden with the values from defaut configmap
 		// if same labels/annotations exist in both.
 		if err := t.overrideClusterInstanceLabelsOrAnnotations(
 			clusterTemplateInput, clusterTemplateDefaultsMap); err != nil {
-			return nil, utils.NewInputError("%s", err.Error())
+			return nil, ctlrutils.NewInputError("%s", err.Error())
 		}
 	}
 
 	// Get the merged cluster data
 	mergedClusterDataMap, err := mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplateDefaultsMap)
 	if err != nil {
-		return nil, utils.NewInputError("failed to merge data for %s: %s", templateParam, err.Error())
+		return nil, ctlrutils.NewInputError("failed to merge data for %s: %s", templateParam, err.Error())
 	}
 
 	t.logger.Info(
@@ -237,7 +237,7 @@ func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplate
 		mergedClusterData = maps.Clone(clusterTemplateInputDefaults)
 
 		checkType := false
-		err := utils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, checkType) // clusterTemplateInput overrides the defaults
+		err := ctlrutils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, checkType) // clusterTemplateInput overrides the defaults
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge the clusterTemplateInput(src) with the defaults(dst): %w", err)
 		}

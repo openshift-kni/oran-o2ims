@@ -13,7 +13,7 @@ import (
 	"github.com/coreos/go-semver/semver"
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,14 +85,14 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		}
 
 		// Create IBGU if it doesn't exist
-		ibgu, err = utils.GetIBGUFromUpgradeDefaultsConfigmap(
+		ibgu, err = ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(
 			ctx, t.client, clusterTemplate.Spec.Templates.UpgradeDefaults,
-			clusterTemplate.Namespace, utils.UpgradeDefaultsConfigmapKey,
+			clusterTemplate.Namespace, ctlrutils.UpgradeDefaultsConfigmapKey,
 			clusterName, t.object.Name, clusterName)
 		if err != nil {
 			return nextReconcile, proceed, fmt.Errorf("failed to generate IBGU for cluster: %w", err)
 		}
-		if err := utils.CreateK8sCR(ctx, t.client, ibgu, t.object, utils.UPDATE); err != nil {
+		if err := ctlrutils.CreateK8sCR(ctx, t.client, ibgu, t.object, ctlrutils.UPDATE); err != nil {
 			return nextReconcile, proceed, fmt.Errorf("failed to create IBGU: %w", err)
 		}
 
@@ -105,14 +105,14 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 			),
 		)
 
-		utils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is initiated")
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is initiated")
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
 			"Upgrade is initiated",
 		)
-		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 			return nextReconcile, proceed, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
 		}
 	}
@@ -123,8 +123,8 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 			"Wait for upgrade to be completed",
 		)
 
-		utils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is in progress")
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is in progress")
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
@@ -132,15 +132,15 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		)
 		nextReconcile = requeueWithMediumInterval()
 	} else if failed, message := isIBGUFailed(ibgu); failed {
-		utils.SetProvisioningStateFailed(t.object, "Cluster upgrade is failed")
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetProvisioningStateFailed(t.object, "Cluster upgrade is failed")
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
 			message,
 		)
 	} else {
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
@@ -154,7 +154,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		proceed = true
 	}
 
-	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return nextReconcile, proceed, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
 	}
 

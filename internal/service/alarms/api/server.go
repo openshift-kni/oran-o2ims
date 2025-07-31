@@ -29,7 +29,7 @@ import (
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 const (
@@ -39,7 +39,7 @@ const (
 
 // AlarmsServerConfig defines the configuration attributes for the alarms server
 type AlarmsServerConfig struct {
-	utils.CommonServerConfig
+	svcutils.CommonServerConfig
 	Address       string
 	GlobalCloudID string
 }
@@ -202,7 +202,7 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 // GetSubscription handles an API request to retrieve an Alarm Subscription
 func (a *AlarmsServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
 	record, err := a.AlarmsRepository.GetAlarmSubscription(ctx, request.AlarmSubscriptionId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetSubscription404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 			AdditionalAttributes: &map[string]string{
 				"alarmSubscriptionId": request.AlarmSubscriptionId.String(),
@@ -244,7 +244,7 @@ func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsReque
 // GetAlarm handles an API request to retrieve an Alarm Event Record
 func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequestObject) (api.GetAlarmResponseObject, error) {
 	record, err := a.AlarmsRepository.GetAlarmEventRecord(ctx, request.AlarmEventRecordId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		// Nothing found
 		return api.GetAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 			AdditionalAttributes: &map[string]string{
@@ -265,7 +265,7 @@ func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequest
 func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmRequestObject) (api.PatchAlarmResponseObject, error) {
 	// Fetch the Alarm Event Record to be patched
 	record, err := a.AlarmsRepository.GetAlarmEventRecord(ctx, request.AlarmEventRecordId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		// Nothing found
 		return api.PatchAlarm404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 			AdditionalAttributes: &map[string]string{

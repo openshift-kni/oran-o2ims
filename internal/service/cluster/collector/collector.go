@@ -24,7 +24,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 const pollingDelay = 1 * time.Minute
@@ -126,7 +126,7 @@ func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) e
 	name := dataSource.Name()
 	record, err := c.repository.GetDataSourceByName(ctx, name)
 	switch {
-	case errors.Is(err, utils.ErrNotFound):
+	case errors.Is(err, svcutils.ErrNotFound):
 		// Doesn't exist so create it now.
 		result, err := c.repository.CreateDataSource(ctx, &models2.DataSource{
 			Name:         name,
@@ -253,7 +253,7 @@ func (c *Collector) persistClusterResource(ctx context.Context, dataSource Clust
 	}
 
 	// Persist Cluster Resource Type
-	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+	dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, *resourceType, resourceType.ClusterResourceTypeID, nil, func(object interface{}) any {
 			record, _ := object.(models.ClusterResourceType)
 			return models.ClusterResourceTypeToModel(&record, commonapi.NewDefaultFieldOptions())
@@ -267,7 +267,7 @@ func (c *Collector) persistClusterResource(ctx context.Context, dataSource Clust
 	}
 
 	// Persist Cluster Resource
-	dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
+	dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, resource, resource.ClusterResourceID, nil, func(object interface{}) any {
 			record, _ := object.(models.ClusterResource)
 			return models.ClusterResourceToModel(&record, commonapi.NewDefaultFieldOptions())
@@ -300,7 +300,7 @@ func (c *Collector) persistNodeCluster(ctx context.Context, dataSource ClusterDa
 	}
 
 	// Persist Node Cluster Type
-	dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+	dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, *resourceType, resourceType.NodeClusterTypeID, nil, func(object interface{}) any {
 			record, _ := object.(models.NodeClusterType)
 			return models.NodeClusterTypeToModel(&record, commonapi.NewDefaultFieldOptions())
@@ -321,7 +321,7 @@ func (c *Collector) persistNodeCluster(ctx context.Context, dataSource ClusterDa
 	}
 
 	// Persist Node Cluster
-	dataChangeEvent, err = utils.PersistObjectWithChangeEvent(
+	dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
 		ctx, c.repository.Db, cluster, cluster.NodeClusterID, nil, func(object interface{}) any {
 			record, _ := object.(models.NodeCluster)
 			return models.NodeClusterToModel(&record, nil, commonapi.NewDefaultFieldOptions())
@@ -363,7 +363,7 @@ func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []a
 			return err
 		}
 
-		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.NodeClusterID, nil, func(object interface{}) any {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.NodeClusterID, nil, func(object interface{}) any {
 			r, _ := object.(models.NodeCluster)
 			return models.NodeClusterToModel(&r, nil, commonapi.NewDefaultFieldOptions())
 		})
@@ -396,7 +396,7 @@ func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids
 
 	count := 0
 	for _, record := range records {
-		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.ClusterResourceID, nil, func(object interface{}) any {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.ClusterResourceID, nil, func(object interface{}) any {
 			r, _ := object.(models.ClusterResource)
 			return models.ClusterResourceToModel(&r, commonapi.NewDefaultFieldOptions())
 		})
@@ -478,7 +478,7 @@ func (c *Collector) deleteRelatedClusterResources(ctx context.Context, nodeClust
 	slog.Debug("deleting related cluster resources", "node_cluster_id", nodeCluster.NodeClusterID, "count", len(resources))
 
 	for _, resource := range resources {
-		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, resource, resource.ClusterResourceID, nil, func(object interface{}) any {
 				record, _ := object.(models.ClusterResource)
 				return models.ClusterResourceToModel(&record, commonapi.NewDefaultFieldOptions())
@@ -504,7 +504,7 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 			return err
 		}
 
-		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, nodeCluster, nodeCluster.NodeClusterID, nil, func(object interface{}) any {
 				record, _ := object.(models.NodeCluster)
 				return models.NodeClusterToModel(&record, nil, commonapi.NewDefaultFieldOptions())
@@ -538,7 +538,7 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 // handleAsyncClusterResourceEvent handles an async handleWatchEvent received for a ClusterResource object.
 func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSource ClusterDataSource, clusterResource models.ClusterResource, deleted bool) error {
 	if deleted {
-		dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(
 			ctx, c.repository.Db, clusterResource, clusterResource.ClusterResourceID, nil, func(object interface{}) any {
 				record, _ := object.(models.ClusterResource)
 				return models.ClusterResourceToModel(&record, commonapi.NewDefaultFieldOptions())
@@ -556,7 +556,7 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 	}
 
 	nodeCluster, err := c.repository.GetNodeClusterByName(ctx, clusterResource.NodeClusterName)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		// Agents will finish being installed before the Managed Cluster is completely provisioned, therefore, we have to
 		// link them after the fact, so here we just skip them.
 		slog.Warn("no node cluster found", "name", clusterResource.NodeClusterName, "resource", clusterResource.Name)
@@ -705,7 +705,7 @@ func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSou
 			alarmDefinitions = append(alarmDefinitions, thanosAlarmDefinitions...)
 
 			// Persist Alarm Dictionary
-			dataChangeEvent, err := utils.PersistObjectWithChangeEvent(
+			dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
 				ctx, c.repository.Db, alarmDictionary, alarmDictionary.AlarmDictionaryID, nil, func(object interface{}) any {
 					record, _ := object.(models2.AlarmDictionary)
 					return models.AlarmDictionaryToModel(&record, alarmDefinitions)
@@ -765,7 +765,7 @@ func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsD
 				return nil
 			}
 
-			dataChangeEvent, err := utils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, alarmDictionary, alarmDictionary.AlarmDictionaryID, nil, func(object interface{}) any {
+			dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, alarmDictionary, alarmDictionary.AlarmDictionaryID, nil, func(object interface{}) any {
 				record, _ := object.(models2.AlarmDictionary)
 				return models.AlarmDictionaryToModel(&record, alarmDefinitions)
 			})

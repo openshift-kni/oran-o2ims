@@ -40,7 +40,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
@@ -169,7 +169,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.InventoryResourceServerName)
+	err = t.createServiceAccount(ctx, ctlrutils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -189,7 +189,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
-	err = t.createServerClusterRoleBinding(ctx, utils.InventoryResourceServerName)
+	err = t.createServerClusterRoleBinding(ctx, ctlrutils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -201,7 +201,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 
 	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
 	// requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryResourceServerName)
+	err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -212,7 +212,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the Service needed for the Resource server.
-	err = t.createService(ctx, utils.InventoryResourceServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, ctlrutils.InventoryResourceServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -223,7 +223,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the resource-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryResourceServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryResourceServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -243,7 +243,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.InventoryClusterServerName)
+	err = t.createServiceAccount(ctx, ctlrutils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -263,7 +263,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 		return
 	}
 
-	err = t.createServerClusterRoleBinding(ctx, utils.InventoryClusterServerName)
+	err = t.createServerClusterRoleBinding(ctx, ctlrutils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -275,7 +275,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 
 	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
 	// requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryClusterServerName)
+	err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -286,7 +286,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 	}
 
 	// Create the Service needed for the cluster server.
-	err = t.createService(ctx, utils.InventoryClusterServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, ctlrutils.InventoryClusterServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -297,7 +297,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 	}
 
 	// Create the cluster-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryClusterServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryClusterServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -317,7 +317,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.InventoryArtifactsServerName)
+	err = t.createServiceAccount(ctx, ctlrutils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -336,7 +336,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 		)
 		return
 	}
-	err = t.createServerClusterRoleBinding(ctx, utils.InventoryArtifactsServerName)
+	err = t.createServerClusterRoleBinding(ctx, ctlrutils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -348,7 +348,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 
 	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
 	// requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryArtifactsServerName)
+	err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -359,7 +359,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 	}
 
 	// Create the Service needed for the Artifacts server.
-	err = t.createService(ctx, utils.InventoryArtifactsServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, ctlrutils.InventoryArtifactsServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -370,7 +370,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 	}
 
 	// Create the artifacts-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryArtifactsServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryArtifactsServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -390,7 +390,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.InventoryAlarmServerName)
+	err = t.createServiceAccount(ctx, ctlrutils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -410,7 +410,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
-	err = t.createServerClusterRoleBinding(ctx, utils.InventoryAlarmServerName)
+	err = t.createServerClusterRoleBinding(ctx, ctlrutils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -433,7 +433,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 
 	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
 	// requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryAlarmServerName)
+	err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -444,7 +444,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 	}
 
 	// Create the Service needed for the alarm server.
-	err = t.createService(ctx, utils.InventoryAlarmServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, ctlrutils.InventoryAlarmServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -455,7 +455,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 	}
 
 	// Create the alarm-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryAlarmServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryAlarmServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -474,7 +474,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	err = t.createServiceAccount(ctx, utils.InventoryProvisioningServerName)
+	err = t.createServiceAccount(ctx, ctlrutils.InventoryProvisioningServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -494,7 +494,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 		return
 	}
 
-	err = t.createServerClusterRoleBinding(ctx, utils.InventoryProvisioningServerName)
+	err = t.createServerClusterRoleBinding(ctx, ctlrutils.InventoryProvisioningServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -506,7 +506,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 
 	// Create the role binding needed to allow the server to interact with the API server to validate incoming API
 	// requests from clients.
-	err = t.createServerRbacClusterRoleBinding(ctx, utils.InventoryProvisioningServerName)
+	err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.InventoryProvisioningServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -517,7 +517,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 	}
 
 	// Create the Service needed for the provisioning server.
-	err = t.createService(ctx, utils.InventoryProvisioningServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, ctlrutils.InventoryProvisioningServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -528,7 +528,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 	}
 
 	// Create the provisioning-server deployment.
-	errorReason, err := t.deployServer(ctx, utils.InventoryProvisioningServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryProvisioningServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -551,39 +551,39 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, error) {
 	var caBundle string
 	if t.object.Spec.CaBundleName != nil {
-		cm, err := utils.GetConfigmap(ctx, t.client, *t.object.Spec.CaBundleName, t.object.Namespace)
+		cm, err := ctlrutils.GetConfigmap(ctx, t.client, *t.object.Spec.CaBundleName, t.object.Namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get configmap: %s", err.Error())
 		}
 
-		caBundle, err = utils.GetConfigMapField(cm, constants.CABundleFilename)
+		caBundle, err = ctlrutils.GetConfigMapField(cm, constants.CABundleFilename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get certificate bundle from configmap: %s", err.Error())
 		}
 	}
 
-	config := utils.OAuthClientConfig{
-		TLSConfig: &utils.TLSConfig{CaBundle: []byte(caBundle)},
+	config := ctlrutils.OAuthClientConfig{
+		TLSConfig: &ctlrutils.TLSConfig{CaBundle: []byte(caBundle)},
 	}
 
 	oAuthConfig := t.object.Spec.SmoConfig.OAuthConfig
 	if oAuthConfig != nil {
-		clientSecrets, err := utils.GetSecret(ctx, t.client, oAuthConfig.ClientSecretName, t.object.Namespace)
+		clientSecrets, err := ctlrutils.GetSecret(ctx, t.client, oAuthConfig.ClientSecretName, t.object.Namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get client secret: %w", err)
 		}
 
-		clientId, err := utils.GetSecretField(clientSecrets, "client-id")
+		clientId, err := ctlrutils.GetSecretField(clientSecrets, "client-id")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get client-id from secret: %s, %w", oAuthConfig.ClientSecretName, err)
 		}
 
-		clientSecret, err := utils.GetSecretField(clientSecrets, "client-secret")
+		clientSecret, err := ctlrutils.GetSecretField(clientSecrets, "client-secret")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get client-secret from secret: %s, %w", oAuthConfig.ClientSecretName, err)
 		}
 
-		o := utils.OAuthConfig{
+		o := ctlrutils.OAuthConfig{
 			ClientID:     clientId,
 			ClientSecret: clientSecret,
 			TokenURL:     fmt.Sprintf("%s%s", oAuthConfig.URL, oAuthConfig.TokenEndpoint),
@@ -594,15 +594,15 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 
 	if t.object.Spec.SmoConfig.TLS != nil && t.object.Spec.SmoConfig.TLS.SecretName != nil {
 		secretName := *t.object.Spec.SmoConfig.TLS.SecretName
-		cert, key, err := utils.GetKeyPairFromSecret(ctx, t.client, secretName, t.object.Namespace)
+		cert, key, err := ctlrutils.GetKeyPairFromSecret(ctx, t.client, secretName, t.object.Namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get certificate and key from secret: %w", err)
 		}
 
-		config.TLSConfig.ClientCert = utils.NewStaticKeyPairLoader(cert, key)
+		config.TLSConfig.ClientCert = ctlrutils.NewStaticKeyPairLoader(cert, key)
 	}
 
-	httpClient, err := utils.SetupOAuthClient(ctx, &config)
+	httpClient, err := ctlrutils.SetupOAuthClient(ctx, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)
 	}
@@ -619,7 +619,7 @@ func (t *reconcilerTask) registerWithSmo(ctx context.Context) error {
 		return fmt.Errorf("failed to setup oauth client: %w", err)
 	}
 
-	data := utils.AvailableNotification{
+	data := ctlrutils.AvailableNotification{
 		GlobalCloudId: *t.object.Spec.CloudID,
 		OCloudId:      t.object.Status.ClusterID,
 		ImsEndpoint:   fmt.Sprintf("https://%s", t.object.Status.IngressHost),
@@ -649,16 +649,16 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		meta.SetStatusCondition(
 			&t.object.Status.Conditions,
 			metav1.Condition{
-				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
+				Type:    string(ctlrutils.InventoryConditionTypes.SmoRegistrationCompleted),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
+				Reason:  string(ctlrutils.InventoryConditionReasons.SmoRegistrationSuccessful),
 				Message: "SMO configuration not present",
 			},
 		)
 		return nil
 	}
 
-	if !utils.IsSmoRegistrationCompleted(t.object) || registerOnRestart {
+	if !ctlrutils.IsSmoRegistrationCompleted(t.object) || registerOnRestart {
 		err = t.registerWithSmo(ctx)
 		if err != nil {
 			t.logger.ErrorContext(
@@ -669,7 +669,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 			meta.SetStatusCondition(
 				&t.object.Status.Conditions,
 				metav1.Condition{
-					Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
+					Type:    string(ctlrutils.InventoryConditionTypes.SmoRegistrationCompleted),
 					Status:  metav1.ConditionFalse,
 					Reason:  err.Error(),
 					Message: fmt.Sprintf("Error registering with SMO at: %s", t.object.Spec.SmoConfig.URL),
@@ -682,9 +682,9 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		meta.SetStatusCondition(
 			&t.object.Status.Conditions,
 			metav1.Condition{
-				Type:    string(utils.InventoryConditionTypes.SmoRegistrationCompleted),
+				Type:    string(ctlrutils.InventoryConditionTypes.SmoRegistrationCompleted),
 				Status:  metav1.ConditionTrue,
-				Reason:  string(utils.InventoryConditionReasons.SmoRegistrationSuccessful),
+				Reason:  string(ctlrutils.InventoryConditionReasons.SmoRegistrationSuccessful),
 				Message: fmt.Sprintf("Registered with SMO at: %s", t.object.Spec.SmoConfig.URL),
 			},
 		)
@@ -708,7 +708,7 @@ func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 	var ingressHost string
 	if t.object.Spec.IngressConfig == nil || t.object.Spec.IngressConfig.IngressHost == nil {
 		var err error
-		ingressHost, err = utils.GetIngressDomain(ctx, t.client)
+		ingressHost, err = ctlrutils.GetIngressDomain(ctx, t.client)
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx,
@@ -728,7 +728,7 @@ func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 
 // storeClusterID stores the local cluster id onto the object status for later retrieval.
 func (t *reconcilerTask) storeClusterID(ctx context.Context) error {
-	clusterID, err := utils.GetClusterID(ctx, t.client, utils.ClusterVersionName)
+	clusterID, err := ctlrutils.GetClusterID(ctx, t.client, ctlrutils.ClusterVersionName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -745,12 +745,12 @@ func (t *reconcilerTask) storeClusterID(ctx context.Context) error {
 // set to a short value so that we can try again quickly; otherwise either an error is returned without a reconciler
 // timer to indicate that an exponential backoff is required
 func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Result, error) {
-	servers := []string{utils.InventoryResourceServerName,
-		utils.InventoryClusterServerName,
-		utils.InventoryAlarmServerName,
-		utils.InventoryArtifactsServerName,
-		utils.InventoryProvisioningServerName,
-		utils.InventoryDatabaseServerName}
+	servers := []string{ctlrutils.InventoryResourceServerName,
+		ctlrutils.InventoryClusterServerName,
+		ctlrutils.InventoryAlarmServerName,
+		ctlrutils.InventoryArtifactsServerName,
+		ctlrutils.InventoryProvisioningServerName,
+		ctlrutils.InventoryDatabaseServerName}
 
 	var list corev1.PodList
 	err := t.client.List(ctx, &list, client.InNamespace(t.object.Namespace))
@@ -797,8 +797,8 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 
 	// Create the database
 	err = t.createDatabase(ctx)
-	if updateError := t.updateInventoryUsedConfigStatus(ctx, utils.InventoryDatabaseServerName,
-		nil, utils.InventoryConditionReasons.DatabaseDeploymentFailed, err); updateError != nil {
+	if updateError := t.updateInventoryUsedConfigStatus(ctx, ctlrutils.InventoryDatabaseServerName,
+		nil, ctlrutils.InventoryConditionReasons.DatabaseDeploymentFailed, err); updateError != nil {
 		t.logger.ErrorContext(ctx, "Failed to report database status", slog.String("error", updateError.Error()))
 		return nextReconcile, updateError
 	}
@@ -874,7 +874,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 
 	// Start the Loopback HardwarePlugin server
-	if utils.ShouldDeployLoopbackHWPlugin() {
+	if ctlrutils.ShouldDeployLoopbackHWPlugin() {
 		nextReconcile, err = t.setupLoopbackPluginServer(ctx, nextReconcile)
 		if err != nil {
 			return
@@ -923,7 +923,7 @@ func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) e
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.InventoryArtifactsServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.InventoryArtifactsServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -957,7 +957,7 @@ func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) e
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Artifacts server cluster role: %w", err)
 	}
 
@@ -1002,7 +1002,7 @@ func (t *reconcilerTask) createSharedRbacRole(ctx context.Context) error {
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create RBAC cluster role: %w", err)
 	}
 
@@ -1013,7 +1013,7 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.InventoryResourceServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.InventoryResourceServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -1070,7 +1070,7 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Resource Server cluster role: %w", err)
 	}
 
@@ -1081,7 +1081,7 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.InventoryClusterServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.InventoryClusterServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -1141,7 +1141,7 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
 	}
 
@@ -1152,7 +1152,7 @@ func (t *reconcilerTask) createProvisioningServerClusterRole(ctx context.Context
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.InventoryProvisioningServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.InventoryProvisioningServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -1175,7 +1175,7 @@ func (t *reconcilerTask) createProvisioningServerClusterRole(ctx context.Context
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Provisioning Server cluster role: %w", err)
 	}
 
@@ -1186,7 +1186,7 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.InventoryAlarmServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.InventoryAlarmServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -1316,7 +1316,7 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Alarm Server cluster role: %w", err)
 	}
 
@@ -1330,7 +1330,7 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.AlertmanagerObjectName,
+				"%s-%s", t.object.Namespace, ctlrutils.AlertmanagerObjectName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -1348,7 +1348,7 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Alertmanager cluster role: %w", err)
 	}
 
@@ -1357,7 +1357,7 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, utils.AlertmanagerObjectName,
+				t.object.Namespace, ctlrutils.AlertmanagerObjectName,
 			),
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -1365,19 +1365,19 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 			Kind:     "ClusterRole",
 			Name: fmt.Sprintf(
 				"%s-%s",
-				t.object.Namespace, utils.AlertmanagerObjectName,
+				t.object.Namespace, ctlrutils.AlertmanagerObjectName,
 			),
 		},
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: utils.OpenClusterManagementObservabilityNamespace,
-				Name:      utils.AlertmanagerSA,
+				Namespace: ctlrutils.OpenClusterManagementObservabilityNamespace,
+				Name:      ctlrutils.AlertmanagerSA,
 			},
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, binding, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Alertmanager cluster role binding: %w", err)
 	}
 
@@ -1411,7 +1411,7 @@ func (t *reconcilerTask) createServerRbacClusterRoleBinding(ctx context.Context,
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, binding, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create RBAC cluster role binding: %w", err)
 	}
 
@@ -1447,38 +1447,38 @@ func (t *reconcilerTask) createServerClusterRoleBinding(ctx context.Context, ser
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, binding, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, binding, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create %s cluster role binding: %w", serverName, err)
 	}
 	return nil
 }
 
-func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (utils.InventoryConditionReason, error) {
+func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (ctlrutils.InventoryConditionReason, error) {
 	t.logger.DebugContext(ctx, "[deploy server]", "Name", serverName)
 
 	// Server variables.
-	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
-	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName, t.object)
+	deploymentVolumes := ctlrutils.GetDeploymentVolumes(serverName, t.object)
+	deploymentVolumeMounts := ctlrutils.GetDeploymentVolumeMounts(serverName, t.object)
 
 	// Build the deployment's metadata.
 	deploymentMeta := metav1.ObjectMeta{
 		Name:      serverName,
-		Namespace: utils.InventoryNamespace,
+		Namespace: ctlrutils.InventoryNamespace,
 		Labels: map[string]string{
 			"oran/o2ims": t.object.Name,
 			"app":        serverName,
 		},
 	}
 
-	deploymentContainerArgs, err := utils.GetServerArgs(t.object, serverName)
+	deploymentContainerArgs, err := ctlrutils.GetServerArgs(t.object, serverName)
 	if err != nil {
 		err2 := t.updateInventoryUsedConfigStatus(
 			ctx, serverName, deploymentContainerArgs,
-			utils.InventoryConditionReasons.ServerArgumentsError, err)
+			ctlrutils.InventoryConditionReasons.ServerArgumentsError, err)
 		if err2 != nil {
 			return "", fmt.Errorf("failed to update ORANO2ISMUsedConfigStatus: %w", err2)
 		}
-		return utils.InventoryConditionReasons.ServerArgumentsError, fmt.Errorf("failed to get server arguments: %w", err)
+		return ctlrutils.InventoryConditionReasons.ServerArgumentsError, fmt.Errorf("failed to get server arguments: %w", err)
 	}
 	err = t.updateInventoryUsedConfigStatus(ctx, serverName, deploymentContainerArgs, "", nil)
 	if err != nil {
@@ -1492,8 +1492,8 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	var envVars []corev1.EnvVar
-	if utils.HasDatabase(serverName) {
-		envVarName, err := utils.GetServerDatabasePasswordName(serverName)
+	if ctlrutils.HasDatabase(serverName) {
+		envVarName, err := ctlrutils.GetServerDatabasePasswordName(serverName)
 		if err != nil {
 			return "", fmt.Errorf("failed to get server database password: %w", err)
 		}
@@ -1502,7 +1502,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: fmt.Sprintf("%s-passwords", utils.InventoryDatabaseServerName),
+						Name: fmt.Sprintf("%s-passwords", ctlrutils.InventoryDatabaseServerName),
 					},
 					Key: envVarName,
 				},
@@ -1511,10 +1511,10 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		envVars = append(envVars, envVar)
 	}
 
-	if utils.NeedsOAuthAccess(serverName) && utils.IsOAuthEnabled(t.object) {
+	if ctlrutils.NeedsOAuthAccess(serverName) && ctlrutils.IsOAuthEnabled(t.object) {
 		envVars = append(envVars, []corev1.EnvVar{
 			{
-				Name: utils.OAuthClientIDEnvName,
+				Name: ctlrutils.OAuthClientIDEnvName,
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
@@ -1525,7 +1525,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				},
 			},
 			{
-				Name: utils.OAuthClientSecretEnvName,
+				Name: ctlrutils.OAuthClientSecretEnvName,
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
@@ -1553,13 +1553,13 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 			Value: fmt.Sprintf("%d", constants.DefaultServicePort),
 		},
 		{
-			Name:  utils.HwMgrPluginNameSpace,
-			Value: utils.GetHwMgrPluginNS(),
+			Name:  ctlrutils.HwMgrPluginNameSpace,
+			Value: ctlrutils.GetHwMgrPluginNS(),
 		},
 	}...)
 
 	// Server specific env var
-	if serverName == utils.InventoryAlarmServerName {
+	if serverName == ctlrutils.InventoryAlarmServerName {
 		postgresImage := os.Getenv(constants.PostgresImageName)
 		if postgresImage == "" {
 			return "", fmt.Errorf("missing %s environment variable value", constants.PostgresImageName)
@@ -1570,10 +1570,10 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		})
 	}
 
-	if serverName == utils.LoopbackPluginServerName {
+	if serverName == ctlrutils.LoopbackPluginServerName {
 		envVars = append(envVars, corev1.EnvVar{
-			Name:  utils.DeployLoopbackHWPluginEnvVar,
-			Value: utils.GetDeployLoopbackHWPlugin(),
+			Name:  ctlrutils.DeployLoopbackHWPluginEnvVar,
+			Value: ctlrutils.GetDeployLoopbackHWPlugin(),
 		})
 	}
 
@@ -1608,7 +1608,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 						Env:             envVars,
 						Ports: []corev1.ContainerPort{
 							{
-								Name:          utils.DefaultServiceTargetPort,
+								Name:          ctlrutils.DefaultServiceTargetPort,
 								Protocol:      corev1.ProtocolTCP,
 								ContainerPort: constants.DefaultContainerPort,
 							},
@@ -1625,7 +1625,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		},
 	}
 
-	if utils.HasDatabase(serverName) {
+	if ctlrutils.HasDatabase(serverName) {
 		deploymentSpec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:    constants.MigrationContainerName,
@@ -1650,7 +1650,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	}
 
 	t.logger.DebugContext(ctx, "[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
-	if err := utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
 		return "", fmt.Errorf("failed to deploy ManagerServer: %w", err)
 	}
 
@@ -1672,7 +1672,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 	}
 
 	t.logger.DebugContext(ctx, "[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
-	if err := utils.CreateK8sCR(ctx, t.client, newServiceAccount, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, newServiceAccount, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create ServiceAccount for deployment: %w", err)
 	}
 
@@ -1699,7 +1699,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 		},
 		Ports: []corev1.ServicePort{
 			{
-				Name:       utils.IngressPortName,
+				Name:       ctlrutils.IngressPortName,
 				Port:       port,
 				TargetPort: intstr.FromString(targetPort),
 			},
@@ -1712,7 +1712,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 	}
 
 	t.logger.DebugContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
-	if err := utils.CreateK8sCR(ctx, t.client, newService, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, newService, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Service for deployment: %w", err)
 	}
 
@@ -1722,9 +1722,9 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	t.logger.DebugContext(ctx, "[createIngress]")
 	// Build the Ingress object.
-	className := utils.IngressClassName
+	className := ctlrutils.IngressClassName
 	ingressMeta := metav1.ObjectMeta{
-		Name:      utils.IngressName,
+		Name:      ctlrutils.IngressName,
 		Namespace: t.object.Namespace,
 		Annotations: map[string]string{
 			"route.openshift.io/termination": "reencrypt",
@@ -1747,9 +1747,9 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: utils.InventoryResourceServerName,
+										Name: ctlrutils.InventoryResourceServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.IngressPortName,
+											Name: ctlrutils.IngressPortName,
 										},
 									},
 								},
@@ -1762,9 +1762,9 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: utils.InventoryClusterServerName,
+										Name: ctlrutils.InventoryClusterServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.IngressPortName,
+											Name: ctlrutils.IngressPortName,
 										},
 									},
 								},
@@ -1777,9 +1777,9 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: utils.InventoryArtifactsServerName,
+										Name: ctlrutils.InventoryArtifactsServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.IngressPortName,
+											Name: ctlrutils.IngressPortName,
 										},
 									},
 								},
@@ -1792,9 +1792,9 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: utils.InventoryProvisioningServerName,
+										Name: ctlrutils.InventoryProvisioningServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.IngressPortName,
+											Name: ctlrutils.IngressPortName,
 										},
 									},
 								},
@@ -1807,9 +1807,9 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								}(),
 								Backend: networkingv1.IngressBackend{
 									Service: &networkingv1.IngressServiceBackend{
-										Name: utils.InventoryAlarmServerName,
+										Name: ctlrutils.InventoryAlarmServerName,
 										Port: networkingv1.ServiceBackendPort{
-											Name: utils.IngressPortName,
+											Name: ctlrutils.IngressPortName,
 										},
 									},
 								},
@@ -1835,8 +1835,8 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 		Spec:       ingressSpec,
 	}
 
-	t.logger.DebugContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", utils.IngressPortName)
-	if err := utils.CreateK8sCR(ctx, t.client, newIngress, t.object, utils.UPDATE); err != nil {
+	t.logger.DebugContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", ctlrutils.IngressPortName)
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, newIngress, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
 	}
 
@@ -1845,17 +1845,17 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 
 func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, deploymentName string) {
 	deployment := &appsv1.Deployment{}
-	err := t.client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: utils.InventoryNamespace}, deployment)
+	err := t.client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: ctlrutils.InventoryNamespace}, deployment)
 
 	if err != nil {
-		reason := string(utils.InventoryConditionReasons.ErrorGettingDeploymentInformation)
+		reason := string(ctlrutils.InventoryConditionReasons.ErrorGettingDeploymentInformation)
 		if errors.IsNotFound(err) {
-			reason = string(utils.InventoryConditionReasons.DeploymentNotFound)
+			reason = string(ctlrutils.InventoryConditionReasons.DeploymentNotFound)
 		}
 		meta.SetStatusCondition(
 			&t.object.Status.Conditions,
 			metav1.Condition{
-				Type:    string(utils.InventoryConditionTypes.Error),
+				Type:    string(ctlrutils.InventoryConditionTypes.Error),
 				Status:  metav1.ConditionTrue,
 				Reason:  reason,
 				Message: fmt.Sprintf("Error when querying for the %s server", deploymentName),
@@ -1865,26 +1865,26 @@ func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, de
 		meta.SetStatusCondition(
 			&t.object.Status.Conditions,
 			metav1.Condition{
-				Type:    string(utils.InventoryConditionTypes.Ready),
+				Type:    string(ctlrutils.InventoryConditionTypes.Ready),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(utils.InventoryConditionReasons.DeploymentsReady),
+				Reason:  string(ctlrutils.InventoryConditionReasons.DeploymentsReady),
 				Message: "The O-Cloud Manager Deployments are not yet ready",
 			},
 		)
 	} else {
 		meta.RemoveStatusCondition(
 			&t.object.Status.Conditions,
-			string(utils.InventoryConditionTypes.Error))
+			string(ctlrutils.InventoryConditionTypes.Error))
 		meta.RemoveStatusCondition(
 			&t.object.Status.Conditions,
-			string(utils.InventoryConditionTypes.Ready))
+			string(ctlrutils.InventoryConditionTypes.Ready))
 		for _, condition := range deployment.Status.Conditions {
 			// Obtain the status directly from the Deployment resources.
 			if condition.Type == "Available" {
 				meta.SetStatusCondition(
 					&t.object.Status.Conditions,
 					metav1.Condition{
-						Type:    string(utils.MapAvailableDeploymentNameConditionType[deploymentName]),
+						Type:    string(ctlrutils.MapAvailableDeploymentNameConditionType[deploymentName]),
 						Status:  metav1.ConditionStatus(condition.Status),
 						Reason:  condition.Reason,
 						Message: condition.Message,
@@ -1897,26 +1897,26 @@ func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, de
 
 func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 	ctx context.Context, serverName string, deploymentArgs []string,
-	errorReason utils.InventoryConditionReason, err error) error {
+	errorReason ctlrutils.InventoryConditionReason, err error) error {
 	t.logger.DebugContext(ctx, "[updateInventoryUsedConfigStatus]")
 
-	if serverName == utils.InventoryResourceServerName {
+	if serverName == ctlrutils.InventoryResourceServerName {
 		t.object.Status.UsedServerConfig.ResourceServerUsedConfig = deploymentArgs
 	}
 
-	if serverName == utils.InventoryClusterServerName {
+	if serverName == ctlrutils.InventoryClusterServerName {
 		t.object.Status.UsedServerConfig.ClusterServerUsedConfig = deploymentArgs
 	}
 
-	if serverName == utils.InventoryAlarmServerName {
+	if serverName == ctlrutils.InventoryAlarmServerName {
 		t.object.Status.UsedServerConfig.AlarmsServerUsedConfig = deploymentArgs
 	}
 
-	if serverName == utils.InventoryArtifactsServerName {
+	if serverName == ctlrutils.InventoryArtifactsServerName {
 		t.object.Status.UsedServerConfig.ArtifactsServerUsedConfig = deploymentArgs
 	}
 
-	if serverName == utils.InventoryProvisioningServerName {
+	if serverName == ctlrutils.InventoryProvisioningServerName {
 		t.object.Status.UsedServerConfig.ProvisioningServerUsedConfig = deploymentArgs
 	}
 
@@ -1925,7 +1925,7 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 		meta.SetStatusCondition(
 			&t.object.Status.Conditions,
 			metav1.Condition{
-				Type:    string(utils.MapErrorDeploymentNameConditionType[serverName]),
+				Type:    string(ctlrutils.MapErrorDeploymentNameConditionType[serverName]),
 				Status:  "True",
 				Reason:  string(errorReason),
 				Message: err.Error(),
@@ -1934,14 +1934,14 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 
 		meta.RemoveStatusCondition(
 			&t.object.Status.Conditions,
-			string(utils.MapAvailableDeploymentNameConditionType[serverName]))
+			string(ctlrutils.MapAvailableDeploymentNameConditionType[serverName]))
 	} else {
 		meta.RemoveStatusCondition(
 			&t.object.Status.Conditions,
-			string(utils.MapErrorDeploymentNameConditionType[serverName]))
+			string(ctlrutils.MapErrorDeploymentNameConditionType[serverName]))
 	}
 
-	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update inventory used config CR status: %w", err)
 	}
 
@@ -1951,14 +1951,14 @@ func (t *reconcilerTask) updateInventoryUsedConfigStatus(
 func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) error {
 
 	t.logger.DebugContext(ctx, "[updateInventoryDeploymentStatus]")
-	t.updateInventoryStatusConditions(ctx, utils.InventoryAlarmServerName)
-	t.updateInventoryStatusConditions(ctx, utils.InventoryResourceServerName)
-	t.updateInventoryStatusConditions(ctx, utils.InventoryClusterServerName)
-	t.updateInventoryStatusConditions(ctx, utils.InventoryArtifactsServerName)
-	t.updateInventoryStatusConditions(ctx, utils.InventoryDatabaseServerName)
-	t.updateInventoryStatusConditions(ctx, utils.InventoryProvisioningServerName)
+	t.updateInventoryStatusConditions(ctx, ctlrutils.InventoryAlarmServerName)
+	t.updateInventoryStatusConditions(ctx, ctlrutils.InventoryResourceServerName)
+	t.updateInventoryStatusConditions(ctx, ctlrutils.InventoryClusterServerName)
+	t.updateInventoryStatusConditions(ctx, ctlrutils.InventoryArtifactsServerName)
+	t.updateInventoryStatusConditions(ctx, ctlrutils.InventoryDatabaseServerName)
+	t.updateInventoryStatusConditions(ctx, ctlrutils.InventoryProvisioningServerName)
 
-	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update inventory deployment CR status: %w", err)
 	}
 

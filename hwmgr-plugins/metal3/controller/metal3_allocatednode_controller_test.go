@@ -141,7 +141,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
 // Simple mock client for testing - avoiding external mock generators
@@ -214,7 +214,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				Name:      "test-node",
 				Namespace: pluginNamespace,
 				Labels: map[string]string{
-					hwpluginutils.HardwarePluginLabel: hwpluginutils.Metal3HardwarePluginID,
+					hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
 				},
 				ResourceVersion: "1000",
 			},
@@ -277,7 +277,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 		})
 
@@ -286,28 +286,28 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 				// Verify finalizer was added
 				var updatedNode pluginsv1alpha1.AllocatedNode
 				Expect(fakeClient.Get(ctx, req.NamespacedName, &updatedNode)).To(Succeed())
-				Expect(controllerutil.ContainsFinalizer(&updatedNode, hwpluginutils.AllocatedNodeFinalizer)).To(BeTrue())
+				Expect(controllerutil.ContainsFinalizer(&updatedNode, hwmgrutils.AllocatedNodeFinalizer)).To(BeTrue())
 			})
 
 			It("should not add finalizer if already present", func() {
 				// Add finalizer to the node
-				controllerutil.AddFinalizer(allocatedNode, hwpluginutils.AllocatedNodeFinalizer)
+				controllerutil.AddFinalizer(allocatedNode, hwmgrutils.AllocatedNodeFinalizer)
 				Expect(fakeClient.Update(ctx, allocatedNode)).To(Succeed())
 
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 				// Verify finalizer is still present
 				var updatedNode pluginsv1alpha1.AllocatedNode
 				Expect(fakeClient.Get(ctx, req.NamespacedName, &updatedNode)).To(Succeed())
-				Expect(controllerutil.ContainsFinalizer(&updatedNode, hwpluginutils.AllocatedNodeFinalizer)).To(BeTrue())
+				Expect(controllerutil.ContainsFinalizer(&updatedNode, hwmgrutils.AllocatedNodeFinalizer)).To(BeTrue())
 			})
 		})
 
@@ -324,7 +324,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 						Namespace:         allocatedNode.Namespace,
 						Labels:            allocatedNode.Labels,
 						DeletionTimestamp: &now,
-						Finalizers:        []string{hwpluginutils.AllocatedNodeFinalizer},
+						Finalizers:        []string{hwmgrutils.AllocatedNodeFinalizer},
 					},
 					Spec: allocatedNode.Spec,
 				}
@@ -347,7 +347,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 
 			It("should complete without error when BMH not found during deletion", func() {
@@ -358,7 +358,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				// Should complete successfully even if BMH is not found
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 		})
 	})
@@ -384,7 +384,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred()) // Controller should handle the error gracefully
-				Expect(result).To(Equal(hwpluginutils.RequeueWithShortInterval()))
+				Expect(result).To(Equal(hwmgrutils.RequeueWithShortInterval()))
 			})
 
 			It("should handle finalizer addition failure", func() {
@@ -404,7 +404,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.RequeueWithShortInterval()))
+				Expect(result).To(Equal(hwmgrutils.RequeueWithShortInterval()))
 			})
 
 			It("should handle BMH retrieval failure during deletion", func() {
@@ -412,7 +412,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				deletingNode := allocatedNode.DeepCopy()
 				now := metav1.Now()
 				deletingNode.DeletionTimestamp = &now
-				deletingNode.Finalizers = []string{hwpluginutils.AllocatedNodeFinalizer}
+				deletingNode.Finalizers = []string{hwmgrutils.AllocatedNodeFinalizer}
 
 				// Mock successful Get call for node, then fail for BMH
 				getCallCount := 0
@@ -433,7 +433,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).To(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.RequeueWithShortInterval()))
+				Expect(result).To(Equal(hwmgrutils.RequeueWithShortInterval()))
 			})
 
 			It("should handle deallocateBMH failure during deletion", func() {
@@ -441,7 +441,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				deletingNode := allocatedNode.DeepCopy()
 				now := metav1.Now()
 				deletingNode.DeletionTimestamp = &now
-				deletingNode.Finalizers = []string{hwpluginutils.AllocatedNodeFinalizer}
+				deletingNode.Finalizers = []string{hwmgrutils.AllocatedNodeFinalizer}
 
 				// Mock successful Get call for node
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -465,7 +465,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).To(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.RequeueWithShortInterval()))
+				Expect(result).To(Equal(hwmgrutils.RequeueWithShortInterval()))
 			})
 		})
 
@@ -476,7 +476,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				nodeWithEmptyBMH.Spec.HwMgrNodeNs = ""
 				now := metav1.Now()
 				nodeWithEmptyBMH.DeletionTimestamp = &now
-				nodeWithEmptyBMH.Finalizers = []string{hwpluginutils.AllocatedNodeFinalizer}
+				nodeWithEmptyBMH.Finalizers = []string{hwmgrutils.AllocatedNodeFinalizer}
 
 				// Mock successful Get call for node
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -487,7 +487,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).To(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.RequeueWithShortInterval()))
+				Expect(result).To(Equal(hwmgrutils.RequeueWithShortInterval()))
 			})
 
 			It("should handle concurrent finalizer removal", func() {
@@ -505,7 +505,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 		})
 	})
@@ -515,7 +515,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			// Test the label selector creation logic directly
 			labelSelector := metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					hwpluginutils.HardwarePluginLabel: hwpluginutils.Metal3HardwarePluginID,
+					hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
 				},
 			}
 
@@ -525,8 +525,8 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 		It("should use correct hardware plugin label", func() {
 			// Verify the label matches what we expect
-			Expect(hwpluginutils.HardwarePluginLabel).To(Equal("clcm.openshift.io/hardware-plugin"))
-			Expect(hwpluginutils.Metal3HardwarePluginID).To(Equal("metal3-hwplugin"))
+			Expect(hwmgrutils.HardwarePluginLabel).To(Equal("clcm.openshift.io/hardware-plugin"))
+			Expect(hwmgrutils.Metal3HardwarePluginID).To(Equal("metal3-hwplugin"))
 		})
 
 		It("should handle manager setup failure gracefully", func() {
@@ -785,7 +785,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+			Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			// Note: Log verification would require a custom logger implementation
 		})
 
@@ -819,7 +819,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			// First reconciliation should add finalizer
 			result, err := reconciler.Reconcile(ctx, req)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+			Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 			// Get the updated resource version
 			var updatedNode pluginsv1alpha1.AllocatedNode
@@ -828,7 +828,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			// Simulate a second reconciliation with the same request (same resource version)
 			result, err = reconciler.Reconcile(ctx, req)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(hwpluginutils.DoNotRequeue()))
+			Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 		})
 	})
 })

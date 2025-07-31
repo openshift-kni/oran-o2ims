@@ -26,7 +26,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/collector"
@@ -78,9 +78,9 @@ func Serve(config *api.ClusterServerConfig) error {
 		cancel()
 	}()
 
-	password, exists := os.LookupEnv(utils.ClustersPasswordEnvName)
+	password, exists := os.LookupEnv(ctlrutils.ClustersPasswordEnvName)
 	if !exists {
-		return fmt.Errorf("missing %s environment variable", utils.ClustersPasswordEnvName)
+		return fmt.Errorf("missing %s environment variable", ctlrutils.ClustersPasswordEnvName)
 	}
 
 	// Init DB client
@@ -193,7 +193,7 @@ func Serve(config *api.ClusterServerConfig) error {
 		middleware.TrailingSlashStripper(),
 	)
 
-	serverTLSConfig, err := utils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
+	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to get server TLS config: %w", err)
 	}

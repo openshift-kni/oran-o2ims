@@ -20,12 +20,12 @@ import (
 	api "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
-	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
+	svcclusterutils "github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 // ClusterServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
@@ -33,7 +33,7 @@ var _ api.StrictServerInterface = (*ClusterServer)(nil)
 
 // ClusterServerConfig defines the configuration attributes for the resource server
 type ClusterServerConfig struct {
-	utils.CommonServerConfig
+	svcutils.CommonServerConfig
 	CloudID         string
 	GlobalCloudID   string
 	Extensions      []string
@@ -73,7 +73,7 @@ func (r *ClusterServer) GetClusterResourceTypes(ctx context.Context, request api
 // GetClusterResourceType receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetClusterResourceType(ctx context.Context, request api.GetClusterResourceTypeRequestObject) (api.GetClusterResourceTypeResponseObject, error) {
 	record, err := r.Repo.GetClusterResourceType(ctx, request.ClusterResourceTypeId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetClusterResourceType404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"ClusterResourceTypeId": request.ClusterResourceTypeId.String(),
@@ -121,7 +121,7 @@ func (r *ClusterServer) GetClusterResources(ctx context.Context, request api.Get
 // GetClusterResource receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetClusterResource(ctx context.Context, request api.GetClusterResourceRequestObject) (api.GetClusterResourceResponseObject, error) {
 	record, err := r.Repo.GetClusterResource(ctx, request.ClusterResourceId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetClusterResource404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"ClusterResourceId": request.ClusterResourceId.String(),
@@ -169,7 +169,7 @@ func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context, request api.Get
 // GetNodeClusterType receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusterType(ctx context.Context, request api.GetNodeClusterTypeRequestObject) (api.GetNodeClusterTypeResponseObject, error) {
 	record, err := r.Repo.GetNodeClusterType(ctx, request.NodeClusterTypeId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetNodeClusterType404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"NodeClusterTypeId": request.NodeClusterTypeId.String(),
@@ -272,7 +272,7 @@ func (r *ClusterServer) GetNodeClusters(ctx context.Context, request api.GetNode
 // GetNodeCluster receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeCluster(ctx context.Context, request api.GetNodeClusterRequestObject) (api.GetNodeClusterResponseObject, error) {
 	record, err := r.Repo.GetNodeCluster(ctx, request.NodeClusterId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetNodeCluster404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"NodeClusterId": request.NodeClusterId.String(),
@@ -315,7 +315,7 @@ func (r *ClusterServer) GetNodeCluster(ctx context.Context, request api.GetNodeC
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
-	version := utils2.CurrentVersion
+	version := svcclusterutils.CurrentVersion
 	baseURL := constants.O2IMSClusterBaseURL
 	versions := []generated.APIVersion{
 		{
@@ -332,7 +332,7 @@ func (r *ClusterServer) GetAllVersions(ctx context.Context, request api.GetAllVe
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
 	// We currently only support a single version
-	version := utils2.CurrentVersion
+	version := svcclusterutils.CurrentVersion
 	baseURL := constants.O2IMSClusterBaseURL
 	versions := []generated.APIVersion{
 		{
@@ -445,7 +445,7 @@ func (r *ClusterServer) CreateSubscription(ctx context.Context, request api.Crea
 // GetSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
 	record, err := r.Repo.GetSubscription(ctx, request.SubscriptionId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetSubscription404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"subscriptionId": request.SubscriptionId.String(),
@@ -530,7 +530,7 @@ func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, request api.Ge
 // GetAlarmDictionary receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
 	record, err := r.Repo.GetAlarmDictionary(ctx, request.AlarmDictionaryId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetAlarmDictionary404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"alarmDictionaryId": request.AlarmDictionaryId.String(),

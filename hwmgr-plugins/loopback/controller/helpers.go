@@ -24,8 +24,8 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // processNewNodeAllocationRequest processes a new NodeAllocationRequest CR, verifying that there are enough free resources
@@ -152,9 +152,9 @@ func handleNodeAllocationRequestConfiguring(
 
 	// Stage 1: Initiate upgrades by updating node.Spec.HwProfile as necessary
 	for _, name := range allocatedNodes {
-		node, err := hwpluginutils.GetNode(ctx, logger, c, nodeAllocationRequest.Namespace, name)
+		node, err := hwmgrutils.GetNode(ctx, logger, c, nodeAllocationRequest.Namespace, name)
 		if err != nil {
-			return hwpluginutils.RequeueWithShortInterval(), err
+			return hwmgrutils.RequeueWithShortInterval(), err
 		}
 		// Check each node against each nodegroup in the NodeAllocationRequest spec
 		for _, nodegroup := range nodeAllocationRequest.Spec.NodeGroup {
@@ -165,7 +165,7 @@ func handleNodeAllocationRequestConfiguring(
 			patch := rtclient.MergeFrom(node.DeepCopy())
 			node.Spec.HwProfile = nodegroup.NodeGroupData.HwProfile
 			if err = c.Patch(ctx, node, patch); err != nil {
-				return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to patch Node %s in namespace %s: %w", node.Name, node.Namespace, err)
+				return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to patch Node %s in namespace %s: %w", node.Name, node.Namespace, err)
 			}
 			nodesToCheck = append(nodesToCheck, node) // Track nodes we attempted to upgrade
 			break
@@ -174,28 +174,28 @@ func handleNodeAllocationRequestConfiguring(
 
 	// Requeue if there are nodes to check
 	if len(nodesToCheck) > 0 {
-		return hwpluginutils.RequeueWithCustomInterval(30 * time.Second), nil
+		return hwmgrutils.RequeueWithCustomInterval(30 * time.Second), nil
 	}
 
 	// Stage 2: Verify and track completion of upgrades
 	_, nodesStillUpgrading, err := checkAllocatedNodeUpgradeProcess(ctx, c, logger, nodeAllocationRequest.Namespace, allocatedNodes)
 	if err != nil {
-		return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to check upgrade status for nodes: %w", err)
+		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to check upgrade status for nodes: %w", err)
 	}
 
 	// Update NodeAllocationRequest status if all nodes are upgraded
 	if len(nodesStillUpgrading) == 0 {
-		if err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(ctx, c, nodeAllocationRequest,
+		if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, c, nodeAllocationRequest,
 			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
-			return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+			return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 		}
 		// Update the NodeAllocationRequest hwMgrPlugin status
-		if err = hwpluginutils.UpdateNodeAllocationRequestPluginStatus(ctx, c, nodeAllocationRequest); err != nil {
-			return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+		if err = hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, c, nodeAllocationRequest); err != nil {
+			return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
 		}
 	} else {
 		// Requeue if there are still nodes upgrading
-		return hwpluginutils.RequeueWithMediumInterval(), nil
+		return hwmgrutils.RequeueWithMediumInterval(), nil
 	}
 
 	return result, nil
@@ -213,7 +213,7 @@ func checkAllocatedNodeUpgradeProcess(
 
 	for _, name := range allocatedNodes {
 		// Fetch the latest version of each node to ensure up-to-date status
-		updatedNode, err := hwpluginutils.GetNode(ctx, logger, c, nodeNamespace, name)
+		updatedNode, err := hwmgrutils.GetNode(ctx, logger, c, nodeNamespace, name)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get node %s: %w", name, err)
 		}
@@ -223,7 +223,7 @@ func checkAllocatedNodeUpgradeProcess(
 			upgradedNodes = append(upgradedNodes, updatedNode)
 		} else {
 			updatedNode.Status.HwProfile = updatedNode.Spec.HwProfile
-			if err := hwpluginutils.UpdateK8sCRStatus(ctx, c, updatedNode); err != nil {
+			if err := hwmgrutils.UpdateK8sCRStatus(ctx, c, updatedNode); err != nil {
 				return nil, nil, fmt.Errorf("failed to update status for AllocatedNode %s: %w", updatedNode.Name, err)
 			}
 			nodesStillUpgrading = append(nodesStillUpgrading, updatedNode)
@@ -322,7 +322,7 @@ func allocateNode(ctx context.Context,
 			return fmt.Errorf("not enough free resources remaining in resource pool %s", nodegroup.NodeGroupData.ResourcePoolId)
 		}
 
-		nodename := hwpluginutils.GenerateNodeName()
+		nodename := hwmgrutils.GenerateNodeName()
 
 		// Grab the first node
 		nodeId := freenodes[0]
@@ -406,7 +406,7 @@ func createBMCSecret(ctx context.Context,
 		},
 	}
 
-	if err := sharedutils.CreateK8sCR(ctx, c, bmcSecret, nil, sharedutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, c, bmcSecret, nil, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create bmc-secret for node %s: %w", nodename, err)
 	}
 
@@ -431,7 +431,7 @@ func createNode(ctx context.Context,
 			Name:      nodename,
 			Namespace: nodeAllocationRequest.Namespace,
 			Labels: map[string]string{
-				hwpluginutils.HardwarePluginLabel: hwpluginutils.LoopbackHardwarePluginID,
+				hwmgrutils.HardwarePluginLabel: hwmgrutils.LoopbackHardwarePluginID,
 			},
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion:         nodeAllocationRequest.APIVersion,
@@ -468,7 +468,7 @@ func updateNodeStatus(ctx context.Context,
 
 	node := &pluginsv1alpha1.AllocatedNode{}
 
-	if err := sharedutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return c.Get(ctx, types.NamespacedName{Name: nodename, Namespace: nodeNamespace}, node)
 	}); err != nil {
 		return fmt.Errorf("failed to get AllocatedNode for update: %w", err)
@@ -483,13 +483,13 @@ func updateNodeStatus(ctx context.Context,
 	}
 	node.Status.Interfaces = info.Interfaces
 
-	hwpluginutils.SetStatusCondition(&node.Status.Conditions,
+	hwmgrutils.SetStatusCondition(&node.Status.Conditions,
 		string(hwmgmtv1alpha1.Provisioned),
 		string(hwmgmtv1alpha1.Completed),
 		metav1.ConditionTrue,
 		"Provisioned")
 	node.Status.HwProfile = hwprofile
-	if err := hwpluginutils.UpdateK8sCRStatus(ctx, c, node); err != nil {
+	if err := hwmgrutils.UpdateK8sCRStatus(ctx, c, node); err != nil {
 		return fmt.Errorf("failed to update status for AllocatedNode %s: %w", nodename, err)
 	}
 

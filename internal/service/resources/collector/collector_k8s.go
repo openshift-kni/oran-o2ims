@@ -23,7 +23,7 @@ import (
 	v1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
@@ -200,7 +200,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 
 	extensions := map[string]interface{}{}
 
-	if templateID, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; found {
+	if templateID, found := cluster.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; found {
 		extensions[artifactResourceIDExtension] = templateID
 	}
 
@@ -212,7 +212,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 
 	// Generate a unique UUID scoped to a different namespace so that it does not collide with the NodeCluster which
 	// uses the raw clusterID to facilitate mapping to incoming alarms which have the clusterID as a key.
-	deploymentManagerID := utils.MakeUUIDFromNames(DeploymentManagerUUIDNamespace, d.cloudID, clusterID)
+	deploymentManagerID := ctlrutils.MakeUUIDFromNames(DeploymentManagerUUIDNamespace, d.cloudID, clusterID)
 	to := models.DeploymentManager{
 		DeploymentManagerID: deploymentManagerID,
 		Name:                cluster.Name,
@@ -243,7 +243,7 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 			return uuid.Nil, nil
 		}
 
-		if _, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
+		if _, found := cluster.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; !found {
 			// The provisioning request which is managing the installation of this cluster is not yet fulfilled
 			slog.Debug("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
 			return uuid.Nil, nil

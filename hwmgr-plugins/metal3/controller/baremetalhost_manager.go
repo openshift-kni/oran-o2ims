@@ -22,8 +22,8 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -307,7 +307,7 @@ func countNodesInGroup(ctx context.Context,
 	groupName string) int {
 	count := 0
 	for _, nodeName := range nodeNames {
-		node, err := hwpluginutils.GetNode(ctx, logger, noncachedClient, namespace, nodeName)
+		node, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, namespace, nodeName)
 		if err == nil && node != nil {
 			if node.Spec.GroupName == groupName {
 				count++
@@ -361,14 +361,14 @@ func processHwProfileWithHandledError(
 		if typederrors.IsInputError(err) {
 			reason = hwmgmtv1alpha1.InvalidInput
 		}
-		if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient, nodeName, nodeNamepace,
+		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, nodeName, nodeNamepace,
 			contType, metav1.ConditionFalse, string(reason), err.Error()); err != nil {
 			logger.ErrorContext(ctx, "failed to update node status", slog.String("node", nodeName), slog.String("error", err.Error()))
 		}
 		return updateRequired, err
 	}
 	if !updateRequired && postInstall {
-		if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient, nodeName, nodeNamepace,
+		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, nodeName, nodeNamepace,
 			contType, metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied),
 			string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
 			logger.ErrorContext(ctx, "failed to update node status", slog.String("node", nodeName), slog.String("error", err.Error()))
@@ -600,7 +600,7 @@ func processBMHUpdateCase(ctx context.Context,
 		if postInstall {
 			condType = hwmgmtv1alpha1.Configured
 		}
-		if err := hwpluginutils.SetNodeFailedStatus(ctx, c, logger, node, string(condType), message); err != nil {
+		if err := hwmgrutils.SetNodeFailedStatus(ctx, c, logger, node, string(condType), message); err != nil {
 			logger.ErrorContext(ctx, "failed to set node failed status", slog.String("node", node.Name), slog.String("error", err.Error()))
 		}
 		return fmt.Errorf("unable to initiate update for BMH %s/%s", bmh.Namespace, bmh.Name)
@@ -695,7 +695,7 @@ func handleBMHCompletion(ctx context.Context,
 				return true, err
 			}
 			errMessage := fmt.Errorf("bmh %s/%s in an error state %s", bmh.Namespace, bmh.Name, bmh.Status.Provisioning.State)
-			if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient, node.Name, node.Namespace,
+			if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, node.Name, node.Namespace,
 				string(hwmgmtv1alpha1.Provisioned), metav1.ConditionFalse,
 				string(hwmgmtv1alpha1.Failed), errMessage.Error()); err != nil {
 				logger.ErrorContext(ctx, "failed to set node condition status",
@@ -735,7 +735,7 @@ func checkForPendingUpdate(ctx context.Context,
 	namespace string,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (bool, error) {
 	// check if there are any pending work
-	nodelist, err := hwpluginutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
 		return false, fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodeAllocationRequest.Name, err)
 	}
@@ -835,7 +835,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		patched := current.DeepCopy()
 
 		// Remove allocation-related labels
-		for _, key := range []string{SiteConfigOwnedByLabel, BmhAllocatedLabel, utils.AllocatedNodeLabel} {
+		for _, key := range []string{SiteConfigOwnedByLabel, BmhAllocatedLabel, ctlrutils.AllocatedNodeLabel} {
 			delete(patched.Labels, key)
 		}
 

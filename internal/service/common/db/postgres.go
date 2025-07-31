@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 type PgConfig struct {
@@ -67,7 +67,7 @@ func NewPgxPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 
 // GetPgConfig common postgres config for alarms server
 func GetPgConfig(username, password, database string) PgConfig {
-	hostname := utils.GetDatabaseHostname()
+	hostname := ctlrutils.GetDatabaseHostname()
 	port := fmt.Sprintf("%d", constants.DatabaseServicePort)
 
 	return PgConfig{

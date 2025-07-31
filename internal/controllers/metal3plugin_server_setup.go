@@ -18,9 +18,9 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/api/common"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // setupMetal3PluginServer creates the Kubernetes resources necessary to start the metal3 hardware plugin server.
@@ -28,7 +28,7 @@ func (t *reconcilerTask) setupMetal3PluginServer(ctx context.Context, defaultRes
 
 	nextReconcile = defaultResult
 
-	if err = t.createServiceAccount(ctx, utils.Metal3PluginServerName); err != nil {
+	if err = t.createServiceAccount(ctx, ctlrutils.Metal3PluginServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy ServiceAccount for the Metal3 hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
@@ -40,25 +40,25 @@ func (t *reconcilerTask) setupMetal3PluginServer(ctx context.Context, defaultRes
 		return
 	}
 
-	if err = t.createServerClusterRoleBinding(ctx, utils.Metal3PluginServerName); err != nil {
+	if err = t.createServerClusterRoleBinding(ctx, ctlrutils.Metal3PluginServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to create server ClusterRoleBinding for the Metal3 hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createServerRbacClusterRoleBinding(ctx, utils.Metal3PluginServerName); err != nil {
+	if err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.Metal3PluginServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to create RBAC ClusterRoleBinding for the Metal3 hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createService(ctx, utils.Metal3PluginServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
+	if err = t.createService(ctx, ctlrutils.Metal3PluginServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy Service for the Metal3 hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	errorReason, err := t.deployServer(ctx, utils.Metal3PluginServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.Metal3PluginServerName)
 	if err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy the Metal3 hardware plugin server.",
 			slog.String("error", err.Error()))
@@ -80,7 +80,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.Metal3PluginServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.Metal3PluginServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -269,7 +269,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
 	}
 
@@ -281,18 +281,18 @@ func (t *reconcilerTask) createMetal3PluginHardwarePluginCR(ctx context.Context)
 	t.logger.DebugContext(ctx, "Creating Metal3 Hardware Plugin CR")
 	hardwarePlugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      hwpluginutils.Metal3HardwarePluginID,
+			Name:      hwmgrutils.Metal3HardwarePluginID,
 			Namespace: t.object.Namespace,
 		},
 		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-			ApiRoot: fmt.Sprintf("https://%s.%s.svc.cluster.local:8443", utils.Metal3PluginServerName, t.object.Namespace),
+			ApiRoot: fmt.Sprintf("https://%s.%s.svc.cluster.local:8443", ctlrutils.Metal3PluginServerName, t.object.Namespace),
 			AuthClientConfig: &common.AuthClientConfig{
 				Type: common.ServiceAccount,
 			},
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, hardwarePlugin, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, hardwarePlugin, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Metal3 Hardware Plugin CR: %w", err)
 	}
 

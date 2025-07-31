@@ -23,7 +23,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 const (
@@ -42,7 +42,7 @@ func GetNode(
 
 	node := &pluginsv1alpha1.AllocatedNode{}
 
-	if err := sharedutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return c.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node)
 	}); err != nil {
 		return node, fmt.Errorf("failed to get AllocatedNode for update: %w", err)
@@ -122,7 +122,7 @@ func GetChildNodes(
 		client.MatchingFields{"spec.nodeAllocationRequest": nodeAllocationRequest.Name},
 	}
 
-	if err := sharedutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return c.List(ctx, nodelist, opts...)
 	}); err != nil {
 		logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))
@@ -194,7 +194,7 @@ func AllocatedNodeAddFinalizer(
 	allocatedNode *pluginsv1alpha1.AllocatedNode,
 ) error {
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newAllocatedNode := &pluginsv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
 			return err
@@ -218,7 +218,7 @@ func AllocatedNodeRemoveFinalizer(
 	allocatedNode *pluginsv1alpha1.AllocatedNode,
 ) error {
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newAllocatedNode := &pluginsv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
 			return err

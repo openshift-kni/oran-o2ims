@@ -9,7 +9,7 @@ package teste2eutils
 import (
 	"fmt"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 const (
@@ -338,19 +338,19 @@ const (
 )
 
 var (
-	TestFullTemplateSchema = fmt.Sprintf(TestFullClusterSchemaTemplate, utils.TemplateParamClusterInstance, TestClusterInstanceSchema,
-		utils.TemplateParamPolicyConfig, TestPolicyTemplateSchema)
+	TestFullTemplateSchema = fmt.Sprintf(TestFullClusterSchemaTemplate, ctlrutils.TemplateParamClusterInstance, TestClusterInstanceSchema,
+		ctlrutils.TemplateParamPolicyConfig, TestPolicyTemplateSchema)
 
 	TestFullTemplateParameters = fmt.Sprintf(`{
 		"%s": "exampleCluster",
 		"%s": "local-123",
 		"%s": %s,
 		"%s": %s
-	}`, utils.TemplateParamNodeClusterName,
-		utils.TemplateParamOCloudSiteId,
-		utils.TemplateParamClusterInstance,
+	}`, ctlrutils.TemplateParamNodeClusterName,
+		ctlrutils.TemplateParamOCloudSiteId,
+		ctlrutils.TemplateParamClusterInstance,
 		TestClusterInstanceInput,
-		utils.TemplateParamPolicyConfig,
+		ctlrutils.TemplateParamPolicyConfig,
 		TestPolicyTemplateInput,
 	)
 	ExternalCrdData = []map[string]string{

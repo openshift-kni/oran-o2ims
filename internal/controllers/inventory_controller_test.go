@@ -50,7 +50,7 @@ import (
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -101,7 +101,7 @@ var _ = Describe("Inventory Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "search-search-api",
 					Namespace: "open-cluster-management",
-					Labels:    map[string]string{utils.SearchApiLabelKey: utils.SearchApiLabelValue},
+					Labels:    map[string]string{ctlrutils.SearchApiLabelKey: ctlrutils.SearchApiLabelValue},
 				},
 				Spec: corev1.ServiceSpec{
 					Type: corev1.ServiceTypeClusterIP,
@@ -115,12 +115,12 @@ var _ = Describe("Inventory Controller", func() {
 			}
 
 			pods := []client.Object{
-				makePod(ns.Name, utils.InventoryDatabaseServerName),
-				makePod(ns.Name, utils.InventoryResourceServerName),
-				makePod(ns.Name, utils.InventoryClusterServerName),
-				makePod(ns.Name, utils.InventoryAlarmServerName),
-				makePod(ns.Name, utils.InventoryArtifactsServerName),
-				makePod(ns.Name, utils.InventoryProvisioningServerName),
+				makePod(ns.Name, ctlrutils.InventoryDatabaseServerName),
+				makePod(ns.Name, ctlrutils.InventoryResourceServerName),
+				makePod(ns.Name, ctlrutils.InventoryClusterServerName),
+				makePod(ns.Name, ctlrutils.InventoryAlarmServerName),
+				makePod(ns.Name, ctlrutils.InventoryArtifactsServerName),
+				makePod(ns.Name, ctlrutils.InventoryProvisioningServerName),
 			}
 
 			cv := &openshiftv1.ClusterVersion{
@@ -158,7 +158,7 @@ var _ = Describe("Inventory Controller", func() {
 				&inventoryv1alpha1.Inventory{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:              "oran-o2ims-sample-1",
-						Namespace:         utils.InventoryNamespace,
+						Namespace:         ctlrutils.InventoryNamespace,
 						CreationTimestamp: metav1.Now(),
 					},
 					Spec: inventoryv1alpha1.InventorySpec{
@@ -168,7 +168,7 @@ var _ = Describe("Inventory Controller", func() {
 			},
 			reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Namespace: utils.InventoryNamespace,
+					Namespace: ctlrutils.InventoryNamespace,
 					Name:      "oran-o2ims-sample-1",
 				},
 			},
@@ -180,8 +180,8 @@ var _ = Describe("Inventory Controller", func() {
 				err := reconciler.Client.Get(
 					context.TODO(),
 					types.NamespacedName{
-						Name:      utils.InventoryResourceServerName,
-						Namespace: utils.InventoryNamespace,
+						Name:      ctlrutils.InventoryResourceServerName,
+						Namespace: ctlrutils.InventoryNamespace,
 					},
 					deployment)
 				Expect(err).ToNot(HaveOccurred())
@@ -195,7 +195,7 @@ var _ = Describe("Inventory Controller", func() {
 				// Run the reconciliation again.
 				req := reconcile.Request{
 					NamespacedName: types.NamespacedName{
-						Namespace: utils.InventoryNamespace,
+						Namespace: ctlrutils.InventoryNamespace,
 						Name:      "oran-o2ims-sample-1",
 					},
 				}
@@ -206,8 +206,8 @@ var _ = Describe("Inventory Controller", func() {
 				err = reconciler.Client.Get(
 					context.TODO(),
 					types.NamespacedName{
-						Name:      utils.InventoryResourceServerName,
-						Namespace: utils.InventoryNamespace,
+						Name:      ctlrutils.InventoryResourceServerName,
+						Namespace: ctlrutils.InventoryNamespace,
 					},
 					deployment)
 				Expect(err).ToNot(HaveOccurred())
@@ -231,7 +231,7 @@ var _ = Describe("Inventory Controller", func() {
 			},
 			reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Namespace: utils.InventoryNamespace,
+					Namespace: ctlrutils.InventoryNamespace,
 					Name:      "oran-o2ims-sample-1",
 				},
 			},
@@ -243,8 +243,8 @@ var _ = Describe("Inventory Controller", func() {
 				err := reconciler.Client.Get(
 					context.TODO(),
 					types.NamespacedName{
-						Name:      utils.InventoryResourceServerName,
-						Namespace: utils.InventoryNamespace,
+						Name:      ctlrutils.InventoryResourceServerName,
+						Namespace: ctlrutils.InventoryNamespace,
 					},
 					resourceDeployment)
 				Expect(err).ToNot(HaveOccurred())
@@ -254,8 +254,8 @@ var _ = Describe("Inventory Controller", func() {
 				err = reconciler.Client.Get(
 					context.TODO(),
 					types.NamespacedName{
-						Name:      utils.InventoryClusterServerName,
-						Namespace: utils.InventoryNamespace,
+						Name:      ctlrutils.InventoryClusterServerName,
+						Namespace: ctlrutils.InventoryNamespace,
 					},
 					clusterDeployment)
 				Expect(err).ToNot(HaveOccurred())
@@ -265,8 +265,8 @@ var _ = Describe("Inventory Controller", func() {
 				err = reconciler.Client.Get(
 					context.TODO(),
 					types.NamespacedName{
-						Name:      utils.InventoryAlarmServerName,
-						Namespace: utils.InventoryNamespace,
+						Name:      ctlrutils.InventoryAlarmServerName,
+						Namespace: ctlrutils.InventoryNamespace,
 					},
 					alarmsDeployment)
 				Expect(err).ToNot(HaveOccurred())
@@ -276,8 +276,8 @@ var _ = Describe("Inventory Controller", func() {
 				err = reconciler.Client.Get(
 					context.TODO(),
 					types.NamespacedName{
-						Name:      utils.InventoryArtifactsServerName,
-						Namespace: utils.InventoryNamespace,
+						Name:      ctlrutils.InventoryArtifactsServerName,
+						Namespace: ctlrutils.InventoryNamespace,
 					},
 					artifactsDeployment)
 				Expect(err).ToNot(HaveOccurred())
@@ -287,8 +287,8 @@ var _ = Describe("Inventory Controller", func() {
 				err = reconciler.Client.Get(
 					context.TODO(),
 					types.NamespacedName{
-						Name:      utils.InventoryProvisioningServerName,
-						Namespace: utils.InventoryNamespace,
+						Name:      ctlrutils.InventoryProvisioningServerName,
+						Namespace: ctlrutils.InventoryNamespace,
 					},
 					provisioningDeployment)
 				Expect(err).ToNot(HaveOccurred())

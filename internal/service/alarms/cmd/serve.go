@@ -18,7 +18,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms"
-	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 var config api.AlarmsServerConfig
@@ -46,7 +46,7 @@ var alarmsServe = &cobra.Command{
 // setServerFlags creates the flag instances for the server
 func setServerFlags(cmd *cobra.Command) error {
 	flags := cmd.Flags()
-	if err := utils2.SetCommonServerFlags(cmd, &config.CommonServerConfig); err != nil {
+	if err := svcutils.SetCommonServerFlags(cmd, &config.CommonServerConfig); err != nil {
 		return fmt.Errorf("could not set common server flags: %w", err)
 	}
 	flags.StringVar(

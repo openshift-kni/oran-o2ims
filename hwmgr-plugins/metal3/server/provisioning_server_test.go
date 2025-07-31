@@ -28,8 +28,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 var _ = Describe("Metal3PluginServer", func() {
@@ -37,15 +37,15 @@ var _ = Describe("Metal3PluginServer", func() {
 		ctrl       *gomock.Controller
 		mockClient *MockClient
 		logger     *slog.Logger
-		config     utils.CommonServerConfig
+		config     svcutils.CommonServerConfig
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockClient = NewMockClient(ctrl)
 		logger = slog.Default()
-		config = utils.CommonServerConfig{
-			Listener: utils.ListenerConfig{
+		config = svcutils.CommonServerConfig{
+			Listener: svcutils.ListenerConfig{
 				Address: "localhost:8080",
 			},
 		}
@@ -88,7 +88,7 @@ var _ = Describe("Metal3PluginServer", func() {
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server.HardwarePluginServer.Namespace).To(Equal(provisioning.GetMetal3HWPluginNamespace()))
-				Expect(server.HardwarePluginServer.HardwarePluginID).To(Equal(hwpluginutils.Metal3HardwarePluginID))
+				Expect(server.HardwarePluginServer.HardwarePluginID).To(Equal(hwmgrutils.Metal3HardwarePluginID))
 				Expect(server.HardwarePluginServer.ResourcePrefix).To(Equal(Metal3ResourcePrefix))
 			})
 
@@ -117,7 +117,7 @@ var _ = Describe("Metal3PluginServer", func() {
 			})
 
 			It("should work with empty config", func() {
-				emptyConfig := utils.CommonServerConfig{}
+				emptyConfig := svcutils.CommonServerConfig{}
 				server, err := NewMetal3PluginServer(emptyConfig, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())

@@ -19,11 +19,11 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
-	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
+	svcresourceutils "github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
 // ResourceServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check
@@ -31,7 +31,7 @@ var _ api.StrictServerInterface = (*ResourceServer)(nil)
 
 // ResourceServerConfig defines the configuration attributes for the resource server
 type ResourceServerConfig struct {
-	utils.CommonServerConfig
+	svcutils.CommonServerConfig
 	CloudID         string
 	GlobalCloudID   string
 	Extensions      []string
@@ -49,7 +49,7 @@ type ResourceServer struct {
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
-	version := utils2.CurrentInventoryVersion
+	version := svcresourceutils.CurrentInventoryVersion
 	baseURL := constants.O2IMSInventoryBaseURL
 	versions := []generated.APIVersion{
 		{
@@ -83,7 +83,7 @@ func (r *ResourceServer) GetCloudInfo(ctx context.Context, request api.GetCloudI
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
 	// We currently only support a single version
-	version := utils2.CurrentInventoryVersion
+	version := svcresourceutils.CurrentInventoryVersion
 	baseURL := constants.O2IMSInventoryBaseURL
 	versions := []generated.APIVersion{
 		{
@@ -123,7 +123,7 @@ func (r *ResourceServer) GetDeploymentManagers(ctx context.Context, request api.
 // GetDeploymentManager receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetDeploymentManager(ctx context.Context, request api.GetDeploymentManagerRequestObject) (api.GetDeploymentManagerResponseObject, error) {
 	record, err := r.Repo.GetDeploymentManager(ctx, request.DeploymentManagerId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetDeploymentManager404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"deploymentManagerId": request.DeploymentManagerId.String(),
@@ -245,7 +245,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 // GetSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
 	record, err := r.Repo.GetSubscription(ctx, request.SubscriptionId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetSubscription404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"subscriptionId": request.SubscriptionId.String(),
@@ -327,7 +327,7 @@ func (r *ResourceServer) GetResourcePools(ctx context.Context, request api.GetRe
 // GetResourcePool receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetResourcePoolRequestObject) (api.GetResourcePoolResponseObject, error) {
 	record, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetResourcePool404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
@@ -423,7 +423,7 @@ func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourc
 
 	// Next, get the resources
 	record, err := r.Repo.GetResource(ctx, request.ResourceId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetResource404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourcePoolId": request.ResourcePoolId.String(),
@@ -474,7 +474,7 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 // GetResourceType receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetResourceTypeRequestObject) (api.GetResourceTypeResponseObject, error) {
 	record, err := r.Repo.GetResourceType(ctx, request.ResourceTypeId)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetResourceType404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"resourceTypeId": request.ResourceTypeId.String(),

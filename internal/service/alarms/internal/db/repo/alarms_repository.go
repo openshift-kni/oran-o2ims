@@ -26,11 +26,11 @@ import (
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 type AlarmsRepository struct {
-	Db utils.DBQuery
+	Db svcutils.DBQuery
 }
 
 // Compile time check for interface implementation
@@ -43,21 +43,21 @@ func (ar *AlarmsRepository) WithTransaction(ctx context.Context, fn func(tx pgx.
 
 // GetAlarmEventRecords grabs all rows of alarm_event_record
 func (ar *AlarmsRepository) GetAlarmEventRecords(ctx context.Context) ([]models.AlarmEventRecord, error) {
-	return utils.FindAll[models.AlarmEventRecord](ctx, ar.Db)
+	return svcutils.FindAll[models.AlarmEventRecord](ctx, ar.Db)
 }
 
 func (ar *AlarmsRepository) PatchAlarmEventRecordACK(ctx context.Context, id uuid.UUID, record *models.AlarmEventRecord) (*models.AlarmEventRecord, error) {
-	return utils.Update[models.AlarmEventRecord](ctx, ar.Db, id, *record, "AlarmAcknowledged", "AlarmAcknowledgedTime", "PerceivedSeverity", "AlarmClearedTime", "AlarmChangedTime")
+	return svcutils.Update[models.AlarmEventRecord](ctx, ar.Db, id, *record, "AlarmAcknowledged", "AlarmAcknowledgedTime", "PerceivedSeverity", "AlarmClearedTime", "AlarmChangedTime")
 }
 
 // GetAlarmEventRecord grabs a row of alarm_event_record using a primary key
 func (ar *AlarmsRepository) GetAlarmEventRecord(ctx context.Context, id uuid.UUID) (*models.AlarmEventRecord, error) {
-	return utils.Find[models.AlarmEventRecord](ctx, ar.Db, id)
+	return svcutils.Find[models.AlarmEventRecord](ctx, ar.Db, id)
 }
 
 // CreateServiceConfiguration inserts a new row of alarm_service_configuration or returns the existing one
 func (ar *AlarmsRepository) CreateServiceConfiguration(ctx context.Context, defaultRetentionPeriod int) (*models.ServiceConfiguration, error) {
-	records, err := utils.FindAll[models.ServiceConfiguration](ctx, ar.Db)
+	records, err := svcutils.FindAll[models.ServiceConfiguration](ctx, ar.Db)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (ar *AlarmsRepository) CreateServiceConfiguration(ctx context.Context, defa
 			ids = append(ids, records[i].ID)
 		}
 
-		_, err = utils.Delete[models.ServiceConfiguration](ctx, ar.Db, psql.Quote(models.ServiceConfiguration{}.PrimaryKey()).In(psql.Arg(ids...)))
+		_, err = svcutils.Delete[models.ServiceConfiguration](ctx, ar.Db, psql.Quote(models.ServiceConfiguration{}.PrimaryKey()).In(psql.Arg(ids...)))
 		if err != nil {
 			return nil, fmt.Errorf("failed to delete additional service configurations: %w", err)
 		}
@@ -91,38 +91,38 @@ func (ar *AlarmsRepository) CreateServiceConfiguration(ctx context.Context, defa
 	record := models.ServiceConfiguration{
 		RetentionPeriod: defaultRetentionPeriod,
 	}
-	return utils.Create[models.ServiceConfiguration](ctx, ar.Db, record, "RetentionPeriod")
+	return svcutils.Create[models.ServiceConfiguration](ctx, ar.Db, record, "RetentionPeriod")
 }
 
 // GetServiceConfigurations grabs all rows of alarm_service_configuration
 func (ar *AlarmsRepository) GetServiceConfigurations(ctx context.Context) ([]models.ServiceConfiguration, error) {
-	return utils.FindAll[models.ServiceConfiguration](ctx, ar.Db)
+	return svcutils.FindAll[models.ServiceConfiguration](ctx, ar.Db)
 }
 
 // UpdateServiceConfiguration updates a row of alarm_service_configuration using a primary key
 func (ar *AlarmsRepository) UpdateServiceConfiguration(ctx context.Context, id uuid.UUID, record *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
-	return utils.Update[models.ServiceConfiguration](ctx, ar.Db, id, *record, "RetentionPeriod", "Extensions")
+	return svcutils.Update[models.ServiceConfiguration](ctx, ar.Db, id, *record, "RetentionPeriod", "Extensions")
 }
 
 // GetAlarmSubscriptions grabs all rows of alarm_subscription
 func (ar *AlarmsRepository) GetAlarmSubscriptions(ctx context.Context) ([]models.AlarmSubscription, error) {
-	return utils.FindAll[models.AlarmSubscription](ctx, ar.Db)
+	return svcutils.FindAll[models.AlarmSubscription](ctx, ar.Db)
 }
 
 // DeleteAlarmSubscription deletes a row of alarm_subscription using a primary key
 func (ar *AlarmsRepository) DeleteAlarmSubscription(ctx context.Context, id uuid.UUID) (int64, error) {
 	expr := psql.Quote(models.AlarmSubscription{}.PrimaryKey()).EQ(psql.Arg(id))
-	return utils.Delete[models.AlarmSubscription](ctx, ar.Db, expr)
+	return svcutils.Delete[models.AlarmSubscription](ctx, ar.Db, expr)
 }
 
 // CreateAlarmSubscription inserts a new row of alarm_subscription
 func (ar *AlarmsRepository) CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error) {
-	return utils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "Filter", "Callback", "EventCursor")
+	return svcutils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "Filter", "Callback", "EventCursor")
 }
 
 // GetAlarmSubscription grabs a row of alarm_subscription using a primary key
 func (ar *AlarmsRepository) GetAlarmSubscription(ctx context.Context, id uuid.UUID) (*models.AlarmSubscription, error) {
-	return utils.Find[models.AlarmSubscription](ctx, ar.Db, id)
+	return svcutils.Find[models.AlarmSubscription](ctx, ar.Db, id)
 }
 
 // UpsertAlarmEventCaaSRecord insert and updating an AlarmEventRecord.
@@ -136,7 +136,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 	query := psql.Insert(im.Into(m.TableName()))
 
 	// Set cols
-	query.Expression.Columns = utils.GetColumns(records[0], []string{
+	query.Expression.Columns = svcutils.GetColumns(records[0], []string{
 		"AlarmRaisedTime", "AlarmClearedTime", "AlarmAcknowledgedTime",
 		"AlarmAcknowledged", "PerceivedSeverity", "Extensions",
 		"ObjectID", "ObjectTypeID", "AlarmStatus",
@@ -159,7 +159,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 
 	// Set upsert constraints
 	// Cols here should match 'manage_alarm_event trigger' function as needed to trigger a notification using 'should_create_data_change_event'
-	dbTags := utils.GetAllDBTagsFromStruct(m)
+	dbTags := svcutils.GetAllDBTagsFromStruct(m)
 	query.Apply(im.OnConflictOnConstraint(m.OnConflict()).DoUpdate(
 		im.SetExcluded(dbTags["AlarmStatus"]),
 		im.SetExcluded(dbTags["AlarmClearedTime"]),
@@ -191,7 +191,7 @@ var TimeNow = time.Now
 // ResolveStaleAlarmEventCaaSRecord resolve all alerts with older generation ID
 func (ar *AlarmsRepository) ResolveStaleAlarmEventCaaSRecord(ctx context.Context, tx pgx.Tx, generationID int64) error {
 	m := models.AlarmEventRecord{}
-	dbTags := utils.GetAllDBTagsFromStruct(m)
+	dbTags := svcutils.GetAllDBTagsFromStruct(m)
 	var (
 		tableName          = m.TableName()
 		generationIDCol    = dbTags["GenerationID"]
@@ -222,7 +222,7 @@ func (ar *AlarmsRepository) ResolveStaleAlarmEventCaaSRecord(ctx context.Context
 	if err != nil {
 		return fmt.Errorf("failed to build AlarmEventRecord update query when processing AM notification: %w", err)
 	}
-	records, err := utils.ExecuteCollectRows[models.AlarmEventRecord](ctx, tx, sql, params)
+	records, err := svcutils.ExecuteCollectRows[models.AlarmEventRecord](ctx, tx, sql, params)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (ar *AlarmsRepository) ResolveStaleAlarmEventCaaSRecord(ctx context.Context
 
 // UpdateSubscriptionEventCursor update a given subscription event cursor with a alarm sequence value
 func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, subscription models.AlarmSubscription) error {
-	_, err := utils.Update[models.AlarmSubscription](ctx, ar.Db, subscription.SubscriptionID, subscription, "EventCursor")
+	_, err := svcutils.Update[models.AlarmSubscription](ctx, ar.Db, subscription.SubscriptionID, subscription, "EventCursor")
 	if err != nil {
 		return fmt.Errorf("failed to execute UpdateSubscriptionEventCursor query: %w", err)
 	}
@@ -245,13 +245,13 @@ func (ar *AlarmsRepository) UpdateSubscriptionEventCursor(ctx context.Context, s
 
 // GetAllAlarmsDataChange get all outbox entries
 func (ar *AlarmsRepository) GetAllAlarmsDataChange(ctx context.Context) ([]commonmodels.DataChangeEvent, error) {
-	return utils.FindAll[commonmodels.DataChangeEvent](ctx, ar.Db)
+	return svcutils.FindAll[commonmodels.DataChangeEvent](ctx, ar.Db)
 }
 
 // DeleteAlarmsDataChange delete outbox entry with given dataChangeID
 func (ar *AlarmsRepository) DeleteAlarmsDataChange(ctx context.Context, dataChangeId uuid.UUID) error {
 	dataChangeModel := commonmodels.DataChangeEvent{}
-	dbTags := utils.GetAllDBTagsFromStruct(dataChangeModel)
+	dbTags := svcutils.GetAllDBTagsFromStruct(dataChangeModel)
 
 	q := psql.Delete(
 		dm.From(dataChangeModel.TableName()),

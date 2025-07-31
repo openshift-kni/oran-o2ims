@@ -17,7 +17,7 @@ import (
 	hwpluginscmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/cmd"
 	loopbackplugincmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/loopback/cmd"
 	metal3plugincmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/cmd"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	alarmscmd "github.com/openshift-kni/oran-o2ims/internal/service/alarms/cmd"
 	artifactscmd "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/cmd"
 	clustercmd "github.com/openshift-kni/oran-o2ims/internal/service/cluster/cmd"
@@ -50,7 +50,7 @@ func main() {
 		AddCommand(provisioningcmd.GetProvisioningRootCmd) // TODO all server should have same root to share init info
 
 	// Determine if the Loopback HardwarePlugin manager should be deployed
-	if utils.ShouldDeployLoopbackHWPlugin() {
+	if ctlrutils.ShouldDeployLoopbackHWPlugin() {
 		toolBuilder.AddCommand(loopbackplugincmd.Start)
 	}
 

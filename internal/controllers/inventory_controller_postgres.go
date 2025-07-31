@@ -21,7 +21,7 @@ import (
 	k8sptr "k8s.io/utils/ptr"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/postgres"
 )
 
@@ -31,8 +31,8 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 	t.logger.DebugContext(ctx, "[deploy postgres server]", "Name", serverName)
 
 	// Default server volumes.
-	deploymentVolumes := utils.GetDeploymentVolumes(serverName, t.object)
-	deploymentVolumeMounts := utils.GetDeploymentVolumeMounts(serverName, t.object)
+	deploymentVolumes := ctlrutils.GetDeploymentVolumes(serverName, t.object)
+	deploymentVolumeMounts := ctlrutils.GetDeploymentVolumeMounts(serverName, t.object)
 
 	// Add additional database volumes.
 	deploymentVolumes = append(deploymentVolumes,
@@ -128,7 +128,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports: []corev1.ContainerPort{
 							{
-								Name:          utils.DatabaseTargetPort,
+								Name:          ctlrutils.DatabaseTargetPort,
 								Protocol:      corev1.ProtocolTCP,
 								ContainerPort: constants.DatabaseServicePort,
 							},
@@ -153,7 +153,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 	}
 
 	t.logger.DebugContext(ctx, "[deployDatabase] Create/Update/Patch Server", "Name", serverName)
-	if err := utils.CreateK8sCR(ctx, t.client, newDeployment, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to deploy database: %w", err)
 	}
 
@@ -174,11 +174,11 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 
 	if errors.IsNotFound(err) {
 		// Does not already exist; create it.
-		err = utils.CreateSecretFromLiterals(ctx, t.client, t.object, t.object.Namespace, passwordSecretName, map[string][]byte{
-			utils.AdminPasswordEnvName:     []byte(utils.GetPasswordOrRandom(utils.AdminPasswordEnvName)),
-			utils.AlarmsPasswordEnvName:    []byte(utils.GetPasswordOrRandom(utils.AlarmsPasswordEnvName)),
-			utils.ResourcesPasswordEnvName: []byte(utils.GetPasswordOrRandom(utils.ResourcesPasswordEnvName)),
-			utils.ClustersPasswordEnvName:  []byte(utils.GetPasswordOrRandom(utils.ClustersPasswordEnvName)),
+		err = ctlrutils.CreateSecretFromLiterals(ctx, t.client, t.object, t.object.Namespace, passwordSecretName, map[string][]byte{
+			ctlrutils.AdminPasswordEnvName:     []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.AdminPasswordEnvName)),
+			ctlrutils.AlarmsPasswordEnvName:    []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.AlarmsPasswordEnvName)),
+			ctlrutils.ResourcesPasswordEnvName: []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.ResourcesPasswordEnvName)),
+			ctlrutils.ClustersPasswordEnvName:  []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.ClustersPasswordEnvName)),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create passwords: %w", err)
@@ -189,20 +189,20 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 		// to force a restart of the postgres service so that its init scripts run again.  Updating the secret without
 		// restarting the postgres service will cause password authentication to fail for all the servers using the new
 		// set of passwords.
-		if _, ok := existing.Data[utils.AdminPasswordEnvName]; !ok {
-			existing.Data[utils.AdminPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.AdminPasswordEnvName))
+		if _, ok := existing.Data[ctlrutils.AdminPasswordEnvName]; !ok {
+			existing.Data[ctlrutils.AdminPasswordEnvName] = []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.AdminPasswordEnvName))
 		}
-		if _, ok := existing.Data[utils.AlarmsPasswordEnvName]; !ok {
-			existing.Data[utils.AlarmsPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.AlarmsPasswordEnvName))
+		if _, ok := existing.Data[ctlrutils.AlarmsPasswordEnvName]; !ok {
+			existing.Data[ctlrutils.AlarmsPasswordEnvName] = []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.AlarmsPasswordEnvName))
 		}
-		if _, ok := existing.Data[utils.ResourcesPasswordEnvName]; !ok {
-			existing.Data[utils.ResourcesPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.ResourcesPasswordEnvName))
+		if _, ok := existing.Data[ctlrutils.ResourcesPasswordEnvName]; !ok {
+			existing.Data[ctlrutils.ResourcesPasswordEnvName] = []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.ResourcesPasswordEnvName))
 		}
-		if _, ok := existing.Data[utils.ClustersPasswordEnvName]; !ok {
-			existing.Data[utils.ClustersPasswordEnvName] = []byte(utils.GetPasswordOrRandom(utils.ClustersPasswordEnvName))
+		if _, ok := existing.Data[ctlrutils.ClustersPasswordEnvName]; !ok {
+			existing.Data[ctlrutils.ClustersPasswordEnvName] = []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.ClustersPasswordEnvName))
 		}
 
-		err = utils.CreateK8sCR(ctx, t.client, &existing, t.object, utils.UPDATE)
+		err = ctlrutils.CreateK8sCR(ctx, t.client, &existing, t.object, ctlrutils.UPDATE)
 		if err != nil {
 			return fmt.Errorf("failed to create passwords: %w", err)
 		}
@@ -215,7 +215,7 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 	t.logger.DebugContext(ctx, "[createDatabase]")
 
-	err = t.createServiceAccount(ctx, utils.InventoryDatabaseServerName)
+	err = t.createServiceAccount(ctx, ctlrutils.InventoryDatabaseServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -225,7 +225,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		return
 	}
 
-	err = t.createService(ctx, utils.InventoryDatabaseServerName, constants.DatabaseServicePort, utils.DatabaseTargetPort)
+	err = t.createService(ctx, ctlrutils.InventoryDatabaseServerName, constants.DatabaseServicePort, ctlrutils.DatabaseTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -237,8 +237,8 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 
 	// Create the config volume
 	t.logger.DebugContext(ctx, "[createDatabase] creating database config volume")
-	configVolumeName := fmt.Sprintf("%s-config", utils.InventoryDatabaseServerName)
-	err = utils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
+	configVolumeName := fmt.Sprintf("%s-config", ctlrutils.InventoryDatabaseServerName)
+	err = ctlrutils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
 		postgres.Artifacts, postgres.ConfigFilePath, t.object.Namespace, configVolumeName, postgres.ConfigFileName)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -251,8 +251,8 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 
 	// Create the startup volume
 	t.logger.DebugContext(ctx, "[createDatabase] creating database startup volume")
-	startupVolumeName := fmt.Sprintf("%s-startup", utils.InventoryDatabaseServerName)
-	err = utils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
+	startupVolumeName := fmt.Sprintf("%s-startup", ctlrutils.InventoryDatabaseServerName)
+	err = ctlrutils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
 		postgres.Artifacts, postgres.StartupFilePath, t.object.Namespace, startupVolumeName, postgres.StartupFileName)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -265,7 +265,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 
 	// Create the service passwords
 	t.logger.DebugContext(ctx, "[createDatabase] creating database service passwords")
-	err = t.createPasswords(ctx, utils.InventoryDatabaseServerName)
+	err = t.createPasswords(ctx, ctlrutils.InventoryDatabaseServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -275,7 +275,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		return
 	}
 
-	err = t.deployPostgresServer(ctx, utils.InventoryDatabaseServerName)
+	err = t.deployPostgresServer(ctx, ctlrutils.InventoryDatabaseServerName)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,

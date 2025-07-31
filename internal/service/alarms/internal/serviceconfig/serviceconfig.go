@@ -20,11 +20,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/kelseyhightower/envconfig"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
-	serverutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dm"
 	batchv1 "k8s.io/api/batch/v1"
@@ -47,7 +47,7 @@ var (
 	successLimit    int32 = 3
 	failureLimit    int32 = 1
 	commonLabels          = map[string]string{
-		"app": utils.InventoryAlarmServerName,
+		"app": ctlrutils.InventoryAlarmServerName,
 	}
 )
 
@@ -74,7 +74,7 @@ func (c *Config) EnsureCleanupCronJob(ctx context.Context, sc *models.ServiceCon
 	deployment := &appsv1.Deployment{}
 	if err := c.HubClient.Get(ctx, client.ObjectKey{
 		Namespace: c.PodNamespace,
-		Name:      utils.InventoryAlarmServerName,
+		Name:      ctlrutils.InventoryAlarmServerName,
 	}, deployment); err != nil {
 		return fmt.Errorf("failed to get alarms-server deployment: %w", err)
 	}
@@ -140,7 +140,7 @@ func getCleanUpPgSQL(ctx context.Context, sc *models.ServiceConfiguration) (stri
 	}
 
 	aer := models.AlarmEventRecord{}
-	dbTag := serverutils.GetAllDBTagsFromStruct(aer)
+	dbTag := svcutils.GetAllDBTagsFromStruct(aer)
 	query := psql.Delete(
 		dm.From(aer.TableName()),
 		dm.Where(
@@ -175,7 +175,7 @@ func (c *Config) generateCronJob(configMap corev1.ConfigMap) batchv1.CronJob {
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: "postgres-server-passwords",
 					},
-					Key: utils.AlarmsPasswordEnvName,
+					Key: ctlrutils.AlarmsPasswordEnvName,
 				},
 			},
 		},

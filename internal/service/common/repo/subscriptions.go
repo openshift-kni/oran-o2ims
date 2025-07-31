@@ -12,7 +12,7 @@ import (
 	"fmt"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
@@ -59,7 +59,7 @@ func (p *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 // cursor.
 func (p *SubscriptionStorageProvider) UpdateSubscription(ctx context.Context, subscription *notifier.SubscriptionInfo) error {
 	record, err := p.repository.GetSubscription(ctx, subscription.SubscriptionID)
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, svcutils.ErrNotFound) {
 		return fmt.Errorf("subscription %s not found", subscription.SubscriptionID)
 	} else if err != nil {
 		return fmt.Errorf("failed to get subscription %s: %w", subscription.SubscriptionID, err)

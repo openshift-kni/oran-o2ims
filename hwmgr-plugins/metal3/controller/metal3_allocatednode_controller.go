@@ -23,7 +23,7 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
 // AllocatedNodeReconciler reconciles NodeAllocationRequest objects associated with the Metal3 H/W plugin
@@ -45,15 +45,15 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Add logging context with the resource name
 	ctx = logging.AppendCtx(ctx, slog.String("ReconcileRequest", req.Name))
 
-	allocatedNode, err := hwpluginutils.GetNode(ctx, r.Logger, r.NoncachedClient, req.Namespace, req.Name)
+	allocatedNode, err := hwmgrutils.GetNode(ctx, r.Logger, r.NoncachedClient, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// The AllocatedNode object has likely been deleted
 			r.Logger.InfoContext(ctx, "Node no longer exists.")
-			return hwpluginutils.DoNotRequeue(), nil
+			return hwmgrutils.DoNotRequeue(), nil
 		}
 		r.Logger.InfoContext(ctx, "Unable to fetch AllocatedNode. Requeuing", slog.String("error", err.Error()))
-		return hwpluginutils.RequeueWithShortInterval(), nil
+		return hwmgrutils.RequeueWithShortInterval(), nil
 	}
 
 	// Add logging context with data from the CR
@@ -64,38 +64,38 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if allocatedNode.GetDeletionTimestamp() != nil {
 		// Handle deletion
 		r.Logger.InfoContext(ctx, "AllocatedNode is being deleted")
-		if controllerutil.ContainsFinalizer(allocatedNode, hwpluginutils.AllocatedNodeFinalizer) {
+		if controllerutil.ContainsFinalizer(allocatedNode, hwmgrutils.AllocatedNodeFinalizer) {
 			completed, deleteErr := r.handleAllocatedNodeDeletion(ctx, allocatedNode)
 			if deleteErr != nil {
-				return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed CleanupForDeletedNode: %w", deleteErr)
+				return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed CleanupForDeletedNode: %w", deleteErr)
 			}
 
 			if !completed {
 				r.Logger.InfoContext(ctx, "Node deletion handling in progress, requeueing")
-				return hwpluginutils.RequeueWithShortInterval(), nil
+				return hwmgrutils.RequeueWithShortInterval(), nil
 			}
 
-			if finalizerErr := hwpluginutils.AllocatedNodeRemoveFinalizer(ctx, r.NoncachedClient, r.Client, allocatedNode); finalizerErr != nil {
+			if finalizerErr := hwmgrutils.AllocatedNodeRemoveFinalizer(ctx, r.NoncachedClient, r.Client, allocatedNode); finalizerErr != nil {
 				r.Logger.InfoContext(ctx, "Failed to remove finalizer, requeueing", slog.String("error", finalizerErr.Error()))
-				return hwpluginutils.RequeueWithShortInterval(), nil
+				return hwmgrutils.RequeueWithShortInterval(), nil
 			}
 
 			r.Logger.InfoContext(ctx, "Deletion handling complete, finalizer removed")
-			return hwpluginutils.DoNotRequeue(), nil
+			return hwmgrutils.DoNotRequeue(), nil
 		}
 
 		r.Logger.InfoContext(ctx, "No finalizer, deletion handling complete")
-		return hwpluginutils.DoNotRequeue(), nil
+		return hwmgrutils.DoNotRequeue(), nil
 	}
 
-	if !controllerutil.ContainsFinalizer(allocatedNode, hwpluginutils.AllocatedNodeFinalizer) {
-		if finalizerErr := hwpluginutils.AllocatedNodeAddFinalizer(ctx, r.NoncachedClient, r.Client, allocatedNode); finalizerErr != nil {
+	if !controllerutil.ContainsFinalizer(allocatedNode, hwmgrutils.AllocatedNodeFinalizer) {
+		if finalizerErr := hwmgrutils.AllocatedNodeAddFinalizer(ctx, r.NoncachedClient, r.Client, allocatedNode); finalizerErr != nil {
 			r.Logger.InfoContext(ctx, "Failed to add node finalizer, requeueing", slog.String("error", finalizerErr.Error()))
-			return hwpluginutils.RequeueWithShortInterval(), nil
+			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 	}
 
-	return hwpluginutils.DoNotRequeue(), nil
+	return hwmgrutils.DoNotRequeue(), nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -104,7 +104,7 @@ func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Create a label selector for filtering AllocatedNode pertaining to the Metal3 HardwarePlugin
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			hwpluginutils.HardwarePluginLabel: hwpluginutils.Metal3HardwarePluginID,
+			hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
 		},
 	}
 

@@ -16,7 +16,7 @@ import (
 	"runtime/debug"
 	"slices"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 
 	"github.com/spf13/cobra"
@@ -274,10 +274,10 @@ func (t *Tool) writeBuildInfo(ctx context.Context) {
 
 // validateSecurityParameters validates
 func (t *Tool) validateSecurityParameters(ctx context.Context) {
-	value := utils.GetTLSSkipVerify()
+	value := ctlrutils.GetTLSSkipVerify()
 	if value {
 		t.logger.WarnContext(ctx, fmt.Sprintf("TLS certificate verification skipped by environment variable '%s'; this configuration is not recommended for production systems",
-			utils.TLSSkipVerifyEnvName))
+			ctlrutils.TLSSkipVerifyEnvName))
 	}
 }
 

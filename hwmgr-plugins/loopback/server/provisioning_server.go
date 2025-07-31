@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 const LoopbackResourcePrefix = "loopback"
@@ -28,7 +28,7 @@ type LoopbackPluginServer struct {
 
 // NewLoopbackPluginServer creates a Loopback HardwarePlugin server
 func NewLoopbackPluginServer(
-	config utils.CommonServerConfig,
+	config svcutils.CommonServerConfig,
 	hubClient client.Client,
 	logger *slog.Logger,
 ) (*LoopbackPluginServer, error) {
@@ -38,7 +38,7 @@ func NewLoopbackPluginServer(
 			HubClient:          hubClient,
 			Logger:             logger,
 			Namespace:          provisioning.GetLoopbackHWPluginNamespace(),
-			HardwarePluginID:   hwpluginutils.LoopbackHardwarePluginID,
+			HardwarePluginID:   hwmgrutils.LoopbackHardwarePluginID,
 			ResourcePrefix:     LoopbackResourcePrefix,
 		},
 	}, nil

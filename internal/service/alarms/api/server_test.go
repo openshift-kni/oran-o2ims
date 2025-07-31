@@ -20,7 +20,7 @@ import (
 	alarmapi "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 var _ = Describe("AlarmsServer", func() {
@@ -45,7 +45,7 @@ var _ = Describe("AlarmsServer", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
 					GetAlarmEventRecord(ctx, testUUID).
-					Return(nil, utils.ErrNotFound)
+					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetAlarm(ctx, alarmapi.GetAlarmRequestObject{
 					AlarmEventRecordId: testUUID,

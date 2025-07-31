@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	clientutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/utils"
+	hwmgrclientutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
@@ -44,7 +44,7 @@ func NewHardwarePluginClient(
 	hwPlugin *hwmgmtv1alpha1.HardwarePlugin,
 ) (*HardwarePluginClient, error) {
 	// Construct OAuth client configuration
-	config, err := clientutils.SetupOAuthClientConfig(ctx, c, hwPlugin)
+	config, err := hwmgrclientutils.SetupOAuthClientConfig(ctx, c, hwPlugin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client config: %w", err)
 	}

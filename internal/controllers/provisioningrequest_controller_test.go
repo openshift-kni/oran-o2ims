@@ -138,7 +138,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -218,7 +218,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 				Namespace: "test-ns",
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "image"
@@ -316,8 +316,8 @@ plan:
 	Describe("GetIBGUFromUpgradeDefaultsConfigmap", func() {
 		Context("when configmap exists with valid data", func() {
 			It("should create IBGU successfully", func() {
-				ibguCR, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(
-					ctx, c, "upgrade-defaults", "test-ns", utils.UpgradeDefaultsConfigmapKey,
+				ibguCR, err := ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(
+					ctx, c, "upgrade-defaults", "test-ns", ctlrutils.UpgradeDefaultsConfigmapKey,
 					clusterName, "test-pr", clusterName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ibguCR).ToNot(BeNil())
@@ -329,8 +329,8 @@ plan:
 
 		Context("when configmap does not exist", func() {
 			It("should return error", func() {
-				_, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(
-					ctx, c, "non-existent", "test-ns", utils.UpgradeDefaultsConfigmapKey,
+				_, err := ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(
+					ctx, c, "non-existent", "test-ns", ctlrutils.UpgradeDefaultsConfigmapKey,
 					clusterName, "test-pr", clusterName)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not found"))
@@ -342,13 +342,13 @@ plan:
 				invalidConfigMap := upgradeDefaults.DeepCopy()
 				invalidConfigMap.Name = "invalid-config"
 				invalidConfigMap.ResourceVersion = "" // Clear for Create
-				invalidConfigMap.Data[utils.UpgradeDefaultsConfigmapKey] = "invalid: yaml: data"
+				invalidConfigMap.Data[ctlrutils.UpgradeDefaultsConfigmapKey] = "invalid: yaml: data"
 				Expect(c.Create(ctx, invalidConfigMap)).To(Succeed())
 			})
 
 			It("should return error", func() {
-				_, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(
-					ctx, c, "invalid-config", "test-ns", utils.UpgradeDefaultsConfigmapKey,
+				_, err := ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(
+					ctx, c, "invalid-config", "test-ns", ctlrutils.UpgradeDefaultsConfigmapKey,
 					clusterName, "test-pr", clusterName)
 				Expect(err).To(HaveOccurred())
 			})
@@ -364,9 +364,9 @@ plan:
 						Name:      "original-policy",
 						Namespace: clusterName,
 						Labels: map[string]string{
-							utils.ChildPolicyRootPolicyLabel:       "original",
-							utils.ChildPolicyClusterNameLabel:      clusterName,
-							utils.ChildPolicyClusterNamespaceLabel: clusterName,
+							ctlrutils.ChildPolicyRootPolicyLabel:       "original",
+							ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+							ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
 						},
 					},
 					Spec: policiesv1.PolicySpec{
@@ -384,10 +384,10 @@ plan:
 						Name:      "cluster-specific-policy",
 						Namespace: clusterName,
 						Labels: map[string]string{
-							utils.ChildPolicyRootPolicyLabel:       "cluster-specific",
-							utils.ChildPolicyClusterNameLabel:      clusterName,
-							utils.ChildPolicyClusterNamespaceLabel: clusterName,
-							"environment":                          "test",
+							ctlrutils.ChildPolicyRootPolicyLabel:       "cluster-specific",
+							ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+							ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
+							"environment": "test",
 						},
 					},
 					Spec: policiesv1.PolicySpec{
@@ -402,7 +402,7 @@ plan:
 				// Filter policies by cluster name
 				policies := &policiesv1.PolicyList{}
 				labels := map[string]string{
-					utils.ChildPolicyClusterNameLabel: clusterName,
+					ctlrutils.ChildPolicyClusterNameLabel: clusterName,
 				}
 
 				err := c.List(ctx, policies, client.MatchingLabels(labels))
@@ -446,25 +446,25 @@ plan:
 		Context("when all resource preparation conditions are successful", func() {
 			BeforeEach(func() {
 				// Set all conditions to true
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Validation completed successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"ClusterInstance rendered successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Cluster resources created successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
@@ -486,13 +486,13 @@ plan:
 		Context("when some conditions are missing", func() {
 			BeforeEach(func() {
 				// Only set some conditions, leave others missing
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Validation completed successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
@@ -515,14 +515,14 @@ plan:
 		Context("when validation condition fails", func() {
 			BeforeEach(func() {
 				// Set validation condition to false
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
 					"Validation failed: invalid template parameters")
 
 				// Set other conditions to true
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
@@ -546,13 +546,13 @@ plan:
 		Context("when cluster instance rendering fails", func() {
 			BeforeEach(func() {
 				// Set validation to true but cluster instance rendering to false
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Validation completed successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
@@ -576,19 +576,19 @@ plan:
 		Context("when cluster resources creation fails", func() {
 			BeforeEach(func() {
 				// Set other conditions to true but cluster resources creation to false
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Validation completed successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"ClusterInstance rendered successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
@@ -612,25 +612,25 @@ plan:
 		Context("when hardware template rendering fails", func() {
 			BeforeEach(func() {
 				// Set other conditions to true but hardware template rendering to false
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Validation completed successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"ClusterInstance rendered successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Cluster resources created successfully")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
@@ -654,21 +654,21 @@ plan:
 		Context("when multiple conditions fail", func() {
 			BeforeEach(func() {
 				// Set validation to false (first in the list)
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
 					"Validation failed: first error")
 
 				// Set cluster instance rendering to false (second in the list)
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
 					"Rendering failed: second error")
 
 				// Set hardware template rendering to false (third in the list)
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
@@ -695,7 +695,7 @@ plan:
 		Context("when conditions are in mixed states", func() {
 			BeforeEach(func() {
 				// Mix of true, false, and missing conditions
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
@@ -703,13 +703,13 @@ plan:
 
 				// Skip ClusterInstanceRendered (missing)
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
 					"Resource creation failed")
 
-				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 					provisioningv1alpha1.CRconditionReasons.InProgress,
 					metav1.ConditionUnknown,
@@ -833,7 +833,7 @@ plan:
 
 			It("should not update state when already set to deleting", func() {
 				// Pre-set the state to deleting
-				utils.SetProvisioningStateDeleting(deletionCR)
+				ctlrutils.SetProvisioningStateDeleting(deletionCR)
 				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
 
 				deleteCompleted, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
@@ -2476,7 +2476,7 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 				Namespace: "test-ns",
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "image"
@@ -2498,7 +2498,7 @@ plan:
 				Namespace: "test-ns",
 			},
 			Data: map[string]string{
-				utils.PolicyTemplateDefaultsConfigmapKey: `
+				ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 source-crs:
 - apiVersion: policy.open-cluster-management.io/v1
   kind: Policy
@@ -2533,9 +2533,9 @@ source-crs:
 				Name:      "test-policy-enforce",
 				Namespace: clusterName,
 				Labels: map[string]string{
-					utils.ChildPolicyRootPolicyLabel:       "test-policy",
-					utils.ChildPolicyClusterNameLabel:      clusterName,
-					utils.ChildPolicyClusterNamespaceLabel: clusterName,
+					ctlrutils.ChildPolicyRootPolicyLabel:       "test-policy",
+					ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+					ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
 				},
 			},
 			Spec: policiesv1.PolicySpec{
@@ -2566,8 +2566,8 @@ source-crs:
 				// Test that the system correctly identifies non-compliant policies
 				policies := &policiesv1.PolicyList{}
 				labels := map[string]string{
-					utils.ChildPolicyClusterNameLabel:      clusterName,
-					utils.ChildPolicyClusterNamespaceLabel: clusterName,
+					ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+					ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
 				}
 
 				err := c.List(ctx, policies, client.MatchingLabels(labels))
@@ -2600,9 +2600,9 @@ source-crs:
 						Name:      "test-policy-2",
 						Namespace: clusterName,
 						Labels: map[string]string{
-							utils.ChildPolicyRootPolicyLabel:       "test-policy-2",
-							utils.ChildPolicyClusterNameLabel:      clusterName,
-							utils.ChildPolicyClusterNamespaceLabel: clusterName,
+							ctlrutils.ChildPolicyRootPolicyLabel:       "test-policy-2",
+							ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+							ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
 						},
 					},
 					Spec: policiesv1.PolicySpec{
@@ -2617,8 +2617,8 @@ source-crs:
 				// List all policies for the cluster
 				policies := &policiesv1.PolicyList{}
 				labels := map[string]string{
-					utils.ChildPolicyClusterNameLabel:      clusterName,
-					utils.ChildPolicyClusterNamespaceLabel: clusterName,
+					ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+					ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
 				}
 
 				err := c.List(ctx, policies, client.MatchingLabels(labels))
@@ -2643,8 +2643,8 @@ source-crs:
 			It("should handle absence of policies gracefully", func() {
 				policies := &policiesv1.PolicyList{}
 				labels := map[string]string{
-					utils.ChildPolicyClusterNameLabel:      clusterName,
-					utils.ChildPolicyClusterNamespaceLabel: clusterName,
+					ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+					ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
 				}
 
 				err := c.List(ctx, policies, client.MatchingLabels(labels))
@@ -2658,7 +2658,7 @@ source-crs:
 		Context("when cluster provisioning is complete", func() {
 			BeforeEach(func() {
 				// Set ProvisioningRequest status to simulate completed provisioning
-				utils.SetProvisioningStateFulfilled(cr)
+				ctlrutils.SetProvisioningStateFulfilled(cr)
 				Expect(c.Status().Update(ctx, cr)).To(Succeed())
 			})
 
@@ -2666,8 +2666,8 @@ source-crs:
 				// Verify initial non-compliant state affects status
 				policies := &policiesv1.PolicyList{}
 				labels := map[string]string{
-					utils.ChildPolicyClusterNameLabel:      clusterName,
-					utils.ChildPolicyClusterNamespaceLabel: clusterName,
+					ctlrutils.ChildPolicyClusterNameLabel:      clusterName,
+					ctlrutils.ChildPolicyClusterNamespaceLabel: clusterName,
 				}
 
 				err := c.List(ctx, policies, client.MatchingLabels(labels))
@@ -2722,7 +2722,7 @@ source-crs:
 				cm := &corev1.ConfigMap{}
 				err := c.Get(ctx, types.NamespacedName{Name: "policy-defaults", Namespace: "test-ns"}, cm)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(cm.Data).To(HaveKey(utils.PolicyTemplateDefaultsConfigmapKey))
+				Expect(cm.Data).To(HaveKey(ctlrutils.PolicyTemplateDefaultsConfigmapKey))
 			})
 
 			It("should handle policy template defaults with valid YAML", func() {
@@ -2731,7 +2731,7 @@ source-crs:
 				err := c.Get(ctx, types.NamespacedName{Name: "policy-defaults", Namespace: "test-ns"}, cm)
 				Expect(err).ToNot(HaveOccurred())
 
-				policyYAML := cm.Data[utils.PolicyTemplateDefaultsConfigmapKey]
+				policyYAML := cm.Data[ctlrutils.PolicyTemplateDefaultsConfigmapKey]
 				Expect(policyYAML).To(ContainSubstring("apiVersion: policy.open-cluster-management.io/v1"))
 				Expect(policyYAML).To(ContainSubstring("kind: Policy"))
 			})
@@ -2756,8 +2756,8 @@ source-crs:
 		Context("when ZTP process involves policy enforcement", func() {
 			It("should maintain ZTP status when policies become compliant", func() {
 				// Set initial ZTP state
-				utils.SetProvisioningStateFulfilled(cr)
-				utils.SetStatusCondition(&cr.Status.Conditions,
+				ctlrutils.SetProvisioningStateFulfilled(cr)
+				ctlrutils.SetStatusCondition(&cr.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
@@ -2786,8 +2786,8 @@ source-crs:
 
 			It("should handle policy non-compliance during ZTP", func() {
 				// Set ZTP in progress with explicit condition
-				utils.SetProvisioningStateInProgress(cr, "ZTP in progress")
-				utils.SetStatusCondition(&cr.Status.Conditions,
+				ctlrutils.SetProvisioningStateInProgress(cr, "ZTP in progress")
+				ctlrutils.SetStatusCondition(&cr.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 					provisioningv1alpha1.CRconditionReasons.InProgress,
 					metav1.ConditionFalse,
@@ -2886,7 +2886,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				Namespace: "test-ns",
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "image"
@@ -3122,7 +3122,7 @@ plan:
 			Context("when IBGU creation fails", func() {
 				BeforeEach(func() {
 					// Create invalid ConfigMap data to cause IBGU creation failure
-					upgradeDefaults.Data[utils.UpgradeDefaultsConfigmapKey] = "invalid: yaml: data"
+					upgradeDefaults.Data[ctlrutils.UpgradeDefaultsConfigmapKey] = "invalid: yaml: data"
 					Expect(c.Update(ctx, upgradeDefaults)).To(Succeed())
 				})
 
@@ -3449,13 +3449,13 @@ plan:
 				}
 
 				// Set up cluster as ZTP completed with configuration applied
-				utils.SetStatusCondition(&integrationCR.Status.Conditions,
+				ctlrutils.SetStatusCondition(&integrationCR.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"Cluster provisioning completed")
 
-				utils.SetStatusCondition(&integrationCR.Status.Conditions,
+				ctlrutils.SetStatusCondition(&integrationCR.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
@@ -3506,7 +3506,7 @@ plan:
 			Context("when upgrade is initiated but not completed", func() {
 				BeforeEach(func() {
 					// Add UpgradeCompleted condition as InProgress
-					utils.SetStatusCondition(&integrationCR.Status.Conditions,
+					ctlrutils.SetStatusCondition(&integrationCR.Status.Conditions,
 						provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 						provisioningv1alpha1.CRconditionReasons.InProgress,
 						metav1.ConditionFalse,
@@ -3532,8 +3532,8 @@ plan:
 
 				It("should continue monitoring upgrade progress", func() {
 					// Check that upgrade is initiated
-					Expect(utils.IsClusterUpgradeInitiated(integrationCR)).To(BeTrue())
-					Expect(utils.IsClusterUpgradeCompleted(integrationCR)).To(BeFalse())
+					Expect(ctlrutils.IsClusterUpgradeInitiated(integrationCR)).To(BeTrue())
+					Expect(ctlrutils.IsClusterUpgradeCompleted(integrationCR)).To(BeFalse())
 
 					// handleUpgrade should continue monitoring
 					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster")
@@ -3546,7 +3546,7 @@ plan:
 			Context("when upgrade is completed", func() {
 				BeforeEach(func() {
 					// Add UpgradeCompleted condition as Completed
-					utils.SetStatusCondition(&integrationCR.Status.Conditions,
+					ctlrutils.SetStatusCondition(&integrationCR.Status.Conditions,
 						provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 						provisioningv1alpha1.CRconditionReasons.Completed,
 						metav1.ConditionTrue,
@@ -3572,8 +3572,8 @@ plan:
 
 				It("should complete upgrade flow and proceed", func() {
 					// Check that upgrade is completed
-					Expect(utils.IsClusterUpgradeInitiated(integrationCR)).To(BeTrue())
-					Expect(utils.IsClusterUpgradeCompleted(integrationCR)).To(BeTrue())
+					Expect(ctlrutils.IsClusterUpgradeInitiated(integrationCR)).To(BeTrue())
+					Expect(ctlrutils.IsClusterUpgradeCompleted(integrationCR)).To(BeTrue())
 
 					// handleUpgrade should complete and clean up
 					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster")

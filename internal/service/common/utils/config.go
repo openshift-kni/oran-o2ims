@@ -17,7 +17,7 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // OAuthConfig defines the attributes used to communicate with the OAuth server
@@ -186,15 +186,15 @@ func (c *CommonServerConfig) Validate() error {
 }
 
 // CreateOAuthConfig builds an OAuthClientConfig from the specified parameters
-func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*utils.OAuthClientConfig, error) {
-	config := utils.OAuthClientConfig{}
+func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.OAuthClientConfig, error) {
+	config := ctlrutils.OAuthClientConfig{}
 	if c.TLS.CABundleFile != "" {
 		// Load the bundle
 		bytes, err := os.ReadFile(c.TLS.CABundleFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read CA bundle file '%s': %w", c.TLS.CABundleFile, err)
 		}
-		config.TLSConfig = &utils.TLSConfig{CaBundle: bytes}
+		config.TLSConfig = &ctlrutils.TLSConfig{CaBundle: bytes}
 		slog.Debug("using CA bundle", "path", c.TLS.CABundleFile)
 	}
 
@@ -205,7 +205,7 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*utils.OAut
 			return nil, fmt.Errorf("failed to create dynamic client certificate loader: %w", err)
 		}
 		if config.TLSConfig == nil {
-			config.TLSConfig = &utils.TLSConfig{}
+			config.TLSConfig = &ctlrutils.TLSConfig{}
 		}
 		config.TLSConfig.ClientCert = dynamicClientCert
 		slog.Debug("using TLS client config", "cert", c.TLS.ClientCertFile, ",key", c.TLS.ClientKeyFile)
@@ -214,7 +214,7 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*utils.OAut
 		go dynamicClientCert.Run(ctx, 1)
 	}
 
-	config.OAuthConfig = &utils.OAuthConfig{
+	config.OAuthConfig = &ctlrutils.OAuthConfig{
 		TokenURL:     fmt.Sprintf("%s/%s", c.OAuth.IssuerURL, c.OAuth.TokenEndpoint),
 		ClientID:     c.OAuth.ClientID,
 		ClientSecret: c.OAuth.ClientSecret,

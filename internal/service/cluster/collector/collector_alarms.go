@@ -26,7 +26,7 @@ import (
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
@@ -109,14 +109,14 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 			continue
 		}
 
-		alarmDictionaryIDString := (*nodeClusterType.Extensions)[utils.ClusterAlarmDictionaryIDExtension]
+		alarmDictionaryIDString := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension]
 		if alarmDictionaryIDString != nil {
 			id, err := uuid.Parse(alarmDictionaryIDString.(string))
 			if err != nil {
 				slog.Error("error parsing alarm dictionary ID", "NodeClusterType ID", nodeClusterType.NodeClusterTypeID, "error", err)
 				continue
 			}
-			(*nodeClusterType.Extensions)[utils.ClusterAlarmDictionaryIDExtension] = id
+			(*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension] = id
 
 			filteredNodeClusterTypes = append(filteredNodeClusterTypes, nodeClusterType)
 		}
@@ -161,9 +161,9 @@ func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Co
 			}
 
 			switch extensions.model {
-			case utils.ClusterModelManagedCluster:
+			case ctlrutils.ClusterModelManagedCluster:
 				rules, err = d.processManagedCluster(ctx, extensions.version)
-			case utils.ClusterModelHubCluster:
+			case ctlrutils.ClusterModelHubCluster:
 				rules, err = d.processHub(ctx)
 			default:
 				err = fmt.Errorf("unsupported node cluster type: %s", extensions.model)
@@ -229,8 +229,8 @@ func (d *AlarmsDataSource) processManagedCluster(ctx context.Context, version st
 func (d *AlarmsDataSource) getManagedCluster(ctx context.Context, version string) (*clusterv1.ManagedCluster, error) {
 	// Match managed cluster with the given version and not local cluster
 	selector := labels.NewSelector()
-	versionSelector, _ := labels.NewRequirement(utils.OpenshiftVersionLabelName, selection.Equals, []string{version})
-	localClusterRequirement, _ := labels.NewRequirement(utils.LocalClusterLabelName, selection.NotEquals, []string{"true"})
+	versionSelector, _ := labels.NewRequirement(ctlrutils.OpenshiftVersionLabelName, selection.Equals, []string{version})
+	localClusterRequirement, _ := labels.NewRequirement(ctlrutils.LocalClusterLabelName, selection.NotEquals, []string{"true"})
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
 	defer cancel()
@@ -298,7 +298,7 @@ func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterT
 		}
 
 		// Only process node cluster types with an alarm dictionary ID
-		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[utils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
+		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
 		if !ok || alarmDictionaryID == uuid.Nil {
 			slog.Error("no alarm dictionary ID found for node cluster type", "NodeClusterType ID", nodeClusterType.NodeClusterTypeID)
 			continue
@@ -361,7 +361,7 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 		}
 
 		// Add severity to additional fields
-		additionalFields[utils.AlarmDefinitionSeverityField] = rule.Labels["severity"]
+		additionalFields[ctlrutils.AlarmDefinitionSeverityField] = rule.Labels["severity"]
 
 		//TODO: Add info from prometheus rules containing the rule such as the namespace
 
@@ -377,7 +377,7 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 			ProposedRepairActions: runbookURL,
 			ClearingType:          string(common.AUTOMATIC),
 			AlarmAdditionalFields: &additionalFields,
-			Severity:              rule.Labels[utils.AlarmDefinitionSeverityField],
+			Severity:              rule.Labels[ctlrutils.AlarmDefinitionSeverityField],
 			IsThanosRule:          isThanosRule,
 		}
 
@@ -407,7 +407,7 @@ func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeC
 			continue
 		}
 
-		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[utils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
+		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
 		if !ok || alarmDictionaryID == uuid.Nil {
 			slog.Error("no alarm dictionary ID found for node cluster type", "NodeClusterType ID", nodeClusterType.NodeClusterTypeID)
 			continue
@@ -473,7 +473,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 		// Get the config map
 		configMap := &corev1.ConfigMap{}
 		err := d.hubClient.Get(ctxWithTimeout, client.ObjectKey{
-			Namespace: utils.OpenClusterManagementObservabilityNamespace,
+			Namespace: ctlrutils.OpenClusterManagementObservabilityNamespace,
 			Name:      configMapName,
 		}, configMap)
 		if err != nil {
@@ -531,13 +531,13 @@ func (d *AlarmsDataSource) makeThanosAlarmDefinitions(rules []monitoringv1.Rule)
 	version := ""
 	var localCluster clusterv1.ManagedCluster
 	err := d.hubClient.Get(context.TODO(), client.ObjectKey{
-		Name: utils.LocalClusterLabelName,
+		Name: ctlrutils.LocalClusterLabelName,
 	}, &localCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get local cluster: %w", err)
 	}
 
-	version = localCluster.Labels[utils.OpenshiftVersionLabelName]
+	version = localCluster.Labels[ctlrutils.OpenshiftVersionLabelName]
 
 	return d.createAlarmDefinitions(filteredRules, uuid.Nil, version, true), nil
 }
@@ -555,17 +555,17 @@ func getVendorExtensions(nodeClusterType models.NodeClusterType) (*vendorExtensi
 		return nil, fmt.Errorf("no extensions found for node cluster type %d", nodeClusterType.NodeClusterTypeID)
 	}
 
-	model, ok := (*nodeClusterType.Extensions)[utils.ClusterModelExtension].(string)
+	model, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterModelExtension].(string)
 	if !ok {
 		return nil, fmt.Errorf("no model extension found for node cluster type %s", nodeClusterType.NodeClusterTypeID)
 	}
 
-	version, ok := (*nodeClusterType.Extensions)[utils.ClusterVersionExtension].(string)
+	version, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterVersionExtension].(string)
 	if !ok {
 		return nil, fmt.Errorf("no version extension found for node cluster type %s", nodeClusterType.NodeClusterTypeID)
 	}
 
-	vendor, ok := (*nodeClusterType.Extensions)[utils.ClusterVendorExtension].(string)
+	vendor, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterVendorExtension].(string)
 	if !ok {
 		return nil, fmt.Errorf("no vendor extension found for node cluster type %s", nodeClusterType.NodeClusterTypeID)
 	}

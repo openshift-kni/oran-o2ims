@@ -33,7 +33,7 @@ import (
 
 	"github.com/google/uuid"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -181,7 +181,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 	// Validate the timeout value from the hardware template if it's present
 	if t.object.Spec.Templates.HwTemplate != "" {
-		_, err = utils.GetTimeoutFromHWTemplate(ctx, t.client, t.object.Spec.Templates.HwTemplate)
+		_, err = ctlrutils.GetTimeoutFromHWTemplate(ctx, t.client, t.object.Spec.Templates.HwTemplate)
 		if err != nil {
 			validationErrs = append(validationErrs, err.Error())
 		}
@@ -192,10 +192,10 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		ctx, t.client,
 		t.object.Spec.Templates.ClusterInstanceDefaults,
 		t.object.Namespace,
-		utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-		utils.ClusterInstallationTimeoutConfigKey)
+		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+		ctlrutils.ClusterInstallationTimeoutConfigKey)
 	if err != nil {
-		if !utils.IsInputError(err) {
+		if !ctlrutils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for ClusterInstance defaults: %w",
 				t.object.Spec.Templates.ClusterInstanceDefaults, err)
 		}
@@ -207,10 +207,10 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		ctx, t.client,
 		t.object.Spec.Templates.PolicyTemplateDefaults,
 		t.object.Namespace,
-		utils.PolicyTemplateDefaultsConfigmapKey,
-		utils.ClusterConfigurationTimeoutConfigKey)
+		ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+		ctlrutils.ClusterConfigurationTimeoutConfigKey)
 	if err != nil {
-		if !utils.IsInputError(err) {
+		if !ctlrutils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for policy template defaults: %w",
 				t.object.Spec.Templates.PolicyTemplateDefaults, err)
 		}
@@ -224,7 +224,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 			t.object.Namespace,
 		)
 		if err != nil {
-			if !utils.IsInputError(err) {
+			if !ctlrutils.IsInputError(err) {
 				return false, fmt.Errorf("failed to validate the ConfigMap %s for upgrade defaults: %w",
 					t.object.Spec.Templates.UpgradeDefaults, err)
 			}
@@ -252,13 +252,13 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
 	ctx context.Context, c client.Client, name, namespace string,
 ) error {
 
-	ibgu, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, utils.UpgradeDefaultsConfigmapKey, "name", "name", namespace)
+	ibgu, err := ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, ctlrutils.UpgradeDefaultsConfigmapKey, "name", "name", namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
 	}
 
 	if t.object.Spec.Release != ibgu.Spec.IBUSpec.SeedImageRef.Version {
-		return utils.NewInputError(
+		return ctlrutils.NewInputError(
 			"The ClusterTemplate spec.release (%s) does not match the seedImageRef version (%s) from the upgrade configmap",
 			t.object.Spec.Release, ibgu.Spec.IBUSpec.SeedImageRef.Version)
 	}
@@ -271,22 +271,22 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
 		if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 			return fmt.Errorf("failed to create IBGU: %w", err)
 		}
-		return utils.NewInputError("%s", err.Error())
+		return ctlrutils.NewInputError("%s", err.Error())
 	}
-	existingConfigmap, err := utils.GetConfigmap(ctx, c, name, namespace)
+	existingConfigmap, err := ctlrutils.GetConfigmap(ctx, c, name, namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get ConfigmapReference: %w", err)
 	}
 	// Check if the configmap is set to mutable
 	if existingConfigmap.Immutable != nil && !*existingConfigmap.Immutable {
-		return utils.NewInputError("It is not allowed to set Immutable to false in the ConfigMap %s", name)
+		return ctlrutils.NewInputError("It is not allowed to set Immutable to false in the ConfigMap %s", name)
 	} else if existingConfigmap.Immutable == nil {
 		// Patch the validated ConfigMap to make it immutable if not already set
 		immutable := true
 		newConfigmap := existingConfigmap.DeepCopy()
 		newConfigmap.Immutable = &immutable
 
-		if err := utils.CreateK8sCR(ctx, c, newConfigmap, nil, utils.PATCH); err != nil {
+		if err := ctlrutils.CreateK8sCR(ctx, c, newConfigmap, nil, ctlrutils.PATCH); err != nil {
 			return fmt.Errorf("failed to patch ConfigMap as immutable: %w", err)
 		}
 	}
@@ -297,43 +297,43 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
 func validateConfigmapReference[T any](
 	ctx context.Context, c client.Client, name, namespace, templateDataKey, timeoutConfigKey string) error {
 
-	existingConfigmap, err := utils.GetConfigmap(ctx, c, name, namespace)
+	existingConfigmap, err := ctlrutils.GetConfigmap(ctx, c, name, namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get ConfigmapReference: %w", err)
 	}
 
 	// Extract and validate the template from the configmap
-	data, err := utils.ExtractTemplateDataFromConfigMap[T](existingConfigmap, templateDataKey)
+	data, err := ctlrutils.ExtractTemplateDataFromConfigMap[T](existingConfigmap, templateDataKey)
 	if err != nil {
 		return err
 	}
 
-	if templateDataKey == utils.ClusterInstanceTemplateDefaultsConfigmapKey {
-		if err = utils.ValidateDefaultInterfaces(data); err != nil {
-			return utils.NewInputError("failed to validate the default ConfigMap: %w", err)
+	if templateDataKey == ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey {
+		if err = ctlrutils.ValidateDefaultInterfaces(data); err != nil {
+			return ctlrutils.NewInputError("failed to validate the default ConfigMap: %w", err)
 		}
 
-		if err = utils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, c, data); err != nil {
-			return utils.NewInputError("failed to validate the default ConfigMap: %w", err)
+		if err = ctlrutils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, c, data); err != nil {
+			return ctlrutils.NewInputError("failed to validate the default ConfigMap: %w", err)
 		}
 	}
 
 	// Extract and validate the timeout from the configmap
-	_, err = utils.ExtractTimeoutFromConfigMap(existingConfigmap, timeoutConfigKey)
+	_, err = ctlrutils.ExtractTimeoutFromConfigMap(existingConfigmap, timeoutConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to validate timeout config: %w", err)
 	}
 
 	// Check if the configmap is set to mutable
 	if existingConfigmap.Immutable != nil && !*existingConfigmap.Immutable {
-		return utils.NewInputError("It is not allowed to set Immutable to false in the ConfigMap %s", name)
+		return ctlrutils.NewInputError("It is not allowed to set Immutable to false in the ConfigMap %s", name)
 	} else if existingConfigmap.Immutable == nil {
 		// Patch the validated ConfigMap to make it immutable if not already set
 		immutable := true
 		newConfigmap := existingConfigmap.DeepCopy()
 		newConfigmap.Immutable = &immutable
 
-		if err := utils.CreateK8sCR(ctx, c, newConfigmap, nil, utils.PATCH); err != nil {
+		if err := ctlrutils.CreateK8sCR(ctx, c, newConfigmap, nil, ctlrutils.PATCH); err != nil {
 			return fmt.Errorf("failed to patch ConfigMap as immutable: %w", err)
 		}
 	}
@@ -346,7 +346,7 @@ func validateConfigmapReference[T any](
 // another namespace for a ClusterTemplate, false otherwise
 func validateName(c client.Client, name, version, metadataName, namespace string) error {
 	if metadataName != name+"."+version {
-		return utils.NewInputError("failed to validate ClusterTemplate name %s, should be in the format <spec.name>.<spec.version>: %s", metadataName, name+"."+version)
+		return ctlrutils.NewInputError("failed to validate ClusterTemplate name %s, should be in the format <spec.name>.<spec.version>: %s", metadataName, name+"."+version)
 	}
 
 	allClusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
@@ -365,8 +365,8 @@ func validateName(c client.Client, name, version, metadataName, namespace string
 		}
 	}
 	if len(sameMetadataName) != 0 {
-		return utils.NewInputError("failed to validate ClusterTemplate name %s, a identical name already exists in namespaces: %s",
-			metadataName, strings.Join(utils.MapKeysToSlice(sameMetadataName), ","))
+		return ctlrutils.NewInputError("failed to validate ClusterTemplate name %s, a identical name already exists in namespaces: %s",
+			metadataName, strings.Join(ctlrutils.MapKeysToSlice(sameMetadataName), ","))
 	}
 	return nil
 }
@@ -377,7 +377,7 @@ func validateTemplateID(object *provisioningv1alpha1.ClusterTemplate) error {
 	if object.Spec.TemplateID != "" {
 		_, err := uuid.Parse(object.Spec.TemplateID)
 		if err != nil {
-			return utils.NewInputError("failed to validate templateID, invalid UUID:%s", object.Spec.TemplateID)
+			return ctlrutils.NewInputError("failed to validate templateID, invalid UUID:%s", object.Spec.TemplateID)
 		}
 	}
 	return nil
@@ -393,7 +393,7 @@ func generateTemplateID(ctx context.Context, c client.Client, object *provisioni
 	newTemplate := object.DeepCopy()
 	newTemplate.Spec.TemplateID = newID.String()
 
-	err := utils.CreateK8sCR(ctx, c, newTemplate, nil, utils.PATCH)
+	err := ctlrutils.CreateK8sCR(ctx, c, newTemplate, nil, ctlrutils.PATCH)
 	if err != nil {
 		return fmt.Errorf("failed to patch templateID in ClusterTemplate %s: %w", object.Name, err)
 	}
@@ -413,12 +413,12 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		stringString = "string"
 		objectString = "object"
 	)
-	mandatoryParams := [][]string{{utils.TemplateParamNodeClusterName, stringString},
-		{utils.TemplateParamOCloudSiteId, stringString},
-		{utils.TemplateParamPolicyConfig, objectString},
-		{utils.TemplateParamClusterInstance, objectString}}
+	mandatoryParams := [][]string{{ctlrutils.TemplateParamNodeClusterName, stringString},
+		{ctlrutils.TemplateParamOCloudSiteId, stringString},
+		{ctlrutils.TemplateParamPolicyConfig, objectString},
+		{ctlrutils.TemplateParamClusterInstance, objectString}}
 	if object.Spec.TemplateParameterSchema.Size() == 0 {
-		return utils.NewInputError("templateParameterSchema is present but empty:")
+		return ctlrutils.NewInputError("templateParameterSchema is present but empty:")
 	}
 	var missingParameter []string
 	var badType []string
@@ -445,7 +445,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		subSchemas[expectedName] = aSubschema
 	}
 	var missingRequired []string
-	requiredList, err := utils.ExtractSchemaRequired(object.Spec.TemplateParameterSchema.Raw)
+	requiredList, err := ctlrutils.ExtractSchemaRequired(object.Spec.TemplateParameterSchema.Raw)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling required subschema: %w", err)
 	}
@@ -462,21 +462,21 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	if len(badType) != 0 {
 		validationFailureReason += fmt.Sprintf(" The following entries are present but have a unexpected type: %s.",
 			strings.Join(badType, ","))
-		return utils.NewInputError("%s", validationFailureReason)
+		return ctlrutils.NewInputError("%s", validationFailureReason)
 	}
 	if len(missingRequired) != 0 {
 		validationFailureReason += fmt.Sprintf(" The following entries are missing in the required section of the template: %s",
 			strings.Join(missingRequired, ","))
-		return utils.NewInputError("%s", validationFailureReason)
+		return ctlrutils.NewInputError("%s", validationFailureReason)
 	}
 
-	policyTemplateParamsSchema := subSchemas[utils.TemplateParamPolicyConfig].(map[string]any)
+	policyTemplateParamsSchema := subSchemas[ctlrutils.TemplateParamPolicyConfig].(map[string]any)
 	if err := validatePolicyTemplateParamsSchema(policyTemplateParamsSchema); err != nil {
-		return utils.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
+		return ctlrutils.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
 	}
-	clusterInstanceParamsSchema := subSchemas[utils.TemplateParamClusterInstance].(map[string]any)
+	clusterInstanceParamsSchema := subSchemas[ctlrutils.TemplateParamClusterInstance].(map[string]any)
 	if err := validateClusterInstanceParamsSchema(object.Spec.Templates.HwTemplate, clusterInstanceParamsSchema); err != nil {
-		return utils.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
+		return ctlrutils.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
 	}
 	return nil
 }
@@ -497,28 +497,28 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 func validatePolicyTemplateParamsSchema(schema map[string]any) error {
 	propertiesInterface, hasProperties := schema["properties"]
 	if !hasProperties {
-		return fmt.Errorf("unexpected %s structure, no properties present", utils.TemplateParamPolicyConfig)
+		return fmt.Errorf("unexpected %s structure, no properties present", ctlrutils.TemplateParamPolicyConfig)
 	}
 
 	properties, isMap := propertiesInterface.(map[string]any)
 	if !isMap {
-		return fmt.Errorf("unexpected %s properties structure", utils.TemplateParamPolicyConfig)
+		return fmt.Errorf("unexpected %s properties structure", ctlrutils.TemplateParamPolicyConfig)
 	}
 
 	for propertyKey, propertyValue := range properties {
 		propertyValueMap, ok := propertyValue.(map[string]any)
 		if !ok {
-			return fmt.Errorf("unexpected %s structure for the %s property", utils.TemplateParamPolicyConfig, propertyKey)
+			return fmt.Errorf("unexpected %s structure for the %s property", ctlrutils.TemplateParamPolicyConfig, propertyKey)
 		}
 
 		valueTypeInterface, ok := propertyValueMap["type"]
 		if !ok {
-			return fmt.Errorf("unexpected %s structure: expected subproperty \"type\" missing", utils.TemplateParamPolicyConfig)
+			return fmt.Errorf("unexpected %s structure: expected subproperty \"type\" missing", ctlrutils.TemplateParamPolicyConfig)
 		}
 
 		valueType, ok := valueTypeInterface.(string)
 		if !ok {
-			return fmt.Errorf("unexpected %s structure: expected the subproperty \"type\" to be string", utils.TemplateParamPolicyConfig)
+			return fmt.Errorf("unexpected %s structure: expected the subproperty \"type\" to be string", ctlrutils.TemplateParamPolicyConfig)
 		}
 
 		if valueType != "string" {
@@ -541,13 +541,13 @@ func validateClusterInstanceParamsSchema(hwTemplate string, schema map[string]an
 // when hardware template is not provided.
 func validateSchemaWithoutHWTemplate(schema map[string]any) error {
 	var expectedSubSchema map[string]any
-	err := yaml.Unmarshal([]byte(utils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &expectedSubSchema)
+	err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &expectedSubSchema)
 	if err != nil {
 		return fmt.Errorf("failed to parse expected clusterInstanceParams subschema for no hwTemplate: %w", err)
 	}
 
-	if err := checkSchemaContains(schema, expectedSubSchema, utils.TemplateParamClusterInstance); err != nil {
-		return fmt.Errorf("unexpected %s structure: %w", utils.TemplateParamClusterInstance, err)
+	if err := checkSchemaContains(schema, expectedSubSchema, ctlrutils.TemplateParamClusterInstance); err != nil {
+		return fmt.Errorf("unexpected %s structure: %w", ctlrutils.TemplateParamClusterInstance, err)
 	}
 
 	return nil
@@ -594,14 +594,14 @@ func checkSchemaContains(actual, expected map[string]any, currentPath string) er
 // setStatusConditionValidated updates the Validated status condition of the ClusterTemplate object
 func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx context.Context, errMsg string) error {
 	if errMsg != "" {
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.CTconditionTypes.Validated,
 			provisioningv1alpha1.CTconditionReasons.Failed,
 			metav1.ConditionFalse,
 			errMsg,
 		)
 	} else {
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.CTconditionTypes.Validated,
 			provisioningv1alpha1.CTconditionReasons.Completed,
 			metav1.ConditionTrue,
@@ -609,7 +609,7 @@ func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx conte
 		)
 	}
 
-	err := utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+	err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
 	if err != nil {
 		return fmt.Errorf("failed to update status for ClusterTemplate %s: %w", t.object.Name, err)
 	}

@@ -20,7 +20,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 const (
@@ -87,7 +87,7 @@ func UpdateNodeAllocationRequestSelectedGroups(
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
@@ -112,7 +112,7 @@ func UpdateNodeAllocationRequestPluginStatus(
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
@@ -147,7 +147,7 @@ func UpdateNodeAllocationRequestStatusCondition(
 		message)
 
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
@@ -183,7 +183,7 @@ func UpdateNodeAllocationRequestProperties(
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
@@ -208,7 +208,7 @@ func NodeAllocationRequestAddFinalizer(
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 ) error {
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
@@ -231,7 +231,7 @@ func NodeAllocationRequestRemoveFinalizer(
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 ) error {
 	// nolint: wrapcheck
-	err := sharedutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err

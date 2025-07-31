@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -35,7 +35,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 	// the ProvisioningRequest.
 	policies := &policiesv1.PolicyList{}
 	listOpts := []client.ListOption{
-		client.HasLabels{utils.ChildPolicyRootPolicyLabel},
+		client.HasLabels{ctlrutils.ChildPolicyRootPolicyLabel},
 		client.InNamespace(t.object.Status.Extensions.ClusterDetails.Name),
 	}
 
@@ -50,8 +50,8 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 	// Go through all the policies and get those that are matched with the managed cluster created
 	// by the current provisioning request.
 	for _, policy := range policies.Items {
-		targetPolicyName, targetPolicyNamespace := utils.GetParentPolicyNameAndNamespace(policy.Name)
-		if !utils.IsParentPolicyInZtpClusterTemplateNs(targetPolicyNamespace, t.ctDetails.namespace) {
+		targetPolicyName, targetPolicyNamespace := ctlrutils.GetParentPolicyNameAndNamespace(policy.Name)
+		if !ctlrutils.IsParentPolicyInZtpClusterTemplateNs(targetPolicyNamespace, t.ctDetails.namespace) {
 			continue
 		}
 
@@ -96,7 +96,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	defer func() {
 		t.object.Status.Extensions.Policies = targetPolicies
 		// Update the current policy status.
-		if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 			err = fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 		} else {
 			err = nil
@@ -105,7 +105,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 	if len(targetPolicies) == 0 {
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.Missing,
 			metav1.ConditionTrue,
@@ -124,7 +124,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 			),
 		)
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
@@ -133,7 +133,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		return
 	}
 
-	clusterIsReadyForPolicyConfig, err := utils.ClusterIsReadyForPolicyConfig(
+	clusterIsReadyForPolicyConfig, err := ctlrutils.ClusterIsReadyForPolicyConfig(
 		ctx, t.client, t.object.Status.Extensions.ClusterDetails.Name,
 	)
 	if err != nil {
@@ -149,17 +149,17 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 				t.object.Status.Extensions.ClusterDetails.Name,
 			),
 		)
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.ClusterNotReady,
 			metav1.ConditionFalse,
 			"The Cluster is not yet ready",
 		)
-		if utils.IsClusterProvisionCompleted(t.object) &&
-			(!utils.IsClusterUpgradeInitiated(t.object) ||
-				utils.IsClusterUpgradeCompleted(t.object)) &&
+		if ctlrutils.IsClusterProvisionCompleted(t.object) &&
+			(!ctlrutils.IsClusterUpgradeInitiated(t.object) ||
+				ctlrutils.IsClusterUpgradeCompleted(t.object)) &&
 			!allPoliciesInInform {
-			utils.SetProvisioningStateInProgress(t.object,
+			ctlrutils.SetProvisioningStateInProgress(t.object,
 				"Waiting for cluster to be ready for policy configuration")
 		}
 		return
@@ -170,7 +170,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		// No timeout is computed if all policies are in inform, just out of date.
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
 		message = "The configuration is out of date"
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.OutOfDate,
 			metav1.ConditionFalse,
@@ -181,22 +181,22 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 		message = "The configuration is still being applied"
 		reason := provisioningv1alpha1.CRconditionReasons.InProgress
-		if !utils.IsClusterUpgradeInitiated(t.object) ||
-			utils.IsClusterUpgradeCompleted(t.object) {
-			utils.SetProvisioningStateInProgress(t.object,
+		if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
+			ctlrutils.IsClusterUpgradeCompleted(t.object) {
+			ctlrutils.SetProvisioningStateInProgress(t.object,
 				"Cluster configuration is being applied")
 		}
 		if policyConfigTimedOut {
 			message += ", but it timed out"
 			reason = provisioningv1alpha1.CRconditionReasons.TimedOut
 
-			if !utils.IsClusterUpgradeInitiated(t.object) ||
-				utils.IsClusterUpgradeCompleted(t.object) {
-				utils.SetProvisioningStateFailed(t.object,
+			if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
+				ctlrutils.IsClusterUpgradeCompleted(t.object) {
+				ctlrutils.SetProvisioningStateFailed(t.object,
 					"Cluster configuration timed out")
 			}
 		}
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			reason,
 			metav1.ConditionFalse,
@@ -221,17 +221,17 @@ func (t *provisioningRequestReconcilerTask) updateZTPStatus(ctx context.Context,
 	crProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
 	if crProvisionedCond != nil {
 		// If the provisioning has started, and the ZTP status is empty or not done.
-		if t.object.Status.Extensions.ClusterDetails.ZtpStatus != utils.ClusterZtpDone {
-			t.object.Status.Extensions.ClusterDetails.ZtpStatus = utils.ClusterZtpNotDone
+		if t.object.Status.Extensions.ClusterDetails.ZtpStatus != ctlrutils.ClusterZtpDone {
+			t.object.Status.Extensions.ClusterDetails.ZtpStatus = ctlrutils.ClusterZtpNotDone
 			// If the provisioning finished and all the policies are compliant, then ZTP is done.
 			if crProvisionedCond.Status == metav1.ConditionTrue && allPoliciesCompliant {
 				// Once the ZTPStatus reaches ZTP Done, it will stay that way.
-				t.object.Status.Extensions.ClusterDetails.ZtpStatus = utils.ClusterZtpDone
+				t.object.Status.Extensions.ClusterDetails.ZtpStatus = ctlrutils.ClusterZtpDone
 			}
 		}
 	}
 
-	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update the ZTP status for ProvisioningRequest %s: %w", t.object.Name, err)
 	}
 	return nil
@@ -240,7 +240,7 @@ func (t *provisioningRequestReconcilerTask) updateZTPStatus(ctx context.Context,
 // updateOCloudNodeClusterId stores the clusterID in the provisionedResources status if it exists.
 func (t *provisioningRequestReconcilerTask) updateOCloudNodeClusterId(ctx context.Context) (*clusterv1.ManagedCluster, error) {
 	managedCluster := &clusterv1.ManagedCluster{}
-	managedClusterExists, err := utils.DoesK8SResourceExist(
+	managedClusterExists, err := ctlrutils.DoesK8SResourceExist(
 		ctx, t.client, t.object.Status.Extensions.ClusterDetails.Name, "", managedCluster)
 	if err != nil {
 		return managedCluster, fmt.Errorf("failed to check if managed cluster exists: %w", err)
@@ -271,7 +271,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 
 	// Add the clustertemplates.clcm.openshift.io/templateId label to the ManagedCluster
 	// associated to the current ProvisioningRequest.
-	err = t.setLabelValue(ctx, mcl, utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
+	err = t.setLabelValue(ctx, mcl, ctlrutils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 
 	// Go through all the obtained agents and apply the above labels.
 	for _, agent := range agents.Items {
-		err = t.setLabelValue(ctx, &agent, utils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
+		err = t.setLabelValue(ctx, &agent, ctlrutils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
 		if err != nil {
 			return err
 		}
@@ -329,7 +329,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 				continue
 			}
 
-			bmh, err := utils.GetBareMetalHostFromHostname(ctx, t.client, hostName)
+			bmh, err := ctlrutils.GetBareMetalHostFromHostname(ctx, t.client, hostName)
 			if err != nil {
 				return fmt.Errorf("failed to retrieve BareMetalHost corresponding with hostname '%s': %w", hostName, err)
 			}
@@ -345,12 +345,12 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			if hostName == agent.Spec.Hostname {
 				foundNode = true
 
-				err = t.setLabelValue(ctx, &agent, utils.HardwarePluginRefLabel, t.hwpluginClient.GetHardwarePluginRef())
+				err = t.setLabelValue(ctx, &agent, ctlrutils.HardwarePluginRefLabel, t.hwpluginClient.GetHardwarePluginRef())
 				if err != nil {
 					return err
 				}
 
-				err = t.setLabelValue(ctx, &agent, utils.HardwareManagerNodeIdLabel, bmh.Name)
+				err = t.setLabelValue(ctx, &agent, ctlrutils.HardwareManagerNodeIdLabel, bmh.Name)
 				if err != nil {
 					return err
 				}
@@ -414,7 +414,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 				t.object.Status.Extensions.ClusterDetails.NonCompliantAt = &metav1.Time{Time: time.Now()}
 			} else {
 				// If NonCompliantAt has been previously set, check for timeout.
-				policyTimedOut = utils.TimeoutExceeded(
+				policyTimedOut = ctlrutils.TimeoutExceeded(
 					t.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time,
 					t.timeouts.clusterConfiguration)
 			}
@@ -430,7 +430,7 @@ func (t *provisioningRequestReconcilerTask) hasPolicyConfigurationTimedOut(ctx c
 			// has been previously set.
 			if !t.object.Status.Extensions.ClusterDetails.NonCompliantAt.IsZero() {
 				// If NonCompliantAt has been previously set, check for timeout.
-				policyTimedOut = utils.TimeoutExceeded(
+				policyTimedOut = ctlrutils.TimeoutExceeded(
 					t.object.Status.Extensions.ClusterDetails.NonCompliantAt.Time,
 					t.timeouts.clusterConfiguration)
 			}
