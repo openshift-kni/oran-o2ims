@@ -89,6 +89,13 @@ spec:
         - name: IMAGE_PULL_POLICY
           # Default value which is overwritten by the replacement kustomization
           value: IfNotPresent
+        - name: NAR_CALLBACK_SERVICE_NAME
+          # Service name for NodeAllocationRequest callback service
+          value: oran-o2ims-nar-callback-service
+        - name: NAR_CALLBACK_SERVICE_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         command:
           - /usr/bin/oran-o2ims
           -  start
@@ -97,6 +104,7 @@ spec:
           - --health-probe-bind-address=:8081
           - --metrics-bind-address=:6443
           - --metrics-tls-cert-dir=/secrets/tls/metrics
+          - --nodeallocationrequest-callback-server-address=:8090
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -125,9 +133,14 @@ spec:
         - containerPort: 6443
           protocol: TCP
           name: https
+        - containerPort: 8090
+          protocol: TCP
+          name: nar-callback
         volumeMounts:
         - name: metrics-tls
           mountPath: /secrets/tls/metrics
+        - name: nar-callback-tls
+          mountPath: /secrets/tls/nar-callback
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
@@ -135,4 +148,8 @@ spec:
         secret:
           defaultMode: 420
           secretName: controller-manager-metrics-tls
+      - name: nar-callback-tls
+        secret:
+          defaultMode: 420
+          secretName: controller-manager-nar-callback-tls
 

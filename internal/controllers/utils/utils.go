@@ -942,6 +942,56 @@ func GetEnvOrDefault(name, defaultValue string) string {
 	return value
 }
 
+// GetNarCallbackServiceName returns the callback service name from environment or default
+func GetNarCallbackServiceName() string {
+	return GetEnvOrDefault(constants.NarCallbackServiceNameEnv, constants.DefaultNarCallbackServiceName)
+}
+
+// GetNarCallbackServiceNamespace returns the callback service namespace from environment or default namespace
+func GetNarCallbackServiceNamespace() string {
+	return GetEnvOrDefault(constants.NarCallbackServiceNamespaceEnv, InventoryNamespace)
+}
+
+// NarCallbackConfig holds configuration for the NodeAllocationRequest callback service
+type NarCallbackConfig struct {
+	ServiceName      string
+	ServiceNamespace string
+	Port             int
+}
+
+// NewNarCallbackConfig creates a new callback configuration with values from environment variables and the provided port
+func NewNarCallbackConfig(port int) *NarCallbackConfig {
+	return &NarCallbackConfig{
+		ServiceName:      GetNarCallbackServiceName(),
+		ServiceNamespace: GetNarCallbackServiceNamespace(),
+		Port:             port,
+	}
+}
+
+// BuildCallbackURL constructs the callback URL for a given provisioning request name
+func (c *NarCallbackConfig) BuildCallbackURL(prName string) string {
+	return fmt.Sprintf("https://%s.%s.%s:%d%s/%s",
+		c.ServiceName, c.ServiceNamespace, constants.ClusterLocalDomain, c.Port, constants.NarCallbackServicePath, prName)
+}
+
+// ExtractPortFromAddress extracts the port number from an address string like ":8090" or "0.0.0.0:8090"
+// Returns an error if no port is found or if parsing fails
+func ExtractPortFromAddress(address string) (int, error) {
+	// Handle address formats like ":8090" or "0.0.0.0:8090"
+	parts := strings.Split(address, ":")
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("no port found in address %q", address)
+	}
+
+	portStr := parts[len(parts)-1]
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse port %q from address %q: %w", portStr, address, err)
+	}
+
+	return port, nil
+}
+
 // MapKeysToSlice takes a map[string]bool and returns a slice of strings containing the keys
 func MapKeysToSlice(inputMap map[string]bool) []string {
 	keys := make([]string, 0, len(inputMap))

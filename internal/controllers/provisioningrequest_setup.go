@@ -48,8 +48,46 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Named("o2ims-cluster-request").
 		For(
 			&provisioningv1alpha1.ProvisioningRequest{},
-			// Watch for create and update event for ProvisioningRequest.
-			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+			// Watch for create and update events for ProvisioningRequest.
+			// Trigger on spec changes OR callback annotation changes.
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Trigger on generation changes (spec updates)
+					if e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() {
+						return true
+					}
+
+					// Trigger on callback annotation changes
+					oldAnnotations := e.ObjectOld.GetAnnotations()
+					newAnnotations := e.ObjectNew.GetAnnotations()
+
+					// Check if callback annotations were added or changed
+					callbackAnnotations := []string{
+						ctlrutils.CallbackReceivedAnnotation,
+						ctlrutils.CallbackStatusAnnotation,
+						ctlrutils.CallbackNodeAllocationRequestIdAnnotation,
+					}
+
+					for _, annotation := range callbackAnnotations {
+						oldValue := ""
+						newValue := ""
+						if oldAnnotations != nil {
+							oldValue = oldAnnotations[annotation]
+						}
+						if newAnnotations != nil {
+							newValue = newAnnotations[annotation]
+						}
+						if oldValue != newValue {
+							return true
+						}
+					}
+
+					return false
+				},
+				CreateFunc:  func(e event.CreateEvent) bool { return true },
+				GenericFunc: func(e event.GenericEvent) bool { return false },
+				DeleteFunc:  func(e event.DeleteEvent) bool { return true },
+			})).
 		Owns(
 			&corev1.Namespace{},
 			builder.WithPredicates(predicate.Funcs{

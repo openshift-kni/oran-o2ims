@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package operator
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"log/slog"
@@ -39,6 +40,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	"github.com/spf13/cobra"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -46,6 +48,7 @@ import (
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 
+	narcallback "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/nar-callback"
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
@@ -96,6 +99,12 @@ func ControllerManager() *cobra.Command {
 		true,
 		"Enable the o2ims validating webhooks")
 	flags.StringVar(
+		&c.narCallbackServerAddr,
+		"nodeallocationrequest-callback-server-address",
+		":8090",
+		"The address the NodeAllocationRequest callback server binds to.",
+	)
+	flags.StringVar(
 		&c.image,
 		imageFlagName,
 		// Intentionally setting the default value to "" if the environment variable is not set to ensure we never
@@ -109,13 +118,15 @@ func ControllerManager() *cobra.Command {
 // ControllerManagerCommand contains the data and logic needed to run the `start controller-manager`
 // command.
 type ControllerManagerCommand struct {
-	metricsAddr          string
-	metricsCertDir       string
-	enableHTTP2          bool
-	enableLeaderElection bool
-	enableWebhooks       bool
-	probeAddr            string
-	image                string
+	metricsAddr           string
+	metricsCertDir        string
+	enableHTTP2           bool
+	enableLeaderElection  bool
+	enableWebhooks        bool
+	probeAddr             string
+	image                 string
+	narCallbackServerAddr string
+	svcutils.CommonServerConfig
 }
 
 // NewControllerManager creates a new runner that knows how to execute the `start
@@ -166,6 +177,11 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			slog.String("flag", imageFlagName),
 		)
 		return exit.Error(1)
+	}
+
+	// Set up common server configuration early so it's available for all servers
+	if err := svcutils.SetCommonServerFlags(cmd, &c.CommonServerConfig); err != nil {
+		return err //nolint:wrapcheck
 	}
 
 	// Set the TLS options.
@@ -267,10 +283,46 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	narCallbackServer := narcallback.NewNodeAllocationRequestCallbackServer(
+		mgr.GetClient(),
+		slog.With("Callback", "NodeAllocationRequest"),
+	)
+
+	serverErrors := make(chan error, 1)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		logger.Info("About to initialize the NAR Callback server")
+
+		// Define NodeAllocationRequest callback configuration
+		callbackConfig := c.CommonServerConfig
+		callbackConfig.Listener.Address = c.narCallbackServerAddr
+		callbackConfig.TLS.CertFile = "/secrets/tls/nar-callback/tls.crt"
+		callbackConfig.TLS.KeyFile = "/secrets/tls/nar-callback/tls.key"
+
+		if err := narCallbackServer.Serve(ctx, callbackConfig); err != nil {
+			logger.Error("NAR Callback server failed", "error", err)
+		}
+	}()
+
+	// Extract port from callback server address for callback URL construction
+	callbackPort, err := ctlrutils.ExtractPortFromAddress(c.narCallbackServerAddr)
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to extract port from callback server address",
+			slog.String("address", c.narCallbackServerAddr),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
 	// Start the Provisioning Request controller.
 	if err = (&controllers.ProvisioningRequestReconciler{
-		Client: mgr.GetClient(),
-		Logger: slog.With("controller", "ProvisioningRequest"),
+		Client:         mgr.GetClient(),
+		Logger:         slog.With("controller", "ProvisioningRequest"),
+		CallbackConfig: ctlrutils.NewNarCallbackConfig(callbackPort),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -311,21 +363,29 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	logger.InfoContext(
-		ctx,
-		"Starting manager",
-		slog.String("image", c.image),
-	)
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.ErrorContext(
+	go func() {
+		logger.InfoContext(
 			ctx,
-			"Problem running manager",
-			slog.String("error", err.Error()),
+			"Starting manager",
+			slog.String("image", c.image),
 		)
-		return exit.Error(1)
-	}
+		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+			logger.ErrorContext(ctx, "Problem running manager", slog.String("error", err.Error()))
+			serverErrors <- err
+			return
+		}
+		// The manager has terminated normally. Cancel the context to allow the API server to shutdown
+		cancel()
+	}()
 
-	return nil
+	select {
+	case err = <-serverErrors:
+		// Server failed to start
+		logger.ErrorContext(ctx, "Problem running internal server", slog.String("error", err.Error()))
+		return exit.Error(1)
+	case <-ctx.Done():
+		return exit.Error(0)
+	}
 }
 
 // Names of command line flags:

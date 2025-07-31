@@ -92,6 +92,7 @@ import (
 //+kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch
 //+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get;list;create;update;delete
+//+kubebuilder:rbac:urls="/nar-callback/*",verbs=get;list;create;update;delete
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {

@@ -35,7 +35,8 @@ import (
 // ProvisioningRequestReconciler reconciles a ProvisioningRequest object
 type ProvisioningRequestReconciler struct {
 	client.Client
-	Logger *slog.Logger
+	Logger         *slog.Logger
+	CallbackConfig *ctlrutils.NarCallbackConfig
 }
 
 type provisioningRequestReconcilerTask struct {
@@ -46,6 +47,7 @@ type provisioningRequestReconcilerTask struct {
 	clusterInput   *clusterInput
 	ctDetails      *clusterTemplateDetails
 	timeouts       *timeouts
+	callbackConfig *ctlrutils.NarCallbackConfig
 }
 
 // clusterInput holds the merged input data for a cluster
@@ -145,12 +147,13 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 	// Create and run the task:
 	task := &provisioningRequestReconcilerTask{
-		logger:       r.Logger,
-		client:       r.Client,
-		object:       object,
-		clusterInput: &clusterInput{},
-		ctDetails:    &clusterTemplateDetails{},
-		timeouts:     &timeouts{},
+		logger:         r.Logger,
+		client:         r.Client,
+		object:         object,
+		clusterInput:   &clusterInput{},
+		ctDetails:      &clusterTemplateDetails{},
+		timeouts:       &timeouts{},
+		callbackConfig: r.CallbackConfig,
 	}
 	result, err = task.run(ctx)
 	return
@@ -186,6 +189,13 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
 		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
 			return res, err
+		}
+
+		// Hardware provisioning completed successfully, now create ClusterInstance resources
+		// with the updated hardware data
+		err = t.handleClusterResources(ctx, renderedClusterInstance)
+		if err != nil {
+			return requeueWithError(err)
 		}
 	}
 
@@ -296,18 +306,22 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	}
 
 	// Handle the creation of resources required for cluster deployment
-	err = t.handleClusterResources(ctx, renderedClusterInstance)
-	if err != nil {
-		if ctlrutils.IsInputError(err) {
-			_, err = t.checkClusterDeployConfigState(ctx)
-			if err != nil {
-				return nil, doNotRequeue(), err
+	// Only create ClusterInstance resources if hardware provisioning is skipped
+	// For hardware provisioning scenarios, cluster resources are created after hardware completion
+	if t.isHardwareProvisionSkipped() {
+		err = t.handleClusterResources(ctx, renderedClusterInstance)
+		if err != nil {
+			if ctlrutils.IsInputError(err) {
+				_, err = t.checkClusterDeployConfigState(ctx)
+				if err != nil {
+					return nil, doNotRequeue(), err
+				}
+				// Requeue since we are not watching for updates to required resources
+				// if they are missing
+				return nil, requeueWithMediumInterval(), nil
 			}
-			// Requeue since we are not watching for updates to required resources
-			// if they are missing
-			return nil, requeueWithMediumInterval(), nil
+			return nil, doNotRequeue(), err
 		}
-		return nil, doNotRequeue(), err
 	}
 
 	return renderedClusterInstance, doNotRequeue(), nil
@@ -358,8 +372,9 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return doNotRequeue(), false, nil
 	}
 	if !provisioned {
+
 		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be provisioned", nodeAllocationRequestID))
-		return requeueWithShortInterval(), false, nil
+		return requeueWithMediumInterval(), false, nil
 	}
 
 	// If the NodeAllocationRequest was updated but the configuration hasn’t been set yet,
@@ -368,7 +383,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	configuringStarted := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart
 	if (configured == nil && !configuringStarted.IsZero()) || (configured != nil && !*configured) {
 		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be configured", nodeAllocationRequestID))
-		return requeueWithShortInterval(), false, nil
+		return requeueWithMediumInterval(), false, nil
 	}
 
 	// Provisioning completed successfully; proceed with further processing
@@ -396,7 +411,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 			return doNotRequeue(), nil
 		}
 		if !hwProvisioned {
-			return requeueWithShortInterval(), nil
+			return requeueWithMediumInterval(), nil
 		}
 	}
 

@@ -1152,6 +1152,59 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
+          Callback defines the configuration for receiving notifications when the NodeAllocationRequest
+          operation is completed or fails. If not specified, no callback will be made.
+        displayName: Callback Configuration
+        path: callback
+      - description: |-
+          AuthClientConfig defines the authentication configuration for the callback requests.
+          This allows configuring how the plugin should authenticate when making callback requests
+          to the specified CallbackURL.
+        displayName: Authentication Configuration
+        path: callback.authClientConfig
+      - description: |-
+          BasicAuthSecret represents the name of a secret (in the current namespace) containing the username
+          and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
+          This field is required when Type is set to "Basic".
+        displayName: Basic Auth Secret
+        path: callback.authClientConfig.basicAuthSecret
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          OAuthConfig holds the configuration for OAuth2-based authentication, including the authorization server
+          URL, token endpoint, and client credentials. This field is required when Type is set to "OAuth".
+        displayName: OAuth Configuration
+        path: callback.authClientConfig.oauthConfig
+      - description: |-
+          TLSConfig specifies the TLS configuration for secure communication, including the certificate and private
+          key. This field is optional and can be used with any authentication type to enable TLS for the connection.
+        displayName: TLS Configuration
+        path: callback.authClientConfig.tlsConfig
+      - description: Type specifies the authentication type to be used (e.g., ServiceAccount,
+          Basic, or OAuth).
+        displayName: Authentication Type
+        path: callback.authClientConfig.type
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:select:ServiceAccount
+        - urn:alm:descriptor:com.tectonic.ui:select:Basic
+        - urn:alm:descriptor:com.tectonic.ui:select:OAuth
+      - description: |-
+          CaBundleName references a config map that contains a set of custom CA certificates
+          to use when verifying the certificate of the callback URL server. The config map
+          must contain a key named 'ca-bundle.crt' which contains one or more CA certificates
+          in PEM format.
+        displayName: CA Bundle Name
+        path: callback.caBundleName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          CallbackURL is the URL to call when the NodeAllocationRequest operation is completed or fails.
+          The callback will be made as a POST request with CallbackPayload in the request body.
+        displayName: Callback URL
+        path: callback.callbackURL
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
           ClusterID is the identifier of the O-Cloud that generated this request. The hardware
           manager may want to use this to tag the nodes in its database, and to generate
           statistics.
@@ -1274,6 +1327,7 @@ spec:
           - list
         - nonResourceURLs:
           - /hardware-manager/provisioning/*
+          - /nar-callback/*
           verbs:
           - create
           - delete
@@ -1670,6 +1724,7 @@ spec:
                 - --health-probe-bind-address=:8081
                 - --metrics-bind-address=:6443
                 - --metrics-tls-cert-dir=/secrets/tls/metrics
+                - --nodeallocationrequest-callback-server-address=:8090
                 env:
                 - name: IMAGE
                   value: quay.io/openshift-kni/oran-o2ims-operator:4.20.0
@@ -1683,6 +1738,12 @@ spec:
                       fieldPath: metadata.namespace
                 - name: IMAGE_PULL_POLICY
                   value: IfNotPresent
+                - name: NAR_CALLBACK_SERVICE_NAME
+                  value: oran-o2ims-nar-callback-service
+                - name: NAR_CALLBACK_SERVICE_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
                 image: quay.io/openshift-kni/oran-o2ims-operator:4.20.0
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
@@ -1698,6 +1759,9 @@ spec:
                   protocol: TCP
                 - containerPort: 6443
                   name: https
+                  protocol: TCP
+                - containerPort: 8090
+                  name: nar-callback
                   protocol: TCP
                 readinessProbe:
                   httpGet:
@@ -1720,6 +1784,8 @@ spec:
                   readOnly: true
                 - mountPath: /secrets/tls/metrics
                   name: metrics-tls
+                - mountPath: /secrets/tls/nar-callback
+                  name: nar-callback-tls
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: oran-o2ims-controller-manager
@@ -1733,6 +1799,10 @@ spec:
                 secret:
                   defaultMode: 420
                   secretName: controller-manager-metrics-tls
+              - name: nar-callback-tls
+                secret:
+                  defaultMode: 420
+                  secretName: controller-manager-nar-callback-tls
       permissions:
       - rules:
         - apiGroups:
