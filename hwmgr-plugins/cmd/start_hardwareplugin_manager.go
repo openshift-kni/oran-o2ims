@@ -26,6 +26,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller"
 	"github.com/openshift-kni/oran-o2ims/internal"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
@@ -43,7 +44,7 @@ func init() {
 // Create creates and returns the `start` command.
 func Start() *cobra.Command {
 	result := &cobra.Command{
-		Use:   "hardwareplugin-manager",
+		Use:   constants.HardwarePluginManagerCmd,
 		Short: "HardwarePlugin Manager",
 		Args:  cobra.NoArgs,
 	}
@@ -80,7 +81,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.metricsAddr,
 		"metrics-bind-address",
-		":8080",
+		constants.MetricsPort,
 		"The address the metric endpoint binds to.",
 	)
 	flags.StringVar(
@@ -92,7 +93,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.probeAddr,
 		"health-probe-bind-address",
-		":8081",
+		constants.HealthProbePort,
 		"The address the probe endpoint binds to.",
 	)
 	flags.BoolVar(

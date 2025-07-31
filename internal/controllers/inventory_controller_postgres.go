@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sptr "k8s.io/utils/ptr"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/postgres"
 )
@@ -77,9 +78,9 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		},
 	}
 
-	postgresImage := os.Getenv(utils.PostgresImageName)
+	postgresImage := os.Getenv(constants.PostgresImageName)
 	if postgresImage == "" {
-		return fmt.Errorf("missing %s environment variable value", utils.PostgresImageName)
+		return fmt.Errorf("missing %s environment variable value", constants.PostgresImageName)
 	}
 
 	// Disable privilege escalation
@@ -96,7 +97,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					"kubectl.kubernetes.io/default-container": utils.ServerContainerName,
+					"kubectl.kubernetes.io/default-container": constants.ServerContainerName,
 				},
 				Labels: map[string]string{
 					"app": serverName,
@@ -107,7 +108,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 				Volumes:            deploymentVolumes,
 				Containers: []corev1.Container{
 					{
-						Name: utils.ServerContainerName,
+						Name: constants.ServerContainerName,
 						EnvFrom: []corev1.EnvFromSource{
 							{
 								SecretRef: &corev1.SecretEnvSource{
@@ -129,7 +130,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 							{
 								Name:          utils.DatabaseTargetPort,
 								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: utils.DatabaseServicePort,
+								ContainerPort: constants.DatabaseServicePort,
 							},
 						},
 						VolumeMounts: deploymentVolumeMounts,
@@ -224,7 +225,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		return
 	}
 
-	err = t.createService(ctx, utils.InventoryDatabaseServerName, utils.DatabaseServicePort, utils.DatabaseTargetPort)
+	err = t.createService(ctx, utils.InventoryDatabaseServerName, constants.DatabaseServicePort, utils.DatabaseTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,

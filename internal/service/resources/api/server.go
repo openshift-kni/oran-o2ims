@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -49,7 +50,7 @@ type ResourceServer struct {
 func (r *ResourceServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
 	version := utils2.CurrentInventoryVersion
-	baseURL := utils2.BaseInventoryURL
+	baseURL := constants.O2IMSInventoryBaseURL
 	versions := []generated.APIVersion{
 		{
 			Version: &version,
@@ -83,7 +84,7 @@ func (r *ResourceServer) GetCloudInfo(ctx context.Context, request api.GetCloudI
 func (r *ResourceServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
 	// We currently only support a single version
 	version := utils2.CurrentInventoryVersion
-	baseURL := utils2.BaseInventoryURL
+	baseURL := constants.O2IMSInventoryBaseURL
 	versions := []generated.APIVersion{
 		{
 			Version: &version,

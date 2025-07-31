@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
@@ -61,7 +62,7 @@ var _ = Describe("Serve", func() {
 		ctx, cancel = context.WithCancel(context.Background())
 
 		// Get a free port for testing
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		listener, err := net.Listen("tcp", constants.Localhost+":0")
 		Expect(err).NotTo(HaveOccurred())
 		freePort = listener.Addr().(*net.TCPAddr).Port
 		err = listener.Close()
@@ -73,7 +74,7 @@ var _ = Describe("Serve", func() {
 		// Set up test configuration
 		config = svcutils.CommonServerConfig{
 			Listener: svcutils.ListenerConfig{
-				Address: "127.0.0.1:" + strconv.Itoa(freePort),
+				Address: constants.Localhost + ":" + strconv.Itoa(freePort),
 			},
 			TLS: svcutils.TLSConfig{
 				CertFile: certFile,

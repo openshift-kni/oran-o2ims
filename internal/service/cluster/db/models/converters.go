@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -177,13 +177,13 @@ func getObjectReference(objectType string, objectID uuid.UUID) *string {
 	var value string
 	switch objectType {
 	case ClusterResourceType{}.TableName():
-		value = fmt.Sprintf("%s/clusterResourceTypes/%s", utils.BaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.ClusterResourceTypesPath, objectID.String())
 	case ClusterResource{}.TableName():
-		value = fmt.Sprintf("%s/clusterResource/%s", utils.BaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.ClusterResourcePath, objectID.String())
 	case NodeClusterType{}.TableName():
-		value = fmt.Sprintf("%s/nodeClusterTypes/%s", utils.BaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.NodeClusterTypesPath, objectID.String())
 	case NodeCluster{}.TableName():
-		value = fmt.Sprintf("%s/nodeClusters/%s", utils.BaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.NodeClustersPath, objectID.String())
 	default:
 		return nil
 	}

@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -54,7 +55,7 @@ func setupCABundle(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha
 		return fmt.Errorf("failed to get CA bundle configmap: %w", err)
 	}
 
-	caBundle, err := sharedutils.GetConfigMapField(cm, sharedutils.CABundleFilename)
+	caBundle, err := sharedutils.GetConfigMapField(cm, constants.CABundleFilename)
 	if err != nil {
 		return fmt.Errorf("failed to get certificate bundle from configmap: %w", err)
 	}

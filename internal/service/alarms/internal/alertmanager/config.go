@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
@@ -108,10 +109,10 @@ func updateReceivers(config map[string]interface{}) {
 				"http_config": map[string]interface{}{ // Auth config.
 					"authorization": map[string]interface{}{
 						"type":             "Bearer",
-						"credentials_file": utils.DefaultBackendTokenFile,
+						"credentials_file": constants.DefaultBackendTokenFile,
 					},
 					"tls_config": map[string]interface{}{
-						"ca_file": utils.DefaultServiceCAFile,
+						"ca_file": constants.DefaultServiceCAFile,
 					},
 				},
 			},

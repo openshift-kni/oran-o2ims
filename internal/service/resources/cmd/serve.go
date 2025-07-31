@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	utils2 "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
@@ -70,7 +70,7 @@ func setServerFlags(cmd *cobra.Command) error {
 	flags.StringVar(
 		&config.GlobalCloudID,
 		server.GlobalCloudIDFlagName,
-		utils.DefaultOCloudID,
+		constants.DefaultOCloudID,
 		"The global O-Cloud identifier.",
 	)
 

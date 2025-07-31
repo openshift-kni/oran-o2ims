@@ -21,6 +21,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
@@ -127,7 +128,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 
 	// Parse global cloud id
 	var globalCloudID uuid.UUID
-	if config.GlobalCloudID != utils.DefaultOCloudID {
+	if config.GlobalCloudID != constants.DefaultOCloudID {
 		globalCloudID, err = uuid.Parse(config.GlobalCloudID)
 		if err != nil {
 			return fmt.Errorf("failed to parse global cloud id: %w", err)
@@ -151,7 +152,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	newNotifier := notifier.NewNotifier(
 		notifier_provider.NewSubscriptionStorageProvider(alarmRepository),
 		notifier_provider.NewNotificationStorageProvider(alarmRepository, globalCloudID),
-		notifier.NewClientFactory(oauthConfig, utils.DefaultBackendTokenFile),
+		notifier.NewClientFactory(oauthConfig, constants.DefaultBackendTokenFile),
 	)
 
 	// Attribute needed when subscription event happens

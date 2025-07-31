@@ -28,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 // debugTransport logs HTTP requests for debugging OAuth issues
@@ -215,7 +217,7 @@ func NewInventoryClient(config *InventoryConfig) (*InventoryClient, error) {
 	return &InventoryClient{
 		httpClient: httpClient,
 		config:     config,
-		baseURL:    config.ServerURL + "/o2ims-infrastructureInventory/v1",
+		baseURL:    config.ServerURL + constants.O2IMSInventoryBaseURL,
 		maxRetries: maxRetries,
 		retryDelay: time.Duration(retryDelayMs) * time.Millisecond,
 	}, nil
@@ -359,7 +361,7 @@ func (c *InventoryClient) GetNodeClusters(ctx context.Context) ([]NodeCluster, e
 	klog.V(2).Info("Fetching node clusters from inventory API")
 
 	// Node clusters use a different API path: /o2ims-infrastructureCluster/v1 instead of /o2ims-infrastructureInventory/v1
-	clusterBaseURL := strings.Replace(c.baseURL, "/o2ims-infrastructureInventory/v1", "/o2ims-infrastructureCluster/v1", 1)
+	clusterBaseURL := strings.Replace(c.baseURL, constants.O2IMSInventoryBaseURL, constants.O2IMSClusterBaseURL, 1)
 	url := clusterBaseURL + "/nodeClusters"
 
 	resp, err := c.retryHTTPRequest(ctx, func() (*http.Response, error) {

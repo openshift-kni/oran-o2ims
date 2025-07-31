@@ -9,11 +9,13 @@ package utils
 import (
 	"fmt"
 	"time"
+
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 // Default namespace
 const (
-	InventoryNamespace = "oran-o2ims"
+	InventoryNamespace = constants.DefaultNamespace
 )
 
 // Base resource names
@@ -70,91 +72,77 @@ const (
 // Container arguments
 var (
 	AlarmServerArgs = []string{
-		"alarms-server",
-		"serve",
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
-		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+		constants.AlarmsServerCmd,
+		constants.ServeSubcommand,
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
+		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
 	ArtifactsServerArgs = []string{
-		"artifacts-server",
-		"serve",
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
-		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+		constants.ArtifactsServerCmd,
+		constants.ServeSubcommand,
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
+		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
 	ResourceServerArgs = []string{
-		"resource-server",
-		"serve",
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
-		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+		constants.ResourceServerCmd,
+		constants.ServeSubcommand,
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
+		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
 	ClusterServerArgs = []string{
-		"cluster-server",
-		"serve",
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
-		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+		constants.ClusterServerCmd,
+		constants.ServeSubcommand,
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
+		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
 	ProvisioningServerArgs = []string{
-		"provisioning-server",
-		"serve",
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
-		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+		constants.ProvisioningServerCmd,
+		constants.ServeSubcommand,
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
+		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
 	HardwarePluginManagerArgs = []string{
-		"hardwareplugin-manager",
-		"start",
-		"--health-probe-bind-address=:8081",
-		"--metrics-bind-address=:8080",
-		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
-		"--leader-elect",
+		constants.HardwarePluginManagerCmd,
+		constants.StartSubcommand,
+		constants.HealthProbeFlag + "=" + constants.HealthProbePort,
+		constants.MetricsFlag + "=" + constants.MetricsPort,
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
+		constants.LeaderElectFlag,
 	}
 
 	LoopbackPluginServerArgs = []string{
-		"loopback-hardwareplugin-manager",
-		"start",
-		"--health-probe-bind-address=:8081",
-		"--metrics-bind-address=:8080",
-		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
-		"--leader-elect",
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
-		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+		constants.LoopbackHardwarePluginManagerCmd,
+		constants.StartSubcommand,
+		constants.HealthProbeFlag + "=" + constants.HealthProbePort,
+		constants.MetricsFlag + "=" + constants.MetricsPort,
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
+		constants.LeaderElectFlag,
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
+		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
 	Metal3PluginServerArgs = []string{
-		"metal3-hardwareplugin-manager",
-		"start",
-		"--health-probe-bind-address=:8081",
-		"--metrics-bind-address=:8080",
-		fmt.Sprintf("--metrics-tls-cert-dir=%s", TLSServerMountPath),
-		"--leader-elect",
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/tls.crt", TLSServerMountPath),
-		fmt.Sprintf("--tls-server-key=%s/tls.key", TLSServerMountPath),
+		constants.Metal3HardwarePluginManagerCmd,
+		constants.StartSubcommand,
+		constants.HealthProbeFlag + "=" + constants.HealthProbePort,
+		constants.MetricsFlag + "=" + constants.MetricsPort,
+		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
+		constants.LeaderElectFlag,
+		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
+		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
-)
-
-// DefaultOCloudID defines the default Global O-Cloud ID to be used until the end user configures this value.
-const DefaultOCloudID = "undefined"
-
-// DefaultAppName defines the name prepended to the ingress host to form our FQDN hostname.
-const DefaultAppName = "o2ims"
-
-// Defines information related to the operator instance in a namespace
-const (
-	DefaultInventoryCR      = "default"
-	DefaultNamespace        = "oran-o2ims"
-	DefaultNamespaceEnvName = "OCLOUD_MANAGER_NAMESPACE"
-	ImagePullPolicyEnvName  = "IMAGE_PULL_POLICY"
 )
 
 // Search API attributes
@@ -165,10 +153,8 @@ const (
 
 // Default values for backend URL and token:
 const (
-	defaultApiServerURL     = "https://kubernetes.default.svc"
-	DefaultBackendTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"          // nolint: gosec // hardcoded path only
-	defaultBackendCABundle  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"         // nolint: gosec // hardcoded path only
-	DefaultServiceCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt" // nolint: gosec // hardcoded path only
+	defaultApiServerURL    = "https://" + constants.KubernetesAPIService
+	defaultBackendCABundle = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" // nolint: gosec // hardcoded path only
 )
 
 // Default timeout values
@@ -273,31 +259,18 @@ const (
 const (
 	UnitTestHwPluginRef    = "hwmgr"
 	UnitTestHwmgrNamespace = "hwmgr"
-	DefaultPluginNamespace = "oran-o2ims"
-)
-
-// POD Container Names
-const (
-	MigrationContainerName = "migration"
-	ServerContainerName    = "server"
+	DefaultPluginNamespace = constants.DefaultNamespace
 )
 
 // POD Port Values
 const (
-	DefaultServicePort       = 8443
 	DefaultServiceTargetPort = "https"
-	DefaultContainerPort     = 8443
-
-	DatabaseServicePort = 5432
-	DatabaseTargetPort  = "database"
+	DatabaseTargetPort       = "database"
 )
 
 // Environment values
 const (
-	ServerImageName         = "IMAGE"
-	PostgresImageName       = "POSTGRES_IMAGE"
-	HwMgrPluginNameSpace    = "HWMGR_PLUGIN_NAMESPACE"
-	InternalServicePortName = "INTERNAL_SERVICE_PORT"
+	HwMgrPluginNameSpace = "HWMGR_PLUGIN_NAMESPACE"
 )
 
 // Deploy Loopback HardwarePlugin constants
@@ -359,14 +332,6 @@ const (
 	AlertmanagerObjectName                      = "alertmanager"
 	OpenClusterManagementObservabilityNamespace = "open-cluster-management-observability"
 	AlertmanagerSA                              = "alertmanager"
-)
-
-// TLS Mount Paths
-const (
-	TLSServerMountPath = "/secrets/tls"
-	TLSClientMountPath = "/secrets/smo/tls"
-	CABundleMountPath  = "/secrets/smo/certs"
-	CABundleFilename   = "ca-bundle.crt"
 )
 
 // SMO OAuth specific environment variables.  These values are stored in environment variables to

@@ -11,12 +11,13 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/spf13/cobra"
 )
 
 // AlarmRootCmd represents the root command for working alarms server
 var AlarmRootCmd = &cobra.Command{
-	Use:   "alarms-server",
+	Use:   constants.AlarmsServerCmd,
 	Short: "All things needed for alarms server",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		configureAlarmLogger()

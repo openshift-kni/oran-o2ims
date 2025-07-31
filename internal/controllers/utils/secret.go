@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -99,12 +100,12 @@ func GetKeyPairFromSecret(ctx context.Context, c client.Client, name, namespace 
 		return nil, nil, fmt.Errorf("failed to retrieve secret '%s': %w", name, err)
 	}
 
-	certBytes, ok := secret.Data["tls.crt"]
+	certBytes, ok := secret.Data[constants.TLSCertField]
 	if !ok {
 		return nil, nil, NewInputError("secret '%s' does not contain key 'tls.crt'", name)
 	}
 
-	keyBytes, ok := secret.Data["tls.key"]
+	keyBytes, ok := secret.Data[constants.TLSKeyField]
 	if !ok {
 		return nil, nil, NewInputError("secret '%s' does not contain key 'tls.key'", name)
 	}

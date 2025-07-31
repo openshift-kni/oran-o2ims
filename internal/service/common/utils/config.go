@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -75,7 +76,7 @@ func SetCommonServerFlags(cmd *cobra.Command, config *CommonServerConfig) error 
 	flags.StringVar(
 		&config.Listener.Address,
 		ListenerFlagName,
-		fmt.Sprintf("127.0.0.1:%d", utils.DefaultContainerPort),
+		fmt.Sprintf("%s:%d", constants.Localhost, constants.DefaultContainerPort),
 		"API listener address",
 	)
 	flags.StringVar(
@@ -117,13 +118,13 @@ func SetCommonServerFlags(cmd *cobra.Command, config *CommonServerConfig) error 
 	flags.StringVar(
 		&config.TLS.CertFile,
 		ServerCertFileFlagName,
-		fmt.Sprintf("%s/tls.crt", utils.TLSServerMountPath),
+		fmt.Sprintf("%s/tls.crt", constants.TLSServerMountPath),
 		"Server certificate file",
 	)
 	flags.StringVar(
 		&config.TLS.KeyFile,
 		ServerKeyFileFlagName,
-		fmt.Sprintf("%s/tls.key", utils.TLSServerMountPath),
+		fmt.Sprintf("%s/tls.key", constants.TLSServerMountPath),
 		"Server private key file",
 	)
 	flags.StringVar(

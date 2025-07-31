@@ -39,6 +39,7 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -211,7 +212,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 	}
 
 	// Create the Service needed for the Resource server.
-	err = t.createService(ctx, utils.InventoryResourceServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, utils.InventoryResourceServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -285,7 +286,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 	}
 
 	// Create the Service needed for the cluster server.
-	err = t.createService(ctx, utils.InventoryClusterServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, utils.InventoryClusterServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -358,7 +359,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 	}
 
 	// Create the Service needed for the Artifacts server.
-	err = t.createService(ctx, utils.InventoryArtifactsServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, utils.InventoryArtifactsServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -443,7 +444,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 	}
 
 	// Create the Service needed for the alarm server.
-	err = t.createService(ctx, utils.InventoryAlarmServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, utils.InventoryAlarmServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -516,7 +517,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 	}
 
 	// Create the Service needed for the provisioning server.
-	err = t.createService(ctx, utils.InventoryProvisioningServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort)
+	err = t.createService(ctx, utils.InventoryProvisioningServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
@@ -555,7 +556,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get configmap: %s", err.Error())
 		}
 
-		caBundle, err = utils.GetConfigMapField(cm, utils.CABundleFilename)
+		caBundle, err = utils.GetConfigMapField(cm, constants.CABundleFilename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get certificate bundle from configmap: %s", err.Error())
 		}
@@ -715,7 +716,7 @@ func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 				slog.String("error", err.Error()))
 			return fmt.Errorf("failed to get ingress domain: %s", err.Error())
 		}
-		ingressHost = utils.DefaultAppName + "." + ingressHost
+		ingressHost = constants.DefaultAppName + "." + ingressHost
 	} else {
 		ingressHost = *t.object.Spec.IngressConfig.IngressHost
 	}
@@ -1548,8 +1549,8 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 			},
 		},
 		{
-			Name:  utils.InternalServicePortName,
-			Value: fmt.Sprintf("%d", utils.DefaultServicePort),
+			Name:  constants.InternalServicePortName,
+			Value: fmt.Sprintf("%d", constants.DefaultServicePort),
 		},
 		{
 			Name:  utils.HwMgrPluginNameSpace,
@@ -1559,12 +1560,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 
 	// Server specific env var
 	if serverName == utils.InventoryAlarmServerName {
-		postgresImage := os.Getenv(utils.PostgresImageName)
+		postgresImage := os.Getenv(constants.PostgresImageName)
 		if postgresImage == "" {
-			return "", fmt.Errorf("missing %s environment variable value", utils.PostgresImageName)
+			return "", fmt.Errorf("missing %s environment variable value", constants.PostgresImageName)
 		}
 		envVars = append(envVars, corev1.EnvVar{
-			Name:  utils.PostgresImageName,
+			Name:  constants.PostgresImageName,
 			Value: postgresImage,
 		})
 	}
@@ -1587,7 +1588,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					"kubectl.kubernetes.io/default-container": utils.ServerContainerName,
+					"kubectl.kubernetes.io/default-container": constants.ServerContainerName,
 				},
 				Labels: map[string]string{
 					"app": serverName,
@@ -1598,18 +1599,18 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 				Volumes:            deploymentVolumes,
 				Containers: []corev1.Container{
 					{
-						Name:            utils.ServerContainerName,
+						Name:            constants.ServerContainerName,
 						Image:           image,
-						ImagePullPolicy: corev1.PullPolicy(os.Getenv(utils.ImagePullPolicyEnvName)),
+						ImagePullPolicy: corev1.PullPolicy(os.Getenv(constants.ImagePullPolicyEnvName)),
 						VolumeMounts:    deploymentVolumeMounts,
-						Command:         []string{"/usr/bin/oran-o2ims"},
+						Command:         []string{constants.ManagerExec},
 						Args:            deploymentContainerArgs,
 						Env:             envVars,
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          utils.DefaultServiceTargetPort,
 								Protocol:      corev1.ProtocolTCP,
-								ContainerPort: utils.DefaultContainerPort,
+								ContainerPort: constants.DefaultContainerPort,
 							},
 						},
 						Resources: corev1.ResourceRequirements{
@@ -1627,9 +1628,9 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (u
 	if utils.HasDatabase(serverName) {
 		deploymentSpec.Template.Spec.InitContainers = []corev1.Container{
 			{
-				Name:    utils.MigrationContainerName,
+				Name:    constants.MigrationContainerName,
 				Image:   image,
-				Command: []string{"/usr/bin/oran-o2ims"},
+				Command: []string{constants.ManagerExec},
 				Args:    []string{serverName, "migrate"},
 				Env:     envVars,
 				Resources: corev1.ResourceRequirements{
@@ -1739,7 +1740,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 					HTTP: &networkingv1.HTTPIngressRuleValue{
 						Paths: []networkingv1.HTTPIngressPath{
 							{
-								Path: "/o2ims-infrastructureInventory",
+								Path: constants.O2IMSInventoryAPIPath,
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
@@ -1754,7 +1755,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureCluster",
+								Path: constants.O2IMSClusterAPIPath,
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
@@ -1769,7 +1770,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureArtifacts",
+								Path: constants.O2IMSArtifactsAPIPath,
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
@@ -1784,7 +1785,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureProvisioning",
+								Path: constants.O2IMSProvisioningAPIPath,
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
@@ -1799,7 +1800,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 								},
 							},
 							{
-								Path: "/o2ims-infrastructureMonitoring",
+								Path: constants.O2IMSMonitoringAPIPath,
 								PathType: func() *networkingv1.PathType {
 									pathType := networkingv1.PathTypePrefix
 									return &pathType
