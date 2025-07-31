@@ -11,12 +11,13 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/spf13/cobra"
 )
 
 // resourcesRootCmd represents the root command for working resource server
 var resourcesRootCmd = &cobra.Command{
-	Use:   "resource-server",
+	Use:   constants.ResourceServerCmd,
 	Short: "All things needed for the resource server",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		configureResourcesLogger()

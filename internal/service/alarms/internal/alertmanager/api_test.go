@@ -17,6 +17,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
@@ -211,7 +212,7 @@ var _ = Describe("Alertmanager API Client", func() {
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
 			Expect(host).NotTo(BeEmpty())
-			Expect(host).To(ContainSubstring("127.0.0.1"))
+			Expect(host).To(ContainSubstring(constants.Localhost))
 		})
 
 		It("should return error when route not found", func() {

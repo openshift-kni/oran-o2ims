@@ -15,6 +15,7 @@ import (
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -63,7 +64,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.metricsAddr,
 		"metrics-bind-address",
-		":8080",
+		constants.MetricsPort,
 		"The address the metric endpoint binds to.",
 	)
 	flags.StringVar(
@@ -75,7 +76,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.probeAddr,
 		"health-probe-bind-address",
-		":8081",
+		constants.HealthProbePort,
 		"The address the probe endpoint binds to.",
 	)
 	flag.BoolVar(
@@ -99,7 +100,7 @@ func ControllerManager() *cobra.Command {
 		imageFlagName,
 		// Intentionally setting the default value to "" if the environment variable is not set to ensure we never
 		// run an image that we didn't intend on running.
-		utils.GetEnvOrDefault(utils.ServerImageName, ""),
+		utils.GetEnvOrDefault(constants.ServerImageName, ""),
 		"Reference of the container image containing the servers.",
 	)
 	return result

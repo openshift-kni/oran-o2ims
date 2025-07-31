@@ -94,9 +94,9 @@ func (r *ClusterRepository) GetNodeClusterResourceIDs(ctx context.Context, clust
 	var args []any
 	query := "SELECT node_cluster_id, array_agg(cluster_resource_id) as cluster_resource_ids FROM cluster_resource"
 	if len(clusters) == 0 {
-		sql, args, err = psql.RawQuery(fmt.Sprintf("%s GROUP BY node_cluster_id", query)).Build()
+		sql, args, err = psql.RawQuery(fmt.Sprintf("%s GROUP BY node_cluster_id", query)).Build(ctx)
 	} else {
-		sql, args, err = psql.RawQuery(fmt.Sprintf("%s WHERE node_cluster_id IN (?) GROUP BY node_cluster_id", query), psql.Arg(clusters...)).Build()
+		sql, args, err = psql.RawQuery(fmt.Sprintf("%s WHERE node_cluster_id IN (?) GROUP BY node_cluster_id", query), psql.Arg(clusters...)).Build(ctx)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
@@ -167,7 +167,7 @@ func (r *ClusterRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 		modInsert...,
 	)
 
-	sql, args, err := query.Build()
+	sql, args, err := query.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
 	}

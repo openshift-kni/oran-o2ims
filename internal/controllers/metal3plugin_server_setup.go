@@ -19,6 +19,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/api/common"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -51,7 +52,7 @@ func (t *reconcilerTask) setupMetal3PluginServer(ctx context.Context, defaultRes
 		return
 	}
 
-	if err = t.createService(ctx, utils.Metal3PluginServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
+	if err = t.createService(ctx, utils.Metal3PluginServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy Service for the Metal3 hardware plugin server.",
 			slog.String("error", err.Error()))
 		return

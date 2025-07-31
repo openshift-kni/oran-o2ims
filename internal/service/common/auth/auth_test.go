@@ -15,6 +15,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -93,7 +94,7 @@ var _ = Describe("Authenticator", func() {
 	})
 
 	It("Authorizes the request using OAuth behind proxy", func() {
-		req.Header.Set("x-forwarded-for", "127.0.0.1")
+		req.Header.Set("x-forwarded-for", constants.Localhost)
 		handler.ServeHTTP(recorder, &req)
 		Expect(oauthAuthenticator.called).To(BeTrue())
 		Expect(k8sAuthenticator.called).To(BeFalse())
@@ -105,7 +106,7 @@ var _ = Describe("Authenticator", func() {
 	})
 
 	It("Authorizes the request using Kubernetes behind proxy when no OAuth handler provided", func() {
-		req.Header.Set("x-forwarded-for", "127.0.0.1")
+		req.Header.Set("x-forwarded-for", constants.Localhost)
 		handler = Authenticator(nil, &k8sAuthenticator)(next)
 		handler.ServeHTTP(recorder, &req)
 		Expect(oauthAuthenticator.called).To(BeFalse())

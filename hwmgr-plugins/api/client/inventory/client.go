@@ -14,7 +14,7 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	clientutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/utils"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
@@ -37,7 +37,7 @@ func NewInventoryClient(
 	}
 
 	// Build OAuth client information if type is not ServiceAccount
-	cf := notifier.NewClientFactory(config, sharedutils.DefaultBackendTokenFile)
+	cf := notifier.NewClientFactory(config, constants.DefaultBackendTokenFile)
 	httpClient, err := cf.NewClient(ctx, hwPlugin.Spec.AuthClientConfig.Type)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build HTTP client: %w", err)

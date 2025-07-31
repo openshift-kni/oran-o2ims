@@ -51,8 +51,11 @@ func (m mapping) cols() []string {
 type Mapper[T any] func(context.Context, cols) (before BeforeFunc, after func(any) (T, error))
 
 // BeforeFunc is returned by a mapper and is called before a row is scanned
-// Scans should be scheduled with either
-// the [*Row.ScheduleScan] or [*Row.ScheduleScanx] methods
+// Scans should be scheduled with any of the following methods:
+// - [*Row.ScheduleScanByName]
+// - [*Row.ScheduleScanByNameX]
+// - [*Row.ScheduleScanByIndex]
+// - [*Row.ScheduleScanByIndexX]
 type BeforeFunc = func(*Row) (link any, err error)
 
 // The generator function does not return an error itself to make it less cumbersome
@@ -102,13 +105,13 @@ func (m *MappingError) Error() string {
 // throws an error if there is more than one column
 func SingleColumnMapper[T any](ctx context.Context, c cols) (before func(*Row) (any, error), after func(any) (T, error)) {
 	if len(c) != 1 {
-		err := fmt.Errorf("Expected 1 column but got %d columns", len(c))
+		err := fmt.Errorf("expected 1 column but got %d columns", len(c))
 		return ErrorMapper[T](err, "wrong column count", "1", strconv.Itoa(len(c)))
 	}
 
 	return func(v *Row) (any, error) {
 			var t T
-			v.ScheduleScan(c[0], &t)
+			v.ScheduleScanByIndex(0, &t)
 			return &t, nil
 		}, func(v any) (T, error) {
 			return *(v.(*T)), nil
@@ -120,7 +123,7 @@ func ColumnMapper[T any](name string) func(ctx context.Context, c cols) (before 
 	return func(ctx context.Context, c cols) (before func(*Row) (any, error), after func(any) (T, error)) {
 		return func(v *Row) (any, error) {
 				var t T
-				v.ScheduleScan(name, &t)
+				v.ScheduleScanByName(name, &t)
 				return &t, nil
 			}, func(v any) (T, error) {
 				return *(v.(*T)), nil
@@ -133,8 +136,8 @@ func SliceMapper[T any](ctx context.Context, c cols) (before func(*Row) (any, er
 	return func(v *Row) (any, error) {
 			row := make([]T, len(c))
 
-			for index, name := range c {
-				v.ScheduleScan(name, &row[index])
+			for index := range c {
+				v.ScheduleScanByIndex(index, &row[index])
 			}
 
 			return row, nil
@@ -149,9 +152,9 @@ func MapMapper[T any](ctx context.Context, c cols) (before func(*Row) (any, erro
 	return func(v *Row) (any, error) {
 			row := make([]*T, len(c))
 
-			for index, name := range c {
+			for index := range c {
 				var t T
-				v.ScheduleScan(name, &t)
+				v.ScheduleScanByIndex(index, &t)
 				row[index] = &t
 			}
 

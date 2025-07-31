@@ -15,6 +15,10 @@ func StructMapper[T any](opts ...MappingOption) Mapper[T] {
 	return CustomStructMapper[T](defaultStructMapper, opts...)
 }
 
+func StructMapperColumns[T any](opts ...MappingOption) ([]string, error) {
+	return CustomStructMapperColumns[T](defaultStructMapper, opts...)
+}
+
 // Uses reflection to create a mapping function for a struct type
 // using with custom options
 func CustomStructMapper[T any](src StructMapperSource, optMod ...MappingOption) Mapper[T] {
@@ -32,6 +36,31 @@ func CustomStructMapper[T any](src StructMapperSource, optMod ...MappingOption) 
 	}
 
 	return mod
+}
+
+func CustomStructMapperColumns[T any](src StructMapperSource, optMod ...MappingOption) ([]string, error) {
+	opts := mappingOptions{}
+	for _, o := range optMod {
+		o(&opts)
+	}
+
+	if len(opts.mapperMods) > 0 {
+		return nil, fmt.Errorf("Mapper mods are not supported in CustomStructMapperColumns")
+	}
+
+	typ := typeOf[T]()
+
+	_, err := checks(typ)
+	if err != nil {
+		return nil, err
+	}
+
+	mapping, err := src.getMapping(typ)
+	if err != nil {
+		return nil, err
+	}
+
+	return mapping.cols(), nil
 }
 
 func structMapperFrom[T any](ctx context.Context, c cols, s StructMapperSource, opts mappingOptions) (func(*Row) (any, error), func(any) (T, error)) {
@@ -53,7 +82,7 @@ func structMapperFrom[T any](ctx context.Context, c cols, s StructMapperSource, 
 // Check if there are any errors, and returns if it is a pointer or not
 func checks(typ reflect.Type) (bool, error) {
 	if typ == nil {
-		return false, fmt.Errorf("Nil type passed to StructMapper")
+		return false, fmt.Errorf("nil type passed to StructMapper")
 	}
 
 	var isPointer bool
@@ -64,10 +93,10 @@ func checks(typ reflect.Type) (bool, error) {
 		isPointer = true
 
 		if typ.Elem().Kind() != reflect.Struct {
-			return false, fmt.Errorf("Type %q is not a struct or pointer to a struct", typ.String())
+			return false, fmt.Errorf("type %q is not a struct or pointer to a struct", typ.String())
 		}
 	default:
-		return false, fmt.Errorf("Type %q is not a struct or pointer to a struct", typ.String())
+		return false, fmt.Errorf("type %q is not a struct or pointer to a struct", typ.String())
 	}
 
 	return isPointer, nil
@@ -117,7 +146,7 @@ func WithMapperMods(mods ...MapperMod) MappingOption {
 func mapperFromMapping[T any](m mapping, typ reflect.Type, isPointer bool, opts mappingOptions) func(context.Context, cols) (func(*Row) (any, error), func(any) (T, error)) {
 	return func(ctx context.Context, c cols) (func(*Row) (any, error), func(any) (T, error)) {
 		// Filter the mapping so we only ask for the available columns
-		filtered, err := filterColumns(ctx, c, m, opts.structTagPrefix)
+		filtered, err := filterColumns(c, m, opts.structTagPrefix)
 		if err != nil {
 			return ErrorMapper[T](err)
 		}
@@ -167,7 +196,7 @@ func (s regular[T]) regular() (func(*Row) (any, error), func(any) (T, error)) {
 				}
 
 				fv := row.FieldByIndex(info.position)
-				v.ScheduleScanx(info.name, fv.Addr())
+				v.ScheduleScanByNameX(info.name, fv.Addr())
 			}
 
 			return row, nil
@@ -200,7 +229,7 @@ func (s regular[T]) allOptions() (func(*Row) (any, error), func(any) (T, error))
 					row[i] = reflect.New(ft)
 				}
 
-				v.ScheduleScanx(info.name, row[i])
+				v.ScheduleScanByNameX(info.name, row[i])
 			}
 
 			return row, nil

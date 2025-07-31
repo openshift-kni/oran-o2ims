@@ -18,6 +18,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -102,8 +103,8 @@ func NewHandler(cfg MigrationConfig) (*MigrationHandler, error) {
 		connStr += fmt.Sprintf("&x-migrations-table=%s", cfg.MigrationsTable)
 	}
 
-	if _, err := os.Stat(utils.DefaultServiceCAFile); err == nil {
-		connStr += fmt.Sprintf("&sslrootcert=%s", utils.DefaultServiceCAFile)
+	if _, err := os.Stat(constants.DefaultServiceCAFile); err == nil {
+		connStr += fmt.Sprintf("&sslrootcert=%s", constants.DefaultServiceCAFile)
 	} else {
 		slog.Warn("No service CA file found")
 	}

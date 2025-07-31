@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
@@ -31,7 +32,7 @@ import (
 
 // Resource server config values
 const (
-	host         = "127.0.0.1"
+	host         = constants.Localhost
 	port         = "8000"
 	readTimeout  = 5 * time.Second
 	writeTimeout = 10 * time.Second

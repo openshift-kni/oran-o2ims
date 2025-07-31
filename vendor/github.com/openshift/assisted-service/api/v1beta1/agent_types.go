@@ -155,6 +155,7 @@ type HostDisk struct {
 type HostBoot struct {
 	CurrentBootMode string `json:"currentBootMode,omitempty"`
 	PxeInterface    string `json:"pxeInterface,omitempty"`
+	DeviceType      string `json:"deviceType,omitempty"`
 }
 
 type HostSystemVendor struct {
@@ -227,6 +228,13 @@ type HostNTPSources struct {
 	SourceState models.SourceState `json:"sourceState,omitempty"`
 }
 
+type AgentDeprovisionInfo struct {
+	ClusterName      string `json:"cluster_name,omitempty"`
+	ClusterNamespace string `json:"cluster_namespace,omitempty"`
+	NodeName         string `json:"node_name,omitempty"`
+	Message          string `json:"message,omitempty"`
+}
+
 // AgentStatus defines the observed state of Agent
 type AgentStatus struct {
 	Bootstrap bool `json:"bootstrap,omitempty"`
@@ -247,6 +255,16 @@ type AgentStatus struct {
 	// InstallationDiskID is the disk that will be used for the installation.
 	// +optional
 	InstallationDiskID string `json:"installation_disk_id,omitempty"`
+
+	// DeprovisionInfo stores data related to the agent's previous cluster binding in order to clean up when the agent re-registers
+	// +optional
+	DeprovisionInfo *AgentDeprovisionInfo `json:"deprovision_info,omitempty"`
+
+	// Kind corresponds to the same field in the model Host. It indicates the type of cluster the host is
+	// being installed to; either an existing cluster (day-2) or a new cluster (day-1).
+	// Value is one of: "AddToExistingClusterHost" (day-2) or "Host" (day-1)
+	// +optional
+	Kind string `json:"kind,omitempty"`
 }
 
 type DebugInfo struct {

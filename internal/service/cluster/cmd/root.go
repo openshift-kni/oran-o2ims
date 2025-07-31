@@ -11,12 +11,13 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/spf13/cobra"
 )
 
 // clusterRootCmd represents the root command for working resource server
 var clusterRootCmd = &cobra.Command{
-	Use:   "cluster-server",
+	Use:   constants.ClusterServerCmd,
 	Short: "All things needed for the cluster server",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		configureDefaultLogger()

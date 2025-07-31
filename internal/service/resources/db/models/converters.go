@@ -12,12 +12,12 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
 // managementInterfaceID defines the unique identifier for the IMS O2 interface
@@ -213,13 +213,13 @@ func getObjectReference(objectType string, objectID uuid.UUID, parentID *uuid.UU
 	var value string
 	switch objectType {
 	case ResourceType{}.TableName():
-		value = fmt.Sprintf("%s/resourceTypes/%s", utils.BaseInventoryURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourceTypesPath, objectID.String())
 	case Resource{}.TableName():
-		value = fmt.Sprintf("%s/resourcePools/%s/resources/%s", utils.BaseInventoryURL, parentID.String(), objectID.String())
+		value = fmt.Sprintf("%s%s/%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourcePoolsPath, parentID.String(), constants.ResourcesPath, objectID.String())
 	case ResourcePool{}.TableName():
-		value = fmt.Sprintf("%s/resourcePools/%s", utils.BaseInventoryURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourcePoolsPath, objectID.String())
 	case DeploymentManager{}.TableName():
-		value = fmt.Sprintf("%s/deploymentManagers/%s", utils.BaseInventoryURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.DeploymentManagersPath, objectID.String())
 	default:
 		return nil
 	}

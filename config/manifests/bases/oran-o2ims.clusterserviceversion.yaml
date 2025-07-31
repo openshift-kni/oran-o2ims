@@ -17,7 +17,7 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
-    olm.skipRange: '>=4.16.0 <4.18'
+    olm.skipRange: '>=4.16.0 <4.20'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
@@ -617,7 +617,7 @@ spec:
   - email: imihai@redhat.com
     name: IrinaMihai
   maturity: alpha
-  minKubeVersion: 1.28.0
+  minKubeVersion: 1.32.0
   provider:
     name: Red Hat
   replaces: oran-o2ims.v0.0.0

@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
@@ -315,7 +316,7 @@ func (r *ClusterServer) GetNodeCluster(ctx context.Context, request api.GetNodeC
 func (r *ClusterServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
 	version := utils2.CurrentVersion
-	baseURL := utils2.BaseURL
+	baseURL := constants.O2IMSClusterBaseURL
 	versions := []generated.APIVersion{
 		{
 			Version: &version,
@@ -332,7 +333,7 @@ func (r *ClusterServer) GetAllVersions(ctx context.Context, request api.GetAllVe
 func (r *ClusterServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
 	// We currently only support a single version
 	version := utils2.CurrentVersion
-	baseURL := utils2.BaseURL
+	baseURL := constants.O2IMSClusterBaseURL
 	versions := []generated.APIVersion{
 		{
 			Version: &version,

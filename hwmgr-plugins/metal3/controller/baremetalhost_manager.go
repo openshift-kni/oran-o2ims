@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,8 @@ import (
 // BMHAllocationStatus defines filtering options for FetchBMHList
 type BMHAllocationStatus string
 
+const ErrorRetryWindow = 5 * time.Minute
+
 const (
 	AllBMHs         BMHAllocationStatus = "all"
 	UnallocatedBMHs BMHAllocationStatus = "unallocated"
@@ -42,6 +45,8 @@ const (
 	FirmwareUpdateNeededAnnotation = "clcm.openshift.io/firmware-update-needed"
 	BmhAllocatedLabel              = "clcm.openshift.io/allocated"
 	NodeNameAnnotation             = "clcm.openshift.io/node-name"
+	BmhDeallocationDoneAnnotation  = "clcm.openshift.io/deallocation-complete"
+	BmhErrorTimestampAnnotation    = "clcm.openshift.io/bmh-error-timestamp"
 	BmhHostMgmtAnnotation          = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
 	BmhInfraEnvLabel               = "infraenvs.agent-install.openshift.io"
 	SiteConfigOwnedByLabel         = "siteconfig.open-cluster-management.io/owned-by"
@@ -239,7 +244,9 @@ func filterAvailableBMHs(bmhList metal3v1alpha1.BareMetalHostList) metal3v1alpha
 }
 
 // GroupBMHsByResourcePool groups unallocated BMHs by resource pool ID.
-func GroupBMHsByResourcePool(unallocatedBMHs metal3v1alpha1.BareMetalHostList) map[string][]metal3v1alpha1.BareMetalHost {
+func GroupBMHsByResourcePool(
+	unallocatedBMHs metal3v1alpha1.BareMetalHostList,
+) map[string][]metal3v1alpha1.BareMetalHost {
 	grouped := make(map[string][]metal3v1alpha1.BareMetalHost)
 	for _, bmh := range unallocatedBMHs.Items {
 		if resourcePoolID, exists := bmh.Labels[LabelResourcePoolID]; exists {
@@ -249,7 +256,9 @@ func GroupBMHsByResourcePool(unallocatedBMHs metal3v1alpha1.BareMetalHostList) m
 	return grouped
 }
 
-func buildInterfacesFromBMH(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest, bmh *metal3v1alpha1.BareMetalHost) ([]*pluginsv1alpha1.Interface, error) {
+func buildInterfacesFromBMH(
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	bmh *metal3v1alpha1.BareMetalHost) ([]*pluginsv1alpha1.Interface, error) {
 	var interfaces []*pluginsv1alpha1.Interface
 
 	if bmh.Status.HardwareDetails == nil {
@@ -500,11 +509,8 @@ func handleTransitionNodes(ctx context.Context,
 			if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 				continue
 			}
-
-			if err := processBMHUpdateCase(ctx, c, logger, pluginNamespace, &node, bmh, uc, postInstall); err != nil {
-				return true, err
-			}
-			return true, nil
+			// Only handle one update case per reconciliation cycle
+			return true, processBMHUpdateCase(ctx, c, logger, pluginNamespace, &node, bmh, uc, postInstall)
 		}
 	}
 
@@ -582,8 +588,13 @@ func processBMHUpdateCase(ctx context.Context,
 		LogLabel      string
 	}, postInstall bool) error {
 
-	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError && bmh.Status.ErrorType != metal3v1alpha1.PowerManagementError {
-		message := "BMH in error state"
+	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
+		tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
+		if err != nil || tolerate {
+			return nil
+		}
+
+		message := fmt.Sprintf("BMH in error state: %s", bmh.Status.ErrorType)
 		logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name))
 		condType := hwmgmtv1alpha1.Provisioned
 		if postInstall {
@@ -593,6 +604,14 @@ func processBMHUpdateCase(ctx context.Context,
 			logger.ErrorContext(ctx, "failed to set node failed status", slog.String("node", node.Name), slog.String("error", err.Error()))
 		}
 		return fmt.Errorf("unable to initiate update for BMH %s/%s", bmh.Namespace, bmh.Name)
+	}
+
+	// clear transient error annotation if BMH recovered
+	if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+			// Don't fail the entire operation for annotation cleanup failure
+		}
 	}
 
 	// Check whether the current state of the BMH meets the transition condition.
@@ -667,12 +686,14 @@ func handleBMHCompletion(ctx context.Context,
 	}
 
 	// Check if BMH has transitioned to "Available"
-	bmhAvailable := checkBMHStatus(ctx, logger, bmh, metal3v1alpha1.StateAvailable)
-
 	// If BMH is not available yet, update is still ongoing
-	if !bmhAvailable {
+	if !checkBMHStatus(ctx, logger, bmh, metal3v1alpha1.StateAvailable) {
 		// BMH entered an error state
 		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
+			tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
+			if err != nil || tolerate {
+				return true, err
+			}
 			errMessage := fmt.Errorf("bmh %s/%s in an error state %s", bmh.Namespace, bmh.Name, bmh.Status.Provisioning.State)
 			if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient, node.Name, node.Namespace,
 				string(hwmgmtv1alpha1.Provisioned), metav1.ConditionFalse,
@@ -682,7 +703,21 @@ func handleBMHCompletion(ctx context.Context,
 			}
 			return false, errMessage
 		}
-		return true, nil
+		// if BMH is not in error state, clean up transient annotation if it exists
+		if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
+			if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+				logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+			}
+		}
+		return true, nil // still waiting for available
+	}
+
+	// BMH is now available - clear any stale transient error annotation
+	if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clean up transient error annotation on BMH available transition",
+				slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+		}
 	}
 
 	// Apply post-config updates and finalize the process
@@ -765,7 +800,6 @@ func removeInfraEnvLabelFromPreprovisioningImage(ctx context.Context, c client.C
 			slog.String("bmh", name.String()))
 		return nil
 	})
-
 }
 
 // removeInfraEnvLabel removes InfraEnvLabel from BMH and the corresponding PreprovisioningImage resource.
@@ -810,7 +844,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 			delete(patched.Annotations, key)
 		}
 
-		patched.Spec.Online = false
+		patched.Annotations[BmhDeallocationDoneAnnotation] = "true"
 
 		// Clear CustomDeploy entirely
 		patched.Spec.CustomDeploy = nil
@@ -818,6 +852,8 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		if bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned {
 			// Wipe partition tables using automated cleaning
 			patched.Spec.AutomatedCleaningMode = metal3v1alpha1.CleaningModeMetadata
+			// Power off the host
+			patched.Spec.Online = false
 		}
 
 		// Reset pre-provisioning data
@@ -876,4 +912,146 @@ func allowHostManagement(ctx context.Context, c client.Client, logger *slog.Logg
 	}
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	return updateBMHMetaWithRetry(ctx, c, logger, name, MetaTypeAnnotation, BmhHostMgmtAnnotation, "", OpAdd)
+}
+
+func isBMHDeallocated(bmh *metal3v1alpha1.BareMetalHost) bool {
+	return bmh.Annotations != nil && bmh.Annotations[BmhDeallocationDoneAnnotation] == "true"
+}
+
+// clearBMHAnnotation clears both BmhDeallocationDoneAnnotation and BmhErrorTimestampAnnotation from a BareMetalHost in a single API call
+func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
+
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		// Fetch the latest version of the BMH
+		var latestBMH metal3v1alpha1.BareMetalHost
+		if err := c.Get(ctx, name, &latestBMH); err != nil {
+			logger.ErrorContext(ctx, "Failed to fetch BMH for annotation cleanup",
+				slog.Any("bmh", name),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		// Check if we need to do anything
+		needsUpdate := false
+		if latestBMH.Annotations != nil {
+			if _, exists := latestBMH.Annotations[BmhDeallocationDoneAnnotation]; exists {
+				needsUpdate = true
+			}
+			if _, exists := latestBMH.Annotations[BmhErrorTimestampAnnotation]; exists {
+				needsUpdate = true
+			}
+		}
+
+		// If no annotations to clear, skip the patch
+		if !needsUpdate {
+			logger.InfoContext(ctx, "No BMH annotations to clear, skipping update",
+				slog.Any("bmh", name))
+			return nil
+		}
+
+		// Create a patch base
+		patch := client.MergeFrom(latestBMH.DeepCopy())
+
+		// Remove both annotations in memory
+		if latestBMH.Annotations != nil {
+			delete(latestBMH.Annotations, BmhDeallocationDoneAnnotation)
+			delete(latestBMH.Annotations, BmhErrorTimestampAnnotation)
+		}
+
+		// Apply the patch with both changes in a single API call
+		if err := c.Patch(ctx, &latestBMH, patch); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear BMH annotations",
+				slog.String("bmh", name.Name),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to clear BMH annotations on BMH %s: %w", name.Name, err)
+		}
+
+		logger.InfoContext(ctx, "Successfully cleared BMH annotations",
+			slog.String("bmh", name.Name))
+		return nil
+	})
+}
+
+func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost) error {
+	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		var fresh metal3v1alpha1.BareMetalHost
+		if err := c.Get(ctx, name, &fresh); err != nil {
+			return err
+		}
+		patched := fresh.DeepCopy()
+		patched.Spec.Online = false
+
+		return c.Patch(ctx, patched, client.MergeFrom(&fresh))
+	})
+}
+
+func markBMHTransitenError(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	if bmh.Annotations == nil {
+		bmh.Annotations = make(map[string]string)
+	}
+	if _, exists := bmh.Annotations[BmhErrorTimestampAnnotation]; exists {
+		return nil // Already marked
+	}
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	return updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation,
+		BmhErrorTimestampAnnotation,
+		time.Now().Format(time.RFC3339), OpAdd)
+}
+
+func clearTransientBMHErrorAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	return updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation,
+		BmhErrorTimestampAnnotation,
+		"", OpRemove)
+}
+
+func isTransientBMHError(bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
+	if bmh.Status.OperationalStatus != metal3v1alpha1.OperationalStatusError {
+		return false, nil
+	}
+
+	tsStr, ok := bmh.Annotations[BmhErrorTimestampAnnotation]
+	if !ok {
+		// First time seeing the error, should be treated as transient error
+		return true, nil
+	}
+
+	ts, err := time.Parse(time.RFC3339, tsStr)
+	if err != nil {
+		return false, fmt.Errorf("invalid BMH error timestamp format: %w", err)
+	}
+
+	// Return true if still within retry window
+	return time.Since(ts) < ErrorRetryWindow, nil
+}
+
+func tolerateAndAnnotateTransientBMHError(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	bmh *metal3v1alpha1.BareMetalHost,
+) (bool, error) {
+	tolerate, err := isTransientBMHError(bmh)
+	if err != nil {
+		message := "error checking transient BMH error"
+		logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+		return false, fmt.Errorf("%s: %w", message, err)
+	}
+
+	if tolerate {
+		if err := markBMHTransitenError(ctx, c, logger, bmh); err != nil {
+			message := "failed to annotate transient BMH error"
+			logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+			return false, fmt.Errorf("%s: %w", message, err)
+		}
+		logger.InfoContext(ctx, "BMH in transient error — tolerating and skipping failure",
+			slog.String("BMH", bmh.Name))
+		return true, nil
+	}
+
+	return false, nil
 }

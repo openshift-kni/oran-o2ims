@@ -1,6 +1,7 @@
 package mods
 
 import (
+	"context"
 	"io"
 
 	"github.com/stephenafamo/bob"
@@ -16,24 +17,18 @@ func (q QueryMods[T]) Apply(query T) {
 	}
 }
 
-type QueryModFunc[T any] func(T)
-
-func (q QueryModFunc[T]) Apply(query T) {
-	q(query)
-}
-
 // This is a generic type for expressions can take extra mods as a function
 // allows for some fluent API, for example with functions
 type Moddable[T bob.Expression] func(...bob.Mod[T]) T
 
-func (m Moddable[T]) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
-	return m().WriteSQL(w, d, start)
+func (m Moddable[T]) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+	return m().WriteSQL(ctx, w, d, start)
 }
 
-type With[Q interface{ AppendWith(clause.CTE) }] clause.CTE
+type With[Q interface{ AppendCTE(clause.CTE) }] clause.CTE
 
 func (f With[Q]) Apply(q Q) {
-	q.AppendWith(clause.CTE(f))
+	q.AppendCTE(clause.CTE(f))
 }
 
 type Recursive[Q interface{ SetRecursive(bool) }] bool
@@ -94,10 +89,16 @@ func (d Having[Q]) Apply(q Q) {
 	q.AppendHaving(d...)
 }
 
-type Window[Q interface{ AppendWindow(clause.NamedWindow) }] clause.NamedWindow
+type Window[Q interface{ SetWindow(clause.Window) }] clause.Window
 
-func (f Window[Q]) Apply(q Q) {
-	q.AppendWindow(clause.NamedWindow(f))
+func (w Window[Q]) Apply(q Q) {
+	q.SetWindow(clause.Window(w))
+}
+
+type NamedWindow[Q interface{ AppendWindow(bob.Expression) }] clause.NamedWindow
+
+func (w NamedWindow[Q]) Apply(q Q) {
+	q.AppendWindow(clause.NamedWindow(w))
 }
 
 type OrderBy[Q interface{ AppendOrder(clause.OrderDef) }] clause.OrderDef
@@ -128,16 +129,16 @@ func (f Fetch[Q]) Apply(q Q) {
 	q.SetFetch(clause.Fetch(f))
 }
 
-type Combine[Q interface{ SetCombine(clause.Combine) }] clause.Combine
+type Combine[Q interface{ AppendCombine(clause.Combine) }] clause.Combine
 
 func (f Combine[Q]) Apply(q Q) {
-	q.SetCombine(clause.Combine(f))
+	q.AppendCombine(clause.Combine(f))
 }
 
-type For[Q interface{ SetFor(clause.For) }] clause.For
+type For[Q interface{ SetFor(clause.Lock) }] clause.Lock
 
 func (f For[Q]) Apply(q Q) {
-	q.SetFor(clause.For(f))
+	q.SetFor(clause.Lock(f))
 }
 
 type Values[Q interface{ AppendValues(vals ...bob.Expression) }] []bob.Expression
@@ -174,4 +175,10 @@ type set[Q interface{ AppendSet(clauses ...any) }] []any
 
 func (s set[Q]) Apply(q Q) {
 	q.AppendSet(s...)
+}
+
+type Hook[Q interface{ AppendHooks(...bob.Hook[Q]) }] []bob.Hook[Q]
+
+func (h Hook[Q]) Apply(q Q) {
+	q.AppendHooks(h...)
 }

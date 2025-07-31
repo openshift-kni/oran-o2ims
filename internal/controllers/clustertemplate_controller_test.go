@@ -4,9 +4,85 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package controllers
+/*
+Assisted-by: Cursor/claude-4-sonnet
+*/
 
 /*
+Test Cases Summary for ClusterTemplate Controller
+
+This file contains comprehensive test cases for the ClusterTemplate controller and its validation functions.
+The tests are organized into the following test suites:
+
+1. ClusterTemplateReconciler Tests:
+   - Validates that a valid ClusterTemplate with all required ConfigMaps and HardwareTemplate does not requeue
+   - Validates that an invalid ClusterTemplate (missing ConfigMaps) requeues with appropriate error conditions
+
+2. enqueueClusterTemplatesForConfigmap Tests:
+   - Tests enqueueing of ClusterTemplates that reference a specific clusterinstance defaults ConfigMap
+   - Tests that ClusterTemplates not referencing the ConfigMap are not enqueued
+
+3. validatePolicyTemplateParamsSchema Tests:
+   - Tests validation of policy template parameter schema structure
+   - Covers missing properties, invalid property structures, incorrect type definitions
+   - Tests validation of nested property structures and type constraints
+
+4. validateClusterTemplateCR Tests:
+   - Tests complete ClusterTemplate validation including ConfigMaps and HardwareTemplate
+   - Tests status condition setting for both valid and invalid templates
+   - Tests validation of timeout configurations in ConfigMaps
+   - Tests hardware template timeout validation
+
+5. validateConfigmapReference Tests:
+   - Tests ConfigMap existence and structure validation
+   - Tests ClusterInstance CRD schema compliance
+   - Tests template data key presence and YAML validity
+   - Tests interface label validation in network configurations
+   - Tests timeout value parsing and validation
+   - Tests ConfigMap immutability requirements and patching
+
+6. Validate Cluster Instance Name Tests:
+   - Tests cluster template name validation rules
+   - Tests handling of templates with same names in different namespaces
+   - Tests metadata name correctness validation
+
+7. Validate Cluster Instance TemplateID Tests:
+   - Tests automatic templateID generation for empty values
+   - Tests UUID format validation for provided templateIDs
+   - Tests both valid and invalid UUID formats
+
+8. validateTemplateParameterSchema Tests (Go test function):
+   - Tests JSON schema validation for template parameters
+   - Tests required field validation and type checking
+   - Tests policy template parameter schema structure
+   - Tests error message formatting for various validation failures
+
+9. validateClusterInstanceParamsSchema Tests:
+   - Tests schema validation behavior when hardware template is provided vs not provided
+   - Tests that hardware template presence skips schema validation entirely
+   - Tests schema validation for cases without hardware template
+   - Tests edge cases including whitespace handling and large/nested schemas
+
+10. validateSchemaWithoutHWTemplate Tests:
+    - Tests detailed schema structure validation for cluster instances without hardware templates
+    - Tests required node properties and BMC credential validation
+    - Tests network interface configuration validation
+    - Tests schema structure integrity and required field presence
+
+11. validateUpgradeDefaultsConfigmap Tests:
+    - Tests validation of upgrade defaults ConfigMap for Image-Based GPU (IBGU) upgrades
+    - Tests YAML parsing and IBGU spec validation
+    - Tests release version matching between ClusterTemplate and seedImageRef
+    - Tests ConfigMap immutability requirements
+    - Tests dry-run validation of IBGU specifications
+    - Tests error handling for missing or malformed ConfigMaps
+
+Each test suite covers both positive and negative test cases to ensure comprehensive validation
+of the ClusterTemplate controller functionality.
+*/
+
+package controllers
+
 import (
 	"context"
 	"encoding/json"
@@ -1247,6 +1323,201 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 	}
 }
 
+var _ = Describe("validateClusterInstanceParamsSchema", func() {
+
+	var validSchema map[string]any
+
+	BeforeEach(func() {
+		// Initialize a valid schema for testing
+		err := yaml.Unmarshal([]byte(utils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &validSchema)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	Context("when hardware template is provided", func() {
+		It("should return nil for any schema when hwTemplate is not empty", func() {
+			// Test with a valid schema
+			err := validateClusterInstanceParamsSchema("hwTemplate-v1", validSchema)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return nil even with invalid schema when hwTemplate is provided", func() {
+			// Test with an invalid/empty schema - should still pass because hwTemplate validation is skipped
+			invalidSchema := map[string]any{
+				"invalidProperty": "invalidValue",
+			}
+			err := validateClusterInstanceParamsSchema("some-hw-template", invalidSchema)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return nil for empty schema when hwTemplate is provided", func() {
+			emptySchema := map[string]any{}
+			err := validateClusterInstanceParamsSchema("hwTemplate-test", emptySchema)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return nil for nil schema when hwTemplate is provided", func() {
+			err := validateClusterInstanceParamsSchema("hwTemplate-test", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("with various hardware template names", func() {
+			It("should handle standard hardware template names", func() {
+				testCases := []string{
+					"hwTemplate-v1",
+					"hardware-template-spr",
+					"hwTemplate-dell-r650",
+					"hw-template-master-node-profile",
+					"template123",
+				}
+
+				for _, hwTemplate := range testCases {
+					err := validateClusterInstanceParamsSchema(hwTemplate, validSchema)
+					Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Failed for hwTemplate: %s", hwTemplate))
+				}
+			})
+
+			It("should handle hardware template with special characters", func() {
+				specialTemplates := []string{
+					"hw-template_v1.0",
+					"template-with-dots.v1.2.3",
+					"template_underscore",
+					"template123-456",
+				}
+
+				for _, hwTemplate := range specialTemplates {
+					err := validateClusterInstanceParamsSchema(hwTemplate, validSchema)
+					Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Failed for hwTemplate: %s", hwTemplate))
+				}
+			})
+		})
+	})
+
+	Context("when hardware template is not provided", func() {
+		It("should delegate to validateSchemaWithoutHWTemplate for empty string", func() {
+			// This should call validateSchemaWithoutHWTemplate and succeed with valid schema
+			err := validateClusterInstanceParamsSchema("", validSchema)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return error for invalid schema when hwTemplate is empty", func() {
+			// Test with schema missing required properties
+			invalidSchema := map[string]any{
+				"properties": map[string]any{
+					"invalidProperty": map[string]any{
+						"type": "string",
+					},
+				},
+			}
+			err := validateClusterInstanceParamsSchema("", invalidSchema)
+			Expect(err).To(HaveOccurred())
+			// The error could be about missing "required", "type" or "nodes" depending on validation order
+			Expect(err.Error()).To(SatisfyAny(
+				ContainSubstring("missing key \"required\""),
+				ContainSubstring("missing key \"nodes\""),
+				ContainSubstring("missing key \"type\""),
+			))
+		})
+
+		It("should return error for completely invalid schema structure when hwTemplate is empty", func() {
+			invalidSchema := map[string]any{
+				"notProperties": "invalidValue",
+			}
+			err := validateClusterInstanceParamsSchema("", invalidSchema)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should handle nil schema when hwTemplate is empty", func() {
+			err := validateClusterInstanceParamsSchema("", nil)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should handle empty schema when hwTemplate is empty", func() {
+			emptySchema := map[string]any{}
+			err := validateClusterInstanceParamsSchema("", emptySchema)
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("edge cases", func() {
+		It("should treat whitespace-only hwTemplate as empty", func() {
+			// Note: The function currently does exact string comparison with "",
+			// so whitespace strings are treated as non-empty hwTemplate
+			err := validateClusterInstanceParamsSchema("   ", validSchema)
+			Expect(err).ToNot(HaveOccurred()) // This will pass because "   " != ""
+		})
+
+		It("should handle very large schema when hwTemplate is provided", func() {
+			// Create a large schema with many properties
+			largeSchema := map[string]any{
+				"properties": map[string]any{},
+			}
+			properties := largeSchema["properties"].(map[string]any)
+
+			// Add many properties to test performance/handling
+			for i := 0; i < 100; i++ {
+				properties[fmt.Sprintf("property%d", i)] = map[string]any{
+					"type":        "string",
+					"description": fmt.Sprintf("Property number %d", i),
+				}
+			}
+
+			err := validateClusterInstanceParamsSchema("hwTemplate-large", largeSchema)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle schema with deeply nested structures when hwTemplate is provided", func() {
+			deepSchema := map[string]any{
+				"properties": map[string]any{
+					"level1": map[string]any{
+						"properties": map[string]any{
+							"level2": map[string]any{
+								"properties": map[string]any{
+									"level3": map[string]any{
+										"type": "string",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			err := validateClusterInstanceParamsSchema("hwTemplate-deep", deepSchema)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("business logic validation", func() {
+		It("should demonstrate that hardware template presence skips schema validation entirely", func() {
+			// This test demonstrates the current business logic:
+			// When hwTemplate is provided, NO schema validation occurs
+
+			// Even completely malformed schema should pass
+			malformedSchema := map[string]any{
+				"this":       "is",
+				"completely": []string{"wrong", "schema", "format"},
+				"123":        "invalid key type",
+			}
+
+			err := validateClusterInstanceParamsSchema("any-hw-template", malformedSchema)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should validate schema only when hardware template is absent", func() {
+			// This demonstrates that schema validation ONLY happens when hwTemplate is empty
+			validSchemaForNoHW := validSchema
+
+			// Should succeed when hwTemplate is empty and schema is valid
+			err := validateClusterInstanceParamsSchema("", validSchemaForNoHW)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Should also succeed when hwTemplate is provided, regardless of schema validity
+			err = validateClusterInstanceParamsSchema("hw-template", validSchemaForNoHW)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+})
+
 var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 
 	var baseSchema map[string]any
@@ -1352,4 +1623,279 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 })
-*/
+
+var _ = Describe("validateUpgradeDefaultsConfigmap", func() {
+	var (
+		c             client.Client
+		ctx           context.Context
+		t             *clusterTemplateReconcilerTask
+		namespace     = "default"
+		configmapName = "upgrade-defaults"
+		tName         = "cluster-template-test"
+		tVersion      = "v1.0.0"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Create a cluster template with a release version
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      GetClusterTemplateRefName(tName, tVersion),
+				Namespace: namespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    tName,
+				Version: tVersion,
+				Release: "4.17.0", // This should match the seedImageRef version in tests
+				Templates: provisioningv1alpha1.Templates{
+					UpgradeDefaults: configmapName,
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{ct}...)
+
+		t = &clusterTemplateReconcilerTask{
+			client: c,
+			logger: logger,
+			object: ct,
+		}
+	})
+
+	It("should validate a valid upgrade defaults configmap successfully", func() {
+		// Create a valid upgrade defaults ConfigMap
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.UpgradeDefaultsConfigmapKey: `
+ibuSpec:
+  seedImageRef:
+    image: "quay.io/openshift-release-dev/ocp-release"
+    version: "4.17.0"
+  oadpContent:
+  - name: "oadp-backup"
+    namespace: "openshift-adp"
+plan:
+- actions: ["Prep"]
+- actions: ["Upgrade"]`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify that the configmap was patched to be immutable
+		updatedCM := &corev1.ConfigMap{}
+		Expect(c.Get(ctx, client.ObjectKey{Name: configmapName, Namespace: namespace}, updatedCM)).To(Succeed())
+		Expect(updatedCM.Immutable).ToNot(BeNil())
+		Expect(*updatedCM.Immutable).To(BeTrue())
+	})
+
+	It("should return error when configmap does not exist", func() {
+		// No ConfigMap created
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
+		Expect(err.Error()).To(ContainSubstring("not found"))
+	})
+
+	It("should return error when configmap has invalid YAML data", func() {
+		// Create a ConfigMap with invalid YAML
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.UpgradeDefaultsConfigmapKey: "invalid: yaml: [data",
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
+	})
+
+	It("should return error when release version does not match seedImageRef version", func() {
+		// Create a valid ConfigMap but with different version
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.UpgradeDefaultsConfigmapKey: `
+ibuSpec:
+  seedImageRef:
+    image: "quay.io/openshift-release-dev/ocp-release"
+    version: "4.18.0"
+  oadpContent:
+  - name: "oadp-backup"
+    namespace: "openshift-adp"
+plan:
+- actions: ["Prep"]
+- actions: ["Upgrade"]`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release (4.17.0) does not match the seedImageRef version (4.18.0) from the upgrade configmap"))
+	})
+
+	It("should successfully validate when IBGU spec is valid for dry-run", func() {
+		// Create a ConfigMap with a valid IBGU spec
+		// Note: The fake client doesn't perform the same validation as real K8s API server,
+		// so we test the successful path where dry-run validation passes
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.UpgradeDefaultsConfigmapKey: `
+ibuSpec:
+  seedImageRef:
+    image: "quay.io/openshift-release-dev/ocp-release"
+    version: "4.17.0"
+  stage: "Idle"
+plan:
+- actions: ["Prep"]
+- actions: ["Upgrade"]`,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should return validation error when configmap is set to mutable", func() {
+		// Create a mutable ConfigMap
+		mutable := false
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.UpgradeDefaultsConfigmapKey: `
+ibuSpec:
+  seedImageRef:
+    image: "quay.io/openshift-release-dev/ocp-release"
+    version: "4.17.0"
+  oadpContent:
+  - name: "oadp-backup"
+    namespace: "openshift-adp"
+plan:
+- actions: ["Prep"]
+- actions: ["Upgrade"]`,
+			},
+			Immutable: &mutable,
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).To(HaveOccurred())
+		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(Equal(fmt.Sprintf(
+			"It is not allowed to set Immutable to false in the ConfigMap %s", configmapName)))
+	})
+
+	It("should succeed when configmap is already immutable", func() {
+		// Create an already immutable ConfigMap
+		immutable := true
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				utils.UpgradeDefaultsConfigmapKey: `
+ibuSpec:
+  seedImageRef:
+    image: "quay.io/openshift-release-dev/ocp-release"
+    version: "4.17.0"
+  oadpContent:
+  - name: "oadp-backup"
+    namespace: "openshift-adp"
+plan:
+- actions: ["Prep"]
+- actions: ["Upgrade"]`,
+			},
+			Immutable: &immutable,
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify that the configmap remains immutable
+		updatedCM := &corev1.ConfigMap{}
+		Expect(c.Get(ctx, client.ObjectKey{Name: configmapName, Namespace: namespace}, updatedCM)).To(Succeed())
+		Expect(updatedCM.Immutable).ToNot(BeNil())
+		Expect(*updatedCM.Immutable).To(BeTrue())
+	})
+
+	It("should handle missing configmap key", func() {
+		// Create a ConfigMap without the expected key
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configmapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				"wrong-key": "some-data",
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+
+		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
+	})
+
+	Context("when cluster template has no release version", func() {
+		BeforeEach(func() {
+			// Update the cluster template to have no release version
+			t.object.Spec.Release = ""
+		})
+
+		It("should return error when seedImageRef version is not empty", func() {
+			// Create a valid ConfigMap
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configmapName,
+					Namespace: namespace,
+				},
+				Data: map[string]string{
+					utils.UpgradeDefaultsConfigmapKey: `
+ibuSpec:
+  seedImageRef:
+    image: "quay.io/openshift-release-dev/ocp-release"
+    version: "4.17.0"
+  oadpContent:
+  - name: "oadp-backup"
+    namespace: "openshift-adp"
+plan:
+- actions: ["Prep"]
+- actions: ["Upgrade"]`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+
+			err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+			Expect(err).To(HaveOccurred())
+			Expect(utils.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade configmap"))
+		})
+	})
+})

@@ -35,6 +35,7 @@ import (
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	openshiftv1 "github.com/openshift/api/config/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -254,7 +255,7 @@ func GetDeploymentVolumes(serverName string, inventory *inventoryv1alpha1.Invent
 		}
 		if inventory.Spec.CaBundleName != nil {
 			volumes = append(volumes, corev1.Volume{
-				Name: "ca-bundle",
+				Name: constants.CABundleField,
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
 						LocalObjectReference: corev1.LocalObjectReference{
@@ -276,7 +277,7 @@ func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.I
 		mounts = append(mounts, []corev1.VolumeMount{
 			{
 				Name:      "tls",
-				MountPath: TLSServerMountPath,
+				MountPath: constants.TLSServerMountPath,
 			},
 		}...)
 	}
@@ -287,14 +288,14 @@ func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.I
 			if clientSecretName != nil {
 				mounts = append(mounts, corev1.VolumeMount{
 					Name:      "smo-mtls",
-					MountPath: TLSClientMountPath,
+					MountPath: constants.TLSClientMountPath,
 				})
 			}
 		}
 		if inventory.Spec.CaBundleName != nil {
 			mounts = append(mounts, corev1.VolumeMount{
-				Name:      "ca-bundle",
-				MountPath: CABundleMountPath,
+				Name:      constants.CABundleField,
+				MountPath: constants.CABundleMountPath,
 			})
 		}
 	}
@@ -310,7 +311,7 @@ func GetBackendTokenArg(backendToken string) string {
 		return fmt.Sprintf("--backend-token=%s", backendToken)
 	}
 
-	return fmt.Sprintf("--backend-token-file=%s", DefaultBackendTokenFile)
+	return fmt.Sprintf("--backend-token-file=%s", constants.DefaultBackendTokenFile)
 }
 
 // GetIngressDomain will determine the network domain of the default ingress controller
@@ -410,15 +411,15 @@ func addArgsForOAuth(inventory *inventoryv1alpha1.Inventory, args []string) []st
 
 		if smo.TLS != nil && smo.TLS.SecretName != nil {
 			args = append(args,
-				fmt.Sprintf("--tls-client-cert=%s/tls.crt", TLSClientMountPath),
-				fmt.Sprintf("--tls-client-key=%s/tls.key", TLSClientMountPath),
+				fmt.Sprintf("--tls-client-cert=%s/tls.crt", constants.TLSClientMountPath),
+				fmt.Sprintf("--tls-client-key=%s/tls.key", constants.TLSClientMountPath),
 			)
 		}
 	}
 
 	if inventory.Spec.CaBundleName != nil {
 		args = append(args,
-			fmt.Sprintf("--ca-bundle-file=%s/%s", CABundleMountPath, CABundleFilename),
+			fmt.Sprintf("--ca-bundle-file=%s/%s", constants.CABundleMountPath, constants.CABundleFilename),
 		)
 	}
 
@@ -426,7 +427,7 @@ func addArgsForOAuth(inventory *inventoryv1alpha1.Inventory, args []string) []st
 }
 
 func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (result []string, err error) {
-	cloudId := DefaultOCloudID
+	cloudId := constants.DefaultOCloudID
 	if inventory.Spec.CloudID != nil {
 		cloudId = *inventory.Spec.CloudID
 	}
@@ -818,8 +819,8 @@ func loadDefaultCABundles(config *tls.Config) error {
 		config.RootCAs.AppendCertsFromPEM(data)
 	}
 
-	if data, err := os.ReadFile(DefaultServiceCAFile); err != nil {
-		return fmt.Errorf("failed to read service CA file '%s': %w", DefaultServiceCAFile, err)
+	if data, err := os.ReadFile(constants.DefaultServiceCAFile); err != nil {
+		return fmt.Errorf("failed to read service CA file '%s': %w", constants.DefaultServiceCAFile, err)
 	} else {
 		// This will enable accessing internal services signed by the service account signer.
 		config.RootCAs.AppendCertsFromPEM(data)
@@ -868,7 +869,7 @@ func AddCABundle(config *tls.Config, caBundle string) error {
 func GetInternalClientTLSConfig(ctx context.Context) (*tls.Config, error) {
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 
-	err := AddCABundle(tlsConfig, DefaultServiceCAFile)
+	err := AddCABundle(tlsConfig, constants.DefaultServiceCAFile)
 	if err != nil {
 		return nil, err
 	}
@@ -1023,8 +1024,8 @@ func GetIBGUFromUpgradeDefaultsConfigmap(
 func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 	inventory := inventoryv1alpha1.Inventory{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      DefaultInventoryCR,
-			Namespace: GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace),
+			Name:      constants.DefaultInventoryCR,
+			Namespace: GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace),
 		},
 	}
 
@@ -1042,8 +1043,8 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 func GetDatabaseHostname() string {
 	hostname, exists := os.LookupEnv(DatabaseHostnameEnvVar)
 	if !exists {
-		return fmt.Sprintf("%s.%s.svc.cluster.local",
-			InventoryDatabaseServerName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace))
+		return fmt.Sprintf("%s.%s.%s",
+			InventoryDatabaseServerName, GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace), constants.ClusterLocalDomain)
 	}
 	return hostname
 }
@@ -1056,7 +1057,7 @@ func GetPasswordOrRandom(envName string) string {
 
 // GetServiceURL constructs the default service URL for a server
 func GetServiceURL(serverName string) string {
-	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%s", serverName, GetEnvOrDefault(DefaultNamespaceEnvName, DefaultNamespace), os.Getenv(InternalServicePortName))
+	return fmt.Sprintf("https://%s.%s.%s:%s", serverName, GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace), constants.ClusterLocalDomain, os.Getenv(constants.InternalServicePortName))
 }
 
 // MakeUUIDFromNames generates a namespaced uuid value from the specified namespace and name values.  The values are
@@ -1113,7 +1114,7 @@ func DetermineAuthType(callback string) commonapi.AuthType {
 	// At this time, only the OAuth and ServiceAccount authTypes are supported
 	// Set authType to OAuth
 	authType := commonapi.OAuth
-	if strings.Contains(callback, "svc.cluster.local") {
+	if strings.Contains(callback, constants.ClusterLocalDomain) {
 		authType = commonapi.ServiceAccount
 	}
 	return authType

@@ -21,11 +21,11 @@ RUN \
   && \
   dnf clean all
 
-# Currently RHEL 9 doesn't provide a Go 1.22 compiler, so we need to install it from the Go
+# Currently RHEL 9 doesn't provide a Go 1.24 compiler, so we need to install it from the Go
 # downloads site.
 RUN \
-  curl -Lo tarball https://go.dev/dl/go1.22.8.linux-amd64.tar.gz && \
-  echo 5f467d29fc67c7ae6468cb6ad5b047a274bae8180cac5e0b7ddbfeba3e47e18f tarball | sha256sum -c && \
+  curl -Lo tarball https://go.dev/dl/go1.24.4.linux-amd64.tar.gz && \
+  echo 77e5da33bb72aeaef1ba4418b6fe511bc4d041873cbf82e5aa6318740df98717 tarball | sha256sum -c && \
   tar -C /usr/local -xf tarball && \
   rm tarball
 

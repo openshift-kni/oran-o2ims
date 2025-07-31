@@ -10,6 +10,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -22,7 +23,7 @@ type InventoryServer struct {
 var _ StrictServerInterface = (*InventoryServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
-var baseURL = "/hardware-manager/inventory/v1"
+var baseURL = constants.HardwareManagerInventoryBaseURL
 var currentVersion = "1.0.0"
 
 // GetAllVersions handles an API request to fetch all versions

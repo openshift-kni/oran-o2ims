@@ -19,6 +19,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/api/common"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -51,7 +52,7 @@ func (t *reconcilerTask) setupLoopbackPluginServer(ctx context.Context, defaultR
 		return
 	}
 
-	if err = t.createService(ctx, utils.LoopbackPluginServerName, utils.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
+	if err = t.createService(ctx, utils.LoopbackPluginServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy Service for the Loopback hardware plugin server.",
 			slog.String("error", err.Error()))
 		return

@@ -22,6 +22,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
@@ -144,8 +145,8 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 	})
 
 	// Mount subrouters to base router with path prefixes
-	baseRouter.Handle("/hardware-manager/provisioning/", provisioningRouter)
-	baseRouter.Handle("/hardware-manager/inventory/", inventoryRouter)
+	baseRouter.Handle(constants.HardwareManagerProvisioningAPIPath+"/", provisioningRouter)
+	baseRouter.Handle(constants.HardwareManagerInventoryAPIPath+"/", inventoryRouter)
 
 	// Apply global middleware chain
 	handler := middleware.ChainHandlers(

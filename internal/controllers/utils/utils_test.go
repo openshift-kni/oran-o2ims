@@ -16,6 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	openshiftv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -102,13 +103,13 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	objs := []client.Object{
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "oran-o2ims",
+				Name: constants.DefaultNamespace,
 			},
 		},
 		&appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "metadata-server",
-				Namespace: "oran-o2ims",
+				Namespace: constants.DefaultNamespace,
 			},
 		},
 	}
@@ -128,7 +129,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 		deployment := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "deployment-server",
-				Namespace: "oran-o2ims",
+				Namespace: constants.DefaultNamespace,
 			},
 		}
 		// Check that the deployment does not exist.
@@ -161,7 +162,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 		deployment := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "deployment-server-2",
-				Namespace: "oran-o2ims",
+				Namespace: constants.DefaultNamespace,
 			},
 			Spec: appsv1.DeploymentSpec{
 				Template: corev1.PodTemplateSpec{
@@ -220,10 +221,10 @@ var _ = Describe("DoesK8SResourceExist", func() {
 		obj := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "metadata-server",
-				Namespace: "oran-o2ims",
+				Namespace: constants.DefaultNamespace,
 			},
 		}
-		k8sResourceExists, err := DoesK8SResourceExist(context.TODO(), fakeClient, "metadata-server", "oran-o2ims", obj)
+		k8sResourceExists, err := DoesK8SResourceExist(context.TODO(), fakeClient, "metadata-server", constants.DefaultNamespace, obj)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(k8sResourceExists).To(Equal(true))
 	})

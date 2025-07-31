@@ -32,7 +32,7 @@ import (
 	metal3ctrl "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	metal3server "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/server"
 	"github.com/openshift-kni/oran-o2ims/internal"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -51,7 +51,7 @@ func init() {
 // Create creates and returns the `start` command.
 func Start() *cobra.Command {
 	result := &cobra.Command{
-		Use:   "metal3-hardwareplugin-manager",
+		Use:   constants.Metal3HardwarePluginManagerCmd,
 		Short: "Metal3 HardwarePlugin Manager",
 		Args:  cobra.NoArgs,
 	}
@@ -89,7 +89,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.metricsAddr,
 		"metrics-bind-address",
-		":8080",
+		constants.MetricsPort,
 		"The address the metric endpoint binds to.",
 	)
 	flags.StringVar(
@@ -101,7 +101,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.probeAddr,
 		"health-probe-bind-address",
-		":8081",
+		constants.HealthProbePort,
 		"The address the probe endpoint binds to.",
 	)
 	flags.BoolVar(
@@ -120,19 +120,19 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.Listener.Address,
 		svcutils.ListenerFlagName,
-		fmt.Sprintf("127.0.0.1:%d", sharedutils.DefaultContainerPort),
+		fmt.Sprintf("%s:%d", constants.Localhost, constants.DefaultContainerPort),
 		"API listener address",
 	)
 	flags.StringVar(
 		&c.TLS.CertFile,
 		svcutils.ServerCertFileFlagName,
-		fmt.Sprintf("%s/tls.crt", sharedutils.TLSServerMountPath),
+		fmt.Sprintf("%s/tls.crt", constants.TLSServerMountPath),
 		"Server certificate file",
 	)
 	flags.StringVar(
 		&c.TLS.KeyFile,
 		svcutils.ServerKeyFileFlagName,
-		fmt.Sprintf("%s/tls.key", sharedutils.TLSServerMountPath),
+		fmt.Sprintf("%s/tls.key", constants.TLSServerMountPath),
 		"Server private key file",
 	)
 	return result

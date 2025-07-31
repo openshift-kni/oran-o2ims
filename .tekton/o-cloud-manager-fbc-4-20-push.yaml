@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "push" &&
-      target_branch == "NOBRANCH" &&
+      target_branch == "main" &&
       (
         '.tekton/fbc-pipeline.yaml'.pathChanged() ||
         '.tekton/o-cloud-manager-fbc-4-20-push.yaml'.pathChanged() ||
@@ -26,22 +26,22 @@ metadata:
   namespace: telco-5g-tenant
 spec:
   params:
-  - name: git-url
-    value: '{{source_url}}'
-  - name: revision
-    value: '{{revision}}'
-  - name: output-image
-    value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-fbc-4-20:{{revision}}
-  - name: build-platforms
-    value:
-    - linux/x86_64
-  - name: dockerfile
-    value: .konflux/catalog/Dockerfile.catalog
-    # We have configured an fbc exception for hermetic builds on the release repo.
-  - name: hermetic
-    value: "false"
-  - name: additional-tags
-    value: ['latest']
+    - name: git-url
+      value: '{{source_url}}'
+    - name: revision
+      value: '{{revision}}'
+    - name: output-image
+      value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-fbc-4-20:{{revision}}
+    - name: build-platforms
+      value:
+        - linux/x86_64
+    - name: dockerfile
+      value: .konflux/Dockerfile.catalog
+      # We have configured an fbc exception for hermetic builds on the release repo.
+    - name: hermetic
+      value: "false"
+    - name: additional-tags
+      value: ['latest']
   pipelineRef:
     name: fbc-pipeline
   taskRunTemplate:

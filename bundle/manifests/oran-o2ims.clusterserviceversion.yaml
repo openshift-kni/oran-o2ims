@@ -681,18 +681,18 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
-    olm.skipRange: '>=4.16.0 <4.18'
+    olm.skipRange: '>=4.16.0 <4.20'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.36.1
+    operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     provider: Red Hat
     repository: https://github.com/openshift-kni/oran-o2ims
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.18.0
+  name: oran-o2ims.v4.20.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -1266,6 +1266,9 @@ spec:
       - rules:
         - nonResourceURLs:
           - /hardware-manager/inventory/*
+          - /o2ims-infrastructureCluster/v1/alarmDictionaries
+          - /o2ims-infrastructureCluster/v1/nodeClusterTypes
+          - /o2ims-infrastructureCluster/v1/nodeClusters
           verbs:
           - get
           - list
@@ -1283,29 +1286,8 @@ spec:
           - create
           - post
         - nonResourceURLs:
-          - /o2ims-infrastructureCluster/v1/alarmDictionaries
-          verbs:
-          - get
-          - list
-        - nonResourceURLs:
           - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
-          verbs:
-          - get
-        - nonResourceURLs:
-          - /o2ims-infrastructureCluster/v1/nodeClusterTypes
-          verbs:
-          - get
-          - list
-        - nonResourceURLs:
           - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
-          verbs:
-          - get
-        - nonResourceURLs:
-          - /o2ims-infrastructureCluster/v1/nodeClusters
-          verbs:
-          - get
-          - list
-        - nonResourceURLs:
           - /o2ims-infrastructureCluster/v1/nodeClusters/*
           verbs:
           - get
@@ -1313,6 +1295,10 @@ spec:
           - ""
           resources:
           - configmaps
+          - namespaces
+          - secrets
+          - serviceaccounts
+          - services
           verbs:
           - create
           - delete
@@ -1332,58 +1318,10 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - namespaces
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
           - pods
           verbs:
           - get
           - list
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - secrets
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - serviceaccounts
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - services
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
           - watch
         - apiGroups:
           - agent-install.openshift.io
@@ -1443,6 +1381,10 @@ spec:
           - clcm.openshift.io
           resources:
           - clustertemplates
+          - hardwareplugins
+          - hardwaretemplates
+          - nodes
+          - provisioningrequests
           verbs:
           - create
           - delete
@@ -1455,41 +1397,27 @@ spec:
           - clcm.openshift.io
           resources:
           - clustertemplates/finalizers
+          - provisioningrequests/finalizers
           verbs:
           - update
         - apiGroups:
           - clcm.openshift.io
           resources:
           - clustertemplates/status
+          - hardwareplugins/status
+          - hardwareprofiles/status
+          - hardwaretemplates/status
+          - nodes/status
+          - provisioningrequests/status
           verbs:
           - get
           - patch
           - update
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - hardwareplugins
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
         - apiGroups:
           - clcm.openshift.io
           resources:
           - hardwareplugins/finalizers
           verbs:
-          - patch
-          - update
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - hardwareplugins/status
-          verbs:
-          - get
           - patch
           - update
         - apiGroups:
@@ -1503,80 +1431,6 @@ spec:
           - patch
           - update
           - watch
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - hardwareprofiles/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - hardwaretemplates
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - hardwaretemplates/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - nodes
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - nodes/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - provisioningrequests
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - provisioningrequests/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - provisioningrequests/status
-          verbs:
-          - get
-          - patch
-          - update
         - apiGroups:
           - cluster.open-cluster-management.io
           resources:
@@ -1629,6 +1483,7 @@ spec:
           - metal3.io
           resources:
           - baremetalhosts
+          - preprovisioningimages
           verbs:
           - get
           - list
@@ -1647,40 +1502,10 @@ spec:
           - metal3.io
           resources:
           - hostfirmwarecomponents
-          verbs:
-          - create
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - metal3.io
-          resources:
           - hostfirmwaresettings
-          verbs:
-          - create
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - metal3.io
-          resources:
           - hostupdatepolicies
           verbs:
           - create
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - metal3.io
-          resources:
-          - preprovisioningimages
-          verbs:
           - get
           - list
           - patch
@@ -1744,32 +1569,6 @@ spec:
           - plugins.clcm.openshift.io
           resources:
           - allocatednodes
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - plugins.clcm.openshift.io
-          resources:
-          - allocatednodes/finalizers
-          verbs:
-          - patch
-          - update
-        - apiGroups:
-          - plugins.clcm.openshift.io
-          resources:
-          - allocatednodes/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - plugins.clcm.openshift.io
-          resources:
           - nodeallocationrequests
           verbs:
           - create
@@ -1782,6 +1581,7 @@ spec:
         - apiGroups:
           - plugins.clcm.openshift.io
           resources:
+          - allocatednodes/finalizers
           - nodeallocationrequests/finalizers
           verbs:
           - patch
@@ -1789,6 +1589,7 @@ spec:
         - apiGroups:
           - plugins.clcm.openshift.io
           resources:
+          - allocatednodes/status
           - nodeallocationrequests/status
           verbs:
           - get
@@ -1805,17 +1606,6 @@ spec:
           - rbac.authorization.k8s.io
           resources:
           - clusterrolebindings
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
           - clusterroles
           verbs:
           - create
@@ -1882,7 +1672,7 @@ spec:
                 - --metrics-tls-cert-dir=/secrets/tls/metrics
                 env:
                 - name: IMAGE
-                  value: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
+                  value: quay.io/openshift-kni/oran-o2ims-operator:4.20.0
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
                 - name: HWMGR_PLUGIN_NAMESPACE
@@ -1895,7 +1685,7 @@ spec:
                       fieldPath: metadata.namespace
                 - name: IMAGE_PULL_POLICY
                   value: IfNotPresent
-                image: quay.io/openshift-kni/oran-o2ims-operator:4.18.0
+                image: quay.io/openshift-kni/oran-o2ims-operator:4.20.0
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
@@ -1999,11 +1789,11 @@ spec:
   - email: imihai@redhat.com
     name: IrinaMihai
   maturity: alpha
-  minKubeVersion: 1.28.0
+  minKubeVersion: 1.32.0
   provider:
     name: Red Hat
   replaces: oran-o2ims.v0.0.0
-  version: 4.18.0
+  version: 4.20.0
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
@@ -2019,6 +1809,7 @@ spec:
       operations:
       - CREATE
       - UPDATE
+      - DELETE
       resources:
       - provisioningrequests
     sideEffects: None

@@ -37,6 +37,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
@@ -168,7 +169,7 @@ var _ = BeforeSuite(func() {
 		// oran-o2ims
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "oran-o2ims",
+				Name: constants.DefaultNamespace,
 			},
 		},
 		// HardwarePlugin CRs

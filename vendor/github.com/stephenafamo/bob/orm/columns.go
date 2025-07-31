@@ -1,30 +1,33 @@
 package orm
 
 import (
+	"context"
 	"io"
+	"slices"
 
 	"github.com/stephenafamo/bob"
+	"github.com/stephenafamo/bob/internal"
 )
 
 // NewColumns returns a [Columns] object with the given column names
 func NewColumns(names ...string) Columns {
-	return Columns{
-		names: names,
-	}
+	return Columns{names: internal.FilterNonZero(names)}
 }
 
+// Columns is a set of columns that can be used in a query
+// It is used to properly quote and format the columns in the query
+// such as "users"."id" AS "id", "users"."name" AS "name"
 type Columns struct {
-	parent      []string
-	names       []string
-	aggFunc     [2]string
-	aliasPrefix string
+	parent        []string
+	names         []string
+	aggFunc       [2]string
+	aliasPrefix   string
+	aliasDisabled bool
 }
 
 // Names returns the names of the columns
 func (c Columns) Names() []string {
-	names := make([]string, len(c.names))
-	copy(names, c.names)
-	return names
+	return slices.Clone(c.names)
 }
 
 func (c Columns) WithAggFunc(a, b string) Columns {
@@ -44,6 +47,18 @@ func (c Columns) WithPrefix(prefix string) Columns {
 	return c
 }
 
+// Enables adding 'AS "prefix_column_name"' when writing SQL
+func (c Columns) EnableAlias() Columns {
+	c.aliasDisabled = false
+	return c
+}
+
+// Disables add 'AS "prefix_column_name"' when writing SQL
+func (c Columns) DisableAlias() Columns {
+	c.aliasDisabled = true
+	return c
+}
+
 // Only drops other column names from the column set
 func (c Columns) Only(cols ...string) Columns {
 	c.names = Only(c.names, cols...)
@@ -56,7 +71,7 @@ func (c Columns) Except(cols ...string) Columns {
 	return c
 }
 
-func (c Columns) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (c Columns) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
 	if len(c.names) == 0 {
 		return nil, nil
 	}
@@ -79,8 +94,10 @@ func (c Columns) WriteSQL(w io.Writer, d bob.Dialect, start int) ([]any, error) 
 		d.WriteQuoted(w, col)
 		w.Write([]byte(c.aggFunc[1]))
 
-		w.Write([]byte(" AS "))
-		d.WriteQuoted(w, c.aliasPrefix+col)
+		if !c.aliasDisabled {
+			w.Write([]byte(" AS "))
+			d.WriteQuoted(w, c.aliasPrefix+col)
+		}
 	}
 
 	return nil, nil

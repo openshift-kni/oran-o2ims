@@ -14,18 +14,19 @@ import (
 
 	"github.com/google/uuid"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	orano2imsutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	api "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api/generated"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	commonutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 type ArtifactsServerConfig struct {
-	utils.CommonServerConfig
+	commonutils.CommonServerConfig
 }
 type ArtifactsServer struct {
 	HubClient client.Client
@@ -35,7 +36,7 @@ type ArtifactsServer struct {
 var _ api.StrictServerInterface = (*ArtifactsServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
-var baseURL = "/o2ims-infrastructureArtifacts/v1"
+var baseURL = constants.O2IMSArtifactsBaseURL
 var currentVersion = "1.0.0"
 
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately.
@@ -156,11 +157,11 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	oranct := clusterTemplatesItems[0]
 
 	// Get the response for the ClusterInstance default values.
-	clusterInstanceResults, err := orano2imsutils.GetDefaultsFromConfigMap(
+	clusterInstanceResults, err := utils.GetDefaultsFromConfigMap(
 		ctx, r.HubClient,
 		oranct.Spec.Templates.ClusterInstanceDefaults,
 		oranct.Namespace,
-		orano2imsutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+		utils.ClusterInstanceTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,
 		provisioningv1alpha1.TemplateParamClusterInstance,
 	)
@@ -169,11 +170,11 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	}
 
 	// Get the response for the Policy default values.
-	policyTemplateResults, err := orano2imsutils.GetDefaultsFromConfigMap(
+	policyTemplateResults, err := utils.GetDefaultsFromConfigMap(
 		ctx, r.HubClient,
 		oranct.Spec.Templates.PolicyTemplateDefaults,
 		oranct.Namespace,
-		orano2imsutils.PolicyTemplateDefaultsConfigmapKey,
+		utils.PolicyTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,
 		provisioningv1alpha1.TemplateParamPolicyConfig,
 	)

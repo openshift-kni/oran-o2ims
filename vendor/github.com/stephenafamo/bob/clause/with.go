@@ -1,6 +1,7 @@
 package clause
 
 import (
+	"context"
 	"io"
 
 	"github.com/stephenafamo/bob"
@@ -8,10 +9,10 @@ import (
 
 type With struct {
 	Recursive bool
-	CTEs      []CTE
+	CTEs      []bob.Expression
 }
 
-func (w *With) AppendWith(cte CTE) {
+func (w *With) AppendCTE(cte bob.Expression) {
 	w.CTEs = append(w.CTEs, cte)
 }
 
@@ -19,10 +20,10 @@ func (w *With) SetRecursive(r bool) {
 	w.Recursive = r
 }
 
-func (w With) WriteSQL(wr io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (w With) WriteSQL(ctx context.Context, wr io.Writer, d bob.Dialect, start int) ([]any, error) {
 	prefix := "WITH\n"
 	if w.Recursive {
 		prefix = "WITH RECURSIVE\n"
 	}
-	return bob.ExpressSlice(wr, d, start, w.CTEs, prefix, ",\n", "")
+	return bob.ExpressSlice(ctx, wr, d, start, w.CTEs, prefix, ",\n", "")
 }

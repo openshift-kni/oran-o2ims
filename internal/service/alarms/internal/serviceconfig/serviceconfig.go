@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -79,7 +80,7 @@ func (c *Config) EnsureCleanupCronJob(ctx context.Context, sc *models.ServiceCon
 	}
 
 	// Create CM with sql
-	configMap, err := c.generateConfigMapWithSql(sc)
+	configMap, err := c.generateConfigMapWithSql(ctx, sc)
 	if err != nil {
 		return fmt.Errorf("generate sql configmap: %w", err)
 	}
@@ -107,8 +108,8 @@ func (c *Config) EnsureCleanupCronJob(ctx context.Context, sc *models.ServiceCon
 }
 
 // generateConfigMapWithSql a simple configMap to hold the sql command that is called from cronjob
-func (c *Config) generateConfigMapWithSql(sc *models.ServiceConfiguration) (corev1.ConfigMap, error) {
-	sql, err := getCleanUpPgSQL(sc)
+func (c *Config) generateConfigMapWithSql(ctx context.Context, sc *models.ServiceConfiguration) (corev1.ConfigMap, error) {
+	sql, err := getCleanUpPgSQL(ctx, sc)
 	if err != nil {
 		return corev1.ConfigMap{}, fmt.Errorf("failed to generate cleanup sql for configmap: %w", err)
 	}
@@ -124,7 +125,7 @@ func (c *Config) generateConfigMapWithSql(sc *models.ServiceConfiguration) (core
 }
 
 // getCleanUpPgSQL returns sql string to do alarms events cleanup based on service config
-func getCleanUpPgSQL(sc *models.ServiceConfiguration) (string, error) {
+func getCleanUpPgSQL(ctx context.Context, sc *models.ServiceConfiguration) (string, error) {
 	slog.Info("Using service config to generating sql", "serviceConfig", sc)
 
 	// This should be checked earlier as well but double-checking here since sql is sensitive to it
@@ -152,7 +153,7 @@ func getCleanUpPgSQL(sc *models.ServiceConfiguration) (string, error) {
 		),
 	)
 
-	sql, _, err := query.Build()
+	sql, _, err := query.Build(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to build query for alarms events cleanup: %w", err)
 	}
@@ -208,7 +209,7 @@ func (c *Config) generateCronJob(configMap corev1.ConfigMap) batchv1.CronJob {
 								{
 									Name:    cleanupCronJobName,
 									Image:   c.PostgresImage,
-									Command: []string{"psql"},
+									Command: []string{constants.PsqlExec},
 									Args:    []string{"-f", fmt.Sprintf("%s/%s", cleanScriptDir, cleanScriptName)},
 									Env:     pgEnv,
 									Resources: corev1.ResourceRequirements{
