@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.39.0] - 2025-07-28
+
+### Added
+
+- Added the `As` method to `clause.TableRef`, which sets the alias and return a copy of the struct. (thanks @Nitjsefni7)
+- Added the `type_system` configuration option to determine how to generate null and optional values in the generated code.
+  Possible options: `github.com/aarondl/opt`, `github.com/aarondl/opt/null` or `database/sql`. The default value is `github.com/aarondl/opt`.
+- When generating code for queries, The `All` method of the generated query will return a struct with nested fields instead of a flat struct.
+  - columns with dots (`.`) are assumed to be a `to-many` nested field.
+  - columns with double underscores (`__`) are assumed to be a `to-one` nested field.
+- Implement `--prefix` annotation in queries for `bobgen-psql`.
+- Add FromExisting<Rel> method to factories to create a template from an existing model. (thanks @dutow)
+- Add WithExisting<Rel> to factory mods to attach an existing model as a relationship. (thanks @dutow)
+- Added support in psql for combined args (order by, limit etc.) in combined queries and use parens if they are present. (@iwyrkore)
+- Added parens for combined queries. (@iwyrkore)
+- Match columns using regular expressions in type replacements. This is useful for e.g. matching columns that have a common prefix or suffix. (thanks @abdusco)
+
+### Changed
+
+- `Mod` is now a separate field in `orm.ModQuery` and `orm.ModExecQuery`.
+- `Allx` now takes a `Transformer` type parameter to transform the result of the query.
+- Updated documentation for readability, added code gen examples. (thanks @singhsays)
+- Columns are now matched in a case-insensitive manner in type replacements. (thanks @abdusco)
+- Columns can now be matched with as many conditions as needed in type replacements. This removes the previous requirement that boolean fields had to be specified in addition to a string field. (thanks @abdusco)
+- Factories now expose a `NewXWithContext` that accepts a context in addition to `NewX` that does not. This provides a cleaner API for the callers, while still allowing the use of context internally. (thanks @abdusco)
+
+### Removed
+
+- Removed the `fallback_null` configuration option. It is now replaced with the `type_system` configuration option.
+
+### Fixed
+
+- Fixed some issues with creating relationships in the factory by avoiding trying to reuse models.
+- Fix issues with generating code for queries with duplicate return column names.
+- Updated gen table detail queries to use context. (thanks @singhsays)
+- Properly detect `bool`, `timestamp` and `timestamptz` types in `bobgen-psql`.
+- Fix transformer for single result queries.
+- Properly handle indexes where the sorting order can be null.
+- Check for nullability when loading relationships.
+- Handle table names quoted with backticks in mysql query parser. (thanks @luiscleto)
+- Allow matching columns in type replacements by the `autoincr` property as stated in the docs. (thanks @abdusco)
+- Handle dashes and spaces in generated enum values properly (thanks @abdusco)
+- Check for nullability when loading relationships from Slices (thanks @felipeparaujo)
+
 ## [v0.38.0] - 2025-06-04
 
 ### Added
@@ -16,8 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Correctly build models with nested relationships in the factory.
-- Fix a performance issue with codegeneration in `bobgen-psql`.
-- Use correct alias when generating table columns.
+- Fix a performance issue with code generation in `bobgen-psql`.
+- Use the correct alias when generating table columns.
 - Fix issue with generating factory code for tables with schema names.
 
 ## [v0.37.0] - 2025-05-31
