@@ -11,6 +11,7 @@ resources:
 - leader_election_role_binding.yaml
 - metrics_service.yaml
 - metrics_service_clusterrole.yaml
+- nar_callback_service.yaml
 # Pre-canned roles to allow binding to users that require specific access to our API endpoints
 - oran_o2ims_user_roles.yaml
 # Pre-canned role bindings that map to groups names that can be used as OAuth "roles" on the authorization server.

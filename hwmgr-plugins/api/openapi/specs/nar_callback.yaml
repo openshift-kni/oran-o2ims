@@ -1,0 +1,242 @@
+openapi: 3.0.3
+info:
+  title: NodeAllocationRequest Callback API
+  version: 1.0.0
+  description: |
+    Callback server for NodeAllocationRequest request operations. This API receives 
+    callback notifications from hardware manager plugins about provisioning request status updates.
+  contact:
+    name: Red Hat
+    url: https://www.redhat.com
+
+servers:
+  - url: http://localhost:8090
+    description: NodeAllocationRequest Callback Server
+
+tags:
+  - name: metadata
+    description: API metadata information
+  - name: nar-callback
+    description: Callback operations for NodeAllocationRequest requests
+
+paths:
+  /nar-callback/api-versions:
+    get:
+      operationId: getAllVersions
+      summary: Get API versions
+      description: |
+        Returns the complete list of API versions implemented by the service.
+      tags:
+        - metadata
+      responses:
+        '200':
+          description: |
+            Successfully obtained the complete list of versions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /nar-callback/v1/api-versions:
+    get:
+      operationId: getMinorVersions
+      summary: Get minor API versions
+      description: |
+        Returns the list of minor API versions implemented for this major version of the API.
+      tags:
+        - metadata
+      responses:
+        '200':
+          description: |
+            Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIVersions"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /nar-callback/provisioning-requests/{provisioningRequestName}:
+    post:
+      operationId: provisioningRequestCallback
+      summary: Receive callback for ProvisioningRequest status update
+      description: |
+        Receives a callback notification from a hardware manager plugin when a 
+        NodeAllocationRequest operation completes or fails. This triggers reconciliation
+        of the associated ProvisioningRequest.
+      tags:
+        - nar-callback
+      parameters:
+        - in: path
+          name: provisioningRequestName
+          required: true
+          schema:
+            type: string
+          description: |
+            Name of the ProvisioningRequest resource that should be reconciled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallbackPayload'
+      responses:
+        '200':
+          description: |
+            Callback processed successfully.
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified ProvisioningRequest was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  schemas:
+    APIVersion:
+      description: |
+        Information about a version of the API.
+      type: object
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+
+    APIVersions:
+      description: |
+        Information about a list of versions of the API.
+      type: object
+      properties:
+        uriPrefix:
+          type: string
+          example: "/nar-callback/v1"
+        apiVersions:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIVersion"
+          example:
+            - version: "1.0.0"
+
+    CallbackPayload:
+      type: object
+      description: Payload structure for hardware plugin callbacks
+      properties:
+        nodeAllocationRequestId:
+          type: string
+          description: |
+            The ID of the NodeAllocationRequest this callback relates to.
+        status:
+          type: string
+          description: |
+            The current status of the NodeAllocationRequest operation.
+          enum:
+            - pending
+            - inProgress
+            - completed
+            - failed
+            - timedOut
+            - unprovisioned
+            - notInitialized
+            - configurationUpdateRequested
+            - configurationApplied
+            - invalidInput
+        timestamp:
+          type: string
+          format: date-time
+          description: |
+            The timestamp when this status update occurred.
+        error:
+          type: string
+          description: |
+            Error message (only provided when status is failed).
+      required:
+        - nodeAllocationRequestId
+        - status
+        - timestamp
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            A URI reference according to IETF RFC 3986 [3] that identifies the problem type. It is encouraged that the URI provides
+            human-readable documentation for the problem (e.g. usingHTML) when dereferenced. When this member is not present,
+            its value is assumed to be "about:blank".
+          example: 'https://problem.description.com'
+        title:
+          type: string
+          description: |
+            A short, human-readable summary of the problem type. It should not change from occurrence to occurrence of the problem,
+            except for purposes of localization. If type is given and other than "about:blank", this attribute shall also be provided.
+        status:
+          type: integer
+          format: int
+          description: The HTTP status code for this occurrence of the problem.
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence of the problem.
+          example: Connection to database timed out
+        instance:
+          type: string
+          format: uri
+          description: |
+            A URI reference that identifies the specific occurrence of the problem.
+            It may yield further information if dereferenced.
+        additionalAttributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Any number of additional attributes, as defined in a specification or by an implementation.
+      required:
+        - status
+        - detail
+
+

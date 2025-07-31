@@ -123,7 +123,9 @@ paths:
       operationId: createNodeAllocationRequest
       summary: Create NodeAllocationRequest resource
       description: |
-        Creates a NodeAllocationRequest resource.
+        Creates a NodeAllocationRequest resource. If a callback configuration is provided in the request,
+        the plugin will send a POST request to the configured callback URL with a CallbackPayload when the
+        operation completes (successfully or with an error).
       tags:
       - provisioning
       requestBody:
@@ -136,6 +138,7 @@ paths:
         '202':
           description: |
             The plugin successfully initiated the creation process of the NodeAllocationRequest resource.
+            If a callback configuration was provided, a callback will be sent upon completion.
           content:
             application/json:
               schema:
@@ -220,6 +223,10 @@ paths:
     put: 
       operationId: updateNodeAllocationRequest
       summary: Modify all fields of the NodeAllocationRequest.
+      description: |
+        Updates a NodeAllocationRequest resource. If a callback configuration is provided in the request,
+        the plugin will send a POST request to the configured callback URL with a CallbackPayload when the
+        operation completes (successfully or with an error).
       parameters:
         - in: path
           name: nodeAllocationRequestId
@@ -236,7 +243,9 @@ paths:
               $ref: '#/components/schemas/NodeAllocationRequest'
       responses:
         '202':
-          description: The plugin successfully initiated the update process of the NodeAllocationRequest resource.
+          description: |
+            The plugin successfully initiated the update process of the NodeAllocationRequest resource.
+            If a callback configuration was provided, a callback will be sent upon completion.
           content:
             application/json:
               schema:
@@ -568,6 +577,11 @@ components:
           type: string
           description: |
             BootInterfaceLabel is the label of the boot interface.
+        callback:
+          $ref: '#/components/schemas/Callback'
+          description: |
+            Callback configuration for receiving notifications when the NodeAllocationRequest operation is completed or fails.
+            The callback will be made as a POST request with CallbackPayload in the request body.
       required:
         - nodeGroup
         - site
@@ -790,3 +804,105 @@ components:
         - lastTransitionTime
         - reason
         - message
+
+    Callback:
+      description: |
+        Callback configuration for hardware plugin notifications.
+      type: object
+      properties:
+        callbackURL:
+          type: string
+          description: |
+            URL to send callback notifications to when hardware operations complete.
+        caBundleName:
+          type: string
+          description: |
+            References a config map that contains a set of custom CA certificates to be used when communicating
+            with the callback server that has its TLS certificate signed by a non-public CA certificate.
+            The config map is expected to contain a single file called 'ca-bundle.crt' containing all trusted CA certificates
+            in PEM format.
+        authClientConfig:
+          $ref: '#/components/schemas/AuthClientConfig'
+      required:
+        - callbackURL
+
+    AuthClientConfig:
+      description: |
+        AuthClientConfig defines the configuration for different authentication types.
+        This struct encapsulates the settings required for ServiceAccount, Basic, and OAuth authentication mechanisms.
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/AuthType'
+        basicAuthSecret:
+          type: string
+          description: |
+            Name of a secret (in the current namespace) containing the username
+            and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
+            This field is required when Type is set to "Basic".
+        oauthConfig:
+          $ref: '#/components/schemas/OAuthClientConfig'
+        tlsConfig:
+          $ref: '#/components/schemas/TLSConfig'
+      required:
+        - type
+
+    AuthType:
+      description: |
+        AuthType defines the authorization type used for authentication.
+      type: string
+      enum:
+        - ServiceAccount
+        - Basic
+        - OAuth
+
+    OAuthClientConfig:
+      description: |
+        OAuthClientConfig defines the configurable client attributes that represent the authentication mechanism.
+        This is currently expected to be a way to acquire a token from an OAuth2 server.
+      type: object
+      properties:
+        url:
+          type: string
+          description: |
+            Base URL of the authorization server (e.g., https://keycloak.example.com/realms/oran).
+        tokenEndpoint:
+          type: string
+          description: |
+            API endpoint used to acquire a token (e.g., /protocol/openid-connect/token) which
+            will be appended to the base URL to form the full URL.
+        clientSecretName:
+          type: string
+          description: |
+            Name of a secret (in the current namespace) which contains the client-id and
+            client-secret values used by the OAuth client.
+        scopes:
+          type: array
+          items:
+            type: string
+          description: |
+            OAuth scope values to request when acquiring a token. Typically, this should be set to
+            "openid" in addition to any other scopes that the SMO specifically requires (e.g., "roles", "groups", etc...)
+            to authorize our requests.
+      required:
+        - url
+        - tokenEndpoint
+        - clientSecretName
+        - scopes
+
+    TLSConfig:
+      description: |
+        TLSConfig defines the configuration for TLS-specific attributes.
+      type: object
+      properties:
+        secretName:
+          type: string
+          description: |
+            Name of a secret (in the current namespace) containing an X.509 certificate and
+            private key. The secret must include 'tls.key' and 'tls.crt' keys. If the certificate is signed by
+            intermediate CA(s), the full certificate chain should be included in the certificate file, with the
+            leaf certificate first and the root CA last. The certificate's Common Name (CN) or Subject Alternative
+            Name (SAN) should align with the service's fully qualified domain name to support both ingress and
+            outgoing client certificate use cases.
+      required:
+        - secretName

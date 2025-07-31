@@ -138,6 +138,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -171,8 +172,9 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).Build()
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
-			Client: c,
-			Logger: slog.New(slog.DiscardHandler),
+			Client:         c,
+			Logger:         slog.New(slog.DiscardHandler),
+			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create basic test objects
@@ -243,9 +245,10 @@ plan:
 
 		// Create task
 		task = &provisioningRequestReconcilerTask{
-			client: c,
-			object: cr,
-			logger: reconciler.Logger,
+			client:         c,
+			object:         cr,
+			logger:         reconciler.Logger,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -437,9 +440,10 @@ plan:
 			Expect(c.Create(ctx, testCR)).To(Succeed())
 
 			testTask = &provisioningRequestReconcilerTask{
-				client: c,
-				object: testCR,
-				logger: reconciler.Logger,
+				client:         c,
+				object:         testCR,
+				logger:         reconciler.Logger,
+				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 		})
 
@@ -742,8 +746,9 @@ plan:
 
 		BeforeEach(func() {
 			deletionReconciler = &ProvisioningRequestReconciler{
-				Client: c,
-				Logger: reconciler.Logger,
+				Client:         c,
+				Logger:         reconciler.Logger,
+				CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 			// Create a ClusterTemplate to avoid hardware plugin errors
@@ -1152,12 +1157,13 @@ plan:
 
 			// Create the reconciler task
 			preProvisioningTask = &provisioningRequestReconcilerTask{
-				logger:       reconciler.Logger,
-				client:       c,
-				object:       preProvisioningCR,
-				clusterInput: &clusterInput{},
-				ctDetails:    &clusterTemplateDetails{},
-				timeouts:     &timeouts{},
+				logger:         reconciler.Logger,
+				client:         c,
+				object:         preProvisioningCR,
+				clusterInput:   &clusterInput{},
+				ctDetails:      &clusterTemplateDetails{},
+				timeouts:       &timeouts{},
+				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 		})
 
@@ -1504,12 +1510,13 @@ plan:
 
 			// Create the reconciler task
 			narProvisioningTask = &provisioningRequestReconcilerTask{
-				logger:       reconciler.Logger,
-				client:       c,
-				object:       narProvisioningCR,
-				clusterInput: &clusterInput{},
-				ctDetails:    &clusterTemplateDetails{},
-				timeouts:     &timeouts{},
+				logger:         reconciler.Logger,
+				client:         c,
+				object:         narProvisioningCR,
+				clusterInput:   &clusterInput{},
+				ctDetails:      &clusterTemplateDetails{},
+				timeouts:       &timeouts{},
+				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 		})
 
@@ -2100,12 +2107,13 @@ plan:
 
 			// Create the reconciler task
 			narResponseTask = &provisioningRequestReconcilerTask{
-				logger:       reconciler.Logger,
-				client:       c,
-				object:       narResponseCR,
-				clusterInput: &clusterInput{},
-				ctDetails:    &clusterTemplateDetails{},
-				timeouts:     &timeouts{},
+				logger:         reconciler.Logger,
+				client:         c,
+				object:         narResponseCR,
+				clusterInput:   &clusterInput{},
+				ctDetails:      &clusterTemplateDetails{},
+				timeouts:       &timeouts{},
+				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 			// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -2429,7 +2437,8 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
-			Logger: slog.New(slog.DiscardHandler),
+			Logger:         slog.New(slog.DiscardHandler),
+			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create basic test objects
@@ -2554,9 +2563,10 @@ source-crs:
 
 		// Create task (for potential future use)
 		_ = &provisioningRequestReconcilerTask{
-			client: c,
-			object: cr,
-			logger: reconciler.Logger,
+			client:         c,
+			object:         cr,
+			logger:         reconciler.Logger,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -2833,7 +2843,8 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 	BeforeEach(func() {
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
-			Logger: slog.New(slog.DiscardHandler),
+			Logger:         slog.New(slog.DiscardHandler),
+			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create more realistic integration test objects
@@ -2912,9 +2923,10 @@ plan:
 
 		// Create task
 		task = &provisioningRequestReconcilerTask{
-			client: c,
-			object: cr,
-			logger: reconciler.Logger,
+			client:         c,
+			object:         cr,
+			logger:         reconciler.Logger,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -3443,9 +3455,10 @@ plan:
 				Expect(c.Create(ctx, integrationCR)).To(Succeed())
 
 				integrationTask = &provisioningRequestReconcilerTask{
-					client: c,
-					object: integrationCR,
-					logger: reconciler.Logger,
+					client:         c,
+					object:         integrationCR,
+					logger:         reconciler.Logger,
+					callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 				}
 
 				// Set up cluster as ZTP completed with configuration applied
@@ -3649,8 +3662,9 @@ plan:
 
 		BeforeEach(func() {
 			finalizerReconciler = &ProvisioningRequestReconciler{
-				Client: c,
-				Logger: reconciler.Logger,
+				Client:         c,
+				Logger:         reconciler.Logger,
+				CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 			// Create a base ProvisioningRequest for finalizer testing
@@ -4057,7 +4071,8 @@ plan:
 						HwTemplate: "test-hardware-template", // Ensure hardware provisioning is not skipped
 					},
 				},
-				timeouts: &timeouts{},
+				timeouts:       &timeouts{},
+				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 			// Set up hwpluginClient using the test Metal3 hardware plugin for deploy config tests

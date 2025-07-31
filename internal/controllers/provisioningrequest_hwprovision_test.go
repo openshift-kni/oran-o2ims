@@ -86,6 +86,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
@@ -189,9 +190,10 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -437,6 +439,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			timeouts: &timeouts{
 				hardwareProvisioning: 1 * time.Minute,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -558,9 +561,10 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -662,9 +666,10 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -776,9 +781,10 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -937,6 +943,7 @@ var _ = Describe("waitForHardwareData", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -1073,9 +1080,10 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -1373,6 +1381,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 					},
 				},
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 

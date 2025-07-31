@@ -35,7 +35,8 @@ import (
 // ProvisioningRequestReconciler reconciles a ProvisioningRequest object
 type ProvisioningRequestReconciler struct {
 	client.Client
-	Logger *slog.Logger
+	Logger         *slog.Logger
+	CallbackConfig *utils.NarCallbackConfig
 }
 
 type provisioningRequestReconcilerTask struct {
@@ -46,6 +47,7 @@ type provisioningRequestReconcilerTask struct {
 	clusterInput   *clusterInput
 	ctDetails      *clusterTemplateDetails
 	timeouts       *timeouts
+	callbackConfig *utils.NarCallbackConfig
 }
 
 // clusterInput holds the merged input data for a cluster
@@ -145,12 +147,13 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 	// Create and run the task:
 	task := &provisioningRequestReconcilerTask{
-		logger:       r.Logger,
-		client:       r.Client,
-		object:       object,
-		clusterInput: &clusterInput{},
-		ctDetails:    &clusterTemplateDetails{},
-		timeouts:     &timeouts{},
+		logger:         r.Logger,
+		client:         r.Client,
+		object:         object,
+		clusterInput:   &clusterInput{},
+		ctDetails:      &clusterTemplateDetails{},
+		timeouts:       &timeouts{},
+		callbackConfig: r.CallbackConfig,
 	}
 	result, err = task.run(ctx)
 	return
@@ -358,8 +361,9 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return doNotRequeue(), false, nil
 	}
 	if !provisioned {
+
 		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be provisioned", nodeAllocationRequestID))
-		return requeueWithShortInterval(), false, nil
+		return requeueWithMediumInterval(), false, nil
 	}
 
 	// If the NodeAllocationRequest was updated but the configuration hasn’t been set yet,
@@ -368,7 +372,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	configuringStarted := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart
 	if (configured == nil && !configuringStarted.IsZero()) || (configured != nil && !*configured) {
 		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be configured", nodeAllocationRequestID))
-		return requeueWithShortInterval(), false, nil
+		return requeueWithMediumInterval(), false, nil
 	}
 
 	// Provisioning completed successfully; proceed with further processing
@@ -396,7 +400,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 			return doNotRequeue(), nil
 		}
 		if !hwProvisioned {
-			return requeueWithShortInterval(), nil
+			return requeueWithMediumInterval(), nil
 		}
 	}
 

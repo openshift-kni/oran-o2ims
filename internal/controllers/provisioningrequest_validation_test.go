@@ -36,6 +36,8 @@ package controllers
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
@@ -50,11 +52,12 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 		srcConfigmap = make(map[string]any)
 
 		task = &provisioningRequestReconcilerTask{
-			logger:       logger,
-			client:       nil,
-			object:       nil,
-			clusterInput: &clusterInput{},
-			ctDetails:    &clusterTemplateDetails{},
+			logger:         logger,
+			client:         nil,
+			object:         nil,
+			clusterInput:   &clusterInput{},
+			ctDetails:      &clusterTemplateDetails{},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 

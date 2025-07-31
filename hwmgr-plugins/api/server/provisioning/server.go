@@ -170,6 +170,19 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 		},
 	}
 
+	if request.Body.Callback != nil {
+		callback := &pluginsv1alpha1.Callback{
+			CallbackURL:  request.Body.Callback.CallbackURL,
+			CaBundleName: request.Body.Callback.CaBundleName,
+		}
+		if request.Body.Callback.AuthClientConfig != nil {
+			// Convert from OpenAPI type to Go type
+			// This will need proper conversion logic
+			callback.AuthClientConfig = convertToCommonAuthClientConfig(request.Body.Callback.AuthClientConfig)
+		}
+		nodeAllocationRequest.Spec.Callback = callback
+	}
+
 	if err := CreateOrUpdateNodeAllocationRequest(ctx, h.HubClient, h.Logger, nodeAllocationRequest); err != nil {
 		return nil, fmt.Errorf("failed to create NodeAllocationRequest resource, err: %w", err)
 	}
@@ -226,6 +239,19 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 			ClusterId:           request.Body.ClusterId,
 			ConfigTransactionId: request.Body.ConfigTransactionId,
 		},
+	}
+
+	if request.Body.Callback != nil {
+		callback := &pluginsv1alpha1.Callback{
+			CallbackURL:  request.Body.Callback.CallbackURL,
+			CaBundleName: request.Body.Callback.CaBundleName,
+		}
+		if request.Body.Callback.AuthClientConfig != nil {
+			// Convert from OpenAPI type to Go type
+			// This will need proper conversion logic
+			callback.AuthClientConfig = convertToCommonAuthClientConfig(request.Body.Callback.AuthClientConfig)
+		}
+		nodeAllocationRequest.Spec.Callback = callback
 	}
 
 	if err := CreateOrUpdateNodeAllocationRequest(ctx, h.HubClient, h.Logger, nodeAllocationRequest); err != nil {
