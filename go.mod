@@ -36,7 +36,7 @@ require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.79.2
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.7
-	github.com/stephenafamo/bob v0.38.0
+	github.com/stephenafamo/bob v0.39.0
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 	go.uber.org/mock v0.5.2
 	golang.org/x/mod v0.26.0
