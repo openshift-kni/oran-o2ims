@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.23.4
-	github.com/onsi/gomega v1.36.3
+	github.com/onsi/gomega v1.38.0
 	github.com/r3labs/diff/v3 v3.0.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 	k8s.io/apimachinery v0.33.3
