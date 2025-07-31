@@ -14,7 +14,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func SetupMetal3Controllers(mgr ctrl.Manager, namespace string) error {
+// Metal3Controllers holds references to the metal3 controllers for lifecycle management
+type Metal3Controllers struct {
+	NodeAllocationReconciler *NodeAllocationRequestReconciler
+	AllocatedNodeReconciler  *AllocatedNodeReconciler
+}
+
+func SetupMetal3Controllers(mgr ctrl.Manager, namespace string) (*Metal3Controllers, error) {
 	baseLogger := slog.New(logging.NewLoggingContextHandler(slog.LevelInfo))
 
 	nodeAllocationReconciler := &NodeAllocationRequestReconciler{
@@ -27,7 +33,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string) error {
 	}
 
 	if err := nodeAllocationReconciler.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("failed to setup NodeAllocationRequest controller: %w", err)
+		return nil, fmt.Errorf("failed to setup NodeAllocationRequest controller: %w", err)
 	}
 
 	allocatedReconciler := &AllocatedNodeReconciler{
@@ -40,8 +46,11 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string) error {
 	}
 
 	if err := allocatedReconciler.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("failed to setup AllocatedNode controller: %w", err)
+		return nil, fmt.Errorf("failed to setup AllocatedNode controller: %w", err)
 	}
 
-	return nil
+	return &Metal3Controllers{
+		NodeAllocationReconciler: nodeAllocationReconciler,
+		AllocatedNodeReconciler:  allocatedReconciler,
+	}, nil
 }

@@ -31,7 +31,12 @@ func NewInventoryClient(
 	hwPlugin *hwmgmtv1alpha1.HardwarePlugin,
 ) (*InventoryClient, error) {
 	// Construct OAuth client configuration
-	config, err := clientutils.SetupOAuthClientConfig(ctx, c, hwPlugin)
+	config, err := clientutils.SetupOAuthClientConfig(
+		ctx, c,
+		hwPlugin.Spec.CaBundleName,
+		hwPlugin.Spec.AuthClientConfig,
+		hwPlugin.Namespace,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client config: %w", err)
 	}

@@ -23,6 +23,13 @@ import (
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 )
 
+// Defines values for AuthType.
+const (
+	Basic          AuthType = "Basic"
+	OAuth          AuthType = "OAuth"
+	ServiceAccount AuthType = "ServiceAccount"
+)
+
 // APIVersion Information about a version of the API.
 type APIVersion struct {
 	Version *string `json:"version,omitempty"`
@@ -67,6 +74,28 @@ type AllocatedNodeStatus struct {
 	ObservedConfigTransactionId *int64 `json:"observedConfigTransactionId,omitempty"`
 }
 
+// AuthClientConfig AuthClientConfig defines the configuration for different authentication types.
+// This struct encapsulates the settings required for ServiceAccount, Basic, and OAuth authentication mechanisms.
+type AuthClientConfig struct {
+	// BasicAuthSecret Name of a secret (in the current namespace) containing the username
+	// and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
+	// This field is required when Type is set to "Basic".
+	BasicAuthSecret *string `json:"basicAuthSecret,omitempty"`
+
+	// OauthConfig OAuthClientConfig defines the configurable client attributes that represent the authentication mechanism.
+	// This is currently expected to be a way to acquire a token from an OAuth2 server.
+	OauthConfig *OAuthClientConfig `json:"oauthConfig,omitempty"`
+
+	// TlsConfig TLSConfig defines the configuration for TLS-specific attributes.
+	TlsConfig *TLSConfig `json:"tlsConfig,omitempty"`
+
+	// Type AuthType defines the authorization type used for authentication.
+	Type AuthType `json:"type"`
+}
+
+// AuthType AuthType defines the authorization type used for authentication.
+type AuthType string
+
 // BMC Baseboard Management Controller (BMC) configuration for an AllocatedNode.
 type BMC struct {
 	// Address IP address or hostname of the BMC.
@@ -74,6 +103,22 @@ type BMC struct {
 
 	// CredentialsName Name of the credentials used to access the BMC.
 	CredentialsName string `json:"credentialsName"`
+}
+
+// Callback Callback configuration for hardware plugin notifications.
+type Callback struct {
+	// AuthClientConfig AuthClientConfig defines the configuration for different authentication types.
+	// This struct encapsulates the settings required for ServiceAccount, Basic, and OAuth authentication mechanisms.
+	AuthClientConfig *AuthClientConfig `json:"authClientConfig,omitempty"`
+
+	// CaBundleName References a config map that contains a set of custom CA certificates to be used when communicating
+	// with the callback server that has its TLS certificate signed by a non-public CA certificate.
+	// The config map is expected to contain a single file called 'ca-bundle.crt' containing all trusted CA certificates
+	// in PEM format.
+	CaBundleName *string `json:"caBundleName,omitempty"`
+
+	// CallbackURL URL to send callback notifications to when hardware operations complete.
+	CallbackURL string `json:"callbackURL"`
 }
 
 // Condition Condition represents an observation of an object's state.
@@ -110,6 +155,9 @@ type Interface struct {
 type NodeAllocationRequest struct {
 	// BootInterfaceLabel BootInterfaceLabel is the label of the boot interface.
 	BootInterfaceLabel string `json:"bootInterfaceLabel"`
+
+	// Callback Callback configuration for hardware plugin notifications.
+	Callback *Callback `json:"callback,omitempty"`
 
 	// ClusterId Cluster identifier associated with the NodeAllocationRequest.
 	ClusterId string `json:"clusterId"`
@@ -175,6 +223,26 @@ type NodeGroupData struct {
 	Size int `json:"size"`
 }
 
+// OAuthClientConfig OAuthClientConfig defines the configurable client attributes that represent the authentication mechanism.
+// This is currently expected to be a way to acquire a token from an OAuth2 server.
+type OAuthClientConfig struct {
+	// ClientSecretName Name of a secret (in the current namespace) which contains the client-id and
+	// client-secret values used by the OAuth client.
+	ClientSecretName string `json:"clientSecretName"`
+
+	// Scopes OAuth scope values to request when acquiring a token. Typically, this should be set to
+	// "openid" in addition to any other scopes that the SMO specifically requires (e.g., "roles", "groups", etc...)
+	// to authorize our requests.
+	Scopes []string `json:"scopes"`
+
+	// TokenEndpoint API endpoint used to acquire a token (e.g., /protocol/openid-connect/token) which
+	// will be appended to the base URL to form the full URL.
+	TokenEndpoint string `json:"tokenEndpoint"`
+
+	// Url Base URL of the authorization server (e.g., https://keycloak.example.com/realms/oran).
+	Url string `json:"url"`
+}
+
 // ProblemDetails defines model for ProblemDetails.
 type ProblemDetails struct {
 	// AdditionalAttributes Any number of additional attributes, as defined in a specification or by an implementation.
@@ -204,6 +272,17 @@ type ProblemDetails struct {
 type Properties struct {
 	// NodeNames List of AllocatedNode names in the group.
 	NodeNames *[]string `json:"nodeNames,omitempty"`
+}
+
+// TLSConfig TLSConfig defines the configuration for TLS-specific attributes.
+type TLSConfig struct {
+	// SecretName Name of a secret (in the current namespace) containing an X.509 certificate and
+	// private key. The secret must include 'tls.key' and 'tls.crt' keys. If the certificate is signed by
+	// intermediate CA(s), the full certificate chain should be included in the certificate file, with the
+	// leaf certificate first and the root CA last. The certificate's Common Name (CN) or Subject Alternative
+	// Name (SAN) should align with the service's fully qualified domain name to support both ingress and
+	// outgoing client certificate use cases.
+	SecretName string `json:"secretName"`
 }
 
 // CreateNodeAllocationRequestJSONRequestBody defines body for CreateNodeAllocationRequest for application/json ContentType.
@@ -1450,52 +1529,72 @@ func (sh *strictHandler) GetAllocatedNodesFromNodeAllocationRequest(w http.Respo
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"ik9bq9vd7f4fAAD//+3u5GcASQAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

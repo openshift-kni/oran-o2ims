@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
@@ -187,11 +188,15 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	if err := metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace()); err != nil {
+	controllers, err := metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace())
+	if err != nil {
 		logger.ErrorContext(ctx, "Unable to create metal3 plugin controller",
 			slog.String("controller", "Metal3HWPlugin"), slog.String("error", err.Error()))
 		return exit.Error(1)
 	}
+
+	// Initialize callback context for NodeAllocationRequest controller
+	controllers.NodeAllocationReconciler.InitializeCallbackContext(ctx)
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		logger.ErrorContext(ctx, "Unable to set up health check", slog.String("error", err.Error()))
@@ -227,8 +232,12 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	case err = <-serverErrors:
 		// Server failed to start
 		logger.ErrorContext(ctx, "Problem running internal server", slog.String("error", err.Error()))
+		// Shutdown callbacks before exit
+		controllers.NodeAllocationReconciler.ShutdownCallbacks(30 * time.Second)
 		return exit.Error(1)
 	case <-ctx.Done():
+		// Graceful shutdown - wait for callbacks to complete
+		controllers.NodeAllocationReconciler.ShutdownCallbacks(30 * time.Second)
 		return exit.Error(0)
 	}
 }

@@ -105,7 +105,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			_ = SetupMetal3Controllers(mgr, namespace)
+			_, _ = SetupMetal3Controllers(mgr, namespace)
 		})
 	})
 
@@ -179,7 +179,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			testError = SetupMetal3Controllers(nil, namespace)
+			_, testError = SetupMetal3Controllers(nil, namespace)
 
 			// If we get here without panic, check the error message
 			if testError != nil {
@@ -207,7 +207,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			_ = SetupMetal3Controllers(nil, "")
+			_, _ = SetupMetal3Controllers(nil, "")
 		})
 
 		It("should accept namespace with special characters", func() {
@@ -220,7 +220,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			}()
 
 			specialNamespace := "test-namespace_with.special-chars"
-			_ = SetupMetal3Controllers(nil, specialNamespace)
+			_, _ = SetupMetal3Controllers(nil, specialNamespace)
 		})
 	})
 

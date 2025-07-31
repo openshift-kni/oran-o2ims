@@ -571,10 +571,17 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			})
 
 			It("should handle deletion successfully", func() {
+				// First call should initiate deallocation and return completed=false
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(completed).To(BeTrue())
+				Expect(completed).To(BeFalse()) // First call is not complete, deallocation in progress
+
+				// Second call should detect deallocation is done and return completed=true
+				completed, err = reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(completed).To(BeTrue()) // Second call completes the process
 
 				// Verify BMH was deallocated (check that allocated label is removed)
 				var updatedBMH metal3v1alpha1.BareMetalHost
@@ -700,6 +707,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				bmh.Spec.Online = true
 				bmh.Spec.CustomDeploy = &metal3v1alpha1.CustomDeploy{Method: "test"}
 				bmh.Spec.Image = &metal3v1alpha1.Image{URL: "test-url"}
+				bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 
 				// Create PreprovisioningImage for the BMH
 				image := &metal3v1alpha1.PreprovisioningImage{

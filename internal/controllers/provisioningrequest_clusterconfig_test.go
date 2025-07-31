@@ -76,6 +76,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
@@ -286,8 +287,9 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRReconciler = &ProvisioningRequestReconciler{
-			Client: c,
-			Logger: logger,
+			Client:         c,
+			Logger:         logger,
+			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create the provisioned NodeAllocationRequest
@@ -411,6 +413,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create the policies, all Compliant, one in inform and one in enforce.
@@ -499,6 +502,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
@@ -541,6 +545,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 		result, err = CRTask.run(ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -582,6 +587,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Update the ProvisioningRequest ConfigurationApplied condition to TimedOut.
@@ -848,6 +854,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 		// Create policies.
 		newPolicies := []client.Object{
@@ -1020,6 +1027,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 		// Update the managed cluster to make it not ready.
 		managedCluster1 := &clusterv1.ManagedCluster{}
@@ -1473,6 +1481,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -1680,6 +1689,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -1787,6 +1797,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -1894,6 +1905,7 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Call the handleClusterPolicyConfiguration function.
@@ -1993,8 +2005,9 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		CRReconciler = &ProvisioningRequestReconciler{
-			Client: c,
-			Logger: logger,
+			Client:         c,
+			Logger:         logger,
+			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		CRTask = &provisioningRequestReconcilerTask{
@@ -2289,6 +2302,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
