@@ -213,13 +213,13 @@ func getObjectReference(objectType string, objectID uuid.UUID, parentID *uuid.UU
 	var value string
 	switch objectType {
 	case ResourceType{}.TableName():
-		value = fmt.Sprintf("%s/resourceTypes/%s", constants.O2IMSInventoryBaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourceTypesPath, objectID.String())
 	case Resource{}.TableName():
-		value = fmt.Sprintf("%s/resourcePools/%s/resources/%s", constants.O2IMSInventoryBaseURL, parentID.String(), objectID.String())
+		value = fmt.Sprintf("%s%s/%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourcePoolsPath, parentID.String(), constants.ResourcesPath, objectID.String())
 	case ResourcePool{}.TableName():
-		value = fmt.Sprintf("%s/resourcePools/%s", constants.O2IMSInventoryBaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourcePoolsPath, objectID.String())
 	case DeploymentManager{}.TableName():
-		value = fmt.Sprintf("%s/deploymentManagers/%s", constants.O2IMSInventoryBaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.DeploymentManagersPath, objectID.String())
 	default:
 		return nil
 	}

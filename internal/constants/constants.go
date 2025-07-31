@@ -35,6 +35,24 @@ var (
 	HardwareManagerInventoryBaseURL    = HardwareManagerInventoryAPIPath + APIVersionV1
 )
 
+// API endpoint path segments
+const (
+	// Inventory/Resources API paths
+	ResourceTypesPath      = "/resourceTypes"
+	ResourcePoolsPath      = "/resourcePools"
+	ResourcesPath          = "/resources"
+	DeploymentManagersPath = "/deploymentManagers"
+
+	// Cluster API paths
+	ClusterResourceTypesPath = "/clusterResourceTypes"
+	ClusterResourcePath      = "/clusterResource"
+	NodeClusterTypesPath     = "/nodeClusterTypes"
+	NodeClustersPath         = "/nodeClusters"
+
+	// Monitoring/Alarms API paths
+	AlarmsPath = "/alarms"
+)
+
 // Command line argument constants
 const (
 	HealthProbeFlag = "--health-probe-bind-address"

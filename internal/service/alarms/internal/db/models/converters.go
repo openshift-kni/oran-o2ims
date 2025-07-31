@@ -50,7 +50,7 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 
 // ConvertAlarmEventRecordModelToAlarmEventNotification converts an AlarmEventRecord to api AlarmEventNotification
 func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, globalCloudID uuid.UUID) api.AlarmEventNotification {
-	or := fmt.Sprintf("%s/alarms/%v", constants.O2IMSMonitoringBaseURL, aerModel.AlarmEventRecordID.String())
+	or := fmt.Sprintf("%s%s/%v", constants.O2IMSMonitoringBaseURL, constants.AlarmsPath, aerModel.AlarmEventRecordID.String())
 	notification := api.AlarmEventNotification{
 		AlarmAcknowledgeTime:  aerModel.AlarmAcknowledgedTime,
 		AlarmAcknowledged:     aerModel.AlarmAcknowledged,

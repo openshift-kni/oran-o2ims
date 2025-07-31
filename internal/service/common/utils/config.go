@@ -76,7 +76,7 @@ func SetCommonServerFlags(cmd *cobra.Command, config *CommonServerConfig) error 
 	flags.StringVar(
 		&config.Listener.Address,
 		ListenerFlagName,
-		fmt.Sprintf("127.0.0.1:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("%s:%d", constants.Localhost, constants.DefaultContainerPort),
 		"API listener address",
 	)
 	flags.StringVar(

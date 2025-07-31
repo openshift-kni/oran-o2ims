@@ -120,7 +120,7 @@ func ControllerManager() *cobra.Command {
 	flags.StringVar(
 		&c.Listener.Address,
 		svcutils.ListenerFlagName,
-		fmt.Sprintf("127.0.0.1:%d", constants.DefaultContainerPort),
+		fmt.Sprintf("%s:%d", constants.Localhost, constants.DefaultContainerPort),
 		"API listener address",
 	)
 	flags.StringVar(

@@ -145,9 +145,6 @@ var (
 	}
 )
 
-// NOTE: DefaultOCloudID, DefaultAppName, DefaultInventoryCR, DefaultNamespace,
-// DefaultNamespaceEnvName, and ImagePullPolicyEnvName have been moved to internal/constants
-
 // Search API attributes
 const (
 	SearchApiLabelKey   = "search-monitor"
@@ -158,7 +155,6 @@ const (
 const (
 	defaultApiServerURL    = "https://" + constants.KubernetesAPIService
 	defaultBackendCABundle = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" // nolint: gosec // hardcoded path only
-	// NOTE: DefaultBackendTokenFile and DefaultServiceCAFile moved to internal/constants
 )
 
 // Default timeout values
@@ -272,15 +268,10 @@ const (
 	DatabaseTargetPort       = "database"
 )
 
-// NOTE: DefaultServicePort, DefaultContainerPort, DatabaseServicePort moved to internal/constants
-// NOTE: MigrationContainerName, ServerContainerName moved to internal/constants
-
 // Environment values
 const (
 	HwMgrPluginNameSpace = "HWMGR_PLUGIN_NAMESPACE"
 )
-
-// NOTE: ServerImageName, PostgresImageName, InternalServicePortName moved to internal/constants
 
 // Deploy Loopback HardwarePlugin constants
 const (
@@ -342,8 +333,6 @@ const (
 	OpenClusterManagementObservabilityNamespace = "open-cluster-management-observability"
 	AlertmanagerSA                              = "alertmanager"
 )
-
-// NOTE: TLS Mount Paths (TLSServerMountPath, TLSClientMountPath, CABundleMountPath, CABundleFilename) moved to internal/constants
 
 // SMO OAuth specific environment variables.  These values are stored in environment variables to
 // avoid them being visible in the command line arguments.

@@ -177,13 +177,13 @@ func getObjectReference(objectType string, objectID uuid.UUID) *string {
 	var value string
 	switch objectType {
 	case ClusterResourceType{}.TableName():
-		value = fmt.Sprintf("%s/clusterResourceTypes/%s", constants.O2IMSClusterBaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.ClusterResourceTypesPath, objectID.String())
 	case ClusterResource{}.TableName():
-		value = fmt.Sprintf("%s/clusterResource/%s", constants.O2IMSClusterBaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.ClusterResourcePath, objectID.String())
 	case NodeClusterType{}.TableName():
-		value = fmt.Sprintf("%s/nodeClusterTypes/%s", constants.O2IMSClusterBaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.NodeClusterTypesPath, objectID.String())
 	case NodeCluster{}.TableName():
-		value = fmt.Sprintf("%s/nodeClusters/%s", constants.O2IMSClusterBaseURL, objectID.String())
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.NodeClustersPath, objectID.String())
 	default:
 		return nil
 	}
