@@ -77,7 +77,6 @@ type TUIFormatter struct {
 	refreshTimer    *time.Timer
 	refreshInterval time.Duration
 	watchedCRDTypes []string
-	staleTimeout    time.Duration
 	lastCleanup     time.Time
 	verifyFunc      func(WatchEvent) bool // Function to verify if resource still exists in source
 
@@ -116,7 +115,6 @@ func NewTUIFormatter(refreshIntervalSeconds int, watchedCRDTypes []string, verif
 		lastActivity:    time.Now(),
 		refreshInterval: time.Duration(refreshIntervalSeconds) * time.Second,
 		watchedCRDTypes: watchedCRDTypes,
-		staleTimeout:    5 * time.Minute, // Resources are considered stale after 5 minutes without updates
 		lastCleanup:     time.Now(),
 		verifyFunc:      verifyFunc,
 
@@ -173,7 +171,7 @@ func (t *TUIFormatter) FormatEvent(event WatchEvent) error {
 	// Periodic cleanup of stale resources (every 30 seconds)
 	// Only removes resources confirmed deleted from source database/API
 	if time.Since(t.lastCleanup) > 30*time.Second {
-		t.cleanupStaleResources()
+		t.cleanupDeletedResources()
 		t.lastCleanup = time.Now()
 	}
 
@@ -304,62 +302,64 @@ func (t *TUIFormatter) getResourceKey(event WatchEvent) string {
 	return fmt.Sprintf("%s/%s", event.CRDType, name)
 }
 
-// cleanupStaleResources removes resources that are both stale AND confirmed deleted from source
-// This ensures that we only remove resources that have actually been deleted from the database/API,
-// not just those that haven't received updates recently due to network issues or other temporary problems.
-func (t *TUIFormatter) cleanupStaleResources() {
+// cleanupDeletedResources removes resources that are confirmed deleted from their source
+// This ensures that only resources that have actually been deleted from the database/API are removed,
+// regardless of when they were last updated. Age is not a factor in removal decisions.
+func (t *TUIFormatter) cleanupDeletedResources() {
 	if t.verifyFunc == nil {
-		klog.V(3).Info("No verification function provided, skipping stale resource cleanup")
+		klog.V(3).Info("No verification function provided, skipping resource cleanup")
 		return
 	}
 
-	now := time.Now()
+	// Only verify a subset of resources each cleanup cycle to avoid excessive API calls
+	// We'll verify up to 10 resources per cleanup, cycling through all resources over time
+	const maxVerificationsPerCycle = 10
 
-	// Filter out stale resources that are confirmed deleted from their source
+	// Filter out resources that are confirmed deleted from their source
 	var filteredEvents []WatchEvent
 	removedCount := 0
 	verifiedCount := 0
 
-	for _, event := range t.events {
-		age := now.Sub(event.Timestamp)
-		if age <= t.staleTimeout {
-			// Resource is not stale yet, keep it
-			filteredEvents = append(filteredEvents, event)
-		} else {
-			// Resource is stale (no updates for > 5 minutes), verify if it still exists in source
+	for i, event := range t.events {
+		// Verify resources in batches to avoid overwhelming the API
+		// Use modulo to cycle through all resources over multiple cleanup calls
+		shouldVerify := verifiedCount < maxVerificationsPerCycle && (i%5 == int(time.Now().Unix()/60)%5)
+
+		if shouldVerify {
 			verifiedCount++
 			resourceKey := t.getResourceKey(event)
-			klog.V(3).Infof("Verifying stale resource (age: %v): %s", age, resourceKey)
+			klog.V(3).Infof("Verifying resource existence: %s", resourceKey)
 
 			if t.verifyFunc(event) {
-				// Resource still exists in source database/API, keep it but reset timestamp
-				// to prevent constant verification calls
-				event.Timestamp = now.Add(-t.staleTimeout + time.Minute) // Reset to 4 minutes ago
+				// Resource still exists in source database/API, keep it
 				filteredEvents = append(filteredEvents, event)
-				klog.V(3).Infof("Stale resource still exists in source, keeping: %s", resourceKey)
+				klog.V(3).Infof("Resource still exists in source, keeping: %s", resourceKey)
 			} else {
 				// Resource confirmed deleted from source database/API, safe to remove from display
 				removedCount++
-				klog.V(2).Infof("Removing stale resource confirmed deleted from source (age: %v): %s", age, resourceKey)
+				klog.V(2).Infof("Removing resource confirmed deleted from source: %s", resourceKey)
 			}
+		} else {
+			// Not verifying this resource in this cycle, keep it
+			filteredEvents = append(filteredEvents, event)
 		}
 	}
 
 	t.events = filteredEvents
 
 	if verifiedCount > 0 {
-		klog.V(1).Infof("Verified %d stale resources: removed %d confirmed deleted, kept %d still existing (%d total remaining)",
+		klog.V(1).Infof("Verified %d resources: removed %d confirmed deleted, kept %d (%d total remaining)",
 			verifiedCount, removedCount, verifiedCount-removedCount, len(t.events))
 	}
 }
 
-// TriggerCleanup manually triggers a cleanup of stale resources (can be called externally)
+// TriggerCleanup manually triggers a cleanup of deleted resources (can be called externally)
 func (t *TUIFormatter) TriggerCleanup() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
 	klog.V(2).Info("Manual cleanup triggered")
-	t.cleanupStaleResources()
+	t.cleanupDeletedResources()
 	t.lastCleanup = time.Now()
 
 	// Trigger screen update using debounced mechanism
@@ -377,7 +377,7 @@ func (t *TUIFormatter) redrawScreen() error {
 	// Ensure stale resources are cleaned up during refresh
 	// Only removes resources confirmed deleted from source database/API
 	if time.Since(t.lastCleanup) > 15*time.Second {
-		t.cleanupStaleResources()
+		t.cleanupDeletedResources()
 		t.lastCleanup = time.Now()
 	}
 
