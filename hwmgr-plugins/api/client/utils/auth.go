@@ -15,13 +15,13 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // SetupOAuthClientConfig constructs an OAuth client configuration from the HardwarePlugin CR.
-func SetupOAuthClientConfig(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin) (*sharedutils.OAuthClientConfig, error) {
-	config := &sharedutils.OAuthClientConfig{
-		TLSConfig: &sharedutils.TLSConfig{},
+func SetupOAuthClientConfig(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin) (*ctlrutils.OAuthClientConfig, error) {
+	config := &ctlrutils.OAuthClientConfig{
+		TLSConfig: &ctlrutils.TLSConfig{},
 	}
 
 	// Set up CA bundle if specified
@@ -45,17 +45,17 @@ func SetupOAuthClientConfig(ctx context.Context, c client.Client, hwPlugin *hwmg
 }
 
 // setupCABundle configures the CA bundle for TLS verification
-func setupCABundle(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
+func setupCABundle(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *ctlrutils.OAuthClientConfig) error {
 	if hwPlugin.Spec.CaBundleName == nil {
 		return nil
 	}
 
-	cm, err := sharedutils.GetConfigmap(ctx, c, *hwPlugin.Spec.CaBundleName, hwPlugin.Namespace)
+	cm, err := ctlrutils.GetConfigmap(ctx, c, *hwPlugin.Spec.CaBundleName, hwPlugin.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get CA bundle configmap: %w", err)
 	}
 
-	caBundle, err := sharedutils.GetConfigMapField(cm, constants.CABundleFilename)
+	caBundle, err := ctlrutils.GetConfigMapField(cm, constants.CABundleFilename)
 	if err != nil {
 		return fmt.Errorf("failed to get certificate bundle from configmap: %w", err)
 	}
@@ -65,45 +65,45 @@ func setupCABundle(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha
 }
 
 // setupTLSClientCert configures the TLS client certificate for mutual TLS
-func setupTLSClientCert(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
+func setupTLSClientCert(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *ctlrutils.OAuthClientConfig) error {
 	if hwPlugin.Spec.AuthClientConfig.TLSConfig == nil ||
 		hwPlugin.Spec.AuthClientConfig.TLSConfig.SecretName == nil {
 		return nil
 	}
 
 	secretName := *hwPlugin.Spec.AuthClientConfig.TLSConfig.SecretName
-	cert, key, err := sharedutils.GetKeyPairFromSecret(ctx, c, secretName, hwPlugin.Namespace)
+	cert, key, err := ctlrutils.GetKeyPairFromSecret(ctx, c, secretName, hwPlugin.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get certificate and key from secret: %w", err)
 	}
 
-	config.TLSConfig.ClientCert = sharedutils.NewStaticKeyPairLoader(cert, key)
+	config.TLSConfig.ClientCert = ctlrutils.NewStaticKeyPairLoader(cert, key)
 	return nil
 }
 
 // setupOAuthConfig configures OAuth client credentials
-func setupOAuthConfig(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *sharedutils.OAuthClientConfig) error {
+func setupOAuthConfig(ctx context.Context, c client.Client, hwPlugin *hwmgmtv1alpha1.HardwarePlugin, config *ctlrutils.OAuthClientConfig) error {
 	if hwPlugin.Spec.AuthClientConfig.OAuthClientConfig == nil {
 		return nil
 	}
 
 	oauthConf := hwPlugin.Spec.AuthClientConfig.OAuthClientConfig
-	secret, err := sharedutils.GetSecret(ctx, c, oauthConf.ClientSecretName, hwPlugin.Namespace)
+	secret, err := ctlrutils.GetSecret(ctx, c, oauthConf.ClientSecretName, hwPlugin.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get OAuth secret '%s': %w", oauthConf.ClientSecretName, err)
 	}
 
-	clientID, err := sharedutils.GetSecretField(secret, sharedutils.OAuthClientIDField)
+	clientID, err := ctlrutils.GetSecretField(secret, ctlrutils.OAuthClientIDField)
 	if err != nil {
-		return fmt.Errorf("failed to get '%s' from OAuth secret: %w", sharedutils.OAuthClientIDField, err)
+		return fmt.Errorf("failed to get '%s' from OAuth secret: %w", ctlrutils.OAuthClientIDField, err)
 	}
 
-	clientSecret, err := sharedutils.GetSecretField(secret, sharedutils.OAuthClientSecretField)
+	clientSecret, err := ctlrutils.GetSecretField(secret, ctlrutils.OAuthClientSecretField)
 	if err != nil {
-		return fmt.Errorf("failed to get '%s' from OAuth secret: %w", sharedutils.OAuthClientSecretField, err)
+		return fmt.Errorf("failed to get '%s' from OAuth secret: %w", ctlrutils.OAuthClientSecretField, err)
 	}
 
-	config.OAuthConfig = &sharedutils.OAuthConfig{
+	config.OAuthConfig = &ctlrutils.OAuthConfig{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		TokenURL:     buildTokenURL(oauthConf.URL, oauthConf.TokenEndpoint),

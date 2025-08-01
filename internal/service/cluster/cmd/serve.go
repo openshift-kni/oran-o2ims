@@ -16,7 +16,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 // config defines the configuration attributes for the cluster server
@@ -45,7 +45,7 @@ var clusterServer = &cobra.Command{
 // setServerFlags creates the flag instances for the server
 func setServerFlags(cmd *cobra.Command) error {
 	flags := cmd.Flags()
-	if err := utils.SetCommonServerFlags(cmd, &config.CommonServerConfig); err != nil {
+	if err := svcutils.SetCommonServerFlags(cmd, &config.CommonServerConfig); err != nil {
 		return fmt.Errorf("could not set common server flags: %w", err)
 	}
 	flags.StringVar(

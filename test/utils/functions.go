@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 func RemoveRequiredFieldFromClusterInstanceCm(
@@ -34,7 +34,7 @@ func RemoveRequiredFieldFromClusterInstanceCm(
 	Expect(c.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, ciConfigmap)).To(Succeed())
 
 	ciConfigmap.Data = map[string]string{
-		utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
     clusterImageSetNameRef: "4.15"
     pullSecretRef:
       name: "pull-secret"
@@ -176,8 +176,8 @@ func DownloadFile(rawUrl, filename, dirpath string) error {
 }
 
 func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
-	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", utils.UnitTestHwmgrNamespace, npName, nil)
-	secrets := CreateSecrets([]string{BmcSecretName}, utils.UnitTestHwmgrNamespace)
+	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", ctlrutils.UnitTestHwmgrNamespace, npName, nil)
+	secrets := CreateSecrets([]string{BmcSecretName}, ctlrutils.UnitTestHwmgrNamespace)
 	CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 }
 
@@ -218,7 +218,7 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName strin
 		Spec: pluginsv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: narName,
 			GroupName:             groupName,
-			HardwarePluginRef:     utils.UnitTestHwPluginRef,
+			HardwarePluginRef:     ctlrutils.UnitTestHwPluginRef,
 			HwMgrNodeId:           name,
 		},
 		Status: pluginsv1alpha1.AllocatedNodeStatus{

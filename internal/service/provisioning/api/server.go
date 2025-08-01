@@ -25,7 +25,7 @@ import (
 
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api/generated"
 )
 
@@ -34,7 +34,7 @@ type ProvisioningServer struct {
 }
 
 type ProvisioningServerConfig struct {
-	utils.CommonServerConfig
+	svcutils.CommonServerConfig
 }
 
 // ProvisioningServer implements StrictServerInterface. This ensures that we've conformed to the `StrictServerInterface` with a compile-time check

@@ -20,7 +20,7 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -31,7 +31,7 @@ func validateFirmwareUpdateSpec(spec hwmgmtv1alpha1.HardwareProfileSpec) error {
 		if spec.BiosFirmware.URL == "" {
 			return typederrors.NewInputError("missing BIOS firmware URL for version: %v", spec.BiosFirmware.Version)
 		}
-		if !utils.IsValidURL(spec.BiosFirmware.URL) {
+		if !ctlrutils.IsValidURL(spec.BiosFirmware.URL) {
 			return typederrors.NewInputError("invalid BIOS firmware URL: %v", spec.BiosFirmware.URL)
 		}
 	}
@@ -39,7 +39,7 @@ func validateFirmwareUpdateSpec(spec hwmgmtv1alpha1.HardwareProfileSpec) error {
 		if spec.BmcFirmware.URL == "" {
 			return typederrors.NewInputError("missing BMC firmware URL for version: %v", spec.BmcFirmware.Version)
 		}
-		if !utils.IsValidURL(spec.BmcFirmware.URL) {
+		if !ctlrutils.IsValidURL(spec.BmcFirmware.URL) {
 			return typederrors.NewInputError("invalid BMC firmware URL: %v", spec.BmcFirmware.URL)
 		}
 	}

@@ -95,7 +95,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
 var _ = Describe("Helpers", func() {
@@ -456,7 +456,7 @@ var _ = Describe("Helpers", func() {
 			Expect(createdNode.Spec.HwProfile).To(Equal("test-profile"))
 			Expect(createdNode.Spec.HwMgrNodeId).To(Equal("test-node-id"))
 			Expect(createdNode.Spec.HwMgrNodeNs).To(Equal("test-node-ns"))
-			Expect(createdNode.Labels[hwpluginutils.HardwarePluginLabel]).To(Equal(hwpluginutils.Metal3HardwarePluginID))
+			Expect(createdNode.Labels[hwmgrutils.HardwarePluginLabel]).To(Equal(hwmgrutils.Metal3HardwarePluginID))
 		})
 
 		It("should skip creation if AllocatedNode already exists", func() {

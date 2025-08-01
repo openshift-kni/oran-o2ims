@@ -26,7 +26,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -168,7 +168,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	}
 
 	// TODO: the handlePreProvisioning function should be updated to return an unstructured ClusterInstance
-	unstructuredClusterInstance, err := utils.ConvertToUnstructured(*renderedClusterInstance)
+	unstructuredClusterInstance, err := ctlrutils.ConvertToUnstructured(*renderedClusterInstance)
 	if err != nil {
 		return requeueWithError(err)
 	}
@@ -194,10 +194,10 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	if err != nil {
 		return requeueWithError(err)
 	}
-	if !utils.IsClusterProvisionPresent(t.object) {
+	if !ctlrutils.IsClusterProvisionPresent(t.object) {
 		t.logger.InfoContext(ctx, "ClusterProvision not present, requeueing", slog.String("name", t.object.Name))
 		return requeueWithShortInterval(), nil
-	} else if utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+	} else if ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
 		// If the cluster installation has not started due to
 		// processing issue, failed or timed out, do not requeue.
 		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, do not requeue", slog.String("name", t.object.Name))
@@ -210,7 +210,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		return requeueWithError(err)
 	}
 
-	if utils.IsClusterZtpDone(t.object) {
+	if ctlrutils.IsClusterZtpDone(t.object) {
 		// If the initial provisioning is completed, check if an upgrade is requested
 		shouldUpgrade, err := t.IsUpgradeRequested(ctx, renderedClusterInstance.GetName())
 		if err != nil {
@@ -219,8 +219,8 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 
 		// An upgrade is requested or upgrade has started but not completed
 		if shouldUpgrade ||
-			(utils.IsClusterUpgradeInitiated(t.object) &&
-				!utils.IsClusterUpgradeCompleted(t.object)) {
+			(ctlrutils.IsClusterUpgradeInitiated(t.object) &&
+				!ctlrutils.IsClusterUpgradeCompleted(t.object)) {
 			upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, renderedClusterInstance.GetName())
 			if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
 				// Requeue if the upgrade is in progress or an error occurs.
@@ -234,7 +234,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	// Requeue if cluster provisioning is not completed (in-progress or unknown)
 	// or there are enforce policies that are not Compliant but the configuration
 	// has not timed out.
-	if !utils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
+	if !ctlrutils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
 		return requeueWithLongInterval(), nil
 	}
 
@@ -250,7 +250,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 	if t.object.Status.ObservedGeneration == t.object.Generation &&
 		t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed &&
-		utils.HasFatalProvisioningFailure(t.object.Status.Conditions) {
+		ctlrutils.HasFatalProvisioningFailure(t.object.Status.Conditions) {
 		// If the provisioning has failed with a fatal error and no spec changes,
 		// stop reconciliation.
 		return true
@@ -265,8 +265,8 @@ func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Context) (*siteconfig.ClusterInstance, ctrl.Result, error) {
 	// Set the provisioning state to pending if spec changes are observed
 	if t.object.Status.ObservedGeneration != t.object.Generation {
-		utils.SetProvisioningStatePending(t.object, "Validating and preparing resources")
-		if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+		ctlrutils.SetProvisioningStatePending(t.object, "Validating and preparing resources")
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 			return nil, doNotRequeue(), fmt.Errorf(
 				"failed to update status for ProvisioningRequest %s: %w",
 				t.object.Name, updateErr,
@@ -277,7 +277,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	// Validate the ProvisioningRequest
 	err := t.handleValidation(ctx)
 	if err != nil {
-		if utils.IsInputError(err) {
+		if ctlrutils.IsInputError(err) {
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return nil, res, err
 		}
@@ -288,7 +288,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	// Render and validate ClusterInstance
 	renderedClusterInstance, err := t.handleRenderClusterInstance(ctx)
 	if err != nil {
-		if utils.IsInputError(err) {
+		if ctlrutils.IsInputError(err) {
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return nil, res, err
 		}
@@ -298,7 +298,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	// Handle the creation of resources required for cluster deployment
 	err = t.handleClusterResources(ctx, renderedClusterInstance)
 	if err != nil {
-		if utils.IsInputError(err) {
+		if ctlrutils.IsInputError(err) {
 			_, err = t.checkClusterDeployConfigState(ctx)
 			if err != nil {
 				return nil, doNotRequeue(), err
@@ -324,7 +324,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	// Render the hardware template for NodeAllocationRequest
 	renderedNodeAllocationRequest, err := t.renderHardwareTemplate(ctx, renderedClusterInstance)
 	if err != nil {
-		if utils.IsInputError(err) {
+		if ctlrutils.IsInputError(err) {
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return res, false, err
 		}
@@ -412,8 +412,8 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	if err != nil {
 		return requeueWithError(err)
 	}
-	if !utils.IsClusterProvisionPresent(t.object) ||
-		utils.IsClusterProvisionTimedOutOrFailed(t.object) {
+	if !ctlrutils.IsClusterProvisionPresent(t.object) ||
+		ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
 		// If the cluster installation has not started due to
 		// processing issue, failed or timed out, do not requeue.
 		return doNotRequeue(), nil
@@ -427,7 +427,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	// Requeue if Cluster Provisioned is not completed (in-progress or unknown)
 	// or there are enforce policies that are not Compliant and configuration
 	// has not timed out
-	if !utils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
+	if !ctlrutils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
 		return requeueWithLongInterval(), nil
 	}
 
@@ -439,7 +439,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	// If the existing provisioning has been fulfilled, check if there are any issues
 	// with the validation, rendering, or creation of resources due to updates to the
 	// ProvisioningRequest. If there are issues, transition the provisioningPhase to failed.
-	if utils.IsProvisioningStateFulfilled(t.object) {
+	if ctlrutils.IsProvisioningStateFulfilled(t.object) {
 		if err = t.checkResourcePreparationStatus(ctx); err != nil {
 			return requeueWithError(err)
 		}
@@ -461,12 +461,12 @@ func (t *provisioningRequestReconcilerTask) checkResourcePreparationStatus(ctx c
 		cond := meta.FindStatusCondition(t.object.Status.Conditions, string(condType))
 		if cond != nil && cond.Status == metav1.ConditionFalse {
 			// Set the provisioning state to failed if any condition is false
-			utils.SetProvisioningStateFailed(t.object, cond.Message)
+			ctlrutils.SetProvisioningStateFailed(t.object, cond.Message)
 			break
 		}
 	}
 
-	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
 	}
 	return nil
@@ -482,7 +482,7 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 			slog.String("name", t.object.Name),
 			slog.String("error", err.Error()),
 		)
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.Validated,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
@@ -494,7 +494,7 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 			"Validated the ProvisioningRequest CR",
 			slog.String("name", t.object.Name),
 		)
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.Validated,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
@@ -502,7 +502,7 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 		)
 	}
 
-	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 	}
 
@@ -519,7 +519,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 			slog.String("name", t.object.Name),
 			slog.String("error", err.Error()),
 		)
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
@@ -532,7 +532,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 			slog.String("name", t.object.Name),
 		)
 
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
@@ -540,7 +540,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 		)
 	}
 
-	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return nil, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 	}
 
@@ -560,7 +560,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 			slog.String("error", err.Error()),
 		)
 
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
@@ -573,14 +573,14 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 			slog.String("name", t.object.Name),
 		)
 
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"Cluster resources applied",
 		)
 	}
-	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 	}
 
@@ -598,7 +598,7 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 			slog.String("error", err.Error()),
 		)
 
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
@@ -611,7 +611,7 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 			slog.String("name", t.object.Name),
 		)
 
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
@@ -619,7 +619,7 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 		)
 	}
 
-	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return nil, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 	}
 
@@ -670,8 +670,8 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 	ctx context.Context, provisioningRequest *provisioningv1alpha1.ProvisioningRequest) (bool, error) {
 	// Set the provisioningState to deleting
 	if provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase != provisioningv1alpha1.StateDeleting {
-		utils.SetProvisioningStateDeleting(provisioningRequest)
-		if err := utils.UpdateK8sCRStatus(ctx, r.Client, provisioningRequest); err != nil {
+		ctlrutils.SetProvisioningStateDeleting(provisioningRequest)
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, r.Client, provisioningRequest); err != nil {
 			return false, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", provisioningRequest.Name, err)
 		}
 	}
@@ -770,16 +770,16 @@ func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
 // If so, it sets the provisioning state to "fulfilled" and updates the provisioned
 // resources in the status.
 func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx context.Context) error {
-	if utils.IsClusterProvisionCompleted(t.object) && utils.IsClusterConfigCompleted(t.object) &&
-		(!utils.IsClusterUpgradeInitiated(t.object) || utils.IsClusterUpgradeCompleted(t.object)) {
+	if ctlrutils.IsClusterProvisionCompleted(t.object) && ctlrutils.IsClusterConfigCompleted(t.object) &&
+		(!ctlrutils.IsClusterUpgradeInitiated(t.object) || ctlrutils.IsClusterUpgradeCompleted(t.object)) {
 
-		utils.SetProvisioningStateFulfilled(t.object)
+		ctlrutils.SetProvisioningStateFulfilled(t.object)
 		mcl, err := t.updateOCloudNodeClusterId(ctx)
 		if err != nil {
 			return err
 		}
 
-		if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 			return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
 		}
 
@@ -801,7 +801,7 @@ func getHardwarePluginClient(
 	pr *provisioningv1alpha1.ProvisioningRequest,
 ) (*hwmgrpluginapi.HardwarePluginClient, error) {
 	// Get the HardwarePlugin CR
-	hwplugin, err := utils.GetHardwarePluginFromProvisioningRequest(ctx, c, pr)
+	hwplugin, err := ctlrutils.GetHardwarePluginFromProvisioningRequest(ctx, c, pr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve HardwarePlugin: %w", err)
 	}
@@ -840,7 +840,7 @@ func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx
 		err                           error
 	)
 	// Get the generated NodeAllocationRequest and its status.
-	if err = utils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+	if err = ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		nodeAllocationRequestResponse, exists, err = t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
 		if err != nil {
 			return fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)

@@ -76,7 +76,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -104,7 +104,7 @@ var _ = Describe("policyManagement", func() {
 		ctx = context.Background()
 
 		// Define the needed resources.
-		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
 		crs := []client.Object{
 			// Cluster Template Namespace.
@@ -147,7 +147,7 @@ var _ = Describe("policyManagement", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 clusterImageSetNameRef: "4.15"
 pullSecretRef:
   name: "pull-secret"
@@ -187,7 +187,7 @@ nodes:
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.PolicyTemplateDefaultsConfigmapKey: `
+					ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 cpu-isolated: "2-31"
 cpu-reserved: "0-1"
 defaultHugepagesSize: "1G"`,
@@ -197,10 +197,10 @@ defaultHugepagesSize: "1G"`,
 			&hwmgmtv1alpha1.HardwareTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplate,
-					Namespace: utils.InventoryNamespace,
+					Namespace: ctlrutils.InventoryNamespace,
 				},
 				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-					HardwarePluginRef:           utils.UnitTestHwPluginRef,
+					HardwarePluginRef:           ctlrutils.UnitTestHwPluginRef,
 					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -292,18 +292,18 @@ defaultHugepagesSize: "1G"`,
 
 		// Create the provisioned NodeAllocationRequest
 		hwPluginNs := &corev1.Namespace{}
-		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+		hwPluginNs.SetName(ctlrutils.UnitTestHwmgrNamespace)
 		Expect(c.Create(ctx, hwPluginNs)).To(Succeed())
 		nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
-				Namespace: utils.UnitTestHwmgrNamespace,
+				Namespace: ctlrutils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
 					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				HardwarePluginRef: utils.UnitTestHwPluginRef,
+				HardwarePluginRef: ctlrutils.UnitTestHwPluginRef,
 				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -343,23 +343,23 @@ defaultHugepagesSize: "1G"`,
 
 		// Update the managedCluster cluster-1 to be available, joined and accepted.
 		managedCluster1 := &clusterv1.ManagedCluster{}
-		managedClusterExists, err := utils.DoesK8SResourceExist(
+		managedClusterExists, err := ctlrutils.DoesK8SResourceExist(
 			ctx, c, "cluster-1", "", managedCluster1)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
-		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
+		ctlrutils.SetStatusCondition(&managedCluster1.Status.Conditions,
 			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionTrue,
 			"Managed cluster is available",
 		)
-		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
+		ctlrutils.SetStatusCondition(&managedCluster1.Status.Conditions,
 			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionHubAccepted),
 			"HubClusterAdminAccepted",
 			metav1.ConditionTrue,
 			"Accepted by hub cluster admin",
 		)
-		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
+		ctlrutils.SetStatusCondition(&managedCluster1.Status.Conditions,
 			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionJoined),
 			"ManagedClusterJoined",
 			metav1.ConditionTrue,
@@ -390,8 +390,8 @@ defaultHugepagesSize: "1G"`,
 
 		// Get hwpluginClient for the test
 		hwpluginKey := types.NamespacedName{
-			Name:      utils.UnitTestHwPluginRef,
-			Namespace: utils.UnitTestHwmgrNamespace,
+			Name:      ctlrutils.UnitTestHwPluginRef,
+			Namespace: ctlrutils.UnitTestHwmgrNamespace,
 		}
 		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
 		err = CRReconciler.Client.Get(ctx, hwpluginKey, hwplugin)
@@ -407,9 +407,9 @@ defaultHugepagesSize: "1G"`,
 			clusterInput:   &clusterInput{},
 			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -420,9 +420,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -437,9 +437,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -478,8 +478,8 @@ defaultHugepagesSize: "1G"`,
 
 		// Get hwpluginClient for the test
 		hwpluginKey = types.NamespacedName{
-			Name:      utils.UnitTestHwPluginRef,
-			Namespace: utils.UnitTestHwmgrNamespace,
+			Name:      ctlrutils.UnitTestHwPluginRef,
+			Namespace: ctlrutils.UnitTestHwmgrNamespace,
 		}
 		hwplugin = &hwmgmtv1alpha1.HardwarePlugin{}
 		err = CRReconciler.Client.Get(ctx, hwpluginKey, hwplugin)
@@ -495,13 +495,13 @@ defaultHugepagesSize: "1G"`,
 			clusterInput:   &clusterInput{},
 			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
@@ -520,8 +520,8 @@ defaultHugepagesSize: "1G"`,
 
 		// Get hwpluginClient for the test
 		hwpluginKey = types.NamespacedName{
-			Name:      utils.UnitTestHwPluginRef,
-			Namespace: utils.UnitTestHwmgrNamespace,
+			Name:      ctlrutils.UnitTestHwPluginRef,
+			Namespace: ctlrutils.UnitTestHwmgrNamespace,
 		}
 		hwplugin = &hwmgmtv1alpha1.HardwarePlugin{}
 		err = CRReconciler.Client.Get(ctx, hwpluginKey, hwplugin)
@@ -537,9 +537,9 @@ defaultHugepagesSize: "1G"`,
 			clusterInput:   &clusterInput{},
 			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 		result, err = CRTask.run(ctx)
@@ -578,14 +578,14 @@ defaultHugepagesSize: "1G"`,
 			object:    provisioningRequest, // cluster-1 request
 			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
 		// Update the ProvisioningRequest ConfigurationApplied condition to TimedOut.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.TimedOut,
 			metav1.ConditionFalse,
@@ -600,9 +600,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -617,9 +617,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -690,8 +690,8 @@ defaultHugepagesSize: "1G"`,
 			object:    provisioningRequest, // cluster-1 request
 			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: 60 * time.Second,
 			},
 		}
@@ -703,9 +703,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -720,9 +720,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -797,7 +797,7 @@ defaultHugepagesSize: "1G"`,
 		// Check that the NonCompliantAt and timeout are cleared if the policies are in inform.
 		// Inform the NonCompliant policy.
 		policy := &policiesv1.Policy{}
-		policyExists, err := utils.DoesK8SResourceExist(
+		policyExists, err := ctlrutils.DoesK8SResourceExist(
 			ctx, c, "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy", "cluster-1", policy)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(policyExists).To(BeTrue())
@@ -844,9 +844,9 @@ defaultHugepagesSize: "1G"`,
 			object:    provisioningRequest, // cluster-1 request
 			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 		// Create policies.
@@ -856,9 +856,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -873,9 +873,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "test-ns.test-policy", // policy that is outside the namespace for clustertemplate
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "test-ns.test-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "test-ns.test-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -920,10 +920,10 @@ defaultHugepagesSize: "1G"`,
 
 		// Step 2: Update the managed cluster to make it not ready.
 		managedCluster1 := &clusterv1.ManagedCluster{}
-		managedClusterExists, err := utils.DoesK8SResourceExist(ctx, c, "cluster-1", "", managedCluster1)
+		managedClusterExists, err := ctlrutils.DoesK8SResourceExist(ctx, c, "cluster-1", "", managedCluster1)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
-		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
+		ctlrutils.SetStatusCondition(&managedCluster1.Status.Conditions,
 			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionFalse,
@@ -958,7 +958,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(configAppliedCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady)))
 
 		// Step 3: Update the managed cluster to make it ready again.
-		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
+		ctlrutils.SetStatusCondition(&managedCluster1.Status.Conditions,
 			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionTrue,
@@ -1016,18 +1016,18 @@ defaultHugepagesSize: "1G"`,
 			object:    provisioningRequest, // cluster-1 request
 			ctDetails: &clusterTemplateDetails{namespace: ctNamespace},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 		// Update the managed cluster to make it not ready.
 		managedCluster1 := &clusterv1.ManagedCluster{}
-		managedClusterExists, err := utils.DoesK8SResourceExist(
+		managedClusterExists, err := ctlrutils.DoesK8SResourceExist(
 			ctx, c, "cluster-1", "", managedCluster1)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(managedClusterExists).To(BeTrue())
-		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
+		ctlrutils.SetStatusCondition(&managedCluster1.Status.Conditions,
 			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
 			"ManagedClusterAvailable",
 			metav1.ConditionFalse,
@@ -1044,9 +1044,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1111,8 +1111,8 @@ defaultHugepagesSize: "1G"`,
 				namespace: ctNamespace,
 			},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: 1 * time.Minute,
 			},
 		}
@@ -1131,9 +1131,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1148,9 +1148,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1200,14 +1200,14 @@ defaultHugepagesSize: "1G"`,
 
 		// Enforce the NonCompliant policy.
 		policy := &policiesv1.Policy{}
-		policyExists, err := utils.DoesK8SResourceExist(
+		policyExists, err := ctlrutils.DoesK8SResourceExist(
 			ctx, c, "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy", "cluster-1", policy)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(policyExists).To(BeTrue())
 		policy.Spec.RemediationAction = policiesv1.Enforce
 		Expect(c.Update(ctx, policy)).To(Succeed())
 
-		policyExists, err = utils.DoesK8SResourceExist(
+		policyExists, err = ctlrutils.DoesK8SResourceExist(
 			ctx, c, "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy", "cluster-1", policy)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(policyExists).To(BeTrue())
@@ -1305,9 +1305,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-validator-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-validator-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-validator-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1322,9 +1322,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1358,8 +1358,8 @@ defaultHugepagesSize: "1G"`,
 				namespace: ctNamespace,
 			},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: 1 * time.Minute,
 			},
 		}
@@ -1469,9 +1469,9 @@ defaultHugepagesSize: "1G"`,
 				namespace: ctNamespace,
 			},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -1622,9 +1622,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1639,9 +1639,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1676,9 +1676,9 @@ defaultHugepagesSize: "1G"`,
 				namespace: ctNamespace,
 			},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -1730,9 +1730,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1747,9 +1747,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1783,9 +1783,9 @@ defaultHugepagesSize: "1G"`,
 				namespace: ctNamespace,
 			},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -1841,9 +1841,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-subscriptions-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1858,9 +1858,9 @@ defaultHugepagesSize: "1G"`,
 					Name:      "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
 					Namespace: "cluster-1",
 					Labels: map[string]string{
-						utils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
-						utils.ChildPolicyClusterNameLabel:      "cluster-1",
-						utils.ChildPolicyClusterNamespaceLabel: "cluster-1",
+						ctlrutils.ChildPolicyRootPolicyLabel:       "ztp-clustertemplate-a-v4-16.v1-sriov-configuration-policy",
+						ctlrutils.ChildPolicyClusterNameLabel:      "cluster-1",
+						ctlrutils.ChildPolicyClusterNamespaceLabel: "cluster-1",
 					},
 				},
 				Spec: policiesv1.PolicySpec{
@@ -1890,9 +1890,9 @@ defaultHugepagesSize: "1G"`,
 				namespace: ctNamespace,
 			},
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 
@@ -2002,8 +2002,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			client: CRReconciler.Client,
 			object: crs[1].(*provisioningv1alpha1.ProvisioningRequest), // cluster-1 request
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: 1 * time.Minute,
 			},
 		}
@@ -2011,7 +2011,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 	It("Returns false if the status is unexpected and NonCompliantAt is not set", func() {
 		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.Unknown,
 			metav1.ConditionFalse,
@@ -2027,7 +2027,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 	It("Returns false if the status is Completed and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
@@ -2043,7 +2043,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 	It("Returns false if the status is OutOfDate and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.OutOfDate,
 			metav1.ConditionFalse,
@@ -2059,7 +2059,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 	It("Returns false if the status is Missing and sets NonCompliantAt", func() {
 		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.Missing,
 			metav1.ConditionFalse,
@@ -2075,7 +2075,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 
 	It("Returns true if the status is InProgress and the timeout has passed", func() {
 		// Set the status to InProgress.
-		utils.SetStatusCondition(&CRTask.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&CRTask.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
 			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
@@ -2156,7 +2156,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		}
 
 		hwPluginNs := &corev1.Namespace{}
-		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+		hwPluginNs.SetName(ctlrutils.UnitTestHwmgrNamespace)
 
 		crs := []client.Object{
 			// Cluster Template Namespace.
@@ -2167,7 +2167,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 			&corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: utils.UnitTestHwmgrNamespace,
+					Name: ctlrutils.UnitTestHwmgrNamespace,
 				},
 			},
 			// ManagedCluster Namespace.
@@ -2214,13 +2214,13 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      mclName,
-				Namespace: utils.UnitTestHwmgrNamespace,
+				Namespace: ctlrutils.UnitTestHwmgrNamespace,
 				Annotations: map[string]string{
 					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				HardwarePluginRef: utils.UnitTestHwPluginRef,
+				HardwarePluginRef: ctlrutils.UnitTestHwPluginRef,
 				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -2264,8 +2264,8 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 		// Get hwpluginClient for the test
 		hwpluginKey := types.NamespacedName{
-			Name:      utils.UnitTestHwPluginRef,
-			Namespace: utils.UnitTestHwmgrNamespace,
+			Name:      ctlrutils.UnitTestHwPluginRef,
+			Namespace: ctlrutils.UnitTestHwmgrNamespace,
 		}
 		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2285,9 +2285,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			object:         provisioningRequest, // cluster-1 request
 			hwpluginClient: hwpluginClient,
 			timeouts: &timeouts{
-				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
-				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
-				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
+				hardwareProvisioning: ctlrutils.DefaultHardwareProvisioningTimeout,
+				clusterProvisioning:  ctlrutils.DefaultClusterInstallationTimeout,
+				clusterConfiguration: ctlrutils.DefaultClusterConfigurationTimeout,
 			},
 		}
 	})
@@ -2353,7 +2353,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 	Context("When the HW template is provided and the expected HW CRs exist", func() {
 		BeforeEach(func() {
 			hwPluginNs := &corev1.Namespace{}
-			hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+			hwPluginNs.SetName(ctlrutils.UnitTestHwmgrNamespace)
 
 			// Create the NodeAllocationRequest.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
@@ -2388,14 +2388,14 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: mclName}, mclUpdated)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(mclUpdated.GetLabels()).To(Equal(map[string]string{
-				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				ctlrutils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 			}))
 
 			// Check that the new label was added and the old label was kept for the Agent CR.
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(agent.GetLabels()).To(Equal(map[string]string{
-				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				ctlrutils.ClusterTemplateArtifactsLabel:                  "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 			}))
 		})
@@ -2461,16 +2461,16 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			bmcSecretName2 := "bmc-secret-2"
 			node := testutils.CreateNode(
 				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
+				"bmc-secret", "controller", ctlrutils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = agent2Hostname
-			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, ctlrutils.UnitTestHwmgrNamespace)
 			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Create the corresponding BareMetalHost that the function will look for
 			bmh := &metal3v1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      masterNodeName2,
-					Namespace: utils.UnitTestHwmgrNamespace,
+					Namespace: ctlrutils.UnitTestHwmgrNamespace,
 				},
 				Spec: metal3v1alpha1.BareMetalHostSpec{
 					BMC: metal3v1alpha1.BMCDetails{
@@ -2505,16 +2505,16 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				if agent.Name == agent2Name {
 					checkedAgents += 1
 					Expect(agent.Labels).To(Equal(map[string]string{
-						utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+						ctlrutils.ClusterTemplateArtifactsLabel:                  "57b39bda-ac56-4143-9b10-d1a71517d04f",
 						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
-						"clcm.openshift.io/hardwarePluginRef":                    utils.UnitTestHwPluginRef,
+						"clcm.openshift.io/hardwarePluginRef":                    ctlrutils.UnitTestHwPluginRef,
 						"clcm.openshift.io/hwMgrNodeId":                          masterNodeName2,
 					}))
 				}
 				if agent.Name == AgentName {
 					checkedAgents += 1
 					Expect(agents.Items[1].Labels).To(Equal(map[string]string{
-						utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+						ctlrutils.ClusterTemplateArtifactsLabel:                  "57b39bda-ac56-4143-9b10-d1a71517d04f",
 						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 					}))
 				}
@@ -2549,9 +2549,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			bmcSecretName2 := "bmc-secret-2"
 			node := testutils.CreateNode(
 				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
+				"bmc-secret", "controller", ctlrutils.UnitTestHwmgrNamespace, mclName, nil)
 			node.Status.Hostname = "some-other-cluster.lab.example.com"
-			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, ctlrutils.UnitTestHwmgrNamespace)
 			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
@@ -2604,14 +2604,14 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: mclName}, mclUpdated)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(mclUpdated.GetLabels()).To(Equal(map[string]string{
-				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				ctlrutils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 			}))
 
 			// Check that the templateArtifacts label is present and hardwarePluginRef and hwMgrNodeId labels are not present.
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(agent.GetLabels()).To(Equal(map[string]string{
-				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				ctlrutils.ClusterTemplateArtifactsLabel:                  "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 			}))
 			Expect(agent.Labels).To(Not(HaveKey("clcm.openshift.io/hardwarePluginRef")))

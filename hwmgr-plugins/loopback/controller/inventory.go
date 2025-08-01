@@ -15,25 +15,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // GetCurrentResources parses the nodelist configmap to get the current available and allocated resource lists
 func GetCurrentResources(ctx context.Context, c client.Client, logger *slog.Logger, loopbackNamespace string) (
 	cm *corev1.ConfigMap, resources cmResources, allocations cmAllocations, err error) {
-	cm, err = utils.GetConfigmap(ctx, c, cmName, loopbackNamespace)
+	cm, err = ctlrutils.GetConfigmap(ctx, c, cmName, loopbackNamespace)
 	if err != nil {
 		err = fmt.Errorf("unable to get configmap: %w", err)
 		return
 	}
 
-	resources, err = utils.ExtractDataFromConfigMap[cmResources](cm, resourcesKey)
+	resources, err = ctlrutils.ExtractDataFromConfigMap[cmResources](cm, resourcesKey)
 	if err != nil {
 		err = fmt.Errorf("unable to parse resources from configmap: %w", err)
 		return
 	}
 
-	allocations, err = utils.ExtractDataFromConfigMap[cmAllocations](cm, allocationsKey)
+	allocations, err = ctlrutils.ExtractDataFromConfigMap[cmAllocations](cm, allocationsKey)
 	if err != nil {
 		// Allocated node field may not be present
 		logger.InfoContext(ctx, "unable to parse allocations from configmap")

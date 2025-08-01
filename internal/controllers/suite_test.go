@@ -122,7 +122,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
@@ -253,7 +253,7 @@ var _ = BeforeSuite(func() {
 	ctrl.SetLogger(adapter)
 	klog.SetLogger(adapter)
 
-	os.Setenv(utils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
+	os.Setenv(ctlrutils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
 
 	// Add all the required types to the scheme used by the tests:
 	scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.Inventory{})

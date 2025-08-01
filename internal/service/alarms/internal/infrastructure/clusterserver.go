@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/transport"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 )
@@ -52,7 +52,7 @@ func (r *ClusterServer) Name() string {
 func (r *ClusterServer) Setup() error {
 	slog.Info("Creating ClusterServer client")
 
-	url := utils.GetServiceURL(utils.InventoryClusterServerName)
+	url := ctlrutils.GetServiceURL(ctlrutils.InventoryClusterServerName)
 
 	// Use for local development
 	clusterServerURL := os.Getenv(clusterServerURLEnvName)
@@ -61,7 +61,7 @@ func (r *ClusterServer) Setup() error {
 	}
 
 	// Set up transport
-	tr, err := utils.GetDefaultBackendTransport()
+	tr, err := ctlrutils.GetDefaultBackendTransport()
 	if err != nil {
 		return fmt.Errorf("failed to create http transport: %w", err)
 	}
@@ -447,7 +447,7 @@ func getAlarmDictionaryIDFromNodeClusterType(nodeClusterType NodeClusterType) (u
 		return uuid.Nil, fmt.Errorf("node cluster type has no extensions")
 	}
 
-	alarmDictionaryIDString, ok := (*nodeClusterType.Extensions)[utils.ClusterAlarmDictionaryIDExtension].(string)
+	alarmDictionaryIDString, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension].(string)
 	if !ok {
 		return uuid.Nil, fmt.Errorf("node cluster type has no alarm dictionary ID")
 	}
@@ -469,7 +469,7 @@ func getAlarmDefinitionsFromAlarmDictionary(dictionary AlarmDictionary) AlarmDef
 			continue
 		}
 
-		severity, ok := (*definition.AlarmAdditionalFields)[utils.AlarmDefinitionSeverityField].(string)
+		severity, ok := (*definition.AlarmAdditionalFields)[ctlrutils.AlarmDefinitionSeverityField].(string)
 		if !ok {
 			// It should have one, even if it is empty
 			slog.Error("Alarm definition has no severity", "alarmDefinitionID", definition.AlarmDefinitionId)

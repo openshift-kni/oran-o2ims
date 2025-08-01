@@ -23,7 +23,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
@@ -155,7 +155,7 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 		middleware.TrailingSlashStripper(),
 	)
 
-	serverTLSConfig, err := utils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
+	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to get Loopback HardwarePlugin server TLS config: %w", err)
 	}

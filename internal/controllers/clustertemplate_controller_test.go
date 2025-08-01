@@ -93,7 +93,7 @@ import (
 	. "github.com/onsi/gomega"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
@@ -119,7 +119,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
@@ -155,7 +155,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 				},
 			},
@@ -165,7 +165,7 @@ baseDomain: value`,
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.PolicyTemplateDefaultsConfigmapKey: `
+					ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 clustertemplate-a-policy-v1-cpu-isolated: "2-31"
 clustertemplate-a-policy-v1-cpu-reserved: "0-1"
 clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
@@ -178,7 +178,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		hwtmpl := &hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
-				Namespace: utils.InventoryNamespace,
+				Namespace: ctlrutils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:  "hwMgr",
@@ -307,7 +307,7 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 			},
 		}
 
-		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
 
 		objs := []client.Object{cm, clusterInstanceCRD}
@@ -541,8 +541,8 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterInstallationTimeoutConfigKey: "80m",
-					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+					ctlrutils.ClusterInstallationTimeoutConfigKey: "80m",
+					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 				},
 			},
@@ -552,8 +552,8 @@ baseDomain: value`,
 					Namespace: ctNamespace,
 				},
 				Data: map[string]string{
-					utils.ClusterConfigurationTimeoutConfigKey: "40m",
-					utils.PolicyTemplateDefaultsConfigmapKey: `
+					ctlrutils.ClusterConfigurationTimeoutConfigKey: "40m",
+					ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 clustertemplate-a-policy-v1-cpu-isolated: "2-31"
 clustertemplate-a-policy-v1-cpu-reserved: "0-1"
 clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
@@ -564,7 +564,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		hwtmpl = &hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
-				Namespace: utils.InventoryNamespace,
+				Namespace: ctlrutils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:  "hwMgr",
@@ -586,7 +586,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
 
 		c = getFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
@@ -636,8 +636,8 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 	})
 
 	It("should return false and set status condition to false if timeouts in ConfigMaps are invalid", func() {
-		cms[0].Data[utils.ClusterInstallationTimeoutConfigKey] = "invalidCiTimeout"
-		cms[1].Data[utils.ClusterConfigurationTimeoutConfigKey] = "invalidPtTimeout"
+		cms[0].Data[ctlrutils.ClusterInstallationTimeoutConfigKey] = "invalidCiTimeout"
+		cms[1].Data[ctlrutils.ClusterConfigurationTimeoutConfigKey] = "invalidPtTimeout"
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
@@ -653,9 +653,9 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
+			"the value of key %s from ConfigMap %s is not a valid duration string", ctlrutils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
-			"the value of key %s from ConfigMap %s is not a valid duration string", utils.ClusterInstallationTimeoutConfigKey, ciDefaultsCm)))
+			"the value of key %s from ConfigMap %s is not a valid duration string", ctlrutils.ClusterInstallationTimeoutConfigKey, ciDefaultsCm)))
 	})
 
 	It("should return validation error message if the hardware template has invalid timeout string", func() {
@@ -695,7 +695,7 @@ var _ = Describe("validateConfigmapReference", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		clusterInstanceCRD, err := utils.BuildTestClusterInstanceCRD(utils.TestClusterInstanceSpecOk)
+		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
 		c = getFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
 	})
@@ -708,16 +708,16 @@ var _ = Describe("validateConfigmapReference", func() {
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstallationTimeoutConfigKey: "40m",
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstallationTimeoutConfigKey: "40m",
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: example.sno.com`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -725,10 +725,10 @@ baseDomain: example.sno.com`,
 		// No ConfigMap created
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"failed to get ConfigmapReference: the ConfigMap '%s' is not found in the namespace '%s'", configmapName, namespace)))
 	})
@@ -741,8 +741,8 @@ baseDomain: example.sno.com`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstallationTimeoutConfigKey: "40m",
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstallationTimeoutConfigKey: "40m",
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baDomain: example.sno.com`,
 			},
 		}
@@ -750,10 +750,10 @@ baDomain: example.sno.com`,
 		// Cluster Instance schema error.
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("failed to validate the default ConfigMap: the ConfigMap does not match the ClusterInstance schema"))
 	})
 
@@ -772,12 +772,12 @@ baDomain: example.sno.com`,
 
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
-			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, utils.ClusterInstanceTemplateDefaultsConfigmapKey)))
+			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey)))
 	})
 
 	It("should return validation error message for invalid YAML in configmap template data", func() {
@@ -788,17 +788,17 @@ baDomain: example.sno.com`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `invalid-yaml`,
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `invalid-yaml`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("the value of key"))
 	})
 
@@ -810,7 +810,7 @@ baDomain: example.sno.com`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 nodes:
 - hostname: "node1"
   nodeNetwork:
@@ -823,10 +823,10 @@ nodes:
 
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("'label' is missing for interface"))
 	})
 
@@ -838,7 +838,7 @@ nodes:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 nodes:
 - hostname: "node1"
   nodeNetwork:
@@ -852,10 +852,10 @@ nodes:
 
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("'label' is empty for interface"))
 	})
 
@@ -867,8 +867,8 @@ nodes:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstallationTimeoutConfigKey: "invalid-timeout",
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstallationTimeoutConfigKey: "invalid-timeout",
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 			},
 		}
@@ -876,10 +876,10 @@ baseDomain: value`,
 
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("is not a valid duration string"))
 	})
 
@@ -892,7 +892,7 @@ baseDomain: value`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 			},
 			Immutable: &mutable,
@@ -901,10 +901,10 @@ baseDomain: value`,
 
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"It is not allowed to set Immutable to false in the ConfigMap %s", configmapName)))
 	})
@@ -917,7 +917,7 @@ baseDomain: value`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 			},
 		}
@@ -925,8 +925,8 @@ baseDomain: value`,
 
 		err := validateConfigmapReference[map[string]any](
 			ctx, c, configmapName, namespace,
-			utils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			utils.ClusterInstallationTimeoutConfigKey)
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that the configmap is patched to be immutable
@@ -1329,7 +1329,7 @@ var _ = Describe("validateClusterInstanceParamsSchema", func() {
 
 	BeforeEach(func() {
 		// Initialize a valid schema for testing
-		err := yaml.Unmarshal([]byte(utils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &validSchema)
+		err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &validSchema)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -1523,7 +1523,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 	var baseSchema map[string]any
 
 	BeforeEach(func() {
-		err := yaml.Unmarshal([]byte(utils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &baseSchema)
+		err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &baseSchema)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -1616,7 +1616,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 
 	It("Returns nil for valid schema", func() {
 		// Re-initialize the base schema for a valid test
-		err := yaml.Unmarshal([]byte(utils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &baseSchema)
+		err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &baseSchema)
 		Expect(err).ToNot(HaveOccurred())
 
 		err = validateSchemaWithoutHWTemplate(baseSchema)
@@ -1671,7 +1671,7 @@ var _ = Describe("validateUpgradeDefaultsConfigmap", func() {
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "quay.io/openshift-release-dev/ocp-release"
@@ -1712,7 +1712,7 @@ plan:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: "invalid: yaml: [data",
+				ctlrutils.UpgradeDefaultsConfigmapKey: "invalid: yaml: [data",
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
@@ -1730,7 +1730,7 @@ plan:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "quay.io/openshift-release-dev/ocp-release"
@@ -1747,7 +1747,7 @@ plan:
 
 		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release (4.17.0) does not match the seedImageRef version (4.18.0) from the upgrade configmap"))
 	})
 
@@ -1761,7 +1761,7 @@ plan:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "quay.io/openshift-release-dev/ocp-release"
@@ -1787,7 +1787,7 @@ plan:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "quay.io/openshift-release-dev/ocp-release"
@@ -1805,7 +1805,7 @@ plan:
 
 		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"It is not allowed to set Immutable to false in the ConfigMap %s", configmapName)))
 	})
@@ -1819,7 +1819,7 @@ plan:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
+				ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "quay.io/openshift-release-dev/ocp-release"
@@ -1877,7 +1877,7 @@ plan:
 					Namespace: namespace,
 				},
 				Data: map[string]string{
-					utils.UpgradeDefaultsConfigmapKey: `
+					ctlrutils.UpgradeDefaultsConfigmapKey: `
 ibuSpec:
   seedImageRef:
     image: "quay.io/openshift-release-dev/ocp-release"
@@ -1894,7 +1894,7 @@ plan:
 
 			err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
 			Expect(err).To(HaveOccurred())
-			Expect(utils.IsInputError(err)).To(BeTrue())
+			Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade configmap"))
 		})
 	})

@@ -17,13 +17,13 @@ import (
 	"k8s.io/client-go/transport"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // ClientFactory is a utility used to abstract building an HTTP client based on the type of callback
 // URL supplied.
 type ClientFactory struct {
-	oauthConfig      *utils.OAuthClientConfig
+	oauthConfig      *ctlrutils.OAuthClientConfig
 	serviceTokenFile string
 }
 
@@ -34,7 +34,7 @@ type ClientProvider interface {
 }
 
 // NewClientFactory creates a new factory
-func NewClientFactory(oauthConfig *utils.OAuthClientConfig, serviceTokenFile string) ClientProvider {
+func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenFile string) ClientProvider {
 	return &ClientFactory{
 		oauthConfig:      oauthConfig,
 		serviceTokenFile: serviceTokenFile,
@@ -42,7 +42,7 @@ func NewClientFactory(oauthConfig *utils.OAuthClientConfig, serviceTokenFile str
 }
 
 func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, error) {
-	tlsConfig, _ := utils.GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
+	tlsConfig, _ := ctlrutils.GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
 	baseClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
@@ -54,7 +54,7 @@ func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, err
 }
 
 func (f *ClientFactory) newOAuthClient(ctx context.Context) (*http.Client, error) {
-	client, err := utils.SetupOAuthClient(ctx, f.oauthConfig)
+	client, err := ctlrutils.SetupOAuthClient(ctx, f.oauthConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup oauth client")
 	}

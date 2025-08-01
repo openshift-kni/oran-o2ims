@@ -23,8 +23,8 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // HardwarePluginReconciler reconciles a HardwarePlugin object
@@ -45,7 +45,7 @@ type HardwarePluginReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
-	result = utils.RequeueWithLongInterval()
+	result = hwmgrutils.RequeueWithLongInterval()
 
 	// Fetch the CR:
 	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
@@ -77,7 +77,7 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		err = fmt.Errorf("encountered an error while attempting to validate HardwarePlugin (%s): %w", hwplugin.Name, err)
 		condMessage = err.Error()
 
-		result = utils.RequeueWithMediumInterval()
+		result = hwmgrutils.RequeueWithMediumInterval()
 	} else {
 		if isValid {
 			condReason = hwmgmtv1alpha1.ConditionReasons.Completed
@@ -89,11 +89,11 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			condMessage = fmt.Sprintf("Failed to validate connection to %s", hwplugin.Spec.ApiRoot)
 
 			r.Logger.InfoContext(ctx, fmt.Sprintf("Failed to validate connection to %s", hwplugin.Spec.ApiRoot))
-			result = utils.RequeueWithMediumInterval()
+			result = hwmgrutils.RequeueWithMediumInterval()
 		}
 	}
 
-	if updateErr := utils.UpdateHardwarePluginStatusCondition(ctx, r.Client, hwplugin,
+	if updateErr := hwmgrutils.UpdateHardwarePluginStatusCondition(ctx, r.Client, hwplugin,
 		hwmgmtv1alpha1.ConditionTypes.Registration, condReason, condStatus, condMessage); updateErr != nil {
 		err = fmt.Errorf("failed to update status for HardwarePlugin (%s) with validation success: %w", hwplugin.Name, updateErr)
 	}
@@ -121,7 +121,7 @@ func (r *HardwarePluginReconciler) validateHardwarePlugin(ctx context.Context, h
 	}
 
 	// Validate the connection by fetch api-versions
-	if err := sharedutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		_, err = hwpclient.GetAllVersions(ctx)
 		if err != nil {
 			return fmt.Errorf("validation attempt to '%s' failed, err: %w", apiRoot, err)

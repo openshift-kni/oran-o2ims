@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -100,7 +100,7 @@ func ControllerManager() *cobra.Command {
 		imageFlagName,
 		// Intentionally setting the default value to "" if the environment variable is not set to ensure we never
 		// run an image that we didn't intend on running.
-		utils.GetEnvOrDefault(constants.ServerImageName, ""),
+		ctlrutils.GetEnvOrDefault(constants.ServerImageName, ""),
 		"Reference of the container image containing the servers.",
 	)
 	return result
@@ -222,7 +222,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	// Create the default inventory CR
-	err = utils.CreateDefaultInventoryCR(ctx, mgr.GetClient())
+	err = ctlrutils.CreateDefaultInventoryCR(ctx, mgr.GetClient())
 	if err != nil {
 		logger.ErrorContext(
 			ctx,

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,7 +23,7 @@ import (
 func (t *reconcilerTask) setupHardwarePluginManager(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 	nextReconcile = defaultResult
 
-	if err = t.createServiceAccount(ctx, utils.HardwarePluginManagerServerName); err != nil {
+	if err = t.createServiceAccount(ctx, ctlrutils.HardwarePluginManagerServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy ServiceAccount for the HardwarePlugin manager.",
 			slog.String("error", err.Error()))
 		return
@@ -35,25 +35,25 @@ func (t *reconcilerTask) setupHardwarePluginManager(ctx context.Context, default
 		return
 	}
 
-	if err = t.createServerClusterRoleBinding(ctx, utils.HardwarePluginManagerServerName); err != nil {
+	if err = t.createServerClusterRoleBinding(ctx, ctlrutils.HardwarePluginManagerServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to create server ClusterRoleBinding for the HardwarePlugin manager.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createServerRbacClusterRoleBinding(ctx, utils.HardwarePluginManagerServerName); err != nil {
+	if err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.HardwarePluginManagerServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to create RBAC ClusterRoleBinding for the HardwarePlugin manager.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createService(ctx, utils.HardwarePluginManagerServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
+	if err = t.createService(ctx, ctlrutils.HardwarePluginManagerServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy Service for the HardwarePlugin manager.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	errorReason, err := t.deployServer(ctx, utils.HardwarePluginManagerServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.HardwarePluginManagerServerName)
 	if err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy the HardwarePlugin manager.",
 			slog.String("error", err.Error()))
@@ -69,7 +69,7 @@ func (t *reconcilerTask) createHardwarePluginManagerClusterRole(ctx context.Cont
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.HardwarePluginManagerServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.HardwarePluginManagerServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -210,7 +210,7 @@ func (t *reconcilerTask) createHardwarePluginManagerClusterRole(ctx context.Cont
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
 	}
 

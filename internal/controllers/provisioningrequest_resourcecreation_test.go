@@ -49,7 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
 
@@ -123,7 +123,7 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 		configMapName := crName + "-pg"
 		configMapNs := "ztp-" + ctNamespace
 		configMap := &corev1.ConfigMap{}
-		configMapExists, err := utils.DoesK8SResourceExist(
+		configMapExists, err := ctlrutils.DoesK8SResourceExist(
 			ctx, c, configMapName, configMapNs, configMap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(configMapExists).To(BeTrue())

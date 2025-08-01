@@ -26,7 +26,7 @@ import (
 	v1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
@@ -111,7 +111,7 @@ func (d *K8SDataSource) makeClusterResourceTypeName(architecture, cores string) 
 // makeClusterResourceTypeID builds a UUID value for this resource type based on its name so that it has
 // a consistent value each time it is created.
 func (d *K8SDataSource) makeClusterResourceTypeID(architecture, cores string) uuid.UUID {
-	return utils.MakeUUIDFromNames(ClusterResourceTypeUUIDNamespace, d.cloudID, d.makeClusterResourceTypeName(architecture, cores))
+	return ctlrutils.MakeUUIDFromNames(ClusterResourceTypeUUIDNamespace, d.cloudID, d.makeClusterResourceTypeName(architecture, cores))
 }
 
 // MakeClusterResourceType creates an instance of a ResourceType from a Resource object.
@@ -127,7 +127,7 @@ func (d *K8SDataSource) MakeClusterResourceType(resource *models.ClusterResource
 	cores := cpu["cores"]
 
 	resourceTypeName := d.makeClusterResourceTypeName(architecture, cores)
-	resourceTypeID := utils.MakeUUIDFromNames(ClusterResourceTypeUUIDNamespace, d.cloudID, resourceTypeName)
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(ClusterResourceTypeUUIDNamespace, d.cloudID, resourceTypeName)
 
 	result := models.ClusterResourceType{
 		ClusterResourceTypeID: resourceTypeID,
@@ -149,23 +149,23 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 	}
 
 	// We know these extensions exist because we checked when we processed the NodeCluster
-	vendor := (*extensions)[utils.ClusterVendorExtension].(string)
-	version := (*extensions)[utils.OpenshiftVersionLabelName].(string)
-	clusterType := (*extensions)[utils.ClusterModelExtension].(string)
+	vendor := (*extensions)[ctlrutils.ClusterVendorExtension].(string)
+	version := (*extensions)[ctlrutils.OpenshiftVersionLabelName].(string)
+	clusterType := (*extensions)[ctlrutils.ClusterModelExtension].(string)
 
 	resourceTypeName := d.makeNodeClusterTypeName(clusterType, vendor, version)
-	resourceTypeID := utils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, resourceTypeName)
-	alarmDictionaryID := utils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, fmt.Sprintf("%s-%s", resourceTypeName, "alarms"))
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, resourceTypeName)
+	alarmDictionaryID := ctlrutils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, fmt.Sprintf("%s-%s", resourceTypeName, "alarms"))
 
 	// We expect that the standard will eventually evolve to contain more attributes to align more
 	// closely with how ResourceType was defined, but for now we'll add some additional info as
 	// extensions so that they are known to clients.  These will be used by the alarm code to build
 	// the dictionary.
 	typeExtensions := map[string]interface{}{
-		utils.ClusterVendorExtension:            vendor,
-		utils.ClusterVersionExtension:           version,
-		utils.ClusterModelExtension:             clusterType,
-		utils.ClusterAlarmDictionaryIDExtension: alarmDictionaryID,
+		ctlrutils.ClusterVendorExtension:            vendor,
+		ctlrutils.ClusterVersionExtension:           version,
+		ctlrutils.ClusterModelExtension:             clusterType,
+		ctlrutils.ClusterAlarmDictionaryIDExtension: alarmDictionaryID,
 	}
 
 	result := models.NodeClusterType{
@@ -185,10 +185,10 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 func (d *K8SDataSource) getInventoryResourceID(agent *v1beta1.Agent) uuid.UUID {
 	var hwMgrID, hwMgrNodeID string
 	var found bool
-	if hwMgrID, found = agent.Labels[utils.HardwarePluginRefLabel]; !found {
+	if hwMgrID, found = agent.Labels[ctlrutils.HardwarePluginRefLabel]; !found {
 		return uuid.Nil
 	}
-	if hwMgrNodeID, found = agent.Labels[utils.HardwareManagerNodeIdLabel]; !found {
+	if hwMgrNodeID, found = agent.Labels[ctlrutils.HardwareManagerNodeIdLabel]; !found {
 		return uuid.Nil
 	}
 
@@ -200,7 +200,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 	// Build a unique UUID value using the namespace and name.  Choosing not to tie ourselves to the agent UUID since
 	// we don't know if/when it can change and how we want to behave if the node gets deleted and re-installed.
 	name := fmt.Sprintf("%s/%s", agent.Namespace, agent.Name)
-	resourceID := utils.MakeUUIDFromNames(ClusterResourceUUIDNamespace, d.cloudID, name)
+	resourceID := ctlrutils.MakeUUIDFromNames(ClusterResourceUUIDNamespace, d.cloudID, name)
 
 	architecture := agent.Status.Inventory.Cpu.Architecture
 	cores := agent.Status.Inventory.Cpu.Count
@@ -238,7 +238,7 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 		GenerationID:          d.generationID,
 	}
 
-	if templateID, found := agent.Labels[utils.ClusterTemplateArtifactsLabel]; found {
+	if templateID, found := agent.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; found {
 		value, err := uuid.Parse(templateID)
 		if err != nil {
 			return models.ClusterResource{}, fmt.Errorf("failed to parse template ID value '%s' into UUID", templateID)
@@ -258,7 +258,7 @@ func (d *K8SDataSource) makeNodeClusterTypeName(clusterType, vendor, version str
 // makeClusterResourceTypeID builds a UUID value for this resource type based on its name so that it has
 // a consistent value each time it is created.
 func (d *K8SDataSource) makeNodeClusterTypeID(clusterType, vendor, version string) uuid.UUID {
-	return utils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, d.makeNodeClusterTypeName(clusterType, vendor, version))
+	return ctlrutils.MakeUUIDFromNames(NodeClusterTypeUUIDNamespace, d.cloudID, d.makeNodeClusterTypeName(clusterType, vendor, version))
 }
 
 // getExtensionsFromLabels converts a label map to an extensions map
@@ -272,35 +272,35 @@ func (d *K8SDataSource) getExtensionsFromLabels(labels map[string]string) map[st
 
 // convertManagedClusterToNodeCluster converts a ManagedCluster to a ManagedCluster object
 func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCluster) (models.NodeCluster, error) {
-	vendor, found := cluster.Labels[utils.ClusterVendorExtension]
+	vendor, found := cluster.Labels[ctlrutils.ClusterVendorExtension]
 	if !found {
 		return models.NodeCluster{}, fmt.Errorf("no vendor label found on cluster %s", cluster.Name)
 	}
 
 	var version string
 	if vendor == "OpenShift" {
-		version, found = cluster.Labels[utils.OpenshiftVersionLabelName]
+		version, found = cluster.Labels[ctlrutils.OpenshiftVersionLabelName]
 		if !found {
 			return models.NodeCluster{}, fmt.Errorf("no version label found on cluster %s", cluster.Name)
 		}
 	}
 
 	var clusterID string
-	clusterID, found = cluster.Labels[utils.ClusterIDLabelName]
+	clusterID, found = cluster.Labels[ctlrutils.ClusterIDLabelName]
 	if !found {
-		return models.NodeCluster{}, fmt.Errorf("no '%s' found on cluster %s", utils.ClusterIDLabelName, cluster.Name)
+		return models.NodeCluster{}, fmt.Errorf("no '%s' found on cluster %s", ctlrutils.ClusterIDLabelName, cluster.Name)
 	}
 
 	// Determine the cluster type so we can differentiate between a hub and a managed cluster
-	clusterType := utils.ClusterModelManagedCluster
+	clusterType := ctlrutils.ClusterModelManagedCluster
 	if isLocalCluster(cluster) {
-		clusterType = utils.ClusterModelHubCluster
+		clusterType = ctlrutils.ClusterModelHubCluster
 	}
 
 	// Use the cluster ID label to facilitate mapping to alarms and possibly other entities
 	resourceID, err := uuid.Parse(clusterID)
 	if err != nil {
-		return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' label value '%s' into UUID", utils.ClusterIDLabelName, clusterID)
+		return models.NodeCluster{}, fmt.Errorf("failed to parse '%s' label value '%s' into UUID", ctlrutils.ClusterIDLabelName, clusterID)
 	}
 
 	// For now continue to generate UUID values based on the string values assigned
@@ -310,7 +310,7 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 	extensions := d.getExtensionsFromLabels(cluster.Labels)
 
 	// Add the cluster type so that clients don't have to depend on the local-cluster bool
-	extensions[utils.ClusterModelExtension] = clusterType
+	extensions[ctlrutils.ClusterModelExtension] = clusterType
 
 	to := models.NodeCluster{
 		NodeClusterID:                  resourceID,
@@ -326,7 +326,7 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 		GenerationID:                   d.generationID,
 	}
 
-	if templateID, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; found {
+	if templateID, found := cluster.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; found {
 		value, err := uuid.Parse(templateID)
 		if err != nil {
 			return models.NodeCluster{}, fmt.Errorf("failed to parse template ID value '%s' into UUID", templateID)
@@ -339,7 +339,7 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 
 // isLocalCluster determines if a cluster is a local-cluster
 func isLocalCluster(cluster *v1.ManagedCluster) bool {
-	if value, found := cluster.Labels[utils.LocalClusterLabelName]; found {
+	if value, found := cluster.Labels[ctlrutils.LocalClusterLabelName]; found {
 		localCluster, err := strconv.ParseBool(value)
 		if err == nil {
 			return localCluster
@@ -364,7 +364,7 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 		if !isLocalCluster(cluster) {
 			// Require an additional label for regular managed clusters so we don't include it until the related
 			// provisioning request has completed, but the local-cluster will never have this, so we continue without it.
-			if _, found := cluster.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
+			if _, found := cluster.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; !found {
 				// The provisioning request which is managing the installation of this cluster is not yet fulfilled
 				slog.Debug("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
 				return uuid.Nil, nil
@@ -401,7 +401,7 @@ func (d *K8SDataSource) handleAgentWatchEvent(ctx context.Context, agent *v1beta
 			return uuid.Nil, nil
 		}
 
-		if _, found := agent.Labels[utils.ClusterTemplateArtifactsLabel]; !found {
+		if _, found := agent.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; !found {
 			// The provisioning request which is managing the installation of this agent is not yet fulfilled
 			slog.Debug("Cluster provisioning request is not yet fulfilled; skipping", "agent", agent.Name)
 			return uuid.Nil, nil

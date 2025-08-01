@@ -19,7 +19,7 @@ import (
 	apigenerated "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 var _ = Describe("Cluster Server", func() {
@@ -256,7 +256,7 @@ var _ = Describe("Cluster Server", func() {
 			It("returns 404 not found response", func() {
 				mockRepo.EXPECT().
 					GetAlarmDictionary(ctx, testUUID).
-					Return(nil, utils.ErrNotFound)
+					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
 					AlarmDictionaryId: testUUID,

@@ -28,7 +28,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwpluginserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	metal3ctrl "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	metal3server "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/server"
 	"github.com/openshift-kni/oran-o2ims/internal"
@@ -164,7 +164,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		})
 	}
 
-	if err := hwpluginutils.InitNodeAllocationRequestUtils(scheme); err != nil {
+	if err := hwmgrutils.InitNodeAllocationRequestUtils(scheme); err != nil {
 		logger.ErrorContext(ctx, "failed InitNodeAllocationRequestUtils", slog.String("error", err.Error()))
 		return exit.Error(1)
 	}

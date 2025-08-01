@@ -15,13 +15,13 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // collectNodeDetails collects BMC and node interfaces details
-func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrpluginapi.AllocatedNode) (map[string][]utils.NodeInfo, error) {
+func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrpluginapi.AllocatedNode) (map[string][]ctlrutils.NodeInfo, error) {
 	// hwNodes maps a group name to a slice of NodeInfo
-	hwNodes := make(map[string][]utils.NodeInfo)
+	hwNodes := make(map[string][]ctlrutils.NodeInfo)
 	for _, node := range *nodes {
 		if node.Bmc.CredentialsName == "" {
 			return nil, fmt.Errorf("the AllocatedNode does not have BMC details")
@@ -36,14 +36,14 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 			})
 		}
 
-		tmpNode := utils.NodeInfo{
+		tmpNode := ctlrutils.NodeInfo{
 			BmcAddress:     node.Bmc.Address,
 			BmcCredentials: node.Bmc.CredentialsName,
 			NodeID:         node.Id,
 			Interfaces:     interfaces,
 		}
 
-		if bmh := utils.GetBareMetalHostForAllocatedNode(ctx, c, node.Id); bmh != nil {
+		if bmh := ctlrutils.GetBareMetalHostForAllocatedNode(ctx, c, node.Id); bmh != nil {
 			tmpNode.HwMgrNodeId = bmh.Name
 			tmpNode.HwMgrNodeNs = bmh.Namespace
 		}

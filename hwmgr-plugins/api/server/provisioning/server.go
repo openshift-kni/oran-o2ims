@@ -19,10 +19,10 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	sharedutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 // HardwarePluginServer implements StricerServerInterface.
@@ -30,7 +30,7 @@ import (
 var _ StrictServerInterface = (*HardwarePluginServer)(nil)
 
 type HardwarePluginServer struct {
-	utils.CommonServerConfig
+	svcutils.CommonServerConfig
 	HubClient        client.Client
 	Logger           *slog.Logger
 	Namespace        string
@@ -79,7 +79,7 @@ func (h *HardwarePluginServer) GetNodeAllocationRequests(
 	// List NodeAllocationRequests with the HardwarePlugin label
 	nodeAllocationRequestList := &pluginsv1alpha1.NodeAllocationRequestList{}
 	listOptions := client.MatchingLabels{
-		hwpluginutils.HardwarePluginLabel: h.HardwarePluginID,
+		hwmgrutils.HardwarePluginLabel: h.HardwarePluginID,
 	}
 	if err := h.HubClient.List(ctx, nodeAllocationRequestList, &listOptions); err != nil {
 		return nil, fmt.Errorf("failed to list all NodeAllocationRequests: %w", err)
@@ -157,7 +157,7 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 			Name:      nodeAllocationRequestID,
 			Namespace: h.Namespace,
 			Labels: map[string]string{
-				hwpluginutils.HardwarePluginLabel: h.HardwarePluginID,
+				hwmgrutils.HardwarePluginLabel: h.HardwarePluginID,
 			},
 		},
 		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
@@ -184,7 +184,7 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 
 	// Check that NodeAllocationRequest object exists
 	existingNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
-	exist, err := sharedutils.DoesK8SResourceExist(ctx, h.HubClient,
+	exist, err := ctlrutils.DoesK8SResourceExist(ctx, h.HubClient,
 		request.NodeAllocationRequestId, h.Namespace, existingNodeAllocationRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest %s, err: %w", request.NodeAllocationRequestId, err)
@@ -242,7 +242,7 @@ func (h *HardwarePluginServer) DeleteNodeAllocationRequest(
 
 	// Check that NodeAllocationRequest object exists
 	existingNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
-	exist, err := sharedutils.DoesK8SResourceExist(ctx, h.HubClient, request.NodeAllocationRequestId, h.Namespace, existingNodeAllocationRequest)
+	exist, err := ctlrutils.DoesK8SResourceExist(ctx, h.HubClient, request.NodeAllocationRequestId, h.Namespace, existingNodeAllocationRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s', err: %w", request.NodeAllocationRequestId, err)
 	}
@@ -272,7 +272,7 @@ func (h *HardwarePluginServer) GetAllocatedNodes(
 	// List AllocatedNodes with the HardwarePlugin label
 	allocatedNodeList := &pluginsv1alpha1.AllocatedNodeList{}
 	listOptions := client.MatchingLabels{
-		hwpluginutils.HardwarePluginLabel: h.HardwarePluginID,
+		hwmgrutils.HardwarePluginLabel: h.HardwarePluginID,
 	}
 
 	if err := h.HubClient.List(ctx, allocatedNodeList, &listOptions); err != nil {

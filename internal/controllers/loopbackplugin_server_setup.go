@@ -18,9 +18,9 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/api/common"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // setupLoopbackPluginServer creates the Kubernetes resources necessary to start the loopback hardware plugin server.
@@ -28,7 +28,7 @@ func (t *reconcilerTask) setupLoopbackPluginServer(ctx context.Context, defaultR
 
 	nextReconcile = defaultResult
 
-	if err = t.createServiceAccount(ctx, utils.LoopbackPluginServerName); err != nil {
+	if err = t.createServiceAccount(ctx, ctlrutils.LoopbackPluginServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy ServiceAccount for the Loopback hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
@@ -40,25 +40,25 @@ func (t *reconcilerTask) setupLoopbackPluginServer(ctx context.Context, defaultR
 		return
 	}
 
-	if err = t.createServerClusterRoleBinding(ctx, utils.LoopbackPluginServerName); err != nil {
+	if err = t.createServerClusterRoleBinding(ctx, ctlrutils.LoopbackPluginServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to create server ClusterRoleBinding for the Loopback hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createServerRbacClusterRoleBinding(ctx, utils.LoopbackPluginServerName); err != nil {
+	if err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.LoopbackPluginServerName); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to create RBAC ClusterRoleBinding for the Loopback hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createService(ctx, utils.LoopbackPluginServerName, constants.DefaultServicePort, utils.DefaultServiceTargetPort); err != nil {
+	if err = t.createService(ctx, ctlrutils.LoopbackPluginServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy Service for the Loopback hardware plugin server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	errorReason, err := t.deployServer(ctx, utils.LoopbackPluginServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.LoopbackPluginServerName)
 	if err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy the Loopback plugin hardware server.",
 			slog.String("error", err.Error()))
@@ -80,7 +80,7 @@ func (t *reconcilerTask) createLoopbackPluginServerClusterRole(ctx context.Conte
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, utils.LoopbackPluginServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.LoopbackPluginServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -192,7 +192,7 @@ func (t *reconcilerTask) createLoopbackPluginServerClusterRole(ctx context.Conte
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, role, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, role, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Cluster Server cluster role: %w", err)
 	}
 
@@ -204,18 +204,18 @@ func (t *reconcilerTask) createLoopbackPluginHardwarePluginCR(ctx context.Contex
 	t.logger.DebugContext(ctx, "Creating Loopback Hardware Plugin CR")
 	hardwarePlugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      hwpluginutils.LoopbackHardwarePluginID,
+			Name:      hwmgrutils.LoopbackHardwarePluginID,
 			Namespace: t.object.Namespace,
 		},
 		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-			ApiRoot: fmt.Sprintf("https://%s.%s.svc.cluster.local:8443", utils.LoopbackPluginServerName, t.object.Namespace),
+			ApiRoot: fmt.Sprintf("https://%s.%s.svc.cluster.local:8443", ctlrutils.LoopbackPluginServerName, t.object.Namespace),
 			AuthClientConfig: &common.AuthClientConfig{
 				Type: common.ServiceAccount,
 			},
 		},
 	}
 
-	if err := utils.CreateK8sCR(ctx, t.client, hardwarePlugin, t.object, utils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, hardwarePlugin, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Loopback Hardware Plugin CR: %w", err)
 	}
 

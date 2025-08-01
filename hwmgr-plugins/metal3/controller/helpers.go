@@ -23,8 +23,8 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -91,7 +91,7 @@ func applyPostConfigUpdates(ctx context.Context,
 			return fmt.Errorf("failed to remove annotation for node %s/%s: %w", updatedNode.Name, updatedNode.Namespace, err)
 		}
 
-		hwpluginutils.SetStatusCondition(&updatedNode.Status.Conditions,
+		hwmgrutils.SetStatusCondition(&updatedNode.Status.Conditions,
 			string(hwmgmtv1alpha1.Provisioned),
 			string(hwmgmtv1alpha1.Completed),
 			metav1.ConditionTrue,
@@ -137,7 +137,7 @@ func deriveNodeAllocationRequestStatusFromNodes(
 
 	for _, node := range nodelist.Items {
 		// Fetch the latest version of the AllocatedNode from the API server
-		updatedNode, err := hwpluginutils.GetNode(ctx, logger, noncachedClient, node.Namespace, node.Name)
+		updatedNode, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, node.Namespace, node.Name)
 		if err != nil {
 			logger.ErrorContext(ctx, "Failed to fetch updated AllocatedNode", slog.String("name", node.Name), slog.String("error", err.Error()))
 			// Fail conservatively if we can't confirm the node's status
@@ -207,7 +207,7 @@ func createNode(ctx context.Context,
 			Name:      nodename,
 			Namespace: pluginNamespace,
 			Labels: map[string]string{
-				hwpluginutils.HardwarePluginLabel: hwpluginutils.Metal3HardwarePluginID,
+				hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
 			},
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion:         nodeAllocationRequest.APIVersion,
@@ -271,7 +271,7 @@ func updateNodeStatus(ctx context.Context,
 			message = "Hardware configuration in progess"
 			status = metav1.ConditionFalse
 		}
-		hwpluginutils.SetStatusCondition(&node.Status.Conditions,
+		hwmgrutils.SetStatusCondition(&node.Status.Conditions,
 			string(hwmgmtv1alpha1.Provisioned),
 			string(reason),
 			status,
@@ -389,29 +389,29 @@ func handleInProgressUpdate(ctx context.Context,
 
 		// Update the node's status to reflect the new hardware profile.
 		node.Status.HwProfile = node.Spec.HwProfile
-		hwpluginutils.SetStatusCondition(&node.Status.Conditions,
+		hwmgrutils.SetStatusCondition(&node.Status.Conditions,
 			string(hwmgmtv1alpha1.Configured),
 			string(hwmgmtv1alpha1.ConfigApplied),
 			metav1.ConditionTrue,
 			string(hwmgmtv1alpha1.ConfigSuccess))
-		if err := utils.UpdateK8sCRStatus(ctx, c, node); err != nil {
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, c, node); err != nil {
 			return ctrl.Result{}, true, fmt.Errorf("failed to update status for AllocatedNode %s: %w", node.Name, err)
 		}
 		removeConfigAnnotation(node)
-		if err := utils.CreateK8sCR(ctx, c, node, nil, utils.PATCH); err != nil {
+		if err := ctlrutils.CreateK8sCR(ctx, c, node, nil, ctlrutils.PATCH); err != nil {
 			return ctrl.Result{}, true, fmt.Errorf("failed to clear annotation from AllocatedNode %s: %w", node.Name, err)
 		}
 
-		return hwpluginutils.RequeueImmediately(), true, nil
+		return hwmgrutils.RequeueImmediately(), true, nil
 	}
 
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
 		tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
 		if err != nil || tolerate {
-			return hwpluginutils.RequeueWithMediumInterval(), true, err
+			return hwmgrutils.RequeueWithMediumInterval(), true, err
 		}
 		logger.InfoContext(ctx, "BMH update failed", slog.String("BMH", bmh.Name))
-		if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient,
+		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.Failed), BmhServicingErr); err != nil {
@@ -421,7 +421,7 @@ func handleInProgressUpdate(ctx context.Context,
 	}
 
 	logger.InfoContext(ctx, "BMH config in progress", slog.String("bmh", bmh.Name))
-	return hwpluginutils.RequeueWithMediumInterval(), true, nil
+	return hwmgrutils.RequeueWithMediumInterval(), true, nil
 }
 
 // initiateNodeUpdate starts the update process for the given AllocatedNode by processing the new hardware profile,
@@ -435,7 +435,7 @@ func initiateNodeUpdate(ctx context.Context,
 
 	bmh, err := getBMHForNode(ctx, c, node)
 	if err != nil {
-		return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
+		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
 	logger.InfoContext(ctx, "Issuing profile update to AllocatedNode",
 		slog.String("hwMgrNodeId", node.Spec.HwMgrNodeId),
@@ -444,7 +444,7 @@ func initiateNodeUpdate(ctx context.Context,
 
 	updateRequired, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, pluginNamespace, bmh, node.Name, node.Namespace, newHwProfile, true)
 	if err != nil {
-		return hwpluginutils.DoNotRequeue(), err
+		return hwmgrutils.DoNotRequeue(), err
 	}
 	logger.InfoContext(ctx, "Processed hardware profile", slog.Bool("updatedRequired", updateRequired))
 
@@ -455,20 +455,20 @@ func initiateNodeUpdate(ctx context.Context,
 	node.Spec.HwProfile = newHwProfile
 
 	if err = c.Patch(ctx, node, patch); err != nil {
-		return hwpluginutils.RequeueWithShortInterval(), fmt.Errorf("failed to patch AllocatedNode %s in namespace %s: %w", node.Name, node.Namespace, err)
+		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to patch AllocatedNode %s in namespace %s: %w", node.Name, node.Namespace, err)
 	}
 
 	if updateRequired {
-		if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient,
+		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.ConfigUpdate), "Update Requested"); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update AllocatedNode status (%s): %w", node.Name, err)
 		}
 		// Return a medium interval requeue to allow time for the update to progress.
-		return hwpluginutils.RequeueWithMediumInterval(), nil
+		return hwmgrutils.RequeueWithMediumInterval(), nil
 	} else {
-		if err := hwpluginutils.SetNodeConditionStatus(ctx, c, noncachedClient,
+		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionTrue,
 			string(hwmgmtv1alpha1.ConfigApplied), string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
@@ -489,7 +489,7 @@ func handleNodeAllocationRequestConfiguring(
 
 	logger.InfoContext(ctx, "Handling NodeAllocationRequest Configuring")
 
-	nodelist, err := hwpluginutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
 		return ctrl.Result{}, nil, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
@@ -515,7 +515,7 @@ func handleNodeAllocationRequestConfiguring(
 	}
 	if updating {
 		// Return a short interval requeue to allow time for the transition
-		return hwpluginutils.RequeueWithShortInterval(), nodelist, nil
+		return hwmgrutils.RequeueWithShortInterval(), nodelist, nil
 	}
 
 	// STEP 3: Process any node that is already in the update-in-progress state.
@@ -523,7 +523,7 @@ func handleNodeAllocationRequestConfiguring(
 	if err != nil {
 		if !handled {
 			logger.InfoContext(ctx, "Not handled", slog.String("error", err.Error()))
-			return hwpluginutils.DoNotRequeue(), nodelist, nil
+			return hwmgrutils.DoNotRequeue(), nodelist, nil
 		}
 		return res, nodelist, err
 	}
@@ -542,7 +542,7 @@ func setAwaitConfigCondition(
 	c client.Client,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 ) (ctrl.Result, error) {
-	err := hwpluginutils.UpdateNodeAllocationRequestStatusCondition(
+	err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(
 		ctx, c,
 		nodeAllocationRequest,
 		hwmgmtv1alpha1.Configured,
@@ -551,7 +551,7 @@ func setAwaitConfigCondition(
 		string(hwmgmtv1alpha1.AwaitConfig),
 	)
 	if err != nil {
-		return hwpluginutils.RequeueWithMediumInterval(), fmt.Errorf(
+		return hwmgrutils.RequeueWithMediumInterval(), fmt.Errorf(
 			"failed to update status for NodeAllocationRequest %s: %w",
 			nodeAllocationRequest.Name,
 			err,
@@ -573,7 +573,7 @@ func releaseNodeAllocationRequest(ctx context.Context,
 	)
 
 	// remove the allocated label from BMHs and finalizer from the corresponding PreprovisioningImage resources
-	nodelist, err := hwpluginutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
 		return false, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
@@ -608,7 +608,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	nodeName := bmh.Annotations[NodeNameAnnotation]
 	if nodeName == "" {
-		nodeName = hwpluginutils.GenerateNodeName()
+		nodeName = hwmgrutils.GenerateNodeName()
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, NodeNameAnnotation,
 			nodeName, OpAdd); err != nil {
 			return fmt.Errorf("failed to save AllocatedNode name annotation to BMH (%s): %w", bmh.Name, err)
@@ -616,9 +616,9 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	}
 
 	// Set AllocatedNode label
-	allocatedNodeLbl := bmh.Labels[utils.AllocatedNodeLabel]
+	allocatedNodeLbl := bmh.Labels[ctlrutils.AllocatedNodeLabel]
 	if allocatedNodeLbl != nodeName {
-		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeLabel, utils.AllocatedNodeLabel,
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeLabel, ctlrutils.AllocatedNodeLabel,
 			nodeName, OpAdd); err != nil {
 			return fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
 		}
@@ -776,7 +776,7 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 	}
 
 	// Update NodeAllocationRequest properties after all allocations are complete
-	if err := hwpluginutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
+	if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
 		return fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
 

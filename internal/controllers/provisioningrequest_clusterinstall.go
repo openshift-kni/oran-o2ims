@@ -26,7 +26,7 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -71,7 +71,7 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 	// We want to add the disable-auto-import annotation to the
 	// rendered ClusterInstance until the cluster installation
 	// is marked as completed.
-	if !utils.IsClusterProvisionCompleted(t.object) {
+	if !ctlrutils.IsClusterProvisionCompleted(t.object) {
 		err = addDisableAutoImportAnnotation(renderedCIUnstructured)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -82,7 +82,7 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 
 	existingCIUnstructured := &unstructured.Unstructured{}
 	existingCIUnstructured.SetGroupVersionKind(renderedCIUnstructured.GroupVersionKind())
-	ciExists, err := utils.DoesK8SResourceExist(ctx, t.client, ciName, ciName, existingCIUnstructured)
+	ciExists, err := ctlrutils.DoesK8SResourceExist(ctx, t.client, ciName, ciName, existingCIUnstructured)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ClusterInstance (%s): %w", ciName, err)
 	}
@@ -118,7 +118,7 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(
 		renderedCIUnstructured.Object, renderedCI); err != nil {
 		// Unlikely to happen since dry-run validation has passed
-		return nil, utils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
+		return nil, ctlrutils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
 	}
 
 	return renderedCI, nil
@@ -159,7 +159,7 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 			nodeMap["bootMACAddress"] = "00:00:5E:00:53:AF"
 		}
 		if value, ok := nodeMap["bmcCredentialsName"]; !ok || value == "" {
-			secretName, err := utils.GenerateSecretName(nodeMap, renderedClusterInstanceUnstructured.GetName())
+			secretName, err := ctlrutils.GenerateSecretName(nodeMap, renderedClusterInstanceUnstructured.GetName())
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate Secret name: %w", err)
 			}
@@ -211,7 +211,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 
 	// Remove the disable-auto-import annotation for the managed cluster
 	// if the cluster provisioning is completed.
-	if utils.IsClusterProvisionCompleted(t.object) {
+	if ctlrutils.IsClusterProvisionCompleted(t.object) {
 		return t.removeDisableAutoImportAnnotation(ctx, clusterInstance)
 	}
 
@@ -224,7 +224,7 @@ func (t *provisioningRequestReconcilerTask) removeDisableAutoImportAnnotation(
 	ctx context.Context, ci *unstructured.Unstructured) error {
 
 	managedCluster := &clusterv1.ManagedCluster{}
-	exists, err := utils.DoesK8SResourceExist(
+	exists, err := ctlrutils.DoesK8SResourceExist(
 		ctx, t.client, ci.GetName(), "", managedCluster)
 	if err != nil {
 		return fmt.Errorf("failed to check if ManagedCluster exists: %w", err)
@@ -248,8 +248,8 @@ func (t *provisioningRequestReconcilerTask) checkClusterProvisionStatus(
 	ctx context.Context, clusterInstanceName string) error {
 
 	clusterInstance := &siteconfig.ClusterInstance{}
-	if err := utils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
-		exists, err := utils.DoesK8SResourceExist(ctx, t.client, clusterInstanceName, clusterInstanceName, clusterInstance)
+	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		exists, err := ctlrutils.DoesK8SResourceExist(ctx, t.client, clusterInstanceName, clusterInstanceName, clusterInstance)
 		if err != nil {
 			return fmt.Errorf("failed to get ClusterInstance %s: %w", clusterInstanceName, err)
 		}
@@ -265,7 +265,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterProvisionStatus(
 	t.updateClusterInstanceProcessedStatus(clusterInstance)
 	t.updateClusterProvisionStatus(clusterInstance)
 
-	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 	}
 
@@ -293,11 +293,11 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 			return fmt.Errorf("failed to get ClusterInstance: %w", err)
 		}
 
-		operationType = utils.OperationTypeCreated
+		operationType = ctlrutils.OperationTypeCreated
 		opts := []client.CreateOption{}
 		if isDryRun {
 			opts = append(opts, client.DryRunAll)
-			operationType = utils.OperationTypeDryRun
+			operationType = ctlrutils.OperationTypeDryRun
 		}
 
 		err = ctrl.SetControllerReference(t.object, clusterInstance, t.client.Scheme())
@@ -309,7 +309,7 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 				return fmt.Errorf("failed to create ClusterInstance: %w", err)
 			}
-			return utils.NewInputError("%s", err.Error())
+			return ctlrutils.NewInputError("%s", err.Error())
 		}
 	} else {
 		// Compare spec fields of both unstructured objects
@@ -333,11 +333,11 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 		clusterInstance.SetLabels(existingClusterInstance.GetLabels())
 		clusterInstance.SetAnnotations(existingClusterInstance.GetAnnotations())
 
-		operationType = utils.OperationTypeUpdated
+		operationType = ctlrutils.OperationTypeUpdated
 		opts := []client.PatchOption{}
 		if isDryRun {
 			opts = append(opts, client.DryRunAll)
-			operationType = utils.OperationTypeDryRun
+			operationType = ctlrutils.OperationTypeDryRun
 		}
 
 		patch := client.MergeFrom(existingClusterInstance.DeepCopy())
@@ -345,7 +345,7 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 				return fmt.Errorf("failed to patch ClusterInstance: %w", err)
 			}
-			return utils.NewInputError("%s", err.Error())
+			return ctlrutils.NewInputError("%s", err.Error())
 		}
 	}
 
@@ -375,31 +375,31 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstanceProcessedStatus
 
 	if len(ci.Status.Conditions) == 0 {
 		message := fmt.Sprintf("Waiting for ClusterInstance (%s) to be processed", ci.Name)
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed,
 			provisioningv1alpha1.CRconditionReasons.Unknown,
 			metav1.ConditionUnknown,
 			message,
 		)
-		utils.SetProvisioningStateInProgress(t.object, message)
+		ctlrutils.SetProvisioningStateInProgress(t.object, message)
 		return
 	}
 
 	for _, condType := range clusterInstanceConditionTypes {
 		ciCondition := meta.FindStatusCondition(ci.Status.Conditions, string(condType))
 		if ciCondition != nil && ciCondition.Status != metav1.ConditionTrue {
-			utils.SetStatusCondition(&t.object.Status.Conditions,
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed,
 				provisioningv1alpha1.ConditionReason(ciCondition.Reason),
 				ciCondition.Status,
 				ciCondition.Message,
 			)
-			utils.SetProvisioningStateFailed(t.object, ciCondition.Message)
+			ctlrutils.SetProvisioningStateFailed(t.object, ciCondition.Message)
 			return
 		}
 	}
 
-	utils.SetStatusCondition(&t.object.Status.Conditions,
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 		provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed,
 		provisioningv1alpha1.CRconditionReasons.Completed,
 		metav1.ConditionTrue,
@@ -423,17 +423,17 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 			t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed))
 		if crClusterInstanceProcessedCond != nil && crClusterInstanceProcessedCond.Status == metav1.ConditionTrue {
 			message = "Waiting for cluster installation to start"
-			utils.SetStatusCondition(&t.object.Status.Conditions,
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 				provisioningv1alpha1.CRconditionReasons.Unknown,
 				metav1.ConditionUnknown,
 				message,
 			)
-			utils.SetProvisioningStateInProgress(t.object, message)
+			ctlrutils.SetProvisioningStateInProgress(t.object, message)
 		}
 	} else {
 		message = ciProvisionedCondition.Message
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 			provisioningv1alpha1.ConditionReason(ciProvisionedCondition.Reason),
 			ciProvisionedCondition.Status,
@@ -441,33 +441,33 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		)
 	}
 
-	if utils.IsClusterProvisionPresent(t.object) {
+	if ctlrutils.IsClusterProvisionPresent(t.object) {
 		// Set the start timestamp if it's not already set
 		if t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.IsZero() {
 			currentTime := metav1.Now()
 			t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
 		}
 
-		if utils.IsClusterProvisionFailed(t.object) {
+		if ctlrutils.IsClusterProvisionFailed(t.object) {
 			message = "Cluster installation failed"
-			utils.SetProvisioningStateFailed(t.object, message)
-		} else if !utils.IsClusterProvisionCompleted(t.object) {
+			ctlrutils.SetProvisioningStateFailed(t.object, message)
+		} else if !ctlrutils.IsClusterProvisionCompleted(t.object) {
 			// If it's not failed or completed, check if it has timed out
-			if utils.TimeoutExceeded(
+			if ctlrutils.TimeoutExceeded(
 				t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time,
 				t.timeouts.clusterProvisioning) {
 				// timed out
 				message = "Cluster installation timed out"
-				utils.SetStatusCondition(&t.object.Status.Conditions,
+				ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 					provisioningv1alpha1.CRconditionReasons.TimedOut,
 					metav1.ConditionFalse,
 					message,
 				)
-				utils.SetProvisioningStateFailed(t.object, message)
+				ctlrutils.SetProvisioningStateFailed(t.object, message)
 			} else {
 				message = "Cluster installation is in progress"
-				utils.SetProvisioningStateInProgress(t.object, message)
+				ctlrutils.SetProvisioningStateInProgress(t.object, message)
 			}
 		}
 	}
@@ -518,7 +518,7 @@ func addSuppressedInstallManifests(renderedCI *unstructured.Unstructured) error 
 	if !found {
 		suppressedManifests = []any{}
 	}
-	for _, crd := range utils.CRDsToBeSuppressedForUpgrade {
+	for _, crd := range ctlrutils.CRDsToBeSuppressedForUpgrade {
 		// Suppress install manifests to prevent unnecessary updates
 		if !slices.ContainsFunc(suppressedManifests, func(item any) bool {
 			return item.(string) == crd
@@ -545,14 +545,14 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceChanges(
 	}
 
 	allowedFields := [][]string{}
-	if utils.IsClusterProvisionCompleted(t.object) {
+	if ctlrutils.IsClusterProvisionCompleted(t.object) {
 		allowedFields = provisioningv1alpha1.AllowedClusterInstanceFields
 	}
 
 	disallowedChanges, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
 		existingCI.Object["spec"].(map[string]any),
 		renderedCI.Object["spec"].(map[string]any),
-		utils.IgnoredClusterInstanceFields,
+		ctlrutils.IgnoredClusterInstanceFields,
 		allowedFields)
 	if err != nil {
 		return fmt.Errorf(
@@ -561,7 +561,7 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceChanges(
 
 	// Special handling for upgrade
 	if slices.Contains(disallowedChanges, "clusterImageSetNameRef") &&
-		utils.IsClusterProvisionCompleted(t.object) {
+		ctlrutils.IsClusterProvisionCompleted(t.object) {
 		err = addSuppressedInstallManifests(renderedCI)
 		if err != nil {
 			return fmt.Errorf(
@@ -588,15 +588,15 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceChanges(
 	}
 
 	if len(disallowedChanges) > 0 &&
-		utils.IsClusterProvisionCompleted(t.object) {
-		return utils.NewInputError(
+		ctlrutils.IsClusterProvisionCompleted(t.object) {
+		return ctlrutils.NewInputError(
 			"detected disallowed changes in immutable fields: %s", strings.Join(disallowedChanges, ", "))
 	}
 
 	disallowedChanges = append(disallowedChanges, scalingNodes...)
 	if len(disallowedChanges) > 0 &&
-		utils.IsClusterProvisionInProgress(t.object) {
-		return utils.NewInputError(
+		ctlrutils.IsClusterProvisionInProgress(t.object) {
+		return ctlrutils.NewInputError(
 			"updates to ClusterInstance parameters are disallowed during cluster installation, "+
 				"detected changes in fields: %s", strings.Join(disallowedChanges, ", "))
 	}

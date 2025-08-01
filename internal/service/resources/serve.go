@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
@@ -76,9 +76,9 @@ func Serve(config *api.ResourceServerConfig) error {
 		cancel()
 	}()
 
-	password, exists := os.LookupEnv(utils.ResourcesPasswordEnvName)
+	password, exists := os.LookupEnv(ctlrutils.ResourcesPasswordEnvName)
 	if !exists {
-		return fmt.Errorf("missing %s environment variable", utils.ResourcesPasswordEnvName)
+		return fmt.Errorf("missing %s environment variable", ctlrutils.ResourcesPasswordEnvName)
 	}
 
 	// Init DB client
@@ -209,7 +209,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		middleware.TrailingSlashStripper(),
 	)
 
-	serverTLSConfig, err := utils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
+	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to get server TLS config: %w", err)
 	}

@@ -12,7 +12,7 @@ import (
 	"os"
 
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 )
 
@@ -26,9 +26,9 @@ func StartResourcesMigration() error {
 		return fmt.Errorf("failed to create migrations source: %w", err)
 	}
 
-	password, exists := os.LookupEnv(utils.ResourcesPasswordEnvName)
+	password, exists := os.LookupEnv(ctlrutils.ResourcesPasswordEnvName)
 	if !exists {
-		return fmt.Errorf("missing %s environment variable", utils.ResourcesPasswordEnvName)
+		return fmt.Errorf("missing %s environment variable", ctlrutils.ResourcesPasswordEnvName)
 	}
 
 	err = db.StartMigration(db.GetPgConfig(username, password, database), driver)

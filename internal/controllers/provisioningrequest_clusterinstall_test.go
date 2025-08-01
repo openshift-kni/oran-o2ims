@@ -59,7 +59,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
 
@@ -112,7 +112,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 				Namespace: ctNamespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 clusterImageSetNameRef: "4.15"
 pullSecretRef:
   name: "pull-secret"
@@ -154,10 +154,10 @@ nodes:
 		}
 
 		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
-			cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+			cr.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		mergedClusterInstanceData, err := task.getMergedClusterInputData(
-			ctx, ciDefaultsCm, clusterInstanceInputParams.(map[string]any), utils.TemplateParamClusterInstance)
+			ctx, ciDefaultsCm, clusterInstanceInputParams.(map[string]any), ctlrutils.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		task.clusterInput.clusterInstanceData = mergedClusterInstanceData
 	})

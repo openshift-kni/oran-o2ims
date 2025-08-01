@@ -19,15 +19,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 func GetLoopbackHWPluginNamespace() string {
-	return utils.GetHwMgrPluginNS()
+	return ctlrutils.GetHwMgrPluginNS()
 }
 
 func GetMetal3HWPluginNamespace() string {
-	return utils.GetHwMgrPluginNS()
+	return ctlrutils.GetHwMgrPluginNS()
 }
 
 func GenerateResourceIdentifier(baseName string) (string, error) {
@@ -121,14 +121,14 @@ func CreateOrUpdateNodeAllocationRequest(
 
 	existingNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
 
-	exist, err := utils.DoesK8SResourceExist(ctx, c, nodeAllocationRequest.Name, nodeAllocationRequest.Namespace, existingNodeAllocationRequest)
+	exist, err := ctlrutils.DoesK8SResourceExist(ctx, c, nodeAllocationRequest.Name, nodeAllocationRequest.Namespace, existingNodeAllocationRequest)
 	if err != nil {
 		return fmt.Errorf("failed to get NodeAllocationRequest %s in namespace %s: %w", nodeAllocationRequest.GetName(), nodeAllocationRequest.GetNamespace(), err)
 	}
 
 	if !exist {
 		// Create the NodeAllocationRequest resource
-		err := utils.CreateK8sCR(ctx, c, nodeAllocationRequest, nil, "")
+		err := ctlrutils.CreateK8sCR(ctx, c, nodeAllocationRequest, nil, "")
 		if err != nil {
 			logger.ErrorContext(
 				ctx,

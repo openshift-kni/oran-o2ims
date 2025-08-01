@@ -39,7 +39,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 )
@@ -83,7 +83,7 @@ var _ = BeforeSuite(func() {
 	klog.SetLogger(adapter)
 
 	// Set the hardware manager plugin details.
-	os.Setenv(utils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
+	os.Setenv(ctlrutils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
 
 	// Set the scheme.
 	testScheme := runtime.NewScheme()
@@ -163,7 +163,7 @@ var _ = BeforeSuite(func() {
 		// HW plugin test namespace
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: utils.UnitTestHwmgrNamespace,
+				Name: ctlrutils.UnitTestHwmgrNamespace,
 			},
 		},
 		// oran-o2ims
@@ -243,8 +243,8 @@ var _ = Describe("Dry-run-ProvisioningRequestReconcile", func() {
 				Namespace: ctNamespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstallationTimeoutConfigKey: "60s",
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstallationTimeoutConfigKey: "60s",
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 clusterImageSetNameRef: "4.15"
 holdInstallation: false
 cpuPartitioningMode: AllNodes
@@ -277,8 +277,8 @@ nodes:
 				Namespace: ctNamespace,
 			},
 			Data: map[string]string{
-				utils.ClusterInstallationTimeoutConfigKey: "60s",
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterInstallationTimeoutConfigKey: "60s",
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 clusterImageSetNameRef: "4.15"
 holdInstallation: false
 cpuPartitioningMode: AllNodes
@@ -315,8 +315,8 @@ nodes:
 				Namespace: ctNamespace,
 			},
 			Data: map[string]string{
-				utils.ClusterConfigurationTimeoutConfigKey: "1m",
-				utils.PolicyTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterConfigurationTimeoutConfigKey: "1m",
+				ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 cpu-isolated: "2-31"
 cpu-reserved: "0-1"
 defaultHugepagesSize: "1G"`,
@@ -326,10 +326,10 @@ defaultHugepagesSize: "1G"`,
 		&hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
-				Namespace: utils.InventoryNamespace,
+				Namespace: ctlrutils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:           utils.UnitTestHwPluginRef,
+				HardwarePluginRef:           ctlrutils.UnitTestHwPluginRef,
 				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "1m",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -547,7 +547,7 @@ defaultHugepagesSize: "1G"`,
 
 			// Patch NodeAllocationRequest provision status to Completed.
 			currentNp := &pluginsv1alpha1.NodeAllocationRequest{}
-			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: utils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
+			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: ctlrutils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
 			Expect(currentNp.Status.Conditions).To(BeEmpty())
 			currentNp.Status.Conditions = []metav1.Condition{
 				{

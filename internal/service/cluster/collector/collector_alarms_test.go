@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 const (
@@ -53,8 +53,8 @@ var _ = Describe("Alarms Collector", func() {
 						Name:      "cluster-1",
 						Namespace: "default",
 						Labels: map[string]string{
-							utils.OpenshiftVersionLabelName: version4167,
-							utils.LocalClusterLabelName:     "true",
+							ctlrutils.OpenshiftVersionLabelName: version4167,
+							ctlrutils.LocalClusterLabelName:     "true",
 						},
 					},
 				},
@@ -63,7 +63,7 @@ var _ = Describe("Alarms Collector", func() {
 						Name:      "cluster-2",
 						Namespace: "default",
 						Labels: map[string]string{
-							utils.OpenshiftVersionLabelName: version4167,
+							ctlrutils.OpenshiftVersionLabelName: version4167,
 						},
 					},
 				},
@@ -72,8 +72,8 @@ var _ = Describe("Alarms Collector", func() {
 						Name:      "cluster-3",
 						Namespace: "default",
 						Labels: map[string]string{
-							utils.OpenshiftVersionLabelName: version4167,
-							utils.LocalClusterLabelName:     "true",
+							ctlrutils.OpenshiftVersionLabelName: version4167,
+							ctlrutils.LocalClusterLabelName:     "true",
 						},
 					},
 				},
@@ -89,8 +89,8 @@ var _ = Describe("Alarms Collector", func() {
 			cluster, err := r.getManagedCluster(ctx, version4167)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cluster.Labels[utils.OpenshiftVersionLabelName]).To(Equal(version4167))
-			Expect(cluster.Labels).ToNot(HaveKey(utils.LocalClusterLabelName))
+			Expect(cluster.Labels[ctlrutils.OpenshiftVersionLabelName]).To(Equal(version4167))
+			Expect(cluster.Labels).ToNot(HaveKey(ctlrutils.LocalClusterLabelName))
 		})
 		It("returns an error when no cluster is found", func() {
 			_, err := r.getManagedCluster(ctx, version4152)
@@ -122,7 +122,7 @@ var _ = Describe("Alarms Collector", func() {
 					Name:      "cluster-1",
 					Namespace: "default",
 					Labels: map[string]string{
-						utils.OpenshiftVersionLabelName: version4167,
+						ctlrutils.OpenshiftVersionLabelName: version4167,
 					},
 				},
 			}

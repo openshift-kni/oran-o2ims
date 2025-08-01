@@ -21,8 +21,8 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	hwpluginutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
@@ -65,7 +65,7 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 			currentTime := metav1.Now()
 			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
 		}
-		err = utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+		err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
 		if err != nil {
 			return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
 		}
@@ -103,7 +103,7 @@ func (t *provisioningRequestReconcilerTask) createNodeAllocationRequestResources
 	currentTime := metav1.Now()
 	t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &currentTime
 
-	err = utils.UpdateK8sCRStatus(ctx, t.client, t.object)
+	err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
 	if err != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
 	}
@@ -150,22 +150,22 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 		return fmt.Errorf("failed to collect hardware node %s details for node allocation request: %w", nodeAllocationRequestID, err)
 	}
 
-	hwpluginRef, err := utils.GetHardwarePluginRefFromProvisioningRequest(ctx, t.client, t.object)
+	hwpluginRef, err := ctlrutils.GetHardwarePluginRefFromProvisioningRequest(ctx, t.client, t.object)
 	if err != nil {
 		return fmt.Errorf("failed to get HardwarePluginRef: %w", err)
 	}
 
-	if hwpluginRef != hwpluginutils.Metal3HardwarePluginID {
-		if err := utils.CopyBMCSecrets(ctx, t.client, hwNodes, clusterInstance.GetNamespace()); err != nil {
+	if hwpluginRef != hwmgrutils.Metal3HardwarePluginID {
+		if err := ctlrutils.CopyBMCSecrets(ctx, t.client, hwNodes, clusterInstance.GetNamespace()); err != nil {
 			return fmt.Errorf("failed to copy BMC secret: %w", err)
 		}
 	} else {
 		// The pull secret must be in the same namespace as the BMH.
-		pullSecretName, err := utils.GetPullSecretName(clusterInstance)
+		pullSecretName, err := ctlrutils.GetPullSecretName(clusterInstance)
 		if err != nil {
 			return fmt.Errorf("failed to get pull secret name from cluster instance: %w", err)
 		}
-		if err := utils.CopyPullSecret(ctx, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
+		if err := ctlrutils.CopyPullSecret(ctx, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
 			return fmt.Errorf("failed to copy pull secret: %w", err)
 		}
 	}
@@ -173,21 +173,21 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 	configErr := t.applyNodeConfiguration(ctx, hwNodes, nodeAllocationRequest, clusterInstance)
 	if configErr != nil {
 		msg := "Failed to apply node configuration to the rendered ClusterInstance: " + configErr.Error()
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,
 			provisioningv1alpha1.CRconditionReasons.NotApplied,
 			metav1.ConditionFalse,
 			msg)
-		utils.SetProvisioningStateFailed(t.object, msg)
+		ctlrutils.SetProvisioningStateFailed(t.object, msg)
 	} else {
-		utils.SetStatusCondition(&t.object.Status.Conditions,
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
 			"Node configuration has been applied to the rendered ClusterInstance")
 	}
 
-	if updateErr := utils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 	}
 
@@ -206,7 +206,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 
 	// Update the provisioning request Status with status from the NodeAllocationRequest object.
 	status, timedOutOrFailed, err := t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
-	if err != nil && !utils.IsConditionDoesNotExistsErr(err) {
+	if err != nil && !ctlrutils.IsConditionDoesNotExistsErr(err) {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to update the NodeAllocationRequest status for ProvisioningRequest",
@@ -249,7 +249,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStat
 
 	status, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Configured)
 	if err != nil {
-		if utils.IsConditionDoesNotExistsErr(err) {
+		if ctlrutils.IsConditionDoesNotExistsErr(err) {
 			// Condition does not exist, return nil (acceptable case)
 			return nil, timedOutOrFailed, nil
 		}
@@ -261,7 +261,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStat
 // applyNodeConfiguration updates the clusterInstance with BMC details, interface MACAddress and bootMACAddress
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 	ctx context.Context,
-	hwNodes map[string][]utils.NodeInfo,
+	hwNodes map[string][]ctlrutils.NodeInfo,
 	nar *hwmgrpluginapi.NodeAllocationRequestResponse,
 	clusterInstance *unstructured.Unstructured,
 ) error {
@@ -323,12 +323,12 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 			}
 
 			hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
-			hwTemplate, err := utils.GetHardwareTemplate(ctx, t.client, hwTemplateName)
+			hwTemplate, err := ctlrutils.GetHardwareTemplate(ctx, t.client, hwTemplateName)
 			if err != nil {
 				return fmt.Errorf("failed to get the HardwareTemplate %s resource: %w ", hwTemplateName, err)
 			}
 			bootInterfaceLabel := hwTemplate.Spec.BootInterfaceLabel
-			bootMAC, err = utils.GetBootMacAddress(nodeInfos[0].Interfaces, bootInterfaceLabel)
+			bootMAC, err = ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, bootInterfaceLabel)
 			if err != nil {
 				return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
 			}
@@ -338,7 +338,7 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 		updatedNode["bootMACAddress"] = bootMAC
 
 		// Assign MACs to interfaces
-		if err := utils.AssignMacAddress(t.clusterInput.clusterInstanceData, nodeInfos[0].Interfaces, updatedNode); err != nil {
+		if err := ctlrutils.AssignMacAddress(t.clusterInput.clusterInstanceData, nodeInfos[0].Interfaces, updatedNode); err != nil {
 			return fmt.Errorf("failed to assign MACs for node '%s': %w", hostName, err)
 		}
 
@@ -393,7 +393,7 @@ func (t *provisioningRequestReconcilerTask) updateAllocatedNodeHostMap(ctx conte
 	t.object.Status.Extensions.AllocatedNodeHostMap[allocatedNodeID] = hostName
 
 	// Update the CR status for the ProvisioningRequest.
-	if err := utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to update AllocatedNodeHostMap: %w", err)
 	}
 
@@ -438,16 +438,16 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		// Condition does not exist
 		status = metav1.ConditionUnknown
 		reason = string(provisioningv1alpha1.CRconditionReasons.Unknown)
-		message = fmt.Sprintf("Hardware %s is in progress", utils.GetStatusMessage(condition))
+		message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
 
 		if condition == hwmgmtv1alpha1.Configured {
 			// If there was no hardware configuration update initiated, return a custom error to
 			// indicate that the configured condition does not exist.
 			if t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart.IsZero() {
-				return false, false, &utils.ConditionDoesNotExistsErr{ConditionName: string(condition)}
+				return false, false, &ctlrutils.ConditionDoesNotExistsErr{ConditionName: string(condition)}
 			}
 		}
-		utils.SetProvisioningStateInProgress(t.object, message)
+		ctlrutils.SetProvisioningStateInProgress(t.object, message)
 	} else {
 		// A hardware condition was found; use its details.
 		status = metav1.ConditionStatus(hwCondition.Status)
@@ -465,13 +465,13 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 
 		// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
 		if status == metav1.ConditionFalse {
-			message = fmt.Sprintf("Hardware %s is in progress", utils.GetStatusMessage(condition))
-			utils.SetProvisioningStateInProgress(t.object, message)
+			message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
+			ctlrutils.SetProvisioningStateInProgress(t.object, message)
 
 			if reason == string(hwmgmtv1alpha1.Failed) {
 				timedOutOrFailed = true
-				message = fmt.Sprintf("Hardware %s failed", utils.GetStatusMessage(condition))
-				utils.SetProvisioningStateFailed(t.object, message)
+				message = fmt.Sprintf("Hardware %s failed", ctlrutils.GetStatusMessage(condition))
+				ctlrutils.SetProvisioningStateFailed(t.object, message)
 			}
 		}
 	}
@@ -479,7 +479,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	// Unknown or in progress hardware status, check if it timed out
 	if status != metav1.ConditionTrue && reason != string(hwmgmtv1alpha1.Failed) {
 		// Handle timeout logic
-		timedOutOrFailed, reason, message = utils.HandleHardwareTimeout(
+		timedOutOrFailed, reason, message = ctlrutils.HandleHardwareTimeout(
 			condition,
 			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart,
 			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart,
@@ -488,7 +488,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 			message,
 		)
 		if timedOutOrFailed {
-			utils.SetProvisioningStateFailed(t.object, message)
+			ctlrutils.SetProvisioningStateFailed(t.object, message)
 		}
 	}
 
@@ -498,17 +498,17 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	}
 
 	// Set the status condition for hardware status.
-	utils.SetStatusCondition(&t.object.Status.Conditions,
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 		conditionType,
 		provisioningv1alpha1.ConditionReason(reason),
 		status,
 		message)
 	t.logger.InfoContext(ctx, fmt.Sprintf("NodeAllocationRequest (%s) %s status: %s",
-		nodeAllocationRequestID, utils.GetStatusMessage(condition), message))
+		nodeAllocationRequestID, ctlrutils.GetStatusMessage(condition), message))
 
 	// Update the CR status for the ProvisioningRequest.
-	if err = utils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-		err = fmt.Errorf("failed to update Hardware %s status: %w", utils.GetStatusMessage(condition), err)
+	if err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		err = fmt.Errorf("failed to update Hardware %s status: %w", ctlrutils.GetStatusMessage(condition), err)
 	}
 	return status == metav1.ConditionTrue, timedOutOrFailed, err
 }
@@ -530,7 +530,7 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	if exist {
 		_, err := compareHardwareTemplateWithNodeAllocationRequest(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest)
 		if err != nil {
-			return nil, utils.NewInputError("%w", err)
+			return nil, ctlrutils.NewInputError("%w", err)
 		}
 	}
 
@@ -574,15 +574,15 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 	}
 
 	siteID, err := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamOCloudSiteId)
+		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamOCloudSiteId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamOCloudSiteId, err)
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamOCloudSiteId, err)
 	}
 
 	clusterId, err := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, utils.TemplateParamNodeClusterName)
+		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamNodeClusterName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", utils.TemplateParamNodeClusterName, err)
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamNodeClusterName, err)
 	}
 
 	nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{}
@@ -604,7 +604,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	}
 
 	hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
-	hwTemplate, err := utils.GetHardwareTemplate(ctx, t.client, hwTemplateName)
+	hwTemplate, err := ctlrutils.GetHardwareTemplate(ctx, t.client, hwTemplateName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get the HardwareTemplate %s resource: %w ", hwTemplateName, err)
 	}
@@ -612,8 +612,8 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
 		nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
 		if _, err := t.checkExistingNodeAllocationRequest(ctx, hwTemplate, nodeAllocationRequestID); err != nil {
-			if utils.IsInputError(err) {
-				updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
+			if ctlrutils.IsInputError(err) {
+				updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
 					provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse, err.Error())
 				if updateErr != nil {
 					// nolint: wrapcheck
@@ -625,18 +625,18 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 	}
 
 	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-	if err := t.client.Get(ctx, types.NamespacedName{Namespace: utils.GetHwMgrPluginNS(), Name: hwTemplate.Spec.HardwarePluginRef}, hwplugin); err != nil {
-		updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
+	if err := t.client.Get(ctx, types.NamespacedName{Namespace: ctlrutils.GetHwMgrPluginNS(), Name: hwTemplate.Spec.HardwarePluginRef}, hwplugin); err != nil {
+		updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
 			provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse,
 			"Unable to find specified HardwarePlugin: "+hwTemplate.Spec.HardwarePluginRef)
 		if updateErr != nil {
 			return nil, fmt.Errorf("failed to update hwtemplate %s status: %w", hwTemplateName, updateErr)
 		}
-		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", utils.GetHwMgrPluginNS(), hwTemplate.Spec.HardwarePluginRef, err)
+		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", ctlrutils.GetHwMgrPluginNS(), hwTemplate.Spec.HardwarePluginRef, err)
 	}
 
 	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed
-	updateErr := utils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
+	updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
 		provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Completed), metav1.ConditionTrue, "Validated")
 	if updateErr != nil {
 		// nolint: wrapcheck

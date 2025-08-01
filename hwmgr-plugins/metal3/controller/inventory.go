@@ -17,7 +17,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
-	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
 const (
@@ -291,7 +291,7 @@ func GetResources(ctx context.Context,
 	c client.Client) (inventory.GetResourcesResponseObject, error) {
 	var resp []inventory.ResourceInfo
 
-	nodes, err := utils.GetBMHToNodeMap(ctx, logger, c)
+	nodes, err := hwmgrutils.GetBMHToNodeMap(ctx, logger, c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query current nodes: %w", err)
 	}
@@ -303,7 +303,7 @@ func GetResources(ctx context.Context,
 
 	for _, bmh := range bmhList.Items {
 		if includeInInventory(&bmh) {
-			resp = append(resp, getResourceInfo(&bmh, utils.GetNodeForBMH(nodes, &bmh)))
+			resp = append(resp, getResourceInfo(&bmh, hwmgrutils.GetNodeForBMH(nodes, &bmh)))
 		}
 	}
 

@@ -17,12 +17,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
 const (
-	ACMObsAMNamespace  = utils.OpenClusterManagementObservabilityNamespace
+	ACMObsAMNamespace  = ctlrutils.OpenClusterManagementObservabilityNamespace
 	ACMObsAMSecretName = "alertmanager-config"
 	ACMObsAMSecretKey  = "alertmanager.yaml"
 	OranReceiverName   = "oran_alarm_receiver"
@@ -97,7 +97,7 @@ func MergeWithExisting(existingYAML []byte) (map[string]interface{}, error) {
 // updateReceivers updates the alertmanager configuration with the oran receiver.
 func updateReceivers(config map[string]interface{}) {
 	// Directly compute the URL for the oran receiver.
-	url := fmt.Sprintf("%s/internal/v1/caas-alerts/alertmanager", utils.GetServiceURL(utils.InventoryAlarmServerName))
+	url := fmt.Sprintf("%s/internal/v1/caas-alerts/alertmanager", ctlrutils.GetServiceURL(ctlrutils.InventoryAlarmServerName))
 
 	// Create oran receiver with webhook config.
 	oranReceiver := map[string]interface{}{

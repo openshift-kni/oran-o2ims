@@ -22,7 +22,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
@@ -88,9 +88,9 @@ func Serve(config *api.AlarmsServerConfig) error {
 		cancel()
 	}()
 
-	password, exists := os.LookupEnv(utils.AlarmsPasswordEnvName)
+	password, exists := os.LookupEnv(ctlrutils.AlarmsPasswordEnvName)
 	if !exists {
-		return fmt.Errorf("missing %s environment variable", utils.AlarmsPasswordEnvName)
+		return fmt.Errorf("missing %s environment variable", ctlrutils.AlarmsPasswordEnvName)
 	}
 
 	// Init DB client and alarm repository
@@ -232,7 +232,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		middleware.TrailingSlashStripper(),
 	)
 
-	serverTLSConfig, err := utils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
+	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to get server TLS config: %w", err)
 	}
