@@ -853,7 +853,6 @@ func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx
 		if strings.Contains(err.Error(), "does not exist") {
 			return nil, false, nil
 		}
-		// nolint: wrapcheck
 		return nil, false, err
 	}
 
