@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"slices"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -73,6 +74,7 @@ func getResourceInfoGroups(bmh metal3v1alpha1.BareMetalHost) *[]string {
 			// Split by comma, removing leading or trailing whitespace around the comma
 			re := regexp.MustCompile(` *, *`)
 			groups := re.Split(annotation, -1)
+			slices.Sort(groups)
 			return &groups
 		}
 	}
@@ -204,6 +206,7 @@ func getResourceInfoTags(bmh *metal3v1alpha1.BareMetalHost) *[]string {
 		tags = append(tags, fmt.Sprintf("%s: %s", match[1], value))
 	}
 
+	slices.Sort(tags)
 	return &tags
 }
 
