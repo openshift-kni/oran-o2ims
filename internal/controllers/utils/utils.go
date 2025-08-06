@@ -168,7 +168,6 @@ func HasApiEndpoints(serverName string) bool {
 		serverName == InventoryArtifactsServerName ||
 		serverName == InventoryProvisioningServerName ||
 		serverName == HardwarePluginManagerServerName ||
-		serverName == LoopbackPluginServerName ||
 		serverName == Metal3PluginServerName
 }
 
@@ -187,7 +186,6 @@ func RequiresInternalListener(serverName string) bool {
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
 		serverName == HardwarePluginManagerServerName ||
-		serverName == LoopbackPluginServerName ||
 		serverName == Metal3PluginServerName
 }
 
@@ -206,7 +204,6 @@ func NeedsOAuthAccess(serverName string) bool {
 		serverName == InventoryArtifactsServerName ||
 		serverName == InventoryProvisioningServerName ||
 		serverName == HardwarePluginManagerServerName ||
-		serverName == LoopbackPluginServerName ||
 		serverName == Metal3PluginServerName
 }
 
@@ -494,12 +491,6 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 	// HwMgr Plugin Controller
 	if serverName == HardwarePluginManagerServerName {
 		result = slices.Clone(HardwarePluginManagerArgs)
-		return
-	}
-
-	// Loopback Plugin Server
-	if serverName == LoopbackPluginServerName {
-		result = slices.Clone(LoopbackPluginServerArgs)
 		return
 	}
 

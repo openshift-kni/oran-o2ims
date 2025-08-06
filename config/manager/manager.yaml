@@ -82,9 +82,6 @@ spec:
         - name: HWMGR_PLUGIN_NAMESPACE
           # A placeholder for the replacement kustomization that will inject the value from the config map
           value: plugin-namespace-placeholder
-        - name: DEPLOY_LOOPBACK_HW_PLUGIN
-          # A placeholder for the replacement kustomization that will inject the value from the config map
-          value: "false"
         - name: OCLOUD_MANAGER_NAMESPACE
           valueFrom:
             fieldRef:

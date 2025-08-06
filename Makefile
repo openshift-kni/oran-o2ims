@@ -107,9 +107,6 @@ OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
 # HWMGR_PLUGIN_NAMESPACE refers to the namespace of the hardware manager plugin.
 HWMGR_PLUGIN_NAMESPACE ?= oran-o2ims
 
-# DEPLOY_LOOPBACK_HW_PLUGIN is a flag to indicate whether the loopback HardwarePlugin should be deployed
-DEPLOY_LOOPBACK_HW_PLUGIN ?= false
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -230,7 +227,6 @@ deploy: install manifests kustomize kubectl ## Deploy controller to the K8s clus
 	@$(KUBECTL) create configmap env-config \
 		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
 		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
-		--from-literal=DEPLOY_LOOPBACK_HW_PLUGIN=$(DEPLOY_LOOPBACK_HW_PLUGIN) \
 		--dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager \
 		&& $(KUSTOMIZE) edit set image controller=${IMG}
@@ -305,7 +301,6 @@ bundle: operator-sdk manifests kustomize kubectl ## Generate bundle manifests an
 	@$(KUBECTL) create configmap env-config \
 		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
 		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
-		--from-literal=DEPLOY_LOOPBACK_HW_PLUGIN=$(DEPLOY_LOOPBACK_HW_PLUGIN) \
 		--dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager \
 		&& $(KUSTOMIZE) edit set image controller=$(IMG)

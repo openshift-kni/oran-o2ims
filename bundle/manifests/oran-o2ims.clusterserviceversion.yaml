@@ -1677,8 +1677,6 @@ spec:
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
                 - name: HWMGR_PLUGIN_NAMESPACE
                   value: oran-o2ims
-                - name: DEPLOY_LOOPBACK_HW_PLUGIN
-                  value: "false"
                 - name: OCLOUD_MANAGER_NAMESPACE
                   valueFrom:
                     fieldRef:
