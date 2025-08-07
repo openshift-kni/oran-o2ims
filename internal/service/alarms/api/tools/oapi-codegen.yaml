@@ -14,6 +14,8 @@ output-options:
   skip-prune: false
   nullable-type: true
   name-normalizer: ToCamelCaseWithDigits
+  overlay:
+    path: ../overlay.yaml
 
 import-mapping:
   ../../common/api/openapi.yaml: "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"

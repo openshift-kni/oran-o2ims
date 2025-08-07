@@ -22,9 +22,6 @@ tags:
   description: Alarm Service Configuration
 - name: subscriptions
   description: Alarm subscription management
-- name: internal
-  description: |
-    Internal endpoints. This is tag is also useful generating client code.
 
 security:
 - oauth2:
@@ -673,52 +670,6 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /internal/v1/caas-alerts/alertmanager:
-    post:
-      operationId: AmNotification
-      summary: Receive Alertmanager notifications
-      description: Receives alerts from Alertmanager and optionally notifies subscribers if available.
-      tags:
-      - internal
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AlertmanagerNotification'
-      responses:
-        '200':
-          description: Notification received successfully
-        '400':
-          description: Bad request
-        '500':
-          description: Internal server error
-
-  /internal/v1/hardware-alerts/{hwVendorName}:
-    post:
-      operationId: HwNotification
-      summary: Receive hardware alerts
-      tags:
-      - internal
-      parameters:
-      - in: path
-        name: hwVendorName
-        required: true
-        schema:
-          type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HardwareAlert'
-      responses:
-        '200':
-          description: Hardware alert received successfully
-        '400':
-          description: Bad request
-        '500':
-          description: Internal server error
 
 components:
   securitySchemes:
