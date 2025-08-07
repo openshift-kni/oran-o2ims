@@ -30,6 +30,13 @@ import (
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
 
+const (
+	DoNotRequeue               = 0
+	RequeueAfterShortInterval  = 15
+	RequeueAfterMediumInterval = 30
+	RequeueAfterLongInterval   = 60
+)
+
 func setConfigAnnotation(object client.Object, reason string) {
 	annotations := object.GetAnnotations()
 	if annotations == nil {
@@ -292,20 +299,32 @@ func checkNodeAllocationRequestProgress(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (full bool, err error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (full bool, requeueAfter int, err error) {
 
+	// Always check allocation/processing status, regardless of current allocation count
+	// This handles both initial allocation and post-allocation processing (e.g., network data clearing)
+	requeueAfter, err = processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+	if err != nil {
+		return false, DoNotRequeue, err
+	}
+	if requeueAfter > DoNotRequeue {
+		return false, requeueAfter, nil
+	}
+
+	// Check if we're fully allocated now that processing is complete
 	full = isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
 	if !full {
-		return false, processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+		// Still not fully allocated, continue processing
+		return false, DoNotRequeue, nil
 	}
-	// Node is fully allocated
+
 	// check if there are any pending work such as bios configuring
 	if updating, err := checkForPendingUpdate(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest); err != nil {
-		return false, err
+		return false, DoNotRequeue, err
 	} else if updating {
-		return false, nil
+		return false, DoNotRequeue, nil
 	}
-	return true, nil
+	return true, DoNotRequeue, nil
 }
 
 // processNewNodeAllocationRequest processes a new NodeAllocationRequest CR, verifying that there are enough free
@@ -595,6 +614,7 @@ func contains(slice []string, value string) bool {
 }
 
 // allocateBMHToNodeAllocationRequest assigns a BareMetalHost to a NodeAllocationRequest.
+// Returns requeueAfter int (seconds) and error. If requeueAfter > DoNotRequeue, caller should requeue after that duration.
 func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
@@ -603,7 +623,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	bmh *metal3v1alpha1.BareMetalHost,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	group pluginsv1alpha1.NodeGroup,
-) error {
+) (int, error) {
 
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	nodeName := bmh.Annotations[NodeNameAnnotation]
@@ -611,7 +631,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 		nodeName = hwmgrutils.GenerateNodeName()
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, NodeNameAnnotation,
 			nodeName, OpAdd); err != nil {
-			return fmt.Errorf("failed to save AllocatedNode name annotation to BMH (%s): %w", bmh.Name, err)
+			return DoNotRequeue, fmt.Errorf("failed to save AllocatedNode name annotation to BMH (%s): %w", bmh.Name, err)
 		}
 	}
 
@@ -620,7 +640,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	if allocatedNodeLbl != nodeName {
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeLabel, ctlrutils.AllocatedNodeLabel,
 			nodeName, OpAdd); err != nil {
-			return fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
+			return DoNotRequeue, fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
 		}
 	}
 
@@ -629,31 +649,31 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 
 	// Ensure node is created
 	if err := createNode(ctx, c, logger, pluginNamespace, nodeAllocationRequest, nodeName, nodeId, nodeNs, group.NodeGroupData.Name, group.NodeGroupData.HwProfile); err != nil {
-		return fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
+		return DoNotRequeue, fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
 
 	// Process HW profile
 	nodeNamespace := pluginNamespace
 	updating, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, pluginNamespace, bmh, nodeName, nodeNamespace, group.NodeGroupData.HwProfile, false)
 	if err != nil {
-		return fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
+		return DoNotRequeue, fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
 	}
 	logger.InfoContext(ctx, "processed hw profile", slog.Bool("updating", updating))
 
 	// Mark BMH allocated
 	if err := markBMHAllocated(ctx, c, logger, bmh); err != nil {
-		return fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
+		return DoNotRequeue, fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Allow Host Management
 	if err := allowHostManagement(ctx, c, logger, bmh); err != nil {
-		return fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
+		return DoNotRequeue, fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
 	bmhInterface, err := buildInterfacesFromBMH(nodeAllocationRequest, bmh)
 	if err != nil {
-		return fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
+		return DoNotRequeue, fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
 	}
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodeGroupData.ResourcePoolId,
@@ -664,18 +684,44 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 		Interfaces: bmhInterface,
 	}
 	if err := updateNodeStatus(ctx, c, noncachedClient, logger, pluginNamespace, nodeInfo, nodeName, group.NodeGroupData.HwProfile, updating); err != nil {
-		return fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
+		return DoNotRequeue, fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
+	}
+
+	// Update NodeAllocationRequest status BEFORE network data clearing
+	// This ensures the node is tracked even if we need to requeue for network data clearing
+	if !contains(nodeAllocationRequest.Status.Properties.NodeNames, nodeName) {
+		nodeAllocationRequest.Status.Properties.NodeNames = append(nodeAllocationRequest.Status.Properties.NodeNames, nodeName)
+
+		// Immediately persist the NodeAllocationRequest status to the cluster
+		// This prevents loss of NodeNames when requeuing for network data clearing
+		if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
+			return DoNotRequeue, fmt.Errorf("failed to update NodeAllocationRequest properties for node %s: %w", nodeName, err)
+		}
+		logger.InfoContext(ctx, "Updated NodeAllocationRequest with allocated node",
+			slog.String("nodeName", nodeName),
+			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
 	}
 
 	if !updating {
-		if err := clearBMHNetworkData(ctx, c, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}); err != nil {
-			return fmt.Errorf("failed to clear network data for BMH (%s/%s): %w", bmh.Name, bmh.Namespace, err)
-		}
-	}
+		bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
-	// Update NodeAllocationRequest status
-	if !contains(nodeAllocationRequest.Status.Properties.NodeNames, nodeName) {
-		nodeAllocationRequest.Status.Properties.NodeNames = append(nodeAllocationRequest.Status.Properties.NodeNames, nodeName)
+		// First, clear BMH NetworkData so metal3 controller can propagate to PreprovisioningImage
+		if err := clearBMHNetworkData(ctx, c, bmhName); err != nil {
+			return DoNotRequeue, fmt.Errorf("failed to clear network data for BMH (%s/%s): %w", bmh.Name, bmh.Namespace, err)
+		}
+
+		// Wait for metal3 controller to propagate the change to PreprovisioningImage network status
+		networkDataCleared, err := waitForPreprovisioningImageNetworkDataCleared(ctx, c, logger, bmhName)
+		if err != nil {
+			return DoNotRequeue, fmt.Errorf("failed to check PreprovisioningImage network status for BMH (%s/%s): %w", bmh.Name, bmh.Namespace, err)
+		}
+
+		if !networkDataCleared {
+			// PreprovisioningImage network data is not yet cleared, return requeue after 15 seconds
+			logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared, requeueing",
+				slog.String("bmh", bmhName.String()))
+			return RequeueAfterShortInterval, nil
+		}
 	}
 
 	// Clean up annotation
@@ -683,7 +729,38 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 		logger.ErrorContext(ctx, "failed to clear node name annotation from BMH", slog.Any("bmh", bmhName), slog.String("error", err.Error()))
 	}
 
-	return nil
+	return DoNotRequeue, nil
+}
+
+// waitForPreprovisioningImageNetworkDataCleared waits for the PreprovisioningImage network status to be cleared
+// before proceeding with BMH NetworkData clearing. Returns true if network data is cleared, false if still waiting.
+func waitForPreprovisioningImageNetworkDataCleared(ctx context.Context, c client.Client, logger *slog.Logger, bmhName types.NamespacedName) (bool, error) {
+	// Get the corresponding PreprovisioningImage (same name/namespace as BMH)
+	image := &metal3v1alpha1.PreprovisioningImage{}
+	if err := c.Get(ctx, bmhName, image); err != nil {
+		if errors.IsNotFound(err) {
+			// If PreprovisioningImage doesn't exist, consider network data as cleared
+			logger.InfoContext(ctx, "PreprovisioningImage not found, considering network data cleared",
+				slog.String("bmh", bmhName.String()))
+			return true, nil
+		}
+		return false, fmt.Errorf("failed to get PreprovisioningImage %s: %w", bmhName.String(), err)
+	}
+
+	// Check if network data is cleared (both Name and Version should be empty)
+	networkDataCleared := image.Status.NetworkData.Name == "" && image.Status.NetworkData.Version == ""
+
+	if networkDataCleared {
+		logger.InfoContext(ctx, "PreprovisioningImage network data is cleared",
+			slog.String("bmh", bmhName.String()))
+		return true, nil
+	}
+
+	logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared",
+		slog.String("bmh", bmhName.String()),
+		slog.String("networkDataName", image.Status.NetworkData.Name),
+		slog.String("networkDataVersion", image.Status.NetworkData.Version))
+	return false, nil
 }
 
 // processNodeAllocationRequestAllocation allocates BareMetalHosts to a NodeAllocationRequest while ensuring all
@@ -694,18 +771,19 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 	logger *slog.Logger,
 	pluginNamespace string,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-) error {
+) (int, error) {
 
 	var (
 		wg            sync.WaitGroup
 		mu            sync.Mutex
 		allocationErr error
+		requeueAfter  int
 	)
 
 	// Get the BMH namespace from an already allocated node in this pool
 	bmhNamespace, err := getNodeAllocationRequestBMHNamespace(ctx, c, logger, nodeAllocationRequest)
 	if err != nil {
-		return fmt.Errorf("unable to determine BMH namespace for pool %s: %w", nodeAllocationRequest.Name, err)
+		return DoNotRequeue, fmt.Errorf("unable to determine BMH namespace for pool %s: %w", nodeAllocationRequest.Name, err)
 	}
 
 	// Process allocation for each NodeGroup
@@ -714,25 +792,51 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 			continue // Skip groups with size 0
 		}
 
-		// Retrieve only unallocated BMHs for the current site, resourcePoolId, and namespace
-		unallocatedBMHs, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site,
-			nodeGroup.NodeGroupData, UnallocatedBMHs, bmhNamespace)
-		if err != nil {
-			return fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
-				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)
-		}
-
-		if len(unallocatedBMHs.Items) == 0 {
-			return fmt.Errorf("no available nodes for site=%s, nodegroup=%s",
-				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name)
-		}
-
 		// Calculate pending nodes for the group
 		pendingNodes := nodeGroup.Size - countNodesInGroup(
 			ctx, noncachedClient, logger, pluginNamespace,
 			nodeAllocationRequest.Status.Properties.NodeNames, nodeGroup.NodeGroupData.Name)
 		if pendingNodes <= 0 {
+			// No new nodes needed, but check if existing allocated BMHs are still processing
+			// This handles the case where requeue is needed for network data clearing
+			allocatedBMHs, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site,
+				nodeGroup.NodeGroupData, AllocatedBMHs, bmhNamespace)
+			if err != nil {
+				logger.WarnContext(ctx, "Failed to fetch allocated BMHs for processing check",
+					slog.String("error", err.Error()))
+				continue
+			}
+
+			// Check if any allocated BMHs are still processing (e.g., network data clearing)
+			for _, bmh := range allocatedBMHs.Items {
+				requeue, err := allocateBMHToNodeAllocationRequest(ctx, c, noncachedClient, logger, pluginNamespace, &bmh, nodeAllocationRequest, nodeGroup)
+				if err != nil {
+					logger.WarnContext(ctx, "Error checking BMH processing status",
+						slog.String("bmh", bmh.Name),
+						slog.String("error", err.Error()))
+					continue
+				}
+				if requeue > DoNotRequeue {
+					logger.InfoContext(ctx, "Allocated BMH still processing, requeueing",
+						slog.String("bmh", bmh.Name),
+						slog.Int("requeueAfter", requeue))
+					return requeue, nil
+				}
+			}
 			continue
+		}
+
+		// Only fetch unallocated BMHs if we actually need new nodes
+		unallocatedBMHs, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site,
+			nodeGroup.NodeGroupData, UnallocatedBMHs, bmhNamespace)
+		if err != nil {
+			return DoNotRequeue, fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
+				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)
+		}
+
+		if len(unallocatedBMHs.Items) == 0 {
+			return DoNotRequeue, fmt.Errorf("no available nodes for site=%s, nodegroup=%s",
+				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name)
 		}
 
 		// Shared counter to track remaining nodes needed
@@ -754,13 +858,20 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 				defer wg.Done()
 
 				// Allocate BMH to NodeAllocationRequest
-				err := allocateBMHToNodeAllocationRequest(ctx, c, noncachedClient, logger, pluginNamespace, bmh, nodeAllocationRequest, nodeGroup)
-				if err != nil {
+				requeue, err := allocateBMHToNodeAllocationRequest(ctx, c, noncachedClient, logger, pluginNamespace, bmh, nodeAllocationRequest, nodeGroup)
+				if err != nil || requeue > DoNotRequeue {
 					mu.Lock()
-					if typederrors.IsInputError(err) {
-						allocationErr = err
-					} else {
-						allocationErr = fmt.Errorf("failed to allocate BMH %s: %w", bmh.Name, err)
+					if requeue > DoNotRequeue {
+						// Set requeue duration - any requeue takes precedence
+						requeueAfter = requeue
+					}
+					if err != nil {
+						// Set error if there was an actual error
+						if typederrors.IsInputError(err) {
+							allocationErr = err
+						} else {
+							allocationErr = fmt.Errorf("failed to allocate BMH %s: %w", bmh.Name, err)
+						}
 					}
 					mu.Unlock()
 				}
@@ -770,17 +881,22 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 
 	wg.Wait()
 
-	// Check if any error occurred in goroutines
+	// Check if any error occurred or requeue needed in goroutines
 	if allocationErr != nil {
-		return allocationErr
+		return requeueAfter, allocationErr
+	}
+
+	// If only requeue needed without error, return that
+	if requeueAfter > DoNotRequeue {
+		return requeueAfter, nil
 	}
 
 	// Update NodeAllocationRequest properties after all allocations are complete
 	if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
-		return fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+		return DoNotRequeue, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
 
-	return nil
+	return DoNotRequeue, nil
 }
 
 // getNodeAllocationRequestBMHNamespace retrieves the namespace of an already allocated BMH in the given NodeAllocationRequest.

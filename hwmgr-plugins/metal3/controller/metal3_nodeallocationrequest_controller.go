@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
@@ -214,7 +215,7 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
 		conditionType, conditionReason, conditionStatus, message); err != nil {
 		return hwmgrutils.RequeueWithMediumInterval(),
-			fmt.Errorf("failed to update status for NodePool %s: %w", nodeAllocationRequest.Name, err)
+			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
 	// Update the NodeAllocationRequest hwMgrPlugin status
 	if err := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
@@ -269,8 +270,13 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 
 	var result ctrl.Result
 
-	full, err := checkNodeAllocationRequestProgress(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace,
+	full, requeueAfter, err := checkNodeAllocationRequestProgress(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace,
 		nodeAllocationRequest)
+	if requeueAfter > DoNotRequeue {
+		r.Logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared, requeueing",
+			slog.Int("seconds", requeueAfter))
+		return hwmgrutils.RequeueWithCustomInterval(time.Duration(requeueAfter) * time.Second), nil
+	}
 	if err != nil {
 		reason := hwmgmtv1alpha1.Failed
 		if typederrors.IsInputError(err) {
@@ -285,12 +291,12 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 	}
 
 	if full {
-		r.Logger.InfoContext(ctx, "NodePool request is fully allocated")
+		r.Logger.InfoContext(ctx, "NodeAllocationRequest is fully allocated")
 
 		if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed, metav1.ConditionTrue, "Created"); err != nil {
 			return hwmgrutils.RequeueWithMediumInterval(),
-				fmt.Errorf("failed to update status for NodePool %s: %w", nodeAllocationRequest.Name, err)
+				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 		}
 		result = hwmgrutils.DoNotRequeue()
 	} else {
@@ -299,7 +305,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress, metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.AwaitConfig)); err != nil {
 			return hwmgrutils.RequeueWithMediumInterval(),
-				fmt.Errorf("failed to update status for NodePool %s: %w", nodeAllocationRequest.Name, err)
+				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 		}
 		result = hwmgrutils.RequeueWithShortInterval()
 	}
