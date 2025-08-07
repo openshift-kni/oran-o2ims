@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -533,14 +532,4 @@ func GetBMHNamespace(node *pluginsv1alpha1.AllocatedNode) string {
 		return ns
 	}
 	return node.Spec.HwMgrNodeNs
-}
-
-// GetDeployLoopbackHWPlugin returns the value of environment variable DEPLOY_LOOPBACK_HW_PLUGIN
-func GetDeployLoopbackHWPlugin() string {
-	return GetEnvOrDefault(DeployLoopbackHWPluginEnvVar, DefaultDeployLoopbackHWPlugin)
-}
-
-// ShouldDeployLoopbackHWPlugin returns a boolean value indiciating if the Loopback HardwarePlugin should be installed
-func ShouldDeployLoopbackHWPlugin() bool {
-	return strings.EqualFold(GetDeployLoopbackHWPlugin(), DeployLoopbackHWPluginOk)
 }

@@ -77,9 +77,8 @@ const (
 
 // Hardware plugin command names
 const (
-	HardwarePluginManagerCmd         = "hardwareplugin-manager"
-	LoopbackHardwarePluginManagerCmd = "loopback-hardwareplugin-manager"
-	Metal3HardwarePluginManagerCmd   = "metal3-hardwareplugin-manager"
+	HardwarePluginManagerCmd       = "hardwareplugin-manager"
+	Metal3HardwarePluginManagerCmd = "metal3-hardwareplugin-manager"
 )
 
 // TLS/Certificate field names

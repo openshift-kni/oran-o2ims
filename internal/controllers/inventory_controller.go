@@ -873,14 +873,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		return
 	}
 
-	// Start the Loopback HardwarePlugin server
-	if ctlrutils.ShouldDeployLoopbackHWPlugin() {
-		nextReconcile, err = t.setupLoopbackPluginServer(ctx, nextReconcile)
-		if err != nil {
-			return
-		}
-	}
-
 	// Start the Metal3 HardwarePlugin server
 	nextReconcile, err = t.setupMetal3PluginServer(ctx, nextReconcile)
 	if err != nil {
@@ -1567,13 +1559,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  constants.PostgresImageName,
 			Value: postgresImage,
-		})
-	}
-
-	if serverName == ctlrutils.LoopbackPluginServerName {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  ctlrutils.DeployLoopbackHWPluginEnvVar,
-			Value: ctlrutils.GetDeployLoopbackHWPlugin(),
 		})
 	}
 

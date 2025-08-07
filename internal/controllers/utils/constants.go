@@ -48,10 +48,8 @@ const (
 
 // HardwarePlugins
 const (
-	LoopbackPlugin           = "loopback-hardwareplugin"
-	LoopbackPluginServerName = LoopbackPlugin + serverSuffix
-	Metal3Plugin             = "metal3-hardwareplugin"
-	Metal3PluginServerName   = Metal3Plugin + serverSuffix
+	Metal3Plugin           = "metal3-hardwareplugin"
+	Metal3PluginServerName = Metal3Plugin + serverSuffix
 )
 
 // IngressName defines the name of our ingress controller
@@ -118,18 +116,6 @@ var (
 		constants.MetricsFlag + "=" + constants.MetricsPort,
 		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
 		constants.LeaderElectFlag,
-	}
-
-	LoopbackPluginServerArgs = []string{
-		constants.LoopbackHardwarePluginManagerCmd,
-		constants.StartSubcommand,
-		constants.HealthProbeFlag + "=" + constants.HealthProbePort,
-		constants.MetricsFlag + "=" + constants.MetricsPort,
-		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
-		constants.LeaderElectFlag,
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
-		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
 	Metal3PluginServerArgs = []string{
@@ -271,13 +257,6 @@ const (
 // Environment values
 const (
 	HwMgrPluginNameSpace = "HWMGR_PLUGIN_NAMESPACE"
-)
-
-// Deploy Loopback HardwarePlugin constants
-const (
-	DeployLoopbackHWPluginEnvVar  = "DEPLOY_LOOPBACK_HW_PLUGIN"
-	DefaultDeployLoopbackHWPlugin = "false"
-	DeployLoopbackHWPluginOk      = "true"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
