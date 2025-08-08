@@ -628,7 +628,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	nodeName := bmh.Annotations[NodeNameAnnotation]
 	if nodeName == "" {
-		nodeName = hwmgrutils.GenerateNodeName()
+		nodeName = hwmgrutils.GenerateNodeName(hwmgrutils.Metal3HardwarePluginID, nodeAllocationRequest.Spec.ClusterId, bmh.Namespace, bmh.Name)
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, NodeNameAnnotation,
 			nodeName, OpAdd); err != nil {
 			return DoNotRequeue, fmt.Errorf("failed to save AllocatedNode name annotation to BMH (%s): %w", bmh.Name, err)
