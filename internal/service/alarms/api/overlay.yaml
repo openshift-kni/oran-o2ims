@@ -1,0 +1,53 @@
+overlay: 1.0.0
+info:
+  title: Internal Endpoints Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths"
+    update:
+      /internal/v1/caas-alerts/alertmanager:
+        post:
+          operationId: AmNotification
+          summary: Receive Alertmanager notifications
+          description: Receives alerts from Alertmanager and notifies subscribers if available.
+          tags:
+            - internal
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  $ref: "#/components/schemas/AlertmanagerNotification"
+          responses:
+            '200':
+              description: Notification received successfully
+            '400':
+              description: Bad request
+            '500':
+              description: Internal server error
+      /internal/v1/hardware-alerts/{hwVendorName}:
+        post:
+          operationId: HwNotification
+          summary: Receive hardware alerts
+          description: Receives hardware alerts for the specified vendor.
+          tags:
+            - internal
+          parameters:
+            - in: path
+              name: hwVendorName
+              required: true
+              schema:
+                type: string
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  $ref: "#/components/schemas/HardwareAlert"
+          responses:
+            '200':
+              description: Hardware alert received successfully
+            '400':
+              description: Bad request
+            '500':
+              description: Internal server error
