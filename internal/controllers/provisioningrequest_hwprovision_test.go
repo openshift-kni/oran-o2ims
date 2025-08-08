@@ -86,7 +86,8 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -189,9 +190,10 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -231,7 +233,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 		hwTemplateResource := &hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
-				Namespace: ctlrutils.InventoryNamespace,
+				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:  testMetal3HardwarePluginRef,
@@ -255,7 +257,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 
 		// Create the hardware template that the ClusterTemplate references
 		Expect(c.Create(ctx, hwTemplateResource)).To(Succeed())
-		unstructuredCi, err := ctlrutils.ConvertToUnstructured(*clusterInstance)
+		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).ToNot(HaveOccurred())
@@ -303,7 +305,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 		}
 		Expect(c.Status().Update(ctx, ct)).To(Succeed())
 
-		unstructuredCi, err := ctlrutils.ConvertToUnstructured(*clusterInstance)
+		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).To(HaveOccurred())
@@ -312,7 +314,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 	})
 
 	It("returns an error when the ClusterTemplate is not found", func() {
-		unstructuredCi, err := ctlrutils.ConvertToUnstructured(*clusterInstance)
+		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).To(HaveOccurred())
@@ -437,6 +439,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			timeouts: &timeouts{
 				hardwareProvisioning: 1 * time.Minute,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -558,9 +561,10 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -662,9 +666,10 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -776,9 +781,10 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -900,7 +906,7 @@ var _ = Describe("waitForHardwareData", func() {
 		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-hardware-template",
-				Namespace: ctlrutils.InventoryNamespace,
+				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:  testMetal3HardwarePluginRef,
@@ -937,6 +943,7 @@ var _ = Describe("waitForHardwareData", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -1073,9 +1080,10 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger: reconciler.Logger,
-			client: reconciler.Client,
-			object: cr,
+			logger:         reconciler.Logger,
+			client:         reconciler.Client,
+			object:         cr,
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
@@ -1144,7 +1152,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		task        *provisioningRequestReconcilerTask
 		cr          *provisioningv1alpha1.ProvisioningRequest
 		ci          *unstructured.Unstructured
-		hwNodes     map[string][]ctlrutils.NodeInfo
+		hwNodes     map[string][]utils.NodeInfo
 		nar         *hwmgrpluginapi.NodeAllocationRequestResponse
 		crName      = "cluster-1"
 		ctNamespace = "clustertemplate-a-v4-16"
@@ -1238,7 +1246,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		hwTemplateResource := &hwmgmtv1alpha1.HardwareTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
-				Namespace: ctlrutils.InventoryNamespace,
+				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:  testMetal3HardwarePluginRef,
@@ -1261,7 +1269,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		}
 
 		// Set up hardware nodes map
-		hwNodes = map[string][]ctlrutils.NodeInfo{
+		hwNodes = map[string][]utils.NodeInfo{
 			"controller": {
 				{
 					BmcAddress:     "192.168.1.100",
@@ -1373,6 +1381,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 					},
 				},
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -1445,7 +1454,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 
 	It("returns error when no matching hardware nodes found", func() {
 		// Empty hardware nodes map
-		emptyHwNodes := map[string][]ctlrutils.NodeInfo{}
+		emptyHwNodes := map[string][]utils.NodeInfo{}
 
 		err := task.applyNodeConfiguration(ctx, emptyHwNodes, nar, ci)
 		Expect(err).To(HaveOccurred())
@@ -1502,7 +1511,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 	It("handles nodes without HwMgrNodeId and HwMgrNodeNs", func() {
 		// Remove HwMgrNodeId and HwMgrNodeNs from hardware nodes
 		// Also provide both interfaces to match the cluster instance structure
-		hwNodesWithoutHostRef := map[string][]ctlrutils.NodeInfo{
+		hwNodesWithoutHostRef := map[string][]utils.NodeInfo{
 			"controller": {
 				{
 					BmcAddress:     "192.168.1.100",
@@ -1595,7 +1604,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		}
 
 		// Add second controller node
-		hwNodes["controller"] = append(hwNodes["controller"], ctlrutils.NodeInfo{
+		hwNodes["controller"] = append(hwNodes["controller"], utils.NodeInfo{
 			BmcAddress:     "192.168.1.102",
 			BmcCredentials: "master-02-bmc-secret",
 			NodeID:         "node-master-02",
@@ -1637,7 +1646,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 
 func VerifyHardwareTemplateStatus(ctx context.Context, c client.Client, templateName string, expectedCon metav1.Condition) {
 	updatedHwTempl := &hwmgmtv1alpha1.HardwareTemplate{}
-	Expect(c.Get(ctx, client.ObjectKey{Name: templateName, Namespace: ctlrutils.InventoryNamespace}, updatedHwTempl)).To(Succeed())
+	Expect(c.Get(ctx, client.ObjectKey{Name: templateName, Namespace: utils.InventoryNamespace}, updatedHwTempl)).To(Succeed())
 	hwTemplCond := meta.FindStatusCondition(updatedHwTempl.Status.Conditions, expectedCon.Type)
 	Expect(hwTemplCond).ToNot(BeNil())
 	testutils.VerifyStatusCondition(*hwTemplCond, metav1.Condition{

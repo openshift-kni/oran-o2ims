@@ -49,7 +49,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
 
@@ -91,6 +92,7 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Define the cluster template.
@@ -123,7 +125,7 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 		configMapName := crName + "-pg"
 		configMapNs := "ztp-" + ctNamespace
 		configMap := &corev1.ConfigMap{}
-		configMapExists, err := ctlrutils.DoesK8SResourceExist(
+		configMapExists, err := utils.DoesK8SResourceExist(
 			ctx, c, configMapName, configMapNs, configMap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(configMapExists).To(BeTrue())
@@ -220,6 +222,7 @@ var _ = Describe("createClusterInstanceBMCSecrets", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 

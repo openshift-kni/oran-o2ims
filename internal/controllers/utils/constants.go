@@ -331,3 +331,10 @@ const (
 const HardwarePluginValidationEndpoint = "/hardware-manager/provisioning/api_versions"
 
 const AllocatedNodeLabel = "clcm.openshift.io/allocated-node"
+
+// Callback annotation keys used by both the NAR callback server and provisioning request controller
+const (
+	CallbackReceivedAnnotation                = "callback.received"
+	CallbackStatusAnnotation                  = "callback.status"
+	CallbackNodeAllocationRequestIdAnnotation = "callback.nodeAllocationRequestId"
+)

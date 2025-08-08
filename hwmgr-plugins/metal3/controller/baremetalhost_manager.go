@@ -844,6 +844,10 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 			delete(patched.Annotations, key)
 		}
 
+		// Initialize annotations map if it's nil
+		if patched.Annotations == nil {
+			patched.Annotations = make(map[string]string)
+		}
 		patched.Annotations[BmhDeallocationDoneAnnotation] = "true"
 
 		// Clear CustomDeploy entirely

@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift-kni/oran-o2ims/api/common"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -215,4 +216,37 @@ func GetAllocatedNode(ctx context.Context, c client.Client, namespace, nodeId st
 		allocatedNode)
 	// nolint: wrapcheck
 	return allocatedNode, err
+}
+
+// convertToCommonAuthClientConfig converts OpenAPI AuthClientConfig to common.AuthClientConfig
+func convertToCommonAuthClientConfig(apiConfig *AuthClientConfig) *common.AuthClientConfig {
+	if apiConfig == nil {
+		return nil
+	}
+
+	result := &common.AuthClientConfig{
+		Type:            common.AuthType(apiConfig.Type),
+		BasicAuthSecret: apiConfig.BasicAuthSecret,
+	}
+
+	// Convert OAuthClientConfig if present
+	if apiConfig.OauthConfig != nil {
+		result.OAuthClientConfig = &common.OAuthClientConfig{
+			URL:              apiConfig.OauthConfig.Url,
+			TokenEndpoint:    apiConfig.OauthConfig.TokenEndpoint,
+			ClientSecretName: apiConfig.OauthConfig.ClientSecretName,
+			Scopes:           apiConfig.OauthConfig.Scopes,
+		}
+	}
+
+	// Convert TLSConfig if present
+	if apiConfig.TlsConfig != nil {
+		// Note: OpenAPI TLSConfig.SecretName is string, common.TLSConfig.SecretName is *string
+		secretName := apiConfig.TlsConfig.SecretName
+		result.TLSConfig = &common.TLSConfig{
+			SecretName: &secretName,
+		}
+	}
+
+	return result
 }

@@ -158,3 +158,19 @@ const (
 	PostgresImageName       = "POSTGRES_IMAGE"
 	InternalServicePortName = "INTERNAL_SERVICE_PORT"
 )
+
+// NodeAllocationRequest Callback Service configuration
+const (
+	NarCallbackServiceNameEnv      = "NAR_CALLBACK_SERVICE_NAME"
+	NarCallbackServiceNamespaceEnv = "NAR_CALLBACK_SERVICE_NAMESPACE"
+	DefaultNarCallbackServiceName  = "oran-o2ims-nar-callback-service"
+	DefaultNarCallbackServicePort  = 8090
+)
+
+// NodeAllocationRequest Callback API Paths and URLs
+const (
+	NarCallbackAPIPath                  = "/nar-callback"
+	NarCallbackProvisioningRequestsPath = "/provisioning-requests"
+	NarCallbackBaseURL                  = NarCallbackAPIPath + APIVersionV1
+	NarCallbackServicePath              = NarCallbackBaseURL + NarCallbackProvisioningRequestsPath
+)

@@ -537,7 +537,7 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	return nodeAllocationRequestResponse, nil
 }
 
-// buildNodeAllocationRequestSpec builds the NodeAllocationRequest based on the templates and cluster instance
+// buildNodeAllocationRequest builds the NodeAllocationRequest based on the templates and cluster instance
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterInstance *unstructured.Unstructured,
 	hwTemplate *hwmgmtv1alpha1.HardwareTemplate) (*hwmgrpluginapi.NodeAllocationRequest, error) {
 
@@ -585,12 +585,22 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamNodeClusterName, err)
 	}
 
+	callbackURL := t.callbackConfig.BuildCallbackURL(t.object.Name)
+
 	nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{}
 	nodeAllocationRequest.Site = siteID.(string)
 	nodeAllocationRequest.ClusterId = clusterId.(string)
 	nodeAllocationRequest.NodeGroup = nodeGroups
 	nodeAllocationRequest.BootInterfaceLabel = hwTemplate.Spec.BootInterfaceLabel
 	nodeAllocationRequest.ConfigTransactionId = t.object.Generation
+
+	// Create callback configuration with the callback URL
+	nodeAllocationRequest.Callback = &hwmgrpluginapi.Callback{
+		CallbackURL: callbackURL,
+		// Note: CaBundleName and AuthClientConfig are optional and can be added later if needed
+		// CaBundleName: nil,
+		// AuthClientConfig: nil,
+	}
 
 	return nodeAllocationRequest, nil
 }
