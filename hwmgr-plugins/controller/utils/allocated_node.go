@@ -10,9 +10,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -95,9 +96,57 @@ func GetNodeForBMH(nodes map[string]pluginsv1alpha1.AllocatedNode, bmh *metal3v1
 	return nil
 }
 
-// GenerateNodeName
-func GenerateNodeName() string {
-	return uuid.NewString()
+// GenerateNodeName generates a deterministic AllocatedNode name based on the hardware plugin identifier,
+// clusterID, BareMetalHost namespace and name. The generated name complies with Kubernetes
+// Custom Resource naming specifications (RFC 1123 subdomain).
+func GenerateNodeName(pluginID, clusterID, bmhNamespace, bmhName string) string {
+
+	// Create deterministic name using hardware pluginID, clusterID, BMH namespace, BMH name
+	// Format: <plugin-id>-<cluster-id>-<bmh-namespace>-<bmh-name>
+	// This ensures uniqueness across different namespaces and BMHs
+	baseName := fmt.Sprintf("%s-%s-%s-%s", pluginID, clusterID, bmhNamespace, bmhName)
+
+	// Sanitize the name to ensure Kubernetes compliance
+	sanitizedName := sanitizeKubernetesName(baseName)
+
+	// Ensure the name doesn't exceed Kubernetes name length limits (253 characters)
+	if sanitizedName == "" || len(sanitizedName) > 253 {
+		// If too long, use a hash-based approach for deterministic truncation
+		clusterUUID := uuid.NewSHA1(uuid.Nil, []byte(clusterID))
+		hash := ctlrutils.MakeUUIDFromNames(bmhNamespace, clusterUUID, bmhName, pluginID)
+		sanitizedName = fmt.Sprintf("%s-%s", pluginID, hash.String()[:10])
+	}
+
+	return sanitizedName
+}
+
+// sanitizeKubernetesName sanitizes a string to comply with Kubernetes resource name requirements.
+// Kubernetes names must be RFC 1123 compliant:
+// - contain only lowercase alphanumeric characters or '-'
+// - start and end with an alphanumeric character
+// - be no more than 253 characters long
+func sanitizeKubernetesName(name string) string {
+	// Convert to lowercase
+	result := strings.ToLower(name)
+
+	// Replace invalid characters with hyphens
+	// Keep only alphanumeric characters and hyphens
+	reg := regexp.MustCompile("[^a-z0-9-]")
+	result = reg.ReplaceAllString(result, "-")
+
+	// Remove consecutive hyphens
+	reg = regexp.MustCompile("-+")
+	result = reg.ReplaceAllString(result, "-")
+
+	// Ensure it starts with alphanumeric character
+	reg = regexp.MustCompile("^[^a-z0-9]+")
+	result = reg.ReplaceAllString(result, "")
+
+	// Ensure it ends with alphanumeric character
+	reg = regexp.MustCompile("[^a-z0-9]+$")
+	result = reg.ReplaceAllString(result, "")
+
+	return result
 }
 
 func FindNodeInList(nodelist pluginsv1alpha1.AllocatedNodeList, hardwarePluginRef, nodeId string) string {
