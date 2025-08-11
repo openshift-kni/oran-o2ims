@@ -4,6 +4,7 @@
 /oran-o2ims
 /bin/*
 /catalog/*
+/dev-tools/crd-watcher/bin
 
 # Folders
 .idea/

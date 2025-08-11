@@ -65,6 +65,7 @@ Shows bare metal host resources managed by Metal3.
 Shows firmware component information for bare metal hosts managed by Metal3.
 
 **Filtering**: Only includes HostFirmwareComponents whose `.metadata.name` matches the name of a BareMetalHost that passed the resource selector filtering (i.e., has labels starting with `resourceselector.clcm.openshift.io/`).
+Deletion events are always processed regardless of BareMetalHost existence to ensure accurate removal display.
 
 **Fields displayed:**
 
@@ -79,6 +80,7 @@ Shows firmware component information for bare metal hosts managed by Metal3.
 Shows firmware settings information for bare metal hosts managed by Metal3.
 
 **Filtering**: Only includes HostFirmwareSettings whose `.metadata.name` matches the name of a BareMetalHost that passed the resource selector filtering (i.e., has labels starting with `resourceselector.clcm.openshift.io/`).
+Deletion events are always processed regardless of BareMetalHost existence to ensure accurate removal display.
 
 **Fields displayed:**
 
@@ -134,6 +136,7 @@ make crd-watcher
 | `--all-namespaces` | `true` | Watch resources across all namespaces |
 | `--output, -o` | `table` | Output format: `table`, `json`, `yaml` |
 | `--refresh-interval` | `5` | Screen refresh interval in seconds (watch mode only) |
+| `--inventory-refresh-interval` | `120` | Inventory data refresh interval in seconds (0 to disable) |
 | `--kubeconfig` | `""` | Path to kubeconfig file |
 | `--log-level, -v` | `1` | Log verbosity level (0-4) |
 
@@ -143,12 +146,66 @@ The tool automatically sorts output based on the CRD type:
 
 - **ProvisioningRequests**: Sorted by `DISPLAYNAME` field (.spec.name)
 - **NodeAllocationRequests**: Sorted by `CLUSTER-ID` field (.spec.clusterId)
-- **AllocatedNodes**: Sorted by `HWMGR-NODE-ID` field (.spec.hwMgrNodeId)
+- **AllocatedNodes**: Sorted by resource name (.metadata.name)
 - **BareMetalHosts**: Sorted by resource name (.metadata.name)
 - **HostFirmwareComponents**: Sorted by resource name (.metadata.name)
 - **HostFirmwareSettings**: Sorted by resource name (.metadata.name)
 
 Sorting is applied in both table mode (non-watch) and watch mode, providing consistent ordered output for easier monitoring and troubleshooting.
+
+## Inventory Data Refresh
+
+When the inventory module is enabled (`--enable-inventory`), the tool can periodically refresh inventory data from the O2IMS API to ensure new cluster nodes and resources are detected at runtime.
+
+### Configuration
+
+- **`--inventory-refresh-interval`**: Set the refresh interval in seconds (default: 120 = 2 minutes)
+- Set to `0` to disable periodic refresh and only fetch data once at startup
+- Recommended values: 60-600 seconds (1-10 minutes) depending on how frequently your inventory changes
+
+### How It Works
+
+1. **Initial Fetch**: On startup, the tool fetches all inventory data (resource pools, resources, node clusters)
+2. **Periodic Refresh**: A background timer periodically re-queries the O2IMS API for fresh data
+3. **Event-Triggered Refresh**: Inventory refreshes automatically when BareMetalHost or ProvisioningRequest CRs are updated
+4. **Live Updates**: New resources appear in the display immediately when discovered
+5. **Stale Object Cleanup**: Before each inventory refresh, stale cached objects are verified and removed from the display
+6. **Continuous Cleanup**: Periodic verification ensures long-term accuracy of displayed data
+
+#### Event-Triggered Refreshes
+
+The tool automatically triggers inventory refreshes when:
+
+- **BareMetalHost** resources are deleted or when their provisioning state changes to "available"
+- **ProvisioningRequest** resources are deleted or when their provisioning phase changes to "fulfilled"
+
+**Refresh Timing:**
+
+- **BareMetalHost deletions or "available" state**: 1-second delay to quickly reflect infrastructure changes
+- **ProvisioningRequest deletions or "fulfilled" phase**: 1-second delay to quickly reflect provisioning completion
+
+This ensures that infrastructure changes are quickly reflected in the inventory data without waiting for the next periodic refresh. Critical events (infrastructure becoming available, provisioning completion, or resource deletions) get priority with a 1-second response time.
+
+#### Display Updates
+
+The watch mode display is optimized for immediate feedback:
+
+- **Deletion Events**: Reflected instantly in the display without any debouncing delay
+- **Firmware CR Deletions**: Always processed regardless of BareMetalHost existence to ensure accurate removal display
+- **Other Events**: Use 250ms debouncing to prevent flickering during rapid updates
+
+### Example Usage
+
+```bash
+# Refresh inventory data every 2 minutes (default)
+./bin/crd-watcher --enable-inventory --watch
+
+# Refresh inventory data every 5 minutes
+./bin/crd-watcher --enable-inventory --watch --inventory-refresh-interval=300
+
+# Disable periodic refresh (startup fetch only)
+./bin/crd-watcher --enable-inventory --watch --inventory-refresh-interval=0
+```
 
 ## Watch Mode
 
@@ -220,7 +277,7 @@ The tool can be easily integrated into:
 
 The watcher includes an optional inventory module that can connect to O2IMS Infrastructure Inventory APIs to fetch and display resources alongside Kubernetes CRDs.
 
-### Configuration
+### Setup
 
 Enable the inventory module with OAuth authentication:
 
