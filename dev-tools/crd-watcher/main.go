@@ -59,14 +59,17 @@ type Config struct {
 	// Retry configuration
 	InventoryMaxRetries   int
 	InventoryRetryDelayMs int
+	// Refresh configuration
+	InventoryRefreshInterval int // Interval in seconds for refreshing inventory data from O2IMS API
 }
 
 var (
 	config = &Config{
-		OutputFormat:    "table",
-		LogLevel:        1,
-		AllNamespaces:   true,
-		RefreshInterval: 2,
+		OutputFormat:             "table",
+		LogLevel:                 1,
+		AllNamespaces:            true,
+		RefreshInterval:          2,
+		InventoryRefreshInterval: 120, // Default: refresh inventory data every 2 minutes
 	}
 
 	// Available CRD types that can be watched
@@ -129,6 +132,7 @@ func addFlags(flags *pflag.FlagSet) {
 	flags.IntVarP(&config.LogLevel, "log-level", "v", 0, "Log level (0-4)")
 	flags.BoolVarP(&config.Watch, "watch", "w", false, "Enable real-time screen updates (live dashboard mode)")
 	flags.IntVar(&config.RefreshInterval, "refresh-interval", 2, "Screen refresh interval in seconds during inactivity (watch mode only)")
+	flags.IntVar(&config.InventoryRefreshInterval, "inventory-refresh-interval", 120, "Inventory data refresh interval in seconds (0 to disable periodic refresh)")
 
 	// Inventory module flags
 	flags.BoolVar(&config.EnableInventory, "enable-inventory", false, "Enable inventory module to fetch resources from O2IMS API")
@@ -209,6 +213,10 @@ func runCommand() error {
 
 	// Ensure cleanup happens on exit (including Ctrl+C)
 	defer func() {
+		// Cleanup the watcher (stops inventory refresh timer)
+		watcher.Cleanup()
+
+		// Cleanup the TUI formatter
 		if tuiFormatter, ok := watcher.GetFormatter().(*TUIFormatter); ok {
 			tuiFormatter.Cleanup()
 		}

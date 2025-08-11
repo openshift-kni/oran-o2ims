@@ -40,14 +40,20 @@ import (
 )
 
 type CRDWatcher struct {
-	clientset        kubernetes.Interface
-	dynamicClient    dynamic.Interface
-	scheme           *runtime.Scheme
-	config           *Config
-	formatter        OutputFormatter
-	includedBMHNames map[string]bool
-	bmhMutex         sync.RWMutex
-	inventoryClient  *InventoryClient
+	clientset             kubernetes.Interface
+	dynamicClient         dynamic.Interface
+	scheme                *runtime.Scheme
+	config                *Config
+	formatter             OutputFormatter
+	includedBMHNames      map[string]bool
+	bmhMutex              sync.RWMutex
+	inventoryClient       *InventoryClient
+	inventoryRefreshTimer *time.Timer
+	inventoryRefreshMutex sync.Mutex
+	// Event-triggered refresh debouncing
+	eventRefreshTimer *time.Timer
+	eventRefreshMutex sync.Mutex
+	lastEventRefresh  time.Time
 }
 
 type WatchEvent struct {
@@ -279,7 +285,7 @@ func (w *CRDWatcher) Start(ctx context.Context) error {
 		// Don't fail, continue with empty map
 	}
 
-	// If inventory is enabled, fetch initial inventory data
+	// If inventory is enabled, fetch initial inventory data and start refresh timer
 	if w.inventoryClient != nil {
 		// Fetch and display initial inventory resource pools
 		if err := w.fetchAndDisplayInventoryResourcePools(ctx); err != nil {
@@ -295,6 +301,9 @@ func (w *CRDWatcher) Start(ctx context.Context) error {
 		if err := w.fetchAndDisplayInventoryNodeClusters(ctx); err != nil {
 			klog.Errorf("Failed to fetch initial inventory node clusters: %v", err)
 		}
+
+		// Start the inventory refresh timer for periodic updates
+		w.startInventoryRefreshTimer(ctx)
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
@@ -494,7 +503,7 @@ func (w *CRDWatcher) listInventoryNodeClusters(ctx context.Context) ([]WatchEven
 	var events []WatchEvent
 	for _, nodeCluster := range nodeClusters {
 		// Filter out the local-cluster
-		if nodeCluster.Name == "local-cluster" {
+		if nodeCluster.Name == StringLocalCluster {
 			klog.V(2).Infof("Filtering out local-cluster from node clusters listing")
 			continue
 		}
@@ -565,7 +574,7 @@ func (w *CRDWatcher) fetchAndDisplayInventoryNodeClusters(ctx context.Context) e
 	filteredCount := 0
 	for _, nodeCluster := range nodeClusters {
 		// Filter out the local-cluster
-		if nodeCluster.Name == "local-cluster" {
+		if nodeCluster.Name == StringLocalCluster {
 			klog.V(2).Infof("Filtering out local-cluster from node clusters display")
 			continue
 		}
@@ -583,6 +592,328 @@ func (w *CRDWatcher) fetchAndDisplayInventoryNodeClusters(ctx context.Context) e
 	}
 
 	klog.V(1).Infof("Displayed %d inventory node clusters (filtered from %d total)", filteredCount, len(nodeClusters))
+	return nil
+}
+
+// startInventoryRefreshTimer starts a timer to periodically refresh inventory data from the O2IMS API
+func (w *CRDWatcher) startInventoryRefreshTimer(ctx context.Context) {
+	if w.inventoryClient == nil || w.config.InventoryRefreshInterval <= 0 {
+		klog.V(1).Info("Inventory refresh timer disabled (no client or interval <= 0)")
+		return
+	}
+
+	refreshInterval := time.Duration(w.config.InventoryRefreshInterval) * time.Second
+	klog.V(1).Infof("Starting inventory refresh timer with interval: %v", refreshInterval)
+
+	w.inventoryRefreshMutex.Lock()
+	defer w.inventoryRefreshMutex.Unlock()
+
+	w.inventoryRefreshTimer = time.AfterFunc(refreshInterval, func() {
+		w.performInventoryRefresh(ctx)
+		// Restart the timer for continuous refresh
+		w.startInventoryRefreshTimer(ctx)
+	})
+}
+
+// stopInventoryRefreshTimer stops the inventory refresh timer
+func (w *CRDWatcher) stopInventoryRefreshTimer() {
+	w.inventoryRefreshMutex.Lock()
+	defer w.inventoryRefreshMutex.Unlock()
+
+	if w.inventoryRefreshTimer != nil {
+		w.inventoryRefreshTimer.Stop()
+		w.inventoryRefreshTimer = nil
+		klog.V(1).Info("Inventory refresh timer stopped")
+	}
+}
+
+// triggerEventBasedInventoryRefresh triggers an inventory refresh in response to CR events
+// with specific logic for BareMetalHost state changes and deletions
+func (w *CRDWatcher) triggerEventBasedInventoryRefresh(ctx context.Context, eventType watch.EventType, crdType string, obj runtime.Object) {
+	if w.inventoryClient == nil {
+		return
+	}
+
+	// Only trigger refreshes for specific CRD types and event types
+	if !w.shouldTriggerRefreshForEvent(crdType, eventType) {
+		return
+	}
+
+	// Special handling for BareMetalHost events
+	if crdType == CRDTypeBareMetalHosts {
+		if !w.shouldTriggerRefreshForBMHEvent(eventType, obj) {
+			klog.V(3).Infof("BareMetalHost event does not meet refresh criteria, skipping")
+			return
+		}
+	}
+
+	// Special handling for ProvisioningRequest events
+	if crdType == CRDTypeProvisioningRequests {
+		if !w.shouldTriggerRefreshForPREvent(eventType, obj) {
+			klog.V(3).Infof("ProvisioningRequest event does not meet refresh criteria, skipping")
+			return
+		}
+	}
+
+	w.eventRefreshMutex.Lock()
+	defer w.eventRefreshMutex.Unlock()
+
+	// For BareMetalHost deletions or "available" state changes, refresh after 1 second
+	if crdType == CRDTypeBareMetalHosts && (eventType == watch.Deleted ||
+		(eventType == watch.Modified && w.isBMHStateAvailable(obj))) {
+
+		if eventType == watch.Deleted {
+			klog.V(2).Infof("Triggering inventory refresh (1s delay) due to BareMetalHost deletion")
+		} else {
+			klog.V(2).Infof("Triggering inventory refresh (1s delay) due to BareMetalHost becoming available")
+		}
+
+		// Cancel any existing event refresh timer since we're scheduling a priority refresh
+		if w.eventRefreshTimer != nil {
+			w.eventRefreshTimer.Stop()
+		}
+
+		// Schedule refresh with 1-second delay for priority events
+		w.eventRefreshTimer = time.AfterFunc(1*time.Second, func() {
+			w.lastEventRefresh = time.Now()
+			w.performInventoryRefreshWithReason(ctx, "bmh-state-triggered")
+		})
+		return
+	}
+
+	// For ProvisioningRequest deletions or "fulfilled" phase changes, refresh after 1 second
+	if crdType == CRDTypeProvisioningRequests && (eventType == watch.Deleted ||
+		(eventType == watch.Modified && w.isPRPhaseFulfilled(obj))) {
+
+		if eventType == watch.Deleted {
+			klog.V(2).Infof("Triggering inventory refresh (1s delay) due to ProvisioningRequest deletion")
+		} else {
+			klog.V(2).Infof("Triggering inventory refresh (1s delay) due to ProvisioningRequest becoming fulfilled")
+		}
+
+		// Cancel any existing event refresh timer since we're scheduling a priority refresh
+		if w.eventRefreshTimer != nil {
+			w.eventRefreshTimer.Stop()
+		}
+
+		// Schedule refresh with 1-second delay for priority events
+		w.eventRefreshTimer = time.AfterFunc(1*time.Second, func() {
+			w.lastEventRefresh = time.Now()
+			w.performInventoryRefreshWithReason(ctx, "pr-state-triggered")
+		})
+		return
+	}
+}
+
+// isBMHStateAvailable checks if a BareMetalHost has provisioning state "available"
+func (w *CRDWatcher) isBMHStateAvailable(obj runtime.Object) bool {
+	if bmh, ok := obj.(*metal3v1alpha1.BareMetalHost); ok {
+		return string(bmh.Status.Provisioning.State) == StringAvailable
+	}
+	return false
+}
+
+// isPRPhaseFulfilled checks if a ProvisioningRequest has provisioning phase "fulfilled"
+func (w *CRDWatcher) isPRPhaseFulfilled(obj runtime.Object) bool {
+	if pr, ok := obj.(*provisioningv1alpha1.ProvisioningRequest); ok {
+		return string(pr.Status.ProvisioningStatus.ProvisioningPhase) == StringFulfilled
+	}
+	return false
+}
+
+// shouldTriggerRefreshForEvent determines if an inventory refresh should be triggered for a given event
+func (w *CRDWatcher) shouldTriggerRefreshForEvent(crdType string, eventType watch.EventType) bool {
+	// Only trigger for BareMetalHosts and ProvisioningRequests
+	if crdType != CRDTypeBareMetalHosts && crdType != CRDTypeProvisioningRequests {
+		return false
+	}
+
+	// Trigger for Added, Modified, and Deleted events
+	switch eventType {
+	case watch.Added, watch.Modified, watch.Deleted:
+		return true
+	default:
+		return false
+	}
+}
+
+// shouldTriggerRefreshForBMHEvent determines if a BareMetalHost event should trigger inventory refresh
+// Returns true for deletions or when state changes to "available"
+func (w *CRDWatcher) shouldTriggerRefreshForBMHEvent(eventType watch.EventType, obj runtime.Object) bool {
+	// Always trigger for deletions
+	if eventType == watch.Deleted {
+		return true
+	}
+
+	// For modifications, check if provisioning state changed to "available"
+	if eventType == watch.Modified {
+		if bmh, ok := obj.(*metal3v1alpha1.BareMetalHost); ok {
+			if string(bmh.Status.Provisioning.State) == StringAvailable {
+				klog.V(3).Infof("BareMetalHost %s state is 'available', triggering inventory refresh", bmh.Name)
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// shouldTriggerRefreshForPREvent determines if a ProvisioningRequest event should trigger inventory refresh
+// Returns true for deletions or when provisioningPhase changes to "fulfilled"
+func (w *CRDWatcher) shouldTriggerRefreshForPREvent(eventType watch.EventType, obj runtime.Object) bool {
+	// Always trigger for deletions
+	if eventType == watch.Deleted {
+		return true
+	}
+
+	// For modifications, check if provisioning phase changed to "fulfilled"
+	if eventType == watch.Modified {
+		if pr, ok := obj.(*provisioningv1alpha1.ProvisioningRequest); ok {
+			if string(pr.Status.ProvisioningStatus.ProvisioningPhase) == StringFulfilled {
+				klog.V(3).Infof("ProvisioningRequest %s phase is 'fulfilled', triggering inventory refresh", pr.Name)
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// stopEventRefreshTimer stops the event-triggered refresh timer
+func (w *CRDWatcher) stopEventRefreshTimer() {
+	w.eventRefreshMutex.Lock()
+	defer w.eventRefreshMutex.Unlock()
+
+	if w.eventRefreshTimer != nil {
+		w.eventRefreshTimer.Stop()
+		w.eventRefreshTimer = nil
+		klog.V(2).Info("Event-triggered inventory refresh timer stopped")
+	}
+}
+
+// performInventoryRefresh fetches fresh inventory data and updates the display
+func (w *CRDWatcher) performInventoryRefresh(ctx context.Context) {
+	w.performInventoryRefreshWithReason(ctx, "periodic")
+}
+
+// performInventoryRefreshWithReason fetches fresh inventory data with a specified reason for logging
+func (w *CRDWatcher) performInventoryRefreshWithReason(ctx context.Context, reason string) {
+	if w.inventoryClient == nil {
+		return
+	}
+
+	klog.V(1).Infof("Performing %s inventory refresh", reason)
+
+	// Create a context with timeout for this refresh operation
+	refreshCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	// Clean up stale inventory objects before fetching fresh data
+	w.cleanupStaleInventoryObjects()
+
+	// Refresh inventory resource pools
+	if err := w.refreshInventoryResourcePools(refreshCtx); err != nil {
+		klog.Errorf("Failed to refresh inventory resource pools: %v", err)
+	}
+
+	// Refresh inventory resources
+	if err := w.refreshInventoryResources(refreshCtx); err != nil {
+		klog.Errorf("Failed to refresh inventory resources: %v", err)
+	}
+
+	// Refresh inventory node clusters
+	if err := w.refreshInventoryNodeClusters(refreshCtx); err != nil {
+		klog.Errorf("Failed to refresh inventory node clusters: %v", err)
+	}
+
+	klog.V(1).Infof("Completed %s inventory refresh", reason)
+}
+
+// cleanupStaleInventoryObjects triggers immediate cleanup of stale inventory objects in the watch display
+func (w *CRDWatcher) cleanupStaleInventoryObjects() {
+	// Only apply to TUI formatter since other formatters don't cache objects
+	if tuiFormatter, ok := w.formatter.(*TUIFormatter); ok {
+		klog.V(2).Info("Triggering immediate cleanup of stale inventory objects")
+		tuiFormatter.cleanupStaleInventoryObjects()
+	}
+}
+
+// refreshInventoryResourcePools fetches and processes updated resource pool data
+func (w *CRDWatcher) refreshInventoryResourcePools(ctx context.Context) error {
+	resourcePools, err := w.inventoryClient.GetAllResourcePools(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get inventory resource pools: %w", err)
+	}
+
+	klog.V(2).Infof("Refreshed %d inventory resource pools", len(resourcePools))
+
+	for _, resourcePool := range resourcePools {
+		event := WatchEvent{
+			Type:      watch.Added, // Treat refreshed data as "Added" events
+			Object:    resourcePool.ToRuntimeObject(),
+			Timestamp: time.Now(),
+			CRDType:   "inventory-resource-pools",
+		}
+		if err := w.formatter.FormatEvent(event); err != nil {
+			klog.Errorf("Error formatting refreshed resource pool event: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// refreshInventoryResources fetches and processes updated resource data
+func (w *CRDWatcher) refreshInventoryResources(ctx context.Context) error {
+	resources, err := w.inventoryClient.GetAllResources(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get inventory resources: %w", err)
+	}
+
+	klog.V(2).Infof("Refreshed %d inventory resources", len(resources))
+
+	for _, resource := range resources {
+		event := WatchEvent{
+			Type:      watch.Added, // Treat refreshed data as "Added" events
+			Object:    resource.ToRuntimeObject(),
+			Timestamp: time.Now(),
+			CRDType:   "inventory-resources",
+		}
+		if err := w.formatter.FormatEvent(event); err != nil {
+			klog.Errorf("Error formatting refreshed resource event: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// refreshInventoryNodeClusters fetches and processes updated node cluster data
+func (w *CRDWatcher) refreshInventoryNodeClusters(ctx context.Context) error {
+	nodeClusters, err := w.inventoryClient.GetAllNodeClusters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get inventory node clusters: %w", err)
+	}
+
+	filteredCount := 0
+	for _, nodeCluster := range nodeClusters {
+		// Filter out the local-cluster
+		if nodeCluster.Name == StringLocalCluster {
+			klog.V(3).Infof("Filtering out local-cluster from node clusters refresh")
+			continue
+		}
+
+		event := WatchEvent{
+			Type:      watch.Added, // Treat refreshed data as "Added" events
+			Object:    nodeCluster.ToRuntimeObject(),
+			Timestamp: time.Now(),
+			CRDType:   "inventory-node-clusters",
+		}
+		if err := w.formatter.FormatEvent(event); err != nil {
+			klog.Errorf("Error formatting refreshed node cluster event: %v", err)
+		}
+		filteredCount++
+	}
+
+	klog.V(2).Infof("Refreshed %d inventory node clusters (filtered from %d total)", filteredCount, len(nodeClusters))
 	return nil
 }
 
@@ -729,14 +1060,14 @@ func (w *CRDWatcher) watchCRD(ctx context.Context, crdType string) error {
 				return w.watchCRD(ctx, crdType) // Restart the watch
 			}
 
-			if err := w.handleWatchEvent(event, crdType); err != nil {
+			if err := w.handleWatchEvent(ctx, event, crdType); err != nil {
 				klog.Errorf("Error handling watch event for %s: %v", crdType, err)
 			}
 		}
 	}
 }
 
-func (w *CRDWatcher) handleWatchEvent(event watch.Event, crdType string) error {
+func (w *CRDWatcher) handleWatchEvent(ctx context.Context, event watch.Event, crdType string) error {
 	typedObj, err := w.convertToTypedObject(event.Object, crdType)
 	if err != nil {
 		return fmt.Errorf("failed to convert object: %w", err)
@@ -769,23 +1100,30 @@ func (w *CRDWatcher) handleWatchEvent(event watch.Event, crdType string) error {
 	}
 
 	// Filter firmware CRDs based on matching BareMetalHost names
+	// For deletion events, always allow them through since the corresponding BMH might already be deleted
 	if crdType == CRDTypeHostFirmwareComponents || crdType == CRDTypeHostFirmwareSettings {
 		accessor, _ := meta.Accessor(typedObj)
 		resourceName := accessor.GetName()
 
-		w.bmhMutex.RLock()
-		_, bmhExists := w.includedBMHNames[resourceName]
-		includedNames := make([]string, 0, len(w.includedBMHNames))
-		for name := range w.includedBMHNames {
-			includedNames = append(includedNames, name)
-		}
-		w.bmhMutex.RUnlock()
-
-		if !bmhExists {
-			klog.V(2).Infof("Filtering out %s '%s' - no matching BareMetalHost found (included BMHs: %v)", crdType, resourceName, includedNames)
-			return nil
+		// Always process deletion events regardless of BMH existence
+		if event.Type == watch.Deleted {
+			klog.V(3).Infof("Processing %s deletion '%s' regardless of BMH existence", crdType, resourceName)
 		} else {
-			klog.V(3).Infof("Including %s '%s' - matches BareMetalHost", crdType, resourceName)
+			// For non-deletion events, apply normal filtering
+			w.bmhMutex.RLock()
+			_, bmhExists := w.includedBMHNames[resourceName]
+			includedNames := make([]string, 0, len(w.includedBMHNames))
+			for name := range w.includedBMHNames {
+				includedNames = append(includedNames, name)
+			}
+			w.bmhMutex.RUnlock()
+
+			if !bmhExists {
+				klog.V(2).Infof("Filtering out %s '%s' - no matching BareMetalHost found (included BMHs: %v)", crdType, resourceName, includedNames)
+				return nil
+			} else {
+				klog.V(3).Infof("Including %s '%s' - matches BareMetalHost", crdType, resourceName)
+			}
 		}
 	}
 
@@ -795,6 +1133,9 @@ func (w *CRDWatcher) handleWatchEvent(event watch.Event, crdType string) error {
 		Timestamp: time.Now(),
 		CRDType:   crdType,
 	}
+
+	// Trigger inventory refresh for relevant CR events
+	w.triggerEventBasedInventoryRefresh(ctx, event.Type, crdType, typedObj)
 
 	return w.formatter.FormatEvent(watchEvent)
 }
@@ -928,4 +1269,11 @@ func (w *CRDWatcher) shouldIncludeBareMetalHost(bmh *metal3v1alpha1.BareMetalHos
 	}
 
 	return false
+}
+
+// Cleanup stops all timers and cleans up resources
+func (w *CRDWatcher) Cleanup() {
+	// Stop the inventory refresh timers
+	w.stopInventoryRefreshTimer()
+	w.stopEventRefreshTimer()
 }

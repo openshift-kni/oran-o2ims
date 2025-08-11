@@ -186,8 +186,27 @@ func (t *TUIFormatter) FormatEvent(event WatchEvent) error {
 		t.resetRefreshTimer()
 	}
 
-	// Use debounced update instead of immediate redraw to prevent flickering
+	// Use immediate update for deletion events, debounced for others to prevent flickering
+	if event.Type == watch.Deleted {
+		return t.immediateUpdate()
+	}
 	return t.scheduleUpdate()
+}
+
+// immediateUpdate performs an immediate screen update without debouncing
+// Used for critical events like deletions that need instant reflection
+func (t *TUIFormatter) immediateUpdate() error {
+	if !t.isTerminal {
+		return t.fallbackFormat()
+	}
+
+	// Cancel any pending debounced update since we're doing immediate update
+	if t.debounceTimer != nil {
+		t.debounceTimer.Stop()
+		t.pendingUpdate = false
+	}
+
+	return t.redrawScreen()
 }
 
 // scheduleUpdate schedules a screen update with debouncing to prevent flickering from rapid events
@@ -350,6 +369,55 @@ func (t *TUIFormatter) cleanupDeletedResources() {
 	if verifiedCount > 0 {
 		klog.V(1).Infof("Verified %d resources: removed %d confirmed deleted, kept %d (%d total remaining)",
 			verifiedCount, removedCount, verifiedCount-removedCount, len(t.events))
+	}
+}
+
+// cleanupStaleInventoryObjects performs immediate cleanup of stale inventory objects only
+func (t *TUIFormatter) cleanupStaleInventoryObjects() {
+	if t.verifyFunc == nil {
+		klog.V(3).Info("No verification function provided, skipping inventory object cleanup")
+		return
+	}
+
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	// Filter out only stale inventory objects
+	var filteredEvents []WatchEvent
+	removedCount := 0
+
+	for _, event := range t.events {
+		// Only verify inventory objects during inventory refresh
+		if event.CRDType == "inventory-resources" ||
+			event.CRDType == "inventory-resource-pools" ||
+			event.CRDType == "inventory-node-clusters" {
+
+			resourceKey := t.getResourceKey(event)
+			klog.V(3).Infof("Verifying inventory object existence: %s", resourceKey)
+
+			if t.verifyFunc(event) {
+				// Resource still exists in inventory, keep it
+				filteredEvents = append(filteredEvents, event)
+				klog.V(3).Infof("Inventory object still exists, keeping: %s", resourceKey)
+			} else {
+				// Resource confirmed deleted from inventory, remove from display
+				removedCount++
+				klog.V(2).Infof("Removing stale inventory object: %s", resourceKey)
+			}
+		} else {
+			// Not an inventory object, keep it
+			filteredEvents = append(filteredEvents, event)
+		}
+	}
+
+	t.events = filteredEvents
+	klog.V(2).Infof("Inventory cleanup removed %d stale objects", removedCount)
+
+	// Trigger screen update if we removed any objects
+	if removedCount > 0 && t.isTerminal {
+		if err := t.scheduleUpdate(); err != nil {
+			klog.V(2).Infof("Error scheduling screen update after inventory cleanup: %v", err)
+		}
 	}
 }
 
@@ -542,10 +610,10 @@ func (t *TUIFormatter) compareEvents(crdType string, a, b WatchEvent) bool {
 		clusterIdB := t.getNodeAllocationRequestClusterId(b.Object)
 		return clusterIdA < clusterIdB
 	case CRDTypeAllocatedNodes:
-		// Sort by HWMGR-NODE-ID
-		hwMgrIdA := t.getAllocatedNodeHwMgrId(a.Object)
-		hwMgrIdB := t.getAllocatedNodeHwMgrId(b.Object)
-		return hwMgrIdA < hwMgrIdB
+		// Sort by name
+		accessor1, _ := meta.Accessor(a.Object)
+		accessor2, _ := meta.Accessor(b.Object)
+		return accessor1.GetName() < accessor2.GetName()
 	case CRDTypeBareMetalHosts, CRDTypeHostFirmwareComponents, CRDTypeHostFirmwareSettings:
 		// Sort by name
 		accessor1, _ := meta.Accessor(a.Object)
@@ -598,15 +666,6 @@ func (t *TUIFormatter) getNodeAllocationRequestClusterId(obj runtime.Object) str
 	if nar, ok := obj.(*pluginsv1alpha1.NodeAllocationRequest); ok {
 		if nar.Spec.ClusterId != "" {
 			return nar.Spec.ClusterId
-		}
-	}
-	return StringNone
-}
-
-func (t *TUIFormatter) getAllocatedNodeHwMgrId(obj runtime.Object) string {
-	if an, ok := obj.(*pluginsv1alpha1.AllocatedNode); ok {
-		if an.Spec.HwMgrNodeId != "" {
-			return an.Spec.HwMgrNodeId
 		}
 	}
 	return StringNone

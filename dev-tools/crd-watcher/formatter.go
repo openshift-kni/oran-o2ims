@@ -51,6 +51,9 @@ const (
 	StringFalse          = "false"
 	StringValid          = "Valid"
 	StringChangeDetected = "ChangeDetected"
+	StringLocalCluster   = "local-cluster"
+	StringAvailable      = "available"
+	StringFulfilled      = "fulfilled"
 )
 
 type OutputFormatter interface {
@@ -197,10 +200,10 @@ func (f *TableFormatter) compareEvents(crdType string, a, b WatchEvent) bool {
 		clusterIdB := f.getNodeAllocationRequestClusterId(b.Object)
 		return clusterIdA < clusterIdB
 	case CRDTypeAllocatedNodes:
-		// Sort by HWMGR-NODE-ID
-		hwMgrIdA := f.getAllocatedNodeHwMgrId(a.Object)
-		hwMgrIdB := f.getAllocatedNodeHwMgrId(b.Object)
-		return hwMgrIdA < hwMgrIdB
+		// Sort by name
+		accessor1, _ := meta.Accessor(a.Object)
+		accessor2, _ := meta.Accessor(b.Object)
+		return accessor1.GetName() < accessor2.GetName()
 	case CRDTypeBareMetalHosts, CRDTypeHostFirmwareComponents, CRDTypeHostFirmwareSettings:
 		// Sort by name
 		accessor1, _ := meta.Accessor(a.Object)
@@ -250,15 +253,6 @@ func (f *TableFormatter) getNodeAllocationRequestClusterId(obj runtime.Object) s
 	if nar, ok := obj.(*pluginsv1alpha1.NodeAllocationRequest); ok {
 		if nar.Spec.ClusterId != "" {
 			return nar.Spec.ClusterId
-		}
-	}
-	return StringNone
-}
-
-func (f *TableFormatter) getAllocatedNodeHwMgrId(obj runtime.Object) string {
-	if an, ok := obj.(*pluginsv1alpha1.AllocatedNode); ok {
-		if an.Spec.HwMgrNodeId != "" {
-			return an.Spec.HwMgrNodeId
 		}
 	}
 	return StringNone
