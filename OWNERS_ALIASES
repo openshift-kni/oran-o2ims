@@ -1,21 +1,17 @@
+---
 # See the OWNERS docs at https://go.k8s.io/owners
 
 aliases:
-  oran-o2ims-reviewers:
-    - irinamihai
-    - bartwensley
-    - browsell
-    - donpenney
-    - Missxiaoguo
-    - pixelsoccupied
-    - tliu2021
-    - alegacy
-    - edcdavid
-    - sudomakeinstall2
-    - mlguerrero12
-    - rauhersu
+  konflux-approvers:
+    - abraham2512
     - fontivan
-    - sakhoury
+    - rauhersu
+    - sabbir-47
+    - shajmakh
+    - yanirq
+  konflux-reviewers:
+    - fontivan
+    - rauhersu
   oran-o2ims-approvers:
     - irinamihai
     - bartwensley
@@ -31,6 +27,18 @@ aliases:
     - rauhersu
     - fontivan
     - sakhoury
-  oran-o2ims-product-owners:
-    - fontivan
+  oran-o2ims-reviewers:
+    - irinamihai
+    - bartwensley
+    - browsell
+    - donpenney
+    - Missxiaoguo
+    - pixelsoccupied
+    - tliu2021
+    - alegacy
+    - edcdavid
+    - sudomakeinstall2
+    - mlguerrero12
     - rauhersu
+    - fontivan
+    - sakhoury
