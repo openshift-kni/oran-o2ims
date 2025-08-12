@@ -2,6 +2,10 @@
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "automergeStrategy": "rebase",
     "automergeType": "pr",
+    "baseBranches": [
+        "/^main$/",
+        "/^release-4\\.\\d{2}$/"
+    ],
     "gomod": {
         "enabled": false
     },
@@ -27,8 +31,10 @@
             "platformAutomerge": true
         },
         {
-            "matchUpdateTypes": ["minor"],
-            "enabled": false
+            "enabled": false,
+            "matchUpdateTypes": [
+                "minor"
+            ]
         }
     ],
     "prConcurrentLimit": 0,
@@ -37,13 +43,13 @@
         "autoApprove": true,
         "automerge": true,
         "enabled": true,
-        "fileMatch": [
-            "\\.yaml$",
-            "\\.yml$"
-        ],
         "ignoreTests": false,
         "includePaths": [
             ".tekton/**"
+        ],
+        "managerFilePatterns": [
+            "/\\.yaml$/",
+            "/\\.yml$/"
         ],
         "platformAutomerge": true
     }
