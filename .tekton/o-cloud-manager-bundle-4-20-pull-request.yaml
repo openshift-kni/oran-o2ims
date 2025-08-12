@@ -12,11 +12,13 @@ metadata:
       event == "pull_request" &&
       target_branch == "main" &&
       (
-        '.tekton/o-cloud-manager-bundle-4-20-pull-request.yaml'.pathChanged() ||
-        '.tekton/build-pipeline.yaml'.pathChanged() ||
         '.konflux/Dockerfile.bundle'.pathChanged() ||
         '.konflux/overlay/***'.pathChanged() ||
-        'bundle/***'.pathChanged()
+        '.tekton/build-pipeline.yaml'.pathChanged() ||
+        '.tekton/o-cloud-manager-bundle-4-20-pull-request.yaml'.pathChanged() ||
+        'bundle/***'.pathChanged() ||
+        'telco5g-konflux'.pathChanged() ||
+        'telco5g-konflux/***'.pathChanged()
       )
   creationTimestamp: null
   labels:

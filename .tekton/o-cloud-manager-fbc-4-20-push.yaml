@@ -11,11 +11,13 @@ metadata:
       event == "push" &&
       target_branch == "main" &&
       (
-        '.tekton/fbc-pipeline.yaml'.pathChanged() ||
-        '.tekton/o-cloud-manager-fbc-4-20-push.yaml'.pathChanged() ||
-        '.tekton/images-mirror-set.yaml'.pathChanged() ||
+        '.konflux/catalog/bundle.builds.in.yaml'.pathChanged() ||
         '.konflux/Dockerfile.catalog'.pathChanged() ||
-        '.konflux/catalog/bundle.builds.in.yaml'.pathChanged()
+        '.tekton/fbc-pipeline.yaml'.pathChanged() ||
+        '.tekton/images-mirror-set.yaml'.pathChanged() ||
+        '.tekton/o-cloud-manager-fbc-4-20-push.yaml'.pathChanged() ||
+        'telco5g-konflux'.pathChanged() ||
+        'telco5g-konflux/***'.pathChanged()
       )
   creationTimestamp: null
   labels:
