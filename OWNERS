@@ -1,25 +1,45 @@
+---
 # See the OWNERS docs at https://go.k8s.io/owners
 
 component: "Telco"
-subcomponent: "O-RAN O2-IMS"
-
 filters:
   ".*":
-    reviewers:
-      - oran-o2ims-reviewers
     approvers:
       - oran-o2ims-approvers
-  ^Dockerfile:
     reviewers:
+      - oran-o2ims-reviewers
+  ".konflux/*":
+    approvers:
+      - konflux-approvers
+    reviewers:
+      - konflux-reviewers
+  ".tekton/*":
+    approvers:
+      - konflux-approvers
+    reviewers:
+      - konflux-reviewers
+  ^Dockerfile:
+    approvers:
       - rauhersu
       - fontivan
-    approvers:
+    reviewers:
       - rauhersu
       - fontivan
   ^bundle/manifests/oran-o2ims.clusterserviceversion.yaml:
-    reviewers:
-      - rauhersu
-      - fontivan
     approvers:
       - rauhersu
       - fontivan
+    reviewers:
+      - rauhersu
+      - fontivan
+  "renovate.json":
+    approvers:
+      - konflux-approvers
+    reviewers:
+      - konflux-reviewers
+  "telco5g-konflux/":
+    approvers:
+      - konflux-approvers
+    reviewers:
+      - konflux-reviewers
+subcomponent: "O-RAN O2-IMS"
