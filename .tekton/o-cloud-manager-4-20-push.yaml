@@ -11,18 +11,18 @@ metadata:
       event == "push" &&
       target_branch == "main" &&
       (
-        '.tekton/o-cloud-manager-4-20-push.yaml'.pathChanged() ||
-        '.tekton/build-pipeline.yaml'.pathChanged() ||
-        'telco5g-konflux'.pathChanged() ||
-        'telco5g-konflux/***'.pathChanged() ||
         '.konflux/Dockerfile'.pathChanged() ||
+        '.tekton/build-pipeline.yaml'.pathChanged() ||
+        '.tekton/o-cloud-manager-4-20-push.yaml'.pathChanged() ||
+        'api/***'.pathChanged() ||
         'go.mod'.pathChanged() ||
         'go.sum'.pathChanged() ||
-        'main.go'.pathChanged() ||
-        'api/***'.pathChanged() ||
         'hack/***'.pathChanged() ||
         'internal/***'.pathChanged() ||
+        'main.go'.pathChanged() ||
         'pkg/***'.pathChanged() ||
+        'telco5g-konflux'.pathChanged() ||
+        'telco5g-konflux/***'.pathChanged() ||
         'vendor/***'.pathChanged()
       )
   creationTimestamp: null
