@@ -422,8 +422,8 @@ github.com/prometheus/procfs/internal/util
 # github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494
 ## explicit; go 1.13
 github.com/qdm12/reprint
-# github.com/r3labs/diff/v3 v3.0.1
-## explicit; go 1.13
+# github.com/r3labs/diff/v3 v3.0.2
+## explicit; go 1.23.5
 github.com/r3labs/diff/v3
 # github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 ## explicit; go 1.13
