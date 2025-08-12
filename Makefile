@@ -128,6 +128,9 @@ endif
 # tools. (i.e. podman)
 CONTAINER_TOOL ?= docker
 
+# Set SKIP_SUBMODULE_SYNC to yes to avoid running the `git submodule update` command in update_deps.sh
+export SKIP_SUBMODULE_SYNC ?= no
+
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail

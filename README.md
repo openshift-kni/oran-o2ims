@@ -12,38 +12,39 @@ SPDX-License-Identifier: Apache-2.0
 <!-- markdownlint-enable MD033 -->
 
 <!-- TOC -->
-* [O-RAN O-Cloud Manager](#o-ran-o-cloud-manager)
-  * [Operator Deployment](#operator-deployment)
-    * [Deploy the operator on your cluster](#deploy-the-operator-on-your-cluster)
-    * [Deploying operator from catalog](#deploying-operator-from-catalog)
-  * [mTLS pre-requisites](#mtls-pre-requisites)
-  * [Registering the O-Cloud Manager with the SMO](#registering-the-o-cloud-manager-with-the-smo)
-    * [OAuth Expectations/Requirements](#oauth-expectationsrequirements)
-    * [Sample OAuth JWT Token](#sample-oauth-jwt-token)
-  * [Testing API endpoints on a cluster](#testing-api-endpoints-on-a-cluster)
-    * [Acquiring a token using OAuth](#acquiring-a-token-using-oauth)
-    * [Acquiring a token using Service Account (development testing only)](#acquiring-a-token-using-service-account-development-testing-only)
-    * [Access an API endpoint](#access-an-api-endpoint)
-  * [Using the development debug mode to attach the DLV debugger](#using-the-development-debug-mode-to-attach-the-dlv-debugger)
-  * [Request Examples](#request-examples)
-    * [Query the Metadata endpoints](#query-the-metadata-endpoints)
-      * [GET api_versions](#get-api_versions)
-      * [GET O-Cloud infrastructure information](#get-o-cloud-infrastructure-information)
-    * [Query the Deployment manager server](#query-the-deployment-manager-server)
-      * [GET deploymentManagers List](#get-deploymentmanagers-list)
-      * [GET field or fields from the deploymentManagers List](#get-field-or-fields-from-the-deploymentmanagers-list)
-      * [GET deploymentManagers List using filter](#get-deploymentmanagers-list-using-filter)
-    * [Query the Resource server](#query-the-resource-server)
-      * [GET Resource Type List](#get-resource-type-list)
-      * [GET Specific Resource Type](#get-specific-resource-type)
-      * [GET Resource Pool List](#get-resource-pool-list)
-      * [GET Specific Resource Pool](#get-specific-resource-pool)
-      * [GET all Resources of a specific Resource Pool](#get-all-resources-of-a-specific-resource-pool)
-    * [Query the Infrastructure Inventory Subscription (Resource Server)](#query-the-infrastructure-inventory-subscription-resource-server)
-      * [GET Infrastructure Inventory Subscription List](#get-infrastructure-inventory-subscription-list)
-      * [GET Infrastructure Inventory Subscription Information](#get-infrastructure-inventory-subscription-information)
-      * [POST a new Infrastructure Inventory Subscription Information](#post-a-new-infrastructure-inventory-subscription-information)
-      * [DELETE an Infrastructure Inventory Subscription](#delete-an-infrastructure-inventory-subscription)
+- [O-RAN O-Cloud Manager](#o-ran-o-cloud-manager)
+  - [Operator Deployment](#operator-deployment)
+    - [Deploy the operator on your cluster](#deploy-the-operator-on-your-cluster)
+    - [Deploying operator from catalog](#deploying-operator-from-catalog)
+  - [mTLS pre-requisites](#mtls-pre-requisites)
+  - [Registering the O-Cloud Manager with the SMO](#registering-the-o-cloud-manager-with-the-smo)
+    - [OAuth Expectations/Requirements](#oauth-expectationsrequirements)
+    - [Sample OAuth JWT Token](#sample-oauth-jwt-token)
+  - [Testing API endpoints on a cluster](#testing-api-endpoints-on-a-cluster)
+    - [Acquiring a token using OAuth](#acquiring-a-token-using-oauth)
+    - [Acquiring a token using Service Account (development testing only)](#acquiring-a-token-using-service-account-development-testing-only)
+    - [Access an API endpoint](#access-an-api-endpoint)
+  - [Using the development debug mode to attach the DLV debugger](#using-the-development-debug-mode-to-attach-the-dlv-debugger)
+  - [Request Examples](#request-examples)
+    - [Query the Metadata endpoints](#query-the-metadata-endpoints)
+      - [GET api\_versions](#get-api_versions)
+      - [GET O-Cloud infrastructure information](#get-o-cloud-infrastructure-information)
+    - [Query the Deployment manager server](#query-the-deployment-manager-server)
+      - [GET deploymentManagers List](#get-deploymentmanagers-list)
+      - [GET field or fields from the deploymentManagers List](#get-field-or-fields-from-the-deploymentmanagers-list)
+      - [GET deploymentManagers List using filter](#get-deploymentmanagers-list-using-filter)
+    - [Query the Resource server](#query-the-resource-server)
+      - [GET Resource Type List](#get-resource-type-list)
+      - [GET Specific Resource Type](#get-specific-resource-type)
+      - [GET Resource Pool List](#get-resource-pool-list)
+      - [GET Specific Resource Pool](#get-specific-resource-pool)
+      - [GET all Resources of a specific Resource Pool](#get-all-resources-of-a-specific-resource-pool)
+    - [Query the Infrastructure Inventory Subscription (Resource Server)](#query-the-infrastructure-inventory-subscription-resource-server)
+      - [GET Infrastructure Inventory Subscription List](#get-infrastructure-inventory-subscription-list)
+      - [GET Infrastructure Inventory Subscription Information](#get-infrastructure-inventory-subscription-information)
+      - [POST a new Infrastructure Inventory Subscription Information](#post-a-new-infrastructure-inventory-subscription-information)
+      - [DELETE an Infrastructure Inventory Subscription](#delete-an-infrastructure-inventory-subscription)
+  - [Submodules](#submodules)
 <!-- TOC -->
 
 <!-- vscode-markdown-toc-config
@@ -340,10 +341,10 @@ configuration requirements.
    attribute must contain the full certificate chain having the device certificate first, then intermediate
    certificates, and the root certificate being last.
 
-    * In a development environment, if mTLS is not required, then this can be skipped and the corresponding attributes
+    - In a development environment, if mTLS is not required, then this can be skipped and the corresponding attributes
       can be omitted from the Inventory CR.
 
-    * In a production environment, it is expected that this certificate should be renewed periodically and managed by
+    - In a production environment, it is expected that this certificate should be renewed periodically and managed by
       cert-manager. When managing this certificate with cert-manager, it is expected that the CN and DNS SAN values of
       the certificate will be set to the Ingress domain name for the application
       (e.g., o2ims.apps.${CLUSTER_DOMAIN_NAME}). The certificate's extended usage should be set to both `server auth`
@@ -779,4 +780,19 @@ To delete an existing resource subscription:
 $ curl -ks -X DELETE \
 --header "Authorization: Bearer ${MY_TOKEN}" \
 https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq
+```
+
+## Submodules
+
+This repo uses submodules to pull in konflux scripts from another repo. The `hack/update_deps.sh` script, which is called from various Makefile targets,
+includes a call to `git submodules update` to ensure submodules are downloaded and up to date automatically in the designer workflow.
+If you want to skip running the update command, if you're working on something related to submodules for example, set `SKIP_SUBMODULES_SYNC` to `yes` on the `make` command-line, such as:
+
+```console
+$ make SKIP_SUBMODULE_SYNC=yes ci-job
+Update dependencies
+hack/update_deps.sh
+Skipping submodule sync
+hack/install_test_deps.sh
+...
 ```
