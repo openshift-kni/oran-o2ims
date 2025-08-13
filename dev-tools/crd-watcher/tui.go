@@ -795,6 +795,7 @@ type FieldWidths struct {
 	Field5    int
 	Field6    int
 	Field7    int
+	Field8    int
 	Age       int
 	Namespace int
 }
@@ -855,7 +856,11 @@ func (t *TUIFormatter) initializeHeaderWidths(crdType string) FieldWidths {
 		widths.Field1 = safeMax(widths.Field1, len("NAME"))
 		widths.Field2 = safeMax(widths.Field2, len("POOL"))
 		widths.Field3 = safeMax(widths.Field3, len("RESOURCE-ID"))
-		// Model field is not width-constrained
+		widths.Field4 = safeMax(widths.Field4, len("MODEL"))
+		widths.Field5 = safeMax(widths.Field5, len("ADMIN"))
+		widths.Field6 = safeMax(widths.Field6, len("OPER"))
+		widths.Field7 = safeMax(widths.Field7, len("POWER"))
+		widths.Field8 = safeMax(widths.Field8, len("USAGE"))
 	case CRDTypeInventoryResourcePools:
 		widths.Field1 = safeMax(widths.Field1, len("SITE"))
 		widths.Field2 = safeMax(widths.Field2, len("POOL"))
@@ -1077,6 +1082,7 @@ func (t *TUIFormatter) calculateHostFirmwareSettingsWidths(events []WatchEvent, 
 	return widths
 }
 
+//nolint:gocyclo // Complex state field extraction logic is required for width calculations
 func (t *TUIFormatter) calculateInventoryResourceWidths(events []WatchEvent, widths FieldWidths) FieldWidths {
 	for _, event := range events {
 		iro, ok := event.Object.(*InventoryResourceObject)
@@ -1116,10 +1122,61 @@ func (t *TUIFormatter) calculateInventoryResourceWidths(events []WatchEvent, wid
 			}
 		}
 
-		// Model field width is not calculated since it's displayed without truncation
+		// Extract Model from extensions
+		model := StringUnknown
+		if resource.Extensions != nil {
+			if modelVal, exists := resource.Extensions["model"]; exists {
+				if modelStr, ok := modelVal.(string); ok && modelStr != "" {
+					model = modelStr
+				}
+			}
+		}
+
+		// Extract state fields from extensions
+		adminState := StringUnknown
+		if resource.Extensions != nil {
+			if adminVal, exists := resource.Extensions["adminState"]; exists {
+				if adminStr, ok := adminVal.(string); ok && adminStr != "" {
+					adminState = adminStr
+				}
+			}
+		}
+
+		operationalState := StringUnknown
+		if resource.Extensions != nil {
+			if operVal, exists := resource.Extensions["operationalState"]; exists {
+				if operStr, ok := operVal.(string); ok && operStr != "" {
+					operationalState = operStr
+				}
+			}
+		}
+
+		powerState := StringUnknown
+		if resource.Extensions != nil {
+			if powerVal, exists := resource.Extensions["powerState"]; exists {
+				if powerStr, ok := powerVal.(string); ok && powerStr != "" {
+					powerState = powerStr
+				}
+			}
+		}
+
+		usageState := StringUnknown
+		if resource.Extensions != nil {
+			if usageVal, exists := resource.Extensions["usageState"]; exists {
+				if usageStr, ok := usageVal.(string); ok && usageStr != "" {
+					usageState = usageStr
+				}
+			}
+		}
+
 		widths.Field1 = safeMax(widths.Field1, len(name))
 		widths.Field2 = safeMax(widths.Field2, len(pool))
 		widths.Field3 = safeMax(widths.Field3, len(resource.ResourceID))
+		widths.Field4 = safeMax(widths.Field4, len(model))
+		widths.Field5 = safeMax(widths.Field5, len(adminState))
+		widths.Field6 = safeMax(widths.Field6, len(operationalState))
+		widths.Field7 = safeMax(widths.Field7, len(powerState))
+		widths.Field8 = safeMax(widths.Field8, len(usageState))
 	}
 	return widths
 }
@@ -1188,9 +1245,11 @@ func (t *TUIFormatter) applyMaxWidthLimits(widths FieldWidths) FieldWidths {
 	widths.Field1 = safeMin(widths.Field1, maxWidth)
 	widths.Field2 = safeMin(widths.Field2, maxWidth)
 	widths.Field3 = safeMin(widths.Field3, maxWidth)
-	widths.Field4 = safeMin(widths.Field4, maxWidth)
+	widths.Field4 = safeMin(widths.Field4, 25) // Limit MODEL field to 25 characters
 	widths.Field5 = safeMin(widths.Field5, maxWidth)
 	widths.Field6 = safeMin(widths.Field6, maxWidth)
+	widths.Field7 = safeMin(widths.Field7, maxWidth)
+	widths.Field8 = safeMin(widths.Field8, maxWidth)
 	widths.Namespace = safeMin(widths.Namespace, 20)
 	return widths
 }
@@ -1287,8 +1346,10 @@ func (t *TUIFormatter) buildCRDTableHeader(crdType string, widths FieldWidths, s
 			widths.Name, "HOSTFIRMWARESETTINGS", widths.Field1, "GEN", widths.Field2, "OBSERVED",
 			widths.Field3, "VALID", widths.Field4, "CHANGE"))
 	case CRDTypeInventoryResources:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %s\n",
-			widths.Field1, "NAME", widths.Field2, "POOL", widths.Field3, "RESOURCE-ID", "MODEL"))
+		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			widths.Field1, "NAME", widths.Field2, "POOL", widths.Field3, "RESOURCE-ID",
+			widths.Field4, "MODEL", widths.Field5, "ADMIN", widths.Field6, "OPER",
+			widths.Field7, "POWER", widths.Field8, "USAGE"))
 	case CRDTypeInventoryResourcePools:
 		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s\n",
 			widths.Field1, "SITE", widths.Field2, "POOL", widths.Field3, "RESOURCE-POOL-ID"))
@@ -1562,7 +1623,7 @@ func (t *TUIFormatter) buildHostFirmwareSettingsLine(age string, obj runtime.Obj
 		widths.Field3, validStatus, widths.Field4, changeStatus))
 }
 
-//nolint:unparam // age parameter required for interface consistency
+//nolint:unparam,gocyclo // age parameter required for interface consistency; complex state field extraction logic is required for line building
 func (t *TUIFormatter) buildInventoryResourceLine(age string, obj runtime.Object, widths FieldWidths, sb *strings.Builder) {
 	iro, ok := obj.(*InventoryResourceObject)
 	if !ok {
@@ -1612,13 +1673,56 @@ func (t *TUIFormatter) buildInventoryResourceLine(age string, obj runtime.Object
 		}
 	}
 
+	// Extract state fields from extensions
+	adminState := StringUnknown
+	if resource.Extensions != nil {
+		if adminVal, exists := resource.Extensions["adminState"]; exists {
+			if adminStr, ok := adminVal.(string); ok && adminStr != "" {
+				adminState = adminStr
+			}
+		}
+	}
+
+	operationalState := StringUnknown
+	if resource.Extensions != nil {
+		if operVal, exists := resource.Extensions["operationalState"]; exists {
+			if operStr, ok := operVal.(string); ok && operStr != "" {
+				operationalState = operStr
+			}
+		}
+	}
+
+	powerState := StringUnknown
+	if resource.Extensions != nil {
+		if powerVal, exists := resource.Extensions["powerState"]; exists {
+			if powerStr, ok := powerVal.(string); ok && powerStr != "" {
+				powerState = powerStr
+			}
+		}
+	}
+
+	usageState := StringUnknown
+	if resource.Extensions != nil {
+		if usageVal, exists := resource.Extensions["usageState"]; exists {
+			if usageStr, ok := usageVal.(string); ok && usageStr != "" {
+				usageState = usageStr
+			}
+		}
+	}
+
 	name = truncateToWidth(name, widths.Field1)
 	pool = truncateToWidth(pool, widths.Field2)
 	resourceID := truncateToWidth(resource.ResourceID, widths.Field3)
-	// Don't truncate model - show full model name
+	model = truncateToWidth(model, widths.Field4)
+	adminState = truncateToWidth(adminState, widths.Field5)
+	operationalState = truncateToWidth(operationalState, widths.Field6)
+	powerState = truncateToWidth(powerState, widths.Field7)
+	usageState = truncateToWidth(usageState, widths.Field8)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %s\n",
-		widths.Field1, name, widths.Field2, pool, widths.Field3, resourceID, model))
+	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		widths.Field1, name, widths.Field2, pool, widths.Field3, resourceID,
+		widths.Field4, model, widths.Field5, adminState, widths.Field6, operationalState,
+		widths.Field7, powerState, widths.Field8, usageState))
 }
 
 //nolint:unparam // age parameter required for interface consistency

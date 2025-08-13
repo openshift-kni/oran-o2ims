@@ -521,6 +521,11 @@ ifeq ($(shell uname -s),Linux)
 endif
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v ginkgo.v
 
+.PHONY: test-crd-watcher
+test-crd-watcher:
+	@echo "Run crd-watcher unit tests"
+	cd dev-tools/crd-watcher && go test -v $(ginkgo_flags)
+
 .PHONY: fmt
 fmt:
 	@echo "Run fmt"
@@ -539,7 +544,7 @@ deps-update:
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-crd-watcher bundle-check
 
 .PHONY: clean
 clean:
