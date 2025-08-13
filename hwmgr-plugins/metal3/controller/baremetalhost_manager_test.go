@@ -680,6 +680,30 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(Equal(metal3v1alpha1.CleaningModeMetadata))
 		})
+
+		It("should not set cleaning mode or power off when SkipCleanupAnnotation is present", func() {
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+			bmh.Spec.Online = true
+			if bmh.Annotations == nil {
+				bmh.Annotations = map[string]string{}
+			}
+			bmh.Annotations[SkipCleanupAnnotation] = ""
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(BeEmpty())
+			Expect(updatedBMH.Spec.Online).To(BeTrue())
+			// Ensure deploy/image/networkdata were NOT cleared/reset when annotation is present
+			Expect(updatedBMH.Spec.CustomDeploy).NotTo(BeNil())
+			Expect(updatedBMH.Spec.Image).NotTo(BeNil())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("old-network-data"))
+		})
 	})
 
 	Describe("removeInfraEnvLabelFromPreprovisioningImage", func() {

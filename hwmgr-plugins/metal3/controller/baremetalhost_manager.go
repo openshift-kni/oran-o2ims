@@ -47,6 +47,7 @@ const (
 	NodeNameAnnotation             = "clcm.openshift.io/node-name"
 	BmhDeallocationDoneAnnotation  = "clcm.openshift.io/deallocation-complete"
 	BmhErrorTimestampAnnotation    = "clcm.openshift.io/bmh-error-timestamp"
+	SkipCleanupAnnotation          = "clcm.openshift.io/skip-cleanup"
 	BmhHostMgmtAnnotation          = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
 	BmhInfraEnvLabel               = "infraenvs.agent-install.openshift.io"
 	SiteConfigOwnedByLabel         = "siteconfig.open-cluster-management.io/owned-by"
@@ -850,21 +851,22 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		}
 		patched.Annotations[BmhDeallocationDoneAnnotation] = "true"
 
-		// Clear CustomDeploy entirely
-		patched.Spec.CustomDeploy = nil
-
-		if bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned {
+		// Skip teardown steps if skip-cleanup is requested via annotation
+		_, skipCleanAndPower := patched.Annotations[SkipCleanupAnnotation]
+		if !skipCleanAndPower {
+			// Clear CustomDeploy entirely
+			patched.Spec.CustomDeploy = nil
+			// Reset pre-provisioning data
+			patched.Spec.PreprovisioningNetworkDataName = BmhNetworkDataPrefx + "-" + bmh.Name
+			// Clear image reference
+			patched.Spec.Image = nil
+		}
+		if !skipCleanAndPower && bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned {
 			// Wipe partition tables using automated cleaning
 			patched.Spec.AutomatedCleaningMode = metal3v1alpha1.CleaningModeMetadata
 			// Power off the host
 			patched.Spec.Online = false
 		}
-
-		// Reset pre-provisioning data
-		patched.Spec.PreprovisioningNetworkDataName = BmhNetworkDataPrefx + "-" + bmh.Name
-
-		// Clear image reference
-		patched.Spec.Image = nil
 
 		// Patch changes
 		patch := client.MergeFrom(&current)
@@ -889,7 +891,6 @@ func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bm
 	if err := removeInfraEnvLabel(ctx, c, logger, name); err != nil {
 		return fmt.Errorf("unable to removeInfraEnvLabel: %w", err)
 	}
-
 	// Clean up BMH
 	if err := finalizeBMHDeallocation(ctx, c, logger, bmh); err != nil {
 		return fmt.Errorf("unable to finalizeBMHDeallocation: %w", err)
