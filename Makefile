@@ -37,7 +37,8 @@ OPM_VERSION ?= v1.52.0
 GOLANGCI_LINT_VERSION ?= v2.3.0
 
 PACKAGE_NAME_KONFLUX = o-cloud-manager
-CATALOG_TEMPLATE_KONFLUX = .konflux/catalog/catalog-template.in.yaml
+CATALOG_TEMPLATE_KONFLUX_INPUT = .konflux/catalog/catalog-template.in.yaml
+CATALOG_TEMPLATE_KONFLUX_OUTPUT = .konflux/catalog/catalog-template.out.yaml
 CATALOG_KONFLUX = .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
 
 # Konflux bundle image configuration
@@ -620,7 +621,8 @@ ENGINE ?= docker
 .PHONY: konflux-validate-catalog-template-bundle ## validate the last bundle entry on the catalog template file
 konflux-validate-catalog-template-bundle: yq operator-sdk
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-validate-catalog-template-bundle \
-		CATALOG_TEMPLATE_KONFLUX=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX) \
+		CATALOG_TEMPLATE_KONFLUX_INPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_INPUT) \
+		CATALOG_TEMPLATE_KONFLUX_OUTPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_OUTPUT) \
 		YQ=$(YQ) \
 		OPERATOR_SDK=$(OPERATOR_SDK) \
 		ENGINE=$(ENGINE)
@@ -634,7 +636,8 @@ konflux-validate-catalog: opm ## validate the current catalog file
 .PHONY: konflux-generate-catalog ## generate a quay.io catalog
 konflux-generate-catalog: yq opm
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-generate-catalog \
-		CATALOG_TEMPLATE_KONFLUX=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX) \
+		CATALOG_TEMPLATE_KONFLUX_INPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_INPUT) \
+		CATALOG_TEMPLATE_KONFLUX_OUTPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_OUTPUT) \
 		CATALOG_KONFLUX=$(PROJECT_DIR)/$(CATALOG_KONFLUX) \
 		PACKAGE_NAME_KONFLUX=$(PACKAGE_NAME_KONFLUX) \
 		BUNDLE_BUILDS_FILE=$(PROJECT_DIR)/.konflux/catalog/bundle.builds.in.yaml \
@@ -645,7 +648,8 @@ konflux-generate-catalog: yq opm
 .PHONY: konflux-generate-catalog-production ## generate a registry.redhat.io catalog
 konflux-generate-catalog-production: yq opm
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-generate-catalog-production \
-		CATALOG_TEMPLATE_KONFLUX=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX) \
+		CATALOG_TEMPLATE_KONFLUX_INPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_INPUT) \
+		CATALOG_TEMPLATE_KONFLUX_OUTPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_OUTPUT) \
 		CATALOG_KONFLUX=$(PROJECT_DIR)/$(CATALOG_KONFLUX) \
 		PACKAGE_NAME_KONFLUX=$(PACKAGE_NAME_KONFLUX) \
 		BUNDLE_NAME_SUFFIX=$(BUNDLE_NAME_SUFFIX) \
