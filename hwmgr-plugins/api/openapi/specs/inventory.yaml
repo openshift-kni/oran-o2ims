@@ -135,7 +135,7 @@ paths:
           required: true
           schema:
             type: string
-          example: rh-pool-cnfdg22
+          example: pool-a
       responses:
         '200':
           description: Successful response
@@ -174,7 +174,7 @@ paths:
           required: true
           schema:
             type: string
-          example: rh-pool-cnfdg22
+          example: pool-a
       responses:
         '200':
           description: Successful response
@@ -249,7 +249,7 @@ paths:
           required: true
           schema:
             type: string
-          example: xr860txcnfdg22
+          example: server-a
       responses:
         '200':
           description: Successful response
@@ -534,7 +534,7 @@ components:
         resourcePoolId:
           type: string
           description: Identifier for the Resource Pool in the hardware manager instance.
-          example: "rh-pool-cnfdg22"
+          example: "pool-a"
         siteId:
           type: string
           description: Identifier for the location of the resource pool.
@@ -542,7 +542,7 @@ components:
         name:
           type: string
           description: Human readable name of the resource pool.
-          example: "rh-pool-cnfdg22"
+          example: "pool-a"
         description:
           type: string
           description: Human readable description of the resource pool.
@@ -586,13 +586,13 @@ components:
         resourceId:
           type: string
           description: Identifier for the Resource.
-          example: "xr860txcnfdg22"
+          example: "server-a"
         resourcePoolId:
           type: string
-          example: "rh-pool-cnfdg22"
+          example: "pool-a"
         hwProfile:
           type: string
-          example: "rh-profile-test-basic"
+          example: "hwprofile-a"
         description:
           type: string
           description: Human readable description of the resource.
@@ -600,12 +600,12 @@ components:
         name:
           type: string
           description: Short name for the resource.
-          example: "xr860txcnfdg22"
+          example: "server-a description"
         globalAssetId:
           type: string
           description:
             Identifier or serial number of the resource, if available.
-          example: "xr860txcnfdg22"
+          example: "assetid-a"
         serialNumber:
           type: string
           description:

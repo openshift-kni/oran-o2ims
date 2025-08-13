@@ -33,7 +33,9 @@ This file contains comprehensive unit tests for the inventory management functio
 in the Metal3 hardware management plugin. The tests cover:
 
 RESOURCE INFO EXTRACTION FUNCTIONS:
-- getResourceInfoAdminState: Tests admin state return (always UNKNOWN)
+- getResourceInfoAdminState: Tests admin state based on BMH online status
+  * Returns UNLOCKED when BMH is online
+  * Returns LOCKED when BMH is offline
 - getResourceInfoDescription: Tests description extraction from annotations
   * Returns description when annotation present
   * Returns empty string when annotations nil or missing
@@ -54,7 +56,9 @@ RESOURCE INFO EXTRACTION FUNCTIONS:
   * Returns model when hardware details present
   * Returns empty string when hardware details nil
 - getResourceInfoName: Tests BMH name extraction
-- getResourceInfoOperationalState: Tests operational state return (always UNKNOWN)
+- getResourceInfoOperationalState: Tests operational state based on BMH conditions
+  * Returns ENABLED when BMH is fully operational (OK status, online, powered on, provisioned)
+  * Returns DISABLED when any condition is not met
 - getResourceInfoPartNumber: Tests part number extraction from annotations
   * Returns part number when annotation present
   * Returns empty string when annotations nil
@@ -72,7 +76,13 @@ RESOURCE INFO EXTRACTION FUNCTIONS:
 - getResourceInfoTags: Tests resource selector label extraction as tags
   * Extracts resource selector labels as tags
   * Returns empty array when no resource selector labels present
-- getResourceInfoUsageState: Tests usage state return (always UNKNOWN)
+- getResourceInfoUsageState: Tests usage state based on BMH provisioning state and conditions
+  * Returns ACTIVE for provisioned BMH with all conditions met
+  * Returns BUSY for provisioned BMH with unmet conditions
+  * Returns IDLE for available BMH with operational status OK
+  * Returns BUSY for available BMH with operational issues
+  * Returns BUSY for transitional states (provisioning, preparing, deprovisioning, inspecting, deleting, etc.)
+  * Returns UNKNOWN for unrecognized states
 - getResourceInfoVendor: Tests vendor extraction from hardware details
   * Returns vendor when hardware details present
   * Returns empty string when hardware details nil
@@ -127,7 +137,7 @@ The tests use several helper functions to create test objects:
 - createBasicBMH: Creates a basic BareMetalHost for testing
 - createBMHWithLabels: Creates BareMetalHost with specified labels
 - createBMHWithAnnotations: Creates BareMetalHost with specified annotations
-- createBMHWithHardwareDetails: Creates BareMetalHost with hardware details
+- createHardwareData: Creates HardwareData with specified hardware details
 - createAllocatedNode: Creates AllocatedNode with specified HW profile
 
 These tests ensure proper extraction and formatting of hardware inventory information
@@ -160,25 +170,6 @@ var _ = Describe("Inventory", func() {
 		return bmh
 	}
 
-	// Helper function to create BareMetalHost with hardware details
-	createBMHWithHardwareDetails := func(name, namespace string) *metal3v1alpha1.BareMetalHost {
-		bmh := createBasicBMH(name, namespace)
-		bmh.Status.HardwareDetails = &metal3v1alpha1.HardwareDetails{
-			RAMMebibytes: 8192,
-			SystemVendor: metal3v1alpha1.HardwareSystemVendor{
-				Manufacturer: "Dell Inc.",
-				ProductName:  "PowerEdge R640",
-				SerialNumber: "ABC123456",
-			},
-			CPU: metal3v1alpha1.CPU{
-				Arch:  "x86_64",
-				Model: "Intel Xeon Gold 6138",
-				Count: 40,
-			},
-		}
-		return bmh
-	}
-
 	// Helper function to create AllocatedNode
 	createAllocatedNode := func(name, hwProfile string) *pluginsv1alpha1.AllocatedNode {
 		return &pluginsv1alpha1.AllocatedNode{
@@ -191,10 +182,44 @@ var _ = Describe("Inventory", func() {
 		}
 	}
 
+	// Helper function to create HardwareData
+	createHardwareData := func(name, namespace string) *metal3v1alpha1.HardwareData {
+		return &metal3v1alpha1.HardwareData{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: metal3v1alpha1.HardwareDataSpec{
+				HardwareDetails: &metal3v1alpha1.HardwareDetails{
+					RAMMebibytes: 8192,
+					SystemVendor: metal3v1alpha1.HardwareSystemVendor{
+						Manufacturer: "Dell Inc.",
+						ProductName:  "PowerEdge R640",
+						SerialNumber: "ABC123456",
+					},
+					CPU: metal3v1alpha1.CPU{
+						Arch:  "x86_64",
+						Model: "Intel Xeon Gold 6138",
+						Count: 40,
+					},
+				},
+			},
+		}
+	}
+
 	Describe("getResourceInfoAdminState", func() {
-		It("should return UNKNOWN admin state", func() {
-			result := getResourceInfoAdminState()
-			Expect(result).To(Equal(inventory.ResourceInfoAdminStateUNKNOWN))
+		It("should return UNLOCKED when BMH is online", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Spec.Online = true
+			result := getResourceInfoAdminState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoAdminStateUNLOCKED))
+		})
+
+		It("should return LOCKED when BMH is offline", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Spec.Online = false
+			result := getResourceInfoAdminState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoAdminStateLOCKED))
 		})
 	})
 
@@ -203,13 +228,13 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
 				AnnotationResourceInfoDescription: "Test description",
 			})
-			result := getResourceInfoDescription(*bmh)
+			result := getResourceInfoDescription(bmh)
 			Expect(result).To(Equal("Test description"))
 		})
 
 		It("should return empty string when annotations are nil", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoDescription(*bmh)
+			result := getResourceInfoDescription(bmh)
 			Expect(result).To(Equal(""))
 		})
 
@@ -217,7 +242,7 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
 				"other.annotation": "other value",
 			})
-			result := getResourceInfoDescription(*bmh)
+			result := getResourceInfoDescription(bmh)
 			Expect(result).To(Equal(""))
 		})
 	})
@@ -227,14 +252,14 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
 				AnnotationResourceInfoGlobalAssetId: "GA123456",
 			})
-			result := getResourceInfoGlobalAssetId(*bmh)
+			result := getResourceInfoGlobalAssetId(bmh)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal("GA123456"))
 		})
 
 		It("should return pointer to empty string when annotations are nil", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoGlobalAssetId(*bmh)
+			result := getResourceInfoGlobalAssetId(bmh)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal(""))
 		})
@@ -245,7 +270,7 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
 				AnnotationsResourceInfoGroups: "group1,group2,group3",
 			})
-			result := getResourceInfoGroups(*bmh)
+			result := getResourceInfoGroups(bmh)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal([]string{"group1", "group2", "group3"}))
 		})
@@ -254,14 +279,14 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
 				AnnotationsResourceInfoGroups: "group1 , group2 , group3",
 			})
-			result := getResourceInfoGroups(*bmh)
+			result := getResourceInfoGroups(bmh)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal([]string{"group1", "group2", "group3"}))
 		})
 
 		It("should return nil when annotations are nil", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoGroups(*bmh)
+			result := getResourceInfoGroups(bmh)
 			Expect(result).To(BeNil())
 		})
 
@@ -269,7 +294,7 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
 				"other.annotation": "other value",
 			})
-			result := getResourceInfoGroups(*bmh)
+			result := getResourceInfoGroups(bmh)
 			Expect(result).To(BeNil())
 		})
 	})
@@ -295,28 +320,44 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getResourceInfoMemory", func() {
 		It("should return memory from hardware details when present", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getResourceInfoMemory(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getResourceInfoMemory(hwdata)
 			Expect(result).To(Equal(8192))
 		})
 
 		It("should return 0 when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoMemory(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getResourceInfoMemory(hwdata)
 			Expect(result).To(Equal(0))
 		})
 	})
 
 	Describe("getResourceInfoModel", func() {
 		It("should return model from hardware details when present", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getResourceInfoModel(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getResourceInfoModel(hwdata)
 			Expect(result).To(Equal("PowerEdge R640"))
 		})
 
 		It("should return empty string when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoModel(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getResourceInfoModel(hwdata)
 			Expect(result).To(Equal(""))
 		})
 	})
@@ -330,9 +371,59 @@ var _ = Describe("Inventory", func() {
 	})
 
 	Describe("getResourceInfoOperationalState", func() {
-		It("should return UNKNOWN operational state", func() {
-			result := getResourceInfoOperationalState()
-			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateUNKNOWN))
+		It("should return ENABLED when BMH is fully operational", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = true
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+
+			result := getResourceInfoOperationalState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
+		})
+
+		It("should return DISABLED when BMH is not operational", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = true
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+
+			result := getResourceInfoOperationalState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
+		})
+
+		It("should return DISABLED when BMH is offline", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = false
+			bmh.Status.PoweredOn = true
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+
+			result := getResourceInfoOperationalState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
+		})
+
+		It("should return DISABLED when BMH is not powered on", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = false
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+
+			result := getResourceInfoOperationalState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
+		})
+
+		It("should return DISABLED when BMH is not provisioned", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = true
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+
+			result := getResourceInfoOperationalState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
 		})
 	})
 
@@ -341,13 +432,13 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
 				AnnotationResourceInfoPartNumber: "PN123456",
 			})
-			result := getResourceInfoPartNumber(*bmh)
+			result := getResourceInfoPartNumber(bmh)
 			Expect(result).To(Equal("PN123456"))
 		})
 
 		It("should return empty string when annotations are nil", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoPartNumber(*bmh)
+			result := getResourceInfoPartNumber(bmh)
 			Expect(result).To(Equal(""))
 		})
 	})
@@ -372,15 +463,23 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getProcessorInfoArchitecture", func() {
 		It("should return CPU architecture from hardware details when present", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getProcessorInfoArchitecture(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getProcessorInfoArchitecture(hwdata)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal("x86_64"))
 		})
 
 		It("should return pointer to empty string when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getProcessorInfoArchitecture(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getProcessorInfoArchitecture(hwdata)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal(""))
 		})
@@ -388,15 +487,23 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getProcessorInfoCores", func() {
 		It("should return CPU core count from hardware details when present", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getProcessorInfoCores(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getProcessorInfoCores(hwdata)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal(40))
 		})
 
 		It("should return nil when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getProcessorInfoCores(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getProcessorInfoCores(hwdata)
 			Expect(result).To(BeNil())
 		})
 	})
@@ -411,15 +518,23 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getProcessorInfoModel", func() {
 		It("should return CPU model from hardware details when present", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getProcessorInfoModel(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getProcessorInfoModel(hwdata)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal("Intel Xeon Gold 6138"))
 		})
 
 		It("should return pointer to empty string when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getProcessorInfoModel(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getProcessorInfoModel(hwdata)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal(""))
 		})
@@ -427,8 +542,8 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getResourceInfoProcessors", func() {
 		It("should return processor info array with hardware details", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getResourceInfoProcessors(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getResourceInfoProcessors(hwdata)
 			Expect(result).To(HaveLen(1))
 
 			processor := result[0]
@@ -439,8 +554,16 @@ var _ = Describe("Inventory", func() {
 		})
 
 		It("should return empty array when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoProcessors(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getResourceInfoProcessors(hwdata)
 			Expect(result).To(HaveLen(0))
 		})
 	})
@@ -448,7 +571,7 @@ var _ = Describe("Inventory", func() {
 	Describe("getResourceInfoResourceId", func() {
 		It("should return formatted resource ID", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoResourceId(*bmh)
+			result := getResourceInfoResourceId(bmh)
 			Expect(result).To(Equal("test-ns/test-bmh"))
 		})
 	})
@@ -478,14 +601,22 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getResourceInfoSerialNumber", func() {
 		It("should return serial number from hardware details when present", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getResourceInfoSerialNumber(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getResourceInfoSerialNumber(hwdata)
 			Expect(result).To(Equal("ABC123456"))
 		})
 
 		It("should return empty string when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoSerialNumber(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getResourceInfoSerialNumber(hwdata)
 			Expect(result).To(Equal(""))
 		})
 	})
@@ -514,22 +645,141 @@ var _ = Describe("Inventory", func() {
 	})
 
 	Describe("getResourceInfoUsageState", func() {
-		It("should return UNKNOWN usage state", func() {
-			result := getResourceInfoUsageState()
+		It("should return ACTIVE for provisioned BMH with all conditions met", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = true
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.ACTIVE))
+		})
+
+		It("should return BUSY for provisioned BMH when not operational", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for provisioned BMH when offline", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = false
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for provisioned BMH when powered off", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = false
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return IDLE for available BMH with operational status OK", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.IDLE))
+		})
+
+		It("should return BUSY for available BMH when not operational", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for transitional states - provisioning", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioning
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for transitional states - preparing", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StatePreparing
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for transitional states - deprovisioning", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateDeprovisioning
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for transitional states - inspecting", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateInspecting
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for transitional states - powering off before delete", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StatePoweringOffBeforeDelete
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return BUSY for transitional states - deleting", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateDeleting
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.BUSY))
+		})
+
+		It("should return UNKNOWN for unrecognized states", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			// Set an unrecognized state by setting empty string (or any other unrecognized value)
+			bmh.Status.Provisioning.State = ""
+
+			result := getResourceInfoUsageState(bmh)
 			Expect(result).To(Equal(inventory.UNKNOWN))
 		})
 	})
 
 	Describe("getResourceInfoVendor", func() {
 		It("should return vendor from hardware details when present", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
-			result := getResourceInfoVendor(bmh)
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getResourceInfoVendor(hwdata)
 			Expect(result).To(Equal("Dell Inc."))
 		})
 
 		It("should return empty string when hardware details are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoVendor(bmh)
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getResourceInfoVendor(hwdata)
 			Expect(result).To(Equal(""))
 		})
 	})
@@ -607,7 +857,7 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getResourceInfo", func() {
 		It("should aggregate all resource information correctly", func() {
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
+			bmh := createBasicBMH("test-bmh", "test-ns")
 			bmh.Labels = map[string]string{
 				LabelResourcePoolID:                  "pool123",
 				LabelPrefixResourceSelector + "zone": "zone1",
@@ -616,19 +866,23 @@ var _ = Describe("Inventory", func() {
 				AnnotationResourceInfoDescription: "Test description",
 				AnnotationResourceInfoPartNumber:  "PN123456",
 			}
+			bmh.Spec.Online = true
 			bmh.Status.PoweredOn = true
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 
 			node := createAllocatedNode("test-node", "profile123")
+			hwdata := createHardwareData("test-hwdata", "test-ns")
 
-			result := getResourceInfo(bmh, node)
+			result := getResourceInfo(bmh, node, hwdata)
 
-			Expect(result.AdminState).To(Equal(inventory.ResourceInfoAdminStateUNKNOWN))
+			Expect(result.AdminState).To(Equal(inventory.ResourceInfoAdminStateUNLOCKED))
 			Expect(result.Description).To(Equal("Test description"))
 			Expect(result.HwProfile).To(Equal("profile123"))
 			Expect(result.Memory).To(Equal(8192))
 			Expect(result.Model).To(Equal("PowerEdge R640"))
 			Expect(result.Name).To(Equal("test-bmh"))
-			Expect(result.OperationalState).To(Equal(inventory.ResourceInfoOperationalStateUNKNOWN))
+			Expect(result.OperationalState).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
 			Expect(result.PartNumber).To(Equal("PN123456"))
 			Expect(*result.PowerState).To(Equal(inventory.ON))
 			Expect(result.Processors).To(HaveLen(1))
@@ -636,7 +890,7 @@ var _ = Describe("Inventory", func() {
 			Expect(result.ResourcePoolId).To(Equal("pool123"))
 			Expect(result.SerialNumber).To(Equal("ABC123456"))
 			Expect(*result.Tags).To(ContainElement("zone: zone1"))
-			Expect(result.UsageState).To(Equal(inventory.UNKNOWN))
+			Expect(result.UsageState).To(Equal(inventory.ACTIVE))
 			Expect(result.Vendor).To(Equal("Dell Inc."))
 		})
 	})
@@ -721,12 +975,15 @@ var _ = Describe("Inventory", func() {
 
 		It("should return resources from BMHs included in inventory", func() {
 			// Create BMH with required labels and valid state
-			bmh := createBMHWithHardwareDetails("test-bmh", "test-ns")
+			bmh := createBasicBMH("test-bmh", "test-ns")
 			bmh.Labels = map[string]string{
 				LabelResourcePoolID: "pool123",
 				LabelSiteID:         "site123",
 			}
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+
+			// Create HardwareData for the BMH
+			hwdata := createHardwareData("test-bmh", "test-ns")
 
 			// Create AllocatedNode that corresponds to this BMH
 			node := createAllocatedNode("test-node", "profile123")
@@ -735,7 +992,7 @@ var _ = Describe("Inventory", func() {
 
 			client := fake.NewClientBuilder().
 				WithScheme(scheme).
-				WithObjects(bmh, node).
+				WithObjects(bmh, hwdata, node).
 				Build()
 
 			result, err := GetResources(ctx, logger, client)
@@ -760,9 +1017,12 @@ var _ = Describe("Inventory", func() {
 			})
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
 
+			// Create HardwareData for the BMH
+			hwdata := createHardwareData("test-bmh", "test-ns")
+
 			client := fake.NewClientBuilder().
 				WithScheme(scheme).
-				WithObjects(bmh).
+				WithObjects(bmh, hwdata).
 				Build()
 
 			result, err := GetResources(ctx, logger, client)

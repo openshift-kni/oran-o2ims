@@ -235,6 +235,7 @@ rules:
   - metal3.io
   resources:
   - firmwareschemas
+  - hardwaredata
   verbs:
   - get
   - list
