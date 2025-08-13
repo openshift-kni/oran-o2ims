@@ -42,7 +42,7 @@ type ProvisioningRequestReconciler struct {
 type provisioningRequestReconcilerTask struct {
 	logger         *slog.Logger
 	client         client.Client
-	hwpluginClient *hwmgrpluginapi.HardwarePluginClient
+	hwpluginClient hwmgrpluginapi.HardwarePluginClientInterface
 	object         *provisioningv1alpha1.ProvisioningRequest
 	clusterInput   *clusterInput
 	ctDetails      *clusterTemplateDetails
@@ -184,7 +184,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		if err != nil {
 			return requeueWithError(err)
 		}
-		t.hwpluginClient = hwclient
+		t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
 
 		res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
 		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
@@ -399,19 +399,27 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		// Check the NodeAllocationRequest status if exists
 		nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
 		if err != nil || !exists {
-			return requeueWithError(err)
-		}
-
-		hwProvisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
-		if err != nil {
-			return requeueWithError(err)
-		}
-		if timedOutOrFailed {
-			// Timeout occurred or failed, stop requeuing
-			return doNotRequeue(), nil
-		}
-		if !hwProvisioned {
-			return requeueWithMediumInterval(), nil
+			// If NodeAllocationRequest doesn't exist and this is likely initial validation phase,
+			// skip hardware status checks and proceed to resource preparation status check
+			if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
+				// No NodeAllocationRequestRef means this is initial phase, skip hardware checks
+			} else {
+				// NodeAllocationRequestRef exists but getNodeAllocationRequestResponse failed,
+				// this indicates a real hardware plugin error
+				return requeueWithError(err)
+			}
+		} else {
+			hwProvisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
+			if err != nil {
+				return requeueWithError(err)
+			}
+			if timedOutOrFailed {
+				// Timeout occurred or failed, stop requeuing
+				return doNotRequeue(), nil
+			}
+			if !hwProvisioned {
+				return requeueWithMediumInterval(), nil
+			}
 		}
 	}
 
@@ -702,7 +710,9 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		nodeAllocationRequestID := provisioningRequest.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
 		if nodeAllocationRequestID != "" {
 			r.Logger.InfoContext(ctx, fmt.Sprintf("Deleting NodeAllocationRequest (%s)", nodeAllocationRequestID))
-			resp, narExists, err := hwpluginClient.DeleteNodeAllocationRequest(ctx, nodeAllocationRequestID)
+			// Create adapter for the hardware plugin client
+			clientAdapter := hwmgrpluginapi.NewHardwarePluginClientAdapter(hwpluginClient)
+			resp, narExists, err := clientAdapter.DeleteNodeAllocationRequest(ctx, nodeAllocationRequestID)
 			if err != nil {
 				return false, fmt.Errorf("failed to delete NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
 			}
@@ -849,6 +859,12 @@ func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx
 	if nodeAllocationRequestID == "" {
 		return nil, false, fmt.Errorf("missing status.nodeAllocationRequestRef.NodeAllocationRequestID")
 	}
+
+	// Check if hardware plugin client is available
+	if t.hwpluginClient == nil {
+		return nil, false, fmt.Errorf("hardware plugin client is not available")
+	}
+
 	var (
 		nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse
 		exists                        bool
