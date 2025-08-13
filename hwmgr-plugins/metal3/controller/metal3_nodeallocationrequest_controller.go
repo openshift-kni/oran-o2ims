@@ -214,6 +214,7 @@ func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) erro
 //+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch
+//+kubebuilder:rbac:groups=metal3.io,resources=hardwaredata,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;watch;delete
 

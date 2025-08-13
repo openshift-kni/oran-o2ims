@@ -246,6 +246,7 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 				},
 				Resources: []string{
 					"firmwareschemas",
+					"hardwaredata",
 				},
 				Verbs: []string{
 					"get",
