@@ -2,10 +2,32 @@
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "automergeStrategy": "rebase",
     "automergeType": "pr",
-    "baseBranches": [
-        "/^main$/",
-        "/^release-4\\.\\d{2}$/"
-    ],
+    "git-submodules": {
+        "enabled": true,
+        "packageRules": [
+            {
+                "addLabels": [
+                    "approved",
+                    "lgtm"
+                ],
+                "additionalBranchPrefix": "telco5g-konflux-",
+                "autoApprove": true,
+                "automerge": true,
+                "matchFileNames": [
+                    "telco5g-konflux/**"
+                ],
+                "schedule": [
+                    "at any time"
+                ]
+            },
+            {
+                "additionalBranchPrefix": "telco5g-konflux-",
+                "matchFileNames": [
+                    "telco5g-konflux/**"
+                ]
+            }
+        ]
+    },
     "gomod": {
         "enabled": false
     },
@@ -28,7 +50,10 @@
             "matchUpdateTypes": [
                 "digest"
             ],
-            "platformAutomerge": true
+            "platformAutomerge": true,
+            "schedule": [
+                "at any time"
+            ]
         },
         {
             "enabled": false,
@@ -40,8 +65,6 @@
     "prConcurrentLimit": 0,
     "pruneBranchAfterAutomerge": true,
     "tekton": {
-        "autoApprove": true,
-        "automerge": true,
         "enabled": true,
         "ignoreTests": false,
         "includePaths": [
@@ -51,6 +74,8 @@
             "/\\.yaml$/",
             "/\\.yml$/"
         ],
-        "platformAutomerge": true
+        "schedule": [
+            "at any time"
+        ]
     }
 }
