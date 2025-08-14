@@ -251,7 +251,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the O-Cloud Manager controller.
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
-		Logger: slog.With("controller", "O-Cloud Manager"),
+		Logger: logger.With("controller", "O-Cloud Manager"),
 		Image:  c.image,
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
@@ -272,7 +272,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the Cluster Template controller.
 	if err = (&controllers.ClusterTemplateReconciler{
 		Client: mgr.GetClient(),
-		Logger: slog.With("controller", "ClusterTemplate"),
+		Logger: logger.With("controller", "ClusterTemplate"),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -285,7 +285,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	narCallbackServer := narcallback.NewNodeAllocationRequestCallbackServer(
 		mgr.GetClient(),
-		slog.With("Callback", "NodeAllocationRequest"),
+		logger.With("Callback", "NodeAllocationRequest"),
 	)
 
 	serverErrors := make(chan error, 1)
@@ -321,7 +321,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the Provisioning Request controller.
 	if err = (&controllers.ProvisioningRequestReconciler{
 		Client:         mgr.GetClient(),
-		Logger:         slog.With("controller", "ProvisioningRequest"),
+		Logger:         logger.With("controller", "ProvisioningRequest"),
 		CallbackConfig: ctlrutils.NewNarCallbackConfig(callbackPort),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
