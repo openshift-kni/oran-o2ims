@@ -335,9 +335,9 @@ func (f *TableFormatter) printTableHeader(crdType string) {
 			"TIME", "EVENT", "AGE", "NAME", "GENERATION", "OBSERVED", "VALID", "CHANGE-DETECTED")
 		fmt.Printf("%s\n", strings.Repeat("-", 120))
 	case CRDTypeInventoryResources:
-		fmt.Printf("%-30s %-20s %-36s %s\n",
-			"NAME", "POOL", "RESOURCE-ID", "MODEL")
-		fmt.Printf("%s\n", strings.Repeat("-", 88))
+		fmt.Printf("%-30s %-20s %-36s %-25s %-15s %-15s %-8s %-10s\n",
+			"NAME", "POOL", "RESOURCE-ID", "MODEL", "ADMIN", "OPER", "POWER", "USAGE")
+		fmt.Printf("%s\n", strings.Repeat("-", 165))
 	case CRDTypeInventoryResourcePools:
 		fmt.Printf("%-20s %-30s %-36s\n",
 			"SITE", "POOL", "RESOURCE-POOL-ID")
@@ -564,7 +564,7 @@ func (f *TableFormatter) formatHostFirmwareSettings(timestamp, eventType, age st
 	return nil
 }
 
-//nolint:unparam // timestamp parameter required for interface consistency
+//nolint:unparam,gocyclo // timestamp parameter required for interface consistency; complex state field extraction logic is required for inventory resource formatting
 func (f *TableFormatter) formatInventoryResource(timestamp, eventType, age string, obj runtime.Object) error {
 	if iro, ok := obj.(*InventoryResourceObject); ok {
 		resource := iro.Resource
@@ -610,11 +610,52 @@ func (f *TableFormatter) formatInventoryResource(timestamp, eventType, age strin
 			}
 		}
 
-		fmt.Printf("%-30s %-20s %-36s %s\n",
+		// Extract state fields from extensions
+		adminState := StringUnknown
+		if resource.Extensions != nil {
+			if adminVal, exists := resource.Extensions["adminState"]; exists {
+				if adminStr, ok := adminVal.(string); ok && adminStr != "" {
+					adminState = adminStr
+				}
+			}
+		}
+
+		operationalState := StringUnknown
+		if resource.Extensions != nil {
+			if operVal, exists := resource.Extensions["operationalState"]; exists {
+				if operStr, ok := operVal.(string); ok && operStr != "" {
+					operationalState = operStr
+				}
+			}
+		}
+
+		powerState := StringUnknown
+		if resource.Extensions != nil {
+			if powerVal, exists := resource.Extensions["powerState"]; exists {
+				if powerStr, ok := powerVal.(string); ok && powerStr != "" {
+					powerState = powerStr
+				}
+			}
+		}
+
+		usageState := StringUnknown
+		if resource.Extensions != nil {
+			if usageVal, exists := resource.Extensions["usageState"]; exists {
+				if usageStr, ok := usageVal.(string); ok && usageStr != "" {
+					usageState = usageStr
+				}
+			}
+		}
+
+		fmt.Printf("%-30s %-20s %-36s %-25s %-15s %-15s %-8s %-10s\n",
 			truncate(name, 30),
 			truncate(pool, 20),
 			truncate(resource.ResourceID, 36),
-			model)
+			truncate(model, 25),
+			truncate(adminState, 15),
+			truncate(operationalState, 15),
+			truncate(powerState, 8),
+			truncate(usageState, 10))
 	}
 	return nil
 }
