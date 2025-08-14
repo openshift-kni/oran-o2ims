@@ -94,6 +94,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			// This test simply validates that the function exists and has the expected signature
 			var mgr ctrl.Manager
 			namespace := "test"
+			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 			// We can't easily call the function without a real manager, but we can test
 			// that it would handle nil manager gracefully
@@ -105,7 +106,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			_, _ = SetupMetal3Controllers(mgr, namespace)
+			_, _ = SetupMetal3Controllers(mgr, namespace, testLogger)
 		})
 	})
 
@@ -179,7 +180,8 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			_, testError = SetupMetal3Controllers(nil, namespace)
+			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			_, testError = SetupMetal3Controllers(nil, namespace, testLogger)
 
 			// If we get here without panic, check the error message
 			if testError != nil {
@@ -207,7 +209,8 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			_, _ = SetupMetal3Controllers(nil, "")
+			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			_, _ = SetupMetal3Controllers(nil, "", testLogger)
 		})
 
 		It("should accept namespace with special characters", func() {
@@ -220,7 +223,8 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			}()
 
 			specialNamespace := "test-namespace_with.special-chars"
-			_, _ = SetupMetal3Controllers(nil, specialNamespace)
+			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			_, _ = SetupMetal3Controllers(nil, specialNamespace, testLogger)
 		})
 	})
 

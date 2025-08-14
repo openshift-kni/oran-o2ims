@@ -188,7 +188,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	controllers, err := metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace())
+	controllers, err := metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace(), logger)
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to create metal3 plugin controller",
 			slog.String("controller", "Metal3HWPlugin"), slog.String("error", err.Error()))

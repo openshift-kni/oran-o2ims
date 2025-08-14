@@ -28,7 +28,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
-	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 var (
@@ -159,7 +158,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	hardwarePluginReconciler := &hwmgrcontroller.HardwarePluginReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Logger: slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "HardwarePlugin")),
+		Logger: logger.With("controller", "HardwarePlugin"),
 	}
 
 	// Start the HardwarePlugin controller
