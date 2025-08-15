@@ -230,7 +230,13 @@ func (b *LoggerBuilder) Build() (result *slog.Logger, err error) {
 		Level:       level,
 		ReplaceAttr: composeReplacers(replacers),
 	}
-	handler := slog.NewJSONHandler(writer, options)
+	baseHandler := slog.NewJSONHandler(writer, options)
+
+	// Wrap with the LoggingContextHandler to enable context attribute extraction
+	contextHandler := &LoggingContextHandler{
+		handler: baseHandler,
+		level:   level,
+	}
 
 	// Caculate the custom fields:
 	fields, err := b.customFields()
@@ -238,8 +244,8 @@ func (b *LoggerBuilder) Build() (result *slog.Logger, err error) {
 		return
 	}
 
-	// Create the logger:
-	result = slog.New(handler).With(fields...)
+	// Create the logger with the context-aware handler:
+	result = slog.New(contextHandler).With(fields...)
 
 	return
 }

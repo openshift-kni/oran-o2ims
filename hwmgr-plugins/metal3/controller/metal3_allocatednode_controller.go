@@ -10,7 +10,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,6 +43,24 @@ type AllocatedNodeReconciler struct {
 // +kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes/finalizers,verbs=update
 func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
+	startTime := time.Now()
+
+	// Add standard reconciliation context
+	ctx = ctlrutils.LogReconcileStart(ctx, r.Logger, req, "AllocatedNode")
+
+	defer func() {
+		duration := time.Since(startTime)
+		if err != nil {
+			r.Logger.ErrorContext(ctx, "Reconciliation failed",
+				slog.Duration("duration", duration),
+				slog.String("error", err.Error()))
+		} else {
+			r.Logger.InfoContext(ctx, "Reconciliation completed",
+				slog.Duration("duration", duration),
+				slog.Bool("requeue", result.Requeue),
+				slog.Duration("requeueAfter", result.RequeueAfter))
+		}
+	}()
 
 	// Add logging context with the resource name
 	ctx = logging.AppendCtx(ctx, slog.String("ReconcileRequest", req.Name))
@@ -48,18 +68,17 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	allocatedNode, err := hwmgrutils.GetNode(ctx, r.Logger, r.NoncachedClient, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// The AllocatedNode object has likely been deleted
-			r.Logger.InfoContext(ctx, "Node no longer exists.")
+			r.Logger.InfoContext(ctx, "AllocatedNode not found, assuming deleted")
 			return hwmgrutils.DoNotRequeue(), nil
 		}
-		r.Logger.InfoContext(ctx, "Unable to fetch AllocatedNode. Requeuing", slog.String("error", err.Error()))
+		ctlrutils.LogError(ctx, r.Logger, "Unable to fetch AllocatedNode", err)
 		return hwmgrutils.RequeueWithShortInterval(), nil
 	}
 
-	// Add logging context with data from the CR
+	// Add object-specific context
+	ctx = ctlrutils.AddObjectContext(ctx, allocatedNode)
 	ctx = logging.AppendCtx(ctx, slog.String("startingResourceVersion", allocatedNode.ResourceVersion))
-
-	r.Logger.InfoContext(ctx, "Reconciling AllocatedNode")
+	r.Logger.InfoContext(ctx, "Fetched AllocatedNode successfully")
 
 	if allocatedNode.GetDeletionTimestamp() != nil {
 		// Handle deletion

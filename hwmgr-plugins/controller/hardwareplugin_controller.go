@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,28 +46,49 @@ type HardwarePluginReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
+	startTime := time.Now()
 	result = hwmgrutils.RequeueWithLongInterval()
+
+	// Add standard reconciliation context
+	ctx = ctlrutils.LogReconcileStart(ctx, r.Logger, req, "HardwarePlugin")
+
+	defer func() {
+		duration := time.Since(startTime)
+		if err != nil {
+			r.Logger.ErrorContext(ctx, "Reconciliation failed",
+				slog.Duration("duration", duration),
+				slog.String("error", err.Error()))
+		} else {
+			r.Logger.InfoContext(ctx, "Reconciliation completed",
+				slog.Duration("duration", duration),
+				slog.Bool("requeue", result.Requeue),
+				slog.Duration("requeueAfter", result.RequeueAfter))
+		}
+	}()
 
 	// Fetch the CR:
 	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
 	if err = r.Client.Get(ctx, req.NamespacedName, hwplugin); err != nil {
 		if errors.IsNotFound(err) {
+			r.Logger.InfoContext(ctx, "HardwarePlugin not found, assuming deleted")
 			err = nil
 			return
 		}
-		r.Logger.ErrorContext(
-			ctx,
-			"Unable to fetch HardwarePlugin",
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, r.Logger, "Unable to fetch HardwarePlugin", err)
 		return
 	}
 
+	// Add object-specific context
+	ctx = ctlrutils.AddObjectContext(ctx, hwplugin)
 	ctx = logging.AppendCtx(ctx, slog.String("HardwarePlugin", hwplugin.Name))
+	r.Logger.InfoContext(ctx, "Fetched HardwarePlugin successfully")
 
 	hwplugin.Status.ObservedGeneration = hwplugin.Generation
 
-	// Validate the HardwarePlugin
+	// Phase 1: Validate the HardwarePlugin
+	ctx = ctlrutils.LogPhaseStart(ctx, r.Logger, "validation")
+	phaseStartTime := time.Now()
+
 	condReason := hwmgmtv1alpha1.ConditionReasons.InProgress
 	condStatus := metav1.ConditionFalse
 	condMessage := ""
@@ -76,7 +98,7 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		err = fmt.Errorf("encountered an error while attempting to validate HardwarePlugin (%s): %w", hwplugin.Name, err)
 		condMessage = err.Error()
-
+		ctlrutils.LogError(ctx, r.Logger, "HardwarePlugin validation failed", err)
 		result = hwmgrutils.RequeueWithMediumInterval()
 	} else {
 		if isValid {
@@ -87,11 +109,12 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			condReason = hwmgmtv1alpha1.ConditionReasons.Failed
 			condStatus = metav1.ConditionFalse
 			condMessage = fmt.Sprintf("Failed to validate connection to %s", hwplugin.Spec.ApiRoot)
-
-			r.Logger.InfoContext(ctx, fmt.Sprintf("Failed to validate connection to %s", hwplugin.Spec.ApiRoot))
+			r.Logger.InfoContext(ctx, "Failed to validate connection to HardwarePlugin",
+				slog.String("apiRoot", hwplugin.Spec.ApiRoot))
 			result = hwmgrutils.RequeueWithMediumInterval()
 		}
 	}
+	ctlrutils.LogPhaseComplete(ctx, r.Logger, "validation", time.Since(phaseStartTime))
 
 	if updateErr := hwmgrutils.UpdateHardwarePluginStatusCondition(ctx, r.Client, hwplugin,
 		hwmgmtv1alpha1.ConditionTypes.Registration, condReason, condStatus, condMessage); updateErr != nil {

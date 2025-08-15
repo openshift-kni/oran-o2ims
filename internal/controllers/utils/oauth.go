@@ -83,7 +83,10 @@ type OAuthClientConfig struct {
 // SetupOAuthClient creates an HTTP client capable of acquiring an OAuth token used to authorize client requests.  If
 // the config excludes the OAuth specific sections then the client produced is a simple HTTP client without OAuth
 // capabilities.
-func SetupOAuthClient(ctx context.Context, config *OAuthClientConfig) (*http.Client, error) {
+func SetupOAuthClient(ctx context.Context, logger *slog.Logger, config *OAuthClientConfig) (*http.Client, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	tlsConfig, _ := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
 
 	// Adjust the TLS config with the related options passed in
@@ -92,7 +95,7 @@ func SetupOAuthClient(ctx context.Context, config *OAuthClientConfig) (*http.Cli
 		if err != nil {
 			return nil, err
 		}
-		slog.Info("Configured TLS client")
+		logger.InfoContext(ctx, "Configured TLS client")
 	}
 
 	baseClient := &http.Client{
@@ -115,11 +118,11 @@ func SetupOAuthClient(ctx context.Context, config *OAuthClientConfig) (*http.Cli
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
 		oauthClient := oauthConfig.Client(ctx)
 
-		slog.Info("Successfully created oauth client")
+		logger.InfoContext(ctx, "Successfully created oauth client")
 		return oauthClient, nil
 	}
 
-	slog.Info("Successfully created base client")
+	logger.InfoContext(ctx, "Successfully created base client")
 	return baseClient, nil
 }
 

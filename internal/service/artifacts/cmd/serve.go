@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 
 	artifacts "github.com/openshift-kni/oran-o2ims/internal/service/artifacts"
 	"github.com/openshift-kni/oran-o2ims/internal/service/artifacts/api"
@@ -25,6 +26,13 @@ var artifactsServer = &cobra.Command{
 	Use:   "serve",
 	Short: "Start artifacts server",
 	Run: func(cmd *cobra.Command, args []string) {
+		// Configure structured logging for this service
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
+		slog.SetDefault(logger)
+		klog.SetSlogLogger(logger)
+
 		if err := config.LoadFromEnv(); err != nil {
 			slog.Error("failed to load environment variables", "err", err)
 			os.Exit(1)

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -20,14 +19,12 @@ type Metal3Controllers struct {
 	AllocatedNodeReconciler  *AllocatedNodeReconciler
 }
 
-func SetupMetal3Controllers(mgr ctrl.Manager, namespace string) (*Metal3Controllers, error) {
-	baseLogger := slog.New(logging.NewLoggingContextHandler(slog.LevelInfo))
-
+func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) (*Metal3Controllers, error) {
 	nodeAllocationReconciler := &NodeAllocationRequestReconciler{
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With(slog.String("controller", "metal3_nodeallocationrequest_controller")),
+		Logger:          baseLogger.With("controller", "metal3_nodeallocationrequest_controller"),
 		PluginNamespace: namespace,
 		Manager:         mgr,
 	}
@@ -40,7 +37,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string) (*Metal3Controll
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With(slog.String("controller", "metal3_allocatednode_controller")),
+		Logger:          baseLogger.With("controller", "metal3_allocatednode_controller"),
 		PluginNamespace: namespace,
 		Manager:         mgr,
 	}

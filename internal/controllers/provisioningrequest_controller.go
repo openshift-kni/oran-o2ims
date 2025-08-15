@@ -115,7 +115,25 @@ func GetClusterTemplateRefName(name, version string) string {
 func (r *ProvisioningRequestReconciler) Reconcile(
 	ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
+	startTime := time.Now()
 	result = doNotRequeue()
+
+	// Add standard reconciliation context
+	ctx = ctlrutils.LogReconcileStart(ctx, r.Logger, req, "ProvisioningRequest")
+
+	defer func() {
+		duration := time.Since(startTime)
+		if err != nil {
+			r.Logger.ErrorContext(ctx, "Reconciliation failed",
+				slog.Duration("duration", duration),
+				slog.String("error", err.Error()))
+		} else {
+			r.Logger.InfoContext(ctx, "Reconciliation completed",
+				slog.Duration("duration", duration),
+				slog.Bool("requeue", result.Requeue),
+				slog.Duration("requeueAfter", result.RequeueAfter))
+		}
+	}()
 
 	// Reconciliation loop can be triggered multiple times for the same resource
 	// due to changes in related resources, events or conditions.
@@ -128,26 +146,21 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
 		if k8serrors.IsNotFound(err) {
 			// The provisioning request could have been deleted
+			r.Logger.InfoContext(ctx, "ProvisioningRequest not found, assuming deleted")
 			err = nil
 			return
 		}
-		r.Logger.ErrorContext(
-			ctx,
-			"Unable to fetch ProvisioningRequest",
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, r.Logger, "Unable to fetch ProvisioningRequest", err)
 		return
 	}
 
-	r.Logger.InfoContext(ctx, "[Reconcile ProvisioningRequest]",
-		"name", object.Name, "namespace", object.Namespace)
+	// Add object-specific context
+	ctx = ctlrutils.AddObjectContext(ctx, object)
+	r.Logger.InfoContext(ctx, "Fetched ProvisioningRequest successfully")
 
 	if res, stop, err := r.handleFinalizer(ctx, object); !res.IsZero() || stop || err != nil {
 		if err != nil {
-			r.Logger.ErrorContext(
-				ctx,
-				"Encountered error while handling the ProvisioningRequest finalizer",
-				slog.String("err", err.Error()))
+			ctlrutils.LogError(ctx, r.Logger, "Encountered error while handling the ProvisioningRequest finalizer", err)
 		}
 		return res, err
 	}
@@ -168,109 +181,235 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, error) {
 	if t.shouldStopReconciliation() {
+		t.logger.InfoContext(ctx, "Stopping reconciliation due to fatal failure")
 		return doNotRequeue(), nil
 	}
 
-	// Determine if hardware provisioning is needed by checking the cluster template early
-	// This is required because handlePreProvisioning may call checkClusterDeployConfigState
-	// which needs the hardware plugin client to be available
-	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
-	if err == nil && clusterTemplate.Spec.Templates.HwTemplate != "" {
-		// Initialize hardware plugin client with retry logic
-		if t.hwpluginClient == nil {
-			if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
-				return requeueWithError(err)
-			}
-		}
+	// Execute the main reconciliation phases
+	renderedClusterInstance, result, err := t.executeProvisioningPhases(ctx)
+	if err != nil || result.Requeue || result.RequeueAfter > 0 {
+		return result, err
+	}
+
+	// Handle post-provisioning logic
+	return t.handlePostProvisioning(ctx, renderedClusterInstance)
+}
+
+// executeProvisioningPhases handles the main provisioning phases and returns the cluster instance if successful
+func (t *provisioningRequestReconcilerTask) executeProvisioningPhases(ctx context.Context) (
+	*unstructured.Unstructured, ctrl.Result, error) {
+
+	// Phase 1: Pre-provisioning
+	renderedClusterInstance, unstructuredClusterInstance, result, err := t.executePreProvisioningPhase(ctx)
+	if err != nil || renderedClusterInstance == nil {
+		return nil, result, err
+	}
+
+	// Phase 2: Hardware provisioning
+	result, err = t.executeHardwareProvisioningPhase(ctx, unstructuredClusterInstance)
+	if err != nil || result.Requeue || result.RequeueAfter > 0 {
+		return nil, result, err
+	}
+
+	// Phase 3: Cluster resources
+	result, err = t.executeClusterResourcesPhase(ctx, renderedClusterInstance)
+	if err != nil {
+		return nil, result, err
+	}
+
+	// Phase 4: Cluster installation
+	result, err = t.executeClusterInstallationPhase(ctx, unstructuredClusterInstance)
+	if err != nil || result.Requeue || result.RequeueAfter > 0 {
+		return nil, result, err
+	}
+
+	return unstructuredClusterInstance, ctrl.Result{}, nil
+}
+
+// executePreProvisioningPhase handles pre-provisioning validation and setup
+func (t *provisioningRequestReconcilerTask) executePreProvisioningPhase(ctx context.Context) (
+	*siteconfig.ClusterInstance, *unstructured.Unstructured, ctrl.Result, error) {
+
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "pre_provisioning")
+	phaseStartTime := time.Now()
+
+	// Initialize hardware plugin client if needed
+	if err := t.initializeHardwarePluginIfNeeded(ctx); err != nil {
+		result, _ := requeueWithError(err)
+		return nil, nil, result, err
 	}
 
 	// Handle validation, rendering and creation of required resources
 	renderedClusterInstance, res, err := t.handlePreProvisioning(ctx)
 	if renderedClusterInstance == nil {
+		if err != nil {
+			ctlrutils.LogError(ctx, t.logger, "Pre-provisioning phase failed", err)
+		}
+		return nil, nil, res, err
+	}
+
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "pre_provisioning", time.Since(phaseStartTime))
+
+	// Convert to unstructured for hardware phase
+	unstructuredClusterInstance, err := ctlrutils.ConvertToUnstructured(*renderedClusterInstance)
+	if err != nil {
+		wrappedErr := fmt.Errorf("failed to convert ClusterInstance to unstructured: %w", err)
+		result, _ := requeueWithError(wrappedErr)
+		return nil, nil, result, wrappedErr
+	}
+
+	return renderedClusterInstance, unstructuredClusterInstance, ctrl.Result{}, nil
+}
+
+// executeHardwareProvisioningPhase handles hardware provisioning
+func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx context.Context,
+	unstructuredClusterInstance *unstructured.Unstructured) (ctrl.Result, error) {
+
+	if t.isHardwareProvisionSkipped() {
+		t.logger.InfoContext(ctx, "Hardware provisioning skipped")
+		return ctrl.Result{}, nil
+	}
+
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_provisioning")
+	phaseStartTime := time.Now()
+
+	if t.hwpluginClient == nil {
+		result, _ := requeueWithError(errors.New("hwpluginClient is not initialized"))
+		return result, errors.New("hwpluginClient is not initialized")
+	}
+
+	res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
+	if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
+		if err != nil {
+			ctlrutils.LogError(ctx, t.logger, "Hardware provisioning phase failed", err)
+		} else if res.RequeueAfter > 0 {
+			t.logger.InfoContext(ctx, "Hardware provisioning in progress, requeueing",
+				slog.Duration("requeueAfter", res.RequeueAfter))
+		}
 		return res, err
 	}
 
-	// TODO: the handlePreProvisioning function should be updated to return an unstructured ClusterInstance
-	unstructuredClusterInstance, err := ctlrutils.ConvertToUnstructured(*renderedClusterInstance)
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_provisioning", time.Since(phaseStartTime))
+	return ctrl.Result{}, nil
+}
+
+// executeClusterResourcesPhase handles cluster resources creation
+func (t *provisioningRequestReconcilerTask) executeClusterResourcesPhase(ctx context.Context,
+	renderedClusterInstance *siteconfig.ClusterInstance) (ctrl.Result, error) {
+
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "cluster_resources")
+	phaseStartTime := time.Now()
+
+	err := t.handleClusterResources(ctx, renderedClusterInstance)
 	if err != nil {
-		return requeueWithError(err)
+		ctlrutils.LogError(ctx, t.logger, "Cluster resources phase failed", err)
+		result, _ := requeueWithError(err)
+		return result, err
 	}
 
-	// Handle hardware template and NodeAllocationRequest provisioning/configuring
-	if !t.isHardwareProvisionSkipped() {
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "cluster_resources", time.Since(phaseStartTime))
+	return ctrl.Result{}, nil
+}
 
-		if t.hwpluginClient == nil {
-			return requeueWithError(errors.New("hwpluginClient is not initialized"))
-		}
+// executeClusterInstallationPhase handles cluster installation
+func (t *provisioningRequestReconcilerTask) executeClusterInstallationPhase(ctx context.Context,
+	unstructuredClusterInstance *unstructured.Unstructured) (ctrl.Result, error) {
 
-		res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
-		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
-			return res, err
-		}
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "cluster_installation")
+	phaseStartTime := time.Now()
 
-		// Hardware provisioning completed successfully, now create ClusterInstance resources
-		// with the updated hardware data
-		err = t.handleClusterResources(ctx, renderedClusterInstance)
-		if err != nil {
-			return requeueWithError(err)
-		}
-	}
-
-	// Handle the cluster install with ClusterInstance
-	err = t.handleClusterInstallation(ctx, unstructuredClusterInstance)
+	err := t.handleClusterInstallation(ctx, unstructuredClusterInstance)
 	if err != nil {
-		return requeueWithError(err)
+		ctlrutils.LogError(ctx, t.logger, "Cluster installation phase failed", err)
+		result, _ := requeueWithError(err)
+		return result, err
 	}
+
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "cluster_installation", time.Since(phaseStartTime))
+
+	// Check cluster provision status
 	if !ctlrutils.IsClusterProvisionPresent(t.object) {
 		t.logger.InfoContext(ctx, "ClusterProvision not present, requeueing", slog.String("name", t.object.Name))
 		return requeueWithShortInterval(), nil
-	} else if ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
-		// If the cluster installation has not started due to
-		// processing issue, failed or timed out, do not requeue.
+	}
+
+	if ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
 		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, do not requeue", slog.String("name", t.object.Name))
 		return doNotRequeue(), nil
 	}
 
+	return ctrl.Result{}, nil
+}
+
+// handlePostProvisioning handles policy configuration, upgrades, and finalization
+func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.Context,
+	renderedClusterInstance *unstructured.Unstructured) (ctrl.Result, error) {
+
 	// Handle policy configuration
 	requeueForConfig, err := t.handleClusterPolicyConfiguration(ctx)
 	if err != nil {
-		return requeueWithError(err)
+		result, _ := requeueWithError(err)
+		return result, err
 	}
 
+	// Handle upgrades if ZTP is done
 	if ctlrutils.IsClusterZtpDone(t.object) {
-		// If the initial provisioning is completed, check if an upgrade is requested
-		shouldUpgrade, err := t.IsUpgradeRequested(ctx, renderedClusterInstance.GetName())
-		if err != nil {
-			return requeueWithError(err)
-		}
-
-		// An upgrade is requested or upgrade has started but not completed
-		if shouldUpgrade ||
-			(ctlrutils.IsClusterUpgradeInitiated(t.object) &&
-				!ctlrutils.IsClusterUpgradeCompleted(t.object)) {
-			upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, renderedClusterInstance.GetName())
-			if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
-				// Requeue if the upgrade is in progress or an error occurs.
-				// Stop reconciliation if the upgrade has failed.
-				// Proceed if the upgrade is completed.
-				return upgradeCtrlResult, err
-			}
+		result, err := t.handleClusterUpgrades(ctx, renderedClusterInstance.GetName())
+		if err != nil || result.Requeue || result.RequeueAfter > 0 {
+			return result, err
 		}
 	}
 
-	// Requeue if cluster provisioning is not completed (in-progress or unknown)
-	// or there are enforce policies that are not Compliant but the configuration
-	// has not timed out.
+	// Check if we need to requeue for ongoing operations
 	if !ctlrutils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
 		return requeueWithLongInterval(), nil
 	}
 
+	// Finalize if everything is complete
 	err = t.finalizeProvisioningIfComplete(ctx)
 	if err != nil {
-		return requeueWithError(err)
+		result, _ := requeueWithError(err)
+		return result, err
 	}
 
 	return doNotRequeue(), nil
+}
+
+// initializeHardwarePluginIfNeeded initializes the hardware plugin client if hardware template is present
+func (t *provisioningRequestReconcilerTask) initializeHardwarePluginIfNeeded(ctx context.Context) error {
+	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
+	if err == nil && clusterTemplate.Spec.Templates.HwTemplate != "" {
+		if t.hwpluginClient == nil {
+			if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// handleClusterUpgrades handles cluster upgrade logic
+func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Context, clusterName string) (ctrl.Result, error) {
+	shouldUpgrade, err := t.IsUpgradeRequested(ctx, clusterName)
+	if err != nil {
+		result, _ := requeueWithError(err)
+		return result, err
+	}
+
+	// An upgrade is requested or upgrade has started but not completed
+	if shouldUpgrade ||
+		(ctlrutils.IsClusterUpgradeInitiated(t.object) &&
+			!ctlrutils.IsClusterUpgradeCompleted(t.object)) {
+		upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, clusterName)
+		if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
+			// Requeue if the upgrade is in progress or an error occurs.
+			// Stop reconciliation if the upgrade has failed.
+			// Proceed if the upgrade is completed.
+			return upgradeCtrlResult, err
+		}
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // shouldStopReconciliation checks if the reconciliation should stop.
@@ -390,7 +529,8 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	}
 	if !provisioned {
 
-		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be provisioned", nodeAllocationRequestID))
+		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be provisioned",
+			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
 	}
 
@@ -399,7 +539,8 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	// If configuration is not set and no configuration update is requested, do nothing.
 	configuringStarted := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart
 	if (configured == nil && !configuringStarted.IsZero()) || (configured != nil && !*configured) {
-		t.logger.InfoContext(ctx, fmt.Sprintf("Waiting for NodeAllocationRequest %s to be configured", nodeAllocationRequestID))
+		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be configured",
+			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
 	}
 
@@ -516,12 +657,8 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 	// Validate provisioning request CR
 	err := t.validateProvisioningRequestCR(ctx)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to validate the ProvisioningRequest",
-			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, t.logger, "Failed to validate the ProvisioningRequest", err,
+			slog.String("name", t.object.Name))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.Validated,
 			provisioningv1alpha1.CRconditionReasons.Failed,
@@ -529,11 +666,8 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 			"Failed to validate the ProvisioningRequest: "+err.Error(),
 		)
 	} else {
-		t.logger.InfoContext(
-			ctx,
-			"Validated the ProvisioningRequest CR",
-			slog.String("name", t.object.Name),
-		)
+		t.logger.InfoContext(ctx, "Validated the ProvisioningRequest CR",
+			slog.String("name", t.object.Name))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.Validated,
 			provisioningv1alpha1.CRconditionReasons.Completed,
@@ -682,7 +816,8 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 			return requeueImmediately(), false, nil
 		}
 	} else if controllerutil.ContainsFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
-		r.Logger.Info(fmt.Sprintf("ProvisioningRequest (%s) is being deleted", provisioningRequest.Name))
+		r.Logger.InfoContext(ctx, "ProvisioningRequest is being deleted",
+			slog.String("name", provisioningRequest.Name))
 		deleteComplete, err := r.handleProvisioningRequestDeletion(ctx, provisioningRequest)
 		if !deleteComplete {
 			return requeueWithShortInterval(), true, err
@@ -726,7 +861,8 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 
 		nodeAllocationRequestID := provisioningRequest.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
 		if nodeAllocationRequestID != "" {
-			r.Logger.InfoContext(ctx, fmt.Sprintf("Deleting NodeAllocationRequest (%s)", nodeAllocationRequestID))
+			r.Logger.InfoContext(ctx, "Deleting NodeAllocationRequest",
+				slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 			// Create adapter for the hardware plugin client
 			clientAdapter := hwmgrpluginapi.NewHardwarePluginClientAdapter(hwpluginClient)
 			resp, narExists, err := clientAdapter.DeleteNodeAllocationRequest(ctx, nodeAllocationRequestID)
@@ -735,11 +871,13 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 			}
 
 			if resp == nodeAllocationRequestID {
-				r.Logger.Info(fmt.Sprintf("Deletion request for nodeAllocationRequest '%s' is successful", nodeAllocationRequestID))
+				r.Logger.InfoContext(ctx, "Deletion request for NodeAllocationRequest successful",
+					slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 			}
 
 			if narExists {
-				r.Logger.Info(fmt.Sprintf("Waiting for NodeAllocationRequest (%s) to be deleted", nodeAllocationRequestID))
+				r.Logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be deleted",
+					slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 				return false, nil
 			}
 		}

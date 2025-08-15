@@ -146,6 +146,10 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	// Set the logger from context
 	logger := internal.LoggerFromContext(ctx)
+
+	// Configure klog to use our structured logger for vendor modules:
+	klog.SetSlogLogger(logger)
+
 	logAdapter := logr.FromSlogHandler(logger.Handler())
 	ctrl.SetLogger(logAdapter)
 	klog.SetLogger(logAdapter)
@@ -188,7 +192,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	controllers, err := metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace())
+	controllers, err := metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace(), logger)
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to create metal3 plugin controller",
 			slog.String("controller", "Metal3HWPlugin"), slog.String("error", err.Error()))
@@ -214,7 +218,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	defer cancel()
 	go func() {
 		logger.Info("Starting Metal3 HardwarePlugin API server")
-		err = metal3server.Serve(ctx, c.CommonServerConfig, mgr.GetClient())
+		err = metal3server.Serve(ctx, logger, c.CommonServerConfig, mgr.GetClient())
 	}()
 
 	go func() {

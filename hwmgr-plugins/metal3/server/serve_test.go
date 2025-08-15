@@ -30,6 +30,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"log/slog"
 	"math/big"
 	"net"
 	"os"
@@ -103,7 +104,8 @@ var _ = Describe("Serve", func() {
 		It("should fail early when not in Kubernetes environment", func() {
 			// Since we're not in a Kubernetes environment, the function should fail
 			// when trying to set up authentication middleware
-			err := Serve(ctx, config, mockClient)
+			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			err := Serve(ctx, logger, config, mockClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("authenticator"))
 		})
@@ -111,7 +113,8 @@ var _ = Describe("Serve", func() {
 		It("should validate that required dependencies are checked", func() {
 			// Test that the function attempts to get swagger specs
 			// This tests the early validation logic
-			err := Serve(ctx, config, mockClient)
+			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			err := Serve(ctx, logger, config, mockClient)
 			Expect(err).To(HaveOccurred())
 			// Should fail on auth setup, not on swagger retrieval
 			Expect(err.Error()).NotTo(ContainSubstring("swagger"))
@@ -139,7 +142,8 @@ var _ = Describe("Serve", func() {
 
 		It("should return error when address is invalid", func() {
 			config.Listener.Address = "invalid-address"
-			err := Serve(ctx, config, mockClient)
+			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			err := Serve(ctx, logger, config, mockClient)
 			Expect(err).To(HaveOccurred())
 			// Will fail on auth setup first, not address validation
 			Expect(err.Error()).To(ContainSubstring("authenticator"))
@@ -166,7 +170,8 @@ var _ = Describe("Serve", func() {
 			cancelFunc() // Cancel immediately
 
 			// This should fail at auth setup stage, not get to server startup
-			err := Serve(cancelledCtx, config, mockClient)
+			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			err := Serve(cancelledCtx, logger, config, mockClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("authenticator"))
 		})

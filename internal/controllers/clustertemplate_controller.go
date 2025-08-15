@@ -96,7 +96,25 @@ func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
 func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
+	startTime := time.Now()
 	result = doNotRequeue()
+
+	// Add standard reconciliation context
+	ctx = ctlrutils.LogReconcileStart(ctx, r.Logger, req, "ClusterTemplate")
+
+	defer func() {
+		duration := time.Since(startTime)
+		if err != nil {
+			r.Logger.ErrorContext(ctx, "Reconciliation failed",
+				slog.Duration("duration", duration),
+				slog.String("error", err.Error()))
+		} else {
+			r.Logger.InfoContext(ctx, "Reconciliation completed",
+				slog.Duration("duration", duration),
+				slog.Bool("requeue", result.Requeue),
+				slog.Duration("requeueAfter", result.RequeueAfter))
+		}
+	}()
 
 	// Wait a bit before getting the object to allow it to be updated to
 	// its current version and avoid older version during updates
@@ -106,18 +124,17 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
 			// The cluster template could have been deleted
+			r.Logger.InfoContext(ctx, "ClusterTemplate not found, assuming deleted")
 			err = nil
 			return
 		}
-		r.Logger.ErrorContext(
-			ctx,
-			"Unable to fetch ClusterTemplate",
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, r.Logger, "Unable to fetch ClusterTemplate", err)
 		return
 	}
 
-	r.Logger.InfoContext(ctx, "[Reconcile Cluster Template] "+object.Name)
+	// Add object-specific context
+	ctx = ctlrutils.AddObjectContext(ctx, object)
+	r.Logger.InfoContext(ctx, "Fetched ClusterTemplate successfully")
 
 	// Create and run the task:
 	task := &clusterTemplateReconcilerTask{
@@ -130,29 +147,34 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 }
 
 func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (ctrl.Result, error) {
+	startTime := time.Now()
+
 	if t.object.Spec.TemplateID == "" {
+		ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "generate_template_id")
 		err := generateTemplateID(ctx, t.client, t.object)
 		if err != nil {
+			ctlrutils.LogError(ctx, t.logger, "Failed to generate template ID", err)
 			return requeueWithError(err)
 		}
+		ctlrutils.LogPhaseComplete(ctx, t.logger, "generate_template_id", time.Since(startTime))
 		return requeueImmediately(), nil
 	}
 
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "validation")
 	valid, err := t.validateClusterTemplateCR(ctx)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to validate ClusterTemplate",
-			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, t.logger, "Failed to validate ClusterTemplate", err,
+			slog.String("name", t.object.Name))
 		return requeueWithError(err)
 	}
 	if !valid {
 		// Requeue for invalid clustertemplate
+		t.logger.InfoContext(ctx, "ClusterTemplate validation failed, requeueing")
 		return requeueWithLongInterval(), nil
 	}
 
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "validation", time.Since(startTime))
+	t.logger.InfoContext(ctx, "ClusterTemplate reconciliation completed successfully")
 	return doNotRequeue(), nil
 }
 
@@ -234,11 +256,12 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 	validationErrsMsg := strings.Join(validationErrs, ";")
 	if validationErrsMsg != "" {
-		t.logger.ErrorContext(ctx, fmt.Sprintf(
-			"Failed to validate for ClusterTemplate %s: %s", t.object.Name, validationErrsMsg))
+		t.logger.ErrorContext(ctx, "ClusterTemplate validation failed",
+			slog.String("name", t.object.Name),
+			slog.String("validationErrors", validationErrsMsg))
 	} else {
-		t.logger.InfoContext(ctx, fmt.Sprintf(
-			"Validation passing for ClusterTemplate %s", t.object.Name))
+		t.logger.InfoContext(ctx, "ClusterTemplate validation passed",
+			slog.String("name", t.object.Name))
 	}
 
 	err = t.updateStatusConditionValidated(ctx, validationErrsMsg)
@@ -611,8 +634,12 @@ func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx conte
 
 	err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to update ClusterTemplate status", err,
+			slog.String("name", t.object.Name))
 		return fmt.Errorf("failed to update status for ClusterTemplate %s: %w", t.object.Name, err)
 	}
+
+	t.logger.InfoContext(ctx, "ClusterTemplate status updated successfully")
 	return nil
 }
 
@@ -661,7 +688,7 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 	clusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
 	err := r.List(ctx, clusterTemplates)
 	if err != nil {
-		r.Logger.Error("Unable to list ClusterTemplate resources. ", "error: ", err.Error())
+		ctlrutils.LogError(ctx, r.Logger, "Unable to list ClusterTemplate resources", err)
 		return nil
 	}
 
