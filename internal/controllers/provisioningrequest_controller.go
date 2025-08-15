@@ -8,13 +8,14 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -71,6 +72,12 @@ type timeouts struct {
 	clusterConfiguration time.Duration
 }
 
+// Hardware plugin client retry configuration constants
+const (
+	maxHardwareClientRetries = 3
+	baseRetryDelay           = 5 * time.Second
+)
+
 func GetClusterTemplateRefName(name, version string) string {
 	return fmt.Sprintf("%s.%s", name, version)
 }
@@ -119,7 +126,7 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 	// Fetch the object:
 	object := &provisioningv1alpha1.ProvisioningRequest{}
 	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// The provisioning request could have been deleted
 			err = nil
 			return
@@ -164,6 +171,19 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		return doNotRequeue(), nil
 	}
 
+	// Determine if hardware provisioning is needed by checking the cluster template early
+	// This is required because handlePreProvisioning may call checkClusterDeployConfigState
+	// which needs the hardware plugin client to be available
+	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
+	if err == nil && clusterTemplate.Spec.Templates.HwTemplate != "" {
+		// Initialize hardware plugin client with retry logic
+		if t.hwpluginClient == nil {
+			if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
+				return requeueWithError(err)
+			}
+		}
+	}
+
 	// Handle validation, rendering and creation of required resources
 	renderedClusterInstance, res, err := t.handlePreProvisioning(ctx)
 	if renderedClusterInstance == nil {
@@ -179,12 +199,9 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	// Handle hardware template and NodeAllocationRequest provisioning/configuring
 	if !t.isHardwareProvisionSkipped() {
 
-		// Get hwplugin client for the HardwarePlugin
-		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
-		if err != nil {
-			return requeueWithError(err)
+		if t.hwpluginClient == nil {
+			return requeueWithError(errors.New("hwpluginClient is not initialized"))
 		}
-		t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
 
 		res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
 		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
@@ -816,6 +833,67 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 	}
 
 	return nil
+}
+
+// initializeHardwarePluginClientWithRetry attempts to initialize the hardware plugin client
+// with synchronous exponential backoff retry logic to handle temporary failures.
+func (t *provisioningRequestReconcilerTask) initializeHardwarePluginClientWithRetry(ctx context.Context) error {
+	var lastErr error
+
+	for attempt := 1; attempt <= maxHardwareClientRetries; attempt++ {
+		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
+		if err == nil {
+			// Success - initialize client and return
+			t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
+
+			if attempt > 1 {
+				t.logger.InfoContext(ctx,
+					"Hardware plugin client initialized successfully after retries",
+					slog.String("provisioningRequest", t.object.Name),
+					slog.Int("attempts", attempt))
+			} else {
+				t.logger.InfoContext(ctx,
+					"Hardware plugin client initialized successfully",
+					slog.String("provisioningRequest", t.object.Name))
+			}
+
+			return nil
+		}
+
+		lastErr = err
+
+		if attempt == maxHardwareClientRetries {
+			// Maximum retries exceeded, fail permanently
+			t.logger.ErrorContext(ctx,
+				"Failed to initialize hardware plugin client after maximum retries",
+				slog.String("provisioningRequest", t.object.Name),
+				slog.Int("maxRetries", maxHardwareClientRetries),
+				slog.String("error", err.Error()))
+			break
+		}
+
+		// Calculate exponential backoff delay: baseRetryDelay * 2^(attempt-1)
+		delay := baseRetryDelay * time.Duration(1<<(attempt-1))
+
+		t.logger.WarnContext(ctx,
+			"Hardware plugin client initialization failed, retrying",
+			slog.String("provisioningRequest", t.object.Name),
+			slog.Int("attempt", attempt),
+			slog.Int("maxRetries", maxHardwareClientRetries),
+			slog.Duration("retryDelay", delay),
+			slog.String("error", err.Error()))
+
+		// Sleep before retry (except for the last attempt)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
+		case <-time.After(delay):
+			// Continue to next attempt
+		}
+	}
+
+	return fmt.Errorf("hardware plugin client initialization failed after %d retries: %w",
+		maxHardwareClientRetries, lastErr)
 }
 
 // getHardwarePluginClient is a convenience wrapper function to get the HardwarePluginClient object

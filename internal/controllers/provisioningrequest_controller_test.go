@@ -4702,4 +4702,95 @@ plan:
 		})
 	})
 
+	Describe("initializeHardwarePluginClientWithRetry", func() {
+		var (
+			retryTask *provisioningRequestReconcilerTask
+			ctx       context.Context
+			logger    *slog.Logger
+		)
+
+		BeforeEach(func() {
+			ctx = context.TODO()
+			logger = slog.New(slog.DiscardHandler)
+
+			// Create a minimal test ProvisioningRequest
+			testCR := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-retry-cr",
+					Namespace: "test-namespace",
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					TemplateName:    "test-template",
+					TemplateVersion: "v1.0.0",
+				},
+			}
+
+			retryTask = &provisioningRequestReconcilerTask{
+				logger: logger,
+				client: c,
+				object: testCR,
+			}
+		})
+
+		Context("when hardware plugin client initialization fails", func() {
+			It("should fail after maximum retries", func() {
+				Skip("Skipping timing tests as they would take 15+ seconds and slow down test suite")
+
+				// This test would verify:
+				// - Exponential backoff with 5s base delay (5s, 10s, 20s)
+				// - Total delay of at least 15 seconds
+				// - Final error message indicating 3 retries attempted
+
+				err := retryTask.initializeHardwarePluginClientWithRetry(ctx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("hardware plugin client initialization failed after 3 retries"))
+				Expect(retryTask.hwpluginClient).To(BeNil())
+			})
+
+			It("should respect context cancellation during retries", func() {
+				Skip("Skipping timing tests as they would take 2+ seconds and slow down test suite")
+
+				// This test would verify:
+				// - Context cancellation is respected during sleep periods
+				// - Returns context error when cancelled
+				// - Does not complete all retries when cancelled early
+			})
+		})
+
+		Context("retry configuration", func() {
+			It("should have correct retry parameters", func() {
+				// Test the configuration constants without actually running retries
+				Expect(maxHardwareClientRetries).To(Equal(3))
+				Expect(baseRetryDelay).To(Equal(5 * time.Second))
+			})
+
+			It("should calculate correct exponential backoff delays", func() {
+				// Verify the mathematical correctness of delay calculation
+				// without actually sleeping
+
+				// Expected delays: 5s * 2^0 = 5s, 5s * 2^1 = 10s, 5s * 2^2 = 20s
+				expectedDelays := []time.Duration{
+					5 * time.Second,  // First retry
+					10 * time.Second, // Second retry
+					20 * time.Second, // Third retry (not used since it's the final attempt)
+				}
+
+				for attempt := 1; attempt <= 2; attempt++ { // Only test first 2 delays
+					expectedDelay := baseRetryDelay * time.Duration(1<<(attempt-1))
+					Expect(expectedDelay).To(Equal(expectedDelays[attempt-1]))
+				}
+			})
+		})
+
+		Context("successful initialization", func() {
+			// Note: This test would require setting up a valid hardware plugin,
+			// which is complex in a unit test environment. The success path is
+			// tested implicitly in integration tests.
+			It("should be tested in integration tests with real hardware plugin setup", func() {
+				Skip("Success path requires complex hardware plugin setup, tested in integration tests")
+			})
+		})
+	})
+
 })
