@@ -72,6 +72,12 @@ type timeouts struct {
 	clusterConfiguration time.Duration
 }
 
+// Hardware plugin client retry configuration constants
+const (
+	maxHardwareClientRetries = 3
+	baseRetryDelay           = 5 * time.Second
+)
+
 func GetClusterTemplateRefName(name, version string) string {
 	return fmt.Sprintf("%s.%s", name, version)
 }
@@ -170,12 +176,12 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	// which needs the hardware plugin client to be available
 	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err == nil && clusterTemplate.Spec.Templates.HwTemplate != "" {
-		// Get hwplugin client for the HardwarePlugin
-		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
-		if err != nil {
-			return requeueWithError(err)
+		// Initialize hardware plugin client with retry logic
+		if t.hwpluginClient == nil {
+			if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
+				return requeueWithError(err)
+			}
 		}
-		t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
 	}
 
 	// Handle validation, rendering and creation of required resources
@@ -827,6 +833,67 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 	}
 
 	return nil
+}
+
+// initializeHardwarePluginClientWithRetry attempts to initialize the hardware plugin client
+// with synchronous exponential backoff retry logic to handle temporary failures.
+func (t *provisioningRequestReconcilerTask) initializeHardwarePluginClientWithRetry(ctx context.Context) error {
+	var lastErr error
+
+	for attempt := 1; attempt <= maxHardwareClientRetries; attempt++ {
+		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
+		if err == nil {
+			// Success - initialize client and return
+			t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
+
+			if attempt > 1 {
+				t.logger.InfoContext(ctx,
+					"Hardware plugin client initialized successfully after retries",
+					slog.String("provisioningRequest", t.object.Name),
+					slog.Int("attempts", attempt))
+			} else {
+				t.logger.InfoContext(ctx,
+					"Hardware plugin client initialized successfully",
+					slog.String("provisioningRequest", t.object.Name))
+			}
+
+			return nil
+		}
+
+		lastErr = err
+
+		if attempt == maxHardwareClientRetries {
+			// Maximum retries exceeded, fail permanently
+			t.logger.ErrorContext(ctx,
+				"Failed to initialize hardware plugin client after maximum retries",
+				slog.String("provisioningRequest", t.object.Name),
+				slog.Int("maxRetries", maxHardwareClientRetries),
+				slog.String("error", err.Error()))
+			break
+		}
+
+		// Calculate exponential backoff delay: baseRetryDelay * 2^(attempt-1)
+		delay := baseRetryDelay * time.Duration(1<<(attempt-1))
+
+		t.logger.WarnContext(ctx,
+			"Hardware plugin client initialization failed, retrying",
+			slog.String("provisioningRequest", t.object.Name),
+			slog.Int("attempt", attempt),
+			slog.Int("maxRetries", maxHardwareClientRetries),
+			slog.Duration("retryDelay", delay),
+			slog.String("error", err.Error()))
+
+		// Sleep before retry (except for the last attempt)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
+		case <-time.After(delay):
+			// Continue to next attempt
+		}
+	}
+
+	return fmt.Errorf("hardware plugin client initialization failed after %d retries: %w",
+		maxHardwareClientRetries, lastErr)
 }
 
 // getHardwarePluginClient is a convenience wrapper function to get the HardwarePluginClient object
