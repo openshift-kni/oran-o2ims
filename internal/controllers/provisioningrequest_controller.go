@@ -8,13 +8,14 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -119,7 +120,7 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 	// Fetch the object:
 	object := &provisioningv1alpha1.ProvisioningRequest{}
 	if err = r.Client.Get(ctx, req.NamespacedName, object); err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// The provisioning request could have been deleted
 			err = nil
 			return
@@ -164,6 +165,19 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 		return doNotRequeue(), nil
 	}
 
+	// Determine if hardware provisioning is needed by checking the cluster template early
+	// This is required because handlePreProvisioning may call checkClusterDeployConfigState
+	// which needs the hardware plugin client to be available
+	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
+	if err == nil && clusterTemplate.Spec.Templates.HwTemplate != "" {
+		// Get hwplugin client for the HardwarePlugin
+		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
+		if err != nil {
+			return requeueWithError(err)
+		}
+		t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
+	}
+
 	// Handle validation, rendering and creation of required resources
 	renderedClusterInstance, res, err := t.handlePreProvisioning(ctx)
 	if renderedClusterInstance == nil {
@@ -179,12 +193,9 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	// Handle hardware template and NodeAllocationRequest provisioning/configuring
 	if !t.isHardwareProvisionSkipped() {
 
-		// Get hwplugin client for the HardwarePlugin
-		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
-		if err != nil {
-			return requeueWithError(err)
+		if t.hwpluginClient == nil {
+			return requeueWithError(errors.New("hwpluginClient is not initialized"))
 		}
-		t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
 
 		res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
 		if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
