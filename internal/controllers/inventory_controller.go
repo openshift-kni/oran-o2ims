@@ -39,6 +39,7 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -117,11 +118,15 @@ const registerOnRestartAnnotation = "ocloud.openshift.io/register-on-restart"
 var registerOnRestart = false
 
 // setRegisterOnRestart initializes the `registerOnRestart` value from an annotation.
-func setRegisterOnRestart(object *inventoryv1alpha1.Inventory) {
+func setRegisterOnRestart(ctx context.Context, object *inventoryv1alpha1.Inventory) {
 	if annotation, ok := object.Annotations[registerOnRestartAnnotation]; ok {
 		if value, err := strconv.ParseBool(annotation); err == nil {
 			registerOnRestart = value
-			slog.Warn("SMO registration will be repeated on all subsequent restarts")
+			logger := slog.Default()
+			if ctxLogger := internal.LoggerFromContext(ctx); ctxLogger != nil {
+				logger = ctxLogger
+			}
+			logger.WarnContext(ctx, "SMO registration will be repeated on all subsequent restarts")
 		}
 	}
 }
@@ -175,7 +180,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 
 	// On the first reconcile, we set the `registerOnRestart` value from an annotation.  This is a one-time operation
 	// since we don't want to repeat the registration on every reconcile loop if it was previously successful.
-	r.setupOnce.Do(func() { setRegisterOnRestart(object) })
+	r.setupOnce.Do(func() { setRegisterOnRestart(ctx, object) })
 
 	// Create and run the task:
 	task := &reconcilerTask{
@@ -625,7 +630,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 		config.TLSConfig.ClientCert = ctlrutils.NewStaticKeyPairLoader(cert, key)
 	}
 
-	httpClient, err := ctlrutils.SetupOAuthClient(ctx, &config)
+	httpClient, err := ctlrutils.SetupOAuthClient(ctx, t.logger, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)
 	}
@@ -784,7 +789,7 @@ func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Resul
 	for _, pod := range list.Items {
 		name, ok := pod.Labels["app"]
 		if !ok {
-			slog.Warn("Pod without an 'app' label in our namespace", "name", pod.Name)
+			t.logger.WarnContext(ctx, "Pod without an 'app' label in our namespace", "name", pod.Name)
 			continue
 		}
 		if !slices.Contains(servers, name) {
@@ -792,7 +797,7 @@ func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Resul
 		}
 		for _, condition := range pod.Status.Conditions {
 			if condition.Type == corev1.PodReady && condition.Status != corev1.ConditionTrue {
-				slog.Warn("Pod is not yet ready", "name", pod.Name, "reason", condition.Reason, "message", condition.Message)
+				t.logger.WarnContext(ctx, "Pod is not yet ready", "name", pod.Name, "reason", condition.Reason, "message", condition.Message)
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		}

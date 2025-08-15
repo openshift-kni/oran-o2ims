@@ -105,8 +105,6 @@ func (r *HardwarePluginReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			condReason = hwmgmtv1alpha1.ConditionReasons.Completed
 			condStatus = metav1.ConditionTrue
 			condMessage = fmt.Sprintf("Validated connection to %s", hwplugin.Spec.ApiRoot)
-			r.Logger.InfoContext(ctx, "HardwarePlugin validation successful",
-				slog.String("apiRoot", hwplugin.Spec.ApiRoot))
 		} else {
 			condReason = hwmgmtv1alpha1.ConditionReasons.Failed
 			condStatus = metav1.ConditionFalse
