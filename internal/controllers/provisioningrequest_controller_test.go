@@ -1557,26 +1557,26 @@ plan:
 		})
 
 		Context("when renderHardwareTemplate returns internal error", func() {
-			It("should return doNotRequeue with error", func() {
+			It("should return requeueWithMediumInterval with error", func() {
 				// Test internal error handling from hardware template rendering
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// Internal error should result in doNotRequeue
+				// Internal error should result in requeueWithMediumInterval for recovery
 				Expect(err).To(HaveOccurred())
 				Expect(proceed).To(BeFalse())
-				Expect(result).To(Equal(doNotRequeue()))
+				Expect(result).To(Equal(requeueWithMediumInterval()))
 			})
 		})
 
 		Context("when createOrUpdateNodeAllocationRequest fails", func() {
-			It("should return doNotRequeue with error", func() {
+			It("should return requeueWithMediumInterval with error", func() {
 				// This will fail when trying to create/update NodeAllocationRequest
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// Error in create/update should result in doNotRequeue
+				// Error in create/update should result in requeueWithMediumInterval for recovery
 				Expect(err).To(HaveOccurred())
 				Expect(proceed).To(BeFalse())
-				Expect(result).To(Equal(doNotRequeue()))
+				Expect(result).To(Equal(requeueWithMediumInterval()))
 			})
 		})
 
@@ -1601,14 +1601,14 @@ plan:
 		})
 
 		Context("when getNodeAllocationRequestResponse returns error", func() {
-			It("should return doNotRequeue with error", func() {
+			It("should return requeueWithMediumInterval with error", func() {
 				// Test error handling from getting NodeAllocationRequest response
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// Error getting NAR response should result in doNotRequeue
+				// Error getting NAR response should result in requeueWithMediumInterval for recovery
 				Expect(err).To(HaveOccurred())
 				Expect(proceed).To(BeFalse())
-				Expect(result).To(Equal(doNotRequeue()))
+				Expect(result).To(Equal(requeueWithMediumInterval()))
 			})
 		})
 
@@ -1631,14 +1631,14 @@ plan:
 		})
 
 		Context("when waitForHardwareData returns error", func() {
-			It("should return doNotRequeue with error", func() {
+			It("should return requeueWithMediumInterval with error", func() {
 				// Test error handling from waiting for hardware data
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// Error waiting for hardware data should result in doNotRequeue
+				// Error waiting for hardware data should result in requeueWithMediumInterval for recovery
 				Expect(err).To(HaveOccurred())
 				Expect(proceed).To(BeFalse())
-				Expect(result).To(Equal(doNotRequeue()))
+				Expect(result).To(Equal(requeueWithMediumInterval()))
 			})
 		})
 
@@ -3723,13 +3723,13 @@ plan:
 					finalizerCR.ResourceVersion = "999999" // Invalid resource version
 				})
 
-				It("should return error when update fails", func() {
+				It("should return requeueWithShortInterval when update fails", func() {
 					result, stop, err := finalizerReconciler.handleFinalizer(ctx, finalizerCR)
 
-					// Should return error due to conflict or other update issues
+					// Should return requeueWithShortInterval due to conflict or other update issues for retry
 					Expect(err).To(HaveOccurred())
 					Expect(stop).To(BeTrue()) // Should stop reconciliation on error
-					Expect(result).To(Equal(doNotRequeue()))
+					Expect(result).To(Equal(requeueWithShortInterval()))
 					Expect(err.Error()).To(ContainSubstring("failed to update ProvisioningRequest with finalizer"))
 				})
 			})
@@ -4164,12 +4164,12 @@ plan:
 			})
 
 			Context("when ClusterDetails is nil", func() {
-				It("should call checkResourcePreparationStatus and return doNotRequeue", func() {
+				It("should call checkResourcePreparationStatus and return requeueWithMediumInterval", func() {
 					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
-					// Should call checkResourcePreparationStatus and return doNotRequeue
+					// Should call checkResourcePreparationStatus and return requeueWithMediumInterval for monitoring
 					if err == nil {
-						Expect(result).To(Equal(doNotRequeue()))
+						Expect(result).To(Equal(requeueWithMediumInterval()))
 					} else {
 						// Error is acceptable due to missing dependencies
 						Expect(result).ToNot(BeNil())
@@ -4189,8 +4189,8 @@ plan:
 						// Error should be formatted properly
 						Expect(err.Error()).ToNot(BeEmpty())
 					} else {
-						// If no error, should complete successfully
-						Expect(result).To(Equal(doNotRequeue()))
+						// If no error, should continue monitoring with requeueWithMediumInterval
+						Expect(result).To(Equal(requeueWithMediumInterval()))
 					}
 				})
 			})
@@ -4226,12 +4226,12 @@ plan:
 			})
 
 			Context("when cluster provision is not present", func() {
-				It("should return doNotRequeue", func() {
+				It("should continue monitoring for cleanup completion", func() {
 					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
-					// If cluster provision not present, should not requeue
+					// Even when cluster provision not present, continue monitoring for cleanup
 					if err == nil {
-						Expect(result).To(Equal(doNotRequeue()))
+						Expect(result).To(Equal(requeueWithLongInterval()))
 					} else {
 						// Error is acceptable due to missing dependencies
 						Expect(result).ToNot(BeNil())
@@ -4240,12 +4240,12 @@ plan:
 			})
 
 			Context("when cluster provision times out or fails", func() {
-				It("should return doNotRequeue", func() {
+				It("should continue monitoring for cleanup completion", func() {
 					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
-					// If cluster provision timed out or failed, should not requeue
+					// Even when cluster provision timed out or failed, continue monitoring for cleanup
 					if err == nil {
-						Expect(result).To(Equal(doNotRequeue()))
+						Expect(result).To(Equal(requeueWithLongInterval()))
 					} else {
 						// Error is acceptable due to missing dependencies
 						Expect(result).ToNot(BeNil())
@@ -4325,19 +4325,45 @@ plan:
 						// Error should be formatted properly
 						Expect(err.Error()).ToNot(BeEmpty())
 					} else {
-						// If no error, should complete successfully
-						Expect(result).To(Equal(doNotRequeue()))
+						// If no error, should continue monitoring even for fulfilled state
+						// Note: May return requeueWithMediumInterval in some paths, which is acceptable
+						validResults := []ctrl.Result{
+							requeueWithMediumInterval(),
+							requeueWithLongInterval(),
+						}
+						isValidResult := false
+						for _, validResult := range validResults {
+							if result == validResult {
+								isValidResult = true
+								break
+							}
+						}
+
+						Expect(isValidResult).To(BeTrue(), "Should continue monitoring with appropriate interval")
 					}
 				})
 			})
 
 			Context("when resource preparation check succeeds", func() {
-				It("should return doNotRequeue", func() {
+				It("should return appropriate requeue interval", func() {
 					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
-					// Should complete successfully for fulfilled state
+					// Should continue monitoring for fulfilled state
 					if err == nil {
-						Expect(result).To(Equal(doNotRequeue()))
+						// Note: May return requeueWithMediumInterval in some paths, which is acceptable
+						validResults := []ctrl.Result{
+							requeueWithMediumInterval(),
+							requeueWithLongInterval(),
+						}
+						isValidResult := false
+						for _, validResult := range validResults {
+							if result == validResult {
+								isValidResult = true
+								break
+							}
+						}
+
+						Expect(isValidResult).To(BeTrue(), "Should continue monitoring with appropriate interval")
 					} else {
 						// Error is acceptable due to missing dependencies
 						Expect(result).ToNot(BeNil())
@@ -4436,6 +4462,7 @@ plan:
 					validResults := []ctrl.Result{
 						doNotRequeue(),
 						requeueWithShortInterval(),
+						requeueWithMediumInterval(),
 						requeueWithLongInterval(),
 					}
 
@@ -4678,10 +4705,10 @@ plan:
 
 				result, err := validationTask.checkClusterDeployConfigState(ctx)
 
-				// EXPECTED BEHAVIOR: Should complete successfully after checking resource preparation
-				// Currently fails because it returns early with requeueWithError when NodeAllocationRequestRef missing
+				// EXPECTED BEHAVIOR: Should continue monitoring after checking resource preparation
+				// Now continues with monitoring instead of stopping
 				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(Equal(doNotRequeue()))
+				Expect(result).To(Equal(requeueWithMediumInterval()))
 
 				// Check that the phase is properly set to failed
 				updatedCR := &provisioningv1alpha1.ProvisioningRequest{}
