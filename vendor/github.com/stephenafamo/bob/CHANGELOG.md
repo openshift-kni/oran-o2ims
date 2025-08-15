@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.40.1] - 2025-08-14
+
+### Fixed
+
+- Fixed bug in preloading
+
+## [v0.40.0] - 2025-08-13
+
+### Added
+
+- Made code generation modular by relying on built-in plugins that can be enabled or disabled in the configuration.
+  - `dbinfo`: Generates code for information about each database. Schemas, tables, columns, indexes, primary keys, foreign keys, unique constraints, and check constraints.
+  - `enums`: Generates code for enums in a separate package, if there are any present.
+  - `models`: Generates code for models. Depends on `enums`.
+  - `factory`: Generates code for factories. Depends on `models`.
+  - `dberrors`: Generates code for unique constraint errors. Depends on `models`.
+  - `where`: Generates type-safe code for `WHERE` clauses in queries. Depends on `models`.
+  - `loaders`: Adds templates to the `models` package to generate code for loaders e.g `models.SelectThenLoad.Table.Rel()`.
+  - `joins`: Adds templates to the `models` package to generate code for joins e.g `models.SelectJoin.Table.LeftJoin.Rel`.
+  - `queries`: Generates code for queries.
+- Added new `types.Uint64` type that sends values to the database as strings. This is necessary because using `uint64` directly can cause an overflow if the value exceeds the maximum value of an `int64`. This is a limitation imposed by `database/sql/driver.Valuer` interface.
+- Added support for `pgvector` types during code generation.
+  - `pgvector.Vector`
+  - `pgvector.HalfVector`
+  - `pgvector.SparseVector`
+
+### Changed
+
+- Enums are now imported directly from a new generated `enums` package. This makes it easier to use enums in other packages without having to depend on the `models` package.
+- Preload functions now take a custom `orm.PreloadRel` struct instead of reusing `orm.Relationship`.
+- By default, factories are now generated in `./factory` instead of `./models/factory`.
+- Outputs are now determined by plugins which can be enabled or disabled in the configuration.
+- UniqueConstraintErrors are now generated in a separate `dberrors` package instead of being generated in the `models` package.
+- Tests in the generated `models` package are no longer generated in a separate `models_test` package. There is no longer any circular dependency since tests for the unique constraint errors are generated in the `dberrors` package.
+- `orm.Columns` has been moved to `expr.ColumnsExpr`.
+- `orm.NewColumns` has been moved to `expr.NewColumnsExpr`.
+- `<Table>.Columns()` is removed. The columns expression is now expected to be embedded in the `Columns` field of the `<Table>` struct.
+- `<dialect>.View` and `<dialect>.Table` now take an additional type parameter for the columns type. This is assigned to the `Columns` field with `NewView/NewTable` functions.
+
+### Removed
+
+- Removed the `no_factory` configuration option. It is now replaced with the `factory` plugin which can be enabled or disabled. See <https://bob.stephenafamo.com/docs/code-generation/configuration#plugins-configuration> for more details.
+- Removed the `Only` and `Except` exported functions in `orm`. They are now in the private `internal` package.
+- Removed the generated `models.<Model>Columns` global variable. It can now be accessed through `models.<Table>.Columns`.
+- Removed the generated `models.TableNames` and `models.ColumnNames` global variables. Their use can be replaced with the `dbinfo` plugin which generates a `dbinfo` package with all the information about the database.
+
+### Fixed
+
+- Fixed issue with redundant title casing column names in query templates. (thanks @luiscleto)
+- Fix invalid expression with pointer-based type systems. (thanks @tak848)
+- Fix panic when parsing SQLite `UPDATE` queries that do not contain a `FROM` clause.
+- Fix issue when using enums in generated queries.
+- Fix randomization of floats and decimals in the factory.
+- Fix JSON data being incorrectly hex-encoded as bytea when using pgx through simple protocol, causing PostgreSQL to reject it with invalid input syntax errors. (by @Maxitosh)
+- Fix issue with preload queries not using a defined schema on the related tables
+
 ## [v0.39.0] - 2025-07-28
 
 ### Added
@@ -149,7 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added tests to check that the generated factory can create models and save into the database.
 - Added the `pgtypes.Snapshot` type for the `pg_snapshot` and `txid_snapshot` type in PostgreSQL.
 - Added a custom `Time` type to the `types` package. This is motivated by the fact that the `libsql` driver does not support the `time.Time` type properly.
-- Added an option to disable aliasing when expressing `orm.Columns`. Also added `EnableAlias` and `DisableAlias` methods to `orm.Columns` to control this behavior.
+- Added an option to disable aliasing when expressing `expr.Columns`. Also added `EnableAlias` and `DisableAlias` methods to `expr.Columns` to control this behavior.
 - Added a `PrimaryKey` method to `{dialect}.Table` to get the primary key columns of the table.
 
 ### Changed
