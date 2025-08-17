@@ -177,7 +177,9 @@ func DownloadFile(rawUrl, filename, dirpath string) error {
 
 func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
 	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", ctlrutils.UnitTestHwmgrNamespace, npName, nil)
-	secrets := CreateSecrets([]string{BmcSecretName}, ctlrutils.UnitTestHwmgrNamespace)
+	// Create both the standard secret and the mock server expected secrets
+	secretNames := []string{BmcSecretName, "test-node-1-bmc-secret", "master-node-2-bmc-secret"}
+	secrets := CreateSecrets(secretNames, ctlrutils.UnitTestHwmgrNamespace)
 	CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 }
 

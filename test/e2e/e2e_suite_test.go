@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/api/common"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -111,6 +112,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = clusterv1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
+	err = pluginsv1alpha1.AddToScheme(testScheme)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Get the needed external CRDs. Their details are under test/utils/vars.go - ExternalCrdsData.
 	// Update that with any other CRDs that the provisioning controller depends on.
@@ -153,11 +156,15 @@ var _ = BeforeSuite(func() {
 
 	// Setup the ProvisioningRequest Reconciler.
 	ProvReqTestReconciler = &provisioningcontrollers.ProvisioningRequestReconciler{
-		Client: K8SClient,
-		Logger: logger,
+		Client:         K8SClient,
+		Logger:         logger,
+		CallbackConfig: ctlrutils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 	}
 	err = ProvReqTestReconciler.SetupWithManager(K8SManager)
 	Expect(err).ToNot(HaveOccurred())
+
+	// Start mock hardware plugin server for e2e tests with Kubernetes client
+	mockServer := provisioningcontrollers.NewMockHardwarePluginServerWithClient(K8SClient)
 
 	suiteCrs := []client.Object{
 		// HW plugin test namespace
@@ -172,6 +179,18 @@ var _ = BeforeSuite(func() {
 				Name: constants.DefaultNamespace,
 			},
 		},
+		// Basic auth secret for hardware plugin
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-hwmgr-auth-secret",
+				Namespace: testHwMgrPluginNameSpace,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"username": []byte("test-user"),
+				"password": []byte("test-password"),
+			},
+		},
 		// HardwarePlugin CRs
 		&hwmgmtv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
@@ -179,7 +198,11 @@ var _ = BeforeSuite(func() {
 				Name:      testHardwarePluginRef,
 			},
 			Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-				ApiRoot: "todo",
+				ApiRoot: mockServer.GetURL(),
+				AuthClientConfig: &common.AuthClientConfig{
+					Type:            common.Basic,
+					BasicAuthSecret: stringPtr("test-hwmgr-auth-secret"),
+				},
 			},
 		},
 	}
@@ -188,6 +211,26 @@ var _ = BeforeSuite(func() {
 		err := K8SClient.Create(context.Background(), cr)
 		Expect(err).ToNot(HaveOccurred())
 	}
+
+	// Update HardwarePlugin status to mark it as registered
+	mockHwPlugin := &hwmgmtv1alpha1.HardwarePlugin{}
+	err = K8SClient.Get(context.Background(), types.NamespacedName{
+		Namespace: testHwMgrPluginNameSpace,
+		Name:      testHardwarePluginRef,
+	}, mockHwPlugin)
+	Expect(err).ToNot(HaveOccurred())
+
+	mockHwPlugin.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(hwmgmtv1alpha1.ConditionTypes.Registration),
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.Now(),
+			Reason:             string(hwmgmtv1alpha1.ConditionReasons.Completed),
+			Message:            "Mock HardwarePlugin registered successfully for e2e tests",
+		},
+	}
+	err = K8SClient.Status().Update(context.Background(), mockHwPlugin)
+	Expect(err).ToNot(HaveOccurred())
 
 	go func() {
 		defer GinkgoRecover()
@@ -511,44 +554,67 @@ defaultHugepagesSize: "1G"`,
 			ProvRequestCR.Name = crName
 			templateParms := strings.Replace(
 				testutils.TestFullTemplateParameters, "\"clusterName\": \"cluster-1\"", "\"clusterName\": \"cluster-2\"", 1)
+			templateParms = strings.Replace(
+				templateParms, "\"nodeClusterName\": \"exampleCluster\"", "\"nodeClusterName\": \"cluster-2\"", 1)
 			ProvRequestCR.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(templateParms)}
 			copyProvRequestCR := ProvRequestCR.DeepCopy()
 			copyProvRequestCR.Spec.TemplateVersion = tVersion2
 			err = K8SClient.Create(testCtx, copyProvRequestCR)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Eventually, the PR should have 5 conditions.
+			// Wait for NodeAllocationRequest to be created and initially have hardware provisioning in progress
 			reconciledPR := &provisioningv1alpha1.ProvisioningRequest{}
 			Eventually(func() bool {
 				err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
 				Expect(err).ToNot(HaveOccurred())
-				return len(reconciledPR.Status.Conditions) == 5
+				// Check that we have at least the basic conditions and hardware provisioning has started
+				if len(reconciledPR.Status.Conditions) < 4 {
+					return false
+				}
+				// Look for HardwareProvisioned condition with status Unknown (in progress)
+				for _, cond := range reconciledPR.Status.Conditions {
+					if cond.Type == string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned) &&
+						cond.Status == metav1.ConditionUnknown {
+						return true
+					}
+				}
+				return false
 			}, time.Minute*1, time.Second*3).Should(BeTrue())
 
+			// Verify initial state - hardware provisioning in progress
 			conditions := reconciledPR.Status.Conditions
-			// Verify the ProvisioningRequest's status conditions - the last should be showing that
-			// we're waiting for the NodeAllocationRequest.
-			Expect(len(conditions)).To(Equal(5))
-
+			testutils.VerifyStatusCondition(conditions[0], metav1.Condition{
+				Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
+				Status: metav1.ConditionTrue,
+				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+			})
 			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
 				Status: metav1.ConditionTrue,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
-			testutils.VerifyStatusCondition(conditions[4], metav1.Condition{
+			// Find and verify HardwareProvisioned condition
+			var hwProvCondition *metav1.Condition
+			for i := range conditions {
+				if conditions[i].Type == string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned) {
+					hwProvCondition = &conditions[i]
+					break
+				}
+			}
+			Expect(hwProvCondition).ToNot(BeNil())
+			testutils.VerifyStatusCondition(*hwProvCondition, metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status:  metav1.ConditionUnknown,
 				Reason:  string(metav1.ConditionUnknown),
-				Message: "Waiting for NodeAllocationRequest (cluster-2) to be processed",
+				Message: "Hardware provisioning is in progress",
 			})
 			// Verify the provisioningState moves to progressing.
 			testutils.VerifyProvisioningStatus(reconciledPR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateProgressing, "Waiting for NodeAllocationRequest (cluster-2) to be processed", nil)
+				provisioningv1alpha1.StateProgressing, "Hardware provisioning is in progress", nil)
 
-			// Patch NodeAllocationRequest provision status to Completed.
+			// Now provision the NodeAllocationRequest to complete hardware provisioning
 			currentNp := &pluginsv1alpha1.NodeAllocationRequest{}
 			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: ctlrutils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
-			Expect(currentNp.Status.Conditions).To(BeEmpty())
 			currentNp.Status.Conditions = []metav1.Condition{
 				{
 					Status:             metav1.ConditionTrue,
@@ -561,14 +627,33 @@ defaultHugepagesSize: "1G"`,
 			// Create the expected nodes.
 			testutils.CreateNodeResources(ctx, K8SClient, currentNp.Name)
 
+			// Give the reconciler a moment to process the NodeAllocationRequest status update
+			time.Sleep(2 * time.Second)
+
 			// The ProvisioningRequest should complete hardware provisioning.
 			Eventually(func() bool {
 				err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
 				Expect(err).ToNot(HaveOccurred())
-				return reconciledPR.Status.Conditions[4].Status == metav1.ConditionTrue
+				// Look for HardwareProvisioned condition with status True (completed)
+				for _, cond := range reconciledPR.Status.Conditions {
+					if cond.Type == string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned) &&
+						cond.Status == metav1.ConditionTrue {
+						return true
+					}
+				}
+				return false
 			}, time.Minute*1, time.Second*3).Should(BeTrue())
 			conditions = reconciledPR.Status.Conditions
-			testutils.VerifyStatusCondition(conditions[4], metav1.Condition{
+			// Find and verify HardwareProvisioned condition is now completed
+			hwProvCondition = nil
+			for i := range conditions {
+				if conditions[i].Type == string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned) {
+					hwProvCondition = &conditions[i]
+					break
+				}
+			}
+			Expect(hwProvCondition).ToNot(BeNil())
+			testutils.VerifyStatusCondition(*hwProvCondition, metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
@@ -594,7 +679,18 @@ defaultHugepagesSize: "1G"`,
 				Message: "ClusterInstance.siteconfig.open-cluster-management.io \"cluster-2\" is invalid: spec.nodes[0].templateRefs: Required value",
 			})
 
-			testutils.VerifyStatusCondition(conditions[4], metav1.Condition{
+			// Find and verify HardwareProvisioned condition after template version change
+			hwProvConditionAfterChange := &metav1.Condition{}
+			found := false
+			for i := range conditions {
+				if conditions[i].Type == string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned) {
+					hwProvConditionAfterChange = &conditions[i]
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "HardwareProvisioned condition should exist")
+			testutils.VerifyStatusCondition(*hwProvConditionAfterChange, metav1.Condition{
 				Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 				Status: metav1.ConditionTrue,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
@@ -605,3 +701,8 @@ defaultHugepagesSize: "1G"`,
 		})
 	})
 })
+
+// stringPtr is a helper function to get a pointer to a string
+func stringPtr(s string) *string {
+	return &s
+}

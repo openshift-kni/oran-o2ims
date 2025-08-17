@@ -545,7 +545,7 @@ deps-update:
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-crd-watcher bundle-check
+ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-e2e test-crd-watcher bundle-check
 
 .PHONY: clean
 clean:

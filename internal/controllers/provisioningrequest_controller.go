@@ -447,6 +447,23 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		}
 		return doNotRequeue(), nil
 	}
+
+	// Always check resource preparation status to detect any failed conditions
+	// (e.g., ClusterInstanceRendered failures after hardware provisioning succeeds)
+	if err = t.checkResourcePreparationStatus(ctx); err != nil {
+		return requeueWithError(err)
+	}
+
+	// If resource preparation check set the state to failed due to validation errors, stop processing
+	// Only stop for persistent validation failures, not temporary cluster installation issues
+	if t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed {
+		// Check if this is a validation failure (persistent) vs installation issue (temporary)
+		if cond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered)); cond != nil && cond.Status == metav1.ConditionFalse && strings.Contains(cond.Message, "Required value") {
+			// This is a persistent validation error that won't resolve by itself
+			return doNotRequeue(), nil
+		}
+		// For other failures (like cluster installation restrictions), continue processing
+	}
 	err = t.checkClusterProvisionStatus(
 		ctx, t.object.Status.Extensions.ClusterDetails.Name)
 	if err != nil {

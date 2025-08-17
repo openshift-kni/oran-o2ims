@@ -92,6 +92,8 @@ cluster template validation through complete cluster deployment and configuratio
 package controllers
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -136,9 +138,6 @@ const testHwMgrPluginNameSpace = "hwmgr"
 const testMetal3HardwarePluginRef = "hwmgr"
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	// Start mock hardware plugin server for tests
-	mockServer := NewMockHardwarePluginServer()
-
 	// Create a basic auth secret for test authentication
 	basicAuthSecret := "test-auth-secret"
 	authSecret := &corev1.Secret{
@@ -153,30 +152,40 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		},
 	}
 
-	// Create BMC secrets that tests expect for allocated nodes
-	bmcSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-node-1-bmc-secret",
-			Namespace: testHwMgrPluginNameSpace,
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			"username": []byte("admin"),
-			"password": []byte("password123"),
-		},
-	}
+	// Note: BMC secrets are created by individual tests in their BeforeEach blocks
+	// to avoid resource conflicts between tests
 
-	bmcSecret2 := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "master-node-2-bmc-secret",
-			Namespace: testHwMgrPluginNameSpace,
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			"username": []byte("admin"),
-			"password": []byte("password123"),
-		},
-	}
+	// First create the fake client
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objs...).
+		WithObjects([]client.Object{authSecret}...).
+		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
+		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
+		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
+		WithStatusSubresource(&siteconfig.ClusterInstance{}).
+		WithStatusSubresource(&clusterv1.ManagedCluster{}).
+		WithStatusSubresource(&hwmgmtv1alpha1.HardwareTemplate{}).
+		WithStatusSubresource(&pluginsv1alpha1.NodeAllocationRequest{}).
+		WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
+		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
+		WithStatusSubresource(&policiesv1.Policy{}).
+		WithStatusSubresource(&clusterv1.ManagedCluster{}).
+		WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+			return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+		}).
+		WithIndex(&bmhv1alpha1.BareMetalHost{}, "status.hardware.hostname", func(obj client.Object) []string {
+			bmh := obj.(*bmhv1alpha1.BareMetalHost)
+			if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname != "" {
+				return []string{bmh.Status.HardwareDetails.Hostname}
+			}
+			return nil
+		}).
+		Build()
+
+	// Start mock hardware plugin server for tests with the client
+	mockServer := NewMockHardwarePluginServerWithClient(fakeClient)
 
 	// Add fake Metal3 hardware plugin CR pointing to mock server with Basic auth
 	metal3HwPlugin := &hwmgmtv1alpha1.HardwarePlugin{
@@ -204,33 +213,13 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		},
 	}
 
-	return fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(objs...).
-		WithObjects([]client.Object{metal3HwPlugin, authSecret, bmcSecret, bmcSecret2}...).
-		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
-		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
-		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
-		WithStatusSubresource(&siteconfig.ClusterInstance{}).
-		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithStatusSubresource(&hwmgmtv1alpha1.HardwareTemplate{}).
-		WithStatusSubresource(&pluginsv1alpha1.NodeAllocationRequest{}).
-		WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
-		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
-		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
-		WithStatusSubresource(&policiesv1.Policy{}).
-		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-			return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
-		}).
-		WithIndex(&bmhv1alpha1.BareMetalHost{}, "status.hardware.hostname", func(obj client.Object) []string {
-			bmh := obj.(*bmhv1alpha1.BareMetalHost)
-			if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname != "" {
-				return []string{bmh.Status.HardwareDetails.Hostname}
-			}
-			return []string{}
-		}).
-		Build()
+	// Add the hardware plugin to the client
+	err := fakeClient.Create(context.Background(), metal3HwPlugin)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create hardware plugin: %v", err))
+	}
+
+	return fakeClient
 }
 
 // Logger used for tests:

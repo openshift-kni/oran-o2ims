@@ -56,13 +56,21 @@ hardware plugin API interactions without requiring a real hardware plugin server
 package controllers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 const (
@@ -75,6 +83,7 @@ type MockHardwarePluginServer struct {
 	server                 *httptest.Server
 	nodeAllocationRequests map[string]*hwmgrpluginapi.NodeAllocationRequestResponse
 	allocatedNodes         map[string][]hwmgrpluginapi.AllocatedNode
+	k8sClient              client.Client
 }
 
 // NewMockHardwarePluginServer creates and starts a new mock hardware plugin server
@@ -82,6 +91,17 @@ func NewMockHardwarePluginServer() *MockHardwarePluginServer {
 	mock := &MockHardwarePluginServer{
 		nodeAllocationRequests: make(map[string]*hwmgrpluginapi.NodeAllocationRequestResponse),
 		allocatedNodes:         make(map[string][]hwmgrpluginapi.AllocatedNode),
+	}
+
+	return mock
+}
+
+// NewMockHardwarePluginServerWithClient creates and starts a new mock hardware plugin server with Kubernetes client
+func NewMockHardwarePluginServerWithClient(k8sClient client.Client) *MockHardwarePluginServer {
+	mock := &MockHardwarePluginServer{
+		nodeAllocationRequests: make(map[string]*hwmgrpluginapi.NodeAllocationRequestResponse),
+		allocatedNodes:         make(map[string][]hwmgrpluginapi.AllocatedNode),
+		k8sClient:              k8sClient,
 	}
 
 	// Setup default mock data
@@ -266,26 +286,31 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 			return
 		}
 
-		// For tests, use testClusterID as the default ID to match test expectations
-		// Each test should be isolated, so we can reuse testClusterID
-		requestID := testClusterID
+		// Use the ClusterId from the request as the NodeAllocationRequestID
+		// This ensures each cluster gets its own unique NodeAllocationRequest
+		requestID := request.ClusterId
 
 		// Store the request
 		response := &hwmgrpluginapi.NodeAllocationRequestResponse{
 			NodeAllocationRequest: &request,
 			Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
-				Conditions: &[]hwmgrpluginapi.Condition{
-					{
-						Type:               "Provisioned",
-						Status:             "False",
-						Reason:             "InProgress",
-						Message:            "Hardware provisioning in progress",
-						LastTransitionTime: time.Now(),
-					},
-				},
+				// No conditions initially - hardware provisioning hasn't started yet
+				// This matches real hardware plugin behavior where conditions are added later
+				Conditions: &[]hwmgrpluginapi.Condition{},
 			},
 		}
 		m.nodeAllocationRequests[requestID] = response
+
+		// Create Kubernetes NodeAllocationRequest resource if k8sClient is available
+		if m.k8sClient != nil {
+			if err := m.createKubernetesNodeAllocationRequest(r.Context(), &request, requestID); err != nil {
+				// Log the error for debugging but continue
+				fmt.Printf("DEBUG: Failed to create K8s NodeAllocationRequest %s: %v\n", requestID, err)
+			} else {
+				// Success case - log for debugging
+				fmt.Printf("DEBUG: Successfully created K8s NodeAllocationRequest %s in namespace %s\n", requestID, ctlrutils.UnitTestHwmgrNamespace)
+			}
+		}
 
 		// Automatically create default allocated nodes for this request
 		if _, exists := m.allocatedNodes[requestID]; !exists {
@@ -458,6 +483,10 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 
 		// Return specific NodeAllocationRequest
 		if response, exists := m.nodeAllocationRequests[requestID]; exists {
+			// Check if we should update the status to simulate hardware provisioning completion
+			// This simulates the behavior of real hardware plugins that update status when AllocatedNodes are created
+			m.updateNodeAllocationRequestStatus(requestID, response)
+
 			if err := json.NewEncoder(w).Encode(response); err != nil {
 				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 				return
@@ -532,4 +561,88 @@ func (m *MockHardwarePluginServer) SetNodeAllocationRequest(id string, response 
 // SetAllocatedNodes allows tests to set up specific allocated nodes
 func (m *MockHardwarePluginServer) SetAllocatedNodes(nodeAllocationRequestID string, nodes []hwmgrpluginapi.AllocatedNode) {
 	m.allocatedNodes[nodeAllocationRequestID] = nodes
+}
+
+// updateNodeAllocationRequestStatus simulates the status update that would occur when AllocatedNodes are created
+func (m *MockHardwarePluginServer) updateNodeAllocationRequestStatus(requestID string, response *hwmgrpluginapi.NodeAllocationRequestResponse) {
+	// If no conditions exist, this simulates the initial state
+	if response.Status == nil || response.Status.Conditions == nil || len(*response.Status.Conditions) == 0 {
+		// Check if we have Kubernetes AllocatedNode resources for this request
+		if m.k8sClient != nil {
+			hasAllocatedNodes := m.checkForAllocatedNodes(requestID)
+			if hasAllocatedNodes {
+				// Simulate the transition to Provisioned=True
+				conditions := []hwmgrpluginapi.Condition{
+					{
+						Type:               string(hwmgmtv1alpha1.Provisioned),
+						Status:             string(metav1.ConditionTrue),
+						Reason:             string(hwmgmtv1alpha1.Completed),
+						Message:            "Hardware provisioning completed",
+						LastTransitionTime: time.Now(),
+					},
+				}
+				if response.Status == nil {
+					response.Status = &hwmgrpluginapi.NodeAllocationRequestStatus{}
+				}
+				response.Status.Conditions = &conditions
+			}
+		}
+	}
+}
+
+// checkForAllocatedNodes checks if AllocatedNode resources exist for the given request
+func (m *MockHardwarePluginServer) checkForAllocatedNodes(requestID string) bool {
+	if m.k8sClient == nil {
+		return false
+	}
+
+	// Check if any AllocatedNode resources exist for this NodeAllocationRequest
+	allocatedNodeList := &pluginsv1alpha1.AllocatedNodeList{}
+	err := m.k8sClient.List(context.Background(), allocatedNodeList, client.InNamespace(ctlrutils.UnitTestHwmgrNamespace))
+	if err != nil {
+		return false
+	}
+
+	for _, node := range allocatedNodeList.Items {
+		if node.Spec.NodeAllocationRequest == requestID {
+			return true
+		}
+	}
+	return false
+}
+
+// createKubernetesNodeAllocationRequest creates a Kubernetes NodeAllocationRequest resource
+func (m *MockHardwarePluginServer) createKubernetesNodeAllocationRequest(ctx context.Context, request *hwmgrpluginapi.NodeAllocationRequest, requestID string) error {
+	// Convert the hardware plugin API request to Kubernetes NodeAllocationRequest
+	k8sNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      requestID,
+			Namespace: ctlrutils.UnitTestHwmgrNamespace,
+		},
+		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+			ClusterId:          request.ClusterId,
+			BootInterfaceLabel: request.BootInterfaceLabel,
+		},
+	}
+
+	// Convert NodeGroup data
+	if request.NodeGroup != nil {
+		for _, group := range request.NodeGroup {
+			k8sNodeGroup := pluginsv1alpha1.NodeGroup{
+				Size: group.NodeGroupData.Size,
+				NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+					Name:      group.NodeGroupData.Name,
+					Role:      group.NodeGroupData.Role,
+					HwProfile: group.NodeGroupData.HwProfile,
+				},
+			}
+			k8sNodeAllocationRequest.Spec.NodeGroup = append(k8sNodeAllocationRequest.Spec.NodeGroup, k8sNodeGroup)
+		}
+	}
+
+	// Create the Kubernetes resource
+	if err := m.k8sClient.Create(ctx, k8sNodeAllocationRequest); err != nil {
+		return fmt.Errorf("failed to create NodeAllocationRequest: %w", err)
+	}
+	return nil
 }
