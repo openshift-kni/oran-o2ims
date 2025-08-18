@@ -375,12 +375,5 @@ var (
 			"owner":       "openshift-kni",
 			"crdFileName": "lcm.openshift.io_imagebasedgroupupgrades.yaml",
 		},
-		{
-			"repoName":    "oran-hwmgr-plugin",
-			"modName":     "github.com/openshift-kni",
-			"crdPath":     "config/crd/bases",
-			"owner":       "openshift-kni",
-			"crdFileName": "hwmgr-plugin.oran.openshift.io_hardwaremanagers.yaml",
-		},
 	}
 )
