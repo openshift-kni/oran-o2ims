@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster"
@@ -27,6 +28,13 @@ var clusterServer = &cobra.Command{
 	Use:   "serve",
 	Short: "Start cluster server",
 	Run: func(cmd *cobra.Command, args []string) {
+		// Configure structured logging for this service
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
+		slog.SetDefault(logger)
+		klog.SetSlogLogger(logger)
+
 		if err := config.LoadFromEnv(); err != nil {
 			slog.Error("failed to load environment variables", "err", err)
 			os.Exit(1)

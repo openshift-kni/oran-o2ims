@@ -38,8 +38,11 @@ const (
 )
 
 // Serve starts the Metal3 HardwarePlugin API server and blocks until it terminates or context is canceled.
-func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient client.Client) error {
-	slog.Info("Initializing the Metal3 HardwarePlugin server")
+func Serve(ctx context.Context, logger *slog.Logger, config svcutils.CommonServerConfig, hubClient client.Client) error {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.InfoContext(ctx, "Initializing the Metal3 HardwarePlugin server")
 
 	// Retrieve the OpenAPI spec file
 	provisioningAPIswagger, err := provisioning.GetSwagger()
@@ -176,7 +179,7 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 	// Start server
 	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
+		logger.InfoContext(ctx, "Server listening", "address", srv.Addr)
 		// Cert/Key files aren't needed here since they've been added to the tls.Config above.
 		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
@@ -187,9 +190,9 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 		// Cancel the context in case it wasn't already canceled
 		cancel()
 		// Shutdown the Metal3 HardwarePlugin server
-		slog.Info("Shutting down Metal3 HardwarePlugin server")
+		logger.InfoContext(ctx, "Shutting down Metal3 HardwarePlugin server")
 		if err := common.GracefulShutdown(srv); err != nil {
-			slog.Error("error shutting down Metal3 HardwarePlugin server", "error", err)
+			logger.ErrorContext(ctx, "Error shutting down Metal3 HardwarePlugin server", "error", err)
 		}
 	}()
 
@@ -198,7 +201,7 @@ func Serve(ctx context.Context, config svcutils.CommonServerConfig, hubClient cl
 	case err := <-serverErrors:
 		return fmt.Errorf("error starting Metal3 HardwarePlugin server: %w", err)
 	case <-ctx.Done():
-		slog.Info("Process shutting down Metal3 HardwarePlugin server")
+		logger.InfoContext(ctx, "Process shutting down Metal3 HardwarePlugin server")
 	}
 
 	return nil

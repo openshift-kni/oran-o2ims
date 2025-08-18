@@ -28,7 +28,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
-	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 var (
@@ -119,6 +118,10 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	// Set the logger from context
 	logger := internal.LoggerFromContext(ctx)
+
+	// Configure klog to use our structured logger for vendor modules:
+	klog.SetSlogLogger(logger)
+
 	logAdapter := logr.FromSlogHandler(logger.Handler())
 	ctrl.SetLogger(logAdapter)
 	klog.SetLogger(logAdapter)
@@ -159,7 +162,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	hardwarePluginReconciler := &hwmgrcontroller.HardwarePluginReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Logger: slog.New(logging.NewLoggingContextHandler(slog.LevelInfo)).With(slog.String("controller", "HardwarePlugin")),
+		Logger: logger.With("controller", "HardwarePlugin"),
 	}
 
 	// Start the HardwarePlugin controller

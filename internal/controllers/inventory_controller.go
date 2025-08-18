@@ -39,6 +39,7 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -117,11 +118,15 @@ const registerOnRestartAnnotation = "ocloud.openshift.io/register-on-restart"
 var registerOnRestart = false
 
 // setRegisterOnRestart initializes the `registerOnRestart` value from an annotation.
-func setRegisterOnRestart(object *inventoryv1alpha1.Inventory) {
+func setRegisterOnRestart(ctx context.Context, object *inventoryv1alpha1.Inventory) {
 	if annotation, ok := object.Annotations[registerOnRestartAnnotation]; ok {
 		if value, err := strconv.ParseBool(annotation); err == nil {
 			registerOnRestart = value
-			slog.Warn("SMO registration will be repeated on all subsequent restarts")
+			logger := slog.Default()
+			if ctxLogger := internal.LoggerFromContext(ctx); ctxLogger != nil {
+				logger = ctxLogger
+			}
+			logger.WarnContext(ctx, "SMO registration will be repeated on all subsequent restarts")
 		}
 	}
 }
@@ -137,23 +142,45 @@ func setRegisterOnRestart(object *inventoryv1alpha1.Inventory) {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (result ctrl.Result,
 	err error) {
+	startTime := time.Now()
+	result = ctrl.Result{RequeueAfter: 5 * time.Minute}
+
+	// Add standard reconciliation context
+	ctx = ctlrutils.LogReconcileStart(ctx, r.Logger, request, "Inventory")
+
+	defer func() {
+		duration := time.Since(startTime)
+		if err != nil {
+			r.Logger.ErrorContext(ctx, "Reconciliation failed",
+				slog.Duration("duration", duration),
+				slog.String("error", err.Error()))
+		} else {
+			r.Logger.InfoContext(ctx, "Reconciliation completed",
+				slog.Duration("duration", duration),
+				slog.Bool("requeue", result.Requeue),
+				slog.Duration("requeueAfter", result.RequeueAfter))
+		}
+	}()
+
 	// Fetch the object:
 	object := &inventoryv1alpha1.Inventory{}
-	if err := r.Client.Get(ctx, request.NamespacedName, object); err != nil {
+	if err = r.Client.Get(ctx, request.NamespacedName, object); err != nil {
 		if errors.IsNotFound(err) {
+			r.Logger.InfoContext(ctx, "Inventory not found, assuming deleted")
 			err = nil
-			return ctrl.Result{RequeueAfter: 5 * time.Minute}, err
+			return
 		}
-		r.Logger.ErrorContext(
-			ctx,
-			"Unable to fetch Inventory",
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, r.Logger, "Unable to fetch Inventory", err)
+		return
 	}
+
+	// Add object-specific context
+	ctx = ctlrutils.AddObjectContext(ctx, object)
+	r.Logger.InfoContext(ctx, "Fetched Inventory successfully")
 
 	// On the first reconcile, we set the `registerOnRestart` value from an annotation.  This is a one-time operation
 	// since we don't want to repeat the registration on every reconcile loop if it was previously successful.
-	r.setupOnce.Do(func() { setRegisterOnRestart(object) })
+	r.setupOnce.Do(func() { setRegisterOnRestart(ctx, object) })
 
 	// Create and run the task:
 	task := &reconcilerTask{
@@ -603,7 +630,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 		config.TLSConfig.ClientCert = ctlrutils.NewStaticKeyPairLoader(cert, key)
 	}
 
-	httpClient, err := ctlrutils.SetupOAuthClient(ctx, &config)
+	httpClient, err := ctlrutils.SetupOAuthClient(ctx, t.logger, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)
 	}
@@ -762,7 +789,7 @@ func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Resul
 	for _, pod := range list.Items {
 		name, ok := pod.Labels["app"]
 		if !ok {
-			slog.Warn("Pod without an 'app' label in our namespace", "name", pod.Name)
+			t.logger.WarnContext(ctx, "Pod without an 'app' label in our namespace", "name", pod.Name)
 			continue
 		}
 		if !slices.Contains(servers, name) {
@@ -770,7 +797,7 @@ func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Resul
 		}
 		for _, condition := range pod.Status.Conditions {
 			if condition.Type == corev1.PodReady && condition.Status != corev1.ConditionTrue {
-				slog.Warn("Pod is not yet ready", "name", pod.Name, "reason", condition.Reason, "message", condition.Message)
+				t.logger.WarnContext(ctx, "Pod is not yet ready", "name", pod.Name, "reason", condition.Reason, "message", condition.Message)
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		}
@@ -784,107 +811,139 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	// Set the default reconcile time to 5 minutes.
 	nextReconcile = ctrl.Result{RequeueAfter: 5 * time.Minute}
 
+	// Phase 1: Infrastructure setup (ingress domain and cluster ID)
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "infrastructure_setup")
+	phaseStartTime := time.Now()
+
 	err = t.storeIngressDomain(ctx)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to store ingress domain", err)
 		return
 	}
 
 	if t.object.Status.ClusterID == "" {
 		err = t.storeClusterID(ctx)
 		if err != nil {
+			ctlrutils.LogError(ctx, t.logger, "Failed to store cluster ID", err)
 			return
 		}
 	}
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "infrastructure_setup", time.Since(phaseStartTime))
 
-	// Create the database
+	// Phase 2: Database setup
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "database_setup")
+	phaseStartTime = time.Now()
+
 	err = t.createDatabase(ctx)
 	if updateError := t.updateInventoryUsedConfigStatus(ctx, ctlrutils.InventoryDatabaseServerName,
 		nil, ctlrutils.InventoryConditionReasons.DatabaseDeploymentFailed, err); updateError != nil {
-		t.logger.ErrorContext(ctx, "Failed to report database status", slog.String("error", updateError.Error()))
+		ctlrutils.LogError(ctx, t.logger, "Failed to report database status", updateError)
 		return nextReconcile, updateError
 	}
 
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to create database.",
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, t.logger, "Failed to create database", err)
 		return
 	}
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "database_setup", time.Since(phaseStartTime))
+
+	// Phase 3: Networking and RBAC setup
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "networking_rbac_setup")
+	phaseStartTime = time.Now()
 
 	err = t.createIngress(ctx)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy Ingress.",
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, t.logger, "Failed to deploy Ingress", err)
 		return
 	}
 
 	// Create the shared cluster role for each of the servers
 	err = t.createSharedRbacRole(ctx)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to deploy RBAC cluster role.",
-			slog.String("error", err.Error()),
-		)
+		ctlrutils.LogError(ctx, t.logger, "Failed to deploy RBAC cluster role", err)
 		return
 	}
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "networking_rbac_setup", time.Since(phaseStartTime))
 
-	// Start the resource server
-	// Create the resources required by the resource server
+	// Phase 4: O2IMS Servers setup
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "o2ims_servers_setup")
+	phaseStartTime = time.Now()
+
+	// Setup Resource Server
+	t.logger.InfoContext(ctx, "Setting up Resource Server")
 	nextReconcile, err = t.setupResourceServerConfig(ctx, nextReconcile)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup Resource Server", err)
 		return
 	}
 
-	// Start the cluster server
-	// Create the resources required by the cluster server
+	// Setup Cluster Server
+	t.logger.InfoContext(ctx, "Setting up Cluster Server")
 	nextReconcile, err = t.setupClusterServerConfig(ctx, nextReconcile)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup Cluster Server", err)
 		return
 	}
 
-	// Start the alarm server
-	// Create the alarm server.
+	// Setup Alarm Server
+	t.logger.InfoContext(ctx, "Setting up Alarm Server")
 	nextReconcile, err = t.setupAlarmServerConfig(ctx, nextReconcile)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup Alarm Server", err)
 		return
 	}
 
-	// Start the artifacts server
-	// Create the artifacts server.
+	// Setup Artifacts Server
+	t.logger.InfoContext(ctx, "Setting up Artifacts Server")
 	nextReconcile, err = t.setupArtifactsServerConfig(ctx, nextReconcile)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup Artifacts Server", err)
 		return
 	}
 
-	// Start the provisioning server
+	// Setup Provisioning Server
+	t.logger.InfoContext(ctx, "Setting up Provisioning Server")
 	nextReconcile, err = t.setupProvisioningServerConfig(ctx, nextReconcile)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup Provisioning Server", err)
 		return
 	}
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "o2ims_servers_setup", time.Since(phaseStartTime))
 
-	// Start the HardwarePlugin manager
+	// Phase 5: Hardware Plugin setup
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_plugin_setup")
+	phaseStartTime = time.Now()
+
+	// Setup HardwarePlugin Manager
+	t.logger.InfoContext(ctx, "Setting up HardwarePlugin Manager")
 	nextReconcile, err = t.setupHardwarePluginManager(ctx, nextReconcile)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup HardwarePlugin Manager", err)
 		return
 	}
 
-	// Start the Metal3 HardwarePlugin server
+	// Setup Metal3 HardwarePlugin Server
+	t.logger.InfoContext(ctx, "Setting up Metal3 HardwarePlugin Server")
 	nextReconcile, err = t.setupMetal3PluginServer(ctx, nextReconcile)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup Metal3 HardwarePlugin Server", err)
 		return
 	}
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_plugin_setup", time.Since(phaseStartTime))
 
-	// Wait for pods to become ready
+	// Phase 6: Readiness validation
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "readiness_validation")
+	phaseStartTime = time.Now()
+
+	t.logger.InfoContext(ctx, "Checking pod readiness status")
 	nextReconcile, err = t.checkForPodReadyStatus(ctx)
 	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed readiness validation", err)
 		return
 	}
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "readiness_validation", time.Since(phaseStartTime))
+
+	t.logger.InfoContext(ctx, "All inventory infrastructure components are ready")
 
 	if !nextReconcile.IsZero() {
 		// The pods are not ready and we are going to retry

@@ -54,7 +54,7 @@ func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, err
 }
 
 func (f *ClientFactory) newOAuthClient(ctx context.Context) (*http.Client, error) {
-	client, err := ctlrutils.SetupOAuthClient(ctx, f.oauthConfig)
+	client, err := ctlrutils.SetupOAuthClient(ctx, nil, f.oauthConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup oauth client")
 	}
