@@ -30,6 +30,7 @@ import (
 	narcallbackclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/nar-callback"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
@@ -220,6 +221,24 @@ func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) erro
 
 func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
+	startTime := time.Now()
+
+	// Add standard reconciliation context
+	ctx = ctlrutils.LogReconcileStart(ctx, r.Logger, req, "NodeAllocationRequest")
+
+	defer func() {
+		duration := time.Since(startTime)
+		if err != nil {
+			r.Logger.ErrorContext(ctx, "Reconciliation failed",
+				slog.Duration("duration", duration),
+				slog.String("error", err.Error()))
+		} else {
+			r.Logger.InfoContext(ctx, "Reconciliation completed",
+				slog.Duration("duration", duration),
+				slog.Bool("requeue", result.Requeue),
+				slog.Duration("requeueAfter", result.RequeueAfter))
+		}
+	}()
 
 	// Add logging context with the NodeAllocationRequest name
 	ctx = logging.AppendCtx(ctx, slog.String("NodeAllocationRequest", req.Name))
@@ -237,17 +256,19 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 	if err := hwmgrutils.GetNodeAllocationRequest(ctx, r.NoncachedClient, req.NamespacedName, nodeAllocationRequest); err != nil {
 		if errors.IsNotFound(err) {
 			// The NodeAllocationRequest object has likely been deleted
+			r.Logger.InfoContext(ctx, "NodeAllocationRequest not found, assuming deleted")
 			return hwmgrutils.DoNotRequeue(), nil
 		}
-		r.Logger.InfoContext(ctx, "Unable to fetch NodeAllocationRequest. Requeuing", slog.String("error", err.Error()))
+		ctlrutils.LogError(ctx, r.Logger, "Unable to fetch NodeAllocationRequest", err)
 		return hwmgrutils.RequeueWithShortInterval(), nil
 	}
 
-	// Add logging context with data from the CR
+	// Add object-specific context and hardware-specific context
+	ctx = ctlrutils.AddObjectContext(ctx, nodeAllocationRequest)
 	ctx = logging.AppendCtx(ctx, slog.String("ClusterID", nodeAllocationRequest.Spec.ClusterId))
 	ctx = logging.AppendCtx(ctx, slog.String("startingResourceVersion", nodeAllocationRequest.ResourceVersion))
 
-	r.Logger.InfoContext(ctx, "Reconciling NodeAllocationRequest")
+	r.Logger.InfoContext(ctx, "Fetched NodeAllocationRequest successfully")
 
 	if nodeAllocationRequest.GetDeletionTimestamp() != nil {
 		// Handle deletion
