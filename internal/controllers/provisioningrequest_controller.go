@@ -188,6 +188,10 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	// Execute the main reconciliation phases
 	renderedClusterInstance, result, err := t.executeProvisioningPhases(ctx)
 	if err != nil || result.Requeue || result.RequeueAfter > 0 {
+		// Check for overall provisioning timeout before returning error/requeue
+		if timeoutResult := t.checkOverallProvisioningTimeout(ctx); timeoutResult.RequeueAfter > 0 {
+			return timeoutResult, nil
+		}
 		return result, err
 	}
 
@@ -331,11 +335,11 @@ func (t *provisioningRequestReconcilerTask) executeClusterInstallationPhase(ctx 
 	if !ctlrutils.IsClusterProvisionPresent(t.object) {
 		t.logger.InfoContext(ctx, "ClusterProvision not present, requeueing", slog.String("name", t.object.Name))
 		return requeueWithShortInterval(), nil
-	}
-
-	if ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
-		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, do not requeue", slog.String("name", t.object.Name))
-		return doNotRequeue(), nil
+	} else if ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
+		// Even after timeout/failure, continue monitoring for cleanup completion
+		// This allows detection of manual recovery or cleanup progress
+		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, monitoring cleanup", slog.String("name", t.object.Name))
+		return requeueWithLongInterval(), nil
 	}
 
 	return ctrl.Result{}, nil
@@ -373,6 +377,101 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 	}
 
 	return doNotRequeue(), nil
+}
+
+// checkOverallProvisioningTimeout checks if the overall provisioning process has exceeded any timeout
+// and sets the appropriate failed state if so. Returns a non-zero RequeueAfter to indicate timeout detected.
+func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx context.Context) ctrl.Result {
+	// Skip timeout checks for fulfilled states
+	if ctlrutils.IsProvisioningStateFulfilled(t.object) {
+		return ctrl.Result{}
+	}
+
+	now := time.Now()
+
+	// Check overall provisioning timeout to catch early failures
+	// Use ProvisioningStatus.UpdateTime when provisioning state changes to InProgress for current generation
+	overallTimeout := t.timeouts.clusterProvisioning + t.timeouts.hardwareProvisioning
+
+	// Only check timeout if we're in a provisioning state (not fulfilled/failed)
+	// and if we have a start time for the current generation
+	if !t.object.Status.ProvisioningStatus.UpdateTime.IsZero() &&
+		t.object.Status.ObservedGeneration == t.object.Generation &&
+		(t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StatePending ||
+			t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateProgressing) {
+
+		provisioningStartTime := t.object.Status.ProvisioningStatus.UpdateTime.Time
+		if ctlrutils.TimeoutExceeded(provisioningStartTime, overallTimeout) {
+			t.logger.ErrorContext(ctx, "Overall provisioning timeout exceeded",
+				slog.Duration("elapsed", now.Sub(provisioningStartTime)),
+				slog.Duration("timeout", overallTimeout))
+
+			ctlrutils.SetProvisioningStateFailed(t.object,
+				fmt.Sprintf("Overall provisioning timed out after %v", overallTimeout))
+
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				t.logger.WarnContext(ctx, "Failed to update status for overall provisioning timeout", slog.String("error", err.Error()))
+			}
+			return requeueWithMediumInterval()
+		}
+	}
+
+	// Check hardware provisioning timeout
+	if !t.isHardwareProvisionSkipped() && t.object.Status.Extensions.NodeAllocationRequestRef != nil {
+		hwStartTime := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart
+		if !hwStartTime.IsZero() && ctlrutils.TimeoutExceeded(hwStartTime.Time, t.timeouts.hardwareProvisioning) {
+			t.logger.ErrorContext(ctx, "Hardware provisioning timeout exceeded",
+				slog.Duration("elapsed", now.Sub(hwStartTime.Time)),
+				slog.Duration("timeout", t.timeouts.hardwareProvisioning))
+
+			ctlrutils.SetProvisioningStateFailed(t.object,
+				fmt.Sprintf("Hardware provisioning timed out after %v", t.timeouts.hardwareProvisioning))
+
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				t.logger.WarnContext(ctx, "Failed to update status for hardware provisioning timeout", slog.String("error", err.Error()))
+			}
+			return requeueWithMediumInterval()
+		}
+	}
+
+	// Check cluster installation timeout
+	if t.object.Status.Extensions.ClusterDetails != nil {
+		clusterStartTime := t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt
+		if !clusterStartTime.IsZero() && ctlrutils.TimeoutExceeded(clusterStartTime.Time, t.timeouts.clusterProvisioning) {
+			t.logger.ErrorContext(ctx, "Cluster installation timeout exceeded",
+				slog.Duration("elapsed", now.Sub(clusterStartTime.Time)),
+				slog.Duration("timeout", t.timeouts.clusterProvisioning))
+
+			ctlrutils.SetProvisioningStateFailed(t.object,
+				fmt.Sprintf("Cluster installation timed out after %v", t.timeouts.clusterProvisioning))
+
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				t.logger.WarnContext(ctx, "Failed to update status for cluster installation timeout", slog.String("error", err.Error()))
+			}
+			return requeueWithMediumInterval()
+		}
+	}
+
+	// Check cluster configuration timeout
+	if t.object.Status.Extensions.ClusterDetails != nil {
+		configStartTime := t.object.Status.Extensions.ClusterDetails.NonCompliantAt
+		if !configStartTime.IsZero() && ctlrutils.TimeoutExceeded(configStartTime.Time, t.timeouts.clusterConfiguration) {
+			t.logger.ErrorContext(ctx, "Cluster configuration timeout exceeded",
+				slog.Duration("elapsed", now.Sub(configStartTime.Time)),
+				slog.Duration("timeout", t.timeouts.clusterConfiguration))
+
+			ctlrutils.SetProvisioningStateFailed(t.object,
+				fmt.Sprintf("Cluster configuration timed out after %v", t.timeouts.clusterConfiguration))
+
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				t.logger.WarnContext(ctx, "Failed to update status for cluster configuration timeout", slog.String("error", err.Error()))
+			}
+			return requeueWithMediumInterval()
+		}
+	}
+
+	// No timeout detected
+	return ctrl.Result{}
 }
 
 // initializeHardwarePluginIfNeeded initializes the hardware plugin client if hardware template is present
@@ -433,7 +532,8 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	if t.object.Status.ObservedGeneration != t.object.Generation {
 		ctlrutils.SetProvisioningStatePending(t.object, "Validating and preparing resources")
 		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-			return nil, doNotRequeue(), fmt.Errorf(
+			t.logger.WarnContext(ctx, "Status update failed, will retry", slog.String("error", updateErr.Error()))
+			return nil, requeueWithShortInterval(), fmt.Errorf(
 				"failed to update status for ProvisioningRequest %s: %w",
 				t.object.Name, updateErr,
 			)
@@ -447,8 +547,9 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return nil, res, err
 		}
-		// internal error that might recover
-		return nil, doNotRequeue(), err
+		// internal error that might recover - requeue to allow recovery
+		t.logger.WarnContext(ctx, "Internal validation error, will retry", slog.String("error", err.Error()))
+		return nil, requeueWithMediumInterval(), err
 	}
 
 	// Render and validate ClusterInstance
@@ -458,7 +559,9 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return nil, res, err
 		}
-		return nil, doNotRequeue(), err
+		// internal error that might recover - requeue to allow recovery
+		t.logger.WarnContext(ctx, "Internal ClusterInstance rendering error, will retry", slog.String("error", err.Error()))
+		return nil, requeueWithMediumInterval(), err
 	}
 
 	// Handle the creation of resources required for cluster deployment
@@ -470,13 +573,16 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 			if ctlrutils.IsInputError(err) {
 				_, err = t.checkClusterDeployConfigState(ctx)
 				if err != nil {
-					return nil, doNotRequeue(), err
+					t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.String("error", err.Error()))
+					return nil, requeueWithMediumInterval(), err
 				}
 				// Requeue since we are not watching for updates to required resources
 				// if they are missing
 				return nil, requeueWithMediumInterval(), nil
 			}
-			return nil, doNotRequeue(), err
+			// internal error that might recover - requeue to allow recovery
+			t.logger.WarnContext(ctx, "Internal cluster resources error, will retry", slog.String("error", err.Error()))
+			return nil, requeueWithMediumInterval(), err
 		}
 	}
 
@@ -498,22 +604,26 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return res, false, err
 		}
+		t.logger.ErrorContext(ctx, "Hardware template rendering error", slog.String("error", err.Error()))
 		return doNotRequeue(), false, err
 	}
 
 	// Create/Update the NodeAllocationRequest
 	if err := t.createOrUpdateNodeAllocationRequest(ctx, renderedClusterInstance.GetNamespace(), renderedNodeAllocationRequest); err != nil {
-		return doNotRequeue(), false, err
+		t.logger.WarnContext(ctx, "NodeAllocationRequest create/update error, will retry", slog.String("error", err.Error()))
+		return requeueWithMediumInterval(), false, err
 	}
 
 	nodeAllocationRequestID := t.getNodeAllocationRequestID()
 	if nodeAllocationRequestID == "" {
-		return doNotRequeue(), false, fmt.Errorf("missing nodeAllocationRequest identifier")
+		t.logger.WarnContext(ctx, "Missing NodeAllocationRequest identifier, will retry")
+		return requeueWithShortInterval(), false, fmt.Errorf("missing nodeAllocationRequest identifier")
 	}
 
 	nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
 	if err != nil {
-		return doNotRequeue(), false, err
+		t.logger.WarnContext(ctx, "NodeAllocationRequest response error, will retry", slog.String("error", err.Error()))
+		return requeueWithMediumInterval(), false, err
 	}
 	if !exists {
 		return requeueWithShortInterval(), false, nil
@@ -522,7 +632,8 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	// Wait for the NodeAllocationRequest to be provisioned and update BMC details if necessary
 	provisioned, configured, timedOutOrFailed, err := t.waitForHardwareData(ctx, renderedClusterInstance, nodeAllocationRequestResponse)
 	if err != nil {
-		return doNotRequeue(), false, err
+		t.logger.WarnContext(ctx, "Hardware data wait error, will retry", slog.String("error", err.Error()))
+		return requeueWithMediumInterval(), false, err
 	}
 	if timedOutOrFailed {
 		return doNotRequeue(), false, nil
@@ -586,7 +697,24 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		if err = t.checkResourcePreparationStatus(ctx); err != nil {
 			return requeueWithError(err)
 		}
-		return doNotRequeue(), nil
+		// For fulfilled state, skip early return and continue to final fulfilled check
+		// For non-fulfilled state, continue monitoring for resource preparation completion
+		if !ctlrutils.IsProvisioningStateFulfilled(t.object) {
+			t.logger.InfoContext(ctx, "ClusterDetails not yet available, monitoring resource preparation")
+			return requeueWithMediumInterval(), nil
+		}
+		// If fulfilled state, continue to the end of function for proper fulfilled handling
+	}
+
+	// Always check timeout even if other checks fail
+	// This ensures we never miss timeout detection due to transient errors
+	timeoutDetected := t.checkClusterInstallationTimeout(ctx)
+	if timeoutDetected {
+		t.logger.WarnContext(ctx, "Cluster installation timeout detected",
+			slog.String("name", t.object.Name),
+			slog.Duration("timeout", t.timeouts.clusterProvisioning))
+		// Continue to monitor even after timeout to detect cleanup completion
+		return requeueWithMediumInterval(), nil
 	}
 
 	// Always check resource preparation status to detect any failed conditions
@@ -605,16 +733,27 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		}
 		// For other failures (like cluster installation restrictions), continue processing
 	}
-	err = t.checkClusterProvisionStatus(
-		ctx, t.object.Status.Extensions.ClusterDetails.Name)
-	if err != nil {
-		return requeueWithError(err)
+
+	// Check cluster provision status if ClusterDetails exists
+	if t.object.Status.Extensions.ClusterDetails != nil {
+		err = t.checkClusterProvisionStatus(
+			ctx, t.object.Status.Extensions.ClusterDetails.Name)
+		if err != nil {
+			// Don't stop on status check errors - timeout monitoring must continue
+			t.logger.WarnContext(ctx, "Failed to check cluster provision status, continuing monitoring",
+				slog.String("error", err.Error()),
+				slog.String("name", t.object.Name))
+			// Continue with timeout monitoring even if status check fails
+		}
 	}
 	if !ctlrutils.IsClusterProvisionPresent(t.object) ||
 		ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
-		// If the cluster installation has not started due to
-		// processing issue, failed or timed out, do not requeue.
-		return doNotRequeue(), nil
+		// Even for timeout/failure cases, continue monitoring unless in fulfilled state
+		// This allows detection of cleanup progress and manual recovery
+		if !ctlrutils.IsProvisioningStateFulfilled(t.object) {
+			// Continue monitoring timeout/failed states for cleanup completion
+			return requeueWithLongInterval(), nil
+		}
 	}
 
 	// Check the policy configuration status
@@ -641,8 +780,60 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		if err = t.checkResourcePreparationStatus(ctx); err != nil {
 			return requeueWithError(err)
 		}
+		// Continue monitoring even after fulfillment for spec changes
+		t.logger.DebugContext(ctx, "Fulfilled provisioning check complete, continuing monitoring")
+		return requeueWithLongInterval(), nil
 	}
 	return doNotRequeue(), nil
+}
+
+// checkClusterInstallationTimeout ensures reliable timeout detection even when other checks fail.
+// This function provides a backup timeout mechanism that works independently of ClusterInstance status.
+// It only applies to active cluster installation (not day 2 operations or fulfilled states).
+func (t *provisioningRequestReconcilerTask) checkClusterInstallationTimeout(ctx context.Context) bool {
+	// Only check timeout if we have ClusterDetails and a valid start timestamp
+	if t.object.Status.Extensions.ClusterDetails == nil ||
+		t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.IsZero() {
+		return false
+	}
+
+	// Skip timeout check for fulfilled states - they represent completed clusters
+	// that may be undergoing day 2 operations, not initial provisioning
+	if ctlrutils.IsProvisioningStateFulfilled(t.object) {
+		return false
+	}
+
+	// Skip if cluster is already completed, failed, or timed out
+	if ctlrutils.IsClusterProvisionCompleted(t.object) ||
+		ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
+		return false
+	}
+
+	// Check if timeout has been exceeded
+	startTime := t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt.Time
+	if ctlrutils.TimeoutExceeded(startTime, t.timeouts.clusterProvisioning) {
+		// Set timeout condition and failed state
+		message := fmt.Sprintf("Cluster installation timed out after %s", t.timeouts.clusterProvisioning)
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+			provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+			provisioningv1alpha1.CRconditionReasons.TimedOut,
+			metav1.ConditionFalse,
+			message,
+		)
+		ctlrutils.SetProvisioningStateFailed(t.object, message)
+
+		// Attempt to persist the timeout status, but don't fail if it doesn't work
+		// The next reconciliation will detect the timeout again if status update fails
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			t.logger.WarnContext(ctx, "Failed to update timeout status, will retry next reconciliation",
+				slog.String("error", updateErr.Error()),
+				slog.String("name", t.object.Name))
+		}
+
+		return true
+	}
+
+	return false
 }
 
 // checkResourcePreparationStatus checks for validation and preparation failures, setting the
@@ -827,7 +1018,8 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 		if !controllerutil.ContainsFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			controllerutil.AddFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer)
 			if err := r.Update(ctx, provisioningRequest); err != nil {
-				return doNotRequeue(), true, fmt.Errorf("failed to update ProvisioningRequest with finalizer: %w", err)
+				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry", slog.String("error", err.Error()))
+				return requeueWithShortInterval(), true, fmt.Errorf("failed to update ProvisioningRequest with finalizer: %w", err)
 			}
 			// Requeue since the finalizer has been added.
 			return requeueImmediately(), false, nil
@@ -846,7 +1038,8 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 		patch := client.MergeFrom(provisioningRequest.DeepCopy())
 		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {
-				return doNotRequeue(), true, fmt.Errorf("failed to patch ProvisioningRequest: %w", err)
+				r.Logger.WarnContext(ctx, "Failed to remove finalizer, will retry", slog.String("error", err.Error()))
+				return requeueWithShortInterval(), true, fmt.Errorf("failed to patch ProvisioningRequest: %w", err)
 			}
 			return doNotRequeue(), true, nil
 		}
