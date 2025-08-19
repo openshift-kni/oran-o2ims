@@ -12,7 +12,7 @@ spec:
     listKind: ClusterTemplateList
     plural: clustertemplates
     shortNames:
-    - oranct
+    - ct
     singular: clustertemplate
   scope: Namespaced
   versions:

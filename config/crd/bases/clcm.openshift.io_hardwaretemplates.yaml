@@ -12,7 +12,7 @@ spec:
     listKind: HardwareTemplateList
     plural: hardwaretemplates
     shortNames:
-    - oranhwtmpl
+    - hwtmpl
     singular: hardwaretemplate
   scope: Namespaced
   versions:
