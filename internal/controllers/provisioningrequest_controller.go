@@ -418,55 +418,67 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 
 	// Check hardware provisioning timeout
 	if !t.isHardwareProvisionSkipped() && t.object.Status.Extensions.NodeAllocationRequestRef != nil {
-		hwStartTime := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart
-		if !hwStartTime.IsZero() && ctlrutils.TimeoutExceeded(hwStartTime.Time, t.timeouts.hardwareProvisioning) {
-			t.logger.ErrorContext(ctx, "Hardware provisioning timeout exceeded",
-				slog.Duration("elapsed", now.Sub(hwStartTime.Time)),
-				slog.Duration("timeout", t.timeouts.hardwareProvisioning))
+		hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
+		if hwProvisionedCond != nil && hwProvisionedCond.Status == metav1.ConditionFalse &&
+			hwProvisionedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Failed) {
+			hwStartTime := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart
+			if !hwStartTime.IsZero() && ctlrutils.TimeoutExceeded(hwStartTime.Time, t.timeouts.hardwareProvisioning) {
+				t.logger.ErrorContext(ctx, "Hardware provisioning timeout exceeded",
+					slog.Duration("elapsed", now.Sub(hwStartTime.Time)),
+					slog.Duration("timeout", t.timeouts.hardwareProvisioning))
 
-			ctlrutils.SetProvisioningStateFailed(t.object,
-				fmt.Sprintf("Hardware provisioning timed out after %v", t.timeouts.hardwareProvisioning))
+				ctlrutils.SetProvisioningStateFailed(t.object,
+					fmt.Sprintf("Hardware provisioning timed out after %v", t.timeouts.hardwareProvisioning))
 
-			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-				t.logger.WarnContext(ctx, "Failed to update status for hardware provisioning timeout", slog.String("error", err.Error()))
+				if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+					t.logger.WarnContext(ctx, "Failed to update status for hardware provisioning timeout", slog.String("error", err.Error()))
+				}
+				return requeueWithMediumInterval()
 			}
-			return requeueWithMediumInterval()
 		}
 	}
 
 	// Check cluster installation timeout
 	if t.object.Status.Extensions.ClusterDetails != nil {
-		clusterStartTime := t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt
-		if !clusterStartTime.IsZero() && ctlrutils.TimeoutExceeded(clusterStartTime.Time, t.timeouts.clusterProvisioning) {
-			t.logger.ErrorContext(ctx, "Cluster installation timeout exceeded",
-				slog.Duration("elapsed", now.Sub(clusterStartTime.Time)),
-				slog.Duration("timeout", t.timeouts.clusterProvisioning))
+		clusterProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
+		if clusterProvisionedCond != nil && clusterProvisionedCond.Status == metav1.ConditionFalse &&
+			clusterProvisionedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Failed) {
+			clusterStartTime := t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt
+			if !clusterStartTime.IsZero() && ctlrutils.TimeoutExceeded(clusterStartTime.Time, t.timeouts.clusterProvisioning) {
+				t.logger.ErrorContext(ctx, "Cluster installation timeout exceeded",
+					slog.Duration("elapsed", now.Sub(clusterStartTime.Time)),
+					slog.Duration("timeout", t.timeouts.clusterProvisioning))
 
-			ctlrutils.SetProvisioningStateFailed(t.object,
-				fmt.Sprintf("Cluster installation timed out after %v", t.timeouts.clusterProvisioning))
+				ctlrutils.SetProvisioningStateFailed(t.object,
+					fmt.Sprintf("Cluster installation timed out after %v", t.timeouts.clusterProvisioning))
 
-			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-				t.logger.WarnContext(ctx, "Failed to update status for cluster installation timeout", slog.String("error", err.Error()))
+				if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+					t.logger.WarnContext(ctx, "Failed to update status for cluster installation timeout", slog.String("error", err.Error()))
+				}
+				return requeueWithMediumInterval()
 			}
-			return requeueWithMediumInterval()
 		}
 	}
 
 	// Check cluster configuration timeout
 	if t.object.Status.Extensions.ClusterDetails != nil {
-		configStartTime := t.object.Status.Extensions.ClusterDetails.NonCompliantAt
-		if !configStartTime.IsZero() && ctlrutils.TimeoutExceeded(configStartTime.Time, t.timeouts.clusterConfiguration) {
-			t.logger.ErrorContext(ctx, "Cluster configuration timeout exceeded",
-				slog.Duration("elapsed", now.Sub(configStartTime.Time)),
-				slog.Duration("timeout", t.timeouts.clusterConfiguration))
+		configAppliedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
+		if configAppliedCond != nil && configAppliedCond.Status == metav1.ConditionFalse &&
+			configAppliedCond.Reason != string(provisioningv1alpha1.CRconditionReasons.Failed) {
+			configStartTime := t.object.Status.Extensions.ClusterDetails.NonCompliantAt
+			if !configStartTime.IsZero() && ctlrutils.TimeoutExceeded(configStartTime.Time, t.timeouts.clusterConfiguration) {
+				t.logger.ErrorContext(ctx, "Cluster configuration timeout exceeded",
+					slog.Duration("elapsed", now.Sub(configStartTime.Time)),
+					slog.Duration("timeout", t.timeouts.clusterConfiguration))
 
-			ctlrutils.SetProvisioningStateFailed(t.object,
-				fmt.Sprintf("Cluster configuration timed out after %v", t.timeouts.clusterConfiguration))
+				ctlrutils.SetProvisioningStateFailed(t.object,
+					fmt.Sprintf("Cluster configuration timed out after %v", t.timeouts.clusterConfiguration))
 
-			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-				t.logger.WarnContext(ctx, "Failed to update status for cluster configuration timeout", slog.String("error", err.Error()))
+				if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+					t.logger.WarnContext(ctx, "Failed to update status for cluster configuration timeout", slog.String("error", err.Error()))
+				}
+				return requeueWithMediumInterval()
 			}
-			return requeueWithMediumInterval()
 		}
 	}
 
