@@ -12,7 +12,7 @@ spec:
     listKind: NodeAllocationRequestList
     plural: nodeallocationrequests
     shortNames:
-    - orannar
+    - nar
     singular: nodeallocationrequest
   scope: Namespaced
   versions:

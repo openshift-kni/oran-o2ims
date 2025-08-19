@@ -133,7 +133,7 @@ type NodeAllocationRequestStatus struct {
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=nodeallocationrequests,shortName=orannar
+// +kubebuilder:resource:path=nodeallocationrequests,shortName=nar
 // +kubebuilder:printcolumn:name="HardwarePlugin",type="string",JSONPath=".spec.hardwarePluginRef"
 // +kubebuilder:printcolumn:name="Cluster ID",type="string",JSONPath=".spec.clusterId"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

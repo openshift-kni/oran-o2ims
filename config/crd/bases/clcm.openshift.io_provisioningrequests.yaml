@@ -12,7 +12,7 @@ spec:
     listKind: ProvisioningRequestList
     plural: provisioningrequests
     shortNames:
-    - oranpr
+    - pr
     singular: provisioningrequest
   scope: Cluster
   versions:

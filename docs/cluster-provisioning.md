@@ -373,7 +373,7 @@ data:
 Deleting the ProvisioningRequest CR initiates the deletion of a provisioned cluster. O-Cloud manager sets the ProvisioningState to `deleting`, ensuring that all dependent resources are fully cleaned up before completing the deletion.
 
 ```console
-oc get oranpr 123e4567-e89b-12d3-a456-426614174000
+oc get pr 123e4567-e89b-12d3-a456-426614174000
 NAME                                   DISPLAYNAME       AGE     PROVISIONPHASE   PROVISIONDETAILS
 123e4567-e89b-12d3-a456-426614174000   sno1-request      71m     deleting         Deletion is in progress
 ```
