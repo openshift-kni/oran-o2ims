@@ -259,6 +259,7 @@ OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 OPM ?= $(LOCALBIN)/opm
 YQ ?= $(LOCALBIN)/yq
+YAML_LINT ?= $(LOCALBIN)/yamllint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
@@ -435,7 +436,7 @@ opm: ## Download opm locally if necessary
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-opm \
 		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
 		DOWNLOAD_OPM_VERSION=$(OPM_VERSION)
-	opm version
+	$(OPM) version
 	@echo "Opm downloaded successfully."
 
 .PHONY: shellcheck
@@ -461,7 +462,7 @@ yamllint: ## Download yamllint locally if necessary and run against yaml files
 	@echo "Downloading yamllint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
 	@echo "Yamllint downloaded successfully."
-	yamllint -v
+	$(YAML_LINT) -v
 	@echo "Running yamllint on repository YAML files..."
 	find . -name "*.yaml" -o -name "*.yml" \
 		-not -path './vendor/*' \
@@ -478,7 +479,7 @@ yamllint: ## Download yamllint locally if necessary and run against yaml files
 yq: ## Download yq locally if necessary
 	@echo "Downloading yq..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yq DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
-	yq --version
+	$(YQ) --version
 	@echo "Yq downloaded successfully."
 
 .PHONY: yq-sort-and-format
@@ -486,7 +487,7 @@ yq-sort-and-format: yq ## Sort keys/reformat all yaml files
 	@echo "Sorting keys and reformatting YAML files..."
 	@find . -name "*.yaml" -o -name "*.yml" | grep -v -E "(telco5g-konflux/|target/|vendor/|bin/|\.git/)" | while read file; do \
 		echo "Processing $$file..."; \
-		yq -i '.. |= sort_keys(.)' "$$file"; \
+		$(YQ) -i '.. |= sort_keys(.)' "$$file"; \
 	done
 	@echo "YAML sorting and formatting completed successfully."
 
