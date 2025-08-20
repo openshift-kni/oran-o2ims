@@ -320,9 +320,9 @@ func checkNodeAllocationRequestProgress(
 
 	// check if there are any pending work such as bios configuring
 	if updating, err := checkForPendingUpdate(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest); err != nil {
-		return false, DoNotRequeue, err
+		return false, RequeueAfterShortInterval, err
 	} else if updating {
-		return false, DoNotRequeue, nil
+		return false, RequeueAfterShortInterval, nil
 	}
 	return true, DoNotRequeue, nil
 }

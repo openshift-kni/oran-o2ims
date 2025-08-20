@@ -4869,6 +4869,7 @@ plan:
 						ProvisioningPhase: provisioningv1alpha1.StatePending,
 						UpdateTime:        metav1.Time{Time: currentTime.Add(-60 * time.Minute)}, // 1 hour ago
 					},
+					Conditions: []metav1.Condition{}, // Initialize empty conditions slice
 				},
 			}
 
@@ -4913,6 +4914,12 @@ plan:
 				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
 					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
 				}
+				// Set HardwareProvisioned condition to False with InProgress reason
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				})
 			})
 
 			It("should set provisioning state to failed for hardware timeout", func() {
@@ -4924,12 +4931,62 @@ plan:
 			})
 		})
 
+		Context("when hardware provisioning timeout is exceeded but condition is already Failed", func() {
+			BeforeEach(func() {
+				// Set up NodeAllocationRequestRef with exceeded timeout
+				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
+				}
+				// Set HardwareProvisioned condition to False with Failed reason
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
+				})
+			})
+
+			It("should not trigger timeout since condition is already Failed", func() {
+				result := testTask.checkOverallProvisioningTimeout(ctx)
+
+				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			})
+		})
+
+		Context("when hardware provisioning timeout is exceeded but condition is True", func() {
+			BeforeEach(func() {
+				// Set up NodeAllocationRequestRef with exceeded timeout
+				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
+				}
+				// Set HardwareProvisioned condition to True (completed)
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+					Status: metav1.ConditionTrue,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+				})
+			})
+
+			It("should not trigger timeout since condition is completed", func() {
+				result := testTask.checkOverallProvisioningTimeout(ctx)
+
+				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			})
+		})
+
 		Context("when cluster installation timeout is exceeded", func() {
 			BeforeEach(func() {
 				// Set up ClusterDetails with exceeded timeout
 				testObject.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
 					ClusterProvisionStartedAt: &metav1.Time{Time: currentTime.Add(-60 * time.Minute)}, // Exceeds 45min timeout
 				}
+				// Set ClusterProvisioned condition to False with InProgress reason
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				})
 			})
 
 			It("should set provisioning state to failed for cluster timeout", func() {
@@ -4941,12 +4998,62 @@ plan:
 			})
 		})
 
+		Context("when cluster installation timeout is exceeded but condition is already Failed", func() {
+			BeforeEach(func() {
+				// Set up ClusterDetails with exceeded timeout
+				testObject.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					ClusterProvisionStartedAt: &metav1.Time{Time: currentTime.Add(-60 * time.Minute)}, // Exceeds 45min timeout
+				}
+				// Set ClusterProvisioned condition to False with Failed reason
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
+				})
+			})
+
+			It("should not trigger timeout since condition is already Failed", func() {
+				result := testTask.checkOverallProvisioningTimeout(ctx)
+
+				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			})
+		})
+
+		Context("when cluster installation timeout is exceeded but condition is True", func() {
+			BeforeEach(func() {
+				// Set up ClusterDetails with exceeded timeout
+				testObject.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					ClusterProvisionStartedAt: &metav1.Time{Time: currentTime.Add(-60 * time.Minute)}, // Exceeds 45min timeout
+				}
+				// Set ClusterProvisioned condition to True (completed)
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+					Status: metav1.ConditionTrue,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+				})
+			})
+
+			It("should not trigger timeout since condition is completed", func() {
+				result := testTask.checkOverallProvisioningTimeout(ctx)
+
+				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			})
+		})
+
 		Context("when cluster configuration timeout is exceeded", func() {
 			BeforeEach(func() {
 				// Set up ClusterDetails with exceeded configuration timeout
 				testObject.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
 					NonCompliantAt: &metav1.Time{Time: currentTime.Add(-20 * time.Minute)}, // Exceeds 15min timeout
 				}
+				// Set ConfigurationApplied condition to False with InProgress reason
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				})
 			})
 
 			It("should set provisioning state to failed for configuration timeout", func() {
@@ -4955,6 +5062,50 @@ plan:
 				Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Cluster configuration timed out"))
+			})
+		})
+
+		Context("when cluster configuration timeout is exceeded but condition is already Failed", func() {
+			BeforeEach(func() {
+				// Set up ClusterDetails with exceeded configuration timeout
+				testObject.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					NonCompliantAt: &metav1.Time{Time: currentTime.Add(-20 * time.Minute)}, // Exceeds 15min timeout
+				}
+				// Set ConfigurationApplied condition to False with Failed reason
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
+				})
+			})
+
+			It("should not trigger timeout since condition is already Failed", func() {
+				result := testTask.checkOverallProvisioningTimeout(ctx)
+
+				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			})
+		})
+
+		Context("when cluster configuration timeout is exceeded but condition is True", func() {
+			BeforeEach(func() {
+				// Set up ClusterDetails with exceeded configuration timeout
+				testObject.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					NonCompliantAt: &metav1.Time{Time: currentTime.Add(-20 * time.Minute)}, // Exceeds 15min timeout
+				}
+				// Set ConfigurationApplied condition to True (completed)
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
+					Status: metav1.ConditionTrue,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+				})
+			})
+
+			It("should not trigger timeout since condition is completed", func() {
+				result := testTask.checkOverallProvisioningTimeout(ctx)
+
+				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
 			})
 		})
 
@@ -5047,6 +5198,24 @@ plan:
 					ClusterProvisionStartedAt: &metav1.Time{Time: oldTime},
 					NonCompliantAt:            &metav1.Time{Time: oldTime},
 				}
+				// Set all conditions to InProgress so they can timeout
+				testObject.Status.Conditions = append(testObject.Status.Conditions,
+					metav1.Condition{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+						Status: metav1.ConditionFalse,
+						Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+					},
+					metav1.Condition{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+						Status: metav1.ConditionFalse,
+						Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+					},
+					metav1.Condition{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
+						Status: metav1.ConditionFalse,
+						Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+					},
+				)
 			})
 
 			It("should trigger the first timeout encountered (overall)", func() {
