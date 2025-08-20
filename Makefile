@@ -267,7 +267,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.18.0
 .PHONY: kubectl
 kubectl: $(KUBECTL) ## Use envtest to download kubectl
 $(KUBECTL): $(LOCALBIN) envtest
-	if [ ! -f $(KUBECTL) ]; then \
+	if [ ! -f $(KUBECTL) ] || ! $(KUBECTL) version 2>/dev/null | grep -q "Client Version: v$(ENVTEST_K8S_VERSION)$$"; then \
 		KUBEBUILDER_ASSETS=$$($(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path); \
 		ln -sf $${KUBEBUILDER_ASSETS}/kubectl $(KUBECTL); \
 	fi
@@ -482,7 +482,7 @@ yq: ## Download yq locally if necessary
 	@echo "Yq downloaded successfully."
 
 .PHONY: yq-sort-and-format
-yq-sort-and-format: yq ## Sort keys/reformat all yaml files 
+yq-sort-and-format: yq ## Sort keys/reformat all yaml files
 	@echo "Sorting keys and reformatting YAML files..."
 	@find . -name "*.yaml" -o -name "*.yml" | grep -v -E "(telco5g-konflux/|target/|vendor/|bin/|\.git/)" | while read file; do \
 		echo "Processing $$file..."; \
