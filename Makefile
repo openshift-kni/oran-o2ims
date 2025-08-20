@@ -34,7 +34,7 @@ YQ_VERSION ?= v4.45.4
 OPM_VERSION ?= v1.52.0
 
 # GOLANGCI_LINT_VERSION the opm version to download from GitHub releases.
-GOLANGCI_LINT_VERSION ?= v2.3.0
+GOLANGCI_LINT_VERSION ?= v2.4.0
 
 PACKAGE_NAME_KONFLUX = o-cloud-manager
 CATALOG_TEMPLATE_KONFLUX_INPUT = .konflux/catalog/catalog-template.in.yaml
@@ -256,8 +256,10 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 OPM ?= $(LOCALBIN)/opm
 YQ ?= $(LOCALBIN)/yq
+YAML_LINT ?= $(LOCALBIN)/yamllint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
@@ -266,7 +268,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.18.0
 .PHONY: kubectl
 kubectl: $(KUBECTL) ## Use envtest to download kubectl
 $(KUBECTL): $(LOCALBIN) envtest
-	if [ ! -f $(KUBECTL) ]; then \
+	if [ ! -f $(KUBECTL) ] || ! $(KUBECTL) version 2>/dev/null | grep -q "Client Version: v$(ENVTEST_K8S_VERSION)$$"; then \
 		KUBEBUILDER_ASSETS=$$($(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path); \
 		ln -sf $${KUBEBUILDER_ASSETS}/kubectl $(KUBECTL); \
 	fi
@@ -399,8 +401,8 @@ golangci-lint: ## Run golangci-lint against code.
 		DOWNLOAD_GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION)
 	@echo "Golangci-lint downloaded successfully."
 	@echo "Running golangci-lint on repository go files..."
-	golangci-lint --version
-	golangci-lint run -v
+	$(GOLANGCI_LINT) --version
+	$(GOLANGCI_LINT) run -v
 	@echo "Golangci-lint linting completed successfully."
 
 .PHONY: tools
@@ -434,7 +436,7 @@ opm: ## Download opm locally if necessary
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-opm \
 		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
 		DOWNLOAD_OPM_VERSION=$(OPM_VERSION)
-	opm version
+	$(OPM) version
 	@echo "Opm downloaded successfully."
 
 .PHONY: shellcheck
@@ -460,7 +462,7 @@ yamllint: ## Download yamllint locally if necessary and run against yaml files
 	@echo "Downloading yamllint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
 	@echo "Yamllint downloaded successfully."
-	yamllint -v
+	$(YAML_LINT) -v
 	@echo "Running yamllint on repository YAML files..."
 	find . -name "*.yaml" -o -name "*.yml" \
 		-not -path './vendor/*' \
@@ -477,15 +479,15 @@ yamllint: ## Download yamllint locally if necessary and run against yaml files
 yq: ## Download yq locally if necessary
 	@echo "Downloading yq..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yq DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
-	yq --version
+	$(YQ) --version
 	@echo "Yq downloaded successfully."
 
 .PHONY: yq-sort-and-format
-yq-sort-and-format: yq ## Sort keys/reformat all yaml files 
+yq-sort-and-format: yq ## Sort keys/reformat all yaml files
 	@echo "Sorting keys and reformatting YAML files..."
 	@find . -name "*.yaml" -o -name "*.yml" | grep -v -E "(telco5g-konflux/|target/|vendor/|bin/|\.git/)" | while read file; do \
 		echo "Processing $$file..."; \
-		yq -i '.. |= sort_keys(.)' "$$file"; \
+		$(YQ) -i '.. |= sort_keys(.)' "$$file"; \
 	done
 	@echo "YAML sorting and formatting completed successfully."
 
