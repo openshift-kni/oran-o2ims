@@ -18,13 +18,15 @@ import (
 // PathEvaluatorBuilder contains the logic and data needed to create attribute path evaluators.
 // Don't create instances of this type directly, use the NewPathEvaluator function instead.
 type PathEvaluatorBuilder struct {
-	logger *slog.Logger
+	logger             *slog.Logger
+	allowMissingFields bool
 }
 
 // PathEvaluator knows how extract from an object the value of an attribute given its path. Don't
 // create instances of this type directly use the NewPathEvaluator function instead.
 type PathEvaluator struct {
-	logger *slog.Logger
+	logger             *slog.Logger
+	allowMissingFields bool
 }
 
 // NewPathEvaluator creates a builder that can then be used to configure and create path
@@ -39,6 +41,13 @@ func (b *PathEvaluatorBuilder) SetLogger(value *slog.Logger) *PathEvaluatorBuild
 	return b
 }
 
+// SetAllowMissingFields sets whether the evaluator should return nil for missing fields
+// instead of errors. This is useful for optional fields in API responses.
+func (b *PathEvaluatorBuilder) SetAllowMissingFields(value bool) *PathEvaluatorBuilder {
+	b.allowMissingFields = value
+	return b
+}
+
 // Build uses the configuration stored in the builder to create a new evaluator.
 func (b *PathEvaluatorBuilder) Build() (result *PathEvaluator, err error) {
 	// Check parameters:
@@ -49,7 +58,8 @@ func (b *PathEvaluatorBuilder) Build() (result *PathEvaluator, err error) {
 
 	// Create and populate the object:
 	result = &PathEvaluator{
-		logger: b.logger,
+		logger:             b.logger,
+		allowMissingFields: b.allowMissingFields,
 	}
 	return
 }
@@ -103,6 +113,11 @@ func (r *PathEvaluator) evaluateStruct(ctx context.Context, path []string,
 	field := path[0]
 	value := object.FieldByName(field)
 	if !value.IsValid() {
+		if r.allowMissingFields {
+			// Return nil for missing optional fields
+			result = reflect.ValueOf(nil)
+			return
+		}
 		typ := object.Type()
 		err = fmt.Errorf(
 			"struct '%s' from package '%s' doesn't have a '%s' field",
@@ -130,6 +145,11 @@ func (r *PathEvaluator) evaluateMap(ctx context.Context, path []string,
 	key := path[0]
 	value := object.MapIndex(reflect.ValueOf(key))
 	if !value.IsValid() {
+		if r.allowMissingFields {
+			// Return nil for missing optional fields
+			result = reflect.ValueOf(nil)
+			return
+		}
 		err = fmt.Errorf("map doesn't have a '%s' key", path[0])
 		return
 	}

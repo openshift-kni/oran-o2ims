@@ -172,4 +172,41 @@ var _ = Describe("Path evaluator", func() {
 			"failed to evaluate 'mykey': map doesn't have a 'mykey' key",
 		),
 	)
+
+	Describe("With missing fields allowed", func() {
+		DescribeTable(
+			"Returns nil for missing fields",
+			func(path []string, producer func() any) {
+				evaluator, err := NewPathEvaluator().
+					SetLogger(logger).
+					SetAllowMissingFields(true).
+					Build()
+				Expect(err).ToNot(HaveOccurred())
+				result, err := evaluator.Evaluate(context.Background(), path, producer())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeNil())
+			},
+			Entry(
+				"Struct field that doesn't exist",
+				[]string{"MissingField"},
+				func() any {
+					type MyObject struct {
+						ExistingField string
+					}
+					return MyObject{
+						ExistingField: "value",
+					}
+				},
+			),
+			Entry(
+				"Map key that doesn't exist",
+				[]string{"missingkey"},
+				func() any {
+					return map[string]any{
+						"existingkey": "value",
+					}
+				},
+			),
+		)
+	})
 })
