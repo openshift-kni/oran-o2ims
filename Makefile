@@ -34,7 +34,7 @@ YQ_VERSION ?= v4.45.4
 OPM_VERSION ?= v1.52.0
 
 # GOLANGCI_LINT_VERSION the opm version to download from GitHub releases.
-GOLANGCI_LINT_VERSION ?= v2.3.0
+GOLANGCI_LINT_VERSION ?= v2.4.0
 
 PACKAGE_NAME_KONFLUX = o-cloud-manager
 CATALOG_TEMPLATE_KONFLUX_INPUT = .konflux/catalog/catalog-template.in.yaml
@@ -256,6 +256,7 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 OPM ?= $(LOCALBIN)/opm
 YQ ?= $(LOCALBIN)/yq
 
@@ -399,8 +400,8 @@ golangci-lint: ## Run golangci-lint against code.
 		DOWNLOAD_GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION)
 	@echo "Golangci-lint downloaded successfully."
 	@echo "Running golangci-lint on repository go files..."
-	golangci-lint --version
-	golangci-lint run -v
+	$(GOLANGCI_LINT) --version
+	$(GOLANGCI_LINT) run -v
 	@echo "Golangci-lint linting completed successfully."
 
 .PHONY: tools
