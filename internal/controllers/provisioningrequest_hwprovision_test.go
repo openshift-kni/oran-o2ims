@@ -71,6 +71,7 @@ package controllers
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1656,3 +1657,289 @@ func VerifyHardwareTemplateStatus(ctx context.Context, c client.Client, template
 		Message: expectedCon.Message,
 	})
 }
+
+var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", func() {
+	var (
+		c                client.Client
+		ctx              context.Context
+		logger           *slog.Logger
+		reconciler       *ProvisioningRequestReconciler
+		task             *provisioningRequestReconcilerTask
+		cr               *provisioningv1alpha1.ProvisioningRequest
+		template         *provisioningv1alpha1.ClusterTemplate
+		hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate
+		testClusterName  = "test-update-after-failure-cluster"
+		testNARID        = "test-nar-failed-update"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		logger = slog.New(slog.DiscardHandler)
+
+		// Create a HardwareTemplate for the test
+		hardwareTemplate = &hwmgmtv1alpha1.HardwareTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-hw-template-update-after-failure",
+				Namespace: "test-ns",
+			},
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+				HardwarePluginRef:  "test-plugin",
+				BootInterfaceLabel: "bootable-device",
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+					{
+						Name:      "master",
+						Role:      "master",
+						HwProfile: "test-profile",
+					},
+				},
+			},
+			Status: hwmgmtv1alpha1.HardwareTemplateStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(hwmgmtv1alpha1.Validation),
+						Status: metav1.ConditionTrue,
+						Reason: string(hwmgmtv1alpha1.Completed),
+					},
+				},
+			},
+		}
+
+		// Create a ClusterTemplate with hardware template
+		template = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-template-update-after-failure.v1.0.0",
+				Namespace: "test-ns",
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Release: "4.17.0",
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: "test-cluster-defaults",
+					HwTemplate:              "test-hw-template-update-after-failure",
+				},
+			},
+			Status: provisioningv1alpha1.ClusterTemplateStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   "ClusterTemplateValidated",
+						Status: metav1.ConditionTrue,
+						Reason: "Completed",
+					},
+				},
+			},
+		}
+
+		// Create initial ProvisioningRequest in failed state due to hardware failure
+		cr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "test-pr-update-after-failure",
+				Namespace:  "test-ns",
+				Generation: 1, // Initial generation
+				Labels: map[string]string{
+					"test-type": "update-after-failure",
+				},
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    "test-template-update-after-failure",
+				TemplateVersion: "v1.0.0",
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(`{"clusterName": "` + testClusterName + `"}`),
+				},
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				ObservedGeneration: 1, // Matches current generation
+				ProvisioningStatus: provisioningv1alpha1.ProvisioningStatus{
+					ProvisioningPhase:   provisioningv1alpha1.StateFailed,
+					ProvisioningDetails: "Hardware provisioning failed",
+				},
+				Extensions: provisioningv1alpha1.Extensions{
+					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+						NodeAllocationRequestID:        testNARID,
+						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now().Add(-10 * time.Minute)},
+						HardwareConfiguringCheckStart:  nil,
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+						Status:  metav1.ConditionFalse,
+						Reason:  string(hwmgmtv1alpha1.Failed),
+						Message: "Hardware provisioning failed",
+					},
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr, template, hardwareTemplate}...)
+		reconciler = &ProvisioningRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &provisioningRequestReconcilerTask{
+			logger:       reconciler.Logger,
+			client:       reconciler.Client,
+			object:       cr,
+			clusterInput: &clusterInput{},
+			ctDetails:    &clusterTemplateDetails{},
+			timeouts: &timeouts{
+				hardwareProvisioning: 30 * time.Minute,
+			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
+		}
+	})
+
+	Context("when ProvisioningRequest is updated after hardware failure", func() {
+		It("should not override pending status with old hardware failure status", func() {
+			// Simulate updating the ProvisioningRequest spec (this would increment generation)
+			cr.Generation = 2 // Simulating spec update
+			cr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"clusterName": "` + testClusterName + `-updated", "newParam": "value"}`),
+			}
+			Expect(c.Update(ctx, cr)).To(Succeed())
+
+			// Simulate the pending status being set during handlePreProvisioning
+			// (this is what happens when ObservedGeneration != Generation)
+			cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StatePending
+			cr.Status.ProvisioningStatus.ProvisioningDetails = "Validating and preparing resources"
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			// Create a mock NodeAllocationRequest response that still shows failure
+			// (representing old hardware status that hasn't been updated yet)
+			failedMock := createMockNodeAllocationRequestResponse("False", "Failed", "Hardware provisioning failed")
+
+			// Call updateHardwareStatus - this should NOT override the pending state
+			provisioned, timedOutOrFailed, err := task.updateHardwareStatus(ctx, failedMock, hwmgmtv1alpha1.Provisioned)
+
+			// Verify the results
+			Expect(err).ToNot(HaveOccurred())
+			Expect(provisioned).To(Equal(false))
+			Expect(timedOutOrFailed).To(Equal(false)) // Should be false because request was updated
+
+			// Refresh the CR to get updated status
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+
+			// Verify that the provisioning status remains pending and is not overridden by hardware failure
+			Expect(cr.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningDetails).To(Equal("Validating and preparing resources"))
+
+			// Verify that hardware condition is still updated but with appropriate message
+			condition := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
+			Expect(condition.Message).To(ContainSubstring("status will be re-evaluated after ProvisioningRequest update"))
+		})
+
+		It("should allow hardware status to fail if ProvisioningRequest has not been updated", func() {
+			// Do NOT update the generation, keep ObservedGeneration = Generation
+			cr.Status.ObservedGeneration = cr.Generation // They match, so no update detected
+
+			// Create a mock NodeAllocationRequest response that shows failure
+			failedMock := createMockNodeAllocationRequestResponse("False", "Failed", "Hardware provisioning failed")
+
+			// Call updateHardwareStatus - this SHOULD set to failed since no update occurred
+			provisioned, timedOutOrFailed, err := task.updateHardwareStatus(ctx, failedMock, hwmgmtv1alpha1.Provisioned)
+
+			// Verify the results
+			Expect(err).ToNot(HaveOccurred())
+			Expect(provisioned).To(Equal(false))
+			Expect(timedOutOrFailed).To(Equal(true)) // Should be true because no update was detected
+
+			// Refresh the CR to get updated status
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+
+			// Verify that the provisioning status is set to failed (original behavior preserved)
+			Expect(cr.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning failed"))
+		})
+
+		It("should not override pending status when hardware status is in progress after update", func() {
+			// Simulate updating the ProvisioningRequest spec
+			cr.Generation = 2 // Simulating spec update
+
+			// Set a recent HardwareProvisioningCheckStart time to avoid timeout
+			recentTime := metav1.NewTime(time.Now().Add(-1 * time.Minute))
+			cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &recentTime
+
+			Expect(c.Update(ctx, cr)).To(Succeed())
+
+			// Get the latest CR from client to ensure we have fresh data
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+
+			// Now set the status to pending and ensure ObservedGeneration != Generation
+			cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StatePending
+			cr.Status.ProvisioningStatus.ProvisioningDetails = "Validating and preparing resources"
+			cr.Status.ObservedGeneration = 1 // Different from generation=2 to show update
+
+			// Manually update the status without using UpdateK8sCRStatus to preserve ObservedGeneration != Generation
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			// Create a mock with in-progress status - use False status as that's what triggers in-progress logic
+			inProgressMock := createMockNodeAllocationRequestResponse("False", "InProgress", "Hardware provisioning in progress")
+
+			// Create a new task with the current CR state so it sees ObservedGeneration != Generation
+			updatedTask := &provisioningRequestReconcilerTask{
+				logger:         task.logger,
+				client:         task.client,
+				object:         cr, // Use the CR with ObservedGeneration != Generation
+				clusterInput:   task.clusterInput,
+				ctDetails:      task.ctDetails,
+				timeouts:       task.timeouts,
+				callbackConfig: task.callbackConfig,
+			}
+
+			// Call updateHardwareStatus - since the request was updated, status shouldn't be overridden
+			provisioned, timedOutOrFailed, err := updatedTask.updateHardwareStatus(ctx, inProgressMock, hwmgmtv1alpha1.Provisioned)
+
+			// Verify the results
+			Expect(err).ToNot(HaveOccurred())
+			Expect(provisioned).To(Equal(false))
+			Expect(timedOutOrFailed).To(Equal(false)) // Should be false because request was updated
+
+			// Refresh the CR to get updated status
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+
+			// Verify that the provisioning status remains pending because the request was updated
+			Expect(cr.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningDetails).To(Equal("Validating and preparing resources"))
+
+			// Verify that hardware condition shows in progress but doesn't override pending status
+			condition := meta.FindStatusCondition(cr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal("InProgress"))
+			Expect(condition.Message).To(ContainSubstring("Hardware provisioning is in progress"))
+		})
+
+		It("should allow hardware status updates after update window closes", func() {
+			// Simulate a ProvisioningRequest that has been updated but the update processing is complete
+			cr.Generation = 2
+			cr.Status.ObservedGeneration = 2 // SAME as generation - update window closed
+			cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
+			cr.Status.ProvisioningStatus.ProvisioningDetails = "Hardware provisioning in progress"
+
+			Expect(c.Update(ctx, cr)).To(Succeed())
+			Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+			// Create a mock showing hardware failure
+			failedMock := createMockNodeAllocationRequestResponse("False", "Failed", "Hardware provisioning failed")
+
+			// Call updateHardwareStatus - since ObservedGeneration == Generation, normal updates should proceed
+			provisioned, timedOutOrFailed, err := task.updateHardwareStatus(ctx, failedMock, hwmgmtv1alpha1.Provisioned)
+
+			// Verify the results
+			Expect(err).ToNot(HaveOccurred())
+			Expect(provisioned).To(Equal(false))
+			// The main point is that the status SHOULD be updated when no update protection applies
+			_ = timedOutOrFailed // Acknowledge we have this variable but focus on status change
+
+			// Refresh the CR to get updated status
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+
+			// Verify that the provisioning status IS updated to failed (normal behavior resumes)
+			Expect(cr.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
+			Expect(cr.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning failed"))
+
+			// This proves that hardware status updates work normally when the update protection doesn't apply
+		})
+	})
+})

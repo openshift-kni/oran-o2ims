@@ -90,11 +90,17 @@ func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 }
 
 func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *metal3v1alpha1.HostFirmwareComponentsStatus,
-	spec hwmgmtv1alpha1.HardwareProfileSpec) ([]metal3v1alpha1.FirmwareUpdate, bool) {
+	existingUpdates []metal3v1alpha1.FirmwareUpdate, spec hwmgmtv1alpha1.HardwareProfileSpec) ([]metal3v1alpha1.FirmwareUpdate, bool) {
 
 	firmwareMap := map[string]hwmgmtv1alpha1.Firmware{
 		"bios": spec.BiosFirmware,
 		"bmc":  spec.BmcFirmware,
+	}
+
+	// Create map of existing updates by component for URL comparison
+	existingUpdateMap := make(map[string]string)
+	for _, update := range existingUpdates {
+		existingUpdateMap[update.Component] = update.URL
 	}
 
 	var updates []metal3v1alpha1.FirmwareUpdate
@@ -109,24 +115,38 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 				continue
 			}
 
-			// If version differs, append update
-			if component.CurrentVersion != fw.Version {
+			// Check if version OR URL has changed
+			existingURL := existingUpdateMap[component.Component]
+			versionChanged := component.CurrentVersion != fw.Version
+			urlChanged := existingURL != fw.URL
+
+			// If version or URL differs, append update
+			if versionChanged || urlChanged {
 				updates = append(updates, metal3v1alpha1.FirmwareUpdate{
 					Component: component.Component,
 					URL:       fw.URL,
 				})
-				logger.InfoContext(ctx, "Add firmware update",
-					slog.String("component", component.Component),
-					slog.String("url", fw.URL))
+
+				if versionChanged {
+					logger.InfoContext(ctx, "Add firmware update due to version change",
+						slog.String("component", component.Component),
+						slog.String("currentVersion", component.CurrentVersion),
+						slog.String("desiredVersion", fw.Version),
+						slog.String("url", fw.URL))
+				}
+				if urlChanged {
+					logger.InfoContext(ctx, "Add firmware update due to URL change",
+						slog.String("component", component.Component),
+						slog.String("currentURL", existingURL),
+						slog.String("desiredURL", fw.URL))
+				}
 				updateRequired = true
 			} else {
-				logger.InfoContext(ctx, "No version change detected",
+				logger.InfoContext(ctx, "No version or URL change detected",
 					slog.String("current", component.CurrentVersion),
 					slog.String("desired", fw.Version),
-					slog.Any("spec", spec),
-					slog.Any("hfc_status", status))
+					slog.String("url", fw.URL))
 			}
-
 		}
 	}
 
@@ -188,7 +208,7 @@ func IsFirmwareUpdateRequired(ctx context.Context,
 		return true, nil
 	}
 
-	updates, updateRequired := isVersionChangeDetected(ctx, logger, &existingHFC.Status, spec)
+	updates, updateRequired := isVersionChangeDetected(ctx, logger, &existingHFC.Status, existingHFC.Spec.Updates, spec)
 
 	// No update needed if already up-to-date
 	if !updateRequired {

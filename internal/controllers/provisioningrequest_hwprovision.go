@@ -434,6 +434,35 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		(nodeAllocationRequest.Status.ObservedConfigTransactionId == nil ||
 			*nodeAllocationRequest.Status.ObservedConfigTransactionId != t.object.Generation)
 
+	// ============================================================================
+	// UPDATE WINDOW PROTECTION: Prevent old hardware status from overriding fresh updates
+	// ============================================================================
+	//
+	// When a ProvisioningRequest is updated by the user:
+	// 1. Generation increments (1 → 2)
+	// 2. ObservedGeneration remains old (still 1)
+	// 3. handlePreProvisioning sets status to "pending"
+	// 4. UpdateK8sCRStatus sets ObservedGeneration = Generation (both = 2)
+	//
+	// The "update window" is the brief period when ObservedGeneration ≠ Generation,
+	// indicating the system is processing a recent update and the status should not
+	// be overridden by stale hardware conditions from previous attempts.
+	//
+	// Once ObservedGeneration == Generation, the update is processed and normal
+	// hardware status monitoring should resume.
+
+	// Check if ProvisioningRequest was updated but hardware provisioning hasn't restarted yet
+	provisioningRequestUpdated := condition == hwmgmtv1alpha1.Provisioned &&
+		t.object.Status.ObservedGeneration != t.object.Generation
+
+	// Check if ProvisioningRequest was updated but hardware configuration hasn't restarted yet
+	configurationRequestUpdated := condition == hwmgmtv1alpha1.Configured &&
+		(nodeAllocationRequest.Status.ObservedConfigTransactionId == nil ||
+			*nodeAllocationRequest.Status.ObservedConfigTransactionId != t.object.Generation)
+
+	// Determine if we're in the "update window" where status should not be overridden
+	requestUpdated := provisioningRequestUpdated || configurationRequestUpdated
+
 	if hwCondition == nil || waitingForConfigStart {
 		// Condition does not exist
 		status = metav1.ConditionUnknown
@@ -447,7 +476,12 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 				return false, false, &ctlrutils.ConditionDoesNotExistsErr{ConditionName: string(condition)}
 			}
 		}
-		ctlrutils.SetProvisioningStateInProgress(t.object, message)
+		// UPDATE WINDOW PROTECTION: Only set provisioning state if we're NOT in update window
+		// If requestUpdated=true, preserve the status set by handlePreProvisioning (e.g., "pending")
+		// If requestUpdated=false, normal behavior - set status to "in progress"
+		if !requestUpdated {
+			ctlrutils.SetProvisioningStateInProgress(t.object, message)
+		}
 	} else {
 		// A hardware condition was found; use its details.
 		status = metav1.ConditionStatus(hwCondition.Status)
@@ -466,12 +500,26 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
 		if status == metav1.ConditionFalse {
 			message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
-			ctlrutils.SetProvisioningStateInProgress(t.object, message)
+
+			// UPDATE WINDOW PROTECTION: Only set provisioning state if we're NOT in update window
+			// This prevents in-progress status from overriding fresh "pending" status after updates
+			if !requestUpdated {
+				ctlrutils.SetProvisioningStateInProgress(t.object, message)
+			}
 
 			if reason == string(hwmgmtv1alpha1.Failed) {
-				timedOutOrFailed = true
-				message = fmt.Sprintf("Hardware %s failed", ctlrutils.GetStatusMessage(condition))
-				ctlrutils.SetProvisioningStateFailed(t.object, message)
+				// UPDATE WINDOW PROTECTION: Only set to failed if NOT in update window
+				// This is the key fix: prevents old hardware failures from overriding
+				// new "pending" status when ProvisioningRequest is updated
+				if !requestUpdated {
+					timedOutOrFailed = true
+					message = fmt.Sprintf("Hardware %s failed", ctlrutils.GetStatusMessage(condition))
+					ctlrutils.SetProvisioningStateFailed(t.object, message)
+				} else {
+					// We're in update window: don't override status, but update the message
+					// to indicate status will be re-evaluated with the updated request
+					message = fmt.Sprintf("Hardware %s status will be re-evaluated after ProvisioningRequest update", ctlrutils.GetStatusMessage(condition))
+				}
 			}
 		}
 	}
@@ -488,9 +536,31 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 			message,
 		)
 		if timedOutOrFailed {
-			ctlrutils.SetProvisioningStateFailed(t.object, message)
+			// UPDATE WINDOW PROTECTION: Only set to failed on timeout if NOT in update window
+			// This prevents timeout failures from overriding fresh "pending" status after updates
+			if !requestUpdated {
+				ctlrutils.SetProvisioningStateFailed(t.object, message)
+			}
 		}
 	}
+
+	// ============================================================================
+	// SUMMARY: Update Window Protection Effect
+	// ============================================================================
+	//
+	// PROTECTED (requestUpdated = true):
+	// - Hardware status conditions are still updated in CR.Status.Conditions
+	// - BUT provisioning status (StatePending/StateProgressing/StateFailed) is preserved
+	// - Allows fresh "pending" status to remain until hardware operations restart
+	//
+	// NORMAL (requestUpdated = false):
+	// - Hardware status conditions are updated in CR.Status.Conditions
+	// - AND provisioning status is updated normally (pending → in-progress → success/failed)
+	// - Standard hardware status monitoring behavior
+	//
+	// This approach fixes the original bug where ProvisioningRequests got stuck in
+	// failed state after updates, while preserving normal hardware status monitoring
+	// once the update processing window closes.
 
 	conditionType := provisioningv1alpha1.PRconditionTypes.HardwareProvisioned
 	if condition == hwmgmtv1alpha1.Configured {

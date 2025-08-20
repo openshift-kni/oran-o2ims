@@ -415,9 +415,69 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			// Empty existing updates for this test
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
+		})
+
+		It("should return false when no version change is detected", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "bios",
+						CurrentVersion: "1.0.0",
+					},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					URL:     "http://example.com/bios.bin",
+					Version: "1.0.0",
+				},
+			}
+
+			// Same URL as spec - no change expected
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{
+				{
+					Component: "bios",
+					URL:       "http://example.com/bios.bin",
+				},
+			}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
+			Expect(updates).To(BeEmpty())
+			Expect(updateRequired).To(BeFalse())
+		})
+
+		It("should return true when URL changes even with same version", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "bios",
+						CurrentVersion: "1.0.0",
+					},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					URL:     "http://corrected-url.com/bios.bin", // Different URL
+					Version: "1.0.0",                             // Same version
+				},
+			}
+
+			// Previous URL was wrong
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{
+				{
+					Component: "bios",
+					URL:       "http://wrong-url.com/bios.bin",
+				},
+			}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
+			Expect(updates).To(HaveLen(1))
+			Expect(updates[0].Component).To(Equal("bios"))
+			Expect(updates[0].URL).To(Equal("http://corrected-url.com/bios.bin"))
+			Expect(updateRequired).To(BeTrue())
 		})
 
 		It("should skip empty firmware specs", func() {
@@ -433,7 +493,9 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				BiosFirmware: hwmgmtv1alpha1.Firmware{}, // Empty firmware spec
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			// Empty existing updates for this test
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
 		})
@@ -454,14 +516,16 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			// Empty existing updates for this test
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
 			Expect(updates).To(HaveLen(1))
 			Expect(updates[0].Component).To(Equal("bios"))
 			Expect(updates[0].URL).To(Equal("https://example.com/bios.bin"))
 			Expect(updateRequired).To(BeTrue())
 		})
 
-		It("should not detect change when versions match", func() {
+		It("should not detect change when versions and URLs match", func() {
 			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
 				Components: []metal3v1alpha1.FirmwareComponentStatus{
 					{
@@ -477,7 +541,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			// Existing updates with SAME URL as spec - no change needed
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{
+				{
+					Component: "bios",
+					URL:       "https://example.com/bios.bin", // Same URL as spec
+				},
+			}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
 		})
@@ -506,7 +577,9 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			// Empty existing updates for this test
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
 			Expect(updates).To(HaveLen(2))
 			Expect(updateRequired).To(BeTrue())
 
@@ -526,6 +599,31 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(bmcUpdate).NotTo(BeNil())
 			Expect(bmcUpdate.Component).To(Equal("bmc"))
 			Expect(bmcUpdate.URL).To(Equal("https://example.com/bmc.bin"))
+		})
+
+		It("should detect URL change when existingUpdates is empty", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "bios",
+						CurrentVersion: "1.0.0",
+					},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "1.0.0",
+					URL:     "https://example.com/bios.bin",
+				},
+			}
+
+			// Empty existing updates - this should trigger update to set the URL
+			existingUpdates := []metal3v1alpha1.FirmwareUpdate{}
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, existingUpdates, spec)
+			Expect(updates).To(HaveLen(1))
+			Expect(updates[0].Component).To(Equal("bios"))
+			Expect(updates[0].URL).To(Equal("https://example.com/bios.bin"))
+			Expect(updateRequired).To(BeTrue())
 		})
 	})
 
@@ -735,13 +833,31 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			// Create HFC with status showing current version matches desired
+			// AND spec.updates with the same URL to truly represent "no update needed"
 			components := []metal3v1alpha1.FirmwareComponentStatus{
 				{
 					Component:      "bios",
 					CurrentVersion: "1.0.0", // Same as desired version
 				},
 			}
-			hfc := createHFCWithStatus("test-bmh", "test-namespace", components, []metav1.Condition{}, 1)
+			hfc := &metal3v1alpha1.HostFirmwareComponents{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-bmh",
+					Namespace:  "test-namespace",
+					Generation: 1,
+				},
+				Spec: metal3v1alpha1.HostFirmwareComponentsSpec{
+					Updates: []metal3v1alpha1.FirmwareUpdate{
+						{
+							Component: "bios",
+							URL:       "https://example.com/bios.bin", // Same URL as spec
+						},
+					},
+				},
+				Status: metal3v1alpha1.HostFirmwareComponentsStatus{
+					Components: components,
+				},
+			}
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
 			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec)

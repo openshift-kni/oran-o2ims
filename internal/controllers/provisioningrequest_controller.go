@@ -648,7 +648,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return requeueWithMediumInterval(), false, err
 	}
 	if timedOutOrFailed {
-		return doNotRequeue(), false, nil
+		return requeueWithMediumInterval(), false, nil
 	}
 	if !provisioned {
 
@@ -695,8 +695,15 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 				return requeueWithError(err)
 			}
 			if timedOutOrFailed {
-				// Timeout occurred or failed, stop requeuing
-				return doNotRequeue(), nil
+				// Check if ProvisioningRequest has been updated since the hardware failure
+				// If updated, give it another chance; if not, use a longer requeue interval
+				if t.object.Status.ObservedGeneration != t.object.Generation {
+					// ProvisioningRequest has been updated, retry with medium interval
+					return requeueWithMediumInterval(), nil
+				} else {
+					// No update since failure, retry with longer interval to avoid aggressive retries
+					return requeueWithLongInterval(), nil
+				}
 			}
 			if !hwProvisioned {
 				return requeueWithMediumInterval(), nil
