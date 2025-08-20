@@ -491,6 +491,21 @@ func handleTransitionNodes(ctx context.Context,
 			bmh.Annotations = make(map[string]string)
 		}
 
+		bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+
+		// Check that metal3 controller has cleared the networkData from the PreprovisioningImage
+		networkDataCleared, err := checkPreprovisioningImageNetworkDataCleared(ctx, c, logger, bmhName)
+		if err != nil {
+			return true, fmt.Errorf("failed to check PreprovisioningImage network status for BMH (%s/%s): %w", bmh.Name, bmh.Namespace, err)
+		}
+
+		if !networkDataCleared {
+			// PreprovisioningImage network data is not yet cleared, return requeue after 15 seconds
+			logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared, requeueing",
+				slog.String("bmh", bmhName.String()))
+			return true, nil
+		}
+
 		if postInstall {
 			if err := evaluateCRForReboot(ctx, c, logger, bmh); err != nil {
 				return true, err

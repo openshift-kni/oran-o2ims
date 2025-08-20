@@ -1173,6 +1173,7 @@ func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
 // resources in the status.
 func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx context.Context) error {
 	if ctlrutils.IsClusterProvisionCompleted(t.object) && ctlrutils.IsClusterConfigCompleted(t.object) &&
+		(t.isHardwareProvisionSkipped() || ctlrutils.IsHardwareConfigCompleted(t.object)) &&
 		(!ctlrutils.IsClusterUpgradeInitiated(t.object) || ctlrutils.IsClusterUpgradeCompleted(t.object)) {
 
 		ctlrutils.SetProvisioningStateFulfilled(t.object)
