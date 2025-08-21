@@ -14,6 +14,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
+
+	"github.com/getkin/kin-openapi/openapi3"
 
 	"github.com/openshift-kni/oran-o2ims/internal/data"
 	"github.com/openshift-kni/oran-o2ims/internal/search"
@@ -34,16 +37,25 @@ type FilterAdapter struct {
 	pathsParser       *search.PathsParser
 	selectorEvaluator *search.SelectorEvaluator
 	selectorParser    *search.SelectorParser
+	schemaValidator   *SchemaValidator
 }
 
 // NewFilterAdapter creates a new filter adapter to be passed to a ResponseFilter
 func NewFilterAdapter(logger *slog.Logger) (*FilterAdapter, error) {
+	return NewFilterAdapterWithSchemas(logger, nil)
+}
+
+// NewFilterAdapterWithSchemas creates a new filter adapter with schema validation
+func NewFilterAdapterWithSchemas(logger *slog.Logger, schemas map[string]*openapi3.Schema) (*FilterAdapter, error) {
 	pathsParser, err := search.NewPathsParser().SetLogger(logger).Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build paths parser: %w", err)
 	}
 
-	pathEvaluator, err := search.NewPathEvaluator().SetLogger(logger).Build()
+	pathEvaluator, err := search.NewPathEvaluator().
+		SetLogger(logger).
+		SetAllowMissingFields(true).
+		Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build path evaluator: %w", err)
 	}
@@ -63,10 +75,16 @@ func NewFilterAdapter(logger *slog.Logger) (*FilterAdapter, error) {
 		return nil, fmt.Errorf("failed to build selector evaluator: %w", err)
 	}
 
+	var schemaValidator *SchemaValidator
+	if schemas != nil && len(schemas) > 0 {
+		schemaValidator = NewSchemaValidator(schemas)
+	}
+
 	return &FilterAdapter{
 		pathsParser:       pathsParser,
 		selectorEvaluator: selectorEvaluator,
 		selectorParser:    selectorParser,
+		schemaValidator:   schemaValidator,
 	}, nil
 }
 
@@ -74,8 +92,19 @@ func NewFilterAdapter(logger *slog.Logger) (*FilterAdapter, error) {
 func (a *FilterAdapter) ParseFilter(query string) (*search.Selector, error) {
 	selector, err := a.selectorParser.Parse(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse filter: %w", err)
+		return nil, fmt.Errorf("invalid filter syntax in '%s': %w", query, err)
 	}
+
+	// Validate field names against schema if validator is available
+	if a.schemaValidator != nil {
+		for _, term := range selector.Terms {
+			if !a.schemaValidator.ValidateFieldPath(term.Path) {
+				fieldName := strings.Join(term.Path, ".")
+				return nil, fmt.Errorf("invalid field name '%s' in filter - field does not exist in the API schema", fieldName)
+			}
+		}
+	}
+
 	return selector, nil
 }
 
@@ -221,7 +250,7 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 					result, err := adapter.ParseFilter(value)
 					if err != nil {
 						slog.Error("failed to parse filter", "value", value, "err", err)
-						_ = adapter.Error(w, fmt.Sprintf("failed to parse filter: %s", value), http.StatusBadRequest)
+						_ = adapter.Error(w, err.Error(), http.StatusBadRequest)
 						return
 					}
 					selector.Terms = append(selector.Terms, result.Terms...)
