@@ -56,6 +56,10 @@ type Config struct {
 	ClientCertFile string
 	ClientKeyFile  string
 	CACertFile     string
+	TLSSkipVerify  bool
+	// Service account token configuration
+	ServiceAccountName      string
+	ServiceAccountNamespace string
 	// Retry configuration
 	InventoryMaxRetries   int
 	InventoryRetryDelayMs int
@@ -146,6 +150,11 @@ func addFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&config.ClientCertFile, "tls-cert", "", "Client certificate file for mutual TLS authentication")
 	flags.StringVar(&config.ClientKeyFile, "tls-key", "", "Client private key file for mutual TLS authentication")
 	flags.StringVar(&config.CACertFile, "tls-cacert", "", "CA certificate bundle file for server verification")
+	flags.BoolVar(&config.TLSSkipVerify, "tls-skip-verify", false, "Skip TLS server certificate verification (insecure)")
+
+	// Service account token flags for inventory module
+	flags.StringVar(&config.ServiceAccountName, "service-account-name", "test-client", "Service account name for token authentication (used when OAuth is not configured)")
+	flags.StringVar(&config.ServiceAccountNamespace, "service-account-namespace", "oran-o2ims", "Service account namespace for token authentication")
 
 	// Retry configuration flags for inventory module
 	flags.IntVar(&config.InventoryMaxRetries, "inventory-max-retries", 3, "Maximum number of retries for inventory API requests")

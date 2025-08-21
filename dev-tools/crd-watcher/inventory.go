@@ -21,12 +21,17 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
+	authenticationv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -63,6 +68,12 @@ type InventoryConfig struct {
 	ClientCertFile string
 	ClientKeyFile  string
 	CACertFile     string
+	TLSSkipVerify  bool
+	// Service account token configuration
+	ServiceAccountName      string
+	ServiceAccountNamespace string
+	// Kubernetes client configuration (for token creation)
+	KubernetesConfig *rest.Config
 	// Retry configuration
 	MaxRetries   int
 	RetryDelayMs int // Initial delay in milliseconds
@@ -144,26 +155,16 @@ func (nc *NodeCluster) ToRuntimeObject() runtime.Object {
 	}
 }
 
-// ResourceAPIResponse represents the API response structure
-type ResourceAPIResponse struct {
-	Resources []json.RawMessage `json:"resources"`
-}
-
-// ResourcePoolAPIResponse represents the resource pool API response structure
-type ResourcePoolAPIResponse struct {
-	ResourcePools []ResourcePool `json:"resourcePools"`
-}
-
-// NewInventoryClient creates a new inventory client with OAuth authentication
+// NewInventoryClient creates a new inventory client with OAuth or service account token authentication
 func NewInventoryClient(config *InventoryConfig) (*InventoryClient, error) {
 	if config.ServerURL == "" {
 		return nil, fmt.Errorf("inventory server URL is required")
 	}
-	if config.TokenURL == "" {
-		return nil, fmt.Errorf("oauth token URL is required")
-	}
-	if config.ClientID == "" || config.ClientSecret == "" {
-		return nil, fmt.Errorf("oauth client ID and secret are required")
+
+	// Check if OAuth is configured (all OAuth fields must be present)
+	useOAuth := config.TokenURL != "" && config.ClientID != "" && config.ClientSecret != ""
+	if !useOAuth {
+		klog.V(1).Info("OAuth not fully configured, falling back to service account token authentication")
 	}
 
 	// Create TLS configuration
@@ -177,31 +178,59 @@ func NewInventoryClient(config *InventoryConfig) (*InventoryClient, error) {
 		TLSClientConfig: tlsConfig,
 	}
 
-	// Set up OAuth2 client credentials flow with custom transport
-	oauthConfig := &clientcredentials.Config{
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		TokenURL:     config.TokenURL,
-		Scopes:       config.Scopes,
-	}
+	var httpClient *http.Client
 
-	klog.V(2).Infof("Creating OAuth client with token URL: %s, scopes: %v", config.TokenURL, config.Scopes)
-	klog.V(2).Infof("OAuth config scopes field: %#v", oauthConfig.Scopes)
+	if useOAuth {
+		// Set up OAuth2 client credentials flow with custom transport
+		oauthConfig := &clientcredentials.Config{
+			ClientID:     config.ClientID,
+			ClientSecret: config.ClientSecret,
+			TokenURL:     config.TokenURL,
+			Scopes:       config.Scopes,
+		}
 
-	// Create context with custom HTTP client for OAuth
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{
-		Transport: transport,
-	})
+		klog.V(2).Infof("Creating OAuth client with token URL: %s, scopes: %v", config.TokenURL, config.Scopes)
+		klog.V(2).Infof("OAuth config scopes field: %#v", oauthConfig.Scopes)
 
-	// Add debug transport to see what's actually being sent
-	if klog.V(3).Enabled() {
-		debugTransport := &debugTransport{base: transport}
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, &http.Client{
-			Transport: debugTransport,
+		// Create context with custom HTTP client for OAuth
+		ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{
+			Transport: transport,
 		})
-	}
 
-	httpClient := oauthConfig.Client(ctx)
+		// Add debug transport to see what's actually being sent
+		if klog.V(3).Enabled() {
+			debugTransport := &debugTransport{base: transport}
+			ctx = context.WithValue(ctx, oauth2.HTTPClient, &http.Client{
+				Transport: debugTransport,
+			})
+		}
+
+		httpClient = oauthConfig.Client(ctx)
+	} else {
+		// Use service account token authentication
+		tokenSource, err := createServiceAccountTokenSource(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create service account token source: %w", err)
+		}
+
+		// Create HTTP client with token source
+		oauthTransport := &oauth2.Transport{Source: tokenSource, Base: transport}
+
+		// Add debug transport to see what's actually being sent for service account tokens
+		if klog.V(3).Enabled() {
+			debugTransport := &debugTransport{base: oauthTransport}
+			httpClient = &http.Client{
+				Transport: debugTransport,
+			}
+		} else {
+			httpClient = &http.Client{
+				Transport: oauthTransport,
+			}
+		}
+
+		klog.V(2).Infof("Created service account token client for account %s in namespace %s",
+			config.ServiceAccountName, config.ServiceAccountNamespace)
+	}
 
 	// Set default retry values if not configured
 	maxRetries := config.MaxRetries
@@ -226,7 +255,12 @@ func NewInventoryClient(config *InventoryConfig) (*InventoryClient, error) {
 // createTLSConfig creates a TLS configuration with optional client certificates and CA bundle
 func createTLSConfig(config *InventoryConfig) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: config.TLSSkipVerify, // nolint: gosec // This is intentional when user requests TLS skip verification
+	}
+
+	if config.TLSSkipVerify {
+		klog.V(1).Info("TLS server certificate verification disabled (insecure)")
 	}
 
 	// Load client certificate and key if provided
@@ -239,8 +273,8 @@ func createTLSConfig(config *InventoryConfig) (*tls.Config, error) {
 		klog.V(1).Infof("Loaded client certificate from %s", config.ClientCertFile)
 	}
 
-	// Load CA certificate bundle if provided
-	if config.CACertFile != "" {
+	// Load CA certificate bundle if provided (only when not skipping verification)
+	if config.CACertFile != "" && !config.TLSSkipVerify {
 		caCert, err := os.ReadFile(config.CACertFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read CA certificate file: %w", err)
@@ -252,9 +286,135 @@ func createTLSConfig(config *InventoryConfig) (*tls.Config, error) {
 		}
 		tlsConfig.RootCAs = caCertPool
 		klog.V(1).Infof("Loaded CA certificate bundle from %s", config.CACertFile)
+	} else if config.CACertFile != "" && config.TLSSkipVerify {
+		klog.V(1).Info("CA certificate file provided but ignored due to TLS skip verification")
 	}
 
 	return tlsConfig, nil
+}
+
+// createServiceAccountTokenSource creates a token source for service account authentication
+func createServiceAccountTokenSource(config *InventoryConfig) (oauth2.TokenSource, error) {
+	if config.KubernetesConfig == nil {
+		return nil, fmt.Errorf("kubernetes config is required for service account token creation")
+	}
+
+	// Create Kubernetes client
+	clientset, err := kubernetes.NewForConfig(config.KubernetesConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	// Create token source that uses Kubernetes TokenRequest API
+	tokenSource := &serviceAccountTokenSource{
+		clientset:   clientset,
+		namespace:   config.ServiceAccountNamespace,
+		accountName: config.ServiceAccountName,
+		mutex:       &sync.Mutex{},
+	}
+
+	// Test the token source by getting an initial token
+	initialToken, err := tokenSource.Token()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create initial service account token for '%s' in namespace '%s': %w. "+
+			"Ensure the service account exists and you have permission to create tokens, "+
+			"or provide OAuth credentials (--oauth-token-url, --oauth-client-id, --oauth-client-secret)",
+			config.ServiceAccountName, config.ServiceAccountNamespace, err)
+	}
+
+	klog.V(2).Infof("Successfully created service account token, token type: %s, expires: %v",
+		initialToken.TokenType, initialToken.Expiry)
+
+	// Check if service account exists and provide helpful guidance
+	if klog.V(1).Enabled() {
+		checkServiceAccountPermissions(clientset, config.ServiceAccountNamespace, config.ServiceAccountName)
+	}
+
+	klog.V(2).Infof("Successfully created service account token source for account %s in namespace %s",
+		config.ServiceAccountName, config.ServiceAccountNamespace)
+
+	return tokenSource, nil
+}
+
+// serviceAccountTokenSource implements oauth2.TokenSource using Kubernetes TokenRequest API
+type serviceAccountTokenSource struct {
+	clientset   kubernetes.Interface
+	namespace   string
+	accountName string
+	mutex       *sync.Mutex
+	token       *oauth2.Token
+}
+
+// Token implements oauth2.TokenSource.Token()
+func (ts *serviceAccountTokenSource) Token() (*oauth2.Token, error) {
+	ts.mutex.Lock()
+	defer ts.mutex.Unlock()
+
+	// Check if we have a valid cached token
+	if ts.token != nil && ts.token.Valid() {
+		klog.V(4).Infof("Using cached service account token for %s/%s, expires at %v",
+			ts.namespace, ts.accountName, ts.token.Expiry)
+		return ts.token, nil
+	}
+
+	// Create a new token using Kubernetes TokenRequest API
+	timeout := int64(24 * 60 * 60)
+	tokenRequest := &authenticationv1.TokenRequest{
+		Spec: authenticationv1.TokenRequestSpec{
+			ExpirationSeconds: &timeout,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	result, err := ts.clientset.CoreV1().ServiceAccounts(ts.namespace).CreateToken(
+		ctx, ts.accountName, tokenRequest, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create service account token: %w", err)
+	}
+
+	// Calculate expiration time (subtract 5 minutes for safety margin)
+	expirationTime := result.Status.ExpirationTimestamp.Time.Add(-5 * time.Minute)
+
+	// Create oauth2.Token
+	token := &oauth2.Token{
+		AccessToken: result.Status.Token,
+		TokenType:   "Bearer",
+		Expiry:      expirationTime,
+	}
+
+	ts.token = token
+
+	klog.V(3).Infof("Created new service account token for %s/%s, expires at %v",
+		ts.namespace, ts.accountName, expirationTime)
+
+	// Log first and last 10 characters of token for debugging (never log full token)
+	if klog.V(4).Enabled() && len(result.Status.Token) > 20 {
+		klog.V(4).Infof("Token preview: %s...%s",
+			result.Status.Token[:10], result.Status.Token[len(result.Status.Token)-10:])
+	}
+
+	return token, nil
+}
+
+// checkServiceAccountPermissions provides helpful guidance about service account configuration
+func checkServiceAccountPermissions(clientset kubernetes.Interface, namespace, accountName string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Check if service account exists
+	_, err := clientset.CoreV1().ServiceAccounts(namespace).Get(ctx, accountName, metav1.GetOptions{})
+	if err != nil {
+		klog.V(1).Infof("Warning: Service account '%s' in namespace '%s' may not exist or is not accessible: %v",
+			accountName, namespace, err)
+		klog.V(1).Infof("Note: If using service account authentication, ensure the service account exists and has appropriate RBAC permissions for the O2IMS API")
+		klog.V(1).Infof("Example: The service account should have 'role:o2ims-reader' permissions or equivalent")
+		return
+	}
+
+	klog.V(2).Infof("Service account '%s' found in namespace '%s'", accountName, namespace)
+	klog.V(1).Infof("Note: Ensure the service account '%s' has appropriate RBAC permissions for the O2IMS API (e.g., 'role:o2ims-reader')", accountName)
 }
 
 // retryHTTPRequest performs an HTTP request with exponential backoff retry logic

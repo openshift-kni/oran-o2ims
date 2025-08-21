@@ -100,16 +100,20 @@ func NewCRDWatcher(clientset kubernetes.Interface, restConfig *rest.Config, sche
 	// Initialize inventory client if enabled
 	if config.EnableInventory {
 		inventoryConfig := &InventoryConfig{
-			ServerURL:      config.InventoryServerURL,
-			TokenURL:       config.OAuthTokenURL,
-			ClientID:       config.OAuthClientID,
-			ClientSecret:   config.OAuthClientSecret,
-			Scopes:         config.OAuthScopes,
-			ClientCertFile: config.ClientCertFile,
-			ClientKeyFile:  config.ClientKeyFile,
-			CACertFile:     config.CACertFile,
-			MaxRetries:     config.InventoryMaxRetries,
-			RetryDelayMs:   config.InventoryRetryDelayMs,
+			ServerURL:               config.InventoryServerURL,
+			TokenURL:                config.OAuthTokenURL,
+			ClientID:                config.OAuthClientID,
+			ClientSecret:            config.OAuthClientSecret,
+			Scopes:                  config.OAuthScopes,
+			ClientCertFile:          config.ClientCertFile,
+			ClientKeyFile:           config.ClientKeyFile,
+			CACertFile:              config.CACertFile,
+			TLSSkipVerify:           config.TLSSkipVerify,
+			ServiceAccountName:      config.ServiceAccountName,
+			ServiceAccountNamespace: config.ServiceAccountNamespace,
+			KubernetesConfig:        restConfig,
+			MaxRetries:              config.InventoryMaxRetries,
+			RetryDelayMs:            config.InventoryRetryDelayMs,
 		}
 
 		inventoryClient, err := NewInventoryClient(inventoryConfig)

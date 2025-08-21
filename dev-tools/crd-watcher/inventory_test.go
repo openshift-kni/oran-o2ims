@@ -14,11 +14,18 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
+	authenticationv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+	ktesting "k8s.io/client-go/testing"
 )
 
 var _ = Describe("InventoryResource", func() {
@@ -329,11 +336,17 @@ var _ = Describe("InventoryClient Integration", func() {
 
 	BeforeEach(func() {
 		config = &InventoryConfig{
-			ServerURL:    "https://test-server.example.com",
-			TokenURL:     "https://auth.example.com/token",
-			ClientID:     "test-client",
-			ClientSecret: "test-secret",
-			Scopes:       []string{"read", "write"},
+			ServerURL:               "https://test-server.example.com",
+			TokenURL:                "https://auth.example.com/token",
+			ClientID:                "test-client",
+			ClientSecret:            "test-secret",
+			Scopes:                  []string{"read", "write"},
+			TLSSkipVerify:           false,
+			ServiceAccountName:      "test-client",
+			ServiceAccountNamespace: "oran-o2ims",
+			KubernetesConfig: &rest.Config{
+				Host: "https://test-k8s-cluster",
+			},
 			MaxRetries:   3,
 			RetryDelayMs: 1000,
 		}
@@ -351,26 +364,36 @@ var _ = Describe("InventoryClient Integration", func() {
 			Expect(err.Error()).To(ContainSubstring("server URL is required"))
 		})
 
-		It("should validate OAuth configuration", func() {
-			// Test missing TokenURL
+		It("should fall back to service account when OAuth not fully configured", func() {
+			// Test missing TokenURL (partial OAuth config)
 			configMissingToken := *config
 			configMissingToken.TokenURL = ""
 
+			// This should fail because we're using a real K8s config that points to test-k8s-cluster
 			client, err := NewInventoryClient(&configMissingToken)
 			Expect(client).To(BeNil())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("token URL is required"))
+			Expect(err.Error()).To(ContainSubstring("failed to create service account token"))
 		})
 
-		It("should validate client credentials", func() {
+		It("should fall back to service account when OAuth credentials missing", func() {
 			// Test missing ClientID
 			configMissingID := *config
 			configMissingID.ClientID = ""
+			configMissingID.TokenURL = "" // Also remove TokenURL to ensure complete fallback
 
 			client, err := NewInventoryClient(&configMissingID)
+			// Should fail because we're using a real K8s config that points to test-k8s-cluster
 			Expect(client).To(BeNil())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("client ID and secret are required"))
+			Expect(err.Error()).To(ContainSubstring("failed to create service account token"))
+		})
+
+		It("should use OAuth when all OAuth fields are provided", func() {
+			// All OAuth fields provided - should use OAuth
+			client, err := NewInventoryClient(config)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(client).ToNot(BeNil())
 		})
 
 		It("should set default retry values", func() {
@@ -393,6 +416,29 @@ var _ = Describe("InventoryClient Integration", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(tlsConfig).ToNot(BeNil())
 			Expect(tlsConfig.MinVersion).To(Equal(uint16(0x0303))) // TLS 1.2
+			Expect(tlsConfig.InsecureSkipVerify).To(BeFalse())
+		})
+
+		It("should enable TLS skip verification when configured", func() {
+			configSkipTLS := *config
+			configSkipTLS.TLSSkipVerify = true
+
+			tlsConfig, err := createTLSConfig(&configSkipTLS)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(tlsConfig).ToNot(BeNil())
+			Expect(tlsConfig.InsecureSkipVerify).To(BeTrue())
+		})
+
+		It("should ignore CA certificate when TLS skip verification is enabled", func() {
+			configSkipTLS := *config
+			configSkipTLS.TLSSkipVerify = true
+			configSkipTLS.CACertFile = "/some/ca/file" // This should be ignored
+
+			tlsConfig, err := createTLSConfig(&configSkipTLS)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(tlsConfig).ToNot(BeNil())
+			Expect(tlsConfig.InsecureSkipVerify).To(BeTrue())
+			Expect(tlsConfig.RootCAs).To(BeNil()) // CA cert should be ignored
 		})
 	})
 
@@ -440,6 +486,160 @@ var _ = Describe("InventoryClient Integration", func() {
 			resp, err := client.retryHTTPRequest(ctx, requestFunc)
 			Expect(resp).To(BeNil())
 			Expect(err).To(Equal(context.Canceled))
+		})
+	})
+
+	Describe("createServiceAccountTokenSource", func() {
+		var fakeClientset *fake.Clientset
+
+		BeforeEach(func() {
+			fakeClientset = fake.NewSimpleClientset()
+		})
+
+		It("should return error when Kubernetes config is missing", func() {
+			config := &InventoryConfig{
+				ServiceAccountName:      "test-sa",
+				ServiceAccountNamespace: "test-ns",
+				KubernetesConfig:        nil, // Missing config
+			}
+
+			tokenSource, err := createServiceAccountTokenSource(config)
+			Expect(tokenSource).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("kubernetes config is required"))
+		})
+
+		It("should create token source successfully with valid service account", func() {
+			// Set up fake clientset to return a successful token creation
+			fakeClientset.PrependReactor("create", "serviceaccounts/token", func(action ktesting.Action) (handled bool, ret runtime.Object, err error) {
+				_ = action.(ktesting.CreateAction) // Verify it's a create action
+
+				// Return a mock token response
+				tokenResponse := &authenticationv1.TokenRequest{
+					Status: authenticationv1.TokenRequestStatus{
+						Token:               "mock-token-12345",
+						ExpirationTimestamp: metav1.Time{Time: time.Now().Add(24 * time.Hour)},
+					},
+				}
+				return true, tokenResponse, nil
+			})
+
+			config := &InventoryConfig{
+				ServiceAccountName:      "test-sa",
+				ServiceAccountNamespace: "test-ns",
+				KubernetesConfig: &rest.Config{
+					Host: "https://test-cluster",
+				},
+			}
+
+			// Override the Kubernetes client creation for testing
+			originalConfig := config.KubernetesConfig
+			defer func() { config.KubernetesConfig = originalConfig }()
+
+			// Create token source with mocked client
+			tokenSource := &serviceAccountTokenSource{
+				clientset:   fakeClientset,
+				namespace:   config.ServiceAccountNamespace,
+				accountName: config.ServiceAccountName,
+				mutex:       &sync.Mutex{},
+			}
+
+			token, err := tokenSource.Token()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(token).ToNot(BeNil())
+			Expect(token.AccessToken).To(Equal("mock-token-12345"))
+			Expect(token.TokenType).To(Equal("Bearer"))
+		})
+
+		It("should return error when service account does not exist", func() {
+			// Set up fake clientset to return an error
+			fakeClientset.PrependReactor("create", "serviceaccounts/token", func(action ktesting.Action) (handled bool, ret runtime.Object, err error) {
+				return true, nil, fmt.Errorf("serviceaccounts \"missing-sa\" not found")
+			})
+
+			config := &InventoryConfig{
+				ServiceAccountName:      "missing-sa",
+				ServiceAccountNamespace: "test-ns",
+				KubernetesConfig: &rest.Config{
+					Host: "https://test-cluster",
+				},
+			}
+
+			// Create token source with mocked client that will fail
+			tokenSource := &serviceAccountTokenSource{
+				clientset:   fakeClientset,
+				namespace:   config.ServiceAccountNamespace,
+				accountName: config.ServiceAccountName,
+				mutex:       &sync.Mutex{},
+			}
+
+			_, err := tokenSource.Token()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to create service account token"))
+			Expect(err.Error()).To(ContainSubstring("missing-sa"))
+		})
+
+		It("should cache and reuse valid tokens", func() {
+			callCount := 0
+			fakeClientset.PrependReactor("create", "serviceaccounts/token", func(action ktesting.Action) (handled bool, ret runtime.Object, err error) {
+				callCount++
+				tokenResponse := &authenticationv1.TokenRequest{
+					Status: authenticationv1.TokenRequestStatus{
+						Token:               fmt.Sprintf("mock-token-%d", callCount),
+						ExpirationTimestamp: metav1.Time{Time: time.Now().Add(24 * time.Hour)},
+					},
+				}
+				return true, tokenResponse, nil
+			})
+
+			tokenSource := &serviceAccountTokenSource{
+				clientset:   fakeClientset,
+				namespace:   "test-ns",
+				accountName: "test-sa",
+				mutex:       &sync.Mutex{},
+			}
+
+			// First call should create token
+			token1, err := tokenSource.Token()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(callCount).To(Equal(1))
+
+			// Second call should reuse cached token
+			token2, err := tokenSource.Token()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(callCount).To(Equal(1)) // Should not increment
+			Expect(token1.AccessToken).To(Equal(token2.AccessToken))
+		})
+	})
+
+	Describe("serviceAccountTokenSource", func() {
+		It("should have proper expiration margin", func() {
+			fakeClientset := fake.NewSimpleClientset()
+			expirationTime := time.Now().Add(24 * time.Hour)
+
+			fakeClientset.PrependReactor("create", "serviceaccounts/token", func(action ktesting.Action) (handled bool, ret runtime.Object, err error) {
+				tokenResponse := &authenticationv1.TokenRequest{
+					Status: authenticationv1.TokenRequestStatus{
+						Token:               "test-token",
+						ExpirationTimestamp: metav1.Time{Time: expirationTime},
+					},
+				}
+				return true, tokenResponse, nil
+			})
+
+			tokenSource := &serviceAccountTokenSource{
+				clientset:   fakeClientset,
+				namespace:   "test-ns",
+				accountName: "test-sa",
+				mutex:       &sync.Mutex{},
+			}
+
+			token, err := tokenSource.Token()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Token expiry should be 5 minutes before the actual expiration
+			expectedExpiry := expirationTime.Add(-5 * time.Minute)
+			Expect(token.Expiry).To(BeTemporally("~", expectedExpiry, time.Second))
 		})
 	})
 })
