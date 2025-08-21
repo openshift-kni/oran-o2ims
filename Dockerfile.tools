@@ -12,7 +12,7 @@
 # the License.
 #
 
-FROM registry.access.redhat.com/ubi9/ubi:9.6-1754586119 AS builder
+FROM registry.access.redhat.com/ubi9/ubi:9.6-1755678605 AS builder
 
 # Install packages.
 RUN \
