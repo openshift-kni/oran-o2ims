@@ -1192,3 +1192,104 @@ properties:
 		Expect(immutableResult).To(Equal(immutableExpected))
 	})
 })
+
+var _ = Describe("IsHardwareConfigCompleted", func() {
+	var pr *provisioningv1alpha1.ProvisioningRequest
+
+	BeforeEach(func() {
+		pr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pr",
+				Namespace: "test-namespace",
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Conditions: []metav1.Condition{},
+			},
+		}
+	})
+
+	Context("when HardwareConfigured condition does not exist", func() {
+		It("should return true (considered completed for initial provisioning)", func() {
+			result := IsHardwareConfigCompleted(pr)
+			Expect(result).To(BeTrue())
+		})
+	})
+
+	Context("when HardwareConfigured condition exists with status True", func() {
+		BeforeEach(func() {
+			pr.Status.Conditions = []metav1.Condition{
+				{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
+					Status: metav1.ConditionTrue,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+				},
+			}
+		})
+
+		It("should return true", func() {
+			result := IsHardwareConfigCompleted(pr)
+			Expect(result).To(BeTrue())
+		})
+	})
+
+	Context("when HardwareConfigured condition exists with status False", func() {
+		BeforeEach(func() {
+			pr.Status.Conditions = []metav1.Condition{
+				{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				},
+			}
+		})
+
+		It("should return false", func() {
+			result := IsHardwareConfigCompleted(pr)
+			Expect(result).To(BeFalse())
+		})
+	})
+
+	Context("when HardwareConfigured condition exists with status Unknown", func() {
+		BeforeEach(func() {
+			pr.Status.Conditions = []metav1.Condition{
+				{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
+					Status: metav1.ConditionUnknown,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				},
+			}
+		})
+
+		It("should return false", func() {
+			result := IsHardwareConfigCompleted(pr)
+			Expect(result).To(BeFalse())
+		})
+	})
+
+	Context("when multiple conditions exist including HardwareConfigured", func() {
+		BeforeEach(func() {
+			pr.Status.Conditions = []metav1.Condition{
+				{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+					Status: metav1.ConditionTrue,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+				},
+				{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
+					Status: metav1.ConditionTrue,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+				},
+				{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				},
+			}
+		})
+
+		It("should return true when HardwareConfigured is True", func() {
+			result := IsHardwareConfigCompleted(pr)
+			Expect(result).To(BeTrue())
+		})
+	})
+})

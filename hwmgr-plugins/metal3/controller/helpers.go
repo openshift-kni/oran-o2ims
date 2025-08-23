@@ -67,10 +67,8 @@ func removeConfigAnnotation(object client.Object) {
 func findNodeInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) *pluginsv1alpha1.AllocatedNode {
 	for _, node := range nodelist.Items {
 		condition := meta.FindStatusCondition(node.Status.Conditions, (string(hwmgmtv1alpha1.Provisioned)))
-		if condition != nil {
-			if condition.Status == metav1.ConditionFalse && condition.Reason == string(hwmgmtv1alpha1.InProgress) {
-				return &node
-			}
+		if condition == nil || (condition.Status == metav1.ConditionFalse && condition.Reason == string(hwmgmtv1alpha1.InProgress)) {
+			return &node
 		}
 	}
 
@@ -80,13 +78,17 @@ func findNodeInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) *pluginsv1a
 func applyPostConfigUpdates(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
-	bmhName types.NamespacedName, node *pluginsv1alpha1.AllocatedNode) error {
+	logger *slog.Logger,
+	bmhName types.NamespacedName, node *pluginsv1alpha1.AllocatedNode) (int, error) {
 
-	if err := clearBMHNetworkData(ctx, c, bmhName); err != nil {
-		return fmt.Errorf("failed to clearBMHNetworkData bmh (%+v): %w", bmhName, err)
+	if requeue, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil {
+		return RequeueAfterShortInterval, fmt.Errorf("failed to clearBMHNetworkData bmh (%+v): %w", bmhName, err)
+	} else if requeue > DoNotRequeue {
+		return requeue, nil
 	}
+
 	// nolint:wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
 		updatedNode := &pluginsv1alpha1.AllocatedNode{}
 
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
@@ -109,6 +111,11 @@ func applyPostConfigUpdates(ctx context.Context,
 
 		return nil
 	})
+	if err != nil {
+		return RequeueAfterShortInterval, fmt.Errorf("failed to remove annotation for node %s/%s: %w", node.Name, node.Namespace, err)
+	}
+
+	return DoNotRequeue, nil
 }
 
 // findNextNodeToUpdate scans the AllocatedNodeList to find the first node with stale HwProfile
@@ -270,19 +277,16 @@ func updateNodeStatus(ctx context.Context,
 		}
 		node.Status.Interfaces = info.Interfaces
 
-		reason := hwmgmtv1alpha1.Completed
-		message := "Provisioned"
-		status := metav1.ConditionTrue
 		if updating {
-			reason = hwmgmtv1alpha1.InProgress
-			message = "Hardware configuration in progess"
-			status = metav1.ConditionFalse
+			reason := hwmgmtv1alpha1.InProgress
+			message := "Hardware configuration in progress"
+			status := metav1.ConditionFalse
+			hwmgrutils.SetStatusCondition(&node.Status.Conditions,
+				string(hwmgmtv1alpha1.Provisioned),
+				string(reason),
+				status,
+				message)
 		}
-		hwmgrutils.SetStatusCondition(&node.Status.Conditions,
-			string(hwmgmtv1alpha1.Provisioned),
-			string(reason),
-			status,
-			message)
 
 		node.Status.HwProfile = hwprofile
 
@@ -301,21 +305,12 @@ func checkNodeAllocationRequestProgress(
 	pluginNamespace string,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (full bool, requeueAfter int, err error) {
 
-	// Always check allocation/processing status, regardless of current allocation count
-	// This handles both initial allocation and post-allocation processing (e.g., network data clearing)
-	requeueAfter, err = processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
-	if err != nil {
-		return false, DoNotRequeue, err
-	}
-	if requeueAfter > DoNotRequeue {
-		return false, requeueAfter, nil
-	}
-
 	// Check if we're fully allocated now that processing is complete
 	full = isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
 	if !full {
 		// Still not fully allocated, continue processing
-		return false, DoNotRequeue, nil
+		requeueAfter, err = processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+		return false, requeueAfter, err
 	}
 
 	// check if there are any pending work such as bios configuring
@@ -342,13 +337,13 @@ func processNewNodeAllocationRequest(ctx context.Context,
 			continue // Skip groups with size 0
 		}
 
-		// Fetch unallocated BMHs for the specific site and poolID
-		bmhListForGroup, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData, UnallocatedBMHs, "")
+		// Fetch unallocated BMHs for the specific site and NodeGroupData
+		bmhListForGroup, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData, UnallocatedBMHs)
 		if err != nil {
 			return fmt.Errorf("unable to fetch BMHs for nodegroup=%s: %w", nodeGroup.NodeGroupData.Name, err)
 		}
 
-		// Ensure enough resources exist in the requested pool
+		// Ensure enough resources exist that satisfy the request
 		if len(bmhListForGroup.Items) < nodeGroup.Size {
 			return fmt.Errorf("not enough free resources matching nodegroup=%s criteria: freenodes=%d, required=%d",
 				nodeGroup.NodeGroupData.Name, len(bmhListForGroup.Items), nodeGroup.Size)
@@ -705,22 +700,10 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	if !updating {
 		bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
-		// First, clear BMH NetworkData so metal3 controller can propagate to PreprovisioningImage
-		if err := clearBMHNetworkData(ctx, c, bmhName); err != nil {
-			return DoNotRequeue, fmt.Errorf("failed to clear network data for BMH (%s/%s): %w", bmh.Name, bmh.Namespace, err)
-		}
-
-		// Wait for metal3 controller to propagate the change to PreprovisioningImage network status
-		networkDataCleared, err := waitForPreprovisioningImageNetworkDataCleared(ctx, c, logger, bmhName)
-		if err != nil {
-			return DoNotRequeue, fmt.Errorf("failed to check PreprovisioningImage network status for BMH (%s/%s): %w", bmh.Name, bmh.Namespace, err)
-		}
-
-		if !networkDataCleared {
-			// PreprovisioningImage network data is not yet cleared, return requeue after 15 seconds
-			logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared, requeueing",
-				slog.String("bmh", bmhName.String()))
-			return RequeueAfterShortInterval, nil
+		if requeue, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil {
+			return RequeueAfterShortInterval, fmt.Errorf("failed to clearBMHNetworkData bmh (%+v): %w", bmhName, err)
+		} else if requeue > DoNotRequeue {
+			return requeue, nil
 		}
 	}
 
@@ -780,12 +763,6 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 		requeueAfter  int
 	)
 
-	// Get the BMH namespace from an already allocated node in this pool
-	bmhNamespace, err := getNodeAllocationRequestBMHNamespace(ctx, c, logger, nodeAllocationRequest)
-	if err != nil {
-		return DoNotRequeue, fmt.Errorf("unable to determine BMH namespace for pool %s: %w", nodeAllocationRequest.Name, err)
-	}
-
 	// Process allocation for each NodeGroup
 	for _, nodeGroup := range nodeAllocationRequest.Spec.NodeGroup {
 		if nodeGroup.Size == 0 {
@@ -797,40 +774,14 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 			ctx, noncachedClient, logger, pluginNamespace,
 			nodeAllocationRequest.Status.Properties.NodeNames, nodeGroup.NodeGroupData.Name)
 		if pendingNodes <= 0 {
-			// No new nodes needed, but check if existing allocated BMHs are still processing
-			// This handles the case where requeue is needed for network data clearing
-			allocatedBMHs, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site,
-				nodeGroup.NodeGroupData, AllocatedBMHs, bmhNamespace)
-			if err != nil {
-				logger.WarnContext(ctx, "Failed to fetch allocated BMHs for processing check",
-					slog.String("error", err.Error()))
-				continue
-			}
-
-			// Check if any allocated BMHs are still processing (e.g., network data clearing)
-			for _, bmh := range allocatedBMHs.Items {
-				requeue, err := allocateBMHToNodeAllocationRequest(ctx, c, noncachedClient, logger, pluginNamespace, &bmh, nodeAllocationRequest, nodeGroup)
-				if err != nil {
-					logger.WarnContext(ctx, "Error checking BMH processing status",
-						slog.String("bmh", bmh.Name),
-						slog.String("error", err.Error()))
-					continue
-				}
-				if requeue > DoNotRequeue {
-					logger.InfoContext(ctx, "Allocated BMH still processing, requeueing",
-						slog.String("bmh", bmh.Name),
-						slog.Int("requeueAfter", requeue))
-					return requeue, nil
-				}
-			}
 			continue
 		}
 
 		// Only fetch unallocated BMHs if we actually need new nodes
 		unallocatedBMHs, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site,
-			nodeGroup.NodeGroupData, UnallocatedBMHs, bmhNamespace)
+			nodeGroup.NodeGroupData, UnallocatedBMHs)
 		if err != nil {
-			return DoNotRequeue, fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
+			return RequeueAfterShortInterval, fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
 				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)
 		}
 
@@ -897,33 +848,6 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 	}
 
 	return DoNotRequeue, nil
-}
-
-// getNodeAllocationRequestBMHNamespace retrieves the namespace of an already allocated BMH in the given NodeAllocationRequest.
-func getNodeAllocationRequestBMHNamespace(ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-) (string, error) {
-
-	for _, nodeGroup := range nodeAllocationRequest.Spec.NodeGroup {
-		if nodeGroup.Size == 0 {
-			continue // Skip groups with size 0
-		}
-
-		// Fetch only allocated BMHs that match site and resourcePoolId
-		bmhList, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData, AllocatedBMHs, "")
-		if err != nil {
-			return "", fmt.Errorf("unable to fetch allocated BMHs for nodegroup=%s: %w", nodeGroup.NodeGroupData.Name, err)
-		}
-
-		// Return the namespace of the first allocated BMH and stop searching
-		if len(bmhList.Items) > 0 {
-			return bmhList.Items[0].Namespace, nil
-		}
-	}
-
-	return "", nil // No allocated BMH found, return empty namespace
 }
 
 func isNodeProvisioningInProgress(allocatednode *pluginsv1alpha1.AllocatedNode) bool {

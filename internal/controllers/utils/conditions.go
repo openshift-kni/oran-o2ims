@@ -143,6 +143,20 @@ func IsClusterConfigCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool
 	return condition != nil && condition.Status == metav1.ConditionTrue
 }
 
+// IsHardwareConfigCompleted checks if the hardware config condition status is completed
+// For initial provisioning, this condition may not exist, which is considered completed.
+// For Day2 updates, the condition must be present and True.
+func IsHardwareConfigCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+	if condition == nil {
+		// No HardwareConfigured condition means no Day2 hardware config was needed
+		return true
+	}
+	// If condition exists, it must be True to be considered completed
+	return condition.Status == metav1.ConditionTrue
+}
+
 // IsSmoRegistrationCompleted checks if registration with SMO has been completed
 func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
