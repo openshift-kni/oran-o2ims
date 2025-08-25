@@ -6,9 +6,7 @@ updates:
  - package-ecosystem: "gomod"
    directories:
     - "/"
-    - "api/hardwaremanagement"
-    - "api/inventory"
-    - "api/provisioning"
+    - "/api/*"
    schedule:
     interval: "daily"
    open-pull-requests-limit: 5
