@@ -165,6 +165,7 @@ SHELL = /usr/bin/env bash -o pipefail
 PROJECT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 ## Location to install dependencies to
+# If you are setting this externally then you must use an aboslute path
 LOCALBIN ?= $(PROJECT_DIR)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
@@ -457,13 +458,13 @@ $(BASHATE): $(LOCALBIN)
 		DOWNLOAD_BASHATE_VERSION=$(BASHATE_VERSION)
 	@echo "Bashate downloaded successfully."
 	@echo "Running bashate on repository bash files..."
-	find . -name '*.sh' \
-		-not -path './vendor/*' \
-		-not -path './*/vendor/*' \
-		-not -path './git/*' \
-		-not -path './bin/*' \
-		-not -path './testbin/*' \
-		-not -path './telco5g-konflux/*' \
+	find $(PROJECT_DIR) -name '*.sh' \
+		-not -path '$(PROJECT_DIR)/vendor/*' \
+		-not -path '$(PROJECT_DIR)/*/vendor/*' \
+		-not -path '$(PROJECT_DIR)/git/*' \
+		-not -path '$(LOCALBIN)/*' \
+		-not -path '$(PROJECT_DIR)/testbin/*' \
+		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
 		| xargs -0 --no-run-if-empty $(BASHATE) -v -e 'E*' -i E006
 	@echo "Bashate linting completed successfully."
@@ -494,13 +495,13 @@ $(SHELLCHECK): $(LOCALBIN)
 	@echo "Shellcheck downloaded successfully."
 	$(SHELLCHECK) -V
 	@echo "Running shellcheck on repository bash files..."
-	find . -name '*.sh' \
-		-not -path './vendor/*' \
-		-not -path './*/vendor/*' \
-		-not -path './git/*' \
-		-not -path './bin/*' \
-		-not -path './testbin/*' \
-		-not -path './telco5g-konflux/*' \
+	find $(PROJECT_DIR) -name '*.sh' \
+		-not -path '$(PROJECT_DIR)/vendor/*' \
+		-not -path '$(PROJECT_DIR)/*/vendor/*' \
+		-not -path '$(PROJECT_DIR)/git/*' \
+		-not -path '$(LOCALBIN)/*' \
+		-not -path '$(PROJECT_DIR)/testbin/*' \
+		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
 		| xargs -0 --no-run-if-empty $(SHELLCHECK) -x
 	@echo "Shellcheck linting completed successfully."
@@ -515,13 +516,13 @@ $(YAMLLINT): $(LOCALBIN)
 	@echo "Yamllint downloaded successfully."
 	$(YAMLLINT) -v
 	@echo "Running yamllint on repository YAML files..."
-	find . -name "*.yaml" -o -name "*.yml" \
-		-not -path './vendor/*' \
-		-not -path './*/vendor/*' \
-		-not -path './git/*' \
-		-not -path './bin/*' \
-		-not -path './testbin/*' \
-		-not -path './telco5g-konflux/*' \
+	find $(PROJECT_DIR) -name "*.yaml" -o -name "*.yml" \
+		-not -path '$(PROJECT_DIR)/vendor/*' \
+		-not -path '$(PROJECT_DIR)/*/vendor/*' \
+		-not -path '$(PROJECT_DIR)/git/*' \
+		-not -path '$(LOCALBIN)/*' \
+		-not -path '$(PROJECT_DIR)/testbin/*' \
+		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
 		| xargs -0 --no-run-if-empty $(YAMLLINT) -c .yamllint.yaml
 	@echo "Yamllint linting completed successfully."
@@ -539,7 +540,7 @@ $(YQ): $(LOCALBIN)
 .PHONY: yq-sort-and-format
 yq-sort-and-format: yq ## Sort keys/reformat all yaml files
 	@echo "Sorting keys and reformatting YAML files..."
-	@find . -name "*.yaml" -o -name "*.yml" | grep -v -E "(telco5g-konflux/|target/|vendor/|bin/|\.git/)" | while read file; do \
+	@find . -name "*.yaml" -o -name "*.yml" | grep -v -E "(telco5g-konflux/|target/|vendor/|$(LOCALBIN)/|\.git/)" | while read file; do \
 		echo "Processing $$file..."; \
 		$(YQ) -i '.. |= sort_keys(.)' "$$file"; \
 	done
