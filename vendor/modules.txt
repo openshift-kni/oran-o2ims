@@ -59,7 +59,7 @@ github.com/fsnotify/fsnotify/internal
 # github.com/fxamacker/cbor/v2 v2.9.0
 ## explicit; go 1.20
 github.com/fxamacker/cbor/v2
-# github.com/getkin/kin-openapi v0.132.0
+# github.com/getkin/kin-openapi v0.133.0
 ## explicit; go 1.22.5
 github.com/getkin/kin-openapi/openapi3
 github.com/getkin/kin-openapi/openapi3filter
@@ -484,6 +484,9 @@ github.com/vmihailenco/tagparser/v2/internal/parser
 # github.com/vmware-labs/yaml-jsonpath v0.3.2
 ## explicit; go 1.13
 github.com/vmware-labs/yaml-jsonpath/pkg/yamlpath
+# github.com/woodsbury/decimal128 v1.3.0
+## explicit; go 1.21
+github.com/woodsbury/decimal128
 # github.com/x448/float16 v0.8.4
 ## explicit; go 1.11
 github.com/x448/float16
