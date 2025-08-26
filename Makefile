@@ -164,9 +164,14 @@ SHELL = /usr/bin/env bash -o pipefail
 # Trim any trailing slash from the directory path as we will add if when necessary later
 PROJECT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
-# This allows all tools under '$(PWD)/bin', ie:opm,yq ... To be used by targets containing scripts
+## Location to install dependencies to
+LOCALBIN ?= $(PROJECT_DIR)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+# This allows all tools in the LOCALBIN folder, ie:opm,yq ... To be used by targets containing scripts
 # Prefer binaries in the local bin directory over system binaries.
-export PATH  := $(PROJECT_DIR)/bin:$(PATH)
+export PATH  := $(LOCALBIN):$(PATH)
 
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
@@ -272,11 +277,6 @@ undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specifie
 
 ## oran-binary
 BINARY_NAME := oran-o2ims
-
-## Location to install dependencies to
-LOCALBIN ?= $(PROJECT_DIR)/bin
-$(LOCALBIN):
-	mkdir -p $(LOCALBIN)
 
 ## Tool Binaries
 BASHATE ?= $(LOCALBIN)/bashate
