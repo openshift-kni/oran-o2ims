@@ -433,7 +433,7 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
 		TOOL_NAME=golangci-lint \
 		GO_MODULE=github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 	@echo "Golangci-lint downloaded successfully."
 	@echo "Running golangci-lint on repository go files..."
 	$(GOLANGCI_LINT) --version
@@ -448,7 +448,7 @@ bashate: $(BASHATE) ## Download bashate and lint bash files in the repository. I
 $(BASHATE): $(LOCALBIN)
 	@echo "Downloading bashate..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-bashate \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_BASHATE_VERSION=$(BASHATE_VERSION)
 	@echo "Bashate downloaded successfully."
 	@echo "Running bashate on repository bash files..."
@@ -466,7 +466,7 @@ $(BASHATE): $(LOCALBIN)
 operator-sdk: $(OPERATOR_SDK) ## Download operator-sdk locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(OPERATOR_SDK): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-operator-sdk \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_OPERATOR_SDK_VERSION=$(OPERATOR_SDK_VERSION)
 	@echo "Operator sdk downloaded successfully."
 
@@ -474,7 +474,7 @@ $(OPERATOR_SDK): $(LOCALBIN)
 opm: $(OPM) ## Download opm locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(OPM): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-opm \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_OPM_VERSION=$(OPM_VERSION)
 	$(OPM) version
 	@echo "Opm downloaded successfully."
@@ -484,7 +484,7 @@ shellcheck: $(SHELLCHECK) ## Download shellcheck locally if necessary and run ag
 $(SHELLCHECK): $(LOCALBIN)
 	@echo "Downloading shellcheck..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-shellcheck \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_SHELLCHECK_VERSION=$(SHELLCHECK_VERSION)
 	@echo "Shellcheck downloaded successfully."
 	$(SHELLCHECK) -V
@@ -505,7 +505,7 @@ yamllint: $(YAMLLINT) ## Download yamllint locally if necessary and run against 
 $(YAMLLINT): $(LOCALBIN)
 	@echo "Downloading yamllint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_YAMLLINT_VERSION=$(YAMLLINT_VERSION)
 	@echo "Yamllint downloaded successfully."
 	$(YAMLLINT) -v
@@ -526,7 +526,7 @@ yq: $(YQ) ## Download yq locally if necessary. If wrong version is installed, it
 $(YQ): $(LOCALBIN)
 	@echo "Downloading yq..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yq \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_YQ_VERSION=$(YQ_VERSION)
 	$(YQ) --version
 	@echo "Yq downloaded successfully."
