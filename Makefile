@@ -24,18 +24,37 @@ VERSION ?= 4.20.0
 
 PACKAGE_NAME ?= oran-o2ims
 
-# OPERATOR_SDK_VERSION defines the operator-sdk version to download from GitHub releases.
-OPERATOR_SDK_VERSION ?= v1.41.1
+# BASHATE_VERSION defines the bashate version to download from GitHub releases.
+BASHATE_VERSION ?= 2.1.1
 
-# YQ_VERSION defines the yq version to download from GitHub releases.
-YQ_VERSION ?= v4.45.4
+# CONTROLLER_GEN_VERSION defines the controller-gen version to download from go modules.
+CONTROLLER_GEN_VERSION ?= v0.18.0
+
+# GOLANGCI_LINT_VERSION defines the golangci-lint version to download from GitHub releases.
+GOLANGCI_LINT_VERSION ?= v2.4.0
+
+# KUSTOMIZE_VERSION defines the kustomize version to download from go modules.
+KUSTOMIZE_VERSION ?= v5@v5.7.1
+
+# MOCK_GEN_VERSION defines the mockgen version to download from go modules.
+MOCK_GEN_VERSION ?= v0.3.0
+
+# OPERATOR_SDK_VERSION defines the operator-sdk version to download from GitHub releases.
+OPERATOR_SDK_VERSION ?= 1.41.1
 
 # OPM_VERSION defines the opm version to download from GitHub releases.
 OPM_VERSION ?= v1.52.0
 
-# GOLANGCI_LINT_VERSION the opm version to download from GitHub releases.
-GOLANGCI_LINT_VERSION ?= v2.4.0
+# SHELLCHECK_VERSION defines the shellcheck version to download from GitHub releases.
+SHELLCHECK_VERSION ?= v0.11.0
 
+# YAMLLINT_VERSION defines the yamllint version to download from GitHub releases.
+YAMLLINT_VERSION ?= 1.37.1
+
+# YQ_VERSION defines the yq version to download from GitHub releases.
+YQ_VERSION ?= v4.45.4
+
+# Konflux catalog configuration
 PACKAGE_NAME_KONFLUX = o-cloud-manager
 CATALOG_TEMPLATE_KONFLUX_INPUT = .konflux/catalog/catalog-template.in.yaml
 CATALOG_TEMPLATE_KONFLUX_OUTPUT = .konflux/catalog/catalog-template.out.yaml
@@ -45,7 +64,11 @@ CATALOG_KONFLUX = .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
 BUNDLE_NAME_SUFFIX = bundle-4-20
 PRODUCTION_BUNDLE_NAME = operator-bundle
 
+# The directory of the current makefile
 PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
+
+# You can use podman or docker as a container engine. Notice that there are some options that might be only valid for one of them.
+ENGINE ?= docker
 
 # Development/Debug passwords for database.  This requires that the operator be deployed in DEBUG=yes mode or for the
 # developer to override these values with the current passwords
@@ -137,8 +160,19 @@ export SKIP_SUBMODULE_SYNC ?= no
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# This allows all tools under '$(PWD)/bin', ie:opm,yq ... To be used by targets containing scripts
-export PATH  := $(PATH):$(PWD)/bin
+# Get the directory of the current makefile
+# Trim any trailing slash from the directory path as we will add if when necessary later
+PROJECT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+
+## Location to install dependencies to
+# If you are setting this externally then you must use an aboslute path
+LOCALBIN ?= $(PROJECT_DIR)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+# This allows all tools in the LOCALBIN folder, ie:opm,yq ... To be used by targets containing scripts
+# Prefer binaries in the local bin directory over system binaries.
+export PATH  := $(LOCALBIN):$(PATH)
 
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
@@ -245,26 +279,20 @@ undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specifie
 ## oran-binary
 BINARY_NAME := oran-o2ims
 
-## Location to install dependencies to
-LOCALBIN ?= $(shell pwd)/bin
-$(LOCALBIN):
-	mkdir -p $(LOCALBIN)
-
 ## Tool Binaries
-KUBECTL ?= $(LOCALBIN)/kubectl
-KUSTOMIZE ?= $(LOCALBIN)/kustomize
+BASHATE ?= $(LOCALBIN)/bashate
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
-OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+KUBECTL ?= $(LOCALBIN)/kubectl
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
+MOCK_GEN ?= $(LOCALBIN)/mockgen
+OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 OPM ?= $(LOCALBIN)/opm
+YAMLLINT ?= $(LOCALBIN)/yamllint
 YQ ?= $(LOCALBIN)/yq
-YAML_LINT ?= $(LOCALBIN)/yamllint
 
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.7.1
-CONTROLLER_TOOLS_VERSION ?= v0.18.0
-
+## Download go tools
 .PHONY: kubectl
 kubectl: $(KUBECTL) ## Use envtest to download kubectl
 $(KUBECTL): $(LOCALBIN) envtest
@@ -274,25 +302,36 @@ $(KUBECTL): $(LOCALBIN) envtest
 	fi
 
 .PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
+kustomize: sync-git-submodules $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(KUSTOMIZE): $(LOCALBIN)
-	@if test -x $(LOCALBIN)/kustomize && ! $(LOCALBIN)/kustomize version | grep -q $(KUSTOMIZE_VERSION); then \
-		echo "$(LOCALBIN)/kustomize version is not expected $(KUSTOMIZE_VERSION). Removing it before installing."; \
-		rm -rf $(LOCALBIN)/kustomize; \
-	fi
-	test -s $(LOCALBIN)/kustomize || GOBIN=$(LOCALBIN) GO111MODULE=on go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
+		TOOL_NAME=kustomize \
+		GO_MODULE=sigs.k8s.io/kustomize/kustomize/$(KUSTOMIZE_VERSION) \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
+controller-gen: sync-git-submodules $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
+		TOOL_NAME=controller-gen \
+		GO_MODULE=sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
+envtest: sync-git-submodules $(ENVTEST) ## Download envtest-setup locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(ENVTEST): $(LOCALBIN)
-	@chmod u+w $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
+		TOOL_NAME=setup-envtest \
+		GO_MODULE=sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION) \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
+
+.PHONY: mock-gen
+mock-gen: sync-git-submodules $(MOCK_GEN) ## Download mockgen locally if necessary. If wrong version is installed, it will be removed before downloading.
+$(MOCK_GEN): $(LOCALBIN)
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
+		TOOL_NAME=mockgen \
+		GO_MODULE=go.uber.org/mock/mockgen@$(MOCK_GEN_VERSION) \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 # Determine sed flags based on the operating system
 ifeq ($(shell uname -s),Linux)
@@ -391,101 +430,117 @@ catalog-undeploy: ## Undeploy from catalog image.
 ##@ Tools and Linting
 
 .PHONY: lint
-lint: golangci-lint yamllint
+lint: bashate golangci-lint shellcheck yamllint
+
+.PHONY: tools
+tools: opm operator-sdk yq
 
 .PHONY: golangci-lint
-golangci-lint: ## Run golangci-lint against code.
+golangci-lint: sync-git-submodules $(GOLANGCI_LINT) ## Run golangci-lint against code. If wrong version is installed, it will be removed before downloading.
+$(GOLANGCI_LINT): $(LOCALBIN)
 	@echo "Downloading golangci-lint..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-golangci-lint \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
-		DOWNLOAD_GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION)
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
+		TOOL_NAME=golangci-lint \
+		GO_MODULE=github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 	@echo "Golangci-lint downloaded successfully."
 	@echo "Running golangci-lint on repository go files..."
 	$(GOLANGCI_LINT) --version
 	$(GOLANGCI_LINT) run -v
 	@echo "Golangci-lint linting completed successfully."
 
-.PHONY: tools
-tools: opm operator-sdk yq
-
 .PHONY: bashate
-bashate: ## Download bashate and lint bash files in the repository
+bashate: sync-git-submodules $(BASHATE) ## Download bashate and lint bash files in the repository. If wrong version is installed, it will be removed before downloading.
+$(BASHATE): $(LOCALBIN)
 	@echo "Downloading bashate..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-bashate DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-bashate \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
+		DOWNLOAD_BASHATE_VERSION=$(BASHATE_VERSION)
 	@echo "Bashate downloaded successfully."
 	@echo "Running bashate on repository bash files..."
-	find . -name '*.sh' \
-		-not -path './vendor/*' \
-		-not -path './*/vendor/*' \
-		-not -path './git/*' \
-		-not -path './bin/*' \
-		-not -path './testbin/*' \
-		-not -path './telco5g-konflux/*' \
+	find $(PROJECT_DIR) -name '*.sh' \
+		-not -path '$(PROJECT_DIR)/vendor/*' \
+		-not -path '$(PROJECT_DIR)/*/vendor/*' \
+		-not -path '$(PROJECT_DIR)/git/*' \
+		-not -path '$(LOCALBIN)/*' \
+		-not -path '$(PROJECT_DIR)/testbin/*' \
+		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
-		| xargs -0 --no-run-if-empty bashate -v -e 'E*' -i E006
+		| xargs -0 --no-run-if-empty $(BASHATE) -v -e 'E*' -i E006
 	@echo "Bashate linting completed successfully."
 
-operator-sdk: ## Download operator-sdk locally if necessary
+operator-sdk: sync-git-submodules $(OPERATOR_SDK) ## Download operator-sdk locally if necessary. If wrong version is installed, it will be removed before downloading.
+$(OPERATOR_SDK): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-operator-sdk \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_OPERATOR_SDK_VERSION=$(OPERATOR_SDK_VERSION)
 	@echo "Operator sdk downloaded successfully."
 
 .PHONY: opm
-opm: ## Download opm locally if necessary
+opm: sync-git-submodules $(OPM) ## Download opm locally if necessary. If wrong version is installed, it will be removed before downloading.
+$(OPM): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-opm \
-		DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_OPM_VERSION=$(OPM_VERSION)
 	$(OPM) version
 	@echo "Opm downloaded successfully."
 
 .PHONY: shellcheck
-shellcheck: ## Download shellcheck locally if necessary and run against bash  scripts
+shellcheck: sync-git-submodules $(SHELLCHECK) ## Download shellcheck locally if necessary and run against bash  scripts. If wrong version is installed, it will be removed before downloading.
+$(SHELLCHECK): $(LOCALBIN)
 	@echo "Downloading shellcheck..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-shellcheck DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-shellcheck \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
+		DOWNLOAD_SHELLCHECK_VERSION=$(SHELLCHECK_VERSION)
 	@echo "Shellcheck downloaded successfully."
-	shellcheck -V
+	$(SHELLCHECK) -V
 	@echo "Running shellcheck on repository bash files..."
-	find . -name '*.sh' \
-		-not -path './vendor/*' \
-		-not -path './*/vendor/*' \
-		-not -path './git/*' \
-		-not -path './bin/*' \
-		-not -path './testbin/*' \
-		-not -path './telco5g-konflux/*' \
+	find $(PROJECT_DIR) -name '*.sh' \
+		-not -path '$(PROJECT_DIR)/vendor/*' \
+		-not -path '$(PROJECT_DIR)/*/vendor/*' \
+		-not -path '$(PROJECT_DIR)/git/*' \
+		-not -path '$(LOCALBIN)/*' \
+		-not -path '$(PROJECT_DIR)/testbin/*' \
+		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
-		| xargs -0 --no-run-if-empty shellcheck -x
+		| xargs -0 --no-run-if-empty $(SHELLCHECK) -x
 	@echo "Shellcheck linting completed successfully."
 
 .PHONY: yamllint
-yamllint: ## Download yamllint locally if necessary and run against yaml files
+yamllint: sync-git-submodules $(YAMLLINT) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
+$(YAMLLINT): $(LOCALBIN)
 	@echo "Downloading yamllint..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
+		DOWNLOAD_YAMLLINT_VERSION=$(YAMLLINT_VERSION)
 	@echo "Yamllint downloaded successfully."
-	$(YAML_LINT) -v
+	$(YAMLLINT) -v
 	@echo "Running yamllint on repository YAML files..."
-	find . -name "*.yaml" -o -name "*.yml" \
-		-not -path './vendor/*' \
-		-not -path './*/vendor/*' \
-		-not -path './git/*' \
-		-not -path './bin/*' \
-		-not -path './testbin/*' \
-		-not -path './telco5g-konflux/*' \
+	find $(PROJECT_DIR) -name "*.yaml" -o -name "*.yml" \
+		-not -path '$(PROJECT_DIR)/vendor/*' \
+		-not -path '$(PROJECT_DIR)/*/vendor/*' \
+		-not -path '$(PROJECT_DIR)/git/*' \
+		-not -path '$(LOCALBIN)/*' \
+		-not -path '$(PROJECT_DIR)/testbin/*' \
+		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
-		| xargs -0 --no-run-if-empty yamllint -c .yamllint.yaml
+		| xargs -0 --no-run-if-empty $(YAMLLINT) -c .yamllint.yaml
 	@echo "Yamllint linting completed successfully."
 
 .PHONY: yq
-yq: ## Download yq locally if necessary
+yq: sync-git-submodules $(YQ) ## Download yq locally if necessary. If wrong version is installed, it will be removed before downloading.
+$(YQ): $(LOCALBIN)
 	@echo "Downloading yq..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yq DOWNLOAD_INSTALL_DIR=$(PROJECT_DIR)/bin
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yq \
+		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
+		DOWNLOAD_YQ_VERSION=$(YQ_VERSION)
 	$(YQ) --version
 	@echo "Yq downloaded successfully."
 
 .PHONY: yq-sort-and-format
 yq-sort-and-format: yq ## Sort keys/reformat all yaml files
 	@echo "Sorting keys and reformatting YAML files..."
-	@find . -name "*.yaml" -o -name "*.yml" | grep -v -E "(telco5g-konflux/|target/|vendor/|bin/|\.git/)" | while read file; do \
+	@find . -name "*.yaml" -o -name "*.yml" | grep -v -E "(telco5g-konflux/|target/|vendor/|$(LOCALBIN)/|\.git/)" | while read file; do \
 		echo "Processing $$file..."; \
 		$(YQ) -i '.. |= sort_keys(.)' "$$file"; \
 	done
@@ -499,7 +554,6 @@ binary: $(LOCALBIN)
 .PHONY: crd-watcher
 crd-watcher: $(LOCALBIN) ## Build the CRD watcher binary.
 	go build -o $(LOCALBIN)/crd-watcher -mod=vendor ./dev-tools/crd-watcher
-
 
 .PHONY: generate
 go-generate:
@@ -539,7 +593,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: deps-update
-deps-update:
+deps-update: mock-gen golangci-lint
 	@echo "Update dependencies"
 	hack/update_deps.sh
 	hack/install_test_deps.sh
@@ -559,10 +613,10 @@ scorecard-test: operator-sdk
 	oc create ns $(OCLOUD_MANAGER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
 	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE) --pod-security=restricted
 
-.PHONY: sync-submodules
-sync-submodules:
-	@echo "Syncing submodules"
-	hack/sync-submodules.sh
+.PHONY: sync-api-submodules
+sync-api-submodules:
+	@echo "Syncing api submodules"
+	hack/sync-api-submodules.sh
 
 # markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
 .PHONY: markdownlint-image
@@ -622,8 +676,15 @@ connect-cluster-server: ##Connect to resource server svc
 
 ##@ Konflux
 
-# You can use podman or docker as a container engine. Notice that there are some options that might be only valid for one of them.
-ENGINE ?= docker
+.PHONY: sync-git-submodules
+sync-git-submodules:
+	@echo "Checking git submodules"
+	@if [ "$(SKIP_SUBMODULE_SYNC)" != "yes" ]; then \
+		echo "Syncing git submodules"; \
+		git submodule update --init --recursive; \
+	else \
+		echo "Skipping submodule sync"; \
+	fi
 
 .PHONY: konflux-validate-catalog-template-bundle ## validate the last bundle entry on the catalog template file
 konflux-validate-catalog-template-bundle: yq operator-sdk
@@ -689,4 +750,3 @@ konflux-compare-catalog: ## Compare generated catalog with upstream FBC image
 .PHONY: konflux-all
 konflux-catalog-all: konflux-validate-catalog-template-bundle konflux-generate-catalog-production  konflux-compare-catalog ## Run all konflux catalog logic
 	@echo "All Konflux targets completed successfully."
-
