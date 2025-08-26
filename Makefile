@@ -301,7 +301,7 @@ $(KUBECTL): $(LOCALBIN) envtest
 	fi
 
 .PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
+kustomize: sync-git-submodules $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(KUSTOMIZE): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
 		TOOL_NAME=kustomize \
@@ -309,7 +309,7 @@ $(KUSTOMIZE): $(LOCALBIN)
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be removed before downloading.
+controller-gen: sync-git-submodules $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
 		TOOL_NAME=controller-gen \
@@ -317,7 +317,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary. If wrong version is installed, it will be removed before downloading.
+envtest: sync-git-submodules $(ENVTEST) ## Download envtest-setup locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(ENVTEST): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
 		TOOL_NAME=setup-envtest \
@@ -325,7 +325,7 @@ $(ENVTEST): $(LOCALBIN)
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: mock-gen
-mock-gen: $(MOCK_GEN) ## Download mockgen locally if necessary. If wrong version is installed, it will be removed before downloading.
+mock-gen: sync-git-submodules $(MOCK_GEN) ## Download mockgen locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(MOCK_GEN): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
 		TOOL_NAME=mockgen \
@@ -435,7 +435,7 @@ lint: bashate golangci-lint shellcheck yamllint
 tools: opm operator-sdk yq
 
 .PHONY: golangci-lint
-golangci-lint: $(GOLANGCI_LINT) ## Run golangci-lint against code. If wrong version is installed, it will be removed before downloading.
+golangci-lint: sync-git-submodules $(GOLANGCI_LINT) ## Run golangci-lint against code. If wrong version is installed, it will be removed before downloading.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	@echo "Downloading golangci-lint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
@@ -449,7 +449,7 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 	@echo "Golangci-lint linting completed successfully."
 
 .PHONY: bashate
-bashate: $(BASHATE) ## Download bashate and lint bash files in the repository. If wrong version is installed, it will be removed before downloading.
+bashate: sync-git-submodules $(BASHATE) ## Download bashate and lint bash files in the repository. If wrong version is installed, it will be removed before downloading.
 $(BASHATE): $(LOCALBIN)
 	@echo "Downloading bashate..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-bashate \
@@ -468,7 +468,7 @@ $(BASHATE): $(LOCALBIN)
 		| xargs -0 --no-run-if-empty $(BASHATE) -v -e 'E*' -i E006
 	@echo "Bashate linting completed successfully."
 
-operator-sdk: $(OPERATOR_SDK) ## Download operator-sdk locally if necessary. If wrong version is installed, it will be removed before downloading.
+operator-sdk: sync-git-submodules $(OPERATOR_SDK) ## Download operator-sdk locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(OPERATOR_SDK): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-operator-sdk \
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
@@ -476,7 +476,7 @@ $(OPERATOR_SDK): $(LOCALBIN)
 	@echo "Operator sdk downloaded successfully."
 
 .PHONY: opm
-opm: $(OPM) ## Download opm locally if necessary. If wrong version is installed, it will be removed before downloading.
+opm: sync-git-submodules $(OPM) ## Download opm locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(OPM): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-opm \
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
@@ -485,7 +485,7 @@ $(OPM): $(LOCALBIN)
 	@echo "Opm downloaded successfully."
 
 .PHONY: shellcheck
-shellcheck: $(SHELLCHECK) ## Download shellcheck locally if necessary and run against bash  scripts. If wrong version is installed, it will be removed before downloading.
+shellcheck: sync-git-submodules $(SHELLCHECK) ## Download shellcheck locally if necessary and run against bash  scripts. If wrong version is installed, it will be removed before downloading.
 $(SHELLCHECK): $(LOCALBIN)
 	@echo "Downloading shellcheck..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-shellcheck \
@@ -506,7 +506,7 @@ $(SHELLCHECK): $(LOCALBIN)
 	@echo "Shellcheck linting completed successfully."
 
 .PHONY: yamllint
-yamllint: $(YAMLLINT) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
+yamllint: sync-git-submodules $(YAMLLINT) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
 $(YAMLLINT): $(LOCALBIN)
 	@echo "Downloading yamllint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint \
@@ -527,7 +527,7 @@ $(YAMLLINT): $(LOCALBIN)
 	@echo "Yamllint linting completed successfully."
 
 .PHONY: yq
-yq: $(YQ) ## Download yq locally if necessary. If wrong version is installed, it will be removed before downloading.
+yq: sync-git-submodules $(YQ) ## Download yq locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(YQ): $(LOCALBIN)
 	@echo "Downloading yq..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yq \
@@ -612,10 +612,10 @@ scorecard-test: operator-sdk
 	oc create ns $(OCLOUD_MANAGER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
 	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE) --pod-security=restricted
 
-.PHONY: sync-submodules
-sync-submodules:
-	@echo "Syncing submodules"
-	hack/sync-submodules.sh
+.PHONY: sync-api-submodules
+sync-api-submodules:
+	@echo "Syncing api submodules"
+	hack/sync-api-submodules.sh
 
 # markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
 .PHONY: markdownlint-image
@@ -674,6 +674,16 @@ connect-cluster-server: ##Connect to resource server svc
 	nohup oc port-forward --address localhost svc/cluster-server 8001:8000 -n $(OCLOUD_MANAGER_NAMESPACE) > pgproxy_resource.log 2>&1 &
 
 ##@ Konflux
+
+.PHONY: sync-git-submodules
+sync-git-submodules:
+	@echo "Checking git submodules"
+	@if [ "$(SKIP_SUBMODULE_SYNC)" != "yes" ]; then \
+		echo "Syncing git submodules"; \
+		git submodule update --init --recursive; \
+	else \
+		echo "Skipping submodule sync"; \
+	fi
 
 .PHONY: konflux-validate-catalog-template-bundle ## validate the last bundle entry on the catalog template file
 konflux-validate-catalog-template-bundle: yq operator-sdk
