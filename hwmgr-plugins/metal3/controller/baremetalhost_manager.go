@@ -157,8 +157,7 @@ func fetchBMHList(
 	logger *slog.Logger,
 	site string,
 	nodeGroupData hwmgmtv1alpha1.NodeGroupData,
-	allocationStatus BMHAllocationStatus,
-	namespace string) (metal3v1alpha1.BareMetalHostList, error) {
+	allocationStatus BMHAllocationStatus) (metal3v1alpha1.BareMetalHostList, error) {
 
 	var bmhList metal3v1alpha1.BareMetalHostList
 	opts := []client.ListOption{}
@@ -181,11 +180,6 @@ func fetchBMHList(
 		}
 
 		matchingLabels[fullLabelName] = value
-	}
-
-	// Add namespace filter if provided
-	if namespace != "" {
-		opts = append(opts, client.InNamespace(namespace))
 	}
 
 	// Apply allocation filtering based on enum value
@@ -325,9 +319,10 @@ func isBMHAllocated(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
-func clearBMHNetworkData(ctx context.Context, c client.Client, name types.NamespacedName) error {
+// Returns requeueAfter int (seconds) and error. If requeueAfter > DoNotRequeue, caller should requeue after that duration.
+func clearBMHNetworkData(ctx context.Context, c client.Client, logger *slog.Logger, name types.NamespacedName) (int, error) {
 	// nolint:wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
 		updatedBmh := &metal3v1alpha1.BareMetalHost{}
 
 		if err := c.Get(ctx, name, updatedBmh); err != nil {
@@ -339,6 +334,24 @@ func clearBMHNetworkData(ctx context.Context, c client.Client, name types.Namesp
 		}
 		return nil
 	})
+	if err != nil {
+		return RequeueAfterShortInterval, fmt.Errorf("failed to clear BMH network data: %w", err)
+	}
+
+	// Wait for metal3 controller to propagate the change to PreprovisioningImage network status
+	networkDataCleared, err := waitForPreprovisioningImageNetworkDataCleared(ctx, c, logger, name)
+	if err != nil {
+		return RequeueAfterShortInterval, fmt.Errorf("failed to check PreprovisioningImage network status for BMH (%s/%s): %w", name.Name, name.Namespace, err)
+	}
+
+	if !networkDataCleared {
+		// PreprovisioningImage network data is not yet cleared, return requeue after 15 seconds
+		logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared, requeueing",
+			slog.String("bmh", name.String()))
+		return RequeueAfterShortInterval, nil
+	}
+
+	return DoNotRequeue, nil
 }
 
 func processHwProfileWithHandledError(
@@ -722,8 +735,10 @@ func handleBMHCompletion(ctx context.Context,
 	}
 
 	// Apply post-config updates and finalize the process
-	if err := applyPostConfigUpdates(ctx, c, noncachedClient, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, node); err != nil {
-		return false, fmt.Errorf("failed to apply post config update on node %s: %w", node.Name, err)
+	if requeue, err := applyPostConfigUpdates(ctx, c, noncachedClient, logger, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, node); err != nil {
+		return true, fmt.Errorf("failed to apply post config update on node %s: %w", node.Name, err)
+	} else if requeue > DoNotRequeue {
+		return true, nil
 	}
 
 	return false, nil // update is now complete

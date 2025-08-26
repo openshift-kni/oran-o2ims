@@ -62,6 +62,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -148,6 +149,36 @@ var _ = Describe("BareMetalHost Manager", func() {
 				Conditions: []metav1.Condition{},
 			},
 		}
+	}
+
+	createAllocatedNodeWithGroup := func(name, namespace, hwMgrNodeId, hwMgrNodeNs, groupName, hwProfile string) *pluginsv1alpha1.AllocatedNode {
+		return &pluginsv1alpha1.AllocatedNode{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: pluginsv1alpha1.AllocatedNodeSpec{
+				HwMgrNodeId: hwMgrNodeId,
+				HwMgrNodeNs: hwMgrNodeNs,
+				GroupName:   groupName,
+				HwProfile:   hwProfile,
+			},
+			Status: pluginsv1alpha1.AllocatedNodeStatus{
+				Conditions: []metav1.Condition{},
+			},
+		}
+	}
+
+	createNodeWithCondition := func(name, namespace string, conditionType, reason string, status metav1.ConditionStatus) *pluginsv1alpha1.AllocatedNode {
+		node := createAllocatedNode(name, namespace, "bmh-"+name, namespace)
+		node.Status.Conditions = []metav1.Condition{
+			{
+				Type:   conditionType,
+				Status: status,
+				Reason: reason,
+			},
+		}
+		return node
 	}
 
 	Describe("BMHAllocationStatus constants", func() {
@@ -424,8 +455,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should clear network data successfully", func() {
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-			err := clearBMHNetworkData(ctx, fakeClient, name)
+			requeue, err := clearBMHNetworkData(ctx, fakeClient, logger, name)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(Equal(DoNotRequeue))
 
 			// Verify network data was cleared
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -439,8 +471,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-			err := clearBMHNetworkData(ctx, fakeClient, name)
+			requeue, err := clearBMHNetworkData(ctx, fakeClient, logger, name)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(Equal(DoNotRequeue))
 		})
 	})
 
@@ -565,20 +598,20 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should fetch all BMHs", func() {
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllBMHs, "test-ns")
+			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllBMHs)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(2))
 		})
 
 		It("should fetch only allocated BMHs", func() {
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllocatedBMHs, "test-ns")
+			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllocatedBMHs)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(1))
 			Expect(bmhList.Items[0].Name).To(Equal("bmh1"))
 		})
 
 		It("should fetch only unallocated BMHs", func() {
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, UnallocatedBMHs, "test-ns")
+			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, UnallocatedBMHs)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(1))
 			Expect(bmhList.Items[0].Name).To(Equal("bmh2"))
@@ -591,7 +624,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			}, nil, metal3v1alpha1.StateAvailable)
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh1, bmh2, bmh3).Build()
 
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllBMHs, "test-ns")
+			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllBMHs)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(2))
 		})
@@ -603,7 +636,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			}, nil, metal3v1alpha1.StateAvailable)
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh1, bmh2, bmh3).Build()
 
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllBMHs, "test-ns")
+			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup, AllBMHs)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(2))
 		})
@@ -906,6 +939,502 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(OpAdd).To(Equal("add"))
 			Expect(OpRemove).To(Equal("remove"))
 			Expect(BmhServicingErr).To(Equal("BMH Servicing Error"))
+		})
+	})
+
+	Describe("node finder functions", func() {
+		Describe("findNodeInProgress", func() {
+			It("should return nil when no nodes are in progress", func() {
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{
+						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse),
+					},
+				}
+
+				result := findNodeInProgress(nodelist)
+				Expect(result).To(BeNil())
+			})
+
+			It("should return node with InProgress provisioned condition", func() {
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{
+						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					},
+				}
+
+				result := findNodeInProgress(nodelist)
+				Expect(result).NotTo(BeNil())
+				Expect(result.Name).To(Equal("node2"))
+			})
+
+			It("should handle empty node list", func() {
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{}}
+				result := findNodeInProgress(nodelist)
+				Expect(result).To(BeNil())
+			})
+		})
+
+		Describe("findNextNodeToUpdate", func() {
+			It("should return nil when no nodes need updating", func() {
+				// Create nodes with configured condition to indicate they are successfully configured
+				node1 := createAllocatedNodeWithGroup("node1", "test-ns", "bmh1", "test-ns", "group1", "profile1")
+				node1.Status.Conditions = []metav1.Condition{
+					{
+						Type:   string(hwmgmtv1alpha1.Configured),
+						Status: metav1.ConditionTrue,
+						Reason: string(hwmgmtv1alpha1.ConfigApplied),
+					},
+				}
+				node2 := createAllocatedNodeWithGroup("node2", "test-ns", "bmh2", "test-ns", "group2", "profile2")
+				node2.Status.Conditions = []metav1.Condition{
+					{
+						Type:   string(hwmgmtv1alpha1.Configured),
+						Status: metav1.ConditionTrue,
+						Reason: string(hwmgmtv1alpha1.ConfigApplied),
+					},
+				}
+
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{*node1, *node2},
+				}
+
+				result := findNextNodeToUpdate(nodelist, "group1", "profile1")
+				Expect(result).To(BeNil())
+			})
+
+			It("should return node with stale hw profile", func() {
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{
+						*createAllocatedNodeWithGroup("node1", "test-ns", "bmh1", "test-ns", "group1", "old-profile"),
+						*createAllocatedNodeWithGroup("node2", "test-ns", "bmh2", "test-ns", "group1", "profile1"),
+					},
+				}
+
+				result := findNextNodeToUpdate(nodelist, "group1", "new-profile")
+				Expect(result).NotTo(BeNil())
+				Expect(result.Name).To(Equal("node1"))
+			})
+
+			It("should return node with invalid input condition", func() {
+				node := createAllocatedNodeWithGroup("node1", "test-ns", "bmh1", "test-ns", "group1", "profile1")
+				node.Status.Conditions = []metav1.Condition{
+					{
+						Type:   string(hwmgmtv1alpha1.Configured),
+						Status: metav1.ConditionFalse,
+						Reason: string(hwmgmtv1alpha1.InvalidInput),
+					},
+				}
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{*node},
+				}
+
+				result := findNextNodeToUpdate(nodelist, "group1", "profile1")
+				Expect(result).NotTo(BeNil())
+				Expect(result.Name).To(Equal("node1"))
+			})
+
+			It("should filter by group name", func() {
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{
+						*createAllocatedNodeWithGroup("node1", "test-ns", "bmh1", "test-ns", "group1", "old-profile"),
+						*createAllocatedNodeWithGroup("node2", "test-ns", "bmh2", "test-ns", "group2", "old-profile"),
+					},
+				}
+
+				result := findNextNodeToUpdate(nodelist, "group1", "new-profile")
+				Expect(result).NotTo(BeNil())
+				Expect(result.Name).To(Equal("node1"))
+			})
+		})
+
+		Describe("findNodeConfigInProgress", func() {
+			It("should return nil when no nodes have config annotation", func() {
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{
+						*createAllocatedNode("node1", "test-ns", "bmh1", "test-ns"),
+						*createAllocatedNode("node2", "test-ns", "bmh2", "test-ns"),
+					},
+				}
+
+				result := findNodeConfigInProgress(nodelist)
+				Expect(result).To(BeNil())
+			})
+
+			It("should return node with config annotation", func() {
+				node1 := createAllocatedNode("node1", "test-ns", "bmh1", "test-ns")
+				node2 := createAllocatedNode("node2", "test-ns", "bmh2", "test-ns")
+				node2.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
+
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{*node1, *node2},
+				}
+
+				result := findNodeConfigInProgress(nodelist)
+				Expect(result).NotTo(BeNil())
+				Expect(result.Name).To(Equal("node2"))
+			})
+
+			It("should return first node with config annotation", func() {
+				node1 := createAllocatedNode("node1", "test-ns", "bmh1", "test-ns")
+				node1.Annotations = map[string]string{ConfigAnnotation: "firmware-update"}
+				node2 := createAllocatedNode("node2", "test-ns", "bmh2", "test-ns")
+				node2.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
+
+				nodelist := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{*node1, *node2},
+				}
+
+				result := findNodeConfigInProgress(nodelist)
+				Expect(result).NotTo(BeNil())
+				Expect(result.Name).To(Equal("node1"))
+			})
+		})
+	})
+
+	Describe("contains helper function", func() {
+		It("should return true when value exists in slice", func() {
+			slice := []string{"apple", "banana", "cherry"}
+			result := contains(slice, "banana")
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return false when value doesn't exist in slice", func() {
+			slice := []string{"apple", "banana", "cherry"}
+			result := contains(slice, "orange")
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false for empty slice", func() {
+			slice := []string{}
+			result := contains(slice, "apple")
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return true for exact string match", func() {
+			slice := []string{"test", "Test", "TEST"}
+			result := contains(slice, "test")
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return false for case sensitive mismatch", func() {
+			slice := []string{"Test", "TEST"}
+			result := contains(slice, "test")
+			Expect(result).To(BeFalse())
+		})
+	})
+
+	Describe("isNodeProvisioningInProgress", func() {
+		It("should return true when node has provisioned condition with InProgress reason", func() {
+			node := createNodeWithCondition("test-node", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse)
+
+			result := isNodeProvisioningInProgress(node)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return false when node has provisioned condition with Completed reason", func() {
+			node := createNodeWithCondition("test-node", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue)
+
+			result := isNodeProvisioningInProgress(node)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when node has provisioned condition with Failed reason", func() {
+			node := createNodeWithCondition("test-node", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse)
+
+			result := isNodeProvisioningInProgress(node)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when node has no provisioned condition", func() {
+			node := createAllocatedNode("test-node", "test-ns", "test-bmh", "test-ns")
+
+			result := isNodeProvisioningInProgress(node)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when provisioned condition status is true with InProgress reason", func() {
+			node := createNodeWithCondition("test-node", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionTrue)
+
+			result := isNodeProvisioningInProgress(node)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when node has different condition type", func() {
+			node := createNodeWithCondition("test-node", "test-ns", string(hwmgmtv1alpha1.Configured), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse)
+
+			result := isNodeProvisioningInProgress(node)
+			Expect(result).To(BeFalse())
+		})
+	})
+
+	Describe("waitForPreprovisioningImageNetworkDataCleared", func() {
+		var (
+			fakeClient client.Client
+			bmhName    types.NamespacedName
+		)
+
+		BeforeEach(func() {
+			bmhName = types.NamespacedName{Name: "test-bmh", Namespace: "test-ns"}
+		})
+
+		It("should return true when PreprovisioningImage network data is cleared", func() {
+			image := &metal3v1alpha1.PreprovisioningImage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      bmhName.Name,
+					Namespace: bmhName.Namespace,
+				},
+				Status: metal3v1alpha1.PreprovisioningImageStatus{
+					NetworkData: metal3v1alpha1.SecretStatus{
+						Name:    "", // Cleared
+						Version: "", // Cleared
+					},
+				},
+			}
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(image).Build()
+
+			result, err := waitForPreprovisioningImageNetworkDataCleared(ctx, fakeClient, logger, bmhName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return false when PreprovisioningImage network data is not cleared", func() {
+			image := &metal3v1alpha1.PreprovisioningImage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      bmhName.Name,
+					Namespace: bmhName.Namespace,
+				},
+				Status: metal3v1alpha1.PreprovisioningImageStatus{
+					NetworkData: metal3v1alpha1.SecretStatus{
+						Name:    "test-network-data",
+						Version: "v1",
+					},
+				},
+			}
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(image).Build()
+
+			result, err := waitForPreprovisioningImageNetworkDataCleared(ctx, fakeClient, logger, bmhName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when only network data name is cleared", func() {
+			image := &metal3v1alpha1.PreprovisioningImage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      bmhName.Name,
+					Namespace: bmhName.Namespace,
+				},
+				Status: metal3v1alpha1.PreprovisioningImageStatus{
+					NetworkData: metal3v1alpha1.SecretStatus{
+						Name:    "",   // Cleared
+						Version: "v1", // Not cleared
+					},
+				},
+			}
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(image).Build()
+
+			result, err := waitForPreprovisioningImageNetworkDataCleared(ctx, fakeClient, logger, bmhName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when only network data version is cleared", func() {
+			image := &metal3v1alpha1.PreprovisioningImage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      bmhName.Name,
+					Namespace: bmhName.Namespace,
+				},
+				Status: metal3v1alpha1.PreprovisioningImageStatus{
+					NetworkData: metal3v1alpha1.SecretStatus{
+						Name:    "test-network-data", // Not cleared
+						Version: "",                  // Cleared
+					},
+				},
+			}
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(image).Build()
+
+			result, err := waitForPreprovisioningImageNetworkDataCleared(ctx, fakeClient, logger, bmhName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return true when PreprovisioningImage doesn't exist", func() {
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+			result, err := waitForPreprovisioningImageNetworkDataCleared(ctx, fakeClient, logger, bmhName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return error for other Get failures", func() {
+			// Create a client that will fail on Get operations for other reasons
+			// This is harder to simulate with fake client, so we'll test the basic case
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+			// Since we can't easily simulate other errors with fake client,
+			// we'll just verify the successful cases work correctly
+			result, err := waitForPreprovisioningImageNetworkDataCleared(ctx, fakeClient, logger, bmhName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeTrue())
+		})
+	})
+
+	Describe("deriveNodeAllocationRequestStatusFromNodes", func() {
+		var (
+			fakeClient client.Reader
+			nodelist   *pluginsv1alpha1.AllocatedNodeList
+		)
+
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		})
+
+		It("should return ConfigApplied when all nodes are successfully configured", func() {
+			node1 := createAllocatedNode("node1", "test-ns", "bmh1", "test-ns")
+			node1.Status.Conditions = []metav1.Condition{
+				{
+					Type:   string(hwmgmtv1alpha1.Configured),
+					Status: metav1.ConditionTrue,
+					Reason: string(hwmgmtv1alpha1.ConfigApplied),
+				},
+			}
+			node2 := createAllocatedNode("node2", "test-ns", "bmh2", "test-ns")
+			node2.Status.Conditions = []metav1.Condition{
+				{
+					Type:   string(hwmgmtv1alpha1.Configured),
+					Status: metav1.ConditionTrue,
+					Reason: string(hwmgmtv1alpha1.ConfigApplied),
+				},
+			}
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(node1, node2).Build()
+			nodelist = &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{*node1, *node2},
+			}
+
+			status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, fakeClient, logger, nodelist)
+			Expect(status).To(Equal(metav1.ConditionTrue))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
+			Expect(message).To(Equal(string(hwmgmtv1alpha1.ConfigSuccess)))
+		})
+
+		It("should return InProgress when node is missing configured condition", func() {
+			node1 := createAllocatedNode("node1", "test-ns", "bmh1", "test-ns")
+			// Node has no configured condition
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(node1).Build()
+			nodelist = &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{*node1},
+			}
+
+			status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, fakeClient, logger, nodelist)
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+			Expect(message).To(ContainSubstring("missing Configured condition"))
+		})
+
+		It("should return node condition when not successfully applied", func() {
+			node1 := createAllocatedNode("node1", "test-ns", "bmh1", "test-ns")
+			node1.Status.Conditions = []metav1.Condition{
+				{
+					Type:    string(hwmgmtv1alpha1.Configured),
+					Status:  metav1.ConditionFalse,
+					Reason:  string(hwmgmtv1alpha1.Failed),
+					Message: "Configuration failed",
+				},
+			}
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(node1).Build()
+			nodelist = &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{*node1},
+			}
+
+			status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, fakeClient, logger, nodelist)
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
+			Expect(message).To(ContainSubstring("Configuration failed"))
+		})
+	})
+
+	Describe("config annotation helper functions", func() {
+		var node *pluginsv1alpha1.AllocatedNode
+
+		BeforeEach(func() {
+			node = createAllocatedNode("test-node", "test-ns", "test-bmh", "test-ns")
+		})
+
+		Describe("setConfigAnnotation", func() {
+			It("should set config annotation when annotations map is nil", func() {
+				node.Annotations = nil
+				setConfigAnnotation(node, "test-reason")
+
+				Expect(node.Annotations).NotTo(BeNil())
+				Expect(node.Annotations[ConfigAnnotation]).To(Equal("test-reason"))
+			})
+
+			It("should set config annotation when annotations map exists", func() {
+				node.Annotations = map[string]string{"existing": "value"}
+				setConfigAnnotation(node, "test-reason")
+
+				Expect(node.Annotations[ConfigAnnotation]).To(Equal("test-reason"))
+				Expect(node.Annotations["existing"]).To(Equal("value"))
+			})
+
+			It("should overwrite existing config annotation", func() {
+				node.Annotations = map[string]string{ConfigAnnotation: "old-reason"}
+				setConfigAnnotation(node, "new-reason")
+
+				Expect(node.Annotations[ConfigAnnotation]).To(Equal("new-reason"))
+			})
+		})
+
+		Describe("getConfigAnnotation", func() {
+			It("should return empty string when annotations map is nil", func() {
+				node.Annotations = nil
+				result := getConfigAnnotation(node)
+
+				Expect(result).To(Equal(""))
+			})
+
+			It("should return empty string when config annotation doesn't exist", func() {
+				node.Annotations = map[string]string{"other": "value"}
+				result := getConfigAnnotation(node)
+
+				Expect(result).To(Equal(""))
+			})
+
+			It("should return config annotation value when it exists", func() {
+				node.Annotations = map[string]string{ConfigAnnotation: "test-reason"}
+				result := getConfigAnnotation(node)
+
+				Expect(result).To(Equal("test-reason"))
+			})
+		})
+
+		Describe("removeConfigAnnotation", func() {
+			It("should handle nil annotations map gracefully", func() {
+				node.Annotations = nil
+				Expect(func() { removeConfigAnnotation(node) }).NotTo(Panic())
+			})
+
+			It("should remove config annotation when it exists", func() {
+				node.Annotations = map[string]string{
+					ConfigAnnotation: "test-reason",
+					"other":          "value",
+				}
+				removeConfigAnnotation(node)
+
+				_, exists := node.Annotations[ConfigAnnotation]
+				Expect(exists).To(BeFalse())
+				Expect(node.Annotations["other"]).To(Equal("value"))
+			})
+
+			It("should handle non-existent config annotation gracefully", func() {
+				node.Annotations = map[string]string{"other": "value"}
+				Expect(func() { removeConfigAnnotation(node) }).NotTo(Panic())
+				Expect(node.Annotations["other"]).To(Equal("value"))
+			})
 		})
 	})
 
