@@ -54,6 +54,7 @@ YAMLLINT_VERSION ?= 1.37.1
 # YQ_VERSION defines the yq version to download from GitHub releases.
 YQ_VERSION ?= v4.45.4
 
+# Konflux catalog configuration
 PACKAGE_NAME_KONFLUX = o-cloud-manager
 CATALOG_TEMPLATE_KONFLUX_INPUT = .konflux/catalog/catalog-template.in.yaml
 CATALOG_TEMPLATE_KONFLUX_OUTPUT = .konflux/catalog/catalog-template.out.yaml
@@ -63,7 +64,11 @@ CATALOG_KONFLUX = .konflux/catalog/$(PACKAGE_NAME_KONFLUX)/catalog.yaml
 BUNDLE_NAME_SUFFIX = bundle-4-20
 PRODUCTION_BUNDLE_NAME = operator-bundle
 
+# The directory of the current makefile
 PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
+
+# You can use podman or docker as a container engine. Notice that there are some options that might be only valid for one of them.
+ENGINE ?= docker
 
 # Development/Debug passwords for database.  This requires that the operator be deployed in DEBUG=yes mode or for the
 # developer to override these values with the current passwords
@@ -426,6 +431,9 @@ catalog-undeploy: ## Undeploy from catalog image.
 .PHONY: lint
 lint: bashate golangci-lint shellcheck yamllint
 
+.PHONY: tools
+tools: opm operator-sdk yq
+
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Run golangci-lint against code. If wrong version is installed, it will be removed before downloading.
 $(GOLANGCI_LINT): $(LOCALBIN)
@@ -439,9 +447,6 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 	$(GOLANGCI_LINT) --version
 	$(GOLANGCI_LINT) run -v
 	@echo "Golangci-lint linting completed successfully."
-
-.PHONY: tools
-tools: opm operator-sdk yq
 
 .PHONY: bashate
 bashate: $(BASHATE) ## Download bashate and lint bash files in the repository. If wrong version is installed, it will be removed before downloading.
@@ -599,7 +604,7 @@ ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt tes
 
 .PHONY: clean
 clean:
-	rm -rf $(LOCALBIN)
+	-rm $(LOCALBIN)/$(BINARY_NAME)
 
 .PHONY: scorecard-test
 scorecard-test: operator-sdk
@@ -669,9 +674,6 @@ connect-cluster-server: ##Connect to resource server svc
 	nohup oc port-forward --address localhost svc/cluster-server 8001:8000 -n $(OCLOUD_MANAGER_NAMESPACE) > pgproxy_resource.log 2>&1 &
 
 ##@ Konflux
-
-# You can use podman or docker as a container engine. Notice that there are some options that might be only valid for one of them.
-ENGINE ?= docker
 
 .PHONY: konflux-validate-catalog-template-bundle ## validate the last bundle entry on the catalog template file
 konflux-validate-catalog-template-bundle: yq operator-sdk
