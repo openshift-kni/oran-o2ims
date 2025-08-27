@@ -58,7 +58,7 @@ var _ = Describe("Metal3PluginServer", func() {
 	Describe("NewMetal3PluginServer", func() {
 		Context("when creating a new Metal3 plugin server", func() {
 			It("should create a server successfully with valid parameters", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, logger)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
@@ -66,7 +66,7 @@ var _ = Describe("Metal3PluginServer", func() {
 			})
 
 			It("should implement the StrictServerInterface", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, logger)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				// Verify that the server can be used as a StrictServerInterface
@@ -75,7 +75,7 @@ var _ = Describe("Metal3PluginServer", func() {
 			})
 
 			It("should properly initialize all embedded struct fields", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, logger)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server.HardwarePluginServer.CommonServerConfig).To(Equal(config))
@@ -84,7 +84,7 @@ var _ = Describe("Metal3PluginServer", func() {
 			})
 
 			It("should set the correct Metal3-specific configuration", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, logger)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server.HardwarePluginServer.Namespace).To(Equal(provisioning.GetMetal3HWPluginNamespace()))
@@ -93,14 +93,14 @@ var _ = Describe("Metal3PluginServer", func() {
 			})
 
 			It("should set the Metal3ResourcePrefix constant correctly", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, logger)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server.HardwarePluginServer.ResourcePrefix).To(Equal("metal3"))
 			})
 
 			It("should set the correct Hardware Plugin ID", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, logger)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server.HardwarePluginServer.HardwarePluginID).To(Equal("metal3-hwplugin"))
@@ -109,7 +109,7 @@ var _ = Describe("Metal3PluginServer", func() {
 
 		Context("when handling different parameter combinations", func() {
 			It("should work with a nil logger", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, nil)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, nil)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
@@ -118,7 +118,7 @@ var _ = Describe("Metal3PluginServer", func() {
 
 			It("should work with empty config", func() {
 				emptyConfig := svcutils.CommonServerConfig{}
-				server, err := NewMetal3PluginServer(emptyConfig, mockClient, logger)
+				server, err := NewMetal3PluginServer(emptyConfig, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
@@ -126,7 +126,7 @@ var _ = Describe("Metal3PluginServer", func() {
 			})
 
 			It("should work with nil client", func() {
-				server, err := NewMetal3PluginServer(config, nil, logger)
+				server, err := NewMetal3PluginServer(config, nil, nil, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(server).ToNot(BeNil())
@@ -146,7 +146,7 @@ var _ = Describe("Metal3PluginServer", func() {
 
 		Context("when verifying field initialization order", func() {
 			It("should initialize all fields in the correct order", func() {
-				server, err := NewMetal3PluginServer(config, mockClient, logger)
+				server, err := NewMetal3PluginServer(config, mockClient, mockClient, logger)
 
 				Expect(err).ToNot(HaveOccurred())
 

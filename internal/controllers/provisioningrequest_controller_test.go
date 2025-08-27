@@ -1239,7 +1239,7 @@ plan:
 
 				// If the generation check triggered, status should be updated
 				if updatedCR.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StatePending {
-					Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Validating and preparing resources"))
+					Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring(utils.ValidationMessage))
 				}
 			})
 		})
@@ -4896,10 +4896,10 @@ plan:
 				testObject.Status.ProvisioningStatus.UpdateTime = metav1.Time{Time: currentTime.Add(-90 * time.Minute)}
 			})
 
-			It("should set provisioning state to failed and return requeue", func() {
+			It("should set provisioning state to failed and continue reconciling", func() {
 				result := testTask.checkOverallProvisioningTimeout(ctx)
 
-				// Should return requeue for monitoring cleanup
+				// Should return requeue to continue reconciling after timeout
 				Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 
 				// Should set state to failed
@@ -4923,8 +4923,37 @@ plan:
 			})
 
 			It("should set provisioning state to failed for hardware timeout", func() {
-				result := testTask.checkOverallProvisioningTimeout(ctx)
+				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
 
+				Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning timed out"))
+			})
+		})
+
+		Context("when hardware provisioning timeout is exceeded but callback annotation exists", func() {
+			BeforeEach(func() {
+				// Set up NodeAllocationRequestRef with exceeded timeout
+				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
+				}
+				// Set HardwareProvisioned condition to False with InProgress reason
+				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
+					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
+					Status: metav1.ConditionFalse,
+					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				})
+				// Add callback annotation to simulate callback-triggered reconciliation
+				if testObject.Annotations == nil {
+					testObject.Annotations = make(map[string]string)
+				}
+				testObject.Annotations[utils.CallbackReceivedAnnotation] = "123456789"
+			})
+
+			It("should trigger timeout even when callback annotation exists", func() {
+				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
+
+				// Should timeout because we now always check timeouts regardless of callbacks
 				Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning timed out"))
@@ -4946,7 +4975,7 @@ plan:
 			})
 
 			It("should not trigger timeout since condition is already Failed", func() {
-				result := testTask.checkOverallProvisioningTimeout(ctx)
+				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
 
 				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
@@ -4968,7 +4997,7 @@ plan:
 			})
 
 			It("should not trigger timeout since condition is completed", func() {
-				result := testTask.checkOverallProvisioningTimeout(ctx)
+				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
 
 				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
@@ -5180,7 +5209,7 @@ plan:
 			It("should still check overall timeout and cluster timeout", func() {
 				result := testTask.checkOverallProvisioningTimeout(ctx)
 
-				// Should timeout on overall timeout
+				// Should timeout on overall timeout and continue reconciling
 				Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
 			})
@@ -5282,7 +5311,7 @@ plan:
 		})
 
 		Context("when provisioning phases fail and timeout is exceeded", func() {
-			It("should trigger timeout check and return timeout result", func() {
+			It("should trigger timeout check and continue reconciling", func() {
 				// This test simulates the integration point at line 191 in the controller
 				// executeProvisioningPhases will fail (due to missing templates), triggering the timeout check
 
@@ -5296,7 +5325,7 @@ plan:
 				// But if we now run the timeout check manually (as done at line 191), it should trigger
 				timeoutResult := testTask.checkOverallProvisioningTimeout(ctx)
 
-				// Should return requeue for timeout monitoring
+				// Should continue reconciling after timeout
 				Expect(timeoutResult.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 
 				// Should have set failed state due to timeout
@@ -5324,6 +5353,56 @@ plan:
 
 				// Should not have changed to failed state due to timeout
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
+			})
+		})
+
+		Context("shouldStopReconciliation", func() {
+			var (
+				prTask *provisioningRequestReconcilerTask
+				pr     *provisioningv1alpha1.ProvisioningRequest
+			)
+
+			BeforeEach(func() {
+				pr = &provisioningv1alpha1.ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-should-stop",
+						Namespace:  "test-ns",
+						Generation: 2,
+					},
+					Status: provisioningv1alpha1.ProvisioningRequestStatus{
+						ObservedGeneration: 2,
+						ProvisioningStatus: provisioningv1alpha1.ProvisioningStatus{
+							ProvisioningPhase: provisioningv1alpha1.StateFailed,
+						},
+					},
+				}
+				prTask = &provisioningRequestReconcilerTask{
+					object: pr,
+				}
+			})
+
+			It("should stop reconciliation only for timeout failures", func() {
+				// Add a timeout failure condition
+				pr.Status.ProvisioningStatus.ProvisioningDetails = "Overall provisioning timed out after 2h"
+
+				shouldStop := prTask.shouldStopReconciliation()
+				Expect(shouldStop).To(BeTrue(), "Should stop for timeout failures")
+			})
+
+			It("should NOT stop reconciliation for non-timeout failures", func() {
+				// Add a non-timeout failure
+				pr.Status.ProvisioningStatus.ProvisioningDetails = "Hardware provisioning failed"
+
+				shouldStop := prTask.shouldStopReconciliation()
+				Expect(shouldStop).To(BeFalse(), "Should NOT stop for non-timeout failures")
+			})
+
+			It("should NOT stop reconciliation for non-failed states", func() {
+				pr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
+				pr.Status.ProvisioningStatus.ProvisioningDetails = "Hardware provisioning timed out after 1h"
+
+				shouldStop := prTask.shouldStopReconciliation()
+				Expect(shouldStop).To(BeFalse(), "Should NOT stop for non-failed states")
 			})
 		})
 	})

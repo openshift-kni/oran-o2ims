@@ -612,6 +612,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	}
 
 	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest)
+
 	if nodelist != nil {
 		status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, r.NoncachedClient, r.Logger, nodelist)
 

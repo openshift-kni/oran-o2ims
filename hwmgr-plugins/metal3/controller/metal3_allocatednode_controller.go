@@ -147,7 +147,7 @@ func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Context, allocatednode *pluginsv1alpha1.AllocatedNode) (bool, error) {
 
 	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion", slog.String("node", allocatednode.Name))
-	bmh, err := getBMHForNode(ctx, r.Client, allocatednode)
+	bmh, err := getBMHForNode(ctx, r.NoncachedClient, allocatednode)
 	if err != nil {
 		return true, fmt.Errorf("failed to get BMH for node %s: %w", allocatednode.Name, err)
 	}
