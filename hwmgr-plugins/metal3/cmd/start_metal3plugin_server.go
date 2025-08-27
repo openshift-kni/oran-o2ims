@@ -218,7 +218,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	defer cancel()
 	go func() {
 		logger.Info("Starting Metal3 HardwarePlugin API server")
-		err = metal3server.Serve(ctx, logger, c.CommonServerConfig, mgr.GetClient())
+		err = metal3server.Serve(ctx, logger, c.CommonServerConfig, mgr.GetClient(), mgr.GetAPIReader())
 	}()
 
 	go func() {

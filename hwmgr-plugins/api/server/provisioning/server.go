@@ -31,7 +31,8 @@ var _ StrictServerInterface = (*HardwarePluginServer)(nil)
 
 type HardwarePluginServer struct {
 	svcutils.CommonServerConfig
-	HubClient        client.Client
+	HubClient        client.Client // Cached client (for writes/updates)
+	NoncachedClient  client.Reader // Non-cached client (for fresh reads)
 	Logger           *slog.Logger
 	Namespace        string
 	HardwarePluginID string
@@ -104,7 +105,8 @@ func (h *HardwarePluginServer) GetNodeAllocationRequest(
 	request GetNodeAllocationRequestRequestObject,
 ) (GetNodeAllocationRequestResponseObject, error) {
 
-	nodeAllocationRequest, err := GetNodeAllocationRequest(ctx, h.HubClient, h.Namespace, request.NodeAllocationRequestId)
+	// Use non-cached client for guaranteed fresh data
+	nodeAllocationRequest, err := GetNodeAllocationRequest(ctx, h.NoncachedClient, h.Namespace, request.NodeAllocationRequestId)
 	if errors.IsNotFound(err) {
 		return GetNodeAllocationRequest404ApplicationProblemPlusJSONResponse(ProblemDetails{
 			Detail: fmt.Sprintf("could not find NodeAllocationRequest '%s', err: %s", request.NodeAllocationRequestId, err.Error()),
