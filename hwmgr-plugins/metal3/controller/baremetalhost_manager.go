@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -146,7 +147,7 @@ func updateBMHMetaWithRetry(
 // FetchBMHList retrieves BareMetalHosts filtered by site ID, allocation status, and optional namespace.
 func fetchBMHList(
 	ctx context.Context,
-	c client.Client,
+	c client.Reader,
 	logger *slog.Logger,
 	site string,
 	nodeGroupData hwmgmtv1alpha1.NodeGroupData) (metal3v1alpha1.BareMetalHostList, error) {
@@ -258,39 +259,47 @@ func isBMHAllocated(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
-// Returns requeueAfter int (seconds) and error. If requeueAfter > DoNotRequeue, caller should requeue after that duration.
-func clearBMHNetworkData(ctx context.Context, c client.Client, logger *slog.Logger, name types.NamespacedName) (int, error) {
-	// nolint:wrapcheck
-	err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-		updatedBmh := &metal3v1alpha1.BareMetalHost{}
-
-		if err := c.Get(ctx, name, updatedBmh); err != nil {
-			return fmt.Errorf("failed to fetch BMH %s/%s: %w", name.Namespace, name.Name, err)
+// clearBMHNetworkData clears PreprovisioningNetworkDataName on the BMH
+// and waits for the PreprovisioningImage network data to reflect the change.
+// Returns a ctrl.Result (use RequeueAfter for short retries) and an error for unexpected failures.
+func clearBMHNetworkData(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	name types.NamespacedName,
+) (ctrl.Result, error) {
+	// Try to clear Spec.PreprovisioningNetworkDataName with conflict retry.
+	if err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		bmh := &metal3v1alpha1.BareMetalHost{}
+		if err := c.Get(ctx, name, bmh); err != nil {
+			return fmt.Errorf("fetch BMH %s/%s: %w", name.Namespace, name.Name, err)
 		}
-		if updatedBmh.Spec.PreprovisioningNetworkDataName != "" {
-			updatedBmh.Spec.PreprovisioningNetworkDataName = ""
-			return c.Update(ctx, updatedBmh)
+		if bmh.Spec.PreprovisioningNetworkDataName == "" {
+			return nil // nothing to do
 		}
-		return nil
-	})
-	if err != nil {
-		return RequeueAfterShortInterval, fmt.Errorf("failed to clear BMH network data: %w", err)
+		bmh.Spec.PreprovisioningNetworkDataName = ""
+		return c.Update(ctx, bmh)
+	}); err != nil {
+		// Transient API issues: ask for a short retry and surface context
+		return hwmgrutils.RequeueWithShortInterval(),
+			fmt.Errorf("clear BMH network data %s/%s: %w", name.Namespace, name.Name, err)
 	}
 
-	// Wait for metal3 controller to propagate the change to PreprovisioningImage network status
-	networkDataCleared, err := waitForPreprovisioningImageNetworkDataCleared(ctx, c, logger, name)
+	// Wait for metal3 to propagate the change into PreprovisioningImage status.
+	cleared, err := waitForPreprovisioningImageNetworkDataCleared(ctx, c, logger, name)
 	if err != nil {
-		return RequeueAfterShortInterval, fmt.Errorf("failed to check PreprovisioningImage network status for BMH (%s/%s): %w", name.Name, name.Namespace, err)
+		// Treat as transient; retry shortly with context
+		return hwmgrutils.RequeueWithShortInterval(),
+			fmt.Errorf("check PreprovisioningImage network status for BMH %s: %w", name.String(), err)
 	}
-
-	if !networkDataCleared {
-		// PreprovisioningImage network data is not yet cleared, return requeue after 15 seconds
-		logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared, requeueing",
+	if !cleared {
+		logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to clear; requeueing",
 			slog.String("bmh", name.String()))
-		return RequeueAfterShortInterval, nil
+		return hwmgrutils.RequeueWithShortInterval(), nil
 	}
 
-	return DoNotRequeue, nil
+	// Done
+	return ctrl.Result{}, nil
 }
 
 func processHwProfileWithHandledError(
@@ -429,14 +438,15 @@ func annotateNodeConfigInProgress(ctx context.Context,
 
 func handleTransitionNodes(ctx context.Context,
 	c client.Client,
+	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
-	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (bool, error) {
+	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (ctrl.Result, error) {
 
 	for _, node := range nodelist.Items {
-		bmh, err := getBMHForNode(ctx, c, &node)
+		bmh, err := getBMHForNode(ctx, noncachedClient, &node)
 		if err != nil {
-			return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+			return ctrl.Result{}, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 		}
 
 		if bmh.Annotations == nil {
@@ -445,7 +455,7 @@ func handleTransitionNodes(ctx context.Context,
 
 		if postInstall {
 			if err := evaluateCRForReboot(ctx, c, logger, bmh); err != nil {
-				return true, err
+				return ctrl.Result{}, err
 			}
 		}
 		updateCases := []struct {
@@ -462,12 +472,17 @@ func handleTransitionNodes(ctx context.Context,
 			if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 				continue
 			}
+			res, err := processBMHUpdateCase(ctx, c, logger, pluginNamespace, &node, bmh, uc, postInstall)
+			if err != nil || res.Requeue || res.RequeueAfter > 0 {
+				// Propagate either requeue or error
+				return res, err
+			}
 			// Only handle one update case per reconciliation cycle
-			return true, processBMHUpdateCase(ctx, c, logger, pluginNamespace, &node, bmh, uc, postInstall)
+			return ctrl.Result{}, nil
 		}
 	}
 
-	return false, nil
+	return ctrl.Result{}, nil
 }
 
 func addRebootAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
@@ -539,12 +554,12 @@ func processBMHUpdateCase(ctx context.Context,
 		AnnotationKey string
 		Reason        string
 		LogLabel      string
-	}, postInstall bool) error {
+	}, postInstall bool) (ctrl.Result, error) {
 
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
 		tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
 		if err != nil || tolerate {
-			return nil
+			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 
 		message := fmt.Sprintf("BMH in error state: %s", bmh.Status.ErrorType)
@@ -554,16 +569,29 @@ func processBMHUpdateCase(ctx context.Context,
 			condType = hwmgmtv1alpha1.Configured
 		}
 		if err := hwmgrutils.SetNodeFailedStatus(ctx, c, logger, node, string(condType), message); err != nil {
-			logger.ErrorContext(ctx, "failed to set node failed status", slog.String("node", node.Name), slog.String("error", err.Error()))
+			if errors.IsConflict(err) {
+				logger.WarnContext(ctx, "conflict setting node status; will retry", slog.String("node", node.Name), slog.String("error", err.Error()))
+				return hwmgrutils.RequeueWithShortInterval(), nil
+			}
+			// everything else here is unexpected
+			return ctrl.Result{}, fmt.Errorf("failed to set node failed status for %s: %w", node.Name, err)
 		}
-		return fmt.Errorf("unable to initiate update for BMH %s/%s", bmh.Namespace, bmh.Name)
+
+		// Clear BMH error annotation to allow future retry attempts
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithShortInterval(), nil
+		}
+		return hwmgrutils.RequeueWithMediumInterval(), nil
 	}
 
 	// clear transient error annotation if BMH recovered
 	if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
 		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
 			logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
-			// Don't fail the entire operation for annotation cleanup failure
+			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 	}
 
@@ -575,7 +603,7 @@ func processBMHUpdateCase(ctx context.Context,
 				slog.String("BMH", bmh.Name),
 				slog.String("expected", string(metal3v1alpha1.OperationalStatusServicing)),
 				slog.String("current", string(bmh.Status.OperationalStatus)))
-			return nil
+			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 		logger.InfoContext(ctx,
 			fmt.Sprintf("BMH transitioned to 'Servicing' state for %s update", uc.LogLabel),
@@ -587,7 +615,7 @@ func processBMHUpdateCase(ctx context.Context,
 				slog.String("BMH", bmh.Name),
 				slog.String("expected", string(metal3v1alpha1.StatePreparing)),
 				slog.String("current", string(bmh.Status.Provisioning.State)))
-			return nil
+			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 		logger.InfoContext(ctx,
 			fmt.Sprintf("BMH transitioned to 'Preparing' state for %s update", uc.LogLabel),
@@ -597,20 +625,24 @@ func processBMHUpdateCase(ctx context.Context,
 	// Remove the update-needed annotation from the BMH.
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, uc.AnnotationKey, "", OpRemove); err != nil {
-		return fmt.Errorf("failed to remove annotation %s from BMH %s: %w", uc.AnnotationKey, bmh.Name, err)
+		logger.WarnContext(ctx, "failed to remove annotation",
+			slog.String("BMH", bmh.Name), slog.String("Annotation", uc.AnnotationKey), slog.String("error", err.Error()))
+		return hwmgrutils.RequeueWithShortInterval(), nil
 	}
 
 	// Only add the in-progress annotation if the node is not already annotated.
 	if getConfigAnnotation(node) == "" {
 		if err := annotateNodeConfigInProgress(ctx, c, logger, namespace, node.Name, uc.Reason); err != nil {
-			logger.ErrorContext(ctx,
+			logger.WarnContext(ctx,
 				fmt.Sprintf("Failed to annotate %s update in progress", uc.LogLabel),
 				slog.String("error", err.Error()))
-			return err
+			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 		logger.InfoContext(ctx,
 			fmt.Sprintf("BMH %s update initiated", uc.LogLabel),
 			slog.String("BMH", bmh.Name))
+		// Requeue to let the next reconcile handle the in-progress node
+		return hwmgrutils.RequeueWithShortInterval(), nil
 	} else {
 		logger.InfoContext(ctx,
 			"Skipping annotation; another config already in progress",
@@ -618,7 +650,7 @@ func processBMHUpdateCase(ctx context.Context,
 			slog.String("skipped", uc.Reason))
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 func handleBMHCompletion(ctx context.Context,
@@ -633,7 +665,7 @@ func handleBMHCompletion(ctx context.Context,
 	}
 
 	// Get BMH associated with the node
-	bmh, err := getBMHForNode(ctx, c, node)
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 	}
@@ -688,34 +720,30 @@ func checkForPendingUpdate(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	namespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (bool, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
 	// check if there are any pending work
 	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
-		return false, fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodeAllocationRequest.Name, err)
+		return ctrl.Result{}, false, fmt.Errorf("failed to get child nodes for Node Pool %s: %w", nodeAllocationRequest.Name, err)
 	}
 
 	// Process BMHs transitioning to "Preparing"
-	updating, err := handleTransitionNodes(ctx, c, logger, namespace, nodelist, false)
+	res, err := handleTransitionNodes(ctx, c, noncachedClient, logger, namespace, nodelist, false)
 	if err != nil {
-		return updating, err
+		return ctrl.Result{}, false, err
 	}
 
-	if updating {
+	if res.Requeue || res.RequeueAfter > 0 {
 		logger.InfoContext(ctx, "Skipping handleBMHCompletion as update is in progress")
-		return true, nil
+		return res, true, nil
 	}
 
 	// Check if configuration is completed
-	updating, err = handleBMHCompletion(ctx, c, noncachedClient, logger, nodelist)
-	if err != nil {
-		return updating, err
-	}
-
-	return updating, nil
+	updating, err := handleBMHCompletion(ctx, c, noncachedClient, logger, nodelist)
+	return ctrl.Result{}, updating, err
 }
 
-func getBMHForNode(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
+func getBMHForNode(ctx context.Context, c client.Reader, node *pluginsv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
 	bmhName := node.Spec.HwMgrNodeId
 	bmhNamespace := node.Spec.HwMgrNodeNs
 	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}

@@ -417,9 +417,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should clear network data successfully", func() {
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-			requeue, err := clearBMHNetworkData(ctx, fakeClient, logger, name)
+			result, err := clearBMHNetworkData(ctx, fakeClient, logger, name)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(requeue).To(Equal(DoNotRequeue))
+			Expect(RequeueCodeFromResult(result)).To(Equal(DoNotRequeue))
 
 			// Verify network data was cleared
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -433,9 +433,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-			requeue, err := clearBMHNetworkData(ctx, fakeClient, logger, name)
+			result, err := clearBMHNetworkData(ctx, fakeClient, logger, name)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(requeue).To(Equal(DoNotRequeue))
+			Expect(RequeueCodeFromResult(result)).To(Equal(DoNotRequeue))
 		})
 	})
 

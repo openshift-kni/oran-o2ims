@@ -106,7 +106,7 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *pluginsv1alp
 }
 
 func GetNodeAllocationRequest(ctx context.Context,
-	c client.Client,
+	c client.Reader,
 	namespace, nodeAllocationRequestId string,
 ) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 

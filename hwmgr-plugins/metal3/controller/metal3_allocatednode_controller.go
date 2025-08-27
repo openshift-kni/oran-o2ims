@@ -12,18 +12,20 @@ import (
 	"log/slog"
 	"time"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
@@ -147,7 +149,7 @@ func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Context, allocatednode *pluginsv1alpha1.AllocatedNode) (bool, error) {
 
 	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion", slog.String("node", allocatednode.Name))
-	bmh, err := getBMHForNode(ctx, r.Client, allocatednode)
+	bmh, err := getBMHForNode(ctx, r.NoncachedClient, allocatednode)
 	if err != nil {
 		return true, fmt.Errorf("failed to get BMH for node %s: %w", allocatednode.Name, err)
 	}
