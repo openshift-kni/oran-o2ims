@@ -65,6 +65,8 @@ type Config struct {
 	InventoryRetryDelayMs int
 	// Refresh configuration
 	InventoryRefreshInterval int // Interval in seconds for refreshing inventory data from O2IMS API
+	// Output formatting configuration
+	UseASCII bool // Use ASCII characters instead of Unicode for table formatting
 }
 
 var (
@@ -137,6 +139,7 @@ func addFlags(flags *pflag.FlagSet) {
 	flags.BoolVarP(&config.Watch, "watch", "w", false, "Enable real-time screen updates (live dashboard mode)")
 	flags.IntVar(&config.RefreshInterval, "refresh-interval", 2, "Screen refresh interval in seconds during inactivity (watch mode only)")
 	flags.IntVar(&config.InventoryRefreshInterval, "inventory-refresh-interval", 120, "Inventory data refresh interval in seconds (0 to disable periodic refresh)")
+	flags.BoolVar(&config.UseASCII, "ascii", false, "Use ASCII characters instead of Unicode for table formatting")
 
 	// Inventory module flags
 	flags.BoolVar(&config.EnableInventory, "enable-inventory", false, "Enable inventory module to fetch resources from O2IMS API")

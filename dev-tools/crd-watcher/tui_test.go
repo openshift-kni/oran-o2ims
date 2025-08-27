@@ -35,6 +35,7 @@ var _ = Describe("TUIFormatter", func() {
 			verifyFunc:      func(event WatchEvent) bool { return true },
 			maxEvents:       100,
 			isTerminal:      false,
+			useUnicode:      true, // Use Unicode characters for tests
 		}
 
 		// Create sample inventory resource with all state fields

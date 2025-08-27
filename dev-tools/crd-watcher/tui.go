@@ -86,9 +86,10 @@ type TUIFormatter struct {
 	debounceDelay     time.Duration
 	lastScreenContent string // Cache of last screen content for differential updates
 	forceFullRedraw   bool   // Force full redraw flag for first draw or terminal resize
+	useUnicode        bool   // Whether to use Unicode characters (default true)
 }
 
-func NewTUIFormatter(refreshIntervalSeconds int, watchedCRDTypes []string, verifyFunc func(WatchEvent) bool) *TUIFormatter {
+func NewTUIFormatter(refreshIntervalSeconds int, watchedCRDTypes []string, verifyFunc func(WatchEvent) bool, useUnicode bool) *TUIFormatter {
 	width, height := 80, 24 // Default values
 	isTerminal := false
 
@@ -123,6 +124,7 @@ func NewTUIFormatter(refreshIntervalSeconds int, watchedCRDTypes []string, verif
 		debounceDelay:     250 * time.Millisecond, // 250ms debounce for rapid events
 		lastScreenContent: "",
 		forceFullRedraw:   true, // Force full redraw on first display
+		useUnicode:        useUnicode,
 	}
 
 	// Start the refresh timer for screen redraws during inactivity
@@ -480,7 +482,7 @@ func (t *TUIFormatter) redrawScreen() error {
 		// Build events for this CRD type
 		if len(events) == 0 {
 			// Show empty message when no resources exist
-			screenContent.WriteString("│ No resources found\n")
+			screenContent.WriteString(fmt.Sprintf("%s No resources found\n", t.getSidebarChar()))
 			lineCount++
 		} else {
 			for i, event := range events {
@@ -529,14 +531,30 @@ func (t *TUIFormatter) redrawScreen() error {
 func (t *TUIFormatter) buildHeader(sb *strings.Builder) {
 	currentTime := time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
 
-	// Use double-line Unicode connectors on the left side
-	headerContent := fmt.Sprintf("╔═══ O-Cloud Manager Provisioning Watcher ═══ %s", currentTime)
-	// Calculate length of content after the connector for alignment
-	contentLength := len(fmt.Sprintf("═══ O-Cloud Manager Provisioning Watcher ═══ %s", currentTime))
-	bottomLine := "╚" + strings.Repeat("═", contentLength)
+	// Use double-line connectors on the left side (Unicode or ASCII)
+	var headerContent, bottomLine string
+	if t.useUnicode {
+		headerContent = fmt.Sprintf("╔═══ O-Cloud Manager Provisioning Watcher ═══ %s", currentTime)
+		// Calculate length of content after the connector for alignment
+		contentLength := len(fmt.Sprintf("═══ O-Cloud Manager Provisioning Watcher ═══ %s", currentTime))
+		bottomLine = "╚" + strings.Repeat("═", contentLength)
+	} else {
+		headerContent = fmt.Sprintf("+--- O-Cloud Manager Provisioning Watcher --- %s", currentTime)
+		// Calculate length of content after the connector for alignment
+		contentLength := len(fmt.Sprintf("--- O-Cloud Manager Provisioning Watcher --- %s", currentTime))
+		bottomLine = "+" + strings.Repeat("-", contentLength)
+	}
 
 	sb.WriteString(fmt.Sprintf("%s%s%s\n", ansiBold, headerContent, ansiReset))
 	sb.WriteString(fmt.Sprintf("%s%s%s\n", ansiBold, bottomLine, ansiReset))
+}
+
+// getSidebarChar returns the appropriate sidebar character based on Unicode mode
+func (t *TUIFormatter) getSidebarChar() string {
+	if t.useUnicode {
+		return SidebarCharUnicode
+	}
+	return SidebarCharASCII
 }
 
 func (t *TUIFormatter) formatCRDHeader(crdType string) string {
@@ -559,7 +577,11 @@ func (t *TUIFormatter) formatCRDHeader(crdType string) string {
 		displayName = crdType
 	}
 
-	return fmt.Sprintf("┌─ %s ─", displayName)
+	if t.useUnicode {
+		return fmt.Sprintf("┌─ %s ─", displayName)
+	} else {
+		return fmt.Sprintf("+- %s -", displayName)
+	}
 }
 
 func (t *TUIFormatter) groupEventsByType() map[string][]WatchEvent {
@@ -1320,42 +1342,43 @@ func (t *TUIFormatter) calculateFieldWidths(crdType string, events []WatchEvent)
 }
 
 func (t *TUIFormatter) buildCRDTableHeader(crdType string, widths FieldWidths, sb *strings.Builder) {
+	sidebarChar := t.getSidebarChar()
 	switch crdType {
 	case CRDTypeProvisioningRequests:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-			widths.Name, "NAME", widths.Field1, "DISPLAYNAME", widths.Age, "AGE",
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Name, "NAME", widths.Field1, "DISPLAYNAME", widths.Age, "AGE",
 			widths.Field2, "PHASE", widths.Field3, "DETAILS"))
 	case CRDTypeNodeAllocationRequests:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s\n",
-			widths.Name, "NAME", widths.Field1, "CLUSTER-ID",
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Name, "NAME", widths.Field1, "CLUSTER-ID",
 			widths.Field2, "PROVISIONING", widths.Field3, "DAY2-UPDATE"))
 	case CRDTypeAllocatedNodes:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-			widths.Name, "NAME", widths.Field1, "NODE-ALLOC-REQUEST",
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Name, "NAME", widths.Field1, "NODE-ALLOC-REQUEST",
 			widths.Field2, "HWMGR-NODE-ID", widths.Field3, "PROVISIONING", widths.Field4, "DAY2-UPDATE"))
 	case CRDTypeBareMetalHosts:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
-			widths.Namespace, "NS", widths.Name, "BMH", widths.Field1, "STATUS", widths.Field2, "STATE",
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Namespace, "NS", widths.Name, "BMH", widths.Field1, "STATUS", widths.Field2, "STATE",
 			widths.Field3, "ONLINE", widths.Field4, "POWEREDON", widths.Field5, "NETDATA", widths.Field6, "ERROR"))
 	case CRDTypeHostFirmwareComponents:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-			widths.Name, "HOSTFIRMWARECOMPONENTS", widths.Field1, "GEN", widths.Field2, "OBSERVED",
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Name, "HOSTFIRMWARECOMPONENTS", widths.Field1, "GEN", widths.Field2, "OBSERVED",
 			widths.Field3, "VALID", widths.Field4, "CHANGE"))
 	case CRDTypeHostFirmwareSettings:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-			widths.Name, "HOSTFIRMWARESETTINGS", widths.Field1, "GEN", widths.Field2, "OBSERVED",
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Name, "HOSTFIRMWARESETTINGS", widths.Field1, "GEN", widths.Field2, "OBSERVED",
 			widths.Field3, "VALID", widths.Field4, "CHANGE"))
 	case CRDTypeInventoryResources:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
-			widths.Field1, "NAME", widths.Field2, "POOL", widths.Field3, "RESOURCE-ID",
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Field1, "NAME", widths.Field2, "POOL", widths.Field3, "RESOURCE-ID",
 			widths.Field4, "MODEL", widths.Field5, "ADMIN", widths.Field6, "OPER",
 			widths.Field7, "POWER", widths.Field8, "USAGE"))
 	case CRDTypeInventoryResourcePools:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s\n",
-			widths.Field1, "SITE", widths.Field2, "POOL", widths.Field3, "RESOURCE-POOL-ID"))
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Field1, "SITE", widths.Field2, "POOL", widths.Field3, "RESOURCE-POOL-ID"))
 	case CRDTypeInventoryNodeClusters:
-		sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s\n",
-			widths.Field1, "NODE-NAME", widths.Field2, "NODE-CLUSTER-ID", widths.Field3, "NODE-CLUSTER-TYPE-ID"))
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Field1, "NODE-NAME", widths.Field2, "NODE-CLUSTER-ID", widths.Field3, "NODE-CLUSTER-TYPE-ID"))
 	}
 }
 
@@ -1416,8 +1439,8 @@ func (t *TUIFormatter) buildProvisioningRequestLine(age string, obj runtime.Obje
 	}
 	details = truncateToWidth(details, widths.Field3)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-		widths.Name, name, widths.Field1, displayName, widths.Age, age,
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Name, name, widths.Field1, displayName, widths.Age, age,
 		widths.Field2, phase, widths.Field3, details))
 }
 
@@ -1440,8 +1463,8 @@ func (t *TUIFormatter) buildNodeAllocationRequestLine(age string, obj runtime.Ob
 	day2Update := getConditionReason(nar.Status.Conditions, "Configured")
 	day2Update = truncateToWidth(day2Update, widths.Field3)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s\n",
-		widths.Name, name, widths.Field1, clusterId,
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Name, name, widths.Field1, clusterId,
 		widths.Field2, provisioning, widths.Field3, day2Update))
 }
 
@@ -1470,8 +1493,8 @@ func (t *TUIFormatter) buildAllocatedNodeLine(age string, obj runtime.Object, wi
 	day2Update := getConditionReason(an.Status.Conditions, "Configured")
 	day2Update = truncateToWidth(day2Update, widths.Field4)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-		widths.Name, name,
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Name, name,
 		widths.Field1, nodeAllocRequest,
 		widths.Field2, hwMgrNodeId,
 		widths.Field3, provisioning,
@@ -1524,8 +1547,8 @@ func (t *TUIFormatter) buildBareMetalHostLine(age string, obj runtime.Object, wi
 	}
 	errorType = truncateToWidth(errorType, widths.Field6)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
-		widths.Namespace, namespace, widths.Name, name, widths.Field1, status, widths.Field2, state,
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Namespace, namespace, widths.Name, name, widths.Field1, status, widths.Field2, state,
 		widths.Field3, online, widths.Field4, poweredOn, widths.Field5, netData, widths.Field6, errorType))
 }
 
@@ -1571,8 +1594,8 @@ func (t *TUIFormatter) buildHostFirmwareComponentsLine(age string, obj runtime.O
 	}
 	changeStatus = truncateToWidth(changeStatus, widths.Field4)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-		widths.Name, name, widths.Field1, generation, widths.Field2, observedGeneration,
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Name, name, widths.Field1, generation, widths.Field2, observedGeneration,
 		widths.Field3, validStatus, widths.Field4, changeStatus))
 }
 
@@ -1618,8 +1641,8 @@ func (t *TUIFormatter) buildHostFirmwareSettingsLine(age string, obj runtime.Obj
 	}
 	changeStatus = truncateToWidth(changeStatus, widths.Field4)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s\n",
-		widths.Name, name, widths.Field1, generation, widths.Field2, observedGeneration,
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Name, name, widths.Field1, generation, widths.Field2, observedGeneration,
 		widths.Field3, validStatus, widths.Field4, changeStatus))
 }
 
@@ -1719,8 +1742,8 @@ func (t *TUIFormatter) buildInventoryResourceLine(age string, obj runtime.Object
 	powerState = truncateToWidth(powerState, widths.Field7)
 	usageState = truncateToWidth(usageState, widths.Field8)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
-		widths.Field1, name, widths.Field2, pool, widths.Field3, resourceID,
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Field1, name, widths.Field2, pool, widths.Field3, resourceID,
 		widths.Field4, model, widths.Field5, adminState, widths.Field6, operationalState,
 		widths.Field7, powerState, widths.Field8, usageState))
 }
@@ -1768,8 +1791,8 @@ func (t *TUIFormatter) buildInventoryResourcePoolLine(age string, obj runtime.Ob
 	poolName = truncateToWidth(poolName, widths.Field2)
 	resourcePoolID = truncateToWidth(resourcePoolID, widths.Field3)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s\n",
-		widths.Field1, site, widths.Field2, poolName, widths.Field3, resourcePoolID))
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Field1, site, widths.Field2, poolName, widths.Field3, resourcePoolID))
 }
 
 //nolint:unparam // age parameter required for interface consistency
@@ -1784,8 +1807,8 @@ func (t *TUIFormatter) buildInventoryNodeClusterLine(age string, obj runtime.Obj
 	nodeClusterID := truncateToWidth(nodeCluster.NodeClusterID, widths.Field2)
 	nodeClusterTypeID := truncateToWidth(nodeCluster.NodeClusterTypeID, widths.Field3)
 
-	sb.WriteString(fmt.Sprintf("│ %-*s   %-*s   %-*s\n",
-		widths.Field1, nodeName, widths.Field2, nodeClusterID, widths.Field3, nodeClusterTypeID))
+	sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s\n",
+		t.getSidebarChar(), widths.Field1, nodeName, widths.Field2, nodeClusterID, widths.Field3, nodeClusterTypeID))
 }
 
 // truncateToWidth truncates a string to fit within the specified width
