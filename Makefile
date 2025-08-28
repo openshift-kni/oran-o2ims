@@ -506,15 +506,17 @@ $(SHELLCHECK): $(LOCALBIN)
 		| xargs -0 --no-run-if-empty $(SHELLCHECK) -x
 	@echo "Shellcheck linting completed successfully."
 
-.PHONY: yamllint
-yamllint: sync-git-submodules $(YAMLLINT) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
-$(YAMLLINT): $(LOCALBIN)
+.PHONY: yamllint-download
+yamllint-download: sync-git-submodules $(LOCALBIN) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
 	@echo "Downloading yamllint..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint \
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download \
+		download-yamllint \
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_YAMLLINT_VERSION=$(YAMLLINT_VERSION)
 	@echo "Yamllint downloaded successfully."
-	$(YAMLLINT) -v
+
+.PHONY: yamllint
+yamllint: yamllint-download $(YAMLLINT) ## Lint YAML files in the repository
 	@echo "Running yamllint on repository YAML files..."
 	find $(PROJECT_DIR) -name "*.yaml" -o -name "*.yml" \
 		-not -path '$(PROJECT_DIR)/vendor/*' \
@@ -525,7 +527,7 @@ $(YAMLLINT): $(LOCALBIN)
 		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
 		| xargs -0 --no-run-if-empty $(YAMLLINT) -c .yamllint.yaml
-	@echo "Yamllint linting completed successfully."
+	@echo "YAML linting completed successfully."
 
 .PHONY: yq
 yq: sync-git-submodules $(YQ) ## Download yq locally if necessary. If wrong version is installed, it will be removed before downloading.
