@@ -364,7 +364,7 @@ bundle-push: bundle-build ## Push the bundle image.
 
 .PHONY: bundle-check
 bundle-check: bundle
-	hack/check-git-tree.sh
+	$(PROJECT_DIR)/hack/check-git-tree.sh
 
 .PHONY: bundle-run
 bundle-run: # Install bundle on cluster using operator sdk.
@@ -398,7 +398,7 @@ endif
 .PHONY: catalog
 catalog: opm ## Build a catalog.
 	@mkdir -p catalog
-	hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
+	$(PROJECT_DIR)/hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
 	$(OPM) render --output=yaml $(BUNDLE_IMG) > catalog/$(PACKAGE_NAME).yaml
 	$(OPM) validate catalog
 
@@ -414,7 +414,7 @@ catalog-push: ## Push a catalog image.
 # Deploy from catalog image.
 .PHONY: catalog-deploy
 catalog-deploy: ## Deploy from catalog image.
-	hack/generate-catalog-deploy.sh \
+	$(PROJECT_DIR)/hack/generate-catalog-deploy.sh \
 		--package $(PACKAGE_NAME) \
 		--namespace $(OCLOUD_MANAGER_NAMESPACE) \
 		--catalog-image $(CATALOG_IMG) \
@@ -425,7 +425,7 @@ catalog-deploy: ## Deploy from catalog image.
 # Undeploy from catalog image.
 .PHONY: catalog-undeploy
 catalog-undeploy: ## Undeploy from catalog image.
-	hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search "o2ims.*oran"
+	$(PROJECT_DIR)/hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search "o2ims.*oran"
 
 ##@ Tools and Linting
 
@@ -597,8 +597,8 @@ vet: ## Run go vet against code.
 .PHONY: deps-update
 deps-update: mock-gen golangci-lint
 	@echo "Update dependencies"
-	hack/update_deps.sh
-	hack/install_test_deps.sh
+	$(PROJECT_DIR)/hack/update_deps.sh
+	$(PROJECT_DIR)/hack/install_test_deps.sh
 
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
@@ -618,12 +618,12 @@ scorecard-test: operator-sdk
 .PHONY: sync-api-submodules
 sync-api-submodules:
 	@echo "Syncing api submodules"
-	hack/sync-api-submodules.sh
+	$(PROJECT_DIR)/hack/sync-api-submodules.sh
 
 # markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
 .PHONY: markdownlint-image
 markdownlint-image:  ## Build local container markdownlint-image
-	$(CONTAINER_TOOL) image build -f ./hack/Dockerfile.markdownlint --tag $(IMAGE_NAME)-markdownlint:latest ./hack
+	$(CONTAINER_TOOL) image build -f $(PROJECT_DIR)/hack/Dockerfile.markdownlint --tag $(IMAGE_NAME)-markdownlint:latest $(PROJECT_DIR)/hack
 
 .PHONY: markdownlint-image-clean
 markdownlint-image-clean:  ## Remove locally cached markdownlint-image
