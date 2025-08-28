@@ -172,7 +172,7 @@ $(LOCALBIN):
 
 # This allows all tools in the LOCALBIN folder, ie:opm,yq ... To be used by targets containing scripts
 # Prefer binaries in the local bin directory over system binaries.
-export PATH  := $(LOCALBIN):$(PATH)
+export PATH := $(abspath $(LOCALBIN)):$(PATH)
 
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
