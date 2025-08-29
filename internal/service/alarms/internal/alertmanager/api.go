@@ -48,15 +48,15 @@ type Status struct {
 	InhibitedBy []string `json:"inhibitedBy"`
 }
 
-// AMClient provides methods to interact with AlertManager
+// AMClient provides methods to interact with Alertmanager
 type AMClient struct {
 	k8sClient        client.Client
 	alarmsRepository repo.AlarmRepositoryInterface
 	infrastructure   *infrastructure.Infrastructure
 }
 
-// NewAlertManagerClient creates a new AMClient
-func NewAlertManagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryInterface, infra *infrastructure.Infrastructure) *AMClient {
+// NewAlertmanagerClient creates a new AMClient
+func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryInterface, infra *infrastructure.Infrastructure) *AMClient {
 	return &AMClient{
 		k8sClient:        k8sClient,
 		alarmsRepository: amrepo,
@@ -108,10 +108,10 @@ func (c *AMClient) SyncAlerts(ctx context.Context) error {
 	return nil
 }
 
-// getAlerts retrieves all alerts from AlertManager API
+// getAlerts retrieves all alerts from Alertmanager API
 func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	// Get the alertmanager route
-	alertManagerHost, err := c.GetAlertmanagerRoute(ctx)
+	alertmanagerHost, err := c.GetAlertmanagerRoute(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get alertmanager route: %w", err)
 	}
@@ -125,7 +125,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	// Create request
 	u := url.URL{
 		Scheme: "https",
-		Host:   alertManagerHost,
+		Host:   alertmanagerHost,
 		Path:   "/api/v2/alerts",
 	}
 

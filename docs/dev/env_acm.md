@@ -235,7 +235,7 @@ spec:
 export TOKEN=$(oc create token oauth-apiserver-sa -n openshift-oauth-apiserver --duration=8760h)
 ```
 
-### Access AlertManager API
+### Access Alertmanager API
 
 <https://alertmanager-open-cluster-management-observability.apps.ostest.test.metalkube.org/api/v2/alerts>
 
