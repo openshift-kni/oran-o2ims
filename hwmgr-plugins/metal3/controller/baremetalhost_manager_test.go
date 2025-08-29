@@ -927,7 +927,6 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(BiosUpdateNeededAnnotation).To(Equal("clcm.openshift.io/bios-update-needed"))
 			Expect(FirmwareUpdateNeededAnnotation).To(Equal("clcm.openshift.io/firmware-update-needed"))
 			Expect(BmhAllocatedLabel).To(Equal("clcm.openshift.io/allocated"))
-			Expect(NodeNameAnnotation).To(Equal("clcm.openshift.io/node-name"))
 			Expect(BmhHostMgmtAnnotation).To(Equal("bmac.agent-install.openshift.io/allow-provisioned-host-management"))
 			Expect(BmhInfraEnvLabel).To(Equal("infraenvs.agent-install.openshift.io"))
 			Expect(SiteConfigOwnedByLabel).To(Equal("siteconfig.open-cluster-management.io/owned-by"))

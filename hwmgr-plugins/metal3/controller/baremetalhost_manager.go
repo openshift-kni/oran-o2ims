@@ -44,7 +44,6 @@ const (
 	BiosUpdateNeededAnnotation     = "clcm.openshift.io/bios-update-needed"
 	FirmwareUpdateNeededAnnotation = "clcm.openshift.io/firmware-update-needed"
 	BmhAllocatedLabel              = "clcm.openshift.io/allocated"
-	NodeNameAnnotation             = "clcm.openshift.io/node-name"
 	BmhDeallocationDoneAnnotation  = "clcm.openshift.io/deallocation-complete"
 	BmhErrorTimestampAnnotation    = "clcm.openshift.io/bmh-error-timestamp"
 	SkipCleanupAnnotation          = "clcm.openshift.io/skip-cleanup"
