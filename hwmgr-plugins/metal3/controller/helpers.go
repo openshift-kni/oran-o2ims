@@ -63,6 +63,15 @@ func removeConfigAnnotation(object client.Object) {
 	delete(annotations, ConfigAnnotation)
 }
 
+// clearConfigAnnotationWithPatch removes the config-in-progress annotation from an AllocatedNode and patches it
+func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+	removeConfigAnnotation(node)
+	if err := ctlrutils.CreateK8sCR(ctx, c, node, nil, ctlrutils.PATCH); err != nil {
+		return fmt.Errorf("failed to clear config annotation from AllocatedNode %s: %w", node.Name, err)
+	}
+	return nil
+}
+
 // findNodeInProgress scans the nodelist to find the first node in InProgress
 func findNodeInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) *pluginsv1alpha1.AllocatedNode {
 	for _, node := range nodelist.Items {
@@ -385,7 +394,7 @@ func handleInProgressUpdate(ctx context.Context,
 		return ctrl.Result{}, false, nil
 	}
 	logger.InfoContext(ctx, "Node found that is in progress", slog.String("node", node.Name))
-	bmh, err := getBMHForNode(ctx, c, node)
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return ctrl.Result{}, true, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
@@ -411,9 +420,8 @@ func handleInProgressUpdate(ctx context.Context,
 		if err := ctlrutils.UpdateK8sCRStatus(ctx, c, node); err != nil {
 			return ctrl.Result{}, true, fmt.Errorf("failed to update status for AllocatedNode %s: %w", node.Name, err)
 		}
-		removeConfigAnnotation(node)
-		if err := ctlrutils.CreateK8sCR(ctx, c, node, nil, ctlrutils.PATCH); err != nil {
-			return ctrl.Result{}, true, fmt.Errorf("failed to clear annotation from AllocatedNode %s: %w", node.Name, err)
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			return ctrl.Result{}, true, err
 		}
 
 		return hwmgrutils.RequeueImmediately(), true, nil
@@ -424,13 +432,29 @@ func handleInProgressUpdate(ctx context.Context,
 		if err != nil || tolerate {
 			return hwmgrutils.RequeueWithMediumInterval(), true, err
 		}
+
 		logger.InfoContext(ctx, "BMH update failed", slog.String("BMH", bmh.Name))
+
+		// Clean up the config-in-progress annotation
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			return ctrl.Result{}, true, err
+		}
+
 		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.Failed), BmhServicingErr); err != nil {
 			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.String("node", node.Name), slog.String("error", err.Error()))
 		}
+
+		// Clear BMH error annotation to allow future retry attempts
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			// Don't fail the entire operation for annotation cleanup failure
+		}
+
 		return ctrl.Result{}, false, fmt.Errorf("failed to apply changes for BMH %s/%s", bmh.Namespace, bmh.Name)
 	}
 
@@ -447,7 +471,7 @@ func initiateNodeUpdate(ctx context.Context,
 	node *pluginsv1alpha1.AllocatedNode,
 	newHwProfile string) (ctrl.Result, error) {
 
-	bmh, err := getBMHForNode(ctx, c, node)
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
@@ -523,7 +547,7 @@ func handleNodeAllocationRequestConfiguring(
 	}
 
 	// STEP 2: Handle nodes in transition (from update-needed to update in-progress).
-	updating, err := handleTransitionNodes(ctx, c, logger, pluginNamespace, nodelist, true)
+	updating, err := handleTransitionNodes(ctx, c, noncachedClient, logger, pluginNamespace, nodelist, true)
 	if err != nil {
 		return ctrl.Result{}, nodelist, fmt.Errorf("error handling transitioning nodes: %w", err)
 	}

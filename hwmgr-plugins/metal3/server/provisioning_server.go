@@ -30,12 +30,14 @@ type Metal3PluginServer struct {
 func NewMetal3PluginServer(
 	config svcutils.CommonServerConfig,
 	hubClient client.Client,
+	noncachedClient client.Reader,
 	logger *slog.Logger,
 ) (*Metal3PluginServer, error) {
 	return &Metal3PluginServer{
 		HardwarePluginServer: provisioning.HardwarePluginServer{
 			CommonServerConfig: config,
 			HubClient:          hubClient,
+			NoncachedClient:    noncachedClient,
 			Logger:             logger,
 			Namespace:          provisioning.GetMetal3HWPluginNamespace(),
 			HardwarePluginID:   hwmgrutils.Metal3HardwarePluginID,

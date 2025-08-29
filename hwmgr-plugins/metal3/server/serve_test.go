@@ -105,7 +105,7 @@ var _ = Describe("Serve", func() {
 			// Since we're not in a Kubernetes environment, the function should fail
 			// when trying to set up authentication middleware
 			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(ctx, logger, config, mockClient)
+			err := Serve(ctx, logger, config, mockClient, mockClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("authenticator"))
 		})
@@ -114,7 +114,7 @@ var _ = Describe("Serve", func() {
 			// Test that the function attempts to get swagger specs
 			// This tests the early validation logic
 			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(ctx, logger, config, mockClient)
+			err := Serve(ctx, logger, config, mockClient, mockClient)
 			Expect(err).To(HaveOccurred())
 			// Should fail on auth setup, not on swagger retrieval
 			Expect(err.Error()).NotTo(ContainSubstring("swagger"))
@@ -143,7 +143,7 @@ var _ = Describe("Serve", func() {
 		It("should return error when address is invalid", func() {
 			config.Listener.Address = "invalid-address"
 			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(ctx, logger, config, mockClient)
+			err := Serve(ctx, logger, config, mockClient, mockClient)
 			Expect(err).To(HaveOccurred())
 			// Will fail on auth setup first, not address validation
 			Expect(err.Error()).To(ContainSubstring("authenticator"))
@@ -171,7 +171,7 @@ var _ = Describe("Serve", func() {
 
 			// This should fail at auth setup stage, not get to server startup
 			logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(cancelledCtx, logger, config, mockClient)
+			err := Serve(cancelledCtx, logger, config, mockClient, mockClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("authenticator"))
 		})

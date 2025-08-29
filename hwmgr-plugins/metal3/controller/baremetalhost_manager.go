@@ -489,12 +489,13 @@ func annotateNodeConfigInProgress(ctx context.Context,
 
 func handleTransitionNodes(ctx context.Context,
 	c client.Client,
+	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
 	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (bool, error) {
 
 	for _, node := range nodelist.Items {
-		bmh, err := getBMHForNode(ctx, c, &node)
+		bmh, err := getBMHForNode(ctx, noncachedClient, &node)
 		if err != nil {
 			return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 		}
@@ -616,6 +617,15 @@ func processBMHUpdateCase(ctx context.Context,
 		if err := hwmgrutils.SetNodeFailedStatus(ctx, c, logger, node, string(condType), message); err != nil {
 			logger.ErrorContext(ctx, "failed to set node failed status", slog.String("node", node.Name), slog.String("error", err.Error()))
 		}
+
+		// Clear BMH error annotation to allow future retry attempts
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			// Don't fail the entire operation for annotation cleanup failure
+		}
+
 		return fmt.Errorf("unable to initiate update for BMH %s/%s", bmh.Namespace, bmh.Name)
 	}
 
@@ -693,7 +703,7 @@ func handleBMHCompletion(ctx context.Context,
 	}
 
 	// Get BMH associated with the node
-	bmh, err := getBMHForNode(ctx, c, node)
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 	}
@@ -756,7 +766,7 @@ func checkForPendingUpdate(ctx context.Context,
 	}
 
 	// Process BMHs transitioning to "Preparing"
-	updating, err := handleTransitionNodes(ctx, c, logger, namespace, nodelist, false)
+	updating, err := handleTransitionNodes(ctx, c, noncachedClient, logger, namespace, nodelist, false)
 	if err != nil {
 		return updating, err
 	}
@@ -775,7 +785,7 @@ func checkForPendingUpdate(ctx context.Context,
 	return updating, nil
 }
 
-func getBMHForNode(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
+func getBMHForNode(ctx context.Context, c client.Reader, node *pluginsv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
 	bmhName := node.Spec.HwMgrNodeId
 	bmhNamespace := node.Spec.HwMgrNodeNs
 	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}
