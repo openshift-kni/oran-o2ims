@@ -86,7 +86,7 @@ func NewCRDWatcher(clientset kubernetes.Interface, restConfig *rest.Config, sche
 		return true // Default to keeping resources if verification isn't available yet
 	}
 
-	formatter := NewOutputFormatter(config.OutputFormat, config.Watch, config.RefreshInterval, crdTypes, verifyFunc)
+	formatter := NewOutputFormatter(config.OutputFormat, config.Watch, config.RefreshInterval, crdTypes, verifyFunc, config.UseASCII)
 
 	watcher := &CRDWatcher{
 		clientset:        clientset,
