@@ -57,7 +57,7 @@ var _ = Describe("Alertmanager API Client", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockRepo = generated.NewMockAlarmRepositoryInterface(ctrl)
 
-		// Create mock AlertManager server
+		// Create mock Alertmanager server
 		mockAMServer = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Verify request has correct path
 			Expect(r.URL.Path).To(Equal("/api/v2/alerts"))
@@ -118,7 +118,7 @@ var _ = Describe("Alertmanager API Client", func() {
 			},
 		}
 
-		amClient = alertmanager.NewAlertManagerClient(fakeClient, mockRepo, infra)
+		amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra)
 
 		// Set up test alerts
 		testAPIAlerts = []alertmanager.APIAlert{
@@ -149,7 +149,7 @@ var _ = Describe("Alertmanager API Client", func() {
 	})
 
 	Describe("SyncAlerts", func() {
-		It("should successfully sync alerts from AlertManager", func() {
+		It("should successfully sync alerts from Alertmanager", func() {
 			mockRepo.EXPECT().
 				WithTransaction(gomock.Any(), gomock.Any()).
 				DoAndReturn(func(ctx context.Context, fn func(tx pgx.Tx) error) error {
@@ -221,7 +221,7 @@ var _ = Describe("Alertmanager API Client", func() {
 				WithScheme(runtime.NewScheme()).
 				Build()
 
-			clientWithoutRoute := alertmanager.NewAlertManagerClient(emptyClient, mockRepo, infra)
+			clientWithoutRoute := alertmanager.NewAlertmanagerClient(emptyClient, mockRepo, infra)
 
 			_, err := clientWithoutRoute.GetAlertmanagerRoute(ctx)
 

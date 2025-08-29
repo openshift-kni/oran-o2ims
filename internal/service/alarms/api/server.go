@@ -488,7 +488,7 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 
 }
 
-// AmNotification handles an API request coming from AlertManager with CaaS alerts. This api is used internally.
+// AmNotification handles an API request coming from Alertmanager with CaaS alerts. This api is used internally.
 // Note: the errors returned can also be view under alertmanager pod logs but also logging here for convenience
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
 	// TODO: AM auto retries if it receives 5xx error code. That means any error, even if permanent (e.g postgres syntax), will be processed the same way. Once we have a better retry mechanism for pg, update all 5xx to 4xx as needed.
