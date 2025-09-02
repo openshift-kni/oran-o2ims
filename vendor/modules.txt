@@ -335,19 +335,6 @@ github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroup
 # github.com/openshift-kni/lifecycle-agent v0.0.0-20250227204303-42df68297836
 ## explicit; go 1.22.4
 github.com/openshift-kni/lifecycle-agent/api/imagebasedupgrade/v1
-# github.com/openshift-kni/oran-o2ims/api/common v0.0.0-20250728092029-9ec1477b18f0 => ./api/common
-## explicit; go 1.24.0
-github.com/openshift-kni/oran-o2ims/api/common
-# github.com/openshift-kni/oran-o2ims/api/hardwaremanagement v0.0.0-00010101000000-000000000000 => ./api/hardwaremanagement
-## explicit; go 1.24.0
-github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
-github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
-# github.com/openshift-kni/oran-o2ims/api/inventory v0.0.0-00010101000000-000000000000 => ./api/inventory
-## explicit; go 1.24.0
-github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
-# github.com/openshift-kni/oran-o2ims/api/provisioning v0.0.0-00010101000000-000000000000 => ./api/provisioning
-## explicit; go 1.24.0
-github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
 # github.com/openshift/api v0.0.0-20250725072657-92b1455121e1
 ## explicit; go 1.24.0
 github.com/openshift/api/config/v1
@@ -1500,10 +1487,6 @@ sigs.k8s.io/structured-merge-diff/v6/value
 sigs.k8s.io/yaml
 # github.com/openshift/assisted-service/api => github.com/openshift/assisted-service/api v0.0.0-20250720065424-7c8b8701e3c9
 # github.com/openshift/assisted-service/models => github.com/openshift/assisted-service/models v0.0.0-20250721175744-aed8de06010d
-# github.com/openshift-kni/oran-o2ims/api/common => ./api/common
-# github.com/openshift-kni/oran-o2ims/api/hardwaremanagement => ./api/hardwaremanagement
-# github.com/openshift-kni/oran-o2ims/api/inventory => ./api/inventory
-# github.com/openshift-kni/oran-o2ims/api/provisioning => ./api/provisioning
 # github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
 # k8s.io/client-go => k8s.io/client-go v0.34.0
 # golang.org/x/crypto => github.com/openshift/golang-crypto v0.33.1-0.20250310193910-9003f682e581

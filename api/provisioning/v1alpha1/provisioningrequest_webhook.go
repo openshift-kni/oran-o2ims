@@ -28,6 +28,7 @@ var provisioningrequestlog = logf.Log.WithName("provisioningrequest-webhook")
 
 // SetupWebhookWithManager will setup the manager to manage the webhooks
 func (r *ProvisioningRequest) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	// nolint:wrapcheck
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&ProvisioningRequest{}).
 		WithValidator(&provisioningRequestValidator{Client: mgr.GetClient()}).
@@ -55,7 +56,7 @@ func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, obj r
 
 	// Validate that metadata.name is a valid UUID
 	if _, err := uuid.Parse(pr.Name); err != nil {
-		return nil, fmt.Errorf("metadata.name must be a valid UUID: %v", err)
+		return nil, fmt.Errorf("metadata.name must be a valid UUID: %w", err)
 	}
 
 	if err := v.validateCreateOrUpdate(ctx, nil, pr); err != nil {
@@ -67,7 +68,7 @@ func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, obj r
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldObj runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	oldPr, casted := oldObj.(*ProvisioningRequest)
 	if !casted {
 		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", oldObj)
@@ -116,13 +117,13 @@ func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, obj r
 	return nil, nil
 }
 
-func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Context, oldPr *ProvisioningRequest, newPr *ProvisioningRequest) error {
+func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Context, oldPr, newPr *ProvisioningRequest) error {
 	clusterTemplate, err := newPr.GetClusterTemplateRef(ctx, v.Client)
 	if err != nil {
 		return err
 	}
 
-	if err = newPr.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
+	if err := newPr.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
 		return err
 	}
 
