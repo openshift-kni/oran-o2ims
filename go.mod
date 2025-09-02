@@ -34,7 +34,7 @@ require (
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
 	github.com/pashagolub/pgxmock/v4 v4.6.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.85.0
-	github.com/spf13/cobra v1.9.1
+	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.9
 	github.com/stephenafamo/bob v0.40.2
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
