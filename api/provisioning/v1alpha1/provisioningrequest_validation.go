@@ -269,9 +269,9 @@ func (r *ProvisioningRequest) GetClusterTemplateRef(ctx context.Context, client 
 // that are considered immutable and should not be modified and a list of fields related
 // to node scaling, indicating nodes that were added or removed.
 func FindClusterInstanceImmutableFieldUpdates(
-	old, new map[string]any, ignoredFields [][]string, allowedFields [][]string) ([]string, []string, error) {
+	oldData, newData map[string]any, ignoredFields [][]string, allowedFields [][]string) ([]string, []string, error) {
 
-	diffs, err := diff.Diff(old, new, diff.AllowTypeMismatch(true))
+	diffs, err := diff.Diff(oldData, newData, diff.AllowTypeMismatch(true))
 	if err != nil {
 		return nil, nil, fmt.Errorf("error comparing differences between old "+
 			"and new ClusterInstance input: %w", err)
