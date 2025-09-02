@@ -172,7 +172,7 @@ $(LOCALBIN):
 
 # This allows all tools in the LOCALBIN folder, ie:opm,yq ... To be used by targets containing scripts
 # Prefer binaries in the local bin directory over system binaries.
-export PATH  := $(LOCALBIN):$(PATH)
+export PATH := $(abspath $(LOCALBIN)):$(PATH)
 
 # Source directories
 SOURCE_DIRS := $(shell find . -maxdepth 1 -type d ! -name "vendor" ! -name "." ! -name ".*")
@@ -364,7 +364,7 @@ bundle-push: bundle-build ## Push the bundle image.
 
 .PHONY: bundle-check
 bundle-check: bundle
-	hack/check-git-tree.sh
+	$(PROJECT_DIR)/hack/check-git-tree.sh
 
 .PHONY: bundle-run
 bundle-run: # Install bundle on cluster using operator sdk.
@@ -398,7 +398,7 @@ endif
 .PHONY: catalog
 catalog: opm ## Build a catalog.
 	@mkdir -p catalog
-	hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
+	$(PROJECT_DIR)/hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
 	$(OPM) render --output=yaml $(BUNDLE_IMG) > catalog/$(PACKAGE_NAME).yaml
 	$(OPM) validate catalog
 
@@ -414,7 +414,7 @@ catalog-push: ## Push a catalog image.
 # Deploy from catalog image.
 .PHONY: catalog-deploy
 catalog-deploy: ## Deploy from catalog image.
-	hack/generate-catalog-deploy.sh \
+	$(PROJECT_DIR)/hack/generate-catalog-deploy.sh \
 		--package $(PACKAGE_NAME) \
 		--namespace $(OCLOUD_MANAGER_NAMESPACE) \
 		--catalog-image $(CATALOG_IMG) \
@@ -425,7 +425,7 @@ catalog-deploy: ## Deploy from catalog image.
 # Undeploy from catalog image.
 .PHONY: catalog-undeploy
 catalog-undeploy: ## Undeploy from catalog image.
-	hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search "o2ims.*oran"
+	$(PROJECT_DIR)/hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search "o2ims.*oran"
 
 ##@ Tools and Linting
 
@@ -506,15 +506,17 @@ $(SHELLCHECK): $(LOCALBIN)
 		| xargs -0 --no-run-if-empty $(SHELLCHECK) -x
 	@echo "Shellcheck linting completed successfully."
 
-.PHONY: yamllint
-yamllint: sync-git-submodules $(YAMLLINT) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
-$(YAMLLINT): $(LOCALBIN)
+.PHONY: yamllint-download
+yamllint-download: sync-git-submodules $(LOCALBIN) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
 	@echo "Downloading yamllint..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-yamllint \
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download \
+		download-yamllint \
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_YAMLLINT_VERSION=$(YAMLLINT_VERSION)
 	@echo "Yamllint downloaded successfully."
-	$(YAMLLINT) -v
+
+.PHONY: yamllint
+yamllint: yamllint-download $(YAMLLINT) ## Lint YAML files in the repository
 	@echo "Running yamllint on repository YAML files..."
 	find $(PROJECT_DIR) -name "*.yaml" -o -name "*.yml" \
 		-not -path '$(PROJECT_DIR)/vendor/*' \
@@ -525,7 +527,7 @@ $(YAMLLINT): $(LOCALBIN)
 		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
 		| xargs -0 --no-run-if-empty $(YAMLLINT) -c .yamllint.yaml
-	@echo "Yamllint linting completed successfully."
+	@echo "YAML linting completed successfully."
 
 .PHONY: yq
 yq: sync-git-submodules $(YQ) ## Download yq locally if necessary. If wrong version is installed, it will be removed before downloading.
@@ -595,8 +597,8 @@ vet: ## Run go vet against code.
 .PHONY: deps-update
 deps-update: mock-gen golangci-lint
 	@echo "Update dependencies"
-	hack/update_deps.sh
-	hack/install_test_deps.sh
+	$(PROJECT_DIR)/hack/update_deps.sh
+	$(PROJECT_DIR)/hack/install_test_deps.sh
 
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
@@ -616,12 +618,12 @@ scorecard-test: operator-sdk
 .PHONY: sync-api-submodules
 sync-api-submodules:
 	@echo "Syncing api submodules"
-	hack/sync-api-submodules.sh
+	$(PROJECT_DIR)/hack/sync-api-submodules.sh
 
 # markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
 .PHONY: markdownlint-image
 markdownlint-image:  ## Build local container markdownlint-image
-	$(CONTAINER_TOOL) image build -f ./hack/Dockerfile.markdownlint --tag $(IMAGE_NAME)-markdownlint:latest ./hack
+	$(CONTAINER_TOOL) image build -f $(PROJECT_DIR)/hack/Dockerfile.markdownlint --tag $(IMAGE_NAME)-markdownlint:latest $(PROJECT_DIR)/hack
 
 .PHONY: markdownlint-image-clean
 markdownlint-image-clean:  ## Remove locally cached markdownlint-image
@@ -681,13 +683,14 @@ sync-git-submodules:
 	@echo "Checking git submodules"
 	@if [ "$(SKIP_SUBMODULE_SYNC)" != "yes" ]; then \
 		echo "Syncing git submodules"; \
+		git submodule sync --recursive; \
 		git submodule update --init --recursive; \
 	else \
 		echo "Skipping submodule sync"; \
 	fi
 
-.PHONY: konflux-validate-catalog-template-bundle ## validate the last bundle entry on the catalog template file
-konflux-validate-catalog-template-bundle: yq operator-sdk
+.PHONY: konflux-validate-catalog-template-bundle
+konflux-validate-catalog-template-bundle: sync-git-submodules yq operator-sdk ## validate the last bundle entry on the catalog template file
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-validate-catalog-template-bundle \
 		CATALOG_TEMPLATE_KONFLUX_INPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_INPUT) \
 		CATALOG_TEMPLATE_KONFLUX_OUTPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_OUTPUT) \
@@ -696,13 +699,13 @@ konflux-validate-catalog-template-bundle: yq operator-sdk
 		ENGINE=$(ENGINE)
 
 .PHONY: konflux-validate-catalog
-konflux-validate-catalog: opm ## validate the current catalog file
+konflux-validate-catalog: sync-git-submodules opm ## validate the current catalog file
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-validate-catalog \
 		CATALOG_KONFLUX=$(PROJECT_DIR)/$(CATALOG_KONFLUX) \
 		OPM=$(OPM)
 
-.PHONY: konflux-generate-catalog ## generate a quay.io catalog
-konflux-generate-catalog: yq opm
+.PHONY: konflux-generate-catalog
+konflux-generate-catalog: sync-git-submodules yq opm ## generate a quay.io catalog
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-generate-catalog \
 		CATALOG_TEMPLATE_KONFLUX_INPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_INPUT) \
 		CATALOG_TEMPLATE_KONFLUX_OUTPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_OUTPUT) \
@@ -713,8 +716,8 @@ konflux-generate-catalog: yq opm
 		YQ=$(YQ)
 	$(MAKE) konflux-validate-catalog
 
-.PHONY: konflux-generate-catalog-production ## generate a registry.redhat.io catalog
-konflux-generate-catalog-production: yq opm
+.PHONY: konflux-generate-catalog-production
+konflux-generate-catalog-production: sync-git-submodules yq opm ## generate a registry.redhat.io catalog
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-generate-catalog-production \
 		CATALOG_TEMPLATE_KONFLUX_INPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_INPUT) \
 		CATALOG_TEMPLATE_KONFLUX_OUTPUT=$(PROJECT_DIR)/$(CATALOG_TEMPLATE_KONFLUX_OUTPUT) \
@@ -728,19 +731,20 @@ konflux-generate-catalog-production: yq opm
 	$(MAKE) konflux-validate-catalog
 
 .PHONY: konflux-filter-unused-redhat-repos
-konflux-filter-unused-redhat-repos: ## Filter unused repositories from redhat.repo files in runtime lock folder
+konflux-filter-unused-redhat-repos: sync-git-submodules ## Filter unused repositories from redhat.repo files in runtime lock folder
 	@echo "Filtering unused repositories from runtime lock folder..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/rpm-lock filter-unused-repos REPO_FILE=$(PROJECT_DIR)/.konflux/lock-runtime/redhat.repo
 	@echo "Filtering completed for runtime lock folder."
 
 .PHONY: konflux-update-tekton-task-refs
-konflux-update-tekton-task-refs: ## Update task references in Tekton pipeline files
+konflux-update-tekton-task-refs: sync-git-submodules ## Update task references in Tekton pipeline files
 	@echo "Updating task references in Tekton pipeline files..."
-	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/tekton update-task-refs PIPELINE_FILES="$(shell find $(PROJECT_DIR)/.tekton -name '*.yaml' -not -name 'OWNERS' | tr '\n' ' ')"
+	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/tekton update-task-refs \
+		PIPELINE_FILES="$$(find $(PROJECT_DIR)/.tekton -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | xargs -0 -r printf '%s ')"
 	@echo "Task references updated successfully."
 
 .PHONY: konflux-compare-catalog
-konflux-compare-catalog: ## Compare generated catalog with upstream FBC image
+konflux-compare-catalog: sync-git-submodules ## Compare generated catalog with upstream FBC image
 	@echo "Comparing generated catalog with upstream FBC image..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/catalog konflux-compare-catalog \
 		CATALOG_KONFLUX=$(PROJECT_DIR)/$(CATALOG_KONFLUX) \
