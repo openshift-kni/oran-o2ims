@@ -435,8 +435,9 @@ lint: bashate golangci-lint shellcheck yamllint
 .PHONY: tools
 tools: opm operator-sdk yq
 
-.PHONY: golangci-lint
-golangci-lint: sync-git-submodules $(GOLANGCI_LINT) ## Run golangci-lint against code. If wrong version is installed, it will be removed before downloading.
+.PHONY: golangci-lint-download
+golangci-lint-download: $(LOCALBIN) sync-git-submodules $(GOLANGCI_LINT) ## If wrong version is installed, it will be removed before downloading.
+
 $(GOLANGCI_LINT): $(LOCALBIN)
 	@echo "Downloading golangci-lint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
@@ -444,19 +445,26 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 		GO_MODULE=github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) \
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 	@echo "Golangci-lint downloaded successfully."
+
+.PHONY: golangci-lint
+golangci-lint: golangci-lint-download ## Run golangci-lint against code.
 	@echo "Running golangci-lint on repository go files..."
 	$(GOLANGCI_LINT) --version
 	$(GOLANGCI_LINT) run -v
 	@echo "Golangci-lint linting completed successfully."
 
-.PHONY: bashate
-bashate: sync-git-submodules $(BASHATE) ## Download bashate and lint bash files in the repository. If wrong version is installed, it will be removed before downloading.
+.PHONY: bashate-download
+bashate-download: sync-git-submodules $(BASHATE) ## Download bashate locally if necessary. If wrong version is installed, it will be removed before downloading.
+
 $(BASHATE): $(LOCALBIN)
 	@echo "Downloading bashate..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-bashate \
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN) \
 		DOWNLOAD_BASHATE_VERSION=$(BASHATE_VERSION)
 	@echo "Bashate downloaded successfully."
+
+.PHONY: bashate
+bashate: bashate-download ## Run bashate against bash files in the repository.
 	@echo "Running bashate on repository bash files..."
 	find $(PROJECT_DIR) -name '*.sh' \
 		-not -path '$(PROJECT_DIR)/vendor/*' \
@@ -485,8 +493,9 @@ $(OPM): $(LOCALBIN)
 	$(OPM) version
 	@echo "Opm downloaded successfully."
 
-.PHONY: shellcheck
-shellcheck: sync-git-submodules $(SHELLCHECK) ## Download shellcheck locally if necessary and run against bash  scripts. If wrong version is installed, it will be removed before downloading.
+.PHONY: shellcheck-download
+shellcheck-download: sync-git-submodules $(SHELLCHECK) ## Download shellcheck locally if necessary. If wrong version is installed, it will be removed before downloading.
+
 $(SHELLCHECK): $(LOCALBIN)
 	@echo "Downloading shellcheck..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-shellcheck \
@@ -494,6 +503,9 @@ $(SHELLCHECK): $(LOCALBIN)
 		DOWNLOAD_SHELLCHECK_VERSION=$(SHELLCHECK_VERSION)
 	@echo "Shellcheck downloaded successfully."
 	$(SHELLCHECK) -V
+
+.PHONY: shellcheck
+shellcheck: shellcheck-download ## Run shellcheck against bash scripts in the repository.
 	@echo "Running shellcheck on repository bash files..."
 	find $(PROJECT_DIR) -name '*.sh' \
 		-not -path '$(PROJECT_DIR)/vendor/*' \
@@ -507,7 +519,9 @@ $(SHELLCHECK): $(LOCALBIN)
 	@echo "Shellcheck linting completed successfully."
 
 .PHONY: yamllint-download
-yamllint-download: sync-git-submodules $(LOCALBIN) ## Download yamllint locally if necessary and run against yaml files. If wrong version is installed, it will be removed before downloading.
+yamllint-download: sync-git-submodules $(YAMLLINT) ## Download yamllint locally if necessary. If wrong version is installed, it will be removed before downloading.
+
+$(YAMLLINT): $(LOCALBIN)
 	@echo "Downloading yamllint..."
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download \
 		download-yamllint \
@@ -516,7 +530,7 @@ yamllint-download: sync-git-submodules $(LOCALBIN) ## Download yamllint locally 
 	@echo "Yamllint downloaded successfully."
 
 .PHONY: yamllint
-yamllint: yamllint-download $(YAMLLINT) ## Lint YAML files in the repository
+yamllint: yamllint-download ## Lint YAML files in the repository
 	@echo "Running yamllint on repository YAML files..."
 	find $(PROJECT_DIR) -name "*.yaml" -o -name "*.yml" \
 		-not -path '$(PROJECT_DIR)/vendor/*' \
@@ -595,7 +609,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: deps-update
-deps-update: mock-gen golangci-lint
+deps-update: mock-gen golangci-lint-download
 	@echo "Update dependencies"
 	$(PROJECT_DIR)/hack/update_deps.sh
 	$(PROJECT_DIR)/hack/install_test_deps.sh
@@ -603,7 +617,7 @@ deps-update: mock-gen golangci-lint
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint shellcheck bashate fmt test test-e2e test-crd-watcher bundle-check
+ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-crd-watcher bundle-check
 
 .PHONY: clean
 clean:
@@ -640,7 +654,7 @@ markdownlint: markdownlint-image  ## run the markdown linter
 
 ##@ O-RAN Alarms Server
 
-.PHNOY: alarms
+.PHONY: alarms
 alarms: ##Run full alarms stack
 	IMG=$(IMAGE_TAG_BASE):latest make bundle deploy clean-am-service connect-postgres connect-cluster-server run-alarms-migrate create-am-service run-alarms
 
