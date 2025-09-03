@@ -404,8 +404,8 @@ github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An
 github.com/spf13/pflag v1.0.9 h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY=
 github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/spkg/bom v0.0.0-20160624110644-59b7046e48ad/go.mod h1:qLr4V1qq6nMqFKkMo8ZTx3f+BZEkzsRUY10Xsm2mwU0=
-github.com/stephenafamo/bob v0.40.2 h1:VNb25TmDFuqxpRoP1ZjsFURs/t7/10LWkpDM+KovV6M=
-github.com/stephenafamo/bob v0.40.2/go.mod h1:8l55917DM36gF518Iz1MHjLds7KGAfkitJfxISYlth8=
+github.com/stephenafamo/bob v0.41.1 h1:xcRPuRMCwtZZ9tS4JIVbZ5Erdm5Dy5dIvbS5kivwPpA=
+github.com/stephenafamo/bob v0.41.1/go.mod h1:8l55917DM36gF518Iz1MHjLds7KGAfkitJfxISYlth8=
 github.com/stephenafamo/fakedb v0.0.0-20221230081958-0b86f816ed97 h1:XItoZNmhOih06TC02jK7l3wlpZ0XT/sPQYutDcGOQjg=
 github.com/stephenafamo/fakedb v0.0.0-20221230081958-0b86f816ed97/go.mod h1:bM3Vmw1IakoaXocHmMIGgJFYob0vuK+CFWiJHQvz0jQ=
 github.com/stephenafamo/scan v0.7.0 h1:lfFiD9H5+n4AdK3qNzXQjj2M3NfTOpmWBIA39NwB94c=

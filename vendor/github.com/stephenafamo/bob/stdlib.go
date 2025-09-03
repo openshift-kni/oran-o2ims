@@ -11,7 +11,7 @@ import (
 )
 
 // Open works just like [sql.Open], but converts the returned [*sql.DB] to [DB]
-func Open(driverName string, dataSource string) (DB, error) {
+func Open(driverName, dataSource string) (DB, error) {
 	db, err := sql.Open(driverName, dataSource)
 	return NewDB(db), err
 }
@@ -46,13 +46,13 @@ func (d DB) QueryContext(ctx context.Context, query string, args ...any) (scan.R
 
 // Begin is similar to [*sql.DB.BeginTx], but return a transaction that
 // implements [Queryer]
-func (d DB) Begin(ctx context.Context) (Transaction, error) {
+func (d DB) Begin(ctx context.Context) (Tx, error) {
 	return d.BeginTx(ctx, nil)
 }
 
 // BeginTx is similar to [*sql.DB.BeginTx], but return a transaction that
 // implements [Queryer]
-func (d DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Transaction, error) {
+func (d DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
 	tx, err := d.DB.BeginTx(ctx, opts)
 	if err != nil {
 		return Tx{}, err
@@ -148,13 +148,13 @@ func (d Conn) QueryContext(ctx context.Context, query string, args ...any) (scan
 
 // Begin is similar to [*sql.DB.BeginTx], but return a transaction that
 // implements [Queryer]
-func (d Conn) Begin(ctx context.Context) (Transaction, error) {
+func (d Conn) Begin(ctx context.Context) (Tx, error) {
 	return d.BeginTx(ctx, nil)
 }
 
 // BeginTx is similar to [*sql.DB.BeginTx], but return a transaction that
 // implements [Queryer]
-func (d Conn) BeginTx(ctx context.Context, opts *sql.TxOptions) (Transaction, error) {
+func (d Conn) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
 	tx, err := d.Conn.BeginTx(ctx, opts)
 	if err != nil {
 		return Tx{}, err
