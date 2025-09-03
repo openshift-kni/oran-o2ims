@@ -9,25 +9,19 @@ import (
 type RuleType int
 
 const (
-	CopyRuleType RuleType = iota
-	InsertRuleType
+	InsertRuleType RuleType = iota
 	DeleteRuleType
 	ReplaceRuleType
-	RecordRuleType
 )
 
 func (r RuleType) String() string {
 	switch r {
-	case CopyRuleType:
-		return "copy"
 	case InsertRuleType:
 		return "insert"
 	case ReplaceRuleType:
 		return "replace"
 	case DeleteRuleType:
 		return "delete"
-	case RecordRuleType:
-		return "record"
 	default:
 		return "unknown"
 	}
@@ -239,12 +233,26 @@ func EditCallback(rule EditRule, callbacks ...func(start, end int, before, after
 	return callbackRule{rule, callbacks}
 }
 
+func RecordPoint(point int, callbacks ...func(point int) error) EditRule {
+	return EditCallback(
+		insertRule{point, nil, 1},
+		func(point, _ int, _, content string) error {
+			for _, cb := range callbacks {
+				if err := cb(point); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	)
+}
+
 func RecordPoints(oldStart, oldEnd int, callbacks ...func(start, end int) error) []EditRule {
 	firstPoint := 0
 	return []EditRule{
 		EditCallback(
 			insertRule{oldStart, nil, -1},
-			func(start int, _ int, _, _ string) error { firstPoint = start; return nil },
+			func(start, _ int, _, _ string) error { firstPoint = start; return nil },
 		),
 		EditCallback(
 			insertRule{oldEnd + 1, nil, 1},

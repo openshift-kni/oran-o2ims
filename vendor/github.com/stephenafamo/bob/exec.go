@@ -31,9 +31,9 @@ type Executor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-type Transactor interface {
+type Transactor[Tx Transaction] interface {
 	Executor
-	Begin(context.Context) (Transaction, error)
+	Begin(context.Context) (Tx, error)
 }
 
 type Transaction interface {
@@ -134,7 +134,7 @@ type Transformer[T any, V any] interface {
 
 // Allx in addition to the [scan.Mapper], Allx takes a [Transformer] that will transform the scanned slice into a different type.
 // For common use cases, you can use [SliceTransformer] to transform a scanned slice of type T into a custom slice type like ~[]T.
-func Allx[Tr Transformer[T, V], T any, V any](ctx context.Context, exec Executor, q Query, m scan.Mapper[T]) (V, error) {
+func Allx[Tr Transformer[T, V], T, V any](ctx context.Context, exec Executor, q Query, m scan.Mapper[T]) (V, error) {
 	var typedSlice V
 	var err error
 

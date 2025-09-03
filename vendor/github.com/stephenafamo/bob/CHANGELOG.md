@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.41.1] - 2025-09-02
+
+### Fixed
+
+- Properly handle code generation tests for compound queries in MySQL.
+
+## [v0.41.0] - 2025-09-02
+
+### Added
+
+- `drivers/pgx.Pool` now includes the methods `Acquire` and `AcquireFunc` which mirror the methods in `pgx/v5/pgxpool` to acquire a connection from the pool (thanks @Eyal-Shalev).
+- Added the `drivers/pgx.PoolConn` type which is a wrapper around `pgx/v5/pgxpool.Conn`.
+
+### Changed
+
+- Use the full column type and not just the datatype as the `DBType` in bobgen-mysql.
+- `bob.Transactor` is now a generic interface so that implementations can use a concrete transaction type.
+- The data types generated for SQLite now follow SQLite's type affinity rules more closely (excluding some common names). As a result, all integer types are now mapped to `int64` and all floating point types are mapped to `float64`.
+
+### Fixed
+
+- Fixed an issue where `bobgen-mysql` could not detect unsigned integer columns in queries.
+- Properly close `pgx` transactions if the context used in `BeginTx` is cancelled.
+- Fix issues with generating code for relationships defined with `WhereExpr`.
+- Support `uint64` type when scanning columns as `types.Uint64`. This fixes scanning `BIGINT UNSIGNED` MySQL columns as `types.Uint64` when `interpolateParams` is enabled. (thanks @luiscleto)
+- Properly handle code generation tests for compound queries in MySQL.
+- Fix an issue where some ids are uppercased by the MySQL query code generator.
+
 ## [v0.40.2] - 2025-08-16
 
 ### Fixed
@@ -83,8 +111,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - columns with dots (`.`) are assumed to be a `to-many` nested field.
   - columns with double underscores (`__`) are assumed to be a `to-one` nested field.
 - Implement `--prefix` annotation in queries for `bobgen-psql`.
-- Add FromExisting<Rel> method to factories to create a template from an existing model. (thanks @dutow)
-- Add WithExisting<Rel> to factory mods to attach an existing model as a relationship. (thanks @dutow)
+- Add FromExisting**Rel** method to factories to create a template from an existing model. (thanks @dutow)
+- Add WithExisting**Rel** to factory mods to attach an existing model as a relationship. (thanks @dutow)
 - Added support in psql for combined args (order by, limit etc.) in combined queries and use parens if they are present. (@iwyrkore)
 - Added parens for combined queries. (@iwyrkore)
 - Match columns using regular expressions in type replacements. This is useful for e.g. matching columns that have a common prefix or suffix. (thanks @abdusco)
@@ -580,7 +608,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add PreloadAs PreloadOption to override the join alias when preloading a relationship with a left join. (thanks @daddz)
 - Add `AliasedAs()` method to `tableColumns` and `tableWhere` types to use a custom alias.
 - Add `AliasedAs()` method to generated relationship join mods. This is avaible in two places:
-
   - one to change the alias of the table being queried
 
     ```go
