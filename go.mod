@@ -33,7 +33,7 @@ require (
 	github.com/r3labs/diff/v3 v3.0.2
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.9
-	github.com/stephenafamo/bob v0.40.2
+	github.com/stephenafamo/bob v0.41.1
 	github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.uber.org/mock v0.6.0

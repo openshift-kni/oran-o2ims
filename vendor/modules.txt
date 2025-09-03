@@ -435,7 +435,7 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.9
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stephenafamo/bob v0.40.2
+# github.com/stephenafamo/bob v0.41.1
 ## explicit; go 1.24.0
 github.com/stephenafamo/bob
 github.com/stephenafamo/bob/clause
