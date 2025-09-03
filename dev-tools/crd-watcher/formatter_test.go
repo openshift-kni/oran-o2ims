@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
@@ -30,7 +29,7 @@ var _ = Describe("TableFormatter", func() {
 	)
 
 	BeforeEach(func() {
-		formatter = NewTableFormatter()
+		formatter = NewTableFormatter([]string{CRDTypeInventoryResources})
 
 		// Create a sample inventory resource with all state fields
 		resource = &InventoryResourceObject{
@@ -76,7 +75,7 @@ var _ = Describe("TableFormatter", func() {
 		})
 
 		It("should format inventory resource with all state fields", func() {
-			err := formatter.formatInventoryResource("2024-01-01T10:00:00Z", "ADDED", "1m", resource)
+			err := formatter.formatInventoryResource("1m", resource, FieldWidths{Field1: 25, Field2: 20, Field3: 35, Field4: 25, Field5: 15, Field6: 15, Field7: 10, Field8: 12})
 			Expect(err).ToNot(HaveOccurred())
 
 			// Wait a bit for output to be captured
@@ -97,7 +96,7 @@ var _ = Describe("TableFormatter", func() {
 		})
 
 		It("should truncate MODEL field to 25 characters", func() {
-			err := formatter.formatInventoryResource("2024-01-01T10:00:00Z", "ADDED", "1m", resource)
+			err := formatter.formatInventoryResource("1m", resource, FieldWidths{Field1: 25, Field2: 20, Field3: 35, Field4: 25, Field5: 15, Field6: 15, Field7: 10, Field8: 12})
 			Expect(err).ToNot(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -128,7 +127,8 @@ var _ = Describe("TableFormatter", func() {
 				},
 			}
 
-			err := formatter.formatInventoryResource("2024-01-01T10:00:00Z", "ADDED", "1m", resourceWithoutStates)
+			widths := FieldWidths{Field1: 25, Field2: 20, Field3: 35, Field4: 25, Field5: 15, Field6: 15, Field7: 10, Field8: 12}
+			err := formatter.formatInventoryResource("1m", resourceWithoutStates, widths)
 			Expect(err).ToNot(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -158,7 +158,8 @@ var _ = Describe("TableFormatter", func() {
 				},
 			}
 
-			err := formatter.formatInventoryResource("2024-01-01T10:00:00Z", "ADDED", "1m", resourceWithoutLabels)
+			widths := FieldWidths{Field1: 25, Field2: 20, Field3: 35, Field4: 25, Field5: 15, Field6: 15, Field7: 10, Field8: 12}
+			err := formatter.formatInventoryResource("1m", resourceWithoutLabels, widths)
 			Expect(err).ToNot(HaveOccurred())
 
 			time.Sleep(100 * time.Millisecond)
@@ -193,7 +194,8 @@ var _ = Describe("TableFormatter", func() {
 		})
 
 		It("should print correct header for inventory resources", func() {
-			formatter.printTableHeader(CRDTypeInventoryResources)
+			widths := FieldWidths{Field1: 25, Field2: 20, Field3: 35, Field4: 25, Field5: 15, Field6: 15, Field7: 10, Field8: 12}
+			formatter.printTableHeader(CRDTypeInventoryResources, widths)
 
 			time.Sleep(100 * time.Millisecond)
 			os.Stdout.Close()
@@ -210,8 +212,8 @@ var _ = Describe("TableFormatter", func() {
 			Expect(output).To(ContainSubstring("POWER"))
 			Expect(output).To(ContainSubstring("USAGE"))
 
-			// Verify separator line is present
-			Expect(output).To(ContainSubstring(strings.Repeat("-", 165)))
+			// Verify Unicode sidebar character is present
+			Expect(output).To(ContainSubstring("│"))
 		})
 	})
 
@@ -277,7 +279,7 @@ var _ = Describe("TableFormatter Events", func() {
 	)
 
 	BeforeEach(func() {
-		formatter = NewTableFormatter()
+		formatter = NewTableFormatter([]string{CRDTypeInventoryResources})
 
 		// Create sample events with inventory resources
 		events = []WatchEvent{

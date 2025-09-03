@@ -5,6 +5,7 @@
 /bin/*
 /catalog/*
 /dev-tools/crd-watcher/bin
+/dev-tools/crd-watcher/crd-watcher
 
 # Folders
 .idea/
