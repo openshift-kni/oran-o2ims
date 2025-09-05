@@ -338,7 +338,7 @@ func processNewNodeAllocationRequest(ctx context.Context,
 		}
 
 		// Fetch unallocated BMHs for the specific site and NodeGroupData
-		bmhListForGroup, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData, UnallocatedBMHs)
+		bmhListForGroup, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData)
 		if err != nil {
 			return fmt.Errorf("unable to fetch BMHs for nodegroup=%s: %w", nodeGroup.NodeGroupData.Name, err)
 		}
@@ -768,7 +768,7 @@ func processNodeAllocationRequestAllocation(ctx context.Context,
 
 		// Only fetch unallocated BMHs if we actually need new nodes
 		unallocatedBMHs, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site,
-			nodeGroup.NodeGroupData, UnallocatedBMHs)
+			nodeGroup.NodeGroupData)
 		if err != nil {
 			return RequeueAfterShortInterval, fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
 				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)

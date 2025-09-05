@@ -33,12 +33,6 @@ type BMHAllocationStatus string
 const ErrorRetryWindow = 5 * time.Minute
 
 const (
-	AllBMHs         BMHAllocationStatus = "all"
-	UnallocatedBMHs BMHAllocationStatus = "unallocated"
-	AllocatedBMHs   BMHAllocationStatus = "allocated"
-)
-
-const (
 	BmhRebootAnnotation            = "reboot.metal3.io"
 	BmhNetworkDataPrefx            = "network-data"
 	BiosUpdateNeededAnnotation     = "clcm.openshift.io/bios-update-needed"
@@ -155,86 +149,32 @@ func fetchBMHList(
 	c client.Client,
 	logger *slog.Logger,
 	site string,
-	nodeGroupData hwmgmtv1alpha1.NodeGroupData,
-	allocationStatus BMHAllocationStatus) (metal3v1alpha1.BareMetalHostList, error) {
+	nodeGroupData hwmgmtv1alpha1.NodeGroupData) (metal3v1alpha1.BareMetalHostList, error) {
 
 	var bmhList metal3v1alpha1.BareMetalHostList
-	opts := []client.ListOption{}
-	matchingLabels := make(client.MatchingLabels)
 
-	// Add site ID filter if provided
-	if site != "" {
-		matchingLabels[LabelSiteID] = site
+	opts, err := ResourceSelectionPrimaryFilter(ctx, c, logger, site, nodeGroupData)
+	if err != nil {
+		return bmhList, fmt.Errorf("failed to create primary filter: %w", err)
 	}
 
-	// Add pool ID filter if provided
-	if nodeGroupData.ResourcePoolId != "" {
-		matchingLabels[LabelResourcePoolID] = nodeGroupData.ResourcePoolId
-	}
-
-	for key, value := range nodeGroupData.ResourceSelector {
-		fullLabelName := key
-		if !REPatternResourceSelectorLabel.MatchString(fullLabelName) {
-			fullLabelName = LabelPrefixResourceSelector + key
-		}
-
-		matchingLabels[fullLabelName] = value
-	}
-
-	// Apply allocation filtering based on enum value
-	switch allocationStatus {
-	case AllocatedBMHs:
-		// Fetch only allocated BMHs
-		matchingLabels[BmhAllocatedLabel] = ValueTrue
-
-	case UnallocatedBMHs:
-		// Fetch only unallocated BMHs
-		selector := metav1.LabelSelector{
-			MatchExpressions: []metav1.LabelSelectorRequirement{
-				{
-					Key:      BmhAllocatedLabel,
-					Operator: metav1.LabelSelectorOpNotIn,
-					Values:   []string{ValueTrue}, // Exclude allocated=true
-				},
-			},
-		}
-		labelSelector, err := metav1.LabelSelectorAsSelector(&selector)
-		if err != nil {
-			return bmhList, fmt.Errorf("failed to create label selector: %w", err)
-		}
-		opts = append(opts, client.MatchingLabelsSelector{Selector: labelSelector})
-
-	case AllBMHs:
-		// fetch all BMHs
-	}
-
-	opts = append(opts, matchingLabels)
-
-	// Fetch BMHs based on filters
+	// Fetch BMHs based on primary filters
 	if err := c.List(ctx, &bmhList, opts...); err != nil {
 		return bmhList, fmt.Errorf("failed to get BMH list: %w", err)
 	}
 
 	if len(bmhList.Items) == 0 {
-		logger.WarnContext(ctx, "No BareMetalHosts found",
-			slog.String(LabelSiteID, site),
-			slog.String("Allocation Status", string(allocationStatus)))
+		logger.WarnContext(ctx, "No BareMetalHosts found matching criteria",
+			slog.String(LabelSiteID, site))
 		return bmhList, nil
 	}
 
-	// we only care about the ones in "available" state
-	return filterAvailableBMHs(bmhList), nil
-}
-
-// filterAvailableBMHs filters out BareMetalHosts that are not in the "Available" provisioning state.
-func filterAvailableBMHs(bmhList metal3v1alpha1.BareMetalHostList) metal3v1alpha1.BareMetalHostList {
-	var filteredBMHs metal3v1alpha1.BareMetalHostList
-	for _, bmh := range bmhList.Items {
-		if bmh.Status.Provisioning.State == metal3v1alpha1.StateAvailable {
-			filteredBMHs.Items = append(filteredBMHs.Items, bmh)
-		}
+	bmhList, err = ResourceSelectionSecondaryFilter(ctx, c, logger, nodeGroupData, bmhList)
+	if err != nil {
+		return bmhList, fmt.Errorf("failed to apply secondary filter: %w", err)
 	}
-	return filteredBMHs
+
+	return bmhList, nil
 }
 
 // GroupBMHsByResourcePool groups unallocated BMHs by resource pool ID.
