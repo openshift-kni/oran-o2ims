@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -324,6 +325,7 @@ func (r *NodeAllocationRequestReconciler) SetupWithManager(mgr ctrl.Manager) err
 
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&pluginsv1alpha1.NodeAllocationRequest{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
 		WithEventFilter(pred).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
@@ -612,6 +614,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	}
 
 	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest)
+
 	if nodelist != nil {
 		status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, r.NoncachedClient, r.Logger, nodelist)
 
@@ -638,51 +641,84 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 
 func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 	ctx context.Context,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) (ctrl.Result, error) {
 
-	var result ctrl.Result
+	r.Logger.InfoContext(ctx, "Handling NodeAllocationRequest Processing")
 
-	full, requeueAfter, err := checkNodeAllocationRequestProgress(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace,
-		nodeAllocationRequest)
-	if requeueAfter > DoNotRequeue {
-		r.Logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared, requeueing",
-			slog.Int("seconds", requeueAfter))
-		return hwmgrutils.RequeueWithCustomInterval(time.Duration(requeueAfter) * time.Second), nil
-	}
+	// New API: returns (ctrl.Result, full bool, error)
+	res, full, err := checkNodeAllocationRequestProgress(
+		ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest,
+	)
+
+	// If the checker asked for a specific requeue or returned an error, handle that first.
 	if err != nil {
 		reason := hwmgmtv1alpha1.Failed
 		if typederrors.IsInputError(err) {
 			reason = hwmgmtv1alpha1.InvalidInput
 		}
-		if updateErr := r.updateConditionAndSendCallback(ctx, nodeAllocationRequest, hwmgmtv1alpha1.Provisioned,
-			reason, metav1.ConditionFalse, err.Error()); updateErr != nil {
+		if updateErr := r.updateConditionAndSendCallback(
+			ctx, nodeAllocationRequest,
+			hwmgmtv1alpha1.Provisioned, reason,
+			metav1.ConditionFalse, err.Error(),
+		); updateErr != nil {
 			return hwmgrutils.RequeueWithMediumInterval(),
-				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, updateErr)
+				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w",
+					nodeAllocationRequest.Name, updateErr)
 		}
-		return hwmgrutils.DoNotRequeue(), fmt.Errorf("failed to check NodeAllocationRequest progress %s: %w", nodeAllocationRequest.Name, err)
+		// Bubble the original error (no forced requeue here; the caller can decide)
+		return hwmgrutils.DoNotRequeue(),
+			fmt.Errorf("failed to check NodeAllocationRequest progress %s: %w",
+				nodeAllocationRequest.Name, err)
 	}
 
+	if res.Requeue || res.RequeueAfter > 0 {
+		if res.RequeueAfter > 0 {
+			r.Logger.InfoContext(ctx, "Progress detected; requeueing",
+				slog.Duration("after", res.RequeueAfter))
+		} else {
+			r.Logger.InfoContext(ctx, "Progress detected; requeueing immediately")
+		}
+
+		if err := r.updateConditionAndSendCallback(
+			ctx, nodeAllocationRequest,
+			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress,
+			metav1.ConditionFalse, string(hwmgmtv1alpha1.AwaitConfig),
+		); err != nil {
+			return hwmgrutils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w",
+					nodeAllocationRequest.Name, err)
+		}
+		return res, nil
+	}
+
+	// No explicit requeue requested by the checker: decide based on "full".
 	if full {
 		r.Logger.InfoContext(ctx, "NodeAllocationRequest is fully allocated")
-
-		if err := r.updateConditionAndSendCallback(ctx, nodeAllocationRequest,
-			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed, metav1.ConditionTrue, "Created"); err != nil {
+		if err := r.updateConditionAndSendCallback(
+			ctx, nodeAllocationRequest,
+			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed,
+			metav1.ConditionTrue, "Created",
+		); err != nil {
 			return hwmgrutils.RequeueWithMediumInterval(),
-				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w",
+					nodeAllocationRequest.Name, err)
 		}
-		result = hwmgrutils.DoNotRequeue()
-	} else {
-		r.Logger.InfoContext(ctx, "NodeAllocationRequest request in progress")
-		if err := r.updateConditionAndSendCallback(ctx, nodeAllocationRequest,
-			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress, metav1.ConditionFalse,
-			string(hwmgmtv1alpha1.AwaitConfig)); err != nil {
-			return hwmgrutils.RequeueWithMediumInterval(),
-				fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
-		}
-		result = hwmgrutils.RequeueWithShortInterval()
+		return hwmgrutils.DoNotRequeue(), nil
 	}
 
-	return result, nil
+	// Not full yet and no specific backoff requested — keep it moving with a short retry.
+	r.Logger.InfoContext(ctx, "NodeAllocationRequest processing in progress")
+	if err := r.updateConditionAndSendCallback(
+		ctx, nodeAllocationRequest,
+		hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress,
+		metav1.ConditionFalse, string(hwmgmtv1alpha1.AwaitConfig),
+	); err != nil {
+		return hwmgrutils.RequeueWithMediumInterval(),
+			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w",
+				nodeAllocationRequest.Name, err)
+	}
+	return hwmgrutils.RequeueWithShortInterval(), nil
 }
 
 // handleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion
