@@ -259,8 +259,8 @@ var _ = Describe("Helpers", func() {
 				Expect(result.Name).To(Equal("in-progress-node"))
 			})
 
-			It("should return nil when no provisioned condition exists", func() {
-				// Add node without provisioned condition
+			It("should return node when no provisioned condition exists", func() {
+				// Add node without provisioned condition (considered in progress)
 				nodeWithoutCondition := pluginsv1alpha1.AllocatedNode{
 					ObjectMeta: metav1.ObjectMeta{Name: "no-condition-node"},
 					Status:     pluginsv1alpha1.AllocatedNodeStatus{},
@@ -268,7 +268,8 @@ var _ = Describe("Helpers", func() {
 				nodeList.Items = append(nodeList.Items, nodeWithoutCondition)
 
 				result := findNodeInProgress(nodeList)
-				Expect(result).To(BeNil())
+				Expect(result).NotTo(BeNil())
+				Expect(result.Name).To(Equal("no-condition-node"))
 			})
 		})
 
@@ -630,9 +631,33 @@ var _ = Describe("Helpers", func() {
 				},
 			}
 
+			// Create corresponding HardwareData for each BMH
+			hwData1 := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bmh-1",
+					Namespace: "test-bmh-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: &metal3v1alpha1.HardwareDetails{
+						CPU: metal3v1alpha1.CPU{Arch: "x86_64"},
+					},
+				},
+			}
+			hwData2 := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bmh-2",
+					Namespace: "test-bmh-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: &metal3v1alpha1.HardwareDetails{
+						CPU: metal3v1alpha1.CPU{Arch: "x86_64"},
+					},
+				},
+			}
+
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
-				WithObjects(nodeAllocationRequest, bmh1, bmh2).
+				WithObjects(nodeAllocationRequest, bmh1, bmh2, hwData1, hwData2).
 				Build()
 		})
 

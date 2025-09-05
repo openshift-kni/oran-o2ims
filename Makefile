@@ -585,7 +585,7 @@ go-generate:
 .PHONY: test tests
 test tests:
 	@echo "Run ginkgo"
-	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api $(ginkgo_flags)
+	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
 
 .PHONY: test-e2e
 test-e2e: envtest kubectl
