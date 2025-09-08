@@ -37,6 +37,7 @@ rules:
   resources:
   - configmaps
   - namespaces
+  - persistentvolumeclaims
   - secrets
   - serviceaccounts
   - services

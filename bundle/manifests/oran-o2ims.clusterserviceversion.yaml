@@ -1350,6 +1350,7 @@ spec:
           resources:
           - configmaps
           - namespaces
+          - persistentvolumeclaims
           - secrets
           - serviceaccounts
           - services

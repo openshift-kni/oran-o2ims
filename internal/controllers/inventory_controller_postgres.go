@@ -56,6 +56,14 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 				},
 			},
 		},
+		corev1.Volume{
+			Name: "data",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: fmt.Sprintf("%s-data", serverName),
+				},
+			},
+		},
 	)
 
 	deploymentVolumeMounts = append(deploymentVolumeMounts,
@@ -66,7 +74,41 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		corev1.VolumeMount{
 			Name:      fmt.Sprintf("%s-startup", serverName),
 			MountPath: "/opt/app-root/src/postgresql-start",
+		},
+		corev1.VolumeMount{
+			Name:      "data",
+			MountPath: "/var/lib/pgsql/data",
 		})
+
+	// Create PersistentVolumeClaim for data storage
+	pvcName := fmt.Sprintf("%s-data", serverName)
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: t.object.Namespace,
+			Labels: map[string]string{
+				"oran/o2ims": t.object.Name,
+				"app":        serverName,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			VolumeMode:       k8sptr.To(corev1.PersistentVolumeFilesystem),
+			StorageClassName: nil, // Use cluster default
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("20Gi"),
+				},
+			},
+		},
+	}
+
+	t.logger.DebugContext(ctx, "[deployPostgresServer] Create PVC", "Name", pvcName)
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, pvc, t.object, ""); err != nil {
+		return fmt.Errorf("failed to create PVC: %w", err)
+	}
 
 	// Build the deployment's metadata.
 	deploymentMeta := metav1.ObjectMeta{
