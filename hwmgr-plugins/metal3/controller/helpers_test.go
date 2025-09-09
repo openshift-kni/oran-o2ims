@@ -25,6 +25,9 @@ Test Cases Covered in this File:
    - removeConfigAnnotation: Tests removing configuration annotations from AllocatedNode objects
      * Handling nil annotations map gracefully
      * Removing existing config annotation while preserving other annotations
+   - clearConfigAnnotationWithPatch: Tests the wrapper function for removing config annotations and patching
+     * Successfully removes annotation and persists changes via patch operation
+     * Handles nodes without config annotation gracefully
 
 2. Node Finding Functions
    - findNodeInProgress: Tests finding nodes that are currently in progress state
@@ -83,6 +86,7 @@ Test Cases Covered in this File:
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -191,6 +195,62 @@ var _ = Describe("Helpers", func() {
 				annotations := testNode.GetAnnotations()
 				Expect(annotations).NotTo(HaveKey(ConfigAnnotation))
 				Expect(annotations["other"]).To(Equal("value"))
+			})
+		})
+
+		Describe("clearConfigAnnotationWithPatch", func() {
+			var (
+				ctx        context.Context
+				testClient client.Client
+				allocNode  *pluginsv1alpha1.AllocatedNode
+			)
+
+			BeforeEach(func() {
+				ctx = context.Background()
+				allocNode = &pluginsv1alpha1.AllocatedNode{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-node",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							ConfigAnnotation: "firmware-update",
+							"other":          "value",
+						},
+					},
+				}
+
+				scheme := runtime.NewScheme()
+				Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+				testClient = fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(allocNode).
+					Build()
+			})
+
+			It("should remove config annotation and patch the AllocatedNode", func() {
+				err := clearConfigAnnotationWithPatch(ctx, testClient, allocNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify annotation was removed from in-memory object
+				Expect(allocNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
+				Expect(allocNode.Annotations["other"]).To(Equal("value"))
+
+				// Verify the change was persisted
+				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				err = testClient.Get(ctx, types.NamespacedName{Name: "test-node", Namespace: "test-namespace"}, updatedNode)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updatedNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
+				Expect(updatedNode.Annotations["other"]).To(Equal("value"))
+			})
+
+			It("should handle nodes without config annotation gracefully", func() {
+				// Remove the config annotation first
+				delete(allocNode.Annotations, ConfigAnnotation)
+
+				err := clearConfigAnnotationWithPatch(ctx, testClient, allocNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Should still have other annotations
+				Expect(allocNode.Annotations["other"]).To(Equal("value"))
 			})
 		})
 	})
@@ -780,8 +840,123 @@ var _ = Describe("Helpers", func() {
 		})
 
 		Context("handleInProgressUpdate", func() {
-			It("should be tested in integration tests", func() {
-				Skip("Requires complex BMH status handling - test in integration suite")
+			var (
+				testBMH    *metal3v1alpha1.BareMetalHost
+				testNode   *pluginsv1alpha1.AllocatedNode
+				testClient client.Client
+				ctx        context.Context
+				logger     *slog.Logger
+			)
+
+			BeforeEach(func() {
+				ctx = context.Background()
+				logger = slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{}))
+
+				// Create a test AllocatedNode with config-in-progress annotation
+				testNode = &pluginsv1alpha1.AllocatedNode{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-node",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							ConfigAnnotation: "firmware-update", // Node has config in progress
+						},
+					},
+					Spec: pluginsv1alpha1.AllocatedNodeSpec{
+						HwMgrNodeId: "test-bmh",
+						HwMgrNodeNs: "test-namespace",
+					},
+				}
+
+				// Create a test BMH in error state with old timestamp to make it non-transient
+				oldTimestamp := time.Now().Add(-10 * time.Minute).Format(time.RFC3339) // 10 minutes ago
+				testBMH = &metal3v1alpha1.BareMetalHost{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-bmh",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							BmhErrorTimestampAnnotation: oldTimestamp,
+						},
+					},
+					Status: metal3v1alpha1.BareMetalHostStatus{
+						OperationalStatus: metal3v1alpha1.OperationalStatusError,
+						ErrorMessage:      "Servicing failed",
+						ErrorType:         metal3v1alpha1.ServicingError,
+					},
+				}
+
+				// Create fake client with the test objects
+				scheme := runtime.NewScheme()
+				Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
+				Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
+				testClient = fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(testBMH, testNode).
+					Build()
+			})
+
+			It("should clean up config annotation when BMH is in error state", func() {
+				nodeList := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{*testNode},
+				}
+
+				// Call handleInProgressUpdate
+				result, handled, err := handleInProgressUpdate(ctx, testClient, testClient, logger, nodeList)
+
+				// Verify the function handled the error case
+				Expect(handled).To(BeTrue()) // Should return true when BMH error is processed
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to update AllocatedNode status"))
+
+				// Verify that the config annotation was removed
+				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
+				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
+
+				// The annotation should be removed
+				Expect(updatedNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
+
+				// Verify requeue result (should not requeue on terminal error)
+				Expect(result.Requeue).To(BeFalse())
+			})
+
+			It("should continue waiting when BMH is in progress (not error)", func() {
+				// Update BMH to be in servicing state (not error)
+				testBMH.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
+				testBMH.Status.ErrorMessage = ""
+				testBMH.Status.ErrorType = ""
+
+				// Update the client with the modified BMH
+				Expect(testClient.Update(ctx, testBMH)).To(Succeed())
+
+				nodeList := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{*testNode},
+				}
+
+				// Call handleInProgressUpdate
+				result, handled, err := handleInProgressUpdate(ctx, testClient, testClient, logger, nodeList)
+
+				// Verify the function continues waiting
+				Expect(handled).To(BeTrue()) // Should return true when still processing
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify that the config annotation was NOT removed (still in progress)
+				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
+				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
+
+				// The annotation should still be there
+				Expect(updatedNode.Annotations).To(HaveKey(ConfigAnnotation))
+
+				// Verify requeue with medium interval
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			})
+
+			Context("Integration test scenarios", func() {
+				It("should be tested for complex BMH status transitions", func() {
+					Skip("Full BMH lifecycle testing requires integration test environment")
+				})
 			})
 		})
 

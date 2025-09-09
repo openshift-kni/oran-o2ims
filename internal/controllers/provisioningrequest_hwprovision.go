@@ -23,6 +23,7 @@ import (
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 // createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
@@ -61,10 +62,9 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 		}
 
 		// Set hardware configuration start time after the NodeAllocationRequest is updated
-		if t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart.IsZero() {
-			currentTime := metav1.Now()
-			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
-		}
+		currentTime := metav1.Now()
+		t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
+
 		err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
 		if err != nil {
 			return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
@@ -197,6 +197,30 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 	return nil
 }
 
+// getHardwareStatusFromConditions reads hardware status from existing ProvisioningRequest conditions
+func (t *provisioningRequestReconcilerTask) getHardwareStatusFromConditions(condition hwmgmtv1alpha1.ConditionType) (bool, bool) {
+	var conditionType string
+	switch condition {
+	case hwmgmtv1alpha1.Provisioned:
+		conditionType = string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned)
+	case hwmgmtv1alpha1.Configured:
+		conditionType = string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured)
+	default:
+		return false, false
+	}
+
+	hwCondition := meta.FindStatusCondition(t.object.Status.Conditions, conditionType)
+	if hwCondition == nil {
+		return false, false
+	}
+
+	status := hwCondition.Status == metav1.ConditionTrue
+	timedOutOrFailed := hwCondition.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) ||
+		hwCondition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed)
+
+	return status, timedOutOrFailed
+}
+
 // checkNodeAllocationRequestStatus checks the NodeAllocationRequest status of a given condition type
 // and updates the provisioning request status accordingly.
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
@@ -204,15 +228,35 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse,
 	condition hwmgmtv1alpha1.ConditionType) (bool, bool, error) {
 
-	// Update the provisioning request Status with status from the NodeAllocationRequest object.
-	status, timedOutOrFailed, err := t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
-	if err != nil && !ctlrutils.IsConditionDoesNotExistsErr(err) {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to update the NodeAllocationRequest status for ProvisioningRequest",
-			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
-		)
+	var status bool
+	var timedOutOrFailed bool
+	var err error
+
+	// Only update hardware status on callback notifications or initial setup
+	// This eliminates the read-after-write race condition
+	if t.shouldUpdateHardwareStatus(condition) {
+		isCallbackTriggered := t.isCallbackTriggeredReconciliation()
+		t.logger.InfoContext(ctx, "Updating hardware status",
+			slog.String("condition", string(condition)),
+			slog.Bool("callbackTriggered", isCallbackTriggered))
+
+		// Update the provisioning request Status with status from the NodeAllocationRequest object.
+		status, timedOutOrFailed, err = t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
+		if err != nil && !ctlrutils.IsConditionDoesNotExistsErr(err) {
+			t.logger.ErrorContext(
+				ctx,
+				"Failed to update the NodeAllocationRequest status for ProvisioningRequest",
+				slog.String("name", t.object.Name),
+				slog.String("error", err.Error()),
+			)
+		}
+	} else {
+		// For non-callback reconciliation, read current status from PR conditions instead of querying plugin
+		status, timedOutOrFailed = t.getHardwareStatusFromConditions(condition)
+		t.logger.InfoContext(ctx, "Skipping hardware status update - not callback triggered",
+			slog.String("condition", string(condition)),
+			slog.Bool("currentStatus", status),
+			slog.Bool("timedOut", timedOutOrFailed))
 	}
 
 	return status, timedOutOrFailed, err
@@ -400,6 +444,60 @@ func (t *provisioningRequestReconcilerTask) updateAllocatedNodeHostMap(ctx conte
 	return nil
 }
 
+// processExistingHardwareCondition processes an existing hardware condition and returns the appropriate status
+func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
+	hwCondition *hwmgrpluginapi.Condition,
+	condition hwmgmtv1alpha1.ConditionType,
+) (metav1.ConditionStatus, string, string, bool) {
+	status := metav1.ConditionStatus(hwCondition.Status)
+	reason := hwCondition.Reason
+	message := hwCondition.Message
+	timedOutOrFailed := false
+
+	// If the condition is Configured and it's completed, reset the configuring check start time.
+	if hwCondition.Type == string(hwmgmtv1alpha1.Configured) && status == metav1.ConditionTrue {
+		t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = nil
+	} else if hwCondition.Type == string(hwmgmtv1alpha1.Configured) && t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart == nil {
+		// HardwareConfiguringCheckStart is nil, so reset it to current time
+		currentTime := metav1.Now()
+		t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
+	}
+
+	// Unknown or in progress hardware status, check if it timed out
+	if status != metav1.ConditionTrue && reason != string(hwmgmtv1alpha1.Failed) {
+		// Handle timeout logic
+		timedOutOrFailed, reason, message = ctlrutils.HandleHardwareTimeout(
+			condition,
+			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart,
+			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart,
+			t.timeouts.hardwareProvisioning,
+			reason,
+			message,
+		)
+		if timedOutOrFailed {
+			ctlrutils.SetProvisioningStateFailed(t.object, message)
+		}
+	}
+
+	// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
+	if status == metav1.ConditionFalse {
+		message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
+		ctlrutils.SetProvisioningStateInProgress(t.object, message)
+
+		if reason == string(hwmgmtv1alpha1.Failed) || reason == string(hwmgmtv1alpha1.TimedOut) {
+			timedOutOrFailed = true
+			if reason == string(hwmgmtv1alpha1.TimedOut) {
+				message = fmt.Sprintf("Hardware %s timed out", ctlrutils.GetStatusMessage(condition))
+			} else {
+				message = fmt.Sprintf("Hardware %s failed", ctlrutils.GetStatusMessage(condition))
+			}
+			ctlrutils.SetProvisioningStateFailed(t.object, message)
+		}
+	}
+
+	return status, reason, message, timedOutOrFailed
+}
+
 // updateHardwareStatus updates the hardware status for the ProvisioningRequest
 func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	ctx context.Context,
@@ -449,47 +547,8 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		}
 		ctlrutils.SetProvisioningStateInProgress(t.object, message)
 	} else {
-		// A hardware condition was found; use its details.
-		status = metav1.ConditionStatus(hwCondition.Status)
-		reason = hwCondition.Reason
-		message = hwCondition.Message
-
-		// If the condition is Configured and it's completed, reset the configuring check start time.
-		if hwCondition.Type == string(hwmgmtv1alpha1.Configured) && status == metav1.ConditionTrue {
-			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = nil
-		} else if hwCondition.Type == string(hwmgmtv1alpha1.Configured) && t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart == nil {
-			// HardwareConfiguringCheckStart is nil, so reset it to current time
-			currentTime := metav1.Now()
-			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
-		}
-
-		// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
-		if status == metav1.ConditionFalse {
-			message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
-			ctlrutils.SetProvisioningStateInProgress(t.object, message)
-
-			if reason == string(hwmgmtv1alpha1.Failed) {
-				timedOutOrFailed = true
-				message = fmt.Sprintf("Hardware %s failed", ctlrutils.GetStatusMessage(condition))
-				ctlrutils.SetProvisioningStateFailed(t.object, message)
-			}
-		}
-	}
-
-	// Unknown or in progress hardware status, check if it timed out
-	if status != metav1.ConditionTrue && reason != string(hwmgmtv1alpha1.Failed) {
-		// Handle timeout logic
-		timedOutOrFailed, reason, message = ctlrutils.HandleHardwareTimeout(
-			condition,
-			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart,
-			t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart,
-			t.timeouts.hardwareProvisioning,
-			reason,
-			message,
-		)
-		if timedOutOrFailed {
-			ctlrutils.SetProvisioningStateFailed(t.object, message)
-		}
+		// A hardware condition was found and should be processed; use its details.
+		status, reason, message, timedOutOrFailed = t.processExistingHardwareCondition(hwCondition, condition)
 	}
 
 	conditionType := provisioningv1alpha1.PRconditionTypes.HardwareProvisioned
@@ -511,6 +570,65 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		err = fmt.Errorf("failed to update Hardware %s status: %w", ctlrutils.GetStatusMessage(condition), err)
 	}
 	return status == metav1.ConditionTrue, timedOutOrFailed, err
+}
+
+// isCallbackTriggeredReconciliation checks if this reconciliation was triggered by a hardware plugin callback
+func (t *provisioningRequestReconcilerTask) isCallbackTriggeredReconciliation() bool {
+	ann := t.object.GetAnnotations()
+	if ann == nil {
+		return false
+	}
+
+	// Must have a non-empty "callback received" marker
+	if ann[ctlrutils.CallbackReceivedAnnotation] == "" {
+		return false
+	}
+
+	// If the callback specified a NAR ID, ensure it matches
+	if narFromCallback := ann[ctlrutils.CallbackNodeAllocationRequestIdAnnotation]; narFromCallback != "" {
+		var narFromStatus string
+		if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
+			narFromStatus = t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
+		}
+		if narFromStatus != "" && narFromCallback != narFromStatus {
+			return false
+		}
+	}
+
+	return true
+
+}
+
+// shouldUpdateHardwareStatus determines if we should update hardware status based on callback or timeout
+func (t *provisioningRequestReconcilerTask) shouldUpdateHardwareStatus(condition hwmgmtv1alpha1.ConditionType) bool {
+	// Always update on callback-triggered reconciliation
+	if t.isCallbackTriggeredReconciliation() {
+		return true
+	}
+
+	// For non-callback reconciliation, check different conditions
+	switch condition {
+	case hwmgmtv1alpha1.Provisioned:
+		hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
+		return hwProvisionedCond == nil // Only update if no status set yet
+	case hwmgmtv1alpha1.Configured:
+		hwConfiguredCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+
+		// If no status exists yet, allow update
+		if hwConfiguredCond == nil {
+			return true
+		}
+
+		// If configuration has been started, continue checking until complete
+		// Allow updates for in-progress states AND completion states
+		configStarted := t.object.Status.Extensions.NodeAllocationRequestRef != nil &&
+			!t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart.IsZero()
+		configNotCompleted := hwConfiguredCond.Status != metav1.ConditionTrue
+
+		return configStarted && configNotCompleted
+	}
+
+	return false
 }
 
 // checkExistingNodeAllocationRequest checks for an existing NodeAllocationRequest and verifies changes if necessary

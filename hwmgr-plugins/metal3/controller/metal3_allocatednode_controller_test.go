@@ -417,8 +417,17 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				// Mock successful Get call for node, then fail for BMH
 				getCallCount := 0
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					deletingNode.DeepCopyInto(obj.(*pluginsv1alpha1.AllocatedNode))
-					return nil
+					// Handle different object types
+					switch v := obj.(type) {
+					case *pluginsv1alpha1.AllocatedNode:
+						deletingNode.DeepCopyInto(v)
+						return nil
+					case *metal3v1alpha1.BareMetalHost:
+						// For BMH requests, we'll let the mockClient handle it
+						return fmt.Errorf("should use mockClient for BMH")
+					default:
+						return fmt.Errorf("unexpected object type: %T", obj)
+					}
 				}
 
 				mockClient.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -445,21 +454,38 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				// Mock successful Get call for node
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					deletingNode.DeepCopyInto(obj.(*pluginsv1alpha1.AllocatedNode))
-					return nil
+					// Handle different object types
+					switch v := obj.(type) {
+					case *pluginsv1alpha1.AllocatedNode:
+						deletingNode.DeepCopyInto(v)
+						return nil
+					case *metal3v1alpha1.BareMetalHost:
+						// For BMH requests, we'll let the mockClient handle it
+						return fmt.Errorf("should use mockClient for BMH")
+					default:
+						return fmt.Errorf("unexpected object type: %T", obj)
+					}
 				}
 
 				// Mock Get calls: first for BMH (success), then for PreprovisioningImage (fail)
 				getCallCount := 0
 				mockClient.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					getCallCount++
-					if getCallCount == 1 {
-						// First call for BMH - success
-						bmh.DeepCopyInto(obj.(*metal3v1alpha1.BareMetalHost))
-						return nil
+					// Handle different object types
+					switch v := obj.(type) {
+					case *metal3v1alpha1.BareMetalHost:
+						if getCallCount == 1 {
+							// First call for BMH - success
+							bmh.DeepCopyInto(v)
+							return nil
+						}
+						return fmt.Errorf("unexpected BMH call")
+					case *metal3v1alpha1.PreprovisioningImage:
+						// PreprovisioningImage calls should fail
+						return fmt.Errorf("preprovisioning image not found")
+					default:
+						return fmt.Errorf("unexpected object type: %T", obj)
 					}
-					// Second call for PreprovisioningImage - fail
-					return fmt.Errorf("preprovisioning image not found")
 				}
 
 				result, err := reconciler.Reconcile(ctx, req)
@@ -480,8 +506,17 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				// Mock successful Get call for node
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					nodeWithEmptyBMH.DeepCopyInto(obj.(*pluginsv1alpha1.AllocatedNode))
-					return nil
+					// Handle different object types
+					switch v := obj.(type) {
+					case *pluginsv1alpha1.AllocatedNode:
+						nodeWithEmptyBMH.DeepCopyInto(v)
+						return nil
+					case *metal3v1alpha1.BareMetalHost:
+						// For BMH requests, we'll let the mockClient handle it
+						return fmt.Errorf("should use mockClient for BMH")
+					default:
+						return fmt.Errorf("unexpected object type: %T", obj)
+					}
 				}
 
 				result, err := reconciler.Reconcile(ctx, req)
@@ -624,13 +659,27 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		Context("with mocked client for error scenarios", func() {
 			BeforeEach(func() {
 				reconciler.Client = mockClient
+				reconciler.NoncachedClient = mockNoncached
 			})
 
 			It("should handle BMH get failure", func() {
-				// Mock Get call to fail
-				mockClient.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					return fmt.Errorf("network error")
+				// Mock noncached client to fail for BMH requests (getBMHForNode uses noncachedClient)
+				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					// Handle different object types
+					switch v := obj.(type) {
+					case *pluginsv1alpha1.AllocatedNode:
+						allocatedNode.DeepCopyInto(v)
+						return nil
+					case *metal3v1alpha1.BareMetalHost:
+						// Fail BMH requests to simulate getBMHForNode failure
+						return fmt.Errorf("network error")
+					default:
+						return fmt.Errorf("unexpected object type: %T", obj)
+					}
 				}
+
+				// Ensure mockClient doesn't interfere (it shouldn't be called if getBMHForNode fails)
+				mockClient.getFunc = nil
 
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
@@ -640,17 +689,41 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			})
 
 			It("should handle partial deallocateBMH failure", func() {
+				// Mock noncached client to succeed for getBMHForNode
+				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					// Handle different object types
+					switch v := obj.(type) {
+					case *pluginsv1alpha1.AllocatedNode:
+						allocatedNode.DeepCopyInto(v)
+						return nil
+					case *metal3v1alpha1.BareMetalHost:
+						// Succeed for getBMHForNode
+						bmh.DeepCopyInto(v)
+						return nil
+					default:
+						return fmt.Errorf("unexpected object type: %T", obj)
+					}
+				}
+
 				// Mock Get calls: first for BMH (success), then fail for PreprovisioningImage
 				getCallCount := 0
 				mockClient.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					getCallCount++
-					if getCallCount == 1 {
-						// First call for BMH - success
-						bmh.DeepCopyInto(obj.(*metal3v1alpha1.BareMetalHost))
-						return nil
+					// Handle different object types
+					switch v := obj.(type) {
+					case *metal3v1alpha1.BareMetalHost:
+						if getCallCount == 1 {
+							// First call for BMH - success
+							bmh.DeepCopyInto(v)
+							return nil
+						}
+						return fmt.Errorf("unexpected BMH call")
+					case *metal3v1alpha1.PreprovisioningImage:
+						// PreprovisioningImage calls should fail
+						return fmt.Errorf("preprovisioning image get failed")
+					default:
+						return fmt.Errorf("unexpected object type: %T", obj)
 					}
-					// Subsequent calls (for PreprovisioningImage) - fail
-					return fmt.Errorf("preprovisioning image get failed")
 				}
 
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -25,7 +26,6 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
@@ -63,6 +63,15 @@ func removeConfigAnnotation(object client.Object) {
 	delete(annotations, ConfigAnnotation)
 }
 
+// clearConfigAnnotationWithPatch removes the config-in-progress annotation from an AllocatedNode and patches it
+func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+	removeConfigAnnotation(node)
+	if err := ctlrutils.CreateK8sCR(ctx, c, node, nil, ctlrutils.PATCH); err != nil {
+		return fmt.Errorf("failed to clear config annotation from AllocatedNode %s: %w", node.Name, err)
+	}
+	return nil
+}
+
 // findNodeInProgress scans the nodelist to find the first node in InProgress
 func findNodeInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) *pluginsv1alpha1.AllocatedNode {
 	for _, node := range nodelist.Items {
@@ -81,10 +90,11 @@ func applyPostConfigUpdates(ctx context.Context,
 	logger *slog.Logger,
 	bmhName types.NamespacedName, node *pluginsv1alpha1.AllocatedNode) (int, error) {
 
-	if requeue, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil {
-		return RequeueAfterShortInterval, fmt.Errorf("failed to clearBMHNetworkData bmh (%+v): %w", bmhName, err)
-	} else if requeue > DoNotRequeue {
-		return requeue, nil
+	if res, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil {
+		// preserve prior behavior: short retry on error
+		return RequeueAfterShortInterval, fmt.Errorf("clear BMH network data %s: %w", bmhName.String(), err)
+	} else if code := RequeueCodeFromResult(res); code > DoNotRequeue {
+		return code, nil
 	}
 
 	// nolint:wrapcheck
@@ -303,29 +313,31 @@ func checkNodeAllocationRequestProgress(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (full bool, requeueAfter int, err error) {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
 
 	// Check if we're fully allocated now that processing is complete
-	full = isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+	full := isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
 	if !full {
 		// Still not fully allocated, continue processing
-		requeueAfter, err = processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
-		return false, requeueAfter, err
+		res, err := processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+		return res, false, err
 	}
 
 	// check if there are any pending work such as bios configuring
-	if updating, err := checkForPendingUpdate(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest); err != nil {
-		return false, RequeueAfterShortInterval, err
-	} else if updating {
-		return false, RequeueAfterShortInterval, nil
+	res, updating, err := checkForPendingUpdate(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+	if err != nil || res.Requeue || res.RequeueAfter > 0 {
+		return res, false, err
 	}
-	return true, DoNotRequeue, nil
+	if updating {
+		return hwmgrutils.RequeueWithShortInterval(), false, nil
+	}
+	return ctrl.Result{}, true, nil
 }
 
 // processNewNodeAllocationRequest processes a new NodeAllocationRequest CR, verifying that there are enough free
 // resources to satisfy the request
 func processNewNodeAllocationRequest(ctx context.Context,
-	c client.Client,
+	noncachedClient client.Reader,
 	logger *slog.Logger,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
@@ -337,8 +349,9 @@ func processNewNodeAllocationRequest(ctx context.Context,
 			continue // Skip groups with size 0
 		}
 
-		// Fetch unallocated BMHs for the specific site and NodeGroupData
-		bmhListForGroup, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData)
+		// Fetch unallocated BMHs for the specific site and NodeGroupData using non-cached client
+		// to avoid race conditions with concurrent allocations
+		bmhListForGroup, err := fetchBMHList(ctx, noncachedClient, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData)
 		if err != nil {
 			return fmt.Errorf("unable to fetch BMHs for nodegroup=%s: %w", nodeGroup.NodeGroupData.Name, err)
 		}
@@ -385,7 +398,7 @@ func handleInProgressUpdate(ctx context.Context,
 		return ctrl.Result{}, false, nil
 	}
 	logger.InfoContext(ctx, "Node found that is in progress", slog.String("node", node.Name))
-	bmh, err := getBMHForNode(ctx, c, node)
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return ctrl.Result{}, true, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
@@ -408,12 +421,19 @@ func handleInProgressUpdate(ctx context.Context,
 			string(hwmgmtv1alpha1.ConfigApplied),
 			metav1.ConditionTrue,
 			string(hwmgmtv1alpha1.ConfigSuccess))
+
 		if err := ctlrutils.UpdateK8sCRStatus(ctx, c, node); err != nil {
+			logger.ErrorContext(ctx, "Failed to update AllocatedNode status",
+				slog.String("node", node.Name),
+				slog.String("error", err.Error()))
 			return ctrl.Result{}, true, fmt.Errorf("failed to update status for AllocatedNode %s: %w", node.Name, err)
 		}
-		removeConfigAnnotation(node)
-		if err := ctlrutils.CreateK8sCR(ctx, c, node, nil, ctlrutils.PATCH); err != nil {
-			return ctrl.Result{}, true, fmt.Errorf("failed to clear annotation from AllocatedNode %s: %w", node.Name, err)
+
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear config annotation",
+				slog.String("node", node.Name),
+				slog.String("error", err.Error()))
+			return ctrl.Result{}, true, err
 		}
 
 		return hwmgrutils.RequeueImmediately(), true, nil
@@ -424,14 +444,33 @@ func handleInProgressUpdate(ctx context.Context,
 		if err != nil || tolerate {
 			return hwmgrutils.RequeueWithMediumInterval(), true, err
 		}
+
 		logger.InfoContext(ctx, "BMH update failed", slog.String("BMH", bmh.Name))
+
+		// Clean up the config-in-progress annotation
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			return ctrl.Result{}, true, err
+		}
+
 		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.Failed), BmhServicingErr); err != nil {
 			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.String("node", node.Name), slog.String("error", err.Error()))
+			return ctrl.Result{}, true, fmt.Errorf("failed to update AllocatedNode status %s:%w", node.Name, err)
 		}
-		return ctrl.Result{}, false, fmt.Errorf("failed to apply changes for BMH %s/%s", bmh.Namespace, bmh.Name)
+
+		// Clear BMH error annotation to allow future retry attempts
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return ctrl.Result{}, true, fmt.Errorf("failed to clear BMH error annotation %s:%w", bmh.Name, err)
+		}
+
+		// Successfully handled BMH error state: updated node status and cleared annotations
+		logger.InfoContext(ctx, "Successfully handled BMH error state", slog.String("BMH", bmh.Name))
+		return ctrl.Result{}, false, fmt.Errorf("bmh %s/%s is in error state, node status updated to Failed", bmh.Namespace, bmh.Name)
 	}
 
 	logger.InfoContext(ctx, "BMH config in progress", slog.String("bmh", bmh.Name))
@@ -447,7 +486,7 @@ func initiateNodeUpdate(ctx context.Context,
 	node *pluginsv1alpha1.AllocatedNode,
 	newHwProfile string) (ctrl.Result, error) {
 
-	bmh, err := getBMHForNode(ctx, c, node)
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
@@ -508,7 +547,17 @@ func handleNodeAllocationRequestConfiguring(
 		return ctrl.Result{}, nil, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
 
-	// STEP 1: Look for the next node that requires an update.
+	// STEP 1: Process any node that is already in the update-in-progress state.
+	logger.InfoContext(ctx, "Checking for nodes in progress", slog.Int("totalNodes", len(nodelist.Items)))
+
+	res, handled, err := handleInProgressUpdate(ctx, c, noncachedClient, logger, nodelist)
+	if err != nil || handled {
+		return res, nodelist, err
+	}
+
+	// No nodes are currently in progress, check if all nodes have been updated
+
+	// STEP 2: Look for the next node that requires an update.
 	for _, nodegroup := range nodeAllocationRequest.Spec.NodeGroup {
 		newHwProfile := nodegroup.NodeGroupData.HwProfile
 		node := findNextNodeToUpdate(nodelist, nodegroup.NodeGroupData.Name, newHwProfile)
@@ -522,32 +571,21 @@ func handleNodeAllocationRequestConfiguring(
 		return res, nodelist, err
 	}
 
-	// STEP 2: Handle nodes in transition (from update-needed to update in-progress).
-	updating, err := handleTransitionNodes(ctx, c, logger, pluginNamespace, nodelist, true)
+	// STEP 3: Handle nodes in transition (from update-needed to update in-progress).
+	res, err = handleTransitionNodes(ctx, c, noncachedClient, logger, pluginNamespace, nodelist, true)
 	if err != nil {
-		return ctrl.Result{}, nodelist, fmt.Errorf("error handling transitioning nodes: %w", err)
-	}
-	if updating {
-		// Return a short interval requeue to allow time for the transition
-		return hwmgrutils.RequeueWithShortInterval(), nodelist, nil
-	}
-
-	// STEP 3: Process any node that is already in the update-in-progress state.
-	res, handled, err := handleInProgressUpdate(ctx, c, noncachedClient, logger, nodelist)
-	if err != nil {
-		if !handled {
-			logger.InfoContext(ctx, "Not handled", slog.String("error", err.Error()))
-			return hwmgrutils.DoNotRequeue(), nodelist, nil
-		}
 		return res, nodelist, err
 	}
-	if handled {
-		return res, nodelist, err
+	if res.Requeue || res.RequeueAfter > 0 {
+		// handleTransitionNodes found work to do, requeue to let next reconcile handle in-progress nodes
+		return res, nodelist, nil
 	}
 
-	// STEP 4: If no nodes are pending updates, mark the NodeAllocationRequest as fully configured.
+	// No nodes in progress, no nodes needing updates, and no transitions happening
+	// All AllocatedNodes have been successfully updated to their target profiles
 	logger.InfoContext(ctx, "All AllocatedNodes have been updated to new profile")
 
+	// No work to do, don't requeue
 	return ctrl.Result{}, nodelist, nil
 }
 
@@ -609,8 +647,10 @@ func contains(slice []string, value string) bool {
 }
 
 // allocateBMHToNodeAllocationRequest assigns a BareMetalHost to a NodeAllocationRequest.
-// Returns requeueAfter int (seconds) and error. If requeueAfter > DoNotRequeue, caller should requeue after that duration.
-func allocateBMHToNodeAllocationRequest(ctx context.Context,
+// Returns a ctrl.Result (for precise requeue timing) and an error for unexpected failures.
+// Callers should propagate any non-zero Result (Requeue / RequeueAfter).
+func allocateBMHToNodeAllocationRequest(
+	ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
@@ -618,7 +658,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	bmh *metal3v1alpha1.BareMetalHost,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	group pluginsv1alpha1.NodeGroup,
-) (int, error) {
+) (ctrl.Result, error) {
 
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
@@ -629,7 +669,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	if allocatedNodeLbl != nodeName {
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeLabel, ctlrutils.AllocatedNodeLabel,
 			nodeName, OpAdd); err != nil {
-			return DoNotRequeue, fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
+			return ctrl.Result{}, fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
 		}
 	}
 
@@ -638,31 +678,31 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 
 	// Ensure node is created
 	if err := createNode(ctx, c, logger, pluginNamespace, nodeAllocationRequest, nodeName, nodeId, nodeNs, group.NodeGroupData.Name, group.NodeGroupData.HwProfile); err != nil {
-		return DoNotRequeue, fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
+		return ctrl.Result{}, fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
 
 	// Process HW profile
 	nodeNamespace := pluginNamespace
 	updating, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, pluginNamespace, bmh, nodeName, nodeNamespace, group.NodeGroupData.HwProfile, false)
 	if err != nil {
-		return DoNotRequeue, fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
+		return ctrl.Result{}, fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
 	}
 	logger.InfoContext(ctx, "processed hw profile", slog.Bool("updating", updating))
 
 	// Mark BMH allocated
 	if err := markBMHAllocated(ctx, c, logger, bmh); err != nil {
-		return DoNotRequeue, fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
+		return ctrl.Result{}, fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Allow Host Management
 	if err := allowHostManagement(ctx, c, logger, bmh); err != nil {
-		return DoNotRequeue, fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
+		return ctrl.Result{}, fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
 	bmhInterface, err := buildInterfacesFromBMH(nodeAllocationRequest, bmh)
 	if err != nil {
-		return DoNotRequeue, fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
+		return ctrl.Result{}, fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
 	}
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodeGroupData.ResourcePoolId,
@@ -673,7 +713,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 		Interfaces: bmhInterface,
 	}
 	if err := updateNodeStatus(ctx, c, noncachedClient, logger, pluginNamespace, nodeInfo, nodeName, group.NodeGroupData.HwProfile, updating); err != nil {
-		return DoNotRequeue, fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
+		return ctrl.Result{}, fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
 	}
 
 	// Update NodeAllocationRequest status BEFORE network data clearing
@@ -684,7 +724,7 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 		// Immediately persist the NodeAllocationRequest status to the cluster
 		// This prevents loss of NodeNames when requeuing for network data clearing
 		if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
-			return DoNotRequeue, fmt.Errorf("failed to update NodeAllocationRequest properties for node %s: %w", nodeName, err)
+			return ctrl.Result{}, fmt.Errorf("failed to update NodeAllocationRequest properties for node %s: %w", nodeName, err)
 		}
 		logger.InfoContext(ctx, "Updated NodeAllocationRequest with allocated node",
 			slog.String("nodeName", nodeName),
@@ -692,16 +732,13 @@ func allocateBMHToNodeAllocationRequest(ctx context.Context,
 	}
 
 	if !updating {
-		bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-
-		if requeue, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil {
-			return RequeueAfterShortInterval, fmt.Errorf("failed to clearBMHNetworkData bmh (%+v): %w", bmhName, err)
-		} else if requeue > DoNotRequeue {
-			return requeue, nil
+		if res, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil || res.Requeue || res.RequeueAfter > 0 {
+			// transient / propagation wait → bubble up callee’s precise requeue
+			return res, err
 		}
 	}
 
-	return DoNotRequeue, nil
+	return ctrl.Result{}, nil
 }
 
 // waitForPreprovisioningImageNetworkDataCleared waits for the PreprovisioningImage network status to be cleared
@@ -737,106 +774,118 @@ func waitForPreprovisioningImageNetworkDataCleared(ctx context.Context, c client
 
 // processNodeAllocationRequestAllocation allocates BareMetalHosts to a NodeAllocationRequest while ensuring all
 // BMHs are in the same namespace.
-func processNodeAllocationRequestAllocation(ctx context.Context,
+func processNodeAllocationRequestAllocation(
+	ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-) (int, error) {
+) (ctrl.Result, error) {
 
 	var (
-		wg            sync.WaitGroup
-		mu            sync.Mutex
-		allocationErr error
-		requeueAfter  int
+		wg         sync.WaitGroup
+		mu         sync.Mutex
+		aggErr     error
+		minBackoff time.Duration // 0 means "no requeue requested"
 	)
 
-	// Process allocation for each NodeGroup
+	// For each NodeGroup, allocate pending nodes
 	for _, nodeGroup := range nodeAllocationRequest.Spec.NodeGroup {
 		if nodeGroup.Size == 0 {
-			continue // Skip groups with size 0
-		}
-
-		// Calculate pending nodes for the group
-		pendingNodes := nodeGroup.Size - countNodesInGroup(
-			ctx, noncachedClient, logger, pluginNamespace,
-			nodeAllocationRequest.Status.Properties.NodeNames, nodeGroup.NodeGroupData.Name)
-		if pendingNodes <= 0 {
 			continue
 		}
 
-		// Only fetch unallocated BMHs if we actually need new nodes
-		unallocatedBMHs, err := fetchBMHList(ctx, c, logger, nodeAllocationRequest.Spec.Site,
-			nodeGroup.NodeGroupData)
-		if err != nil {
-			return RequeueAfterShortInterval, fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
-				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)
+		// Calculate how many nodes are still needed for this group
+		pending := nodeGroup.Size - countNodesInGroup(
+			ctx, noncachedClient, logger, pluginNamespace,
+			nodeAllocationRequest.Status.Properties.NodeNames, nodeGroup.NodeGroupData.Name,
+		)
+		if pending <= 0 {
+			continue
 		}
 
+		// Only fetch unallocated BMHs if we actually need new nodes using non-cached client
+		// to avoid race conditions with concurrent allocations
+		unallocatedBMHs, err := fetchBMHList(ctx, noncachedClient, logger, nodeAllocationRequest.Spec.Site,
+			nodeGroup.NodeGroupData)
+		if err != nil {
+			return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
+				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)
+		}
 		if len(unallocatedBMHs.Items) == 0 {
-			return DoNotRequeue, fmt.Errorf("no available nodes for site=%s, nodegroup=%s",
+			// No capacity available; surface error to upper layer
+			return ctrl.Result{}, fmt.Errorf("no available nodes for site=%s, nodegroup=%s",
 				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name)
 		}
 
-		// Shared counter to track remaining nodes needed
-		nodeCounter := pendingNodes
-
-		// Allocate multiple nodes concurrently within the group
-		for _, bmh := range unallocatedBMHs.Items {
+		// Allocate up to 'pending' nodes concurrently
+		need := pending
+		for i := range unallocatedBMHs.Items {
 			mu.Lock()
-			if nodeCounter <= 0 {
+			if need <= 0 {
 				mu.Unlock()
-				break // Stop allocation if we've reached the required count
+				break
 			}
-
-			nodeCounter--
+			need--
 			mu.Unlock()
+
+			bmh := &unallocatedBMHs.Items[i] // address of slice element (avoid range-var bug)
 
 			wg.Add(1)
 			go func(bmh *metal3v1alpha1.BareMetalHost) {
 				defer wg.Done()
 
-				// Allocate BMH to NodeAllocationRequest
-				requeue, err := allocateBMHToNodeAllocationRequest(ctx, c, noncachedClient, logger, pluginNamespace, bmh, nodeAllocationRequest, nodeGroup)
-				if err != nil || requeue > DoNotRequeue {
-					mu.Lock()
-					if requeue > DoNotRequeue {
-						// Set requeue duration - any requeue takes precedence
-						requeueAfter = requeue
+				res, err := allocateBMHToNodeAllocationRequest(
+					ctx, c, noncachedClient, logger, pluginNamespace,
+					bmh, nodeAllocationRequest, nodeGroup,
+				)
+
+				mu.Lock()
+				defer mu.Unlock()
+
+				// Record the first error (or replace with a more informative one)
+				if err != nil {
+					// Prefer not to wrap multiple times; keep most specific context
+					if aggErr == nil {
+						aggErr = err
 					}
-					if err != nil {
-						// Set error if there was an actual error
-						if typederrors.IsInputError(err) {
-							allocationErr = err
-						} else {
-							allocationErr = fmt.Errorf("failed to allocate BMH %s: %w", bmh.Name, err)
-						}
-					}
-					mu.Unlock()
 				}
-			}(&bmh)
+
+				// Track the shortest requested backoff to stay responsive
+				if res.RequeueAfter > 0 || res.Requeue {
+					b := res.RequeueAfter
+					if b == 0 {
+						b = 15 * time.Second
+					}
+					if minBackoff == 0 || b < minBackoff {
+						minBackoff = b
+					}
+				}
+			}(bmh)
 		}
 	}
 
 	wg.Wait()
 
-	// Check if any error occurred or requeue needed in goroutines
-	if allocationErr != nil {
-		return requeueAfter, allocationErr
+	if aggErr != nil {
+		if minBackoff > 0 {
+			return ctrl.Result{RequeueAfter: minBackoff}, aggErr
+		}
+		return ctrl.Result{}, aggErr
 	}
 
-	// If only requeue needed without error, return that
-	if requeueAfter > DoNotRequeue {
-		return requeueAfter, nil
+	if minBackoff > 0 {
+		return ctrl.Result{RequeueAfter: minBackoff}, nil
 	}
 
-	// Update NodeAllocationRequest properties after all allocations are complete
+	// Update NAR properties after all successful allocations
 	if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
-		return DoNotRequeue, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+		return ctrl.Result{}, fmt.Errorf("update NodeAllocationRequest %s properties: %w",
+			nodeAllocationRequest.Name, err)
 	}
 
-	return DoNotRequeue, nil
+	return ctrl.Result{}, nil
 }
 
 func isNodeProvisioningInProgress(allocatednode *pluginsv1alpha1.AllocatedNode) bool {
@@ -844,4 +893,30 @@ func isNodeProvisioningInProgress(allocatednode *pluginsv1alpha1.AllocatedNode) 
 	return condition != nil &&
 		condition.Status == metav1.ConditionFalse &&
 		condition.Reason == string(hwmgmtv1alpha1.InProgress)
+}
+
+// RequeueCodeFromResult maps a ctrl.Result into the int-based requeue codes.
+//
+// NOTE: This is a compatibility shim. The idiomatic controller-runtime style
+// is to return ctrl.Result directly from Reconcile() and helpers.
+// Over time, callers should migrate to use ctrl.Result instead of int codes
+// so this mapping can be removed.
+func RequeueCodeFromResult(res ctrl.Result) int {
+	if res.RequeueAfter <= 0 && !res.Requeue {
+		return DoNotRequeue
+	}
+	// Prefer explicit buckets if you have them
+	switch res.RequeueAfter {
+	case hwmgrutils.RequeueWithShortInterval().RequeueAfter:
+		return RequeueAfterShortInterval
+	case hwmgrutils.RequeueWithMediumInterval().RequeueAfter:
+		return RequeueAfterMediumInterval
+	case hwmgrutils.RequeueWithLongInterval().RequeueAfter:
+		return RequeueAfterLongInterval
+	}
+	if res.RequeueAfter > 0 {
+		return int(res.RequeueAfter / time.Second) // generic seconds
+	}
+	// res.Requeue == true without After -> treat as short
+	return RequeueAfterShortInterval
 }

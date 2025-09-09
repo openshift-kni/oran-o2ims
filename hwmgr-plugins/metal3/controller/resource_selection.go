@@ -153,7 +153,7 @@ var REPatternQualifierOp = regexp.MustCompile(`^([^!<>=~]+)([!<>=~]+)(.*)$`)
 //
 // Returns a slice of client.ListOption that can be used with client.List() to fetch BMHs.
 func ResourceSelectionPrimaryFilter(ctx context.Context,
-	c client.Client,
+	c client.Reader,
 	logger *slog.Logger,
 	site string,
 	nodeGroupData hwmgmtv1alpha1.NodeGroupData) ([]client.ListOption, error) {
@@ -265,7 +265,7 @@ func ResourceSelectionPrimaryFilter(ctx context.Context,
 // BMHs without corresponding HardwareData CRs are excluded but logged as errors.
 // BMHs that are not in "Available" state are excluded.
 func ResourceSelectionSecondaryFilter(ctx context.Context,
-	c client.Client,
+	c client.Reader,
 	logger *slog.Logger,
 	nodeGroupData hwmgmtv1alpha1.NodeGroupData,
 	bmhList metal3v1alpha1.BareMetalHostList) (metal3v1alpha1.BareMetalHostList, error) {
@@ -323,7 +323,7 @@ func ResourceSelectionSecondaryFilter(ctx context.Context,
 //
 // Returns true if the hardware data matches the criterion, false otherwise.
 func ResourceSelectionSecondaryFilterHardwareData(ctx context.Context,
-	c client.Client,
+	c client.Reader,
 	logger *slog.Logger,
 	key, value string,
 	hwdata *metal3v1alpha1.HardwareData) (bool, error) {

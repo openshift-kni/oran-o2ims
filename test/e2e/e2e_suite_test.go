@@ -8,6 +8,7 @@ package controllersE2Etest
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -626,6 +627,16 @@ defaultHugepagesSize: "1G"`,
 			Expect(K8SClient.Status().Update(ctx, currentNp)).To(Succeed())
 			// Create the expected nodes.
 			testutils.CreateNodeResources(ctx, K8SClient, currentNp.Name)
+
+			// Simulate callback-triggered reconciliation by adding callback annotation to ProvisioningRequest
+			// This is needed because hardware status updates now only occur during callback-triggered reconciliations
+			// First, get the latest version to ensure we have the correct resourceVersion
+			Expect(K8SClient.Get(ctx, client.ObjectKeyFromObject(ProvRequestCR), ProvRequestCR)).To(Succeed())
+			if ProvRequestCR.Annotations == nil {
+				ProvRequestCR.Annotations = make(map[string]string)
+			}
+			ProvRequestCR.Annotations[ctlrutils.CallbackReceivedAnnotation] = fmt.Sprintf("%d", time.Now().Unix())
+			Expect(K8SClient.Update(ctx, ProvRequestCR)).To(Succeed())
 
 			// Give the reconciler a moment to process the NodeAllocationRequest status update
 			time.Sleep(2 * time.Second)

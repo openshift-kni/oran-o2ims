@@ -110,7 +110,7 @@ var _ = Describe("Serve", func() {
 			// Since we're not in a Kubernetes environment, the function should fail
 			// when trying to set up authentication middleware
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(timeoutCtx, logger, config, mockClient)
+			err := Serve(timeoutCtx, logger, config, mockClient, mockClient)
 
 			// In local env: should fail on authenticator setup (err != nil)
 			// In CI env: may succeed past auth and return nil on context timeout (graceful shutdown)
@@ -132,7 +132,7 @@ var _ = Describe("Serve", func() {
 			// Test that the function attempts to get swagger specs
 			// This tests the early validation logic
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(timeoutCtx, logger, config, mockClient)
+			err := Serve(timeoutCtx, logger, config, mockClient, mockClient)
 
 			// In local env: should fail on auth setup, not on swagger retrieval
 			// In CI env: may succeed past auth and return nil on context timeout (graceful shutdown)
@@ -174,7 +174,7 @@ var _ = Describe("Serve", func() {
 
 			config.Listener.Address = "invalid-address"
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(timeoutCtx, logger, config, mockClient)
+			err := Serve(timeoutCtx, logger, config, mockClient, mockClient)
 
 			// In local env: will fail on auth setup first, not address validation
 			// In CI env: may succeed past auth and return nil on context timeout (graceful shutdown)
@@ -208,7 +208,7 @@ var _ = Describe("Serve", func() {
 
 			// This should fail at auth setup stage, not get to server startup
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			err := Serve(cancelledCtx, logger, config, mockClient)
+			err := Serve(cancelledCtx, logger, config, mockClient, mockClient)
 
 			// In local env: should fail on authenticator setup (err != nil)
 			// In CI env: may succeed past auth and return nil on context cancellation (graceful shutdown)

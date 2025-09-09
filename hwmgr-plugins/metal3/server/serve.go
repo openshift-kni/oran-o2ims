@@ -38,7 +38,7 @@ const (
 )
 
 // Serve starts the Metal3 HardwarePlugin API server and blocks until it terminates or context is canceled.
-func Serve(ctx context.Context, logger *slog.Logger, config svcutils.CommonServerConfig, hubClient client.Client) error {
+func Serve(ctx context.Context, logger *slog.Logger, config svcutils.CommonServerConfig, hubClient client.Client, noncachedClient client.Reader) error {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -72,6 +72,7 @@ func Serve(ctx context.Context, logger *slog.Logger, config svcutils.CommonServe
 	metal3ProvisioningServer, err := NewMetal3PluginServer(
 		config,
 		hubClient,
+		noncachedClient,
 		slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			AddSource: true,
 			Level:     slog.LevelDebug,
