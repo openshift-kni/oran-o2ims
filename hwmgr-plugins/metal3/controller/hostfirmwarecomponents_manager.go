@@ -229,7 +229,7 @@ func getOrCreateHostFirmwareComponents(ctx context.Context,
 }
 
 func getHostFirmwareComponents(ctx context.Context,
-	c client.Client,
+	c client.Reader,
 	name, namespace string) (*metal3v1alpha1.HostFirmwareComponents, error) {
 	hfc := &metal3v1alpha1.HostFirmwareComponents{}
 	err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, hfc)

@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -390,6 +392,7 @@ func handleInProgressUpdate(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
+	pluginNamespace string,
 	nodelist *pluginsv1alpha1.AllocatedNodeList,
 ) (ctrl.Result, bool, error) {
 	node := findNodeConfigInProgress(nodelist)
@@ -406,6 +409,15 @@ func handleInProgressUpdate(ctx context.Context,
 	// Check if the update is complete by examining the BMH operational status.
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK {
 		logger.InfoContext(ctx, "BMH update complete", slog.String("BMH", bmh.Name))
+
+		// Validate node configuration (firmware versions and BIOS settings)
+		configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, pluginNamespace, node.Spec.HwProfile)
+		if err != nil {
+			return hwmgrutils.RequeueWithMediumInterval(), true, err
+		}
+		if !configValid {
+			return hwmgrutils.RequeueWithMediumInterval(), true, nil
+		}
 
 		if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
 			if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
@@ -550,7 +562,7 @@ func handleNodeAllocationRequestConfiguring(
 	// STEP 1: Process any node that is already in the update-in-progress state.
 	logger.InfoContext(ctx, "Checking for nodes in progress", slog.Int("totalNodes", len(nodelist.Items)))
 
-	res, handled, err := handleInProgressUpdate(ctx, c, noncachedClient, logger, nodelist)
+	res, handled, err := handleInProgressUpdate(ctx, c, noncachedClient, logger, pluginNamespace, nodelist)
 	if err != nil || handled {
 		return res, nodelist, err
 	}
@@ -919,4 +931,215 @@ func RequeueCodeFromResult(res ctrl.Result) int {
 	}
 	// res.Requeue == true without After -> treat as short
 	return RequeueAfterShortInterval
+}
+
+// validateFirmwareVersions checks whether HostFirmwareComponents on the BMH
+// match the firmware versions specified in the HardwareProfile.
+// Returns (valid=true) if matches or no versions are specified;
+// returns (valid=false, nil) for mismatches or missing required components;
+// returns (false, err) on API errors.
+func validateFirmwareVersions(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	bmh *metal3v1alpha1.BareMetalHost,
+	pluginNamespace string,
+	hwProfileName string,
+) (bool, error) {
+
+	// 1) Fetch HardwareProfile
+	prof := &hwmgmtv1alpha1.HardwareProfile{}
+	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: pluginNamespace}, prof); err != nil {
+		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", pluginNamespace, hwProfileName, err)
+	}
+
+	// 2) Build expected versions map (normalized)
+	expected := map[string]string{}
+	if v := strings.TrimSpace(prof.Spec.BiosFirmware.Version); v != "" {
+		expected["bios"] = normalizeVersion(v)
+	}
+	if v := strings.TrimSpace(prof.Spec.BmcFirmware.Version); v != "" {
+		expected["bmc"] = normalizeVersion(v)
+	}
+
+	if len(expected) == 0 {
+		// No versions specified => nothing to validate
+		logger.DebugContext(ctx, "No firmware versions specified in hardware profile; treating as valid")
+		return true, nil
+	}
+
+	// 3) Get HostFirmwareComponents
+	hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Profile expects versions but HFC absent -> not valid yet
+			logger.InfoContext(ctx, "HostFirmwareComponents not found while versions are specified; not valid yet",
+				slog.String("bmh", bmh.Name))
+			return false, nil
+		}
+		return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
+	}
+
+	// 4) Index actual components by normalized name
+	actual := map[string]string{}
+	for _, comp := range hfc.Status.Components {
+		k := strings.ToLower(strings.TrimSpace(comp.Component))
+		actual[k] = normalizeVersion(comp.CurrentVersion)
+	}
+
+	// 5) Check presence & equality for each expected component
+	for k, want := range expected {
+		have, ok := actual[k]
+		if !ok {
+			logger.InfoContext(ctx, "Firmware component missing in HFC",
+				slog.String("component", k),
+				slog.String("bmh", bmh.Name))
+			return false, nil
+		}
+		if have != want {
+			logger.InfoContext(ctx, "Firmware version mismatch",
+				slog.String("component", k),
+				slog.String("current", have),
+				slog.String("expected", want),
+				slog.String("bmh", bmh.Name))
+			return false, nil
+		}
+		logger.DebugContext(ctx, "Firmware version matches",
+			slog.String("component", k),
+			slog.String("version", have),
+			slog.String("bmh", bmh.Name))
+	}
+
+	logger.InfoContext(ctx, "All required firmware versions match", slog.String("bmh", bmh.Name))
+	return true, nil
+}
+
+func normalizeVersion(v string) string {
+	v = strings.TrimSpace(strings.ToLower(v))
+	// strip optional leading "v"
+	if strings.HasPrefix(v, "v") && len(v) > 1 && (v[1] >= '0' && v[1] <= '9') {
+		return v[1:]
+	}
+	return v
+}
+
+// validateAppliedBiosSettings checks whether HostFirmwareSettings status reflects
+// the BIOS settings specified in the HardwareProfile.
+// Returns (valid=true) if matches or no BIOS settings are specified;
+// returns (valid=false, nil) for mismatches or missing required settings;
+// returns (false, err) on API errors.
+func validateAppliedBiosSettings(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	bmh *metal3v1alpha1.BareMetalHost,
+	pluginNamespace string,
+	hwProfileName string,
+) (bool, error) {
+
+	// 1) Fetch HardwareProfile
+	prof := &hwmgmtv1alpha1.HardwareProfile{}
+	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: pluginNamespace}, prof); err != nil {
+		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", pluginNamespace, hwProfileName, err)
+	}
+
+	// 2) Check if any BIOS settings are specified
+	if len(prof.Spec.Bios.Attributes) == 0 {
+		// No BIOS settings specified => nothing to validate
+		logger.DebugContext(ctx, "No BIOS settings specified in hardware profile; treating as valid")
+		return true, nil
+	}
+
+	// 3) Get HostFirmwareSettings
+	hfs, err := getHostFirmwareSettings(ctx, noncachedClient, bmh.Name, bmh.Namespace)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Profile expects BIOS settings but HFS absent -> not valid yet
+			logger.InfoContext(ctx, "HostFirmwareSettings not found while BIOS settings are specified; not valid yet",
+				slog.String("bmh", bmh.Name))
+			return false, nil
+		}
+		return false, fmt.Errorf("get HostFirmwareSettings %s/%s: %w", bmh.Namespace, bmh.Name, err)
+	}
+
+	// 4) Compare each expected BIOS setting with actual status
+	for key, expectedValue := range prof.Spec.Bios.Attributes {
+		actualValue, exists := hfs.Status.Settings[key]
+		if !exists {
+			logger.InfoContext(ctx, "BIOS setting missing in HFS status",
+				slog.String("setting", key),
+				slog.String("bmh", bmh.Name))
+			return false, nil
+		}
+
+		// Compare values (expected is IntOrString, actual is string)
+		if !equalIntOrStringWithString(expectedValue, actualValue) {
+			logger.InfoContext(ctx, "BIOS setting value mismatch",
+				slog.String("setting", key),
+				slog.String("current", actualValue),
+				slog.String("expected", expectedValue.String()),
+				slog.String("bmh", bmh.Name))
+			return false, nil
+		}
+
+		logger.DebugContext(ctx, "BIOS setting matches",
+			slog.String("setting", key),
+			slog.String("value", actualValue),
+			slog.String("bmh", bmh.Name))
+	}
+
+	logger.InfoContext(ctx, "All required BIOS settings match", slog.String("bmh", bmh.Name))
+	return true, nil
+}
+
+// equalIntOrStringWithString compares intstr.IntOrString with string value
+func equalIntOrStringWithString(expected intstr.IntOrString, actual string) bool {
+	// Compare string representations
+	return strings.EqualFold(strings.TrimSpace(expected.String()), strings.TrimSpace(actual))
+}
+
+// validateNodeConfiguration validates both firmware versions and BIOS settings
+// for a given BMH and hardware profile. Returns appropriate requeue result and error
+// if validation fails or is not yet complete.
+func validateNodeConfiguration(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	bmh *metal3v1alpha1.BareMetalHost,
+	pluginNamespace string,
+	hwProfileName string,
+) (bool, error) {
+	// Validate firmware versions
+	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, pluginNamespace, hwProfileName)
+	if err != nil {
+		logger.ErrorContext(ctx, "Failed to validate firmware versions",
+			slog.String("BMH", bmh.Name),
+			slog.String("error", err.Error()))
+		return false, err
+	}
+	if !firmwareValid {
+		logger.InfoContext(ctx, "Firmware versions not yet updated, continuing to poll",
+			slog.String("BMH", bmh.Name))
+		return false, nil
+	}
+
+	// Validate BIOS settings
+	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, pluginNamespace, hwProfileName)
+	if err != nil {
+		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
+			slog.String("BMH", bmh.Name),
+			slog.String("error", err.Error()))
+		return false, err
+	}
+	if !biosValid {
+		logger.InfoContext(ctx, "BIOS settings not yet updated, continuing to poll",
+			slog.String("BMH", bmh.Name))
+		return false, nil
+	}
+
+	logger.InfoContext(ctx, "Firmware versions and BIOS settings validated successfully", slog.String("BMH", bmh.Name))
+	return true, nil
 }
