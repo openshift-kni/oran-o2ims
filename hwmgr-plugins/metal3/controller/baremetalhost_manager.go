@@ -656,7 +656,9 @@ func processBMHUpdateCase(ctx context.Context,
 func handleBMHCompletion(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
-	logger *slog.Logger, nodelist *pluginsv1alpha1.AllocatedNodeList) (bool, error) {
+	logger *slog.Logger,
+	pluginNamespace string,
+	nodelist *pluginsv1alpha1.AllocatedNodeList) (bool, error) {
 
 	logger.InfoContext(ctx, "Checking for node with config in progress")
 	node := findNodeInProgress(nodelist)
@@ -705,6 +707,15 @@ func handleBMHCompletion(ctx context.Context,
 		}
 	}
 
+	// Validate node configuration (firmware versions and BIOS settings) before finalizing
+	configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, pluginNamespace, node.Spec.HwProfile)
+	if err != nil {
+		return true, err
+	}
+	if !configValid {
+		return true, nil // Continue polling
+	}
+
 	// Apply post-config updates and finalize the process
 	if requeue, err := applyPostConfigUpdates(ctx, c, noncachedClient, logger, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, node); err != nil {
 		return true, fmt.Errorf("failed to apply post config update on node %s: %w", node.Name, err)
@@ -739,7 +750,7 @@ func checkForPendingUpdate(ctx context.Context,
 	}
 
 	// Check if configuration is completed
-	updating, err := handleBMHCompletion(ctx, c, noncachedClient, logger, nodelist)
+	updating, err := handleBMHCompletion(ctx, c, noncachedClient, logger, namespace, nodelist)
 	return ctrl.Result{}, updating, err
 }
 

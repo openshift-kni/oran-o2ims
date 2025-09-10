@@ -94,6 +94,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -807,6 +808,270 @@ var _ = Describe("Helpers", func() {
 		})
 	})
 
+	Describe("Validation Functions", func() {
+		var (
+			testBMH       *metal3v1alpha1.BareMetalHost
+			testHwProfile *hwmgmtv1alpha1.HardwareProfile
+			testHFC       *metal3v1alpha1.HostFirmwareComponents
+			testHFS       *metal3v1alpha1.HostFirmwareSettings
+			testClient    client.Client
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			logger = slog.Default()
+
+			// Create test BMH
+			testBMH = &metal3v1alpha1.BareMetalHost{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-bmh",
+					Namespace: "test-namespace",
+				},
+			}
+
+			// Create test HardwareProfile with firmware and BIOS settings
+			testHwProfile = &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-profile",
+					Namespace: pluginNamespace,
+				},
+				Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+					BiosFirmware: hwmgmtv1alpha1.Firmware{
+						Version: "1.2.3",
+						URL:     "http://example.com/bios.bin",
+					},
+					BmcFirmware: hwmgmtv1alpha1.Firmware{
+						Version: "4.5.6",
+						URL:     "http://example.com/bmc.bin",
+					},
+					Bios: hwmgmtv1alpha1.Bios{
+						Attributes: map[string]intstr.IntOrString{
+							"VirtualizationTechnology": intstr.FromString("Enabled"),
+							"HyperThreading":           intstr.FromString("Disabled"),
+							"BootOrder":                intstr.FromInt(1),
+						},
+					},
+				},
+			}
+
+			// Create test HostFirmwareComponents
+			testHFC = &metal3v1alpha1.HostFirmwareComponents{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-bmh",
+					Namespace: "test-namespace",
+				},
+				Status: metal3v1alpha1.HostFirmwareComponentsStatus{
+					Components: []metal3v1alpha1.FirmwareComponentStatus{
+						{
+							Component:      "bios",
+							CurrentVersion: "1.2.3",
+						},
+						{
+							Component:      "bmc",
+							CurrentVersion: "4.5.6",
+						},
+					},
+				},
+			}
+
+			// Create test HostFirmwareSettings
+			testHFS = &metal3v1alpha1.HostFirmwareSettings{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-bmh",
+					Namespace: "test-namespace",
+				},
+				Status: metal3v1alpha1.HostFirmwareSettingsStatus{
+					Settings: map[string]string{
+						"VirtualizationTechnology": "Enabled",
+						"HyperThreading":           "Disabled",
+						"BootOrder":                "1",
+					},
+				},
+			}
+
+			scheme = runtime.NewScheme()
+			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
+			testClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(testBMH, testHwProfile, testHFC, testHFS).
+				Build()
+		})
+
+		Describe("validateFirmwareVersions", func() {
+			It("should return true when firmware versions match", func() {
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return true when no firmware versions are specified", func() {
+				// Update profile to have no firmware versions
+				testHwProfile.Spec.BiosFirmware.Version = ""
+				testHwProfile.Spec.BmcFirmware.Version = ""
+				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
+
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return false when firmware versions don't match", func() {
+				// Update HFC to have different versions
+				testHFC.Status.Components[0].CurrentVersion = "1.0.0" // Different BIOS version
+				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
+
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return false when HostFirmwareComponents is missing", func() {
+				// Delete HFC
+				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
+
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return error when HardwareProfile is missing", func() {
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "nonexistent-profile")
+				Expect(err).To(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+		})
+
+		Describe("validateAppliedBiosSettings", func() {
+			It("should return true when BIOS settings match", func() {
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return true when no BIOS settings are specified", func() {
+				// Update profile to have no BIOS settings
+				testHwProfile.Spec.Bios.Attributes = map[string]intstr.IntOrString{}
+				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return false when BIOS setting values don't match", func() {
+				// Update HFS to have different values
+				testHFS.Status.Settings["VirtualizationTechnology"] = "Disabled" // Different value
+				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return false when BIOS setting is missing from HFS", func() {
+				// Remove a setting from HFS
+				delete(testHFS.Status.Settings, "HyperThreading")
+				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return false when HostFirmwareSettings is missing", func() {
+				// Delete HFS
+				Expect(testClient.Delete(ctx, testHFS)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+		})
+
+		Describe("validateNodeConfiguration", func() {
+			It("should return true when both firmware and BIOS validation pass", func() {
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return false when firmware validation fails", func() {
+				// Make firmware validation fail
+				testHFC.Status.Components[0].CurrentVersion = "1.0.0" // Different BIOS version
+				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
+
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return false when BIOS validation fails", func() {
+				// Make BIOS validation fail
+				testHFS.Status.Settings["VirtualizationTechnology"] = "Disabled" // Different value
+				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
+
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return true when no firmware or BIOS settings are specified", func() {
+				// Update profile to have no firmware or BIOS settings
+				testHwProfile.Spec.BiosFirmware.Version = ""
+				testHwProfile.Spec.BmcFirmware.Version = ""
+				testHwProfile.Spec.Bios.Attributes = map[string]intstr.IntOrString{}
+				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
+
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return error when HardwareProfile is missing", func() {
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "nonexistent-profile")
+				Expect(err).To(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+		})
+
+		Describe("equalIntOrStringWithString", func() {
+			It("should compare string values correctly", func() {
+				result := equalIntOrStringWithString(intstr.FromString("Enabled"), "Enabled")
+				Expect(result).To(BeTrue())
+
+				result = equalIntOrStringWithString(intstr.FromString("Enabled"), "Disabled")
+				Expect(result).To(BeFalse())
+			})
+
+			It("should compare integer values correctly", func() {
+				result := equalIntOrStringWithString(intstr.FromInt(42), "42")
+				Expect(result).To(BeTrue())
+
+				result = equalIntOrStringWithString(intstr.FromInt(42), "24")
+				Expect(result).To(BeFalse())
+			})
+
+			It("should handle case insensitive comparison", func() {
+				result := equalIntOrStringWithString(intstr.FromString("ENABLED"), "enabled")
+				Expect(result).To(BeTrue())
+
+				result = equalIntOrStringWithString(intstr.FromString("Enabled"), "ENABLED")
+				Expect(result).To(BeTrue())
+			})
+
+			It("should handle whitespace trimming", func() {
+				result := equalIntOrStringWithString(intstr.FromString(" Enabled "), "Enabled")
+				Expect(result).To(BeTrue())
+
+				result = equalIntOrStringWithString(intstr.FromString("Enabled"), " Enabled ")
+				Expect(result).To(BeTrue())
+			})
+		})
+	})
+
 	// Skip complex integration tests that require extensive mocking
 	Describe("Complex Integration Functions - Skipped", func() {
 		Context("setAwaitConfigCondition", func() {
@@ -902,7 +1167,7 @@ var _ = Describe("Helpers", func() {
 				}
 
 				// Call handleInProgressUpdate
-				result, handled, err := handleInProgressUpdate(ctx, testClient, testClient, logger, nodeList)
+				result, handled, err := handleInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", nodeList)
 
 				// Verify the function handled the error case
 				Expect(handled).To(BeTrue()) // Should return true when BMH error is processed
@@ -935,7 +1200,7 @@ var _ = Describe("Helpers", func() {
 				}
 
 				// Call handleInProgressUpdate
-				result, handled, err := handleInProgressUpdate(ctx, testClient, testClient, logger, nodeList)
+				result, handled, err := handleInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", nodeList)
 
 				// Verify the function continues waiting
 				Expect(handled).To(BeTrue()) // Should return true when still processing

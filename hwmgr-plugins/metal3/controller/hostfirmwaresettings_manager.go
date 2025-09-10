@@ -124,7 +124,7 @@ func getOrCreateHostFirmwareSettings(ctx context.Context,
 	return existingHFS, nil
 }
 
-func getHostFirmwareSettings(ctx context.Context, c client.Client, name, namespace string) (*metal3v1alpha1.HostFirmwareSettings, error) {
+func getHostFirmwareSettings(ctx context.Context, c client.Reader, name, namespace string) (*metal3v1alpha1.HostFirmwareSettings, error) {
 	hfs := &metal3v1alpha1.HostFirmwareSettings{}
 	err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, hfs)
 	if err != nil {
