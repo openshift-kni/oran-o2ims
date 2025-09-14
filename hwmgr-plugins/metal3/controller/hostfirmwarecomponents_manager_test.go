@@ -17,14 +17,23 @@ validateFirmwareUpdateSpec tests:
 - Validates invalid BIOS firmware URLs are rejected
 - Ensures BMC firmware with version but no URL returns error
 - Validates invalid BMC firmware URLs are rejected
+- Ensures NIC firmware with version but no URL returns error
+- Validates invalid NIC firmware URLs are rejected
+- Confirms valid NIC firmware specifications with proper URLs pass validation
+- Skips NIC validation when version is empty
+- Validates mixed firmware specs with BIOS, BMC, and NIC
 - Confirms valid firmware specifications with proper URLs pass validation
 
 convertToFirmwareUpdates tests:
 - Returns empty slice when no firmware is specified in hardware profile
 - Converts BIOS firmware specification to Metal3 firmware update format
 - Converts BMC firmware specification to Metal3 firmware update format
+- Converts NIC firmware to update using slot as component
+- Converts multiple NIC firmware to updates
+- Converts all firmware types (BIOS, BMC, NIC) to updates
 - Handles both BIOS and BMC firmware specifications simultaneously
 - Excludes firmware entries with empty URLs from conversion
+- Does not include NIC firmware with empty URL
 
 isHostFirmwareComponentsChangeDetectedAndValid tests:
 - Returns error when HostFirmwareComponents resource does not exist
@@ -40,6 +49,10 @@ isVersionChangeDetected tests:
 - Detects version changes when current differs from desired version
 - Returns no updates when current and desired versions match
 - Handles version detection for both BIOS and BMC components
+- Detects NIC firmware version changes
+- Does not detect change when NIC versions match
+- Skips empty NIC firmware specs
+- Detects changes for all firmware types (BIOS, BMC, NIC)
 
 createHostFirmwareComponents tests:
 - Creates HostFirmwareComponents resource with specified firmware updates
@@ -204,6 +217,91 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			err := validateFirmwareUpdateSpec(spec)
 			Expect(err).To(BeNil())
 		})
+
+		It("should return error when NIC version is set but URL is empty", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "",
+					},
+				},
+			}
+			err := validateFirmwareUpdateSpec(spec)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing NIC firmware URL for NIC nic1"))
+		})
+
+		It("should return error when NIC URL is invalid", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "invalid-url",
+					},
+				},
+			}
+			err := validateFirmwareUpdateSpec(spec)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid NIC firmware URL for NIC nic1"))
+		})
+
+		It("should return nil for valid NIC firmware specs", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+					"nic2": {
+						Slot:    "pci-0000:02:00.0",
+						Version: "4.0.0",
+						URL:     "https://example.com/nic2.bin",
+					},
+				},
+			}
+			err := validateFirmwareUpdateSpec(spec)
+			Expect(err).To(BeNil())
+		})
+
+		It("should skip NIC validation when version is empty", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "", // Empty version should be skipped
+						URL:     "https://example.com/nic1.bin",
+					},
+				},
+			}
+			err := validateFirmwareUpdateSpec(spec)
+			Expect(err).To(BeNil())
+		})
+
+		It("should validate mixed firmware specs with BIOS, BMC, and NIC", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "1.0.0",
+					URL:     "https://example.com/bios.bin",
+				},
+				BmcFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "2.0.0",
+					URL:     "https://example.com/bmc.bin",
+				},
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+				},
+			}
+			err := validateFirmwareUpdateSpec(spec)
+			Expect(err).To(BeNil())
+		})
 	})
 
 	Describe("convertToFirmwareUpdates", func() {
@@ -283,6 +381,99 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(updates).To(HaveLen(1))
 			Expect(updates[0].Component).To(Equal("bmc"))
 			Expect(updates[0].URL).To(Equal("https://example.com/bmc.bin"))
+		})
+
+		It("should convert NIC firmware to update using slot as component", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+				},
+			}
+			updates := convertToFirmwareUpdates(spec)
+			Expect(updates).To(HaveLen(1))
+			Expect(updates[0].Component).To(Equal("nic:pci-0000:01:00.0"))
+			Expect(updates[0].URL).To(Equal("https://example.com/nic1.bin"))
+		})
+
+		It("should convert multiple NIC firmware to updates", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+					"nic2": {
+						Slot:    "pci-0000:02:00.0",
+						Version: "4.0.0",
+						URL:     "https://example.com/nic2.bin",
+					},
+				},
+			}
+			updates := convertToFirmwareUpdates(spec)
+			Expect(updates).To(HaveLen(2))
+
+			updateMap := make(map[string]string)
+			for _, update := range updates {
+				updateMap[update.Component] = update.URL
+			}
+			Expect(updateMap["nic:pci-0000:01:00.0"]).To(Equal("https://example.com/nic1.bin"))
+			Expect(updateMap["nic:pci-0000:02:00.0"]).To(Equal("https://example.com/nic2.bin"))
+		})
+
+		It("should convert all firmware types (BIOS, BMC, NIC) to updates", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "1.0.0",
+					URL:     "https://example.com/bios.bin",
+				},
+				BmcFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "2.0.0",
+					URL:     "https://example.com/bmc.bin",
+				},
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+				},
+			}
+			updates := convertToFirmwareUpdates(spec)
+			Expect(updates).To(HaveLen(3))
+
+			updateMap := make(map[string]string)
+			for _, update := range updates {
+				updateMap[update.Component] = update.URL
+			}
+			Expect(updateMap["bios"]).To(Equal("https://example.com/bios.bin"))
+			Expect(updateMap["bmc"]).To(Equal("https://example.com/bmc.bin"))
+			Expect(updateMap["nic:pci-0000:01:00.0"]).To(Equal("https://example.com/nic1.bin"))
+		})
+
+		It("should not include NIC firmware with empty URL", func() {
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "",
+					},
+					"nic2": {
+						Slot:    "pci-0000:02:00.0",
+						Version: "4.0.0",
+						URL:     "https://example.com/nic2.bin",
+					},
+				},
+			}
+			updates := convertToFirmwareUpdates(spec)
+			Expect(updates).To(HaveLen(1))
+			Expect(updates[0].Component).To(Equal("nic:pci-0000:02:00.0"))
+			Expect(updates[0].URL).To(Equal("https://example.com/nic2.bin"))
 		})
 	})
 
@@ -526,6 +717,138 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(bmcUpdate).NotTo(BeNil())
 			Expect(bmcUpdate.Component).To(Equal("bmc"))
 			Expect(bmcUpdate.URL).To(Equal("https://example.com/bmc.bin"))
+		})
+
+		It("should detect NIC firmware version changes", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "nic:pci-0000:01:00.0",
+						CurrentVersion: "2.9.0",
+					},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+				},
+			}
+
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			Expect(updates).To(HaveLen(1))
+			Expect(updates[0].Component).To(Equal("nic:pci-0000:01:00.0"))
+			Expect(updates[0].URL).To(Equal("https://example.com/nic1.bin"))
+			Expect(updateRequired).To(BeTrue())
+		})
+
+		It("should not detect change when NIC versions match", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "nic:pci-0000:01:00.0",
+						CurrentVersion: "3.0.0",
+					},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+				},
+			}
+
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			Expect(updates).To(BeEmpty())
+			Expect(updateRequired).To(BeFalse())
+		})
+
+		It("should skip empty NIC firmware specs", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "nic:pci-0000:01:00.0",
+						CurrentVersion: "2.9.0",
+					},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "", // Empty version should be skipped
+						URL:     "https://example.com/nic1.bin",
+					},
+				},
+			}
+
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			Expect(updates).To(BeEmpty())
+			Expect(updateRequired).To(BeFalse())
+		})
+
+		It("should detect changes for all firmware types (BIOS, BMC, NIC)", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "bios",
+						CurrentVersion: "0.9.0",
+					},
+					{
+						Component:      "bmc",
+						CurrentVersion: "1.9.0",
+					},
+					{
+						Component:      "nic:pci-0000:01:00.0",
+						CurrentVersion: "2.9.0",
+					},
+					{
+						Component:      "nic:pci-0000:02:00.0",
+						CurrentVersion: "3.9.0",
+					},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "1.0.0",
+					URL:     "https://example.com/bios.bin",
+				},
+				BmcFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "2.0.0",
+					URL:     "https://example.com/bmc.bin",
+				},
+				NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+					"nic1": {
+						Slot:    "pci-0000:01:00.0",
+						Version: "3.0.0",
+						URL:     "https://example.com/nic1.bin",
+					},
+					"nic2": {
+						Slot:    "pci-0000:02:00.0",
+						Version: "4.0.0",
+						URL:     "https://example.com/nic2.bin",
+					},
+				},
+			}
+
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			Expect(updates).To(HaveLen(4))
+			Expect(updateRequired).To(BeTrue())
+
+			updateMap := make(map[string]string)
+			for _, update := range updates {
+				updateMap[update.Component] = update.URL
+			}
+			Expect(updateMap["bios"]).To(Equal("https://example.com/bios.bin"))
+			Expect(updateMap["bmc"]).To(Equal("https://example.com/bmc.bin"))
+			Expect(updateMap["nic:pci-0000:01:00.0"]).To(Equal("https://example.com/nic1.bin"))
+			Expect(updateMap["nic:pci-0000:02:00.0"]).To(Equal("https://example.com/nic2.bin"))
 		})
 	})
 

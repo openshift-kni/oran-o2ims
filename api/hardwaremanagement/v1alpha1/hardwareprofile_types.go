@@ -25,6 +25,15 @@ type Firmware struct {
 	URL string `json:"url,omitempty"`
 }
 
+type Nic struct {
+	// Slot is the NIC slot identifier
+	Slot string `json:"slot,omitempty"`
+	// Version is the NIC firmware version
+	Version string `json:"version,omitempty"`
+	// URL points to the NIC firmware file
+	URL string `json:"url,omitempty"`
+}
+
 // HardwareProfileSpec defines the desired state of HardwareProfile
 type HardwareProfileSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -40,6 +49,10 @@ type HardwareProfileSpec struct {
 	// BMC firmware information
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BMC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	BmcFirmware Firmware `json:"bmcFirmware,omitempty"`
+
+	// NIC firmware information mapped by NIC identifier
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="NIC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	NicFirmware map[string]Nic `json:"nicFirmware,omitempty"`
 }
 
 // HardwareProfileStatus defines the observed state of HardwareProfile

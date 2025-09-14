@@ -844,6 +844,18 @@ var _ = Describe("Helpers", func() {
 						Version: "4.5.6",
 						URL:     "http://example.com/bmc.bin",
 					},
+					NicFirmware: map[string]hwmgmtv1alpha1.Nic{
+						"nic1": {
+							Slot:    "pci-0000:01:00.0",
+							Version: "7.8.9",
+							URL:     "http://example.com/nic1.bin",
+						},
+						"nic2": {
+							Slot:    "pci-0000:02:00.0",
+							Version: "10.11.12",
+							URL:     "http://example.com/nic2.bin",
+						},
+					},
 					Bios: hwmgmtv1alpha1.Bios{
 						Attributes: map[string]intstr.IntOrString{
 							"VirtualizationTechnology": intstr.FromString("Enabled"),
@@ -869,6 +881,14 @@ var _ = Describe("Helpers", func() {
 						{
 							Component:      "bmc",
 							CurrentVersion: "4.5.6",
+						},
+						{
+							Component:      "nic:pci-0000:01:00.0",
+							CurrentVersion: "7.8.9",
+						},
+						{
+							Component:      "nic:pci-0000:02:00.0",
+							CurrentVersion: "10.11.12",
 						},
 					},
 				},
@@ -988,6 +1008,65 @@ var _ = Describe("Helpers", func() {
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
+			})
+
+			It("should return true when NIC firmware versions match", func() {
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return true when no NIC firmware is specified", func() {
+				// Update profile to have no NIC firmware
+				testHwProfile.Spec.NicFirmware = map[string]hwmgmtv1alpha1.Nic{}
+				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
+			})
+
+			It("should return false when NIC firmware version doesn't match", func() {
+				// Update HFC to have different NIC version
+				testHFC.Status.Components[2].CurrentVersion = "7.0.0" // Different version for nic1
+				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return false when NIC component is missing from HFC", func() {
+				// Remove a NIC component from HFC
+				testHFC.Status.Components = testHFC.Status.Components[:3] // Remove the second NIC
+				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should return false when HostFirmwareComponents is missing and NIC firmware is specified", func() {
+				// Delete HFC
+				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeFalse())
+			})
+
+			It("should skip NIC validation when NIC version is empty", func() {
+				// Update profile to have empty NIC version
+				testHwProfile.Spec.NicFirmware["nic1"] = hwmgmtv1alpha1.Nic{
+					Slot:    "pci-0000:01:00.0",
+					Version: "", // Empty version should be skipped
+					URL:     "http://example.com/nic1.bin",
+				}
+				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
+
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(valid).To(BeTrue())
 			})
 		})
 
