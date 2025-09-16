@@ -44,6 +44,17 @@ func validateFirmwareUpdateSpec(spec hwmgmtv1alpha1.HardwareProfileSpec) error {
 		}
 	}
 
+	for nicID, nic := range spec.NicFirmware {
+		if nic.Version != "" {
+			if nic.URL == "" {
+				return typederrors.NewInputError("missing NIC firmware URL for NIC %v, version: %v", nicID, nic.Version)
+			}
+			if !ctlrutils.IsValidURL(nic.URL) {
+				return typederrors.NewInputError("invalid NIC firmware URL for NIC %v: %v", nicID, nic.URL)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -62,6 +73,15 @@ func convertToFirmwareUpdates(spec hwmgmtv1alpha1.HardwareProfileSpec) []metal3v
 			Component: "bmc",
 			URL:       spec.BmcFirmware.URL,
 		})
+	}
+
+	for _, nic := range spec.NicFirmware {
+		if nic.URL != "" {
+			updates = append(updates, metal3v1alpha1.FirmwareUpdate{
+				Component: "nic:" + nic.Slot,
+				URL:       nic.URL,
+			})
+		}
 	}
 
 	return updates
@@ -95,6 +115,16 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 	firmwareMap := map[string]hwmgmtv1alpha1.Firmware{
 		"bios": spec.BiosFirmware,
 		"bmc":  spec.BmcFirmware,
+	}
+
+	// Add NIC firmware to the map using nic:slot as the component identifier
+	for _, nic := range spec.NicFirmware {
+		if nic.Slot != "" && nic.Version != "" {
+			firmwareMap["nic:"+nic.Slot] = hwmgmtv1alpha1.Firmware{
+				Version: nic.Version,
+				URL:     nic.URL,
+			}
+		}
 	}
 
 	var updates []metal3v1alpha1.FirmwareUpdate

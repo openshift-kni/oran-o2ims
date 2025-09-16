@@ -1091,6 +1091,66 @@ func validateAppliedBiosSettings(
 	}
 
 	logger.InfoContext(ctx, "All required BIOS settings match", slog.String("bmh", bmh.Name))
+
+	// 5) Validate NIC firmware if specified
+	if len(prof.Spec.NicFirmware) > 0 {
+		// Get HostFirmwareComponents to check NIC firmware versions
+		hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// Profile expects NIC firmware but HFC absent -> not valid yet
+				logger.InfoContext(ctx, "HostFirmwareComponents not found while NIC firmware is specified; not valid yet",
+					slog.String("bmh", bmh.Name))
+				return false, nil
+			}
+			return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
+		}
+
+		// Create a map of current firmware versions by component
+		currentVersions := make(map[string]string)
+		for _, component := range hfc.Status.Components {
+			currentVersions[component.Component] = component.CurrentVersion
+		}
+
+		// Check each NIC firmware requirement
+		for nicID, nic := range prof.Spec.NicFirmware {
+			if nic.Version == "" {
+				continue // Skip if no version specified
+			}
+
+			nicComponent := "nic:" + nic.Slot
+			currentVersion, exists := currentVersions[nicComponent]
+			if !exists {
+				logger.InfoContext(ctx, "NIC firmware component not found in HFC status",
+					slog.String("nicID", nicID),
+					slog.String("component", nicComponent),
+					slog.String("slot", nic.Slot),
+					slog.String("bmh", bmh.Name))
+				return false, nil
+			}
+
+			if currentVersion != nic.Version {
+				logger.InfoContext(ctx, "NIC firmware version mismatch",
+					slog.String("nicID", nicID),
+					slog.String("component", nicComponent),
+					slog.String("slot", nic.Slot),
+					slog.String("current", currentVersion),
+					slog.String("expected", nic.Version),
+					slog.String("bmh", bmh.Name))
+				return false, nil
+			}
+
+			logger.DebugContext(ctx, "NIC firmware version matches",
+				slog.String("nicID", nicID),
+				slog.String("component", nicComponent),
+				slog.String("slot", nic.Slot),
+				slog.String("version", currentVersion),
+				slog.String("bmh", bmh.Name))
+		}
+
+		logger.InfoContext(ctx, "All required NIC firmware versions match", slog.String("bmh", bmh.Name))
+	}
+
 	return true, nil
 }
 
