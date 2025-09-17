@@ -8,19 +8,19 @@ entries:
     schema: olm.package
     # Channel entries for 'stable' channel
   - entries:
-      - name: o-cloud-manager.v4.20.0
-        skipRange: '>=4.9.0 <4.20.0'
+      - name: o-cloud-manager.v4.21.0
+        skipRange: '>=4.9.0 <4.21.0'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
-    # Channel entries for '4.20' channel
+    # Channel entries for '4.21' channel
   - entries:
-      - name: o-cloud-manager.v4.20.0
-        skipRange: '>=4.9.0 <4.20.0'
-    name: "4.20"
+      - name: o-cloud-manager.v4.21.0
+        skipRange: '>=4.9.0 <4.21.0'
+    name: "4.21"
     package: o-cloud-manager
     schema: olm.channel
-  # v4.20.0 bundle
+  # v4.21.0 bundle
   # The url for this last entry is updated by telco5g-konflux/scripts/catalog/update-catalog-template.sh automatically
   - image: placeholder.will.be.updated.by.telco5g-konflux.scripts.catalog.update-catalog-template.sh
     schema: olm.bundle
