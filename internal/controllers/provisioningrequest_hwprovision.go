@@ -128,6 +128,17 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 	if provisioned {
 		configured, timedOutOrFailed, err = t.checkNodeAllocationRequestConfigStatus(ctx, nodeAllocationRequestResponse)
 	}
+
+	// Clear callback annotations after hardware processing to prevent false callback detection
+	// This ensures future reconciliations aren't incorrectly treated as callback-triggered
+	// If no annotations exist, this does nothing
+	ctlrutils.ClearPRCallbackAnnotations(t.object)
+	if err == nil {
+		t.logger.InfoContext(ctx, "Cleared PR callback annotations after successful hardware processing")
+	} else {
+		t.logger.InfoContext(ctx, "Cleared PR callback annotations after hardware processing completed with error")
+	}
+
 	return provisioned, configured, timedOutOrFailed, err
 }
 
@@ -569,6 +580,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	if err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		err = fmt.Errorf("failed to update Hardware %s status: %w", ctlrutils.GetStatusMessage(condition), err)
 	}
+
 	return status == metav1.ConditionTrue, timedOutOrFailed, err
 }
 
