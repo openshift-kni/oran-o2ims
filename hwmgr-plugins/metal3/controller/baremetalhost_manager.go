@@ -577,6 +577,14 @@ func processBMHUpdateCase(ctx context.Context,
 			return ctrl.Result{}, fmt.Errorf("failed to set node failed status for %s: %w", node.Name, err)
 		}
 
+		// Clear config-in-progress annotation when node fails
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear config annotation",
+				slog.String("node", node.Name),
+				slog.String("error", err.Error()))
+			return ctrl.Result{}, err
+		}
+
 		// Clear BMH error annotation to allow future retry attempts
 		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
 			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
