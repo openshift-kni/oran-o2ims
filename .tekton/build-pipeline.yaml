@@ -190,7 +190,7 @@ spec:
           value:
             - build-date=$SOURCE_DATE
             - short-commit=$(tasks.clone-repository.results.short-commit)
-            - version=v4.20-$SOURCE_DATE_EPOCH
+            - version=v4.21-$SOURCE_DATE_EPOCH
         - name: source-date-epoch
           value: $(tasks.clone-repository.results.commit-timestamp)
       runAfter:
@@ -273,7 +273,7 @@ spec:
             - distribution-scope=public
             - io.k8s.description=o-cloud-manager
             - name=openshift4/o-cloud-manager-rhel9-operator
-            - release=4.20
+            - release=4.21
             - 'url=https://github.com/openshift-kni/oran-o2ims'
             - 'vendor=Red Hat, Inc.'
             - io.k8s.display-name=o-cloud-manager

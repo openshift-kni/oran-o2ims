@@ -12,20 +12,20 @@ metadata:
       event == "pull_request" &&
       target_branch == "main" &&
       (
-        '.konflux/Dockerfile.bundle'.pathChanged() ||
-        '.konflux/overlay/***'.pathChanged() ||
-        '.tekton/build-pipeline.yaml'.pathChanged() ||
-        '.tekton/o-cloud-manager-bundle-4-20-pull-request.yaml'.pathChanged() ||
-        'bundle/***'.pathChanged() ||
+        '.konflux/catalog/bundle.builds.in.yaml'.pathChanged() ||
+        '.konflux/Dockerfile.catalog'.pathChanged() ||
+        '.tekton/fbc-pipeline.yaml'.pathChanged() ||
+        '.tekton/images-mirror-set.yaml'.pathChanged() ||
+        '.tekton/o-cloud-manager-fbc-4-21-pull-request.yaml'.pathChanged() ||
         'telco5g-konflux'.pathChanged() ||
         'telco5g-konflux/***'.pathChanged()
       )
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: o-cloud-manager-4-20
-    appstudio.openshift.io/component: o-cloud-manager-bundle-4-20
+    appstudio.openshift.io/application: o-cloud-manager-fbc-4-21
+    appstudio.openshift.io/component: o-cloud-manager-fbc-4-21
     pipelines.appstudio.openshift.io/type: build
-  name: o-cloud-manager-bundle-4-20-on-pull-request
+  name: o-cloud-manager-fbc-4-21-on-pull-request
   namespace: telco-5g-tenant
 spec:
   params:
@@ -34,34 +34,23 @@ spec:
     - name: revision
       value: '{{revision}}'
     - name: output-image
-      value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-bundle-4-20:on-pr-{{revision}}
+      value: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-fbc-4-21:on-pr-{{revision}}
     - name: image-expires-after
       value: 5d
     - name: build-platforms
       value:
         - linux/x86_64
     - name: dockerfile
-      value: .konflux/Dockerfile.bundle
+      value: .konflux/Dockerfile.catalog
+    # We have configured an fbc exception for hermetic builds on the release repo.
     - name: hermetic
-      value: "true"
-    - name: prefetch-input
-      value: ""
-    - name: build-source-image
-      value: "true"
-    - name: skip-preflight
-      value: "true"
-    - name: build-image-index
       value: "false"
-    - name: image-append-platform
-      value: "false"
-    - name: skip-sast-coverity
-      value: "true"
     - name: additional-tags
       value: []
   pipelineRef:
-    name: build-pipeline
+    name: fbc-pipeline
   taskRunTemplate:
-    serviceAccountName: build-pipeline-o-cloud-manager-bundle-4-20
+    serviceAccountName: build-pipeline-o-cloud-manager-fbc-4-21
   workspaces:
     - name: git-auth
       secret:
