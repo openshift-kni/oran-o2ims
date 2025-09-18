@@ -22,7 +22,7 @@ The operator leverages several key components to achieve this:
 
 Ensure the following operators are installed on the hub cluster:
 
-- Advanced Cluster Management (ACM) v2.12+
+- Advanced Cluster Management (ACM) v2.14+
 - Red Hat OpenShift GitOps Operator
 - ORAN Hardware Manager Plugin
 - SiteConfig Operator

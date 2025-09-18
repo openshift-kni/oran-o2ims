@@ -9,7 +9,6 @@ package utils
 import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	siteconfigv1alpha1 "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -102,17 +101,10 @@ func IsClusterProvisionInProgress(cr *provisioningv1alpha1.ProvisioningRequest) 
 }
 
 // IsClusterProvisionCompleted checks if the cluster provision condition status is completed.
-// The staleCondition is set when the ClusterDeployment's spec.installed has become true, but its status
-// conditions have not been properly updated due to the known issue (https://issues.redhat.com/browse/ACM-13064).
-// In this case, the cluster has actually been successfully installed and is ready for configuration,
-// but the status wasn't updated correctly. Therefore, we treat it as completed so that the provisioningStatus
-// be updated properly. This workaround can be removed after ACM 2.12 GA.
 func IsClusterProvisionCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
 		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
-	return condition != nil &&
-		(condition.Status == metav1.ConditionTrue ||
-			condition.Reason == string(siteconfigv1alpha1.StaleConditions))
+	return condition != nil && (condition.Status == metav1.ConditionTrue)
 }
 
 // IsClusterProvisionTimedOutOrFailed checks if the cluster provision condition status is timedout or failed

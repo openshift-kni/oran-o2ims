@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -95,22 +94,22 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 		}
 	}
 
+	// Handle cluster upgrade transformations before validation
+	if ciExists && ctlrutils.IsClusterProvisionCompleted(t.object) {
+		err = t.handleClusterInstanceUpgrade(existingCIUnstructured, renderedCIUnstructured)
+		if err != nil {
+			return nil, fmt.Errorf("failed to handle cluster instance upgrade: %w", err)
+		}
+	}
+
 	// Validate the rendered ClusterInstance with dry-run. The defaults defined in the
 	// ClusterInstance CRD will be applied by the APIserver after the dry-run.
+	// NOTE: ClusterInstance immutable field validation is handled by ACM 2.13+
+	// admission webhook, so no additional validation is needed here.
 	isDryRun := true
 	err = t.applyClusterInstance(ctx, renderedCIUnstructured, isDryRun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate the rendered ClusterInstance with dry-run: %w", err)
-	}
-
-	// Validate updates for ClusterInstance spec. Once cluster has started installation,
-	// updates to spec are disallowed. After cluster installation is completed, only
-	// permissible fields can be updated.
-	// TODO: This updates validation could be removed when we require ACM 2.13+ which
-	// already has the feature gate for immutable field validation.
-	err = t.validateClusterInstanceChanges(existingCIUnstructured, renderedCIUnstructured)
-	if err != nil {
-		return nil, err
 	}
 
 	// Convert unstructured to siteconfig.ClusterInstance type
@@ -534,44 +533,33 @@ func addSuppressedInstallManifests(renderedCI *unstructured.Unstructured) error 
 	return nil
 }
 
-// validateClusterInstanceChanges validates the changes between the existing and rendered
-// ClusterInstance for immutable fields.
-func (t *provisioningRequestReconcilerTask) validateClusterInstanceChanges(
+// handleClusterInstanceUpgrade handles cluster upgrade transformations for the ClusterInstance.
+// This includes adding suppressed manifests and preserving existing suppressed manifests.
+func (t *provisioningRequestReconcilerTask) handleClusterInstanceUpgrade(
 	existingCI *unstructured.Unstructured, renderedCI *unstructured.Unstructured) error {
 
-	if existingCI.GetName() == "" || len(existingCI.Object) == 0 {
-		// No existing ClusterInstance, skip validation
-		return nil
-	}
-
-	allowedFields := [][]string{}
-	if ctlrutils.IsClusterProvisionCompleted(t.object) {
-		allowedFields = provisioningv1alpha1.AllowedClusterInstanceFields
-	}
-
-	disallowedChanges, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+	// Check if there is a clusterImageSetNameRef change (indicating an upgrade)
+	changedFields, _, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
 		existingCI.Object["spec"].(map[string]any),
 		renderedCI.Object["spec"].(map[string]any),
 		ctlrutils.IgnoredClusterInstanceFields,
-		allowedFields)
+		provisioningv1alpha1.AllowedClusterInstanceFields)
 	if err != nil {
 		return fmt.Errorf(
-			"failed to find immutable field updates for ClusterInstance (%s): %w", existingCI.GetName(), err)
+			"failed to find field updates for ClusterInstance (%s): %w", existingCI.GetName(), err)
 	}
 
-	// Special handling for upgrade
-	if slices.Contains(disallowedChanges, "clusterImageSetNameRef") &&
-		ctlrutils.IsClusterProvisionCompleted(t.object) {
+	// Add suppressed manifests when clusterImageSetNameRef changes (indicating an upgrade)
+	if slices.Contains(changedFields, "clusterImageSetNameRef") {
 		err = addSuppressedInstallManifests(renderedCI)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to add suppressed install manifests to the rendered ClusterInstance (%s): %w",
 				renderedCI.GetName(), err)
 		}
-		disallowedChanges = slices.DeleteFunc(disallowedChanges, func(field string) bool {
-			return field == "clusterImageSetNameRef"
-		})
 	}
+
+	// Preserve existing suppressedManifests from the current ClusterInstance
 	if existingCISuppressed, ok := existingCI.Object["spec"].(map[string]any)["suppressedManifests"].([]any); ok {
 		renderedCISuppressed, ok := renderedCI.Object["spec"].(map[string]any)["suppressedManifests"].([]any)
 		if !ok {
@@ -585,20 +573,6 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceChanges(
 			}
 		}
 		renderedCI.Object["spec"].(map[string]any)["suppressedManifests"] = renderedCISuppressed
-	}
-
-	if len(disallowedChanges) > 0 &&
-		ctlrutils.IsClusterProvisionCompleted(t.object) {
-		return ctlrutils.NewInputError(
-			"detected disallowed changes in immutable fields: %s", strings.Join(disallowedChanges, ", "))
-	}
-
-	disallowedChanges = append(disallowedChanges, scalingNodes...)
-	if len(disallowedChanges) > 0 &&
-		ctlrutils.IsClusterProvisionInProgress(t.object) {
-		return ctlrutils.NewInputError(
-			"updates to ClusterInstance parameters are disallowed during cluster installation, "+
-				"detected changes in fields: %s", strings.Join(disallowedChanges, ", "))
 	}
 
 	return nil
