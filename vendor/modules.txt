@@ -453,6 +453,11 @@ github.com/stephenafamo/scan
 # github.com/stoewer/go-strcase v1.3.1
 ## explicit; go 1.11
 github.com/stoewer/go-strcase
+# github.com/stolostron/multicluster-observability-operator v0.0.0-20250915133613-22760d2cb96b
+## explicit; go 1.24.0
+github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/shared
+github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta1
+github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta2
 # github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba
 ## explicit; go 1.21
 github.com/stolostron/siteconfig/api/v1alpha1

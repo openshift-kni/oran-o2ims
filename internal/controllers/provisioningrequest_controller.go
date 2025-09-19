@@ -28,6 +28,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	observabilityv1beta1 "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -102,6 +103,7 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=lcm.openshift.io,resources=imagebasedgroupupgrades/status,verbs=get
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;patch;update;watch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=managedclusters,verbs=get;list;patch;update;watch
+//+kubebuilder:rbac:groups=observability.open-cluster-management.io,resources=observabilityaddons,verbs=get;list;watch;update
 //+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get;list;create;update;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -1172,6 +1174,16 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		return false, fmt.Errorf("failed to list namespaces: %w", err)
 	}
 	for _, ns := range namespaceList.Items {
+		// TODO, remove once root cause has been addressed
+		// Workaround to deal with stuck ObservabilityAddon finalizer
+		// Check for ObservabilityAddon CR and remove finalizers before deleting namespace
+		if err := r.handleObservabilityAddonCleanup(ctx, ns.Name); err != nil {
+			r.Logger.WarnContext(ctx, "Failed to handle ObservabilityAddon cleanup",
+				slog.String("namespace", ns.Name),
+				slog.String("error", err.Error()))
+			// Continue with deletion attempt even if cleanup fails
+		}
+
 		// Delete cluster namespace if not already.
 		// Deleting cluster namespace will delete all resources within it, including
 		// ClusterInstance and ImageBasedGroupUpgrade.
@@ -1187,6 +1199,64 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 	}
 
 	return deleteCompleted, nil
+}
+
+// handleObservabilityAddonCleanup checks for ObservabilityAddon CRs in the given namespace
+// and removes their finalizers to allow proper namespace deletion
+func (r *ProvisioningRequestReconciler) handleObservabilityAddonCleanup(ctx context.Context, namespace string) error {
+	// List ObservabilityAddon CRs in the namespace
+	observabilityAddonList := &observabilityv1beta1.ObservabilityAddonList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(namespace),
+	}
+
+	if err := r.Client.List(ctx, observabilityAddonList, listOpts...); err != nil {
+		// If the CRD doesn't exist, this is not an error - just return
+		if meta.IsNoMatchError(err) {
+			r.Logger.InfoContext(ctx, "ObservabilityAddon CRD not found, skipping cleanup",
+				slog.String("namespace", namespace))
+			return nil
+		}
+		return fmt.Errorf("failed to list ObservabilityAddon CRs in namespace %s: %w", namespace, err)
+	}
+
+	for _, addon := range observabilityAddonList.Items {
+		// Only process CRs that are in deleting state (have deletion timestamp set)
+		if addon.DeletionTimestamp.IsZero() {
+			r.Logger.InfoContext(ctx, "Skipping ObservabilityAddon - not in deleting state",
+				slog.String("name", addon.Name),
+				slog.String("namespace", addon.Namespace))
+			continue
+		}
+
+		if len(addon.Finalizers) > 0 {
+			r.Logger.InfoContext(ctx, "Removing finalizers from deleting ObservabilityAddon",
+				slog.String("name", addon.Name),
+				slog.String("namespace", addon.Namespace),
+				slog.Any("finalizers", addon.Finalizers))
+
+			// Remove all finalizers
+			addon.Finalizers = []string{}
+
+			if err := r.Client.Update(ctx, &addon); err != nil {
+				r.Logger.WarnContext(ctx, "Failed to update ObservabilityAddon after removing finalizers",
+					slog.String("name", addon.Name),
+					slog.String("namespace", addon.Namespace),
+					slog.String("error", err.Error()))
+				continue
+			}
+
+			r.Logger.InfoContext(ctx, "Successfully removed finalizers from deleting ObservabilityAddon",
+				slog.String("name", addon.Name),
+				slog.String("namespace", addon.Namespace))
+		} else {
+			r.Logger.InfoContext(ctx, "ObservabilityAddon is deleting but has no finalizers",
+				slog.String("name", addon.Name),
+				slog.String("namespace", addon.Namespace))
+		}
+	}
+
+	return nil
 }
 
 func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
