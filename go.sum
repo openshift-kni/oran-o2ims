@@ -412,6 +412,8 @@ github.com/stephenafamo/scan v0.7.0/go.mod h1:FhIUJ8pLNyex36xGFiazDJJ5Xry0UkAi+R
 github.com/stoewer/go-strcase v1.2.0/go.mod h1:IBiWB2sKIp3wVVQ3Y035++gc+knqhUQag1KpM8ahLw8=
 github.com/stoewer/go-strcase v1.3.1 h1:iS0MdW+kVTxgMoE1LAZyMiYJFKlOzLooE4MxjirtkAs=
 github.com/stoewer/go-strcase v1.3.1/go.mod h1:fAH5hQ5pehh+j3nZfvwdk2RgEgQjAoM8wodgtPmh1xo=
+github.com/stolostron/multicluster-observability-operator v0.0.0-20250915133613-22760d2cb96b h1:zjQCme7/Fhjhqn7s4w5Jpx/INLBDKCrAWU5eV4Ii3Bs=
+github.com/stolostron/multicluster-observability-operator v0.0.0-20250915133613-22760d2cb96b/go.mod h1:4vXhFB4sjvMWx/lEOVlvJttR3oQHXJ1dFvymKTZUEVk=
 github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba h1:Y5UC8T+SEfIJRm/00kjmj2XQINsLD3IPVoUOHpQEHNI=
 github.com/stolostron/siteconfig v0.0.0-20241003162917-06ef126f7eba/go.mod h1:0ipO3RwfHAaT2NxfxZJxoqkE18TzL4vc07wq491bsAQ=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
