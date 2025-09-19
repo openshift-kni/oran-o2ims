@@ -111,16 +111,12 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 			&siteconfig.ClusterInstance{},
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Watch on ClusterInstance status conditions changes only
+					// Watch on ClusterInstance status conditions changes
 					ciOld := e.ObjectOld.(*siteconfig.ClusterInstance)
 					ciNew := e.ObjectNew.(*siteconfig.ClusterInstance)
 
-					if ciOld.GetGeneration() == ciNew.GetGeneration() {
-						if !equality.Semantic.DeepEqual(ciOld.Status.Conditions, ciNew.Status.Conditions) {
-							return true
-						}
-					}
-					return false
+					// Trigger reconciliation if status conditions have changed
+					return !equality.Semantic.DeepEqual(ciOld.Status.Conditions, ciNew.Status.Conditions)
 				},
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },

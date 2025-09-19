@@ -406,7 +406,7 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 	})
 })
 
-var _ = Describe("removeLabelFromInterfaces", func() {
+var _ = Describe("RemoveLabelFromInterfaces", func() {
 
 	It("returns error for invalid node structure", func() {
 		data := map[string]interface{}{
@@ -415,7 +415,7 @@ var _ = Describe("removeLabelFromInterfaces", func() {
 				42, // should be a map
 			},
 		}
-		err := removeLabelFromInterfaces(data)
+		err := RemoveLabelFromInterfaces(data)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("unexpected: invalid node data structure"))
 	})
@@ -429,7 +429,7 @@ var _ = Describe("removeLabelFromInterfaces", func() {
 				},
 			},
 		}
-		err := removeLabelFromInterfaces(data)
+		err := RemoveLabelFromInterfaces(data)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("failed to extract the interfaces from the node map"))
 	})
@@ -451,7 +451,7 @@ var _ = Describe("removeLabelFromInterfaces", func() {
 				},
 			},
 		}
-		err := removeLabelFromInterfaces(data)
+		err := RemoveLabelFromInterfaces(data)
 		Expect(err).To(Not(HaveOccurred()))
 		Expect(
 			data["nodes"].([]interface{})[0].(map[string]interface{})["nodeNetwork"].(map[string]interface{})["interfaces"].([]interface{})[0].(map[string]interface{})).

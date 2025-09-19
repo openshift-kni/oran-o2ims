@@ -67,6 +67,14 @@ const (
 	PATCH  = "Patch"
 )
 
+// Field Manager Names for Server-Side Apply
+const (
+	// ProvisioningRequestFieldManager is the unique identifier for the ProvisioningRequest controller
+	// when performing Server-Side Apply operations. This name is used by the Kubernetes API server
+	// to track field ownership for SSA.
+	ProvisioningRequestFieldManager = "provisioning-request-reconciler"
+)
+
 // Container arguments
 var (
 	AlarmServerArgs = []string{
