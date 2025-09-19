@@ -12,12 +12,10 @@ import (
 	"log/slog"
 	"slices"
 
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -180,6 +178,12 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 		}
 	}
 
+	// Remove interface labels from the ClusterInstance spec as they are not part of the ClusterInstance CRD schema
+	// but are needed during hardware provisioning for MAC address assignment
+	if err := ctlrutils.RemoveLabelFromInterfaces(renderedClusterInstanceUnstructured.Object["spec"]); err != nil {
+		return nil, fmt.Errorf("failed to remove interface labels from ClusterInstance spec: %w", err)
+	}
+
 	// Add ProvisioningRequest labels to the generated ClusterInstance.
 	labels := make(map[string]string)
 	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
@@ -271,92 +275,86 @@ func (t *provisioningRequestReconcilerTask) checkClusterProvisionStatus(
 	return nil
 }
 
+// applyClusterInstance ensures the state of the ClusterInstance in the cluster matches the desired state.
+// It uses Server-Side Apply (SSA), which is the modern, idempotent, and robust Kubernetes standard.
+// This single function correctly handles create, update, and conflict scenarios without needing to
+// manually check if the object already exists.
 func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance client.Object, isDryRun bool) error {
-	var operationType string
 
-	existingClusterInstance := &unstructured.Unstructured{}
-
-	existingClusterInstance.SetGroupVersionKind(clusterInstance.GetObjectKind().GroupVersionKind())
-
-	err := t.client.Get(
-		ctx,
-		types.NamespacedName{
-			Name:      clusterInstance.GetName(),
-			Namespace: clusterInstance.GetNamespace(),
-		},
-		existingClusterInstance,
-	)
-
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to get ClusterInstance: %w", err)
-		}
-
-		operationType = ctlrutils.OperationTypeCreated
-		opts := []client.CreateOption{}
-		if isDryRun {
-			opts = append(opts, client.DryRunAll)
-			operationType = ctlrutils.OperationTypeDryRun
-		}
-
-		err = ctrl.SetControllerReference(t.object, clusterInstance, t.client.Scheme())
-		if err != nil {
-			return fmt.Errorf("failed to set controller reference: %w", err)
-		}
-
-		if err = t.client.Create(ctx, clusterInstance, opts...); err != nil {
-			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return fmt.Errorf("failed to create ClusterInstance: %w", err)
-			}
-			return ctlrutils.NewInputError("%s", err.Error())
-		}
-	} else {
-		// Compare spec fields of both unstructured objects
-		newSpec, _, err := unstructured.NestedMap(clusterInstance.(*unstructured.Unstructured).Object, "spec")
-		if err != nil {
-			return fmt.Errorf("failed to extract spec from new object: %w", err)
-		}
-
-		existingSpec, _, err := unstructured.NestedMap(existingClusterInstance.Object, "spec")
-		if err != nil {
-			return fmt.Errorf("failed to extract spec from existing object: %w", err)
-		}
-
-		if equality.Semantic.DeepEqual(existingSpec, newSpec) {
-			return nil
-		}
-
-		// Preserve metadata
-		clusterInstance.SetResourceVersion(existingClusterInstance.GetResourceVersion())
-		clusterInstance.SetFinalizers(existingClusterInstance.GetFinalizers())
-		clusterInstance.SetLabels(existingClusterInstance.GetLabels())
-		clusterInstance.SetAnnotations(existingClusterInstance.GetAnnotations())
-
-		operationType = ctlrutils.OperationTypeUpdated
-		opts := []client.PatchOption{}
-		if isDryRun {
-			opts = append(opts, client.DryRunAll)
-			operationType = ctlrutils.OperationTypeDryRun
-		}
-
-		patch := client.MergeFrom(existingClusterInstance.DeepCopy())
-		if err := t.client.Patch(ctx, clusterInstance, patch, opts...); err != nil {
-			if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-				return fmt.Errorf("failed to patch ClusterInstance: %w", err)
-			}
-			return ctlrutils.NewInputError("%s", err.Error())
-		}
+	if clusterInstance == nil {
+		return ctlrutils.NewInputError("clusterInstance cannot be nil")
+	}
+	unstructuredObj, ok := clusterInstance.(*unstructured.Unstructured)
+	if !ok {
+		// This would indicate a programming error in the calling code.
+		return fmt.Errorf("internal error: clusterInstance is not of type *unstructured.Unstructured, but %T", clusterInstance)
 	}
 
+	// Log function entry with structured context
 	t.logger.InfoContext(
 		ctx,
-		fmt.Sprintf(
-			"Rendered ClusterInstance %s in the namespace %s %s",
-			clusterInstance.GetName(),
-			clusterInstance.GetNamespace(),
-			operationType,
-		),
+		"Applying ClusterInstance using Server-Side Apply",
+		slog.String("name", unstructuredObj.GetName()),
+		slog.String("namespace", unstructuredObj.GetNamespace()),
+		slog.Bool("isDryRun", isDryRun),
 	)
+
+	// Use DeepCopy() to create a safe, mutable copy for the patch operation. This prevents
+	// any modifications to the original object that might be used elsewhere.
+	patchObj := unstructuredObj.DeepCopy()
+
+	// Set controller reference to ensure proper ownership and enable watch functionality
+	if err := ctrl.SetControllerReference(t.object, patchObj, t.client.Scheme()); err != nil {
+		return fmt.Errorf("failed to set controller reference: %w", err)
+	}
+
+	// Build Server-Side Apply Options
+	patchOpts := []client.PatchOption{
+		client.ForceOwnership,
+		client.FieldOwner(ctlrutils.ProvisioningRequestFieldManager),
+	}
+	if isDryRun {
+		patchOpts = append(patchOpts, client.DryRunAll)
+	}
+
+	// Execute the Apply Operation
+	// This single API call instructs the server to converge the object to our desired state.
+	// The server handles the complex logic of creating or merging the changes.
+	if err := t.client.Patch(ctx, patchObj, client.Apply, patchOpts...); err != nil {
+		// Standard error handling for Kubernetes API calls.
+		if errors.IsConflict(err) {
+			t.logger.InfoContext(
+				ctx,
+				"Conflict detected during Server-Side Apply, requeueing for retry. This is a normal part of reconciliation.",
+				slog.String("name", patchObj.GetName()),
+				slog.String("namespace", patchObj.GetNamespace()),
+			)
+			// Returning a conflict error will cause the reconciler to retry the operation.
+			return fmt.Errorf("conflict during server-side apply: %w", err)
+		}
+		if errors.IsInvalid(err) || errors.IsBadRequest(err) {
+			return ctlrutils.NewInputError("invalid ClusterInstance configuration: %w", err)
+		}
+		return fmt.Errorf("failed to apply ClusterInstance: %w", err)
+	}
+
+	// Determine the operation type for logging, conforming to the original function's style.
+	// With SSA, the operation is best described as "Applied" or "Updated" since the server
+	// converges the state regardless of whether it was a create or update.
+	operationType := ctlrutils.OperationTypeUpdated
+	if isDryRun {
+		operationType = ctlrutils.OperationTypeDryRun
+	}
+
+	// This log message now reflects that the state has been successfully converged.
+	t.logger.InfoContext(
+		ctx,
+		"Successfully applied ClusterInstance",
+		slog.String("name", patchObj.GetName()),
+		slog.String("namespace", patchObj.GetNamespace()),
+		slog.String("operation", operationType),
+	)
+
 	return nil
 }
 
