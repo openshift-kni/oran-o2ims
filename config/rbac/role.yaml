@@ -275,6 +275,15 @@ rules:
   - update
   - watch
 - apiGroups:
+  - observability.open-cluster-management.io
+  resources:
+  - observabilityaddons
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - ocloud.openshift.io
   resources:
   - inventories
