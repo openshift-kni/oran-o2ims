@@ -184,9 +184,9 @@ func ValidateDefaultInterfaces[T any](data T) error {
 	return nil
 }
 
-// removeLabelFromInterfaces removed the label property for each interface as the label
+// RemoveLabelFromInterfaces removes the label property for each interface as the label
 // property is not part of the ClusterInstance schema.
-func removeLabelFromInterfaces[T any](data T) error {
+func RemoveLabelFromInterfaces[T any](data T) error {
 	dataMap, _ := any(data).(map[string]any)
 	nodes, ok := dataMap["nodes"].([]any)
 	if ok {
@@ -289,7 +289,7 @@ func ValidateConfigmapSchemaAgainstClusterInstanceCRD[T any](ctx context.Context
 	provisioningv1alpha1.DisallowUnknownFieldsInSchema(openAPIV3SchemaSpec)
 	// Remove the interface label properties as it's not part of the ClusterInstance CRD schema.
 	dataMap, _ := any(data).(map[string]any)
-	if err := removeLabelFromInterfaces(dataMap); err != nil {
+	if err := RemoveLabelFromInterfaces(dataMap); err != nil {
 		return fmt.Errorf("error removing label from interfaces")
 	}
 

@@ -108,7 +108,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -136,6 +138,67 @@ func TestControllers(t *testing.T) {
 
 const testHwMgrPluginNameSpace = "hwmgr"
 const testMetal3HardwarePluginRef = "hwmgr"
+
+// SSACompatibleClient wraps a fake client and converts Server-Side Apply operations
+// to traditional create/update operations, providing compatibility for testing.
+type SSACompatibleClient struct {
+	client.WithWatch
+}
+
+// Patch intercepts Server-Side Apply operations and converts them to create/update
+func (c *SSACompatibleClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	// Check if this is a Server-Side Apply operation
+	if patch.Type() == types.ApplyPatchType {
+		return c.handleServerSideApply(ctx, obj, opts...)
+	}
+
+	// For non-SSA patches, delegate to the underlying client
+	if err := c.WithWatch.Patch(ctx, obj, patch, opts...); err != nil {
+		return fmt.Errorf("failed to apply patch: %w", err)
+	}
+	return nil
+}
+
+// handleServerSideApply converts SSA operations to create/update operations
+func (c *SSACompatibleClient) handleServerSideApply(ctx context.Context, obj client.Object, opts ...client.PatchOption) error {
+	// Check for dry-run option by inspecting patch options
+	isDryRun := false
+	for _, opt := range opts {
+		// Check if this is a dry-run option by examining the string representation
+		optStr := fmt.Sprintf("%T", opt)
+		if optStr == "client.dryRunAll" {
+			isDryRun = true
+			break
+		}
+	}
+
+	// For dry-run, just validate without actually creating/updating
+	if isDryRun {
+		return nil
+	}
+
+	// Check if the object already exists
+	existing := obj.DeepCopyObject().(client.Object)
+	err := c.WithWatch.Get(ctx, client.ObjectKeyFromObject(obj), existing)
+
+	switch {
+	case errors.IsNotFound(err):
+		// Create the object
+		if createErr := c.WithWatch.Create(ctx, obj); createErr != nil {
+			return fmt.Errorf("failed to create object: %w", createErr)
+		}
+		return nil
+	case err != nil:
+		return fmt.Errorf("failed to check existing object: %w", err)
+	default:
+		// Update the existing object
+		obj.SetResourceVersion(existing.GetResourceVersion())
+		if updateErr := c.WithWatch.Update(ctx, obj); updateErr != nil {
+			return fmt.Errorf("failed to update object: %w", updateErr)
+		}
+		return nil
+	}
+}
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	// Create a basic auth secret for test authentication
@@ -219,7 +282,8 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		panic(fmt.Sprintf("Failed to create hardware plugin: %v", err))
 	}
 
-	return fakeClient
+	// Wrap the fake client with SSA compatibility for testing
+	return &SSACompatibleClient{WithWatch: fakeClient}
 }
 
 // Logger used for tests:
