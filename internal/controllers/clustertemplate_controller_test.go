@@ -84,9 +84,11 @@ of the ClusterTemplate controller functionality.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -95,12 +97,14 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -129,6 +133,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:       tName,
 				Version:    tVersion,
+				Release:    "4.15.0",
 				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
@@ -156,7 +161,8 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				},
 				Data: map[string]string{
 					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-baseDomain: value`,
+baseDomain: value
+clusterImageSetNameRef: "4.15.0"`,
 				},
 			},
 			{
@@ -200,6 +206,17 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
+
+		// Create the ClusterImageSet required for validation
+		clusterImageSet := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "4.15.0",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64",
+			},
+		}
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
@@ -524,6 +541,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
+				Release: "4.15.0",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
@@ -543,7 +561,8 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Data: map[string]string{
 					ctlrutils.ClusterInstallationTimeoutConfigKey: "80m",
 					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-baseDomain: value`,
+baseDomain: value
+clusterImageSetNameRef: "4.15.0"`,
 				},
 			},
 			{
@@ -604,6 +623,17 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		}
 		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
 
+		// Create the ClusterImageSet required for validation
+		clusterImageSet := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "4.15.0",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64",
+			},
+		}
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
 		valid, err := t.validateClusterTemplateCR(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(valid).To(BeTrue())
@@ -641,6 +671,17 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
+
+		// Create the ClusterImageSet required for validation
+		clusterImageSet := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "4.15.0",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64",
+			},
+		}
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
 
 		valid, err := t.validateClusterTemplateCR(ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -682,6 +723,64 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			Reason:  string(hwmgmtv1alpha1.Failed),
 			Message: errMessage,
 		})
+	})
+
+	Context("skip clusterimageset validation annotation", func() {
+		DescribeTable("should correctly handle annotation values",
+			func(annotationValue string, expectValidation bool) {
+				// Create a test ClusterTemplate
+				testCT := &provisioningv1alpha1.ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-template.v1.0.0",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							ctlrutils.SkipClusterImageSetValidationAnnotation: annotationValue,
+						},
+					},
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						Name:    "test-template",
+						Version: "v1.0.0",
+						Release: "4.17.0",
+						Templates: provisioningv1alpha1.Templates{
+							ClusterInstanceDefaults: "test-ci-defaults",
+							PolicyTemplateDefaults:  "test-pt-defaults",
+						},
+					},
+				}
+
+				// Capture log output
+				var logBuffer bytes.Buffer
+				testLogger := slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+				task := &clusterTemplateReconcilerTask{
+					client: c,
+					logger: testLogger,
+					object: testCT,
+				}
+
+				// call validateClusterTemplateCR to validate the ClusterImageSet
+				_, _ = task.validateClusterTemplateCR(ctx) // Ignore result since other validations will fail
+
+				// Verify the expected behavior based on the expectValidation flag
+				logOutput := logBuffer.String()
+				if expectValidation {
+					Expect(logOutput).To(ContainSubstring("Validating ClusterImageSet"))
+					Expect(logOutput).ToNot(ContainSubstring("Skipping ClusterImageSet validation"))
+				} else {
+					Expect(logOutput).To(ContainSubstring("Skipping ClusterImageSet validation"))
+					Expect(logOutput).ToNot(ContainSubstring("Validating ClusterImageSet"))
+				}
+			},
+			Entry("annotation='true' - should skip", "true", false),
+			Entry("annotation='TRUE' - should skip", "TRUE", false),
+			Entry("annotation='True' - should skip", "True", false),
+			Entry("annotation='TrUe' - should skip", "TrUe", false),
+			Entry("annotation='false' - should validate", "false", true),
+			Entry("annotation='' - should validate", "", true),
+			Entry("annotation='yes' - should validate", "yes", true),
+			Entry("annotation='1' - should validate", "1", true),
+			Entry("annotation='skip' - should validate", "skip", true),
+		)
 	})
 })
 
@@ -1897,5 +1996,434 @@ plan:
 			Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade configmap"))
 		})
+	})
+})
+
+var _ = Describe("validateClusterImageSetMatchesRelease", func() {
+	var (
+		ctx             context.Context
+		c               client.Client
+		task            *clusterTemplateReconcilerTask
+		clusterTemplate *provisioningv1alpha1.ClusterTemplate
+		configMap       *corev1.ConfigMap
+		clusterImageSet *hivev1.ClusterImageSet
+		scheme          *runtime.Scheme
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Initialize scheme with required types
+		scheme = runtime.NewScheme()
+		err := corev1.AddToScheme(scheme)
+		Expect(err).NotTo(HaveOccurred())
+		err = provisioningv1alpha1.AddToScheme(scheme)
+		Expect(err).NotTo(HaveOccurred())
+		err = hivev1.AddToScheme(scheme)
+		Expect(err).NotTo(HaveOccurred())
+
+		c = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterTemplate = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-template",
+				Namespace: "test-namespace",
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Name:    "test-cluster-template",
+				Version: "v1.0.0",
+				Release: "4.17.0",
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: "test-configmap",
+				},
+			},
+		}
+
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-configmap",
+				Namespace: "test-namespace",
+			},
+			Data: map[string]string{
+				"clusterinstance-defaults": `
+clusterImageSetNameRef: "4.17.0"
+baseDomain: example.com
+clusterType: SNO
+`,
+			},
+		}
+
+		clusterImageSet = &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "4.17.0",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.17.0-x86_64",
+			},
+		}
+
+		task = &clusterTemplateReconcilerTask{
+			client: c,
+			logger: logger,
+			object: clusterTemplate,
+		}
+	})
+
+	It("should succeed when ClusterImageSet version matches ClusterTemplate release", func() {
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should fail when ClusterImageSet version does not match ClusterTemplate release", func() {
+		// Create ConfigMap and ClusterImageSet with mismatched versions
+		clusterTemplate.Spec.Release = "4.16.0" // Different from ClusterImageSet version
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("does not match ClusterTemplate release version"))
+		Expect(err.Error()).To(ContainSubstring("4.17.0"))
+		Expect(err.Error()).To(ContainSubstring("4.16.0"))
+	})
+
+	It("should fail when ClusterInstanceDefaults ConfigMap does not exist", func() {
+		// Don't create the ConfigMap
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get ClusterInstanceDefaults ConfigMap"))
+	})
+
+	It("should fail when clusterinstance-defaults key is missing from ConfigMap", func() {
+		configMap.Data = map[string]string{
+			"wrong-key": "some-data",
+		}
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to extract clusterinstance-defaults"))
+	})
+
+	It("should fail when clusterImageSetNameRef is missing from cluster instance data", func() {
+		configMap.Data = map[string]string{
+			"clusterinstance-defaults": `
+baseDomain: example.com
+clusterType: SNO
+# clusterImageSetNameRef is missing
+`,
+		}
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("clusterImageSetNameRef not found"))
+	})
+
+	It("should fail when clusterImageSetNameRef is not a string", func() {
+		configMap.Data = map[string]string{
+			"clusterinstance-defaults": `
+clusterImageSetNameRef: 123  # Not a string
+baseDomain: example.com
+`,
+		}
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("clusterImageSetNameRef in ClusterInstanceDefaults ConfigMap"))
+		Expect(err.Error()).To(ContainSubstring("is not a string"))
+	})
+
+	It("should fail when ClusterImageSet does not exist", func() {
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		// Don't create the ClusterImageSet
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get ClusterImageSet"))
+	})
+
+	It("should fail when ClusterImageSet has no releaseImage in spec", func() {
+		clusterImageSet.Spec.ReleaseImage = ""
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("releaseImage not found in ClusterImageSet"))
+	})
+
+	It("should fail when ClusterImageSet releaseImage contains no extractable version", func() {
+		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:latest" // No version pattern
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
+	})
+
+	It("should fail when extracted version is invalid semver", func() {
+		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:4.17.0-rc.invalid.identifier" // Invalid semver pre-release
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to parse ClusterImageSet version"))
+	})
+
+	It("should fail when release image has partial version (missing patch)", func() {
+		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:4.17" // Missing patch version
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
+	})
+
+	It("should fail when ClusterTemplate release version is invalid semver", func() {
+		clusterTemplate.Spec.Release = "invalid-version"
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to parse ClusterTemplate release version"))
+	})
+
+	It("should handle pre-release versions correctly", func() {
+		clusterTemplate.Spec.Release = "4.17.0-rc1"
+
+		// Update the ConfigMap to reference the matching pre-release ClusterImageSet
+		configMap.Data = map[string]string{
+			"clusterinstance-defaults": `
+clusterImageSetNameRef: "4.17.0-rc1"
+baseDomain: example.com
+clusterType: SNO
+`,
+		}
+
+		// Update ClusterImageSet name and release image to match
+		clusterImageSet.ObjectMeta.Name = "4.17.0-rc1"
+		clusterImageSet.Spec.ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.17.0-rc1-x86_64"
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should handle different architectures in release image", func() {
+		clusterImageSet.Spec.ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.17.0-aarch64"
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+})
+
+var _ = Describe("extractVersionFromReleaseImage", func() {
+	It("should extract version from standard OpenShift release image", func() {
+		testCases := []struct {
+			description     string
+			releaseImage    string
+			expectedVersion string
+		}{
+			{
+				description:     "standard OCP release image",
+				releaseImage:    "quay.io/openshift-release-dev/ocp-release:4.17.0-x86_64",
+				expectedVersion: "4.17.0",
+			},
+			{
+				description:     "release image without architecture",
+				releaseImage:    "quay.io/openshift-release-dev/ocp-release:4.16.1",
+				expectedVersion: "4.16.1",
+			},
+			{
+				description:     "release image with pre-release tag",
+				releaseImage:    "registry.redhat.io/ubi8/ubi:4.15.2-rc1",
+				expectedVersion: "4.15.2-rc1",
+			},
+			{
+				description:     "simple registry with version",
+				releaseImage:    "my-registry/openshift:4.14.10",
+				expectedVersion: "4.14.10",
+			},
+			{
+				description:     "version with build metadata",
+				releaseImage:    "quay.io/openshift:4.18.0-build.123",
+				expectedVersion: "4.18.0",
+			},
+		}
+
+		for _, tc := range testCases {
+			By(tc.description)
+			version := extractVersionFromReleaseImage(tc.releaseImage)
+			Expect(version).To(Equal(tc.expectedVersion))
+		}
+	})
+
+	It("should return empty string for invalid release images", func() {
+		testCases := []struct {
+			description  string
+			releaseImage string
+		}{
+			{
+				description:  "image without tag",
+				releaseImage: "quay.io/openshift-release-dev/ocp-release",
+			},
+			{
+				description:  "image with non-version tag",
+				releaseImage: "quay.io/openshift-release-dev/ocp-release:latest",
+			},
+			{
+				description:  "image with partial version",
+				releaseImage: "quay.io/openshift-release-dev/ocp-release:4.17",
+			},
+			{
+				description:  "empty string",
+				releaseImage: "",
+			},
+			{
+				description:  "invalid format",
+				releaseImage: "not-a-valid-image",
+			},
+		}
+
+		for _, tc := range testCases {
+			By(tc.description)
+			version := extractVersionFromReleaseImage(tc.releaseImage)
+			Expect(version).To(Equal(""))
+		}
+	})
+})
+
+var _ = Describe("validateVersionsMatch", func() {
+	It("should succeed when versions match exactly", func() {
+		testCases := []struct {
+			description     string
+			imageVersion    string
+			templateVersion string
+		}{
+			{
+				description:     "exact semantic versions",
+				imageVersion:    "4.17.0",
+				templateVersion: "4.17.0",
+			},
+			{
+				description:     "versions with v prefix",
+				imageVersion:    "v4.16.1",
+				templateVersion: "v4.16.1",
+			},
+			{
+				description:     "mixed prefix formats",
+				imageVersion:    "4.15.2",
+				templateVersion: "v4.15.2",
+			},
+			{
+				description:     "pre-release versions",
+				imageVersion:    "4.18.0-rc1",
+				templateVersion: "4.18.0-rc1",
+			},
+		}
+
+		for _, tc := range testCases {
+			By(tc.description)
+			err := validateVersionsMatch(tc.imageVersion, tc.templateVersion)
+			Expect(err).ToNot(HaveOccurred())
+		}
+	})
+
+	It("should fail when versions do not match", func() {
+		testCases := []struct {
+			description     string
+			imageVersion    string
+			templateVersion string
+		}{
+			{
+				description:     "different patch versions",
+				imageVersion:    "4.17.0",
+				templateVersion: "4.17.1",
+			},
+			{
+				description:     "different minor versions",
+				imageVersion:    "4.16.0",
+				templateVersion: "4.17.0",
+			},
+			{
+				description:     "different major versions",
+				imageVersion:    "3.17.0",
+				templateVersion: "4.17.0",
+			},
+			{
+				description:     "pre-release vs release",
+				imageVersion:    "4.17.0-rc1",
+				templateVersion: "4.17.0",
+			},
+		}
+
+		for _, tc := range testCases {
+			By(tc.description)
+			err := validateVersionsMatch(tc.imageVersion, tc.templateVersion)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("versions do not match exactly"))
+		}
+	})
+
+	It("should fail with invalid semver versions", func() {
+		testCases := []struct {
+			description     string
+			imageVersion    string
+			templateVersion string
+			expectedError   string
+		}{
+			{
+				description:     "invalid image version",
+				imageVersion:    "invalid-version",
+				templateVersion: "4.17.0",
+				expectedError:   "failed to parse ClusterImageSet version",
+			},
+			{
+				description:     "invalid template version",
+				imageVersion:    "4.17.0",
+				templateVersion: "not-semver",
+				expectedError:   "failed to parse ClusterTemplate release version",
+			},
+			{
+				description:     "both versions invalid",
+				imageVersion:    "bad-version",
+				templateVersion: "also-bad",
+				expectedError:   "failed to parse ClusterImageSet version",
+			},
+			{
+				description:     "partial version",
+				imageVersion:    "4.17",
+				templateVersion: "4.17.0",
+				expectedError:   "failed to parse ClusterImageSet version",
+			},
+		}
+
+		for _, tc := range testCases {
+			By(tc.description)
+			err := validateVersionsMatch(tc.imageVersion, tc.templateVersion)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(tc.expectedError))
+		}
 	})
 })

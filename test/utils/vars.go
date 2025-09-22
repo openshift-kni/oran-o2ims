@@ -375,5 +375,12 @@ var (
 			"owner":       "openshift-kni",
 			"crdFileName": "lcm.openshift.io_imagebasedgroupupgrades.yaml",
 		},
+		{
+			"repoName":    "hive",
+			"modulePath":  "github.com/openshift/hive/apis",
+			"crdPath":     "config/crds",
+			"owner":       "openshift",
+			"crdFileName": "hive.openshift.io_clusterimagesets.yaml",
+		},
 	}
 )

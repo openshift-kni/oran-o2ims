@@ -349,3 +349,13 @@ const (
 	CallbackStatusAnnotation                  = "callback.status"
 	CallbackNodeAllocationRequestIdAnnotation = "callback.nodeAllocationRequestId"
 )
+
+// ClusterTemplate annotation keys
+const (
+	// SkipClusterImageSetValidationAnnotation when set to "true" (case-insensitive),
+	// skips the validation that ensures the ClusterImageSet referenced in the
+	// ClusterInstanceDefaults matches the release version specified in the ClusterTemplate.
+	// This is useful in scenarios where the ClusterImageSet validation needs to be bypassed,
+	// such as during testing or when using custom image sets that don't follow standard naming.
+	SkipClusterImageSetValidationAnnotation = "clcm.openshift.io/skip-clusterimageset-validation"
+)
