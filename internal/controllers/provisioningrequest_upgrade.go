@@ -55,11 +55,10 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	case 1:
 		return true, nil
 	case -1:
-		return false, fmt.Errorf("template version (%v) is lower then ManagedCluster version (%v), no upgrade requested",
-			templateReleaseVersion, managedClusterVersion)
-	default:
-		return false, nil
+		t.logger.InfoContext(ctx, "Template version is lower than ManagedCluster version, no upgrade requested",
+			"templateVersion", templateReleaseVersion, "managedClusterVersion", managedClusterVersion)
 	}
+	return false, nil
 }
 
 // handleUpgrade handles the upgrade of the cluster through IBGU. It returns a ctrl.Result to indicate

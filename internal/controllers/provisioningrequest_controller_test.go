@@ -344,11 +344,10 @@ plan:
 				Expect(c.Update(ctx, managedCluster)).To(Succeed())
 			})
 
-			It("should return error", func() {
-				_, err := task.IsUpgradeRequested(ctx, clusterName)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("template version"))
-				Expect(err.Error()).To(ContainSubstring("is lower then ManagedCluster version"))
+			It("should return false with no error", func() {
+				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(upgradeRequested).To(BeFalse())
 			})
 		})
 
