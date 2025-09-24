@@ -572,10 +572,10 @@ defaultHugepagesSize: "1G"`,
 				if len(reconciledPR.Status.Conditions) < 4 {
 					return false
 				}
-				// Look for HardwareProvisioned condition with status Unknown (in progress)
+				// Look for HardwareProvisioned condition with status False (in progress)
 				for _, cond := range reconciledPR.Status.Conditions {
 					if cond.Type == string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned) &&
-						cond.Status == metav1.ConditionUnknown {
+						cond.Status == metav1.ConditionFalse {
 						return true
 					}
 				}
@@ -605,8 +605,8 @@ defaultHugepagesSize: "1G"`,
 			Expect(hwProvCondition).ToNot(BeNil())
 			testutils.VerifyStatusCondition(*hwProvCondition, metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
-				Status:  metav1.ConditionUnknown,
-				Reason:  string(metav1.ConditionUnknown),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "Hardware provisioning is in progress",
 			})
 			// Verify the provisioningState moves to progressing.

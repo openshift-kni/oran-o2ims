@@ -525,8 +525,10 @@ func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout(ctx
 	}
 
 	hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
-	if hwProvisionedCond == nil || hwProvisionedCond.Status != metav1.ConditionFalse ||
-		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) {
+	// Skip only on outcomes: succeeded, failed or timed-out
+	if hwProvisionedCond != nil && (hwProvisionedCond.Status == metav1.ConditionTrue ||
+		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
 		return ctrl.Result{}
 	}
 

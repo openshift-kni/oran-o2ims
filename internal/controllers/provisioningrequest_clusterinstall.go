@@ -374,8 +374,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstanceProcessedStatus
 		message := fmt.Sprintf("Waiting for ClusterInstance (%s) to be processed", ci.Name)
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed,
-			provisioningv1alpha1.CRconditionReasons.Unknown,
-			metav1.ConditionUnknown,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
+			metav1.ConditionFalse,
 			message,
 		)
 		ctlrutils.SetProvisioningStateInProgress(t.object, message)
@@ -422,8 +422,8 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 			message = "Waiting for cluster installation to start"
 			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
-				provisioningv1alpha1.CRconditionReasons.Unknown,
-				metav1.ConditionUnknown,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
+				metav1.ConditionFalse,
 				message,
 			)
 			ctlrutils.SetProvisioningStateInProgress(t.object, message)
