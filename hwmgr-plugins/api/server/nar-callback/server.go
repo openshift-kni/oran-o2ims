@@ -321,17 +321,6 @@ func (n *NodeAllocationRequestCallbackServer) ProvisioningRequestCallback(ctx co
 		}, nil
 	}
 
-	// Filter out InProgress status callbacks to prevent unnecessary reconciliations
-	if request.Body.Status == InProgress {
-		n.Logger.Debug("Filtering out InProgress callback - no reconciliation needed",
-			"provisioningRequestName", request.ProvisioningRequestName,
-			"nodeAllocationRequestId", request.Body.NodeAllocationRequestId,
-			"status", request.Body.Status)
-
-		// Return success but don't trigger reconciliation
-		return ProvisioningRequestCallback200Response{}, nil
-	}
-
 	// Get the ProvisioningRequest
 	var pr provisioningv1alpha1.ProvisioningRequest
 	if err := n.HubClient.Get(ctx, client.ObjectKey{Name: request.ProvisioningRequestName}, &pr); err != nil {
@@ -358,31 +347,47 @@ func (n *NodeAllocationRequestCallbackServer) ProvisioningRequestCallback(ctx co
 		}, nil
 	}
 
-	// Check if this is a duplicate callback with the same status
-	currentCallbackStatus := pr.Annotations[ctlrutils.CallbackStatusAnnotation]
-	if currentCallbackStatus == string(request.Body.Status) {
-		n.Logger.Debug("Filtering out duplicate callback with same status",
-			"provisioningRequestName", request.ProvisioningRequestName,
-			"nodeAllocationRequestId", request.Body.NodeAllocationRequestId,
-			"status", request.Body.Status,
-			"currentStatus", currentCallbackStatus)
+	// Dedupe on (status, NAR id) so InProgress is handled once per NAR and
+	// same-status updates for the same NAR don't retrigger reconciliation.
+	prevStatus := ""
+	prevNar := ""
+	if pr.Annotations != nil {
+		prevStatus = pr.Annotations[ctlrutils.CallbackStatusAnnotation]
+		prevNar = pr.Annotations[ctlrutils.CallbackNodeAllocationRequestIdAnnotation]
+	}
+	newStatus := string(request.Body.Status)
+	newNar := request.Body.NodeAllocationRequestId
 
+	if prevStatus == newStatus && prevNar == newNar {
+		n.Logger.Debug("Duplicate callback (same status & NAR) — ignoring",
+			"provisioningRequestName", request.ProvisioningRequestName,
+			"nodeAllocationRequestId", newNar,
+			"status", newStatus)
 		// Return success but don't trigger reconciliation
 		return ProvisioningRequestCallback200Response{}, nil
 	}
 
-	// Update annotation to trigger reconciliation only for meaningful changes
+	// Log when ProvisioningRequest receives a new NodeAllocationRequestID
+	if newNar != prevNar && newNar != "" {
+		n.Logger.Info("ProvisioningRequest received new NodeAllocationRequestID",
+			"provisioningRequestName", request.ProvisioningRequestName,
+			"nodeAllocationRequestId", newNar,
+			"status", newStatus)
+	}
+
+	// Update annotations to trigger reconciliation only for a meaningful change
 	if pr.Annotations == nil {
 		pr.Annotations = make(map[string]string)
 	}
 	pr.Annotations[ctlrutils.CallbackReceivedAnnotation] = fmt.Sprintf("%d", time.Now().Unix())
-	pr.Annotations[ctlrutils.CallbackStatusAnnotation] = string(request.Body.Status)
-	pr.Annotations[ctlrutils.CallbackNodeAllocationRequestIdAnnotation] = request.Body.NodeAllocationRequestId
+	pr.Annotations[ctlrutils.CallbackStatusAnnotation] = newStatus
+	pr.Annotations[ctlrutils.CallbackNodeAllocationRequestIdAnnotation] = newNar
 
 	if err := n.HubClient.Update(ctx, &pr); err != nil {
 		n.Logger.ErrorContext(ctx, "Failed to update ProvisioningRequest",
 			"provisioningRequestName", request.ProvisioningRequestName,
-			"nodeAllocationRequestId", request.Body.NodeAllocationRequestId,
+			"nodeAllocationRequestId", newNar,
+			"status", newStatus,
 			"error", err.Error())
 		detail := fmt.Sprintf("Failed to update ProvisioningRequest: %s", err.Error())
 		return ProvisioningRequestCallback500ApplicationProblemPlusJSONResponse{
@@ -394,9 +399,9 @@ func (n *NodeAllocationRequestCallbackServer) ProvisioningRequestCallback(ctx co
 
 	n.Logger.Info("Successfully processed meaningful callback",
 		"provisioningRequestName", request.ProvisioningRequestName,
-		"nodeAllocationRequestId", request.Body.NodeAllocationRequestId,
-		"status", request.Body.Status,
-		"previousStatus", currentCallbackStatus)
+		"nodeAllocationRequestId", newNar,
+		"status", newStatus,
+		"previousStatus", prevStatus)
 
 	return ProvisioningRequestCallback200Response{}, nil
 }
