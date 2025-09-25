@@ -128,6 +128,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
@@ -342,4 +343,5 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion, &assistedservicev1beta1.AgentList{})
 	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
 	utilruntime.Must(bmhv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(hivev1.AddToScheme(scheme))
 })
