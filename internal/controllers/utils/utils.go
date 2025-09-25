@@ -1166,24 +1166,22 @@ func IsValidURL(u string) bool {
 	return err == nil && parsed.Scheme != "" && parsed.Host != ""
 }
 
-// ClearPRCallbackAnnotations removes all PR callback annotations from a client.Object
-func ClearPRCallbackAnnotations(object client.Object) {
+// ClearPRCallbackReceivedAnnotation removes CallbackReceivedAnnotation from a client.Object
+func ClearPRCallbackReceivedAnnotation(object client.Object) {
 	annotations := object.GetAnnotations()
 	if annotations == nil {
 		return
 	}
 
-	// Remove all callback-related annotations
+	// Only clears CallbackReceivedAnnotation
 	delete(annotations, CallbackReceivedAnnotation)
-	delete(annotations, CallbackStatusAnnotation)
-	delete(annotations, CallbackNodeAllocationRequestIdAnnotation)
 
 	object.SetAnnotations(annotations)
 }
 
-// ClearPRCallbackAnnotationsWithPatch removes all PR callback annotations from a client.Object and patches it
+// ClearPRCallbackAnnotationsWithPatch removes CallbackReceivedAnnotation from a client.Object and patches it
 func ClearPRCallbackAnnotationsWithPatch(ctx context.Context, c client.Client, object client.Object) error {
-	ClearPRCallbackAnnotations(object)
+	ClearPRCallbackReceivedAnnotation(object)
 	if err := CreateK8sCR(ctx, c, object, nil, PATCH); err != nil {
 		return fmt.Errorf("failed to clear PR callback annotations from %T %s: %w", object, object.GetName(), err)
 	}
