@@ -88,11 +88,9 @@ spec:
                     type: string
                 type: object
               nicFirmware:
-                additionalProperties:
+                description: NIC firmware information list
+                items:
                   properties:
-                    slot:
-                      description: Slot is the NIC slot identifier
-                      type: string
                     url:
                       description: URL points to the NIC firmware file
                       type: string
@@ -100,8 +98,7 @@ spec:
                       description: Version is the NIC firmware version
                       type: string
                   type: object
-                description: NIC firmware information mapped by NIC identifier
-                type: object
+                type: array
             required:
             - bios
             type: object
