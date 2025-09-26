@@ -218,13 +218,7 @@ func (t *provisioningRequestReconcilerTask) executeProvisioningPhases(ctx contex
 		return nil, result, err
 	}
 
-	// Phase 3: Cluster resources
-	result, err = t.executeClusterResourcesPhase(ctx, renderedClusterInstance)
-	if err != nil {
-		return nil, result, err
-	}
-
-	// Phase 4: Cluster installation
+	// Phase 3: Cluster installation
 	result, err = t.executeClusterInstallationPhase(ctx, unstructuredClusterInstance)
 	if err != nil || result.Requeue || result.RequeueAfter > 0 {
 		return nil, result, err
@@ -297,24 +291,6 @@ func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx
 	}
 
 	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_provisioning", time.Since(phaseStartTime))
-	return ctrl.Result{}, nil
-}
-
-// executeClusterResourcesPhase handles cluster resources creation
-func (t *provisioningRequestReconcilerTask) executeClusterResourcesPhase(ctx context.Context,
-	renderedClusterInstance *siteconfig.ClusterInstance) (ctrl.Result, error) {
-
-	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "cluster_resources")
-	phaseStartTime := time.Now()
-
-	err := t.handleClusterResources(ctx, renderedClusterInstance)
-	if err != nil {
-		ctlrutils.LogError(ctx, t.logger, "Cluster resources phase failed", err)
-		result, _ := requeueWithError(err)
-		return result, err
-	}
-
-	ctlrutils.LogPhaseComplete(ctx, t.logger, "cluster_resources", time.Since(phaseStartTime))
 	return ctrl.Result{}, nil
 }
 
@@ -593,25 +569,22 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	}
 
 	// Handle the creation of resources required for cluster deployment
-	// Only create ClusterInstance resources if hardware provisioning is skipped
-	// For hardware provisioning scenarios, cluster resources are created after hardware completion
-	if t.isHardwareProvisionSkipped() {
-		err = t.handleClusterResources(ctx, renderedClusterInstance)
-		if err != nil {
-			if ctlrutils.IsInputError(err) {
-				_, err = t.checkClusterDeployConfigState(ctx)
-				if err != nil {
-					t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.String("error", err.Error()))
-					return nil, requeueWithMediumInterval(), err
-				}
-				// Requeue since we are not watching for updates to required resources
-				// if they are missing
-				return nil, requeueWithMediumInterval(), nil
+	err = t.handleClusterResources(ctx, renderedClusterInstance)
+	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Cluster resources creation failed", err)
+		if ctlrutils.IsInputError(err) {
+			_, err = t.checkClusterDeployConfigState(ctx)
+			if err != nil {
+				t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.String("error", err.Error()))
+				return nil, requeueWithMediumInterval(), err
 			}
-			// internal error that might recover - requeue to allow recovery
-			t.logger.WarnContext(ctx, "Internal cluster resources error, will retry", slog.String("error", err.Error()))
-			return nil, requeueWithMediumInterval(), err
+			// Requeue since we are not watching for updates to required resources
+			// if they are missing
+			return nil, requeueWithMediumInterval(), nil
 		}
+		// internal error that might recover - requeue to allow recovery
+		t.logger.WarnContext(ctx, "Internal cluster resources error, will retry", slog.String("error", err.Error()))
+		return nil, requeueWithMediumInterval(), err
 	}
 
 	return renderedClusterInstance, doNotRequeue(), nil
@@ -713,6 +686,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 			// skip hardware status checks and proceed to resource preparation status check
 			if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
 				// No NodeAllocationRequestRef means this is initial phase, skip hardware checks
+				t.logger.InfoContext(ctx, "NodeAllocationRequestRef is nil, skipping hardware status checks during initial phase")
 			} else {
 				// NodeAllocationRequestRef exists but getNodeAllocationRequestResponse failed,
 				// this indicates a real hardware plugin error
