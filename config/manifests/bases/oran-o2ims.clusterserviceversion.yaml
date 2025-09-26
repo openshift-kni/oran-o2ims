@@ -219,8 +219,8 @@ spec:
       kind: HardwareProfile
       name: hardwareprofiles.clcm.openshift.io
       resources:
-      - kind: Service
-        name: policy-engine-service
+      - kind: ConfigMap
+        name: ""
         version: v1
       specDescriptors:
       - description: Bios defines a set of bios attributes
