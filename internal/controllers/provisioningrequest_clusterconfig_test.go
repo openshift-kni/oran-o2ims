@@ -80,6 +80,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -124,6 +125,7 @@ var _ = Describe("policyManagement", func() {
 					Name:       tName,
 					Version:    tVersion,
 					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+					Release:    "4.15.0",
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
@@ -149,7 +151,7 @@ var _ = Describe("policyManagement", func() {
 				},
 				Data: map[string]string{
 					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-clusterImageSetNameRef: "4.15"
+clusterImageSetNameRef: "4.15.0"
 pullSecretRef:
   name: "pull-secret"
 templateRefs:
@@ -264,6 +266,15 @@ defaultHugepagesSize: "1G"`,
 				},
 				Spec: clusterv1.ManagedClusterSpec{
 					HubAcceptsClient: true,
+				},
+			},
+			// ClusterImageSet for the test
+			&hivev1.ClusterImageSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "4.15.0",
+				},
+				Spec: hivev1.ClusterImageSetSpec{
+					ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64",
 				},
 			},
 		}
@@ -2199,6 +2210,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					Name:       tName,
 					Version:    tVersion,
 					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
+					Release:    "4.15.0",
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
@@ -2219,6 +2231,15 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			provisioningRequest,
 			// Managed clusters
 			managedCluster,
+			// ClusterImageSet for the test
+			&hivev1.ClusterImageSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "4.15.0",
+				},
+				Spec: hivev1.ClusterImageSetSpec{
+					ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64",
+				},
+			},
 		}
 
 		c = getFakeClientFromObjects(crs...)

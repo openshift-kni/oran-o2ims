@@ -1522,6 +1522,14 @@ spec:
           - update
           - watch
         - apiGroups:
+          - hive.openshift.io
+          resources:
+          - clusterimagesets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - lcm.openshift.io
           resources:
           - imagebasedgroupupgrades

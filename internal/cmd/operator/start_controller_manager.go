@@ -42,6 +42,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/spf13/cobra"
 	observabilityv1beta1 "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -156,6 +157,7 @@ func init() {
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(observabilityv1beta1.AddToScheme(scheme))
+	utilruntime.Must(hivev1.AddToScheme(scheme))
 }
 
 // run executes the `start controller-manager` command.

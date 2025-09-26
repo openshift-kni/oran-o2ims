@@ -9,12 +9,15 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
 	"log/slog"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -82,6 +85,7 @@ func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=hive.openshift.io,resources=clusterimagesets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -222,6 +226,25 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 				t.object.Spec.Templates.ClusterInstanceDefaults, err)
 		}
 		validationErrs = append(validationErrs, err.Error())
+	}
+
+	// Validate that ClusterImageSet matches release version
+	skipValidationValue, hasSkipAnnotation := t.object.Annotations[ctlrutils.SkipClusterImageSetValidationAnnotation]
+	shouldSkipClusterImageSetValidation := hasSkipAnnotation && strings.EqualFold(skipValidationValue, "true")
+
+	if shouldSkipClusterImageSetValidation {
+		t.logger.InfoContext(ctx, "Skipping ClusterImageSet validation due to annotation",
+			slog.String("name", t.object.Name),
+			slog.String("annotation", ctlrutils.SkipClusterImageSetValidationAnnotation))
+	} else {
+		t.logger.InfoContext(ctx, "Validating ClusterImageSet", slog.String("name", t.object.Name))
+		err = t.validateClusterImageSetMatchesRelease(ctx)
+		if err != nil {
+			if !ctlrutils.IsInputError(err) {
+				return false, fmt.Errorf("failed to validate ClusterImageSet matches release: %w", err)
+			}
+			validationErrs = append(validationErrs, err.Error())
+		}
 	}
 
 	// Validation for the policy template defaults configmap.
@@ -708,4 +731,133 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 		}
 	}
 	return requests
+}
+
+// validateClusterImageSetMatchesRelease validates that the ClusterImageSet referenced in the
+// ClusterTemplate.spec.templates.clusterInstanceDefaults matches the release version specified
+// in the ClusterTemplate.spec.release
+func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ctx context.Context) error {
+
+	// Get the ClusterInstanceDefaults ConfigMap
+	clusterInstanceDefaultsCm, err := ctlrutils.GetConfigmap(
+		ctx, t.client, t.object.Spec.Templates.ClusterInstanceDefaults, t.object.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ClusterInstanceDefaults ConfigMap %s: %w",
+			t.object.Spec.Templates.ClusterInstanceDefaults, err)
+	}
+
+	// Extract the clusterinstance-defaults data from the ConfigMap
+	clusterInstanceData, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](
+		clusterInstanceDefaultsCm, ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey)
+	if err != nil {
+		return fmt.Errorf("failed to extract clusterinstance-defaults from ConfigMap %s: %w",
+			t.object.Spec.Templates.ClusterInstanceDefaults, err)
+	}
+
+	// Extract the clusterImageSetNameRef from the cluster instance data
+	clusterImageSetNameRef, exists := clusterInstanceData["clusterImageSetNameRef"]
+	if !exists {
+		return ctlrutils.NewInputError(
+			"clusterImageSetNameRef not found in ClusterInstanceDefaults ConfigMap %s",
+			t.object.Spec.Templates.ClusterInstanceDefaults)
+	}
+
+	clusterImageSetName, ok := clusterImageSetNameRef.(string)
+	if !ok {
+		return ctlrutils.NewInputError(
+			"clusterImageSetNameRef in ClusterInstanceDefaults ConfigMap %s is not a string: %T",
+			t.object.Spec.Templates.ClusterInstanceDefaults, clusterImageSetNameRef)
+	}
+
+	// Fetch the ClusterImageSet resource
+	clusterImageSet := &hivev1.ClusterImageSet{}
+	err = t.client.Get(ctx, client.ObjectKey{Name: clusterImageSetName}, clusterImageSet)
+	if err != nil {
+		return fmt.Errorf("failed to get ClusterImageSet %s: %w", clusterImageSetName, err)
+	}
+
+	// Extract the release image from the ClusterImageSet spec
+	releaseImage := clusterImageSet.Spec.ReleaseImage
+	if releaseImage == "" {
+		return fmt.Errorf("releaseImage not found in ClusterImageSet %s spec", clusterImageSetName)
+	}
+
+	// Extract version from the release image URL
+	// Release image URLs typically contain the version, e.g.,
+	// "quay.io/openshift-release-dev/ocp-release:4.17.0-x86_64"
+	imageVersion := extractVersionFromReleaseImage(releaseImage)
+	if imageVersion == "" {
+		return fmt.Errorf("could not extract version from ClusterImageSet %s release image: %s",
+			clusterImageSetName, releaseImage)
+	}
+
+	// Compare with the ClusterTemplate release version
+	expectedVersion := t.object.Spec.Release
+	if err := validateVersionsMatch(imageVersion, expectedVersion); err != nil {
+		return ctlrutils.NewInputError(
+			"ClusterImageSet %s version (%s) does not match ClusterTemplate release version (%s): %w",
+			clusterImageSetName, imageVersion, expectedVersion, err)
+	}
+
+	t.logger.InfoContext(ctx,
+		"ClusterImageSet version matches ClusterTemplate release",
+		slog.String("clusterImageSet", clusterImageSetName),
+		slog.String("imageVersion", imageVersion),
+		slog.String("expectedVersion", expectedVersion),
+	)
+
+	return nil
+}
+
+// extractVersionFromReleaseImage extracts the OpenShift version from a release image URL
+// Examples:
+//   - "quay.io/openshift-release-dev/ocp-release:4.17.0-x86_64" -> "4.17.0"
+//   - "registry.redhat.io/ubi8/ubi:4.16.1" -> "4.16.1"
+func extractVersionFromReleaseImage(releaseImage string) string {
+	// Split by ':' to get the tag part
+	parts := strings.Split(releaseImage, ":")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	tag := parts[len(parts)-1]
+
+	// Look for version pattern (X.Y.Z with optional pre-release) in the tag
+	// This regex matches semantic version patterns, excluding architecture suffixes
+	// Architecture patterns like -x86_64, -aarch64 are NOT part of semver
+	versionRegex := `(\d+\.\d+\.\d+(?:-(?:rc|alpha|beta)[0-9\.]*)*)`
+	matches := regexp.MustCompile(versionRegex).FindStringSubmatch(tag)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+
+	return ""
+}
+
+// validateVersionsMatch compares two version strings using semantic versioning
+// This function ensures both versions are valid semver and match exactly
+func validateVersionsMatch(imageVersion, templateVersion string) error {
+	// Normalize versions by removing 'v' prefix if present
+	normalizedImageVersion := strings.TrimPrefix(imageVersion, "v")
+	normalizedTemplateVersion := strings.TrimPrefix(templateVersion, "v")
+
+	// Parse the image version using semver
+	imageSemver, err := semver.NewVersion(normalizedImageVersion)
+	if err != nil {
+		return fmt.Errorf("failed to parse ClusterImageSet version '%s' as semver: %w", imageVersion, err)
+	}
+
+	// Parse the template version using semver
+	templateSemver, err := semver.NewVersion(normalizedTemplateVersion)
+	if err != nil {
+		return fmt.Errorf("failed to parse ClusterTemplate release version '%s' as semver: %w", templateVersion, err)
+	}
+
+	// Compare versions for exact match
+	if imageSemver.Compare(*templateSemver) != 0 {
+		return fmt.Errorf("versions do not match exactly: ClusterImageSet version %s != ClusterTemplate version %s",
+			imageSemver.String(), templateSemver.String())
+	}
+
+	return nil
 }

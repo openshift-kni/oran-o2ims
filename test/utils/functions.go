@@ -98,7 +98,13 @@ func VerifyProvisioningStatus(provStatus provisioningv1alpha1.ProvisioningStatus
 func GetExternalCrdFiles(destDir string) error {
 	for _, externalCrd := range ExternalCrdData {
 		// Get the commit sha from the go.mod of the IMS repo.
-		policyMod := externalCrd["modName"] + "/" + externalCrd["repoName"]
+		// Use modulePath if provided, otherwise construct from modName/repoName
+		var policyMod string
+		if modulePath, exists := externalCrd["modulePath"]; exists && modulePath != "" {
+			policyMod = modulePath
+		} else {
+			policyMod = externalCrd["modName"] + "/" + externalCrd["repoName"]
+		}
 		_, policyModPseudoVersionNew, err := GetModuleFromGoMod(policyMod)
 		if err != nil {
 			return fmt.Errorf("error getting module from go.mod: %w", err)
