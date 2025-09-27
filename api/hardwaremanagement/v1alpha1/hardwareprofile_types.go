@@ -70,7 +70,8 @@ type HardwareProfileStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Profile",resources={{Service,v1,policy-engine-service}}
+// +kubebuilder:validation:XValidation:message="HardwareProfile spec is immutable", rule="oldSelf.spec == self.spec"
+// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Profile",resources={{ConfigMap, v1}}
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=hardwareprofiles,scope=Namespaced
