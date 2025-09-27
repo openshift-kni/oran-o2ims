@@ -227,10 +227,8 @@ func (in *HardwareProfileSpec) DeepCopyInto(out *HardwareProfileSpec) {
 	out.BmcFirmware = in.BmcFirmware
 	if in.NicFirmware != nil {
 		in, out := &in.NicFirmware, &out.NicFirmware
-		*out = make(map[string]Nic, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
+		*out = make([]Nic, len(*in))
+		copy(*out, *in)
 	}
 }
 

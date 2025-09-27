@@ -844,14 +844,12 @@ var _ = Describe("Helpers", func() {
 						Version: "4.5.6",
 						URL:     "http://example.com/bmc.bin",
 					},
-					NicFirmware: map[string]hwmgmtv1alpha1.Nic{
-						"nic1": {
-							Slot:    "pci-0000:01:00.0",
+					NicFirmware: []hwmgmtv1alpha1.Nic{
+						{
 							Version: "7.8.9",
 							URL:     "http://example.com/nic1.bin",
 						},
-						"nic2": {
-							Slot:    "pci-0000:02:00.0",
+						{
 							Version: "10.11.12",
 							URL:     "http://example.com/nic2.bin",
 						},
@@ -1018,7 +1016,7 @@ var _ = Describe("Helpers", func() {
 
 			It("should return true when no NIC firmware is specified", func() {
 				// Update profile to have no NIC firmware
-				testHwProfile.Spec.NicFirmware = map[string]hwmgmtv1alpha1.Nic{}
+				testHwProfile.Spec.NicFirmware = []hwmgmtv1alpha1.Nic{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
@@ -1057,10 +1055,11 @@ var _ = Describe("Helpers", func() {
 
 			It("should skip NIC validation when NIC version is empty", func() {
 				// Update profile to have empty NIC version
-				testHwProfile.Spec.NicFirmware["nic1"] = hwmgmtv1alpha1.Nic{
-					Slot:    "pci-0000:01:00.0",
-					Version: "", // Empty version should be skipped
-					URL:     "http://example.com/nic1.bin",
+				testHwProfile.Spec.NicFirmware = []hwmgmtv1alpha1.Nic{
+					{
+						Version: "", // Empty version should be skipped
+						URL:     "http://example.com/nic1.bin",
+					},
 				}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 

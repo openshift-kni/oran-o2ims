@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -44,13 +45,13 @@ func validateFirmwareUpdateSpec(spec hwmgmtv1alpha1.HardwareProfileSpec) error {
 		}
 	}
 
-	for nicID, nic := range spec.NicFirmware {
+	for i, nic := range spec.NicFirmware {
 		if nic.Version != "" {
 			if nic.URL == "" {
-				return typederrors.NewInputError("missing NIC firmware URL for NIC %v, version: %v", nicID, nic.Version)
+				return typederrors.NewInputError("missing NIC firmware URL for NIC at index %v, version: %v", i, nic.Version)
 			}
 			if !ctlrutils.IsValidURL(nic.URL) {
-				return typederrors.NewInputError("invalid NIC firmware URL for NIC %v: %v", nicID, nic.URL)
+				return typederrors.NewInputError("invalid NIC firmware URL for NIC at index %v: %v", i, nic.URL)
 			}
 		}
 	}
@@ -75,14 +76,8 @@ func convertToFirmwareUpdates(spec hwmgmtv1alpha1.HardwareProfileSpec) []metal3v
 		})
 	}
 
-	for _, nic := range spec.NicFirmware {
-		if nic.URL != "" {
-			updates = append(updates, metal3v1alpha1.FirmwareUpdate{
-				Component: "nic:" + nic.Slot,
-				URL:       nic.URL,
-			})
-		}
-	}
+	// NIC firmware updates are handled by isVersionChangeDetected function
+	// since we need to match against actual HFC status components
 
 	return updates
 }
@@ -117,19 +112,10 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 		"bmc":  spec.BmcFirmware,
 	}
 
-	// Add NIC firmware to the map using nic:slot as the component identifier
-	for _, nic := range spec.NicFirmware {
-		if nic.Slot != "" && nic.Version != "" {
-			firmwareMap["nic:"+nic.Slot] = hwmgmtv1alpha1.Firmware{
-				Version: nic.Version,
-				URL:     nic.URL,
-			}
-		}
-	}
-
 	var updates []metal3v1alpha1.FirmwareUpdate
 	updateRequired := false
 
+	// Handle BIOS and BMC firmware
 	for _, component := range status.Components {
 		if fw, exists := firmwareMap[component.Component]; exists {
 			// Skip if firmware spec is empty
@@ -156,7 +142,49 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 					slog.Any("spec", spec),
 					slog.Any("hfc_status", status))
 			}
+		}
+	}
 
+	// Handle NIC firmware - match versions regardless of component name
+	usedComponents := make(map[string]bool)
+	for i, nic := range spec.NicFirmware {
+		if nic.Version == "" || nic.URL == "" {
+			continue // Skip if no version or URL specified
+		}
+
+		// Check if this version already exists in any nic: component
+		versionFound := false
+		for _, component := range status.Components {
+			if strings.HasPrefix(component.Component, "nic:") && component.CurrentVersion == nic.Version {
+				versionFound = true
+				usedComponents[component.Component] = true
+				logger.InfoContext(ctx, "NIC firmware version already matches",
+					slog.Int("nicIndex", i),
+					slog.String("version", nic.Version),
+					slog.String("component", component.Component))
+				break
+			}
+		}
+
+		if !versionFound {
+			// Find the first available NIC component that hasn't been used yet
+			for _, component := range status.Components {
+				if !strings.HasPrefix(component.Component, "nic:") || usedComponents[component.Component] {
+					continue
+				}
+				updates = append(updates, metal3v1alpha1.FirmwareUpdate{
+					Component: component.Component,
+					URL:       nic.URL,
+				})
+				usedComponents[component.Component] = true
+				logger.InfoContext(ctx, "Add NIC firmware update",
+					slog.Int("nicIndex", i),
+					slog.String("component", component.Component),
+					slog.String("url", nic.URL),
+					slog.String("targetVersion", nic.Version))
+				updateRequired = true
+				break
+			}
 		}
 	}
 
