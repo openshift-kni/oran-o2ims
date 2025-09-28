@@ -1106,45 +1106,33 @@ func validateAppliedBiosSettings(
 			return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
 
-		// Create a map of current firmware versions by component
-		currentVersions := make(map[string]string)
+		// Create a set of current NIC firmware versions from HFC status
+		nicVersions := make(map[string]bool)
 		for _, component := range hfc.Status.Components {
-			currentVersions[component.Component] = component.CurrentVersion
+			if strings.HasPrefix(component.Component, "nic:") && component.CurrentVersion != "" {
+				nicVersions[normalizeVersion(component.CurrentVersion)] = true
+			}
 		}
 
 		// Check each NIC firmware requirement
-		for nicID, nic := range prof.Spec.NicFirmware {
+		for i, nic := range prof.Spec.NicFirmware {
 			if nic.Version == "" {
 				continue // Skip if no version specified
 			}
 
-			nicComponent := "nic:" + nic.Slot
-			currentVersion, exists := currentVersions[nicComponent]
-			if !exists {
-				logger.InfoContext(ctx, "NIC firmware component not found in HFC status",
-					slog.String("nicID", nicID),
-					slog.String("component", nicComponent),
-					slog.String("slot", nic.Slot),
-					slog.String("bmh", bmh.Name))
-				return false, nil
-			}
-
-			if currentVersion != nic.Version {
-				logger.InfoContext(ctx, "NIC firmware version mismatch",
-					slog.String("nicID", nicID),
-					slog.String("component", nicComponent),
-					slog.String("slot", nic.Slot),
-					slog.String("current", currentVersion),
+			normalizedExpected := normalizeVersion(nic.Version)
+			if !nicVersions[normalizedExpected] {
+				logger.InfoContext(ctx, "NIC firmware version not found in any nic: component",
+					slog.Int("nicIndex", i),
 					slog.String("expected", nic.Version),
+					slog.String("normalizedExpected", normalizedExpected),
 					slog.String("bmh", bmh.Name))
 				return false, nil
 			}
 
 			logger.DebugContext(ctx, "NIC firmware version matches",
-				slog.String("nicID", nicID),
-				slog.String("component", nicComponent),
-				slog.String("slot", nic.Slot),
-				slog.String("version", currentVersion),
+				slog.Int("nicIndex", i),
+				slog.String("version", nic.Version),
 				slog.String("bmh", bmh.Name))
 		}
 
