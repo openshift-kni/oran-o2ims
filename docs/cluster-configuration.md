@@ -26,7 +26,8 @@ This should all be achieved through ArgoCD.
 
 ## Full DU profile
 
-For configuring an SNO with a full DU profile according to the [4.17 RAN RDS](https://docs.openshift.com/container-platform/4.17/scalability_and_performance/telco_ref_design_specs/ran/telco-ran-ref-du-crs.html), the following main samples can be used as a starting example:
+For configuring an SNO with a full DU profile according to the [4.19 RAN RDS](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/scalability_and_performance/telco-ran-du-ref-design-specs#telco-ran-du-reference-configuration-crs),
+the following main samples can be used as a starting example:
 
 * [ClusterInstance defaults ConfigMap](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/clusterinstance-defaults-full-du-v1.yaml)
 * [PolicyTemplate defaults ConfigMap](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/policytemplates-defaults-full-du-v1.yaml)
