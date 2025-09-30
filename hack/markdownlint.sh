@@ -20,4 +20,4 @@ EOF
     fi
 }
 
-markdownlint-cli2 '**/*.md' !'vendor/**/*.md' !'telco5g-konflux/**/*.md'
+markdownlint-cli2 '**/*.md' !'vendor/**/*.md' !'telco5g-konflux/**/*.md' !'bin/**/*.md'
