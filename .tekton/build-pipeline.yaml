@@ -4,22 +4,12 @@ metadata:
   name: build-pipeline
 spec:
   description: >
-    This pipeline is ideal for building multi-arch container images from a
-    Containerfile while maintaining trust after pipeline customization.
+    This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.
 
-    _Uses `buildah` to create a multi-platform container image leveraging
-    [trusted artifacts](https://konflux-ci.dev/architecture/ADR/0036-trusted-artifacts.html).
-    It also optionally creates a source image and runs some build-time tests.
-    This pipeline requires that the [multi platform
-    controller](https://github.com/konflux-ci/multi-platform-controller) is
-    deployed and configured on your Konflux instance. Information is shared
-    between tasks using OCI artifacts instead of PVCs. EC will pass the
-    [`trusted_task.trusted`](https://conforma.dev/docs/policy/packages/release_trusted_task.html#trusted_task__trusted)
-    policy as long as all data used to build the artifact is generated from
-    trusted tasks.
+    _Uses `buildah` to create a multi-platform container image leveraging [trusted artifacts](https://konflux-ci.dev/architecture/ADR/0036-trusted-artifacts.html). It also optionally creates a source image and runs some build-time tests. This pipeline requires that the [multi platform controller](https://github.com/konflux-ci/multi-platform-controller) is deployed and configured on your Konflux instance. Information is shared between tasks using OCI artifacts instead of PVCs. EC will pass the [`trusted_task.trusted`](https://conforma.dev/docs/policy/packages/release_trusted_task.html#trusted_task__trusted) policy as long as all data used to build the artifact is generated from trusted tasks.
 
-    This pipeline is pushed as a Tekton bundle to
-    [quay.io](https://quay.io/repository/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta?tab=tags)_
+    This pipeline is pushed as a Tekton bundle to [quay.io](https://quay.io/repository/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta?tab=tags)_
+
   finally:
     - name: show-sbom
       params:
@@ -48,14 +38,12 @@ spec:
       type: string
     - default: .
       description: >-
-        Path to the source code of an application's component from where to
-        build image.
+        Path to the source code of an application's component from where to build image.
       name: path-context
       type: string
     - default: Dockerfile
       description: >-
-        Path to the Dockerfile inside the context specified by parameter
-        path-context
+        Path to the Dockerfile inside the context specified by parameter path-context
       name: dockerfile
       type: string
     - default: 'false'
@@ -80,8 +68,7 @@ spec:
       type: string
     - default: ''
       description: >-
-        Image tag expiration time, time values could be something like 1h, 2d,
-        3w for hours, days, and weeks, respectively.
+        Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
       type: string
     - default: 'false'
@@ -98,8 +85,7 @@ spec:
       type: array
     - default: ''
       description: >-
-        Path to a file with build arguments for buildah, see
-        https://www.mankier.com/1/buildah-build#--build-arg-file
+        Path to a file with build arguments for buildah, see https://www.mankier.com/1/buildah-build#--build-arg-file
       name: build-args-file
       type: string
     - default: 'false'
@@ -109,9 +95,7 @@ spec:
     - default:
         - linux/x86_64
       description: >-
-        List of platforms to build the container images on. The available set of
-        values is determined by the configuration of the
-        multi-platform-controller.
+        List of platforms to build the container images on. The available set of values is determined by the configuration of the multi-platform-controller.
       name: build-platforms
       type: array
     - default: 'true'
@@ -122,6 +106,10 @@ spec:
       description: Additional tags to apply to the built container image
       name: additional-tags
       type: array
+    - name: buildah-format
+      default: docker
+      type: string
+      description: The format for the resulting image's mediaType. Valid values are oci or docker.
   results:
     - description: ''
       name: IMAGE_URL
@@ -150,7 +138,7 @@ spec:
             value: init
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:ec962d0be18f36ca7d331c99bf243800f569fc0a2ea6f8c8c3d3a574b71c44dc
+              quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:526a104a3342e36dad5c5e7f98c647da6b2a33897e458f772ff4afe523e0690a
           - name: kind
             value: task
         resolver: bundles
@@ -222,7 +210,7 @@ spec:
             value: prefetch-dependencies-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.2@sha256:098322d6b789824f716f2d9caca1862d4afdc083ebaaee61aadd22a8c179480a
+              quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.2@sha256:dc82a7270aace9b1c26f7e96f8ccab2752e53d32980c41a45e1733baad76cde6
           - name: kind
             value: task
         resolver: bundles
@@ -280,6 +268,8 @@ spec:
             - io.openshift.tags=o-cloud-manager
             - summary=o-cloud-manager
             - 'maintainer=sskeard@redhat.com,rauherna@redhat.com'
+        - name: BUILDAH_FORMAT
+          value: $(params.buildah-format)
       runAfter:
         - prefetch-dependencies
       taskRef:
@@ -288,7 +278,7 @@ spec:
             value: buildah-remote-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.5@sha256:17a0b093c9e9d21e9e374c60a88eb293a0fa57e4e2b67baf20ccac9735aa20ff
+              quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.5@sha256:650b0bca57c626c1e82f35cdfadf44a7792230b2b992aaa9c369d615aae6590d
           - name: kind
             value: task
         resolver: bundles
@@ -310,6 +300,8 @@ spec:
         - name: IMAGES
           value:
             - '$(tasks.build-images.results.IMAGE_REF[*])'
+        - name: BUILDAH_FORMAT
+          value: $(params.buildah-format)
       runAfter:
         - build-images
       taskRef:
@@ -318,7 +310,7 @@ spec:
             value: build-image-index
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.1@sha256:8e5dfb2fac011148f8715bbe0b99415f88297683d269eae0dfcad52562195d45
+              quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.1@sha256:79784d53749584bc5a8de32142ec4e2f01cdbf42c20d94e59280e0b927c8597d
           - name: kind
             value: task
         resolver: bundles
@@ -372,7 +364,7 @@ spec:
             value: deprecated-image-check
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-deprecated-image-check:0.5@sha256:2c32152a55f6bfba67b41be456da46b6e109bb3e348e25220eed4eed149958c5
+              quay.io/konflux-ci/tekton-catalog/task-deprecated-image-check:0.5@sha256:f59175d9a0a60411738228dfe568af4684af4aa5e7e05c832927cb917801d489
           - name: kind
             value: task
         resolver: bundles
