@@ -518,7 +518,11 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 	return status, reason, message, timedOutOrFailed
 }
 
-// updateHardwareStatus updates the hardware status for the ProvisioningRequest
+// updateHardwareStatus updates the hardware status for the ProvisioningRequest.
+// Returns:
+//   - status (bool): true if the hardware condition is completed successfully (ConditionTrue)
+//   - timedOutOrFailed (bool): true if the hardware has timed out or failed
+//   - error: any error that occurred during status processing
 func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequestResponse,
@@ -576,10 +580,21 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		conditionType = provisioningv1alpha1.PRconditionTypes.HardwareConfigured
 	}
 
+	// Map hardware-specific reasons to provisioning request reasons
+	provisioningReason := ctlrutils.MapHardwareReasonToProvisioningReason(reason)
+
+	// Handle unknown reasons with warning (only if Unknown was returned)
+	if provisioningReason == provisioningv1alpha1.CRconditionReasons.Unknown {
+		t.logger.WarnContext(ctx, "Unknown hardware condition reason encountered",
+			slog.String("hardwareReason", reason),
+			slog.String("conditionType", string(condition)),
+			slog.String("status", string(status)))
+	}
+
 	// Set the status condition for hardware status.
 	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 		conditionType,
-		provisioningv1alpha1.ConditionReason(reason),
+		provisioningReason,
 		status,
 		message)
 	t.logger.InfoContext(ctx, fmt.Sprintf("NodeAllocationRequest (%s) %s status: %s",
