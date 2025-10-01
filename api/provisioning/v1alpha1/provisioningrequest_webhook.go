@@ -157,26 +157,41 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 			"failed to extract matching input for subSchema %s: %w", TemplateParamClusterInstance, err)
 	}
 
-	allowedFields := [][]string{}
-	if crProvisionedCond.Reason == string(CRconditionReasons.Completed) {
-		allowedFields = AllowedClusterInstanceFields
-	}
-	disallowedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-		oldPrClusterInstanceInput.(map[string]any), newPrClusterInstanceInput.(map[string]any), [][]string{}, allowedFields)
-	if err != nil {
-		return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", newPr.Name, err)
-	}
+	var disallowedFields, scalingNodes []string
 
-	if len(disallowedFields) > 0 && crProvisionedCond.Reason == string(CRconditionReasons.Completed) {
-		return fmt.Errorf("only \"%s\" and/or \"%s\" changes in spec.TemplateParameters.ClusterInstanceParameters "+
-			"are allowed after cluster installation is completed, detected changes in immutable fields: %s",
-			AllowedClusterInstanceFields[0], AllowedClusterInstanceFields[1], strings.Join(disallowedFields, ", "))
-	}
+	// State-based validation with explicit logic
+	if crProvisionedCond.Reason == string(CRconditionReasons.InProgress) {
+		// Block all changes during active cluster installation
+		// This includes field updates and node scaling to prevent interference with ongoing installation
+		disallowedFields, scalingNodes, err = FindClusterInstanceImmutableFieldUpdates(
+			oldPrClusterInstanceInput.(map[string]any), newPrClusterInstanceInput.(map[string]any), [][]string{}, [][]string{})
+		if err != nil {
+			return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", newPr.Name, err)
+		}
 
-	disallowedFields = append(disallowedFields, scalingNodes...)
-	if len(disallowedFields) > 0 && crProvisionedCond.Reason == string(CRconditionReasons.InProgress) {
-		return fmt.Errorf("updates to spec.TemplateParameters.ClusterInstanceParameters are "+
-			"disallowed during cluster installation, detected changes in fields: %s", strings.Join(disallowedFields, ", "))
+		// Combine field updates and node scaling for rejection
+		disallowedFields = append(disallowedFields, scalingNodes...)
+		if len(disallowedFields) > 0 {
+			return fmt.Errorf("updates to spec.TemplateParameters.ClusterInstanceParameters are "+
+				"disallowed during cluster installation, detected changes in fields: %s", strings.Join(disallowedFields, ", "))
+		}
+
+	} else if crProvisionedCond.Reason == string(CRconditionReasons.Completed) {
+		// Allow specific fields and node scaling after installation completes
+		// This enables Day 2 operations like annotation/label updates and cluster scaling
+		disallowedFields, _, err = FindClusterInstanceImmutableFieldUpdates(
+			oldPrClusterInstanceInput.(map[string]any), newPrClusterInstanceInput.(map[string]any),
+			[][]string{}, AllowedClusterInstanceFields)
+		if err != nil {
+			return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", newPr.Name, err)
+		}
+
+		// Only reject disallowed field changes; node scaling is explicitly allowed
+		if len(disallowedFields) > 0 {
+			return fmt.Errorf("only \"%s\" and/or \"%s\" changes in spec.TemplateParameters.ClusterInstanceParameters "+
+				"are allowed after cluster installation is completed, detected changes in immutable fields: %s",
+				AllowedClusterInstanceFields[0], AllowedClusterInstanceFields[1], strings.Join(disallowedFields, ", "))
+		}
 	}
 
 	return nil
