@@ -1001,6 +1001,10 @@ func (t *provisioningRequestReconcilerTask) canSkipClusterInstanceRendering(ctx 
 		return nil, false
 	}
 
+	// Prepare the existing ClusterInstance for Server-Side Apply by clearing metadata
+	// that must not be present in SSA requests
+	ctlrutils.PrepareClusterInstanceForServerSideApply(existingCI)
+
 	return existingCI, true
 }
 
