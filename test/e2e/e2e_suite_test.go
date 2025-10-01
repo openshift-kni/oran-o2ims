@@ -44,6 +44,7 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 )
 
 const testHwMgrPluginNameSpace = "hwmgr"
@@ -114,6 +115,8 @@ var _ = BeforeSuite(func() {
 	err = clusterv1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = pluginsv1alpha1.AddToScheme(testScheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = hivev1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Get the needed external CRDs. Their details are under test/utils/vars.go - ExternalCrdsData.
@@ -289,7 +292,7 @@ var _ = Describe("Dry-run-ProvisioningRequestReconcile", func() {
 			Data: map[string]string{
 				ctlrutils.ClusterInstallationTimeoutConfigKey: "60s",
 				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-clusterImageSetNameRef: "4.15"
+clusterImageSetNameRef: "4.15.0"
 holdInstallation: false
 cpuPartitioningMode: AllNodes
 networkType: OVNKubernetes
@@ -323,7 +326,7 @@ nodes:
 			Data: map[string]string{
 				ctlrutils.ClusterInstallationTimeoutConfigKey: "60s",
 				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-clusterImageSetNameRef: "4.15"
+clusterImageSetNameRef: "4.15.0"
 holdInstallation: false
 cpuPartitioningMode: AllNodes
 networkType: OVNKubernetes
@@ -403,6 +406,15 @@ defaultHugepagesSize: "1G"`,
 			},
 			Type: corev1.SecretTypeDockerConfigJson,
 		},
+		// ClusterImageSet for e2e tests
+		&hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "4.15.0",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64",
+			},
+		},
 	}
 	// Define the cluster templates.
 	ctIncomplete = &provisioningv1alpha1.ClusterTemplate{
@@ -413,6 +425,7 @@ defaultHugepagesSize: "1G"`,
 		Spec: provisioningv1alpha1.ClusterTemplateSpec{
 			Name:       tName,
 			Version:    tVersion1,
+			Release:    "4.15.0",
 			TemplateID: "aab39bda-ac56-4143-9b10-d1a71517d04f",
 			Templates: provisioningv1alpha1.Templates{
 				ClusterInstanceDefaults: ciDefaultsCmIncomplete,
@@ -430,6 +443,7 @@ defaultHugepagesSize: "1G"`,
 		Spec: provisioningv1alpha1.ClusterTemplateSpec{
 			Name:       tName,
 			Version:    tVersion2,
+			Release:    "4.15.0",
 			TemplateID: "bbb39bda-ac56-4143-9b10-d1a71517d04f",
 			Templates: provisioningv1alpha1.Templates{
 				ClusterInstanceDefaults: ciDefaultsCmComplete,
@@ -481,7 +495,9 @@ defaultHugepagesSize: "1G"`,
 		for _, cr := range ctCRs {
 			crCopy := cr.DeepCopyObject().(client.Object)
 			err := K8SClient.Create(testCtx, crCopy)
-			Expect(err).ToNot(HaveOccurred())
+			if err != nil && !errors.IsAlreadyExists(err) {
+				Expect(err).ToNot(HaveOccurred())
+			}
 		}
 
 		Eventually(func() bool {
@@ -572,10 +588,10 @@ defaultHugepagesSize: "1G"`,
 				if len(reconciledPR.Status.Conditions) < 4 {
 					return false
 				}
-				// Look for HardwareProvisioned condition with status Unknown (in progress)
+				// Look for HardwareProvisioned condition with status False (in progress)
 				for _, cond := range reconciledPR.Status.Conditions {
 					if cond.Type == string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned) &&
-						cond.Status == metav1.ConditionUnknown {
+						cond.Status == metav1.ConditionFalse {
 						return true
 					}
 				}
@@ -605,8 +621,8 @@ defaultHugepagesSize: "1G"`,
 			Expect(hwProvCondition).ToNot(BeNil())
 			testutils.VerifyStatusCondition(*hwProvCondition, metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
-				Status:  metav1.ConditionUnknown,
-				Reason:  string(metav1.ConditionUnknown),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				Message: "Hardware provisioning is in progress",
 			})
 			// Verify the provisioningState moves to progressing.

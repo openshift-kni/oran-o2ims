@@ -26,8 +26,6 @@ type Firmware struct {
 }
 
 type Nic struct {
-	// Slot is the NIC slot identifier
-	Slot string `json:"slot,omitempty"`
 	// Version is the NIC firmware version
 	Version string `json:"version,omitempty"`
 	// URL points to the NIC firmware file
@@ -50,9 +48,9 @@ type HardwareProfileSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BMC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	BmcFirmware Firmware `json:"bmcFirmware,omitempty"`
 
-	// NIC firmware information mapped by NIC identifier
+	// NIC firmware information list
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="NIC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	NicFirmware map[string]Nic `json:"nicFirmware,omitempty"`
+	NicFirmware []Nic `json:"nicFirmware,omitempty"`
 }
 
 // HardwareProfileStatus defines the observed state of HardwareProfile
@@ -70,7 +68,8 @@ type HardwareProfileStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Profile",resources={{Service,v1,policy-engine-service}}
+// +kubebuilder:validation:XValidation:message="HardwareProfile spec is immutable", rule="oldSelf.spec == self.spec"
+// +operator-sdk:csv:customresourcedefinitions:displayName="Hardware Profile",resources={{ConfigMap, v1}}
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=hardwareprofiles,scope=Namespaced

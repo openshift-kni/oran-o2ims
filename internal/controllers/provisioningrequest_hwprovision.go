@@ -132,11 +132,22 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 	// Clear callback annotations after hardware processing to prevent false callback detection
 	// This ensures future reconciliations aren't incorrectly treated as callback-triggered
 	// If no annotations exist, this does nothing
-	ctlrutils.ClearPRCallbackAnnotations(t.object)
-	if err == nil {
-		t.logger.InfoContext(ctx, "Cleared PR callback annotations after successful hardware processing")
-	} else {
-		t.logger.InfoContext(ctx, "Cleared PR callback annotations after hardware processing completed with error")
+	annotations := t.object.GetAnnotations()
+	hasCallbackAnnotations := annotations != nil && annotations[ctlrutils.CallbackReceivedAnnotation] != ""
+
+	if hasCallbackAnnotations {
+		t.logger.InfoContext(ctx, "Clearing PR callback annotations after hardware processing",
+			"callbackReceived", annotations[ctlrutils.CallbackReceivedAnnotation],
+			"callbackStatus", annotations[ctlrutils.CallbackStatusAnnotation],
+			"narId", annotations[ctlrutils.CallbackNodeAllocationRequestIdAnnotation],
+			"hadError", err != nil)
+
+		// Clear annotations and persist to cluster to prevent false callback detection on next reconciliation
+		if clearErr := ctlrutils.ClearPRCallbackAnnotationsWithPatch(ctx, t.client, t.object); clearErr != nil {
+			t.logger.WarnContext(ctx, "Failed to clear PR callback annotations", "error", clearErr.Error())
+		} else {
+			t.logger.InfoContext(ctx, "Successfully cleared PR callback annotations")
+		}
 	}
 
 	return provisioned, configured, timedOutOrFailed, err
@@ -246,10 +257,8 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	// Only update hardware status on callback notifications or initial setup
 	// This eliminates the read-after-write race condition
 	if t.shouldUpdateHardwareStatus(condition) {
-		isCallbackTriggered := t.isCallbackTriggeredReconciliation()
 		t.logger.InfoContext(ctx, "Updating hardware status",
-			slog.String("condition", string(condition)),
-			slog.Bool("callbackTriggered", isCallbackTriggered))
+			slog.String("condition", string(condition)))
 
 		// Update the provisioning request Status with status from the NodeAllocationRequest object.
 		status, timedOutOrFailed, err = t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
@@ -509,7 +518,11 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 	return status, reason, message, timedOutOrFailed
 }
 
-// updateHardwareStatus updates the hardware status for the ProvisioningRequest
+// updateHardwareStatus updates the hardware status for the ProvisioningRequest.
+// Returns:
+//   - status (bool): true if the hardware condition is completed successfully (ConditionTrue)
+//   - timedOutOrFailed (bool): true if the hardware has timed out or failed
+//   - error: any error that occurred during status processing
 func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequestResponse,
@@ -545,8 +558,8 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 
 	if hwCondition == nil || waitingForConfigStart {
 		// Condition does not exist
-		status = metav1.ConditionUnknown
-		reason = string(provisioningv1alpha1.CRconditionReasons.Unknown)
+		status = metav1.ConditionFalse
+		reason = string(provisioningv1alpha1.CRconditionReasons.InProgress)
 		message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
 
 		if condition == hwmgmtv1alpha1.Configured {
@@ -567,10 +580,21 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		conditionType = provisioningv1alpha1.PRconditionTypes.HardwareConfigured
 	}
 
+	// Map hardware-specific reasons to provisioning request reasons
+	provisioningReason := ctlrutils.MapHardwareReasonToProvisioningReason(reason)
+
+	// Handle unknown reasons with warning (only if Unknown was returned)
+	if provisioningReason == provisioningv1alpha1.CRconditionReasons.Unknown {
+		t.logger.WarnContext(ctx, "Unknown hardware condition reason encountered",
+			slog.String("hardwareReason", reason),
+			slog.String("conditionType", string(condition)),
+			slog.String("status", string(status)))
+	}
+
 	// Set the status condition for hardware status.
 	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 		conditionType,
-		provisioningv1alpha1.ConditionReason(reason),
+		provisioningReason,
 		status,
 		message)
 	t.logger.InfoContext(ctx, fmt.Sprintf("NodeAllocationRequest (%s) %s status: %s",
@@ -608,7 +632,6 @@ func (t *provisioningRequestReconcilerTask) isCallbackTriggeredReconciliation() 
 	}
 
 	return true
-
 }
 
 // shouldUpdateHardwareStatus determines if we should update hardware status based on callback or timeout

@@ -533,3 +533,36 @@ func GetBMHNamespace(node *pluginsv1alpha1.AllocatedNode) string {
 	}
 	return node.Spec.HwMgrNodeNs
 }
+
+// MapHardwareReasonToProvisioningReason converts hardware management condition reasons
+// to provisioning request condition reasons with explicit semantic mapping
+func MapHardwareReasonToProvisioningReason(hardwareReason string) provisioningv1alpha1.ConditionReason {
+	switch hardwareReason {
+	case string(hwmgmtv1alpha1.Failed):
+		return provisioningv1alpha1.CRconditionReasons.Failed
+	case string(hwmgmtv1alpha1.TimedOut):
+		return provisioningv1alpha1.CRconditionReasons.TimedOut
+	case string(hwmgmtv1alpha1.InProgress):
+		return provisioningv1alpha1.CRconditionReasons.InProgress
+	case string(hwmgmtv1alpha1.Completed):
+		return provisioningv1alpha1.CRconditionReasons.Completed
+	case string(hwmgmtv1alpha1.InvalidInput):
+		// Hardware InvalidUserInput maps to provisioning Failed
+		return provisioningv1alpha1.CRconditionReasons.Failed
+	case string(hwmgmtv1alpha1.Unprovisioned):
+		// Unexpected unprovisioned state is a failure
+		return provisioningv1alpha1.CRconditionReasons.Failed
+	case string(hwmgmtv1alpha1.NotInitialized):
+		// Initialization failure is a failure
+		return provisioningv1alpha1.CRconditionReasons.Failed
+	case string(hwmgmtv1alpha1.ConfigUpdate):
+		// Configuration update request is in progress
+		return provisioningv1alpha1.CRconditionReasons.InProgress
+	case string(hwmgmtv1alpha1.ConfigApplied):
+		// Configuration applied successfully
+		return provisioningv1alpha1.CRconditionReasons.Completed
+	default:
+		// For unknown hardware reasons, use Unknown
+		return provisioningv1alpha1.CRconditionReasons.Unknown
+	}
+}

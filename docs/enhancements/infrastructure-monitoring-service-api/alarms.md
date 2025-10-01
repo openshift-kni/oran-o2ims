@@ -30,10 +30,10 @@ superseded-by:
 
 ## Table of Contents
 
-- [Summary](#Summary)
-- [Goals](#Goals)
-- [Key O-RAN data structures](#key-O-RAN-data-structures)
-- [InfrastructureMonitoring Service API](#Infrastructure-Monitoring-Service-Alarms-API)
+- [Summary](#summary)
+- [Goals](#goals)
+- [Key O-RAN data structures](#key-o-ran-data-structures)
+- [InfrastructureMonitoring Service API](#infrastructure-monitoring-service-alarms-api)
 - [Database schema](#schema)
 - [Init behaviour](#init)
   - [Detailed Steps](#detailed-server-instantiation)
@@ -294,7 +294,7 @@ oc -n open-cluster-management-observability create secret generic alertmanager-c
    - Database interaction is further explained [here](#notification-tracking)
 4. Move all the `status: resolved` rows from `alarm_event_record` to `alarm_event_record_archive`
 
-Eventually data in `alarm_event_record_archive` will be cleared (hardcoded to 24hr) as seen [here](#daily-archive-cleanup-)
+Eventually data in `alarm_event_record_archive` will be cleared (hardcoded to 24hr) as seen [here](#daily-archive-cleanup)
 
 ## Alertmanager Example payload
 

@@ -55,7 +55,7 @@ Core Reconciliation:
 - IsUpgradeRequested: Version comparison and upgrade decision logic
 - GetIBGUFromUpgradeDefaultsConfigmap: IBGU creation from ConfigMap data
 - Policy Labels and Selectors: Policy filtering and management
-- checkResourcePreparationStatus: Resource readiness validation
+- checkProvisioningConditionsForFailures: Resource readiness validation
 - handleProvisioningRequestDeletion: Cleanup of provisioned resources
 - handlePreProvisioning: Pre-deployment validation and preparation
 - handleNodeAllocationRequestProvisioning: Hardware allocation workflow
@@ -319,8 +319,9 @@ plan:
 
 		Context("when template version is higher than cluster version", func() {
 			It("should return true", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeTrue())
 			})
 		})
@@ -332,8 +333,9 @@ plan:
 			})
 
 			It("should return false", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeFalse())
 			})
 		})
@@ -345,8 +347,10 @@ plan:
 			})
 
 			It("should return false with no error", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				Expect(result).To(BeZero())
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeFalse())
 			})
 		})
@@ -358,8 +362,23 @@ plan:
 			})
 
 			It("should return false", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
+				Expect(upgradeRequested).To(BeFalse())
+			})
+		})
+
+		Context("when ManagedCluster does not have openshiftVersion label", func() {
+			BeforeEach(func() {
+				delete(managedCluster.Labels, "openshiftVersion")
+				Expect(c.Update(ctx, managedCluster)).To(Succeed())
+			})
+
+			It("should return false with requeue requested", func() {
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 				Expect(upgradeRequested).To(BeFalse())
 			})
 		})
@@ -471,7 +490,7 @@ plan:
 		})
 	})
 
-	Describe("checkResourcePreparationStatus", func() {
+	Describe("checkProvisioningConditionsForFailures", func() {
 		var testTask *provisioningRequestReconcilerTask
 
 		BeforeEach(func() {
@@ -525,7 +544,7 @@ plan:
 			})
 
 			It("should not set provisioning state to failed", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify provisioning state is not failed
@@ -554,7 +573,7 @@ plan:
 			})
 
 			It("should not set provisioning state to failed when conditions are missing", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify provisioning state is not failed (missing conditions are not treated as failures)
@@ -583,7 +602,7 @@ plan:
 			})
 
 			It("should set provisioning state to failed with validation error message", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify provisioning state is set to failed
@@ -613,7 +632,7 @@ plan:
 			})
 
 			It("should set provisioning state to failed with rendering error message", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify provisioning state is set to failed
@@ -649,7 +668,7 @@ plan:
 			})
 
 			It("should set provisioning state to failed with resource creation error message", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify provisioning state is set to failed
@@ -691,7 +710,7 @@ plan:
 			})
 
 			It("should set provisioning state to failed with hardware template error message", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify provisioning state is set to failed
@@ -729,7 +748,7 @@ plan:
 			})
 
 			It("should set provisioning state to failed with the first failed condition's message", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify provisioning state is set to failed with the first error message
@@ -770,7 +789,7 @@ plan:
 			})
 
 			It("should set provisioning state to failed based on the first false condition encountered", func() {
-				err := testTask.checkResourcePreparationStatus(ctx)
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Should fail on ClusterResourcesCreated since it's the first false condition in the iteration order
@@ -780,6 +799,110 @@ plan:
 
 				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
 				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Resource creation failed"))
+			})
+		})
+
+		Context("when HardwareConfigured condition has failed", func() {
+			BeforeEach(func() {
+				// Simulate Day 2 BIOS configuration failure scenario
+				// Set the ProvisioningRequest to a progressing state first
+				testTask.object.Status.ProvisioningStatus = provisioningv1alpha1.ProvisioningStatus{
+					ProvisioningPhase:   provisioningv1alpha1.StateProgressing,
+					ProvisioningDetails: "Hardware configuring is in progress",
+				}
+				testTask.object.Status.ObservedGeneration = 3
+
+				// Set HardwareConfigured condition to False with Failed reason
+				// This simulates the scenario where InvalidUserInput from hardware layer
+				// should be mapped to Failed in provisioning layer
+				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.Failed,
+					metav1.ConditionFalse,
+					"Hardware configuring failed due to invalid BIOS configuration parameters")
+
+				// Update the CR in the client
+				Expect(c.Status().Update(ctx, testTask.object)).To(Succeed())
+			})
+
+			It("should propagate hardware configuration failure to provisioning state", func() {
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify the provisioning state is set to failed
+				updatedCR := &provisioningv1alpha1.ProvisioningRequest{}
+				err = c.Get(ctx, types.NamespacedName{Name: testTask.object.Name, Namespace: testTask.object.Namespace}, updatedCR)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
+				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware configuring failed due to invalid BIOS configuration parameters"))
+			})
+		})
+
+		Context("when HardwareConfigured condition has timed out", func() {
+			BeforeEach(func() {
+				// Simulate hardware configuration timeout scenario
+				testTask.object.Status.ProvisioningStatus = provisioningv1alpha1.ProvisioningStatus{
+					ProvisioningPhase:   provisioningv1alpha1.StateProgressing,
+					ProvisioningDetails: "Hardware configuring is in progress",
+				}
+
+				// Set HardwareConfigured condition to False with TimedOut reason
+				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Hardware configuration timed out")
+
+				// Update the CR in the client
+				Expect(c.Status().Update(ctx, testTask.object)).To(Succeed())
+			})
+
+			It("should propagate hardware configuration timeout to provisioning state", func() {
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify the provisioning state is set to failed due to timeout
+				updatedCR := &provisioningv1alpha1.ProvisioningRequest{}
+				err = c.Get(ctx, types.NamespacedName{Name: testTask.object.Name, Namespace: testTask.object.Namespace}, updatedCR)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
+				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware configuration timed out"))
+			})
+		})
+
+		Context("when HardwareConfigured condition is False but still in progress", func() {
+			BeforeEach(func() {
+				// Simulate hardware configuration still in progress
+				testTask.object.Status.ProvisioningStatus = provisioningv1alpha1.ProvisioningStatus{
+					ProvisioningPhase:   provisioningv1alpha1.StateProgressing,
+					ProvisioningDetails: "Hardware configuring is in progress",
+				}
+
+				// Set HardwareConfigured condition to False with InProgress reason
+				// This should NOT trigger a failure state
+				utils.SetStatusCondition(&testTask.object.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.InProgress,
+					metav1.ConditionFalse,
+					"Hardware configuring is in progress")
+
+				// Update the CR in the client
+				Expect(c.Status().Update(ctx, testTask.object)).To(Succeed())
+			})
+
+			It("should not set provisioning state to failed for in-progress hardware configuration", func() {
+				err := testTask.checkProvisioningConditionsForFailures(ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify the provisioning state remains progressing (not failed)
+				updatedCR := &provisioningv1alpha1.ProvisioningRequest{}
+				err = c.Get(ctx, types.NamespacedName{Name: testTask.object.Name, Namespace: testTask.object.Namespace}, updatedCR)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Should remain in progressing state since InProgress is not a failure
+				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateProgressing))
 			})
 		})
 	})
@@ -3502,8 +3625,9 @@ plan:
 			Context("when ZTP is done and upgrade is requested", func() {
 				It("should initiate upgrade flow", func() {
 					// The main reconciliation should detect upgrade is needed and initiate it
-					shouldUpgrade, err := integrationTask.IsUpgradeRequested(ctx, "integration-cluster")
+					shouldUpgrade, result, err := integrationTask.IsUpgradeRequested(ctx, "integration-cluster")
 					Expect(err).ToNot(HaveOccurred())
+					Expect(result).To(BeZero())
 					Expect(shouldUpgrade).To(BeTrue())
 
 					// Simulate calling handleUpgrade from main flow
@@ -4184,10 +4308,10 @@ plan:
 			})
 
 			Context("when ClusterDetails is nil", func() {
-				It("should call checkResourcePreparationStatus and return requeueWithMediumInterval", func() {
+				It("should call checkProvisioningConditionsForFailures and return requeueWithMediumInterval", func() {
 					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
-					// Should call checkResourcePreparationStatus and return requeueWithMediumInterval for monitoring
+					// Should call checkProvisioningConditionsForFailures and return requeueWithMediumInterval for monitoring
 					if err == nil {
 						Expect(result).To(Equal(requeueWithMediumInterval()))
 					} else {
@@ -4197,7 +4321,7 @@ plan:
 				})
 			})
 
-			Context("when checkResourcePreparationStatus returns error", func() {
+			Context("when checkProvisioningConditionsForFailures returns error", func() {
 				It("should handle resource preparation status check appropriately", func() {
 					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
@@ -4333,7 +4457,7 @@ plan:
 				Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 			})
 
-			Context("when checkResourcePreparationStatus returns error", func() {
+			Context("when checkProvisioningConditionsForFailures returns error", func() {
 				It("should handle final resource preparation check appropriately", func() {
 					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
@@ -4736,7 +4860,7 @@ plan:
 				Expect(getErr).ToNot(HaveOccurred())
 
 				// EXPECTED: The phase should be failed due to the validation failure condition
-				// The fix should make checkClusterDeployConfigState call checkResourcePreparationStatus
+				// The fix should make checkClusterDeployConfigState call checkProvisioningConditionsForFailures
 				// when NodeAllocationRequestRef doesn't exist during initial validation phase
 				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
 
@@ -5269,6 +5393,90 @@ plan:
 			ctx = context.Background()
 			currentTime = time.Now()
 
+			// Create HardwareTemplate with timeout configuration
+			hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hw-template",
+					Namespace: utils.InventoryNamespace, // This is "oran-o2ims" namespace
+				},
+				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+					HardwareProvisioningTimeout: "30m",
+					HardwarePluginRef:           "test-hw-plugin",
+					BootInterfaceLabel:          "test-label",
+					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+						{
+							Name:           "master",
+							Role:           "master",
+							ResourcePoolId: "test-pool",
+							HwProfile:      "test-profile",
+						},
+					},
+				},
+			}
+
+			clusterInstanceConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-ci-defaults",
+					Namespace: "test-namespace",
+				},
+				Data: map[string]string{
+					utils.ClusterInstallationTimeoutConfigKey: "30m",
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+baseDomain: example.com
+clusterImageSetNameRef: "4.15.0"
+pullSecretRef:
+  name: "pull-secret"`,
+				},
+			}
+
+			policyTemplateConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pt-defaults",
+					Namespace: "test-namespace",
+				},
+				Data: map[string]string{
+					utils.ClusterConfigurationTimeoutConfigKey: "15m",
+					utils.PolicyTemplateDefaultsConfigmapKey: `
+clustertemplate-test-policy-v1-cpu-isolated: "2-31"
+clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
+				},
+			}
+
+			// Create ClusterTemplate that references the ConfigMaps
+			testClusterTemplate := &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-template.v1.0.0",
+					Namespace: "test-namespace",
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:    "test-template",
+					Version: "v1.0.0",
+					Templates: provisioningv1alpha1.Templates{
+						HwTemplate:              "test-hw-template",
+						ClusterInstanceDefaults: "test-ci-defaults",
+						PolicyTemplateDefaults:  "test-pt-defaults",
+					},
+					TemplateParameterSchema: runtime.RawExtension{
+						Raw: []byte(`{
+							"type": "object",
+							"properties": {
+								"test": {"type": "string"}
+							}
+						}`),
+					},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:    string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Status:  metav1.ConditionTrue,
+							Reason:  string(provisioningv1alpha1.CTconditionReasons.Completed),
+							Message: "ClusterTemplate validation completed successfully",
+						},
+					},
+				},
+			}
+
 			testObject = &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-integration-pr",
@@ -5290,6 +5498,13 @@ plan:
 					},
 				},
 			}
+
+			// Create all objects in the fake client
+			Expect(c.Create(ctx, hwTemplate)).To(Succeed())
+			Expect(c.Create(ctx, clusterInstanceConfigMap)).To(Succeed())
+			Expect(c.Create(ctx, policyTemplateConfigMap)).To(Succeed())
+			Expect(c.Create(ctx, testClusterTemplate)).To(Succeed())
+			Expect(c.Create(ctx, testObject)).To(Succeed())
 
 			testTask = &provisioningRequestReconcilerTask{
 				logger:       slog.New(slog.NewTextHandler(os.Stderr, nil)),

@@ -218,13 +218,7 @@ func (t *provisioningRequestReconcilerTask) executeProvisioningPhases(ctx contex
 		return nil, result, err
 	}
 
-	// Phase 3: Cluster resources
-	result, err = t.executeClusterResourcesPhase(ctx, renderedClusterInstance)
-	if err != nil {
-		return nil, result, err
-	}
-
-	// Phase 4: Cluster installation
+	// Phase 3: Cluster installation
 	result, err = t.executeClusterInstallationPhase(ctx, unstructuredClusterInstance)
 	if err != nil || result.Requeue || result.RequeueAfter > 0 {
 		return nil, result, err
@@ -297,24 +291,6 @@ func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx
 	}
 
 	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_provisioning", time.Since(phaseStartTime))
-	return ctrl.Result{}, nil
-}
-
-// executeClusterResourcesPhase handles cluster resources creation
-func (t *provisioningRequestReconcilerTask) executeClusterResourcesPhase(ctx context.Context,
-	renderedClusterInstance *siteconfig.ClusterInstance) (ctrl.Result, error) {
-
-	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "cluster_resources")
-	phaseStartTime := time.Now()
-
-	err := t.handleClusterResources(ctx, renderedClusterInstance)
-	if err != nil {
-		ctlrutils.LogError(ctx, t.logger, "Cluster resources phase failed", err)
-		result, _ := requeueWithError(err)
-		return result, err
-	}
-
-	ctlrutils.LogPhaseComplete(ctx, t.logger, "cluster_resources", time.Since(phaseStartTime))
 	return ctrl.Result{}, nil
 }
 
@@ -488,10 +464,12 @@ func (t *provisioningRequestReconcilerTask) initializeHardwarePluginIfNeeded(ctx
 
 // handleClusterUpgrades handles cluster upgrade logic
 func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Context, clusterName string) (ctrl.Result, error) {
-	shouldUpgrade, err := t.IsUpgradeRequested(ctx, clusterName)
+	shouldUpgrade, result, err := t.IsUpgradeRequested(ctx, clusterName)
 	if err != nil {
-		result, _ := requeueWithError(err)
-		return result, err
+		return requeueWithError(err)
+	}
+	if result.RequeueAfter > 0 {
+		return result, nil
 	}
 
 	// An upgrade is requested or upgrade has started but not completed
@@ -525,8 +503,10 @@ func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout(ctx
 	}
 
 	hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
-	if hwProvisionedCond == nil || hwProvisionedCond.Status != metav1.ConditionFalse ||
-		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) {
+	// Skip only on outcomes: succeeded, failed or timed-out
+	if hwProvisionedCond != nil && (hwProvisionedCond.Status == metav1.ConditionTrue ||
+		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
 		return ctrl.Result{}
 	}
 
@@ -591,25 +571,22 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	}
 
 	// Handle the creation of resources required for cluster deployment
-	// Only create ClusterInstance resources if hardware provisioning is skipped
-	// For hardware provisioning scenarios, cluster resources are created after hardware completion
-	if t.isHardwareProvisionSkipped() {
-		err = t.handleClusterResources(ctx, renderedClusterInstance)
-		if err != nil {
-			if ctlrutils.IsInputError(err) {
-				_, err = t.checkClusterDeployConfigState(ctx)
-				if err != nil {
-					t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.String("error", err.Error()))
-					return nil, requeueWithMediumInterval(), err
-				}
-				// Requeue since we are not watching for updates to required resources
-				// if they are missing
-				return nil, requeueWithMediumInterval(), nil
+	err = t.handleClusterResources(ctx, renderedClusterInstance)
+	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Cluster resources creation failed", err)
+		if ctlrutils.IsInputError(err) {
+			_, err = t.checkClusterDeployConfigState(ctx)
+			if err != nil {
+				t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.String("error", err.Error()))
+				return nil, requeueWithMediumInterval(), err
 			}
-			// internal error that might recover - requeue to allow recovery
-			t.logger.WarnContext(ctx, "Internal cluster resources error, will retry", slog.String("error", err.Error()))
-			return nil, requeueWithMediumInterval(), err
+			// Requeue since we are not watching for updates to required resources
+			// if they are missing
+			return nil, requeueWithMediumInterval(), nil
 		}
+		// internal error that might recover - requeue to allow recovery
+		t.logger.WarnContext(ctx, "Internal cluster resources error, will retry", slog.String("error", err.Error()))
+		return nil, requeueWithMediumInterval(), err
 	}
 
 	return renderedClusterInstance, doNotRequeue(), nil
@@ -711,6 +688,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 			// skip hardware status checks and proceed to resource preparation status check
 			if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
 				// No NodeAllocationRequestRef means this is initial phase, skip hardware checks
+				t.logger.InfoContext(ctx, "NodeAllocationRequestRef is nil, skipping hardware status checks during initial phase")
 			} else {
 				// NodeAllocationRequestRef exists but getNodeAllocationRequestResponse failed,
 				// this indicates a real hardware plugin error
@@ -733,7 +711,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 
 	// Check the ClusterInstance status if exists
 	if t.object.Status.Extensions.ClusterDetails == nil {
-		if err = t.checkResourcePreparationStatus(ctx); err != nil {
+		if err = t.checkProvisioningConditionsForFailures(ctx); err != nil {
 			return requeueWithError(err)
 		}
 		// For fulfilled state, skip early return and continue to final fulfilled check
@@ -756,13 +734,13 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		return requeueWithMediumInterval(), nil
 	}
 
-	// Always check resource preparation status to detect any failed conditions
+	// Always check provisioning conditions to detect any failed conditions
 	// (e.g., ClusterInstanceRendered failures after hardware provisioning succeeds)
-	if err = t.checkResourcePreparationStatus(ctx); err != nil {
+	if err = t.checkProvisioningConditionsForFailures(ctx); err != nil {
 		return requeueWithError(err)
 	}
 
-	// If resource preparation check set the state to failed due to validation errors, stop processing
+	// If provisioning condition check set the state to failed due to validation errors, stop processing
 	// Only stop for persistent validation failures, not temporary cluster installation issues
 	if t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed {
 		// Check if this is a validation failure (persistent) vs installation issue (temporary)
@@ -816,7 +794,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	// with the validation, rendering, or creation of resources due to updates to the
 	// ProvisioningRequest. If there are issues, transition the provisioningPhase to failed.
 	if ctlrutils.IsProvisioningStateFulfilled(t.object) {
-		if err = t.checkResourcePreparationStatus(ctx); err != nil {
+		if err = t.checkProvisioningConditionsForFailures(ctx); err != nil {
 			return requeueWithError(err)
 		}
 		// Continue monitoring even after fulfillment for spec changes
@@ -875,19 +853,23 @@ func (t *provisioningRequestReconcilerTask) checkClusterInstallationTimeout(ctx 
 	return false
 }
 
-// checkResourcePreparationStatus checks for validation and preparation failures, setting the
-// provisioningPhase to failed if issues are found.
-func (t *provisioningRequestReconcilerTask) checkResourcePreparationStatus(ctx context.Context) error {
+// checkProvisioningConditionsForFailures checks all provisioning-related conditions for failures,
+// setting the provisioningPhase to failed if any condition is in a failed state.
+func (t *provisioningRequestReconcilerTask) checkProvisioningConditionsForFailures(ctx context.Context) error {
 	conditionTypes := []provisioningv1alpha1.ConditionType{
 		provisioningv1alpha1.PRconditionTypes.Validated,
 		provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 		provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 		provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+		provisioningv1alpha1.PRconditionTypes.HardwareProvisioned,
+		provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
 	}
 
 	for _, condType := range conditionTypes {
 		cond := meta.FindStatusCondition(t.object.Status.Conditions, string(condType))
-		if cond != nil && cond.Status == metav1.ConditionFalse {
+		if cond != nil && cond.Status == metav1.ConditionFalse &&
+			(cond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+				cond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
 			// Set the provisioning state to failed if any condition is false
 			ctlrutils.SetProvisioningStateFailed(t.object, cond.Message)
 			break
@@ -904,14 +886,17 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 	// Validate provisioning request CR
 	err := t.validateProvisioningRequestCR(ctx)
 	if err != nil {
-		ctlrutils.LogError(ctx, t.logger, "Failed to validate the ProvisioningRequest", err,
-			slog.String("name", t.object.Name))
+		validationFailureMsg := "Failed to validate the ProvisioningRequest"
+		validationFailureMsgWithError := validationFailureMsg + ": " + err.Error()
+		ctlrutils.LogError(ctx, t.logger, validationFailureMsg, err, slog.String("name", t.object.Name))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.Validated,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
-			"Failed to validate the ProvisioningRequest: "+err.Error(),
+			validationFailureMsgWithError,
 		)
+		// Update provisioning status to failed to ensure consistency with the Validation condition Failed status
+		ctlrutils.SetProvisioningStateFailed(t.object, validationFailureMsgWithError)
 	} else {
 		t.logger.InfoContext(ctx, "Validated the ProvisioningRequest CR",
 			slog.String("name", t.object.Name))
@@ -934,18 +919,17 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx context.Context) (*siteconfig.ClusterInstance, error) {
 	renderedClusterInstance, err := t.buildClusterInstance(ctx)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to render and validate the ClusterInstance for ProvisioningRequest",
-			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
-		)
+		clusterInstanceFailureMsg := "Failed to render and validate ClusterInstance"
+		clusterInstanceFailureMsgWithError := clusterInstanceFailureMsg + ": " + err.Error()
+		ctlrutils.LogError(ctx, t.logger, clusterInstanceFailureMsg, err, slog.String("name", t.object.Name))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
-			"Failed to render and validate ClusterInstance: "+err.Error(),
+			clusterInstanceFailureMsgWithError,
 		)
+		// Update provisioning status to failed to ensure consistency with the ClusterInstanceRendered condition Failed status
+		ctlrutils.SetProvisioningStateFailed(t.object, clusterInstanceFailureMsgWithError)
 	} else {
 		t.logger.InfoContext(
 			ctx,
@@ -974,19 +958,17 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {
 	err := t.createOrUpdateClusterResources(ctx, clusterInstance)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to apply the required cluster resource for ProvisioningRequest",
-			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
-		)
-
+		clusterResourceFailureMsg := "Failed to apply the required cluster resource"
+		clusterResourceFailureMsgWithError := clusterResourceFailureMsg + ": " + err.Error()
+		ctlrutils.LogError(ctx, t.logger, clusterResourceFailureMsg, err, slog.String("name", t.object.Name))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
-			"Failed to apply the required cluster resource: "+err.Error(),
+			clusterResourceFailureMsgWithError,
 		)
+		// Update provisioning status to failed to ensure consistency with the ClusterResourcesCreated condition Failed status
+		ctlrutils.SetProvisioningStateFailed(t.object, clusterResourceFailureMsgWithError)
 	} else {
 		t.logger.InfoContext(
 			ctx,
@@ -1012,19 +994,17 @@ func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.C
 	clusterInstance *unstructured.Unstructured) (*hwmgrpluginapi.NodeAllocationRequest, error) {
 	renderedNodeAllocationRequest, err := t.handleRenderHardwareTemplate(ctx, clusterInstance)
 	if err != nil {
-		t.logger.ErrorContext(
-			ctx,
-			"Failed to render the Hardware template for NodeAllocationRequest",
-			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
-		)
-
+		hardwareTemplateFailureMsg := "Failed to render the Hardware template"
+		hardwareTemplateFailureMsgWithError := hardwareTemplateFailureMsg + ": " + err.Error()
+		ctlrutils.LogError(ctx, t.logger, hardwareTemplateFailureMsg, err, slog.String("name", t.object.Name))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
-			"Failed to render the Hardware template: "+err.Error(),
+			hardwareTemplateFailureMsgWithError,
 		)
+		// Update provisioning status to failed to ensure consistency with the HardwareTemplateRendered condition Failed status
+		ctlrutils.SetProvisioningStateFailed(t.object, hardwareTemplateFailureMsgWithError)
 	} else {
 		t.logger.InfoContext(
 			ctx,

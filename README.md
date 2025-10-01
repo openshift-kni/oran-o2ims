@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 # O-RAN O-Cloud Manager
 
 <!-- markdownlint-disable MD033 -->
-<a href="https://github.com/o-ran-sc/it-test/tree/master/test_scripts/O2IMS_Compliance_Test"><img src="https://img.shields.io/badge/O--RAN_SC_O2_IMS_Automated_Test_Compliance-100%25-green"/></a>
+<a href="https://github.com/o-ran-sc/it-test/tree/master/test_scripts/O2IMS_Compliance_Test"><img alt="100%" src="https://img.shields.io/badge/O--RAN_SC_O2_IMS_Automated_Test_Compliance-100%25-green"/></a>
 <!-- markdownlint-enable MD033 -->
 
 <!-- TOC -->
@@ -252,7 +252,7 @@ client present a certificate.
 
 To configure the primary controller to enable mTLS the following attributes must be set in the `clientTLS` section of
 the `spec`. For more information, please refer to the
-documention [here](https://docs.openshift.com/container-platform/4.17/networking/networking_operators/ingress-operator.html#configuring-ingress-controller-tls).
+[Ingress Operator in OpenShift Container Platform documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/networking_operators/configuring-ingress#configuring-ingress-controller-tls).
 
 ```yaml
 apiVersion: operator.openshift.io/v1
@@ -303,8 +303,8 @@ configuration requirements.
 
    > :warning: Do this only if the cluster proxy isn't currently pointing to some other custom CA bundle. If it is
    > pointing to an existing bundle, then the new private certificates need to be appended to the existing set. Refer to
-   > the OpenShift documentation for more
-   details [here](https://docs.openshift.com/container-platform/4.17/networking/configuring-a-custom-pki.html).
+   > the [OpenShift Configuring a custom PKI documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/configuring_network_settings/configuring-a-custom-pki)
+   > for more details.
 
    ```console
    oc create configmap -n openshift-config custom-ca-certs --from-file=ca-bundle.crt=/some/path/to/ca-bundle.crt

@@ -28,6 +28,7 @@ require (
 	github.com/openshift/api v0.0.0-20250725072657-92b1455121e1
 	github.com/openshift/assisted-service/api v0.0.0
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
+	github.com/openshift/hive/apis v0.0.0-20250725035156-a29a23859060
 	github.com/pashagolub/pgxmock/v4 v4.6.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.85.0
 	github.com/r3labs/diff/v3 v3.0.2
@@ -118,7 +119,6 @@ require (
 	github.com/openshift-kni/lifecycle-agent v0.0.0-20250227204303-42df68297836 // indirect
 	github.com/openshift/assisted-service v1.0.10-0.20230830164851-6573b5d7021d // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
-	github.com/openshift/hive/apis v0.0.0-20250725035156-a29a23859060 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

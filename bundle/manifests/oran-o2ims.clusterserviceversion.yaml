@@ -885,8 +885,8 @@ spec:
       kind: HardwareProfile
       name: hardwareprofiles.clcm.openshift.io
       resources:
-      - kind: Service
-        name: policy-engine-service
+      - kind: ConfigMap
+        name: ""
         version: v1
       specDescriptors:
       - description: Bios defines a set of bios attributes
@@ -904,7 +904,7 @@ spec:
         path: bmcFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NIC firmware information mapped by NIC identifier
+      - description: NIC firmware information list
         displayName: NIC Firmware
         path: nicFirmware
         x-descriptors:
@@ -1520,6 +1520,14 @@ spec:
           - list
           - patch
           - update
+          - watch
+        - apiGroups:
+          - hive.openshift.io
+          resources:
+          - clusterimagesets
+          verbs:
+          - get
+          - list
           - watch
         - apiGroups:
           - lcm.openshift.io
