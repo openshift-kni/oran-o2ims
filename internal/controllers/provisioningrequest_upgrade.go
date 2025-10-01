@@ -9,6 +9,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/coreos/go-semver/semver"
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
@@ -22,43 +23,61 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-// IsUpgradeRequested retruns true if cluster template release version is higher than
-// managedCluster openshift release version
+// IsUpgradeRequested determines if a cluster upgrade is requested by comparing whether the ClusterTemplate release version
+// is higher than the ManagedCluster's OpenShift release version.
+// Returns:
+//   - bool: true if an upgrade is requested (template version > managed cluster version), false otherwise
+//   - ctrl.Result: requeue result with 30s delay if openshiftVersion label is not yet available, empty otherwise
+//   - error: any error encountered during processing (ClusterTemplate fetch, ManagedCluster fetch, or version parsing)
 func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	ctx context.Context, managedClusterName string,
-) (bool, error) {
+) (bool, ctrl.Result, error) {
 	template, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
-		return false, fmt.Errorf("failed to get ClusterTemplate: %w", err)
+		return false, ctrl.Result{}, fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
 
 	if template.Spec.Release == "" {
-		return false, nil
+		return false, ctrl.Result{}, nil
+	}
+
+	// Parse template version first to fail fast on invalid versions
+	templateReleaseVersion, err := semver.NewVersion(template.Spec.Release)
+	if err != nil {
+		return false, ctrl.Result{}, fmt.Errorf("failed to parse ClusterTemplate release version %s: %w", template.Spec.Release, err)
 	}
 
 	managedCluster := &clusterv1.ManagedCluster{}
-	err = t.client.Get(ctx, types.NamespacedName{Name: managedClusterName}, managedCluster)
-	if err != nil {
-		return false, fmt.Errorf("failed to get ManagedCluster: %w", err)
+	if err := t.client.Get(ctx, types.NamespacedName{Name: managedClusterName}, managedCluster); err != nil {
+		return false, ctrl.Result{}, fmt.Errorf("failed to get ManagedCluster: %w", err)
 	}
 
-	templateReleaseVersion, err := semver.NewVersion(template.Spec.Release)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse template version: %w", err)
+	openshiftVersion, ok := managedCluster.GetLabels()["openshiftVersion"]
+	if !ok {
+		t.logger.InfoContext(ctx, "openshiftVersion label not found in ManagedCluster, requeueing",
+			"managedCluster", managedClusterName)
+		return false, ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
-	managedClusterVersion, err := semver.NewVersion(managedCluster.GetLabels()["openshiftVersion"])
+
+	managedClusterVersion, err := semver.NewVersion(openshiftVersion)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse ManagedCluster version: %w", err)
+		return false, ctrl.Result{}, fmt.Errorf("failed to parse ManagedCluster version %q: %w", openshiftVersion, err)
 	}
+
 	cmp := templateReleaseVersion.Compare(*managedClusterVersion)
 	switch cmp {
 	case 1:
-		return true, nil
+		t.logger.InfoContext(ctx, "Upgrade requested: template version is higher than ManagedCluster version",
+			"templateVersion", templateReleaseVersion.String(), "managedClusterVersion", managedClusterVersion.String())
+		return true, ctrl.Result{}, nil
 	case -1:
 		t.logger.InfoContext(ctx, "Template version is lower than ManagedCluster version, no upgrade requested",
-			"templateVersion", templateReleaseVersion, "managedClusterVersion", managedClusterVersion)
+			"templateVersion", templateReleaseVersion.String(), "managedClusterVersion", managedClusterVersion.String())
+	case 0:
+		t.logger.InfoContext(ctx, "Template version equals ManagedCluster version, no upgrade requested",
+			"version", templateReleaseVersion.String())
 	}
-	return false, nil
+	return false, ctrl.Result{}, nil
 }
 
 // handleUpgrade handles the upgrade of the cluster through IBGU. It returns a ctrl.Result to indicate
