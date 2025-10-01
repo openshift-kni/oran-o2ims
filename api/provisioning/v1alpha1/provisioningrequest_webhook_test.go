@@ -108,5 +108,577 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
+
+		Context("ClusterInstance Immutable Fields Validation", func() {
+			BeforeEach(func() {
+				// Create a ClusterTemplate with schema for validation
+				testSchema := `{
+				"properties": {
+					"nodeClusterName": {
+						"type": "string"
+					},
+					"oCloudSiteId": {
+						"type": "string"
+					},
+					"policyTemplateParameters": {
+						"type": "object",
+						"properties": {
+							"sriov-network-vlan-1": {
+								"type": "string"
+							}
+						}
+					},
+					"clusterInstanceParameters": {
+						"type": "object",
+						"properties": {
+							"clusterName": {
+								"type": "string"
+							},
+							"baseDomain": {
+								"type": "string"
+							},
+							"nodes": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"hostName": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"extraAnnotations": {
+								"type": "object"
+							},
+							"extraLabels": {
+								"type": "object"
+							}
+						}
+					}
+				},
+				"required": [
+					"nodeClusterName",
+					"oCloudSiteId"
+				],
+				"type": "object"
+			}`
+
+				ct := &ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "clustertemplate-a.v1.0.1",
+						Namespace: "default",
+					},
+					Spec: ClusterTemplateSpec{
+						Name:       "clustertemplate-a",
+						Version:    "v1.0.1",
+						TemplateID: "test-template-id",
+						Templates: Templates{
+							ClusterInstanceDefaults: "defaults-v1",
+							PolicyTemplateDefaults:  "policy-defaults-v1",
+						},
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testSchema)},
+					},
+					Status: ClusterTemplateStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(CTconditionTypes.Validated),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				}
+				Expect(fakeClient.Create(ctx, ct)).To(Succeed())
+
+				// Base ProvisioningRequest with ClusterInstance parameters
+				oldPr = &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174000",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-1",
+						TemplateName:    "clustertemplate-a",
+						TemplateVersion: "v1.0.1",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+					"oCloudSiteId": "local-123",
+					"nodeClusterName": "exampleCluster",
+					"clusterInstanceParameters": {
+						"clusterName": "test-cluster",
+						"baseDomain": "example.com",
+						"nodes": [
+							{
+								"hostName": "node1.example.com"
+							}
+						],
+						"extraAnnotations": {
+							"ManagedCluster": {
+								"key1": "value1"
+							}
+						},
+						"extraLabels": {
+							"ManagedCluster": {
+								"label1": "labelvalue1"
+							}
+						}
+					},
+					"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+				}`)},
+					},
+				}
+
+				newPr = oldPr.DeepCopy()
+			})
+
+			Context("When ClusterProvisioned condition is InProgress", func() {
+				BeforeEach(func() {
+					newPr.Status.Conditions = []metav1.Condition{
+						{
+							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionFalse,
+							Reason: string(CRconditionReasons.InProgress),
+						},
+					}
+				})
+
+				It("should reject ANY field changes during installation", func() {
+					// Try to change baseDomain (immutable field)
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "newdomain.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("disallowed during cluster installation"))
+					Expect(err.Error()).To(ContainSubstring("baseDomain"))
+				})
+
+				It("should reject extraAnnotations changes during installation", func() {
+					// Try to change extraAnnotations (normally allowed after completion)
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "changed-value"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("disallowed during cluster installation"))
+				})
+
+				It("should reject node scaling (adding nodes) during installation", func() {
+					// Try to add a node
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						},
+						{
+							"hostName": "node2.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("disallowed during cluster installation"))
+					Expect(err.Error()).To(ContainSubstring("nodes.1"))
+				})
+
+				It("should reject node scaling (removing nodes) during installation", func() {
+					// Start with 2 nodes in oldPr
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						},
+						{
+							"hostName": "node2.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					// Try to remove a node
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("disallowed during cluster installation"))
+				})
+			})
+
+			Context("When ClusterProvisioned condition is Completed", func() {
+				BeforeEach(func() {
+					newPr.Status.Conditions = []metav1.Condition{
+						{
+							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionTrue,
+							Reason: string(CRconditionReasons.Completed),
+						},
+					}
+				})
+
+				It("should allow extraAnnotations changes after completion", func() {
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "changed-value",
+							"key2": "new-value"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should allow extraLabels changes after completion", func() {
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "changed-label",
+							"label2": "new-label"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should allow node scaling (adding nodes) after completion", func() {
+					// Add a node
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						},
+						{
+							"hostName": "node2.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should allow node scaling (removing nodes) after completion", func() {
+					// Start with 2 nodes
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						},
+						{
+							"hostName": "node2.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					// Remove a node
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should reject immutable field changes after completion", func() {
+					// Try to change baseDomain (immutable)
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "newdomain.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("only"))
+					Expect(err.Error()).To(ContainSubstring("extraAnnotations"))
+					Expect(err.Error()).To(ContainSubstring("extraLabels"))
+					Expect(err.Error()).To(ContainSubstring("are allowed"))
+					Expect(err.Error()).To(ContainSubstring("baseDomain"))
+				})
+
+				It("should allow combined changes (annotations + labels + node scaling)", func() {
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						},
+						{
+							"hostName": "node2.example.com"
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "changed-value"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "changed-label"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("When ClusterProvisioned condition is Unknown or Failed", func() {
+				It("should allow all changes when condition is Unknown", func() {
+					newPr.Status.Conditions = []metav1.Condition{
+						{
+							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionUnknown,
+							Reason: string(CRconditionReasons.Unknown),
+						},
+					}
+
+					// Change anything
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "new-cluster-name",
+					"baseDomain": "newdomain.com",
+					"nodes": [
+						{
+							"hostName": "newnode.example.com"
+						}
+					]
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "999"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should allow all changes when condition is Failed", func() {
+					newPr.Status.Conditions = []metav1.Condition{
+						{
+							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionFalse,
+							Reason: string(CRconditionReasons.Failed),
+						},
+					}
+
+					// Change anything for recovery
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "new-cluster-name",
+					"baseDomain": "newdomain.com",
+					"nodes": [
+						{
+							"hostName": "newnode.example.com"
+						}
+					]
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "999"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+		})
 	})
 })

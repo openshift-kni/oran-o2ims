@@ -560,7 +560,7 @@ defaultHugepagesSize: "1G"`,
 
 	Context("When NodeAllocationRequest has been created", func() {
 
-		It("Verify status when configuration change causes ClusterInstance rendering to fail but NodeAllocationRequest becomes provisioned", func() {
+		It("Skips re-rendering the ClusterInstance when configuration changes occur during active provisioning", func() {
 			crName := "cluster-2"
 			// Make sure the needed ClusterTemplate exists.
 			oranCT := &provisioningv1alpha1.ClusterTemplate{}
@@ -686,24 +686,22 @@ defaultHugepagesSize: "1G"`,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
 
-			// Update the ProvisioningRequest to use a ClusterTemplate pointing to a ConfigMap that would
-			// trigger ClusterInstance dry-run failure.
+			// Update the ProvisioningRequest to use a ClusterTemplate pointing to a ConfigMap that would attempt to
+			// trigger re-rendering the ClusterInstance.
 			Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)).To(Succeed())
 			reconciledPR.Spec.TemplateVersion = tVersion1
 			Expect(K8SClient.Update(testCtx, reconciledPR)).To(Succeed())
 
-			Eventually(func() bool {
-				err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
-				Expect(err).ToNot(HaveOccurred())
-				return reconciledPR.Status.Conditions[1].Status == metav1.ConditionFalse
-			}, time.Minute*1, time.Second*3).Should(BeTrue())
-
+			// With the HardwareProvisioned condition set to True, the ClusterInstance should be created.
+			// We now expect to skip re-rendering the ClusterInstance and mitigate a possible dry-run failure.
+			err = K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
+			Expect(err).ToNot(HaveOccurred())
 			conditions = reconciledPR.Status.Conditions
 			testutils.VerifyStatusCondition(conditions[1], metav1.Condition{
 				Type:    string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered),
-				Status:  metav1.ConditionFalse,
-				Reason:  string(provisioningv1alpha1.CRconditionReasons.Failed),
-				Message: "ClusterInstance.siteconfig.open-cluster-management.io \"cluster-2\" is invalid: spec.nodes[0].templateRefs: Required value",
+				Status:  metav1.ConditionTrue,
+				Reason:  string(provisioningv1alpha1.CRconditionReasons.Completed),
+				Message: "ClusterInstance rendered and passed dry-run validation",
 			})
 
 			// Find and verify HardwareProvisioned condition after template version change
@@ -722,9 +720,10 @@ defaultHugepagesSize: "1G"`,
 				Status: metav1.ConditionTrue,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			})
-			// Verify the provisioningState moves to failed.
+
+			// Verify the provisioningState is progressing.
 			testutils.VerifyProvisioningStatus(reconciledPR.Status.ProvisioningStatus,
-				provisioningv1alpha1.StateFailed, "Failed to render and validate ClusterInstance", nil)
+				provisioningv1alpha1.StateProgressing, fmt.Sprintf("Waiting for ClusterInstance (%s) to be processed", crName), nil)
 		})
 	})
 })
