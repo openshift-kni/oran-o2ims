@@ -332,3 +332,23 @@ func ConvertFromUnstructured(u *unstructured.Unstructured) (*siteconfig.ClusterI
 	}
 	return &ci, nil
 }
+
+// PrepareClusterInstanceForServerSideApply prepares a ClusterInstance object for Server-Side Apply (SSA)
+// by clearing metadata fields that must not be present in SSA requests and ensuring type information is set.
+// This is necessary when reusing an existing ClusterInstance object retrieved from the cluster.
+//
+// Server-Side Apply requirements:
+//   - metadata.managedFields MUST be nil (Kubernetes API requirement)
+//   - metadata.resourceVersion and metadata.uid should be empty (not used by SSA)
+//   - apiVersion and kind MUST be set for proper object identification
+func PrepareClusterInstanceForServerSideApply(ci *siteconfig.ClusterInstance) {
+	// Clear server-managed metadata that must not be present in SSA requests
+	ci.SetManagedFields(nil)
+	ci.SetResourceVersion("")
+	ci.SetUID("")
+
+	// Ensure type information is set for proper object identification
+	// This is defensive: controller-runtime should set these, but we guarantee they're present
+	ci.APIVersion = fmt.Sprintf("%s/%s", siteconfig.Group, siteconfig.Version)
+	ci.Kind = siteconfig.ClusterInstanceKind
+}
