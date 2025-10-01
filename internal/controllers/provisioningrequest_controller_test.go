@@ -319,8 +319,9 @@ plan:
 
 		Context("when template version is higher than cluster version", func() {
 			It("should return true", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeTrue())
 			})
 		})
@@ -332,8 +333,9 @@ plan:
 			})
 
 			It("should return false", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeFalse())
 			})
 		})
@@ -345,8 +347,10 @@ plan:
 			})
 
 			It("should return false with no error", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				Expect(result).To(BeZero())
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeFalse())
 			})
 		})
@@ -358,8 +362,23 @@ plan:
 			})
 
 			It("should return false", func() {
-				upgradeRequested, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
+				Expect(upgradeRequested).To(BeFalse())
+			})
+		})
+
+		Context("when ManagedCluster does not have openshiftVersion label", func() {
+			BeforeEach(func() {
+				delete(managedCluster.Labels, "openshiftVersion")
+				Expect(c.Update(ctx, managedCluster)).To(Succeed())
+			})
+
+			It("should return false with requeue requested", func() {
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 				Expect(upgradeRequested).To(BeFalse())
 			})
 		})
@@ -3606,8 +3625,9 @@ plan:
 			Context("when ZTP is done and upgrade is requested", func() {
 				It("should initiate upgrade flow", func() {
 					// The main reconciliation should detect upgrade is needed and initiate it
-					shouldUpgrade, err := integrationTask.IsUpgradeRequested(ctx, "integration-cluster")
+					shouldUpgrade, result, err := integrationTask.IsUpgradeRequested(ctx, "integration-cluster")
 					Expect(err).ToNot(HaveOccurred())
+					Expect(result).To(BeZero())
 					Expect(shouldUpgrade).To(BeTrue())
 
 					// Simulate calling handleUpgrade from main flow
