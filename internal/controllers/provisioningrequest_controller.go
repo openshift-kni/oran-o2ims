@@ -464,10 +464,12 @@ func (t *provisioningRequestReconcilerTask) initializeHardwarePluginIfNeeded(ctx
 
 // handleClusterUpgrades handles cluster upgrade logic
 func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Context, clusterName string) (ctrl.Result, error) {
-	shouldUpgrade, err := t.IsUpgradeRequested(ctx, clusterName)
+	shouldUpgrade, result, err := t.IsUpgradeRequested(ctx, clusterName)
 	if err != nil {
-		result, _ := requeueWithError(err)
-		return result, err
+		return requeueWithError(err)
+	}
+	if result.RequeueAfter > 0 {
+		return result, nil
 	}
 
 	// An upgrade is requested or upgrade has started but not completed
