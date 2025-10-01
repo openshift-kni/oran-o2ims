@@ -1,12 +1,15 @@
 # See https://github.com/DavidAnson/markdownlint#optionsconfig
 # and https://github.com/DavidAnson/markdownlint-cli2
 
+# https://github.com/DavidAnson/markdownlint-cli2/blob/main/test/markdownlint-cli2-yaml-example/.markdownlint-cli2.yaml
+
 config:
-  line-length:
+  MD013: # line-length
     line_length: 300
     code_blocks: false
-  ul-style: consistent
+  ul-style: true
   emphasis-style: true
   strong-style: true
   no-space-in-emphasis: true
   no-blanks-blockquote: false
+  descriptive-link-text: false
