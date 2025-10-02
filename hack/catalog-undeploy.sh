@@ -17,15 +17,24 @@ EOF
 
 function cleanSubscription {
     oc delete subscriptions.operators.coreos.com -n "${NAMESPACE}" "${PACKAGE}"
-    oc get csv -n "${NAMESPACE}" | grep "${PACKAGE}" | awk '{print $1}' \
+
+    oc get csv -n "${NAMESPACE}" --no-headers -o custom-columns=NAME:.metadata.name | grep "${PACKAGE}" \
         | xargs --no-run-if-empty oc delete csv -n "${NAMESPACE}"
-    oc get crd | grep "${CRD_SEARCH}" | awk '{print $1}' \
+
+    oc get crd --no-headers -o custom-columns=NAME:.metadata.name | grep "${CRD_SEARCH}" \
         | xargs --no-run-if-empty oc delete crd
+
     oc delete ns "${NAMESPACE}"
-    oc get clusterrole.rbac.authorization.k8s.io | grep "${PACKAGE}" | awk '{print $1}' \
+
+    oc get clusterrole.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
         | xargs --no-run-if-empty oc delete clusterrole.rbac.authorization.k8s.io
-    oc get clusterrolebinding.rbac.authorization.k8s.io | grep "${PACKAGE}" | awk '{print $1}' \
+    oc get clusterrolebinding.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
         | xargs --no-run-if-empty oc delete clusterrolebinding.rbac.authorization.k8s.io
+
+    oc get rolebindings.rbac.authorization.k8s.io -n kube-system --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
+        | xargs --no-run-if-empty oc delete rolebindings.rbac.authorization.k8s.io -n kube-system
+
+    oc delete operators.operators.coreos.com "${PACKAGE}.${NAMESPACE}"
 
     oc delete catalogsources.operators.coreos.com -n openshift-marketplace "${PACKAGE}"
 }

@@ -24,6 +24,8 @@ VERSION ?= 4.20.0
 
 PACKAGE_NAME ?= oran-o2ims
 
+CHANNEL ?= alpha
+
 # BASHATE_VERSION defines the bashate version to download from GitHub releases.
 BASHATE_VERSION ?= 2.1.1
 
@@ -398,7 +400,7 @@ endif
 .PHONY: catalog
 catalog: opm ## Build a catalog.
 	@mkdir -p catalog
-	$(PROJECT_DIR)/hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel alpha --version $(VERSION)
+	$(PROJECT_DIR)/hack/generate-catalog-index.sh --opm $(OPM) --name $(PACKAGE_NAME) --channel $(CHANNEL) --version $(VERSION)
 	$(OPM) render --output=yaml $(BUNDLE_IMG) > catalog/$(PACKAGE_NAME).yaml
 	$(OPM) validate catalog
 
@@ -418,14 +420,14 @@ catalog-deploy: ## Deploy from catalog image.
 		--package $(PACKAGE_NAME) \
 		--namespace $(OCLOUD_MANAGER_NAMESPACE) \
 		--catalog-image $(CATALOG_IMG) \
-		--channel alpha \
+		--channel $(CHANNEL) \
 		--install-mode OwnNamespace \
 		| oc create -f -
 
 # Undeploy from catalog image.
 .PHONY: catalog-undeploy
 catalog-undeploy: ## Undeploy from catalog image.
-	$(PROJECT_DIR)/hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search "o2ims.*oran"
+	$(PROJECT_DIR)/hack/catalog-undeploy.sh --package $(PACKAGE_NAME) --namespace $(OCLOUD_MANAGER_NAMESPACE) --crd-search clcm.openshift.io
 
 ##@ Tools and Linting
 
