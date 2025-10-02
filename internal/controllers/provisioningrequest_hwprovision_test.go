@@ -642,11 +642,12 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		// Simulate non-callback reconciliation with stale failed state
 		// This should NOT update status because the condition reason is Failed (terminal state)
 		staleMock := createMockNodeAllocationRequestResponse("False", "Failed", "Old failure message")
+		detailedError := "Old failure message"
 		failedCond := hwmgrpluginapi.Condition{
 			Type:    "Configured",
 			Status:  "False",
 			Reason:  "Failed",
-			Message: "Old failure message",
+			Message: detailedError,
 		}
 		staleMock.Status.Conditions = &[]hwmgrpluginapi.Condition{failedCond}
 
@@ -664,7 +665,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Failed))) // Should remain as original failed state
-		Expect(condition.Message).To(Equal("Hardware configuring failed"))                         // Reflects the current plugin response
+		Expect(condition.Message).To(Equal("Hardware configuring failed: " + detailedError))       // Reflects the current plugin response with the detailed error
 	})
 
 	It("returns false when NodeAllocationRequest is not provisioned", func() {
@@ -2204,6 +2205,243 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			Expect(cr.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning failed"))
 
 			// This proves that hardware status updates work normally when transaction ID is current
+		})
+	})
+})
+
+var _ = Describe("processExistingHardwareCondition", func() {
+	var (
+		ctx         context.Context
+		c           client.Client
+		reconciler  *ProvisioningRequestReconciler
+		task        *provisioningRequestReconcilerTask
+		pr          *provisioningv1alpha1.ProvisioningRequest
+		clusterName = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		pr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName,
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+						NodeAllocationRequestID:        clusterName,
+						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{pr}...)
+		reconciler = &ProvisioningRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &provisioningRequestReconcilerTask{
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: pr,
+			timeouts: &timeouts{
+				hardwareProvisioning: 1 * time.Minute,
+			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
+		}
+	})
+
+	Context("when HardwareProvisioned condition fails", func() {
+		It("preserves detailed NAR error message in PR condition", func() {
+			detailedError := "Creation request failed: not enough free resources matching nodegroup=controller criteria: freenodes=0, required=1"
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Provisioned),
+				Status:  string(metav1.ConditionFalse),
+				Reason:  string(hwmgmtv1alpha1.Failed),
+				Message: detailedError,
+			}
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Provisioned)
+
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
+			Expect(timedOutOrFailed).To(BeTrue())
+			// Verify the detailed error is preserved with context prefix
+			Expect(message).To(Equal("Hardware provisioning failed: " + detailedError))
+		})
+	})
+
+	Context("when HardwareConfigured condition fails", func() {
+		It("preserves detailed NAR error message in PR condition", func() {
+			detailedError := "Configuration failed: unable to apply BIOS settings on node controller-0"
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Configured),
+				Status:  string(metav1.ConditionFalse),
+				Reason:  string(hwmgmtv1alpha1.Failed),
+				Message: detailedError,
+			}
+
+			// Set the configuring start time
+			currentTime := metav1.Now()
+			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
+
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
+			Expect(timedOutOrFailed).To(BeTrue())
+			// Verify the detailed error is preserved with context prefix
+			Expect(message).To(Equal("Hardware configuring failed: " + detailedError))
+		})
+	})
+
+	Context("when HardwareProvisioned times out", func() {
+		It("preserves timeout message", func() {
+			// Simulate timeout scenario
+			oldTime := metav1.NewTime(time.Now().Add(-2 * time.Hour)) // 2 hours ago, well past timeout
+			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &oldTime
+
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Provisioned),
+				Status:  string(metav1.ConditionFalse),
+				Reason:  string(hwmgmtv1alpha1.InProgress), // Still in progress, but will timeout
+				Message: "Waiting for BMH to provision",
+			}
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Provisioned)
+
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.TimedOut)))
+			Expect(timedOutOrFailed).To(BeTrue())
+			Expect(message).To(Equal("Hardware provisioning timed out"))
+		})
+	})
+
+	Context("when HardwareConfigured times out", func() {
+		It("preserves timeout message", func() {
+			// Simulate timeout scenario
+			oldTime := metav1.NewTime(time.Now().Add(-2 * time.Hour)) // 2 hours ago, well past timeout
+			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &oldTime
+
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Configured),
+				Status:  string(metav1.ConditionFalse),
+				Reason:  string(hwmgmtv1alpha1.InProgress), // Still in progress, but will timeout
+				Message: "Applying BIOS configuration",
+			}
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
+
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.TimedOut)))
+			Expect(timedOutOrFailed).To(BeTrue())
+			Expect(message).To(Equal("Hardware configuration timed out"))
+		})
+	})
+
+	Context("when HardwareProvisioned is in progress with context", func() {
+		It("preserves NAR context message", func() {
+			narContextMessage := "Handling creation"
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Provisioned),
+				Status:  string(metav1.ConditionFalse),
+				Reason:  string(hwmgmtv1alpha1.InProgress),
+				Message: narContextMessage,
+			}
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Provisioned)
+
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+			Expect(timedOutOrFailed).To(BeFalse())
+			// Verify the NAR context is preserved
+			Expect(message).To(Equal("Hardware provisioning is in progress: " + narContextMessage))
+		})
+	})
+
+	Context("when HardwareProvisioned is in progress without context", func() {
+		It("uses generic in-progress message", func() {
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Provisioned),
+				Status:  string(metav1.ConditionFalse),
+				Reason:  string(hwmgmtv1alpha1.InProgress),
+				Message: "", // Empty message
+			}
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Provisioned)
+
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+			Expect(timedOutOrFailed).To(BeFalse())
+			// Verify generic message when no NAR context
+			Expect(message).To(Equal("Hardware provisioning is in progress"))
+		})
+	})
+
+	Context("when HardwareConfigured is in progress with context", func() {
+		It("preserves NAR context message", func() {
+			narContextMessage := "AwaitConfig"
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Configured),
+				Status:  string(metav1.ConditionFalse),
+				Reason:  string(hwmgmtv1alpha1.InProgress),
+				Message: narContextMessage,
+			}
+
+			// Set the configuring start time
+			currentTime := metav1.Now()
+			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
+
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+			Expect(timedOutOrFailed).To(BeFalse())
+			// Verify the NAR context is preserved with "configuring" (verb form)
+			Expect(message).To(Equal("Hardware configuring is in progress: " + narContextMessage))
+		})
+	})
+
+	Context("integration test: updateHardwareStatus with callback for failed condition", func() {
+		It("propagates detailed error through the full flow", func() {
+			detailedError := "Creation request failed: not enough free resources matching nodegroup=controller criteria: freenodes=0, required=1"
+
+			// Simulate callback-triggered reconciliation
+			if pr.Annotations == nil {
+				pr.Annotations = make(map[string]string)
+			}
+			pr.Annotations[utils.CallbackReceivedAnnotation] = "test-callback"
+			Expect(c.Update(ctx, pr)).To(Succeed())
+
+			// Update task object to reflect the annotations
+			task.object = pr
+
+			// Create mock NAR response with detailed error
+			failedMock := createMockNodeAllocationRequestResponse("False", "Failed", detailedError)
+
+			// Call updateHardwareStatus
+			provisioned, timedOutOrFailed, err := task.updateHardwareStatus(ctx, failedMock, hwmgmtv1alpha1.Provisioned)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(provisioned).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeTrue())
+
+			// Refresh CR to get updated status
+			var updatedCR provisioningv1alpha1.ProvisioningRequest
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), &updatedCR)).To(Succeed())
+
+			// Verify the condition has the detailed error message
+			condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Failed)))
+			Expect(condition.Message).To(ContainSubstring("Hardware provisioning failed"))
+			Expect(condition.Message).To(ContainSubstring(detailedError))
+
+			// Verify provisioning status details also contain the error
+			Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning failed"))
+			Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring(detailedError))
 		})
 	})
 })

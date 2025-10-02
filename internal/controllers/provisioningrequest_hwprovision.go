@@ -500,18 +500,27 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 	}
 
 	// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
+	// The message is augmented with additional NAR context for in-progress and failure states.
+	// Use HandleHardwareTimeout as the source of base messages for both timeout and failure:
+	//  - Timeout: preserve the complete message from HandleHardwareTimeout.
+	//  - Failure: enrich the base failure message with detailed NAR error context.
+	//  - In-progress: enrich the message with NAR context when available, otherwise provide a generic in-progress message.
 	if status == metav1.ConditionFalse {
-		message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
-		ctlrutils.SetProvisioningStateInProgress(t.object, message)
-
 		if reason == string(hwmgmtv1alpha1.Failed) || reason == string(hwmgmtv1alpha1.TimedOut) {
 			timedOutOrFailed = true
-			if reason == string(hwmgmtv1alpha1.TimedOut) {
-				message = fmt.Sprintf("Hardware %s timed out", ctlrutils.GetStatusMessage(condition))
-			} else {
-				message = fmt.Sprintf("Hardware %s failed", ctlrutils.GetStatusMessage(condition))
+			if reason == string(hwmgmtv1alpha1.Failed) {
+				// For failures, preserve the detailed error from NAR
+				message = fmt.Sprintf("Hardware %s failed: %s", ctlrutils.GetStatusMessage(condition), message)
 			}
 			ctlrutils.SetProvisioningStateFailed(t.object, message)
+		} else {
+			// For in-progress states, preserve NAR context if it provides useful information
+			if strings.TrimSpace(message) != "" {
+				message = fmt.Sprintf("Hardware %s is in progress: %s", ctlrutils.GetStatusMessage(condition), message)
+			} else {
+				message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
+			}
+			ctlrutils.SetProvisioningStateInProgress(t.object, message)
 		}
 	}
 
