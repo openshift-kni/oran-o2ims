@@ -13,7 +13,7 @@
 
 The O-RAN O2IMS Alarms API Server provides standardized access to infrastructure alarms from OpenShift clusters managed by ACM. It receives alerts from ACM's Alertmanager and exposes O-RAN O2IMS compliant REST APIs for alarm management and real-time subscriptions.
 
-**API Reference:** Complete documentation is in [`internal/service/alarms/api/openapi.yaml`](../internal/service/alarms/api/openapi.yaml)
+**API Reference:** Complete documentation is in [`internal/service/alarms/api/openapi.yaml`](../../internal/service/alarms/api/openapi.yaml)
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ All commands should return running pods/resources. If any fail, check the [ACM O
 
 > **⚠️ Critical Dependency:** The alarms service is **completely dependent** on a healthy ACM Observability stack. The O2IMS alarms server only configures the alertmanager webhook - it cannot function without ACM's monitoring infrastructure already running and generating alerts.
 >
-> **For Development/Testing:** If you need to set up ACM Observability from scratch, see the development configuration guide in [DEVELOPING.md](../internal/service/alarms/DEVELOPING.md#setting-up-acm-observability-for-development).
+> **For Development/Testing:** If you need to set up ACM Observability from scratch, see the development configuration guide in [DEVELOPING.md](../../internal/service/alarms/DEVELOPING.md#setting-up-acm-observability-for-development).
 
 ## Authentication & Access
 
@@ -60,13 +60,13 @@ export BASE_URL="https://${API_URI}/o2ims-infrastructureMonitoring/v1"
 
 > **Note**: For OAuth2/OIDC-only configurations, service account tokens may not work. Check logs: `oc logs -n oran-o2ims deployment/alarms-server | grep -i oidc`
 
-**Production:** See [OAuth setup instructions in README](../README.md#oauth-expectationsrequirements) for full OAuth2 configuration.
+**Production:** See [OAuth setup instructions in Prereqsuites](./prereqs.md#oauth-server-expectationsrequirements) for full OAuth2 configuration.
 
 ## API Operations
 
 All examples assume you have set `MY_TOKEN` and `BASE_URL` as shown in the authentication section.
 
-**Note:** For complete endpoint documentation, parameter details, and response schemas, refer to the [OpenAPI specification](../internal/service/alarms/api/openapi.yaml).
+**Note:** For complete endpoint documentation, parameter details, and response schemas, refer to the [OpenAPI specification](../../internal/service/alarms/api/openapi.yaml).
 
 ### Alarm Management
 
@@ -140,7 +140,7 @@ curl -s -k \
 
 ### Subscription Management
 
-**⚠️ Prerequisites:** Requires SMO configuration. Without SMO: _"provisioning of Alarm Subscriptions is blocked until the SMO attributes are configured"_. See [SMO registration guide in README](../README.md#registering-the-o-cloud-manager-with-the-smo) for setup instructions.
+**⚠️ Prerequisites:** Requires SMO configuration. Without SMO: _"provisioning of Alarm Subscriptions is blocked until the SMO attributes are configured"_. See [SMO registration guide in Environment Setup](./environment-setup.md#registering-the-o-cloud-manager-with-the-smo) for setup instructions.
 
 #### Create Subscription
 
@@ -171,7 +171,7 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" -X DELETE \
   "${BASE_URL}/alarmSubscriptions/SUBSCRIPTION_ID"
 ```
 
-**Webhook Requirements:** Your endpoint must respond to GET requests with 204 status. See [Development Guide](../internal/service/alarms/DEVELOPING.md) for test server example.
+**Webhook Requirements:** Your endpoint must respond to GET requests with 204 status. See [Development Guide](../../internal/service/alarms/DEVELOPING.md) for test server example.
 
 ## Troubleshooting
 
@@ -205,7 +205,7 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq '. |
 
 ## API Reference
 
-**Complete API documentation is available in the [OpenAPI specification](../internal/service/alarms/api/openapi.yaml)** which includes:
+**Complete API documentation is available in the [OpenAPI specification](../../internal/service/alarms/api/openapi.yaml)** which includes:
 
 - All endpoint definitions with parameters and responses
 - Complete data model schemas (`AlarmEventRecord`, `AlarmSubscriptionInfo`, etc.)
@@ -218,8 +218,8 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq '. |
 
 ### Key Documentation
 
-- **[OpenAPI Specification](../internal/service/alarms/api/openapi.yaml)** - Complete API reference (endpoints, models, authentication)
-- **[Development Guide](../internal/service/alarms/DEVELOPING.md)** - Server development and testing guidance
+- **[OpenAPI Specification](../../internal/service/alarms/api/openapi.yaml)** - Complete API reference (endpoints, models, authentication)
+- **[Development Guide](../../internal/service/alarms/DEVELOPING.md)** - Server development and testing guidance
 - **[O-RAN O2IMS Spec](https://specifications.o-ran.org/download?id=674)** - Official specification this server implements
 
 ### Dependencies
