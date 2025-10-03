@@ -49,7 +49,7 @@ policies:
 
 ## Steps
 
-- Create new [clustertemplates](samples/git-setup/clustertemplates/version_4.Y.Z+1/) and [policytemplates](samples/git-setup/policytemplates/version_4.Y.Z+1/) directories for the new release according to sample git-setup,
+- Create new [clustertemplates](../samples/git-setup/clustertemplates/version_4.Y.Z+1/) and [policytemplates](../samples/git-setup/policytemplates/version_4.Y.Z+1/) directories for the new release according to sample git-setup,
 if they are not already created. File names, namespaces and names should match the new release version.
 - Update release version in new clustertemplates files.
 - If there are changes to the templateParameterSchema in the new ClusterTemplate version, update templateParameters to match the new schema.
