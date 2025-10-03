@@ -256,12 +256,13 @@ spec:
         - name: LABELS
           value:
             - '$(tasks.generate-labels.results.labels[*])'
+            - $(params.additional-labels[*])
             - com.redhat.component=o-cloud-manager-operator-container
             - description=o-cloud-manager
             - distribution-scope=public
             - io.k8s.description=o-cloud-manager
-            - name=openshift4/o-cloud-manager-rhel9-operator
             - release=4.21
+            - cpe="cpe:/a:redhat:openshift:4.21::el9"
             - 'url=https://github.com/openshift-kni/oran-o2ims'
             - 'vendor=Red Hat, Inc.'
             - io.k8s.display-name=o-cloud-manager
