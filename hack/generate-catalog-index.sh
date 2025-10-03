@@ -32,49 +32,87 @@ declare NAME=
 declare CHANNEL=
 declare VERSION=
 
-longopts=(
-    "help"
-    "opm:"
-    "name:"
-    "channel:"
-    "version:"
-)
+function parse_args_macos {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --opm)
+                OPM="$2"
+                shift 2
+                ;;
+            --name)
+                NAME="$2"
+                shift 2
+                ;;
+            --channel)
+                CHANNEL="$2"
+                shift 2
+                ;;
+            --version)
+                VERSION="$2"
+                shift 2
+                ;;
+            --help)
+                usage
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                usage
+                ;;
+        esac
+    done
+}
 
-longopts_str=$(IFS=,; echo "${longopts[*]}")
+function parse_args_linux {
+    longopts=(
+        "help"
+        "opm:"
+        "name:"
+        "channel:"
+        "version:"
+    )
 
-if ! OPTS=$(getopt -o "h" --long "${longopts_str}" --name "$0" -- "$@"); then
-    usage
+    longopts_str=$(IFS=,; echo "${longopts[*]}")
+
+    if ! OPTS=$(getopt -o "h" --long "${longopts_str}" --name "$0" -- "$@"); then
+        usage
+    fi
+
+    eval set -- "${OPTS}"
+
+    while :; do
+        case "$1" in
+            --opm)
+                OPM="$2"
+                shift 2
+                ;;
+            --name)
+                NAME="$2"
+                shift 2
+                ;;
+            --channel)
+                CHANNEL="$2"
+                shift 2
+                ;;
+            --version)
+                VERSION="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                usage
+                ;;
+        esac
+    done
+}
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    parse_args_macos "$@"
+else
+    parse_args_linux "$@"
 fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        --opm)
-            OPM="$2"
-            shift 2
-            ;;
-        --name)
-            NAME="$2"
-            shift 2
-            ;;
-        --channel)
-            CHANNEL="$2"
-            shift 2
-            ;;
-        --version)
-            VERSION="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
-            ;;
-        *)
-            usage
-            ;;
-    esac
-done
 
 if [ -z "${OPM}" ] || [ -z "${NAME}" ] || [ -z "${CHANNEL}" ] || [ -z "${VERSION}" ]; then
     usage
