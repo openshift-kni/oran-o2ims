@@ -22,7 +22,7 @@ This document provides a walkthrough for provisioning single-node OpenShift (SNO
 
 ### Git Repository Setup
 
-Prepare a Git repository with all required provisioning and configuration files, and sync it with ArgoCD. Follow the recommended [directory structure](samples/git-setup/).
+Prepare a Git repository with all required provisioning and configuration files, and sync it with ArgoCD. Follow the recommended [directory structure](../samples/git-setup/).
 
 ## Image-Based Installation Concepts
 
@@ -64,8 +64,8 @@ The Image-Based Installation workflow consists of four main phases. The first th
 
 This repository includes sample resources for IBI-based provisioning:
 
-* [IBI Cluster Instance Defaults](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-ibi.yaml): References the IBI templates, `ibi-cluster-templates-v1` and `ibi-node-templates-v1`, from the SiteConfig Operator
-* [IBI ClusterTemplate](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-ibi-v4-Y-Z-1.yaml): Uses the IBI-specific cluster instance defaults
+* [IBI Cluster Instance Defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-ibi.yaml): References the IBI templates, `ibi-cluster-templates-v1` and `ibi-node-templates-v1`, from the SiteConfig Operator
+* [IBI ClusterTemplate](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-ibi-v4-Y-Z-1.yaml): Uses the IBI-specific cluster instance defaults
 
 ## Implementation Guide
 
@@ -187,7 +187,7 @@ Before provisioning clusters with a ProvisioningRequest CR, pre-provision your b
 
 #### ProvisioningRequest CR for IBI
 
-The IBI ProvisioningRequest CR follows the same structure as the [sample ProvisioningRequest](../config/samples/v1alpha1_provisioningrequest.yaml) but references the IBI-specific ClusterTemplate.
+The IBI ProvisioningRequest CR follows the same structure as the [sample ProvisioningRequest](../../config/samples/v1alpha1_provisioningrequest.yaml) but references the IBI-specific ClusterTemplate.
 
 #### IBI Provisioning Process
 
