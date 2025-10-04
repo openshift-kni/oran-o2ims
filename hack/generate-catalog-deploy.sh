@@ -100,54 +100,96 @@ declare CHANNEL=
 declare CATALOG_IMG=
 declare INSTALL_MODE=
 
-longopts=(
-    "help"
-    "namespace:"
-    "package:"
-    "catalog-image:"
-    "channel:"
-    "install-mode:"
-)
+function parse_args_macos {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --namespace)
+                NAMESPACE="$2"
+                shift 2
+                ;;
+            --package)
+                PACKAGE="$2"
+                shift 2
+                ;;
+            --catalog-image)
+                CATALOG_IMG="$2"
+                shift 2
+                ;;
+            --channel)
+                CHANNEL="$2"
+                shift 2
+                ;;
+            --install-mode)
+                INSTALL_MODE="$2"
+                shift 2
+                ;;
+            --help)
+                usage
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                usage
+                ;;
+        esac
+    done
+}
 
-longopts_str=$(IFS=,; echo "${longopts[*]}")
+function parse_args_linux {
+    longopts=(
+        "help"
+        "namespace:"
+        "package:"
+        "catalog-image:"
+        "channel:"
+        "install-mode:"
+    )
 
-if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
-    usage
+    longopts_str=$(IFS=,; echo "${longopts[*]}")
+
+    if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
+        usage
+    fi
+
+    eval set -- "${OPTS}"
+
+    while :; do
+        case "$1" in
+            --namespace)
+                NAMESPACE="$2"
+                shift 2
+                ;;
+            --package)
+                PACKAGE="$2"
+                shift 2
+                ;;
+            --catalog-image)
+                CATALOG_IMG="$2"
+                shift 2
+                ;;
+            --channel)
+                CHANNEL="$2"
+                shift 2
+                ;;
+            --install-mode)
+                INSTALL_MODE="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                usage
+                ;;
+        esac
+    done
+}
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    parse_args_macos "$@"
+else
+    parse_args_linux "$@"
 fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        --namespace)
-            NAMESPACE="$2"
-            shift 2
-            ;;
-        --package)
-            PACKAGE="$2"
-            shift 2
-            ;;
-        --catalog-image)
-            CATALOG_IMG="$2"
-            shift 2
-            ;;
-        --channel)
-            CHANNEL="$2"
-            shift 2
-            ;;
-        --install-mode)
-            INSTALL_MODE="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
-            ;;
-        *)
-            usage
-            ;;
-    esac
-done
 
 if [ -z "${NAMESPACE}" ] || [ -z "${PACKAGE}" ] || [ -z "${CATALOG_IMG}" ] || [ -z "${CHANNEL}" ] || [ -z "${INSTALL_MODE}" ]; then
     usage
