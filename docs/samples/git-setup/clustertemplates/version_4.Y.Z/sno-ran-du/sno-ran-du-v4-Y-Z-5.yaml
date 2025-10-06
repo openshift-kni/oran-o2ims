@@ -8,7 +8,7 @@ spec:
   version: v4-Y-Z-5
   release: 4.Y.Z
   templates:
-    hwTemplate: placeholder-du-template-v2
+    hwTemplate: dell-r740-blue-bios-2.23.0-bmc-7.00.00.181
     clusterInstanceDefaults: clusterinstance-defaults-v4
     policyTemplateDefaults: policytemplate-defaults-v2
   templateParameterSchema:

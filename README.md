@@ -18,7 +18,7 @@ SPDX-License-Identifier: Apache-2.0
   - [GitOps Repository Layout And Setup](./docs/user-guide/gitops-layout-and-setup.md)
   - [Server Onboarding](./docs/user-guide/server-onboarding.md)
   - [Template Overview](./docs/user-guide/template-overview.md)
-  - [Provisioning Request API](./docs/cuser-guide/luster-provisioning.md)
+  - [Provisioning Request API](./docs/user-guide/cluster-provisioning.md)
   - [Inventory API](./docs/user-guide/inventory-api.md)
   - [Cluster API](./docs/user-guide/cluster-api.md)
   - [Alarm API](./docs/user-guide/alarms-user-guide.md)
