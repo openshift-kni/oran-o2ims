@@ -4,49 +4,23 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Cluster Configuration
+# Day-2 Cluster Configuration Changes
 
-## Preparation
+* [Day-2 Cluster Configuration Changes](#day-2-cluster-configuration-changes)
+  * [Overview](#overview)
+  * [Use Cases](#use-cases)
+    * [Updates to the clusterInstanceParameters field under ProvisioningRequest spec.templateParameters](#updates-to-the-clusterinstanceparameters-field-under-provisioningrequest-spectemplateparameters)
+    * [Updates to the ClusterInstance defaults ConfigMap](#updates-to-the-clusterinstance-defaults-configmap)
+    * [Updates to an existing ACM PolicyGenerator manifest](#updates-to-an-existing-acm-policygenerator-manifest)
+    * [Adding a new manifest to an existing ACM PolicyGenerator](#adding-a-new-manifest-to-an-existing-acm-policygenerator)
+    * [Updating the ClusterTemplate schemas](#updating-the-clustertemplate-schemas)
+    * [Switching to a new hardware profile](#switching-to-a-new-hardware-profile)
 
-For a proper cluster configuration, the ACM PolicyGenerator CRs have to be prepared in git.
-The namespace of the parent policies will be `ztp-<cluster-template-namespace>` (see [here](./samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/ns.yaml)). This is generally created through ArgoCD and Kustomize.
+## Overview
 
-The source-crs need to be extracted.
+This guide provides instructions for Day‑2 configuration change use cases, to be applied after cluster provisioning. For guidance on provisioning a cluster, refer to [Cluster Provisioning and Configuration](./cluster-provisioning.md#cluster-provisioning-and-configuration).
 
-For details about setting up the Git repo, please refer to the the Gitops setup [README.md](./samples/git-setup/README.md).
-
-**Note:** Make sure all the values used in hub templates in the PGs are exposed in the corresponding ClusterTemplate,
-under `spec.templateParameterSchema.policyTemplateParameters` and are present either in the `spec.templates.policyTemplateDefaults` ConfigMap or are specified through the ProvisioningRequest (`spec.templateParameters.policyTemplateParameters`).
-
-## Initial install and configuration
-
-Before creating a ProvisioningRequest, make sure the namespace destined for the ACM policies has been created and that the ACM policies
-have been synced to the hub cluster.
-This should all be achieved through ArgoCD.
-
-## Full DU profile
-
-For configuring an SNO with a full DU profile according to the [4.19 RAN RDS](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/scalability_and_performance/telco-ran-du-ref-design-specs#telco-ran-du-reference-configuration-crs),
-the following main samples can be used as a starting example:
-
-* [ClusterInstance defaults ConfigMap](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/clusterinstance-defaults-full-du-v1.yaml)
-* [PolicyTemplate defaults ConfigMap](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/policytemplates-defaults-full-du-v1.yaml)
-* [ClusterTemplate](./samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/sno-ran-full-du-v4-Y-Z-1.yaml)
-* [Full DU profile ACM Policy Generator](./samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-full-du/sno-ran-full-du-pg-v4-Y-Z-v1.yaml)
-* Observability configuration. This requires the creation of an ACM policy in the
-`open-cluster-management-observability` namespace, as seen in [copy-acm-route-observability-v1.yaml](./samples/git-setup/policytemplates/common/copy-acm-route-observability-v1.yaml).
-This policy will create a ConfigMap containing the acm-route in the same namespace as the ACM policies such that it can be used in the hub templates.
-  * A custom source-cr ([source-cr-observability.yaml](./samples/git-setup/policytemplates/common/source-cr-observability.yaml)) is used. Currently **the namespaces where ACM policies are created need to be manually added to the namespace list.**
-  * For allowing the creation of this policy in the `open-cluster-management-observability` namespace,
-  the `AppProject` associated to the desired ACM policies needs to also contain the following in
-  its `spec.destinations`:
-
-  ```yaml
-    - namespace: open-cluster-management-observability
-      server: '*'
-  ```
-
-## Day 2 configuration
+## Use Cases
 
 ### Updates to the clusterInstanceParameters field under ProvisioningRequest spec.templateParameters
 
@@ -235,16 +209,16 @@ status:
 
 ### Updates to the ClusterInstance defaults ConfigMap
 
-We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR.
+We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR.
 
-In this example we are adding a new annotation to the `ManagedCluster` through the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` holding default values for the corresponding `ClusterInstance`.
+In this example we are adding a new annotation to the `ManagedCluster` through the [clusterinstance-defaults-v1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` holding default values for the corresponding `ClusterInstance`.
 The following steps need to be taken:
 
 1. Upversion the cluster template:
-    * Create a new version of the [clusterinstance-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` - [clusterinstance-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml):
+    * Create a new version of the [clusterinstance-defaults-v1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml) `ConfigMap` - [clusterinstance-defaults-v2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml):
         * Update the name to `clusterinstance-defaults-v2` (the namespace stays `sno-ran-du-v4-Y-Z`).
         * Update `data.clusterinstance-defaults.extraAnnotations` with the desired new annotation.
-    * Create a new version of the [sno-ran-du.v4-Y-Z-1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml)
+    * Create a new version of the [sno-ran-du.v4-Y-Z-1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-1` to `sno-ran-du.v4-Y-Z-2`
         * Update `spec.version` from `v4-Y-Z-1` to `v4-Y-Z-2`
         * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v2`
@@ -262,18 +236,18 @@ The following steps need to be taken:
 
 ### Updates to an existing ACM PolicyGenerator manifest
 
-For updating a manifest in an existing ACM PolicyGenerator, the following steps need to be taken (we'll take [sno-ran-du-pg-v4-Y-Z-v1](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml) as an example):
+For updating a manifest in an existing ACM PolicyGenerator, the following steps need to be taken (we'll take [sno-ran-du-pg-v4-Y-Z-v1](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml) as an example):
 
 1. Upversion the cluster template content:
-    * Create a new version of the ACM PG - [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml):
+    * Create a new version of the ACM PG - [sno-ran-du-pg-v4-Y-Z-v2](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml):
         * The name is updated to `sno-ran-du-pg-v4-Y-Z-v2` (the `ztp-sno-ran-du-v4-Y-Z` namespace is kept).
         * `policyDefaults.placement.labelSelector.sno-ran-du-policy` is updated from `v1` to `v2` such that the policy binding is updated.
         * All policy names are updated from `v1` to `v2` (example: `v1-subscriptions-policy` -> `v2-subscriptions-policy`).
-        * The desired manifest section is updated. The current [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) sample adds a `sysctl` section to the `TunedPerformancePatch` section under the `v2-tuned-configuration-policy` policy.
-    * Create a new version of the [clusterinstance-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml) `ConfigMap` - [clusterinstance-defaults-v3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v3.yaml):
+        * The desired manifest section is updated. The current [sno-ran-du-pg-v4-Y-Z-v2](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) sample adds a `sysctl` section to the `TunedPerformancePatch` section under the `v2-tuned-configuration-policy` policy.
+    * Create a new version of the [clusterinstance-defaults-v2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml) `ConfigMap` - [clusterinstance-defaults-v3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v3.yaml):
         * Update the name to `clusterinstance-defaults-v3` (the namespace stays `sno-ran-du-v4-Y-Z`).
         * Update the `sno-ran-du-policy` ManagedCluster `extraLabel` from `v1` to `v2`.
-    * Create a new version of the [sno-ran-du.v4-Y-Z-2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml)
+    * Create a new version of the [sno-ran-du.v4-Y-Z-2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-2` to `sno-ran-du.v4-Y-Z-3`.
         * Update `spec.version` from `v4-Y-Z-2` to `v4-Y-Z-3`.
         * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v3`.
@@ -287,8 +261,8 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
     * It updates the ClusterInstance with the new `sno-ran-du-policy: "v2"` ManagedCluster label.
     * The siteconfig operator applies the new label to the ManagedCluster.
 5. The ACM Policy Propagator detects the new binding:
-    * The old policies created through the [sno-ran-du-pg-v4-Y-Z-v1](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml) Policy Generator are no longer matched to the ManagedCluster.
-    * The new policies created through the [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) Policy Generator are matched to the ManagedCluster.
+    * The old policies created through the [sno-ran-du-pg-v4-Y-Z-v1](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml) Policy Generator are no longer matched to the ManagedCluster.
+    * The new policies created through the [sno-ran-du-pg-v4-Y-Z-v2](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) Policy Generator are matched to the ManagedCluster.
     * The `ConfigurationApplied` condition is updated in the ProvisioningRequest to show that the configuration has changed and is being applied (the policies depend on each other, so some are in a `Pending` state until ACM confirms their compliance):
 
     ```yaml
@@ -421,15 +395,15 @@ policies:
 
 ### Updating the ClusterTemplate schemas
 
-We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml) `ClusterTemplate` CR.
+We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml) `ClusterTemplate` CR.
 
 In this example we are updating the policy template schema - `spec.templateParameterSchema.policyTemplateParameters`. This update means that the ACM PG requires extra configuration values.
-We assume we are starting from the [sno-ran-du-pg-v4-Y-Z-v2](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) ACM PG, but want to add configuration for one more SRIOV network, so 2 extra manifests (`SriovNetwork` and `SriovNetworkNodePolicy`) are needed.
+We assume we are starting from the [sno-ran-du-pg-v4-Y-Z-v2](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) ACM PG, but want to add configuration for one more SRIOV network, so 2 extra manifests (`SriovNetwork` and `SriovNetworkNodePolicy`) are needed.
 
 The following steps need to be taken:
 
 1. Upversion the cluster template content:
-    * A new ACM PG is created - [sno-ran-du-pg-v4-Y-Z-v3](samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v3.yaml):
+    * A new ACM PG is created - [sno-ran-du-pg-v4-Y-Z-v3](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v3.yaml):
         * `metadata.name` is updated from `sno-ran-du-pg-v4-Y-Z-v2` to `sno-ran-du-pg-v4-Y-Z-v3` (the `ztp-sno-ran-du-v4-Y-Z` namespace is kept).
         * `policyDefaults.placement.labelSelector.sno-ran-du-policy` is updated from `v2` to `v3` such that the policy binding is updated.
         * All policy names are updated from `v2` to `v3` (example: `v2-subscriptions-policy` -> `v3-subscriptions-policy`).
@@ -459,14 +433,14 @@ The following steps need to be taken:
               resourceName: du_mh
         ```
 
-    * A new version of the [policytemplate-defaults-v1](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v1.yaml) ConfigMap is created - [policytemplate-defaults-v2](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v2.yaml):
+    * A new version of the [policytemplate-defaults-v1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v1.yaml) ConfigMap is created - [policytemplate-defaults-v2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v2.yaml):
         * `metadata.name` is updated from `policytemplate-defaults-v1` to `policytemplate-defaults-v2`.
         * update the defaults to reflect the new schema and thus the needed configuration values, in our case: `sriov-network-vlan-2` and `sriov-network-pfNames-2`.
-    * Create a new version of the [clusterinstance-defaults-v3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v3.yaml) `ConfigMap` - [clusterinstance-defaults-v4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v4.yaml):
+    * Create a new version of the [clusterinstance-defaults-v3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v3.yaml) `ConfigMap` - [clusterinstance-defaults-v4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v4.yaml):
         * Update the name to `clusterinstance-defaults-v4` (the namespace stays `sno-ran-du-v4-Y-Z`).
         * Update the `sno-ran-du-policy` ManagedCluster `extraLabel` from `v2` to `v3`.
 
-    * Create a new version of the [sno-ran-du.v4-Y-Z-3](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
+    * Create a new version of the [sno-ran-du.v4-Y-Z-3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-3` to `sno-ran-du.v4-Y-Z-4`.
         * Update `spec.version` from `v4-Y-Z-3` to `v4-Y-Z-4`.
         * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v4`.
@@ -510,30 +484,51 @@ metadata:
 
 ### Switching to a new hardware profile
 
-We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` CR.
+We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` CR.
 
-In this example we are updating the `hwProfile` under `spec.nodeGroupData.hwProfile` in the [placeholder-du-template-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v1.yaml) hardware template resource.
+In this example we are updating BIOS settings, BIOS firmware, and BMC firmware by updating the `hwProfile` under `spec.nodeGroupData.hwProfile`
+in the [dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) hardware template resource.
 
 The following steps are required:
 
-1. Upversion the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) ClusterTemplate:
-    * Create a new version of the [placeholder-du-template-v1](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v1.yaml) hardware template resource - [placeholder-du-template-v2](samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/placeholder-du-template-v2.yaml)
-        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `spec.nodeGroupData.hwProfile` from `profile-proliant-gen11-dual-processor-256G-v1` to `profile-proliant-gen11-dual-processor-256G-v2`.
-    * Create a new version of the [sno-ran-du.v4-Y-Z-4](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` - [sno-ran-du.v4-Y-Z-5](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-5.yaml).
+1. Upversion the [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) ClusterTemplate:
+    * Create a new version of [dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) `HardwareProfile` - [dell-r740-bios-2.23.0-bmc-7.00.00.181](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.23.0-bmc-7.00.00.181.yaml)
+        * Update the name from `dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5` to `dell-r740-bios-2.23.0-bmc-7.00.00.181`.
+        * Update the `spec.bios`, `spec.biosFirmware` and `spec.bmcFirmware` with desired settings/versions.
+        * Remove the `spec.nicFirmware`.
+    * Create a new version of [dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) `HardwareTemplate` - [dell-r740-blue-bios-2.23.0-bmc-7.00.00.181](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue-bios-2.23.0-bmc-7.00.00.181.yaml)
+        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `spec.nodeGroupData.hwProfile` from `profile-dell-r740-v1` to `profile-dell-r740-v2`.
+    * Create a new version of the [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` - [sno-ran-du.v4-Y-Z-5](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-5.yaml).
         * update the name from `sno-ran-du.v4-Y-Z-4` to `sno-ran-du.v4-Y-Z-5` (the namespace remains `sno-ran-du-v4-Y-Z`).
         * update `spec.version` from `v4-Y-Z-4` to `v4-Y-Z-5`.
-        * update `spec.templates.hwTemplate` from `placeholder-du-template-v1` to `placeholder-du-template-v2`.
+        * update `spec.templates.hwTemplate` from `dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5` to `dell-r740-blue-bios-2.23.0-bmc-7.00.00.181`.
 2. Update the kustomization files to include the new resources. ArgoCD will automatically sync them to the hub cluster.
     * The O-Cloud manager validates the new `ClusterTemplate`, but no other action is taken since the `ProvisioningRequest` has not been updated.
 3. The SMO selects the new `ClusterTemplate` version in the `ProvisioningRequest`.
     * `spec.templateVersion` is updated from `v4-Y-Z-4` to `v4-Y-Z-5`, the one pointing to the new `hwProfile`.
-4. The O-Cloud manager:
+4. The O-Cloud manager detects the change:
+    * Updates the hardware profile in the `nodeAllocationRequests` CR for that cluster to the new profile.
+
+    ```yaml
+    spec:
+      ...
+        nodeGroup:
+        - nodeGroupData:
+            hwProfile: dell-r740-blue-bios-2.23.0-bmc-7.00.00.181
+            name: controller
+            resourceSelector:
+              server-colour: blue
+              server-type: Dell-R740
+            role: master
+      ...
+    ```
+
     * Updates the status of the `ProvisioningRequest`:
 
     ```yaml
-        - lastTransitionTime: "2024-11-06T16:55:30Z"
+        - lastTransitionTime: "2025-10-01T21:36:01Z"
           message: Hardware configuring is in progress
-          reason: ConfigurationUpdateRequested
+          reason: InProgress
           status: "False"
           type: HardwareConfigured
         ...
@@ -544,62 +539,125 @@ The following steps are required:
           provisioningState: progressing
     ```
 
-    * Updates the desired hardware profile in the `nodeAllocationRequests` CR for that cluster and the status condition to reflect the configuration change.
+5. The O-Cloud Metal3 hardware plugin detects the updated `NodeAllocationRequest` CR:
+    * It lists the `AllocatedNode` CRs that reference the `NodeAllocationRequest` and updates `spec.hwProfile` in each `AllocatedNode` CR to the new profile.
+    * It computes BIOS/firmware changes from the new `HardwareProfile` and requests the updates by updating the Metal3 resources—`HostFirmwareSettings` and `HostFirmwareComponents`—with the changes.
+    * The `NodeAllocationRequest` and `AllocatedNode` CRs status conditions are also updated to reflect the configuration change.
+
+    `NodeAllocationRequest` CR status:
 
     ```yaml
-    spec:
-      ...
-        - hwProfile: profile-proliant-gen11-dual-processor-256G-v2
-          interfaces:
-      ...
     status:
       conditions:
-      - lastTransitionTime: "2024-10-20T01:22:19Z"
+      - lastTransitionTime: "2025-09-17T21:47:53Z"
         message: Created
         reason: Completed
         status: "True"
         type: Provisioned
-      - lastTransitionTime: "2024-11-06T16:55:30Z"
-        message: Spec updated; awaiting configuration application by the hardware plugin
+      - lastTransitionTime: "2025-10-01T21:36:01Z"
+        message: 'AllocatedNode metal3-hwplugin-sno1-dell-r740-pool-dell-r740-sno1:
+          Update Requested'
         reason: ConfigurationUpdateRequested
         status: "False"
         type: Configured
     ```
 
-    * Obtains the list of nodes from the `NodeAllocationRequest` CR for the master MCP.
-    * For the SNO case that we are considering, there is only one node that cannot be cordoned and drained.
-    * Updates `spec.hwProfile` in the `Node` (`node.clcm.openshift.io/v1alpha1`) CR.
-5. The hardware plugin requests the hardware manager to apply the new hardware profile from the `Node` `spec`.
-6. The hardware manager updates the profile.
-7. The hardware plugin waits for the result from the hardware manager.
+    `AllocatedNode` CR status:
+
+    ```yaml
+    conditions:
+    - lastTransitionTime: "2025-09-17T21:47:53Z"
+      message: Provisioned
+      reason: Completed
+      status: "True"
+      type: Provisioned
+    - lastTransitionTime: "2025-10-01T21:36:01Z"
+      message: Update Requested
+      reason: ConfigurationUpdateRequested
+      status: "False"
+      type: Configured
+    ```
+
+6. Metal3 baremetal operator applies the updates on the host.
+7. The O-Cloud metal3 hardware plugin waits for the result via `HostFirmwareSettings`/`HostFirmwareComponents` status and validates configuration.
     * Success scenario:
-        * The hardware plugin updates the status of the `Node` CR.
+        * It updates the status of the `AllocatedNode` CR to reflect the result of the operation.
+
+        ```yaml
+        status:
+          conditions:
+          - lastTransitionTime: "2025-09-17T21:47:53Z"
+            message: Provisioned
+            reason: Completed
+            status: "True"
+            type: Provisioned
+          - lastTransitionTime: "2025-10-01T22:05:01Z"
+            message: Configuration has been applied successfully
+            reason: ConfigurationApplied
+            status: "True"
+            type: Configured
+          hwProfile: dell-r740-blue-bios-2.23.0-bmc-7.00.00.181
+        ```
+
+        * The `currentVersion` values for bios and bmc in `HostFirmwareComponents` status should match the versions declared in the new HardwareProfile.
+
+        ```yaml
+        status:
+          components:
+          - component: bios
+            currentVersion: 2.23.0
+            initialVersion: 2.22.2
+            lastVersionFlashed: 2.23.0
+            updatedAt: "2025-10-01T22:01:50Z"
+          - component: bmc
+            currentVersion: 7.00.00.181
+            initialVersion: 7.00.00.173
+            lastVersionFlashed: 7.00.00.181
+            updatedAt: "2025-10-01T22:01:50Z"
+          ...
+        ```
+
+        * The `settings` field in the `HostFirmwareSettings` status shows the applied BIOS attributes as defined in the new HardwareProfile.
+
+        ```yaml
+        status:
+          settings:
+            AcPwrRcvryUserDelay: "90"
+        ```
+
+        * Once all nodes have been updated, it will update the status of the `NodeAllocationRequest` CR to reflect the result of the operation.
+
+        ```yaml
+        status:
+          conditions:
+          - lastTransitionTime: "2025-09-17T21:47:53Z"
+            message: Created
+            reason: Completed
+            status: "True"
+            type: Provisioned
+          - lastTransitionTime: "2025-10-01T22:05:01Z"
+            message: Configuration has been applied successfully
+            reason: ConfigurationApplied
+            status: "True"
+            type: Configured
+         ```
+
     * Failure scenario:
         * The operation is aborted.
-        * The status of the `Node` CR is updated with the failure reason.
-        * The O-Cloud manager does not initiate a rollback of any nodes already updates. This is left to the user to remediate.
-8. Once all nodes have been updated, the hardware plugin will update the status of the `NodePool` CR `Configured` condition to reflect the result of the operation:
+        * The status of the `AllocatedNode` CR is updated with the failure reason.
+        * The O-Cloud manager does not initiate a rollback of any nodes already updated. This is left to the user to remediate.
+8. The O-Cloud manager will update the `ProvisioningRequest` status to reflect the result of the operation, based on the status update of the `NodeAllocationRequest` CR:
 
-   ```yaml
-       - lastTransitionTime: "2024-10-20T01:22:19Z"
-         message: Configuration has been applied successfully
-         reason: ConfigApplied
-         status: "True"
-         type: Configured
-   ```
-
-9. The O-Cloud manager will update the `ProvisioningRequest` status to reflect the result of the operation, based on the status update of the `NodePool` CR:
-
-```yaml
-    - lastTransitionTime: "2024-11-06T17:57:31Z"
-      message: Configuration has been applied successfully
-      reason: ConfigApplied
-      status: "True"
-      type: HardwareConfigured
-    ...
-    provisioningStatus:
-      provisionedResources:
-        oCloudNodeClusterId: 95f4a2cf-04dc-42d5-9d1e-f6cbc693d8ea
-      provisioningDetails: Provisioning request has completed successfully
-      provisioningState: fulfilled
-```
+  ```yaml
+      - lastTransitionTime: "2025-10-01T22:05:01Z"
+        message: Configuration has been applied successfully
+        reason: Completed
+        status: "True"
+        type: HardwareConfigured
+      ...
+      provisioningStatus:
+        provisionedResources:
+          oCloudNodeClusterId: 95f4a2cf-04dc-42d5-9d1e-f6cbc693d8ea
+        provisioningDetails: Provisioning request has completed successfully
+        provisioningState: fulfilled
+  ```

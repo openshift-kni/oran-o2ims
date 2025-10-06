@@ -1,0 +1,4 @@
+resources:
+- common.yaml
+- dell-r740-sno1.yaml
+- dell-r740-sno2.yaml

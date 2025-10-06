@@ -1,0 +1,67 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: network-data-dell-r740-sno2
+  namespace: dell-r740-pool
+type: Opaque
+stringData:
+  nmstate: |
+    interfaces:
+    - name: eno1
+      type: ethernet
+      state: up
+      ipv4:
+        enabled: true
+        dhcp: true
+      ipv6:
+        enabled: false
+    - name: eth1
+      type: ethernet
+      state: up
+      ipv4:
+        enabled: false
+      ipv6:
+        enabled: false
+    dns-resolver:
+      config:
+        server:
+        - 198.51.100.20
+---
+apiVersion: v1
+data:
+  password: dGVzdA==
+  username: dGVzdA==
+kind: Secret
+metadata:
+  name: bmc-secret-dell-r740-sno2
+  namespace: dell-r740-pool
+type: Opaque
+---
+apiVersion: metal3.io/v1alpha1
+kind: BareMetalHost
+metadata:
+  labels:
+    resources.clcm.openshift.io/siteId: local-west
+    resources.clcm.openshift.io/resourcePoolId: dell-r740-pool
+    resourceselector.clcm.openshift.io/server-colour: green
+    resourceselector.clcm.openshift.io/server-type: R740
+    resourceselector.clcm.openshift.io/server-id: dell-r740-sno2
+    resourceselector.clcm.openshift.io/subnet: "192.0.2.0"
+    interfacelabel.clcm.openshift.io/data-interface: eth1
+  annotations:
+    bmac.agent-install.openshift.io/allow-provisioned-host-management: ""
+    resourceinfo.clcm.openshift.io/description: "R740 server with Green label"
+    resourceinfo.clcm.openshift.io/partNumber: "00002"
+    resourceinfo.clcm.openshift.io/globalAssetId: "asset0002"
+    resourceinfo.clcm.openshift.io/groups: "groupA"
+  name: dell-r740-sno2
+  namespace: dell-r740-pool
+spec:
+  online: false
+  bmc:
+    address: idrac-virtualmedia+https://198.51.100.11/redfish/v1/Systems/System.Embedded.1
+    credentialsName: bmc-secret-dell-r740-sno2
+    disableCertificateVerification: true
+  bootMACAddress: 02:00:00:00:00:02
+  preprovisioningNetworkDataName: network-data-dell-r740-sno2
