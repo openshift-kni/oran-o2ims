@@ -363,8 +363,8 @@ github.com/openshift/golang-crypto v0.33.1-0.20250310193910-9003f682e581 h1:YWom
 github.com/openshift/golang-crypto v0.33.1-0.20250310193910-9003f682e581/go.mod h1:bVdXmD7IV/4GdElGPozy6U7lWdRXA4qyRVGJV57uQ5M=
 github.com/openshift/hive/apis v0.0.0-20250725035156-a29a23859060 h1:MIseGDYL78FNVjzoek+UcA94pbzEAnlpytdN6aaB8zc=
 github.com/openshift/hive/apis v0.0.0-20250725035156-a29a23859060/go.mod h1:XUEuhGkTuSXP+eb0LtY3/iJTs/3Fc18CVkqMsmgN+gg=
-github.com/pashagolub/pgxmock/v4 v4.6.0 h1:ds0hIs+bJtkfo01vqjp0BOFirjt4Ea8XV082uorzM3w=
-github.com/pashagolub/pgxmock/v4 v4.6.0/go.mod h1:9VoVHXwS3XR/yPtKGzwQvwZX1kzGB9sM8SviDcHDa3A=
+github.com/pashagolub/pgxmock/v4 v4.9.0 h1:itlO8nrVRnzkdMBXLs8pWUyyB2PC3Gku0WGIj/gGl7I=
+github.com/pashagolub/pgxmock/v4 v4.9.0/go.mod h1:9L57pC193h2aKRHVyiiE817avasIPZnPwPlw3JczWvM=
 github.com/perimeterx/marshmallow v1.1.5 h1:a2LALqQ1BlHM8PZblsDdidgv1mWi1DgC2UmX50IvK2s=
 github.com/perimeterx/marshmallow v1.1.5/go.mod h1:dsXbUu8CRzfYP5a87xpp0xq9S3u0Vchtcl8we9tYaXw=
 github.com/pganalyze/pg_query_go/v6 v6.1.0 h1:jG5ZLhcVgL1FAw4C/0VNQaVmX1SUJx71wBGdtTtBvls=

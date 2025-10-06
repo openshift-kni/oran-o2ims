@@ -82,12 +82,25 @@ func (rs *rowSets) Close() {
 	if rs.ex != nil {
 		rs.ex.rowsWereClosed = true
 	}
-	// return rs.sets[rs.pos].closeErr
+	rs.close()
+}
+
+// close marks the current rows closed, jumps to the last row, and sets the
+// close error.
+func (rs *rowSets) close() {
+	r := rs.sets[rs.RowSetNo]
+	r.recNo = len(r.rows)
+	r.nextErr[r.recNo-1] = r.closeErr
+	r.closed = true
 }
 
 // advances to next row
 func (rs *rowSets) Next() bool {
 	r := rs.sets[rs.RowSetNo]
+	if r.recNo == len(r.rows) {
+		rs.close()
+		return false
+	}
 	r.recNo++
 	return r.recNo <= len(r.rows)
 }
@@ -102,13 +115,18 @@ func (rs *rowSets) Values() ([]interface{}, error) {
 
 func (rs *rowSets) Scan(dest ...interface{}) error {
 	r := rs.sets[rs.RowSetNo]
+	if r.closed {
+		// If there is no error, we should return one anyway. Weirdly, pgx returns
+		// `number of field descriptions must equal number of values, got %d and %d`.
+		return r.nextErr[r.recNo-1]
+	}
 	if len(dest) == 1 {
 		if rc, ok := dest[0].(pgx.RowScanner); ok {
 			return rc.ScanRow(rs)
 		}
 	}
 	if len(dest) != len(r.defs) {
-		return fmt.Errorf("Incorrect argument number %d for columns %d", len(dest), len(r.defs))
+		return fmt.Errorf("incorrect argument number %d for columns %d", len(dest), len(r.defs))
 	}
 	if len(r.rows) == 0 {
 		return pgx.ErrNoRows
@@ -120,7 +138,7 @@ func (rs *rowSets) Scan(dest ...interface{}) error {
 		}
 		destVal := reflect.ValueOf(dest[i])
 		if destVal.Kind() != reflect.Ptr {
-			return fmt.Errorf("Destination argument must be a pointer for column %s", r.defs[i].Name)
+			return fmt.Errorf("destination argument must be a pointer for column %s", r.defs[i].Name)
 		}
 		if col == nil {
 			dest[i] = nil
@@ -131,21 +149,21 @@ func (rs *rowSets) Scan(dest ...interface{}) error {
 			if destElem := destVal.Elem(); destElem.CanSet() {
 				destElem.Set(val)
 			} else {
-				return fmt.Errorf("Cannot set destination value for column %s", r.defs[i].Name)
+				return fmt.Errorf("cannot set destination value for column %s", r.defs[i].Name)
 			}
 		} else if scanner, ok := destVal.Interface().(interface{ Scan(interface{}) error }); ok {
 			// Try to use Scanner interface
 			if err := scanner.Scan(val.Interface()); err != nil {
-				return fmt.Errorf("Scanning value error for column '%s': %w", string(r.defs[i].Name), err)
+				return fmt.Errorf("scanning value error for column '%s': %w", string(r.defs[i].Name), err)
 			}
 		} else if val.CanConvert(destVal.Elem().Type()) {
 			if destElem := destVal.Elem(); destElem.CanSet() {
 				destElem.Set(val.Convert(destElem.Type()))
 			} else {
-				return fmt.Errorf("Cannot set destination value for column %s", r.defs[i].Name)
+				return fmt.Errorf("cannot set destination value for column %s", r.defs[i].Name)
 			}
 		} else {
-			return fmt.Errorf("Destination kind '%v' not supported for value kind '%v' of column '%s'",
+			return fmt.Errorf("destination kind '%v' not supported for value kind '%v' of column '%s'",
 				destVal.Elem().Kind(), val.Kind(), string(r.defs[i].Name))
 		}
 	}
@@ -218,6 +236,7 @@ type Rows struct {
 	recNo      int
 	nextErr    map[int]error
 	closeErr   error
+	closed     bool
 }
 
 // NewRows allows Rows to be created from a
@@ -235,13 +254,8 @@ func NewRows(columns []string) *Rows {
 	}
 }
 
-// CloseError allows to set an error
-// which will be returned by rows.Close
-// function.
-//
-// The close error will be triggered only in cases
-// when rows.Next() EOF was not yet reached, that is
-// a default sql library behavior
+// CloseError sets an error which will be returned by [Rows.Err] after
+// [Rows.Close] has been called or [Rows.Next] returns false.
 func (r *Rows) CloseError(err error) *Rows {
 	r.closeErr = err
 	return r
