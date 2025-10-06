@@ -37,44 +37,78 @@ declare PACKAGE=
 declare NAMESPACE=
 declare CRD_SEARCH=
 
-longopts=(
-    "help"
-    "namespace:"
-    "package:"
-    "crd-search:"
-)
+function parse_args_macos {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --namespace)
+                NAMESPACE="$2"
+                shift 2
+                ;;
+            --package)
+                PACKAGE="$2"
+                shift 2
+                ;;
+            --crd-search)
+                CRD_SEARCH="$2"
+                shift 2
+                ;;
+            --help)
+                usage
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                usage
+                ;;
+        esac
+    done
+}
 
-longopts_str=$(IFS=,; echo "${longopts[*]}")
+function parse_args_linux {
+    longopts=(
+        "help"
+        "namespace:"
+        "package:"
+        "crd-search:"
+    )
 
-if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
-    usage
+    longopts_str=$(IFS=,; echo "${longopts[*]}")
+
+    if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
+        usage
+    fi
+
+    eval set -- "${OPTS}"
+
+    while :; do
+        case "$1" in
+            --namespace)
+                NAMESPACE="$2"
+                shift 2
+                ;;
+            --package)
+                PACKAGE="$2"
+                shift 2
+                ;;
+            --crd-search)
+                CRD_SEARCH="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                usage
+                ;;
+        esac
+    done
+}
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    parse_args_macos "$@"
+else
+    parse_args_linux "$@"
 fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        --namespace)
-            NAMESPACE="$2"
-            shift 2
-            ;;
-        --package)
-            PACKAGE="$2"
-            shift 2
-            ;;
-        --crd-search)
-            CRD_SEARCH="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
-            ;;
-        *)
-            usage
-            ;;
-    esac
-done
 
 if [ -z "${NAMESPACE}" ] || [ -z "${PACKAGE}" ] || [ -z "${CRD_SEARCH}" ]; then
     usage
