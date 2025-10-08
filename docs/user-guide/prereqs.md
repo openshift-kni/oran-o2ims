@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Prerequisites
 
 - [Prerequisites](#prerequisites)
@@ -6,6 +12,32 @@
   - [OAuth Server Expectations/Requirements](#oauth-server-expectationsrequirements)
 
 ## Hub Cluster Requirements
+
+### Platform
+
+- OpenShift Container Platform 4.20.0-rc3 or newer
+
+### Required operators and add‑ons on the hub
+
+- Advanced Cluster Management (ACM) v2.14 or newer
+  - SiteConfig Operator
+
+    Enable SiteConfig in ACM by running the following command:
+
+    ```console
+    oc patch multiclusterhubs.operator.open-cluster-management.io multiclusterhub -n <ACM_NAMESPACE> --type json --patch '[{"op": "add", "path":"/spec/overrides/components/-", "value": {"name":"siteconfig","enabled": true}}]'
+    ```
+
+  - Observablity Operator
+
+    Enable Observablity in ACM by following the official guide: [Red Hat ACM Observability - Enabling the Observability service](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index#enabling-observability)
+- Red Hat OpenShift GitOps Operator
+- Topology Aware Lifecycle Manager
+
+### Storage
+
+- A default StorageClass that supports ReadWriteOnce (RWO)
+- Ensure a free PersistentVolume with at least 20 Gi capacity is available for the operator’s internal database
 
 ## mTLS
 
