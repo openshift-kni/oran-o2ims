@@ -46,6 +46,30 @@ type ResourceServer struct {
 	SubscriptionEventHandler notifier.SubscriptionEventHandler
 }
 
+func (r *ResourceServer) GetAlarmDictionaries(ctx context.Context, request api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
+	// TODO: implement actual logic to fetch alarm dictionaries from database
+	// For now, return an empty array
+	return api.GetAlarmDictionaries200JSONResponse{}, nil
+}
+
+func (r *ResourceServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
+	// TODO: implement actual logic to fetch alarm dictionary by ID from database
+	// For now, return 404 not found
+	return api.GetAlarmDictionary404ApplicationProblemPlusJSONResponse{
+		Detail: "Alarm dictionary not found (not implemented yet)",
+		Status: http.StatusNotFound,
+	}, nil
+}
+
+func (r *ResourceServer) GetResourceTypeAlarmDictionary(ctx context.Context, request api.GetResourceTypeAlarmDictionaryRequestObject) (api.GetResourceTypeAlarmDictionaryResponseObject, error) {
+	// TODO: implement actual logic to fetch alarm dictionary for resource type from database
+	// For now, return 404 not found
+	return api.GetResourceTypeAlarmDictionary404ApplicationProblemPlusJSONResponse{
+		Detail: "Resource type alarm dictionary not found (not implemented yet)",
+		Status: http.StatusNotFound,
+	}, nil
+}
+
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
