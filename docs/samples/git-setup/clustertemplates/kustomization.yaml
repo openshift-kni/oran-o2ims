@@ -1,4 +1,6 @@
 resources:
+- hardwareprofiles
+- hardwaretemplates
+- inventory
 - version_4.Y.Z
 - version_4.Y.Z+1
-- hardwaretemplates
