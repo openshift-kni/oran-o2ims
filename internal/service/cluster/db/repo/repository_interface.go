@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
-	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 )
 
@@ -33,12 +32,12 @@ type RepositoryInterface interface {
 	GetClusterResources(context.Context) ([]models.ClusterResource, error)
 	GetClusterResourcesNotIn(context.Context, []any) ([]models.ClusterResource, error)
 	GetClusterResource(context.Context, uuid.UUID) (*models.ClusterResource, error)
-	UpsertAlarmDefinitions(context.Context, []commonmodels.AlarmDefinition) ([]commonmodels.AlarmDefinition, error)
+	UpsertAlarmDefinitions(context.Context, []models.AlarmDefinition) ([]models.AlarmDefinition, error)
 	DeleteAlarmDefinitionsNotIn(context.Context, []any, uuid.UUID) (int64, error)
-	GetAlarmDefinitionsByAlarmDictionaryID(context.Context, uuid.UUID) ([]commonmodels.AlarmDefinition, error)
-	FindStaleAlarmDictionaries(context.Context, uuid.UUID, int) ([]commonmodels.AlarmDictionary, error)
-	GetNodeClusterTypeAlarmDictionary(context.Context, uuid.UUID) ([]commonmodels.AlarmDictionary, error)
-	GetAlarmDictionaries(context.Context) ([]commonmodels.AlarmDictionary, error)
-	GetAlarmDictionary(context.Context, uuid.UUID) (*commonmodels.AlarmDictionary, error)
+	GetAlarmDefinitionsByAlarmDictionaryID(context.Context, uuid.UUID) ([]models.AlarmDefinition, error)
+	FindStaleAlarmDictionaries(context.Context, uuid.UUID, int) ([]models.AlarmDictionary, error)
+	GetNodeClusterTypeAlarmDictionary(context.Context, uuid.UUID) ([]models.AlarmDictionary, error)
+	GetAlarmDictionaries(context.Context) ([]models.AlarmDictionary, error)
+	GetAlarmDictionary(context.Context, uuid.UUID) (*models.AlarmDictionary, error)
 	SetNodeClusterID(context.Context, string, uuid.UUID) (int, error)
 }

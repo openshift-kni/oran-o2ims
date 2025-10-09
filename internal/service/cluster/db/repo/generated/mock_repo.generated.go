@@ -132,10 +132,10 @@ func (mr *MockRepositoryInterfaceMockRecorder) DeleteSubscription(arg0, arg1 any
 }
 
 // FindStaleAlarmDictionaries mocks base method.
-func (m *MockRepositoryInterface) FindStaleAlarmDictionaries(arg0 context.Context, arg1 uuid.UUID, arg2 int) ([]models0.AlarmDictionary, error) {
+func (m *MockRepositoryInterface) FindStaleAlarmDictionaries(arg0 context.Context, arg1 uuid.UUID, arg2 int) ([]models.AlarmDictionary, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindStaleAlarmDictionaries", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]models0.AlarmDictionary)
+	ret0, _ := ret[0].([]models.AlarmDictionary)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -147,10 +147,10 @@ func (mr *MockRepositoryInterfaceMockRecorder) FindStaleAlarmDictionaries(arg0, 
 }
 
 // GetAlarmDefinitionsByAlarmDictionaryID mocks base method.
-func (m *MockRepositoryInterface) GetAlarmDefinitionsByAlarmDictionaryID(arg0 context.Context, arg1 uuid.UUID) ([]models0.AlarmDefinition, error) {
+func (m *MockRepositoryInterface) GetAlarmDefinitionsByAlarmDictionaryID(arg0 context.Context, arg1 uuid.UUID) ([]models.AlarmDefinition, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAlarmDefinitionsByAlarmDictionaryID", arg0, arg1)
-	ret0, _ := ret[0].([]models0.AlarmDefinition)
+	ret0, _ := ret[0].([]models.AlarmDefinition)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -162,10 +162,10 @@ func (mr *MockRepositoryInterfaceMockRecorder) GetAlarmDefinitionsByAlarmDiction
 }
 
 // GetAlarmDictionaries mocks base method.
-func (m *MockRepositoryInterface) GetAlarmDictionaries(arg0 context.Context) ([]models0.AlarmDictionary, error) {
+func (m *MockRepositoryInterface) GetAlarmDictionaries(arg0 context.Context) ([]models.AlarmDictionary, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAlarmDictionaries", arg0)
-	ret0, _ := ret[0].([]models0.AlarmDictionary)
+	ret0, _ := ret[0].([]models.AlarmDictionary)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -177,10 +177,10 @@ func (mr *MockRepositoryInterfaceMockRecorder) GetAlarmDictionaries(arg0 any) *g
 }
 
 // GetAlarmDictionary mocks base method.
-func (m *MockRepositoryInterface) GetAlarmDictionary(arg0 context.Context, arg1 uuid.UUID) (*models0.AlarmDictionary, error) {
+func (m *MockRepositoryInterface) GetAlarmDictionary(arg0 context.Context, arg1 uuid.UUID) (*models.AlarmDictionary, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAlarmDictionary", arg0, arg1)
-	ret0, _ := ret[0].(*models0.AlarmDictionary)
+	ret0, _ := ret[0].(*models.AlarmDictionary)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -377,10 +377,10 @@ func (mr *MockRepositoryInterfaceMockRecorder) GetNodeClusterType(arg0, arg1 any
 }
 
 // GetNodeClusterTypeAlarmDictionary mocks base method.
-func (m *MockRepositoryInterface) GetNodeClusterTypeAlarmDictionary(arg0 context.Context, arg1 uuid.UUID) ([]models0.AlarmDictionary, error) {
+func (m *MockRepositoryInterface) GetNodeClusterTypeAlarmDictionary(arg0 context.Context, arg1 uuid.UUID) ([]models.AlarmDictionary, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNodeClusterTypeAlarmDictionary", arg0, arg1)
-	ret0, _ := ret[0].([]models0.AlarmDictionary)
+	ret0, _ := ret[0].([]models.AlarmDictionary)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -512,10 +512,10 @@ func (mr *MockRepositoryInterfaceMockRecorder) UpdateSubscription(arg0, arg1 any
 }
 
 // UpsertAlarmDefinitions mocks base method.
-func (m *MockRepositoryInterface) UpsertAlarmDefinitions(arg0 context.Context, arg1 []models0.AlarmDefinition) ([]models0.AlarmDefinition, error) {
+func (m *MockRepositoryInterface) UpsertAlarmDefinitions(arg0 context.Context, arg1 []models.AlarmDefinition) ([]models.AlarmDefinition, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpsertAlarmDefinitions", arg0, arg1)
-	ret0, _ := ret[0].([]models0.AlarmDefinition)
+	ret0, _ := ret[0].([]models.AlarmDefinition)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

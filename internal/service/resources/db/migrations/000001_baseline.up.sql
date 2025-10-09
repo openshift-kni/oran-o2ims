@@ -117,35 +117,44 @@ CREATE TABLE subscription
     CONSTRAINT unique_callback UNIQUE (callback)
 );
 
--- Table: cached_alarm_dictionary
-CREATE TABLE cached_alarm_dictionary
+-- Table: alarm_dictionary
+CREATE TABLE alarm_dictionary
 (
-    alarm_dictionary_id             UUID PRIMARY KEY,
-    resource_type_id                UUID         NOT NULL,
-    alarm_dictionary_version        VARCHAR(50)  NOT NULL,
-    alarm_dictionary_schema_version VARCHAR(50)  NOT NULL,
-    entity_type                     VARCHAR(255) NOT NULL,
-    vendor                          VARCHAR(255) NOT NULL,
-    management_interface_id VARCHAR(50)[] DEFAULT ARRAY ['O2IMS']::VARCHAR[],
-    pk_notification_field   TEXT[]        DEFAULT ARRAY ['alarm_dictionary_id']::TEXT[],
-    created_at              TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
+    alarm_dictionary_id             UUID          PRIMARY KEY,
+    alarm_dictionary_version        VARCHAR(50)   NOT NULL,
+    alarm_dictionary_schema_version VARCHAR(50)   NOT NULL,
+    entity_type                     VARCHAR(255)  NOT NULL,
+    vendor                          VARCHAR(255)  NOT NULL,
+    management_interface_id         VARCHAR(50)[] DEFAULT ARRAY ['O2IMS']::VARCHAR[],
+    pk_notification_field           TEXT[]        DEFAULT ARRAY ['alarmDefinitionID']::TEXT[],
+
+    resource_type_id                UUID          NOT NULL UNIQUE,
+    created_at                      TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table: cached_alarm_definition
-CREATE TABLE cached_alarm_definition
+-- Table: alarm_definition
+CREATE TABLE alarm_definition
 (
-    alarm_definition_id     UUID PRIMARY KEY,
-    alarm_dictionary_id     UUID         NOT NULL,
-    alarm_name              VARCHAR(255) NOT NULL,
-    alarm_last_change       VARCHAR(50)  NOT NULL,
-    alarm_description       TEXT         NOT NULL,
-    proposed_repair_actions TEXT         NOT NULL,
-    alarm_additional_fields JSONB,
-    alarm_change_type       INTEGER      NOT NULL,
-    clearing_type           INTEGER      NOT NULL,
+    alarm_definition_id     UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    alarm_name              VARCHAR(255)  NOT NULL,
+    alarm_last_change       VARCHAR(50)   NOT NULL,
+    alarm_change_type       VARCHAR(20)   NOT NULL,
+    alarm_description       TEXT          NOT NULL,
+    proposed_repair_actions TEXT          NOT NULL,
+    clearing_type           VARCHAR(20)   NOT NULL,
     management_interface_id VARCHAR(50)[] DEFAULT ARRAY ['O2IMS']::VARCHAR[],
-    pk_notification_field   TEXT[]        DEFAULT ARRAY ['alarm_definition_id']::TEXT[],
+    pk_notification_field   TEXT[]        DEFAULT ARRAY ['alarmDefinitionID']::TEXT[],
+    alarm_additional_fields JSONB,
+
+    -- There exists alerts within the same PrometheusRule.Group that have the same name but different severity label.
+    -- By adding this columns and a unique constraint on (alarm_name, severity), we can differentiate between them.
+    -- All the Alerts from the Core Platform Monitoring have a severity label (except alert Watchdog). Alerts without a severity label are not affected by this.
+    severity                VARCHAR(50)   NOT NULL,
+
+    alarm_dictionary_id     UUID          NULL,
+
     created_at              TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (alarm_dictionary_id) REFERENCES cached_alarm_dictionary (alarm_dictionary_id),
-    CONSTRAINT unique_alarm_name_last_change UNIQUE (alarm_name, alarm_last_change)
+
+    FOREIGN KEY (alarm_dictionary_id) REFERENCES alarm_dictionary (alarm_dictionary_id) ON DELETE CASCADE,
+    CONSTRAINT unique_alarm UNIQUE(alarm_dictionary_id, alarm_name, severity)
 );

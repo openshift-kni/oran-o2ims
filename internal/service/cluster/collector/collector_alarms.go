@@ -32,7 +32,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
-	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 )
 
 // AlarmsDataSource is the struct that holds the alarms data source
@@ -86,7 +85,7 @@ func (d *AlarmsDataSource) IncrGenerationID() int {
 }
 
 // makeAlarmDictionaryIDToAlarmDefinitions fetches monitoring rules for each node cluster type and builds a map of alarm dictionary ID to alarm definitions
-func (d *AlarmsDataSource) makeAlarmDictionaryIDToAlarmDefinitions(ctx context.Context, nodeClusterTypes []models.NodeClusterType) (map[uuid.UUID][]commonmodels.AlarmDefinition, error) {
+func (d *AlarmsDataSource) makeAlarmDictionaryIDToAlarmDefinitions(ctx context.Context, nodeClusterTypes []models.NodeClusterType) (map[uuid.UUID][]models.AlarmDefinition, error) {
 	slog.Info("making alarm dictionary ID to alarm definitions map", "nodeClusterTypes count", len(nodeClusterTypes))
 
 	// Fetch prometheus rules from managed clusters and hub
@@ -279,10 +278,10 @@ func (d *AlarmsDataSource) getRules(ctx context.Context, cl crclient.Client) ([]
 }
 
 // buildAlarmDictionaryIDToAlarmDefinitionsMap builds a map of alarm dictionary ID to alarm definitions
-func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterTypes []models.NodeClusterType, nodeClusterTypeIDToMonitoringRules map[uuid.UUID][]monitoringv1.Rule) map[uuid.UUID][]commonmodels.AlarmDefinition {
+func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterTypes []models.NodeClusterType, nodeClusterTypeIDToMonitoringRules map[uuid.UUID][]monitoringv1.Rule) map[uuid.UUID][]models.AlarmDefinition {
 	slog.Info("building alarm dictionary ID to alarm definitions map", "nodeClusterTypes count", len(nodeClusterTypes))
 
-	alarmDictionaryIDToAlarmDefinitions := make(map[uuid.UUID][]commonmodels.AlarmDefinition)
+	alarmDictionaryIDToAlarmDefinitions := make(map[uuid.UUID][]models.AlarmDefinition)
 	for _, nodeClusterType := range nodeClusterTypes {
 		if _, ok := nodeClusterTypeIDToMonitoringRules[nodeClusterType.NodeClusterTypeID]; !ok {
 			slog.Warn("no monitoring rules found for node cluster type", "NodeClusterType ID", nodeClusterType.NodeClusterTypeID)
@@ -348,8 +347,8 @@ func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule)
 }
 
 // createAlarmDefinitions creates alarm definitions from prometheus rules
-func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, alarmDictionaryID uuid.UUID, version string, isThanosRule bool) []commonmodels.AlarmDefinition {
-	var records []commonmodels.AlarmDefinition
+func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, alarmDictionaryID uuid.UUID, version string, isThanosRule bool) []models.AlarmDefinition {
+	var records []models.AlarmDefinition
 
 	for _, rule := range rules {
 		additionalFields := map[string]any{"Expr": rule.Expr.String()}
@@ -369,7 +368,7 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 		description := rule.Annotations["description"]
 		runbookURL := rule.Annotations["runbook_url"]
 
-		record := commonmodels.AlarmDefinition{
+		record := models.AlarmDefinition{
 			AlarmName:             rule.Alert,
 			AlarmLastChange:       version,
 			AlarmChangeType:       string(common.ADDED),
@@ -394,10 +393,10 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 }
 
 // makeAlarmDictionaries creates alarm dictionaries from node cluster types
-func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeClusterType) []commonmodels.AlarmDictionary {
+func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeClusterType) []models.AlarmDictionary {
 	slog.Info("making alarm dictionaries", "nodeClusterTypes count", len(nodeClusterTypes))
 
-	var alarmDictionaries []commonmodels.AlarmDictionary
+	var alarmDictionaries []models.AlarmDictionary
 	for _, nodeClusterType := range nodeClusterTypes {
 		// Remove once fields are added to the NodeClusterType model
 		extensions, err := getVendorExtensions(nodeClusterType)
@@ -413,7 +412,7 @@ func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeC
 			continue
 		}
 
-		alarmDictionary := commonmodels.AlarmDictionary{
+		alarmDictionary := models.AlarmDictionary{
 			AlarmDictionaryID:      alarmDictionaryID,
 			AlarmDictionaryVersion: extensions.version,
 			EntityType:             fmt.Sprintf("%s-%s", extensions.model, extensions.version),
@@ -522,7 +521,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 }
 
 // makeThanosAlarmDefinitions creates alarm definitions from thanos rules
-func (d *AlarmsDataSource) makeThanosAlarmDefinitions(rules []monitoringv1.Rule) ([]commonmodels.AlarmDefinition, error) {
+func (d *AlarmsDataSource) makeThanosAlarmDefinitions(rules []monitoringv1.Rule) ([]models.AlarmDefinition, error) {
 	slog.Debug("Making Thanos alarm definitions", "rules count", len(rules))
 
 	filteredRules := d.getFilteredRules(rules)
