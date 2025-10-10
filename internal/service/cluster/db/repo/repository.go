@@ -17,7 +17,6 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/im"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
-	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -137,11 +136,11 @@ func (r *ClusterRepository) GetClusterResource(ctx context.Context, id uuid.UUID
 }
 
 // UpsertAlarmDefinitions inserts or updates alarm definition records
-func (r *ClusterRepository) UpsertAlarmDefinitions(ctx context.Context, records []commonmodels.AlarmDefinition) ([]commonmodels.AlarmDefinition, error) {
-	dbModel := commonmodels.AlarmDefinition{}
+func (r *ClusterRepository) UpsertAlarmDefinitions(ctx context.Context, records []models.AlarmDefinition) ([]models.AlarmDefinition, error) {
+	dbModel := models.AlarmDefinition{}
 
 	if len(records) == 0 {
-		return []commonmodels.AlarmDefinition{}, nil
+		return []models.AlarmDefinition{}, nil
 	}
 
 	columns := svcutils.GetColumns(records[0], []string{
@@ -172,67 +171,67 @@ func (r *ClusterRepository) UpsertAlarmDefinitions(ctx context.Context, records 
 		return nil, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	return svcutils.ExecuteCollectRows[commonmodels.AlarmDefinition](ctx, r.Db, sql, args)
+	return svcutils.ExecuteCollectRows[models.AlarmDefinition](ctx, r.Db, sql, args)
 }
 
 // DeleteAlarmDefinitionsNotIn deletes all alarm definitions identified by the primary key that are not in the list of IDs.
 // The Where expression also uses the column "alarm_dictionary_id" to filter the records
 func (r *ClusterRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids []any, alarmDictionaryID uuid.UUID) (int64, error) {
-	tags := svcutils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "AlarmDictionaryID")
+	tags := svcutils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "AlarmDictionaryID")
 
-	expr := psql.Quote(commonmodels.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["AlarmDictionaryID"]).EQ(psql.Arg(alarmDictionaryID)))
-	return svcutils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
+	expr := psql.Quote(models.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["AlarmDictionaryID"]).EQ(psql.Arg(alarmDictionaryID)))
+	return svcutils.Delete[models.AlarmDefinition](ctx, r.Db, expr)
 }
 
 // DeleteThanosAlarmDefinitions deletes all thanos alarm definitions
 func (r *ClusterRepository) DeleteThanosAlarmDefinitions(ctx context.Context) (int64, error) {
-	tags := svcutils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "IsThanosRule")
+	tags := svcutils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "IsThanosRule")
 
 	expr := psql.Quote(tags["IsThanosRule"]).EQ(psql.Arg(true))
-	return svcutils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
+	return svcutils.Delete[models.AlarmDefinition](ctx, r.Db, expr)
 }
 
 // DeleteThanosAlarmDefinitionsNotIn deletes all thanos alarm definitions identified by the primary key that are not in the list of IDs
 func (r *ClusterRepository) DeleteThanosAlarmDefinitionsNotIn(ctx context.Context, ids []any) (int64, error) {
-	tags := svcutils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "IsThanosRule")
+	tags := svcutils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "IsThanosRule")
 
-	expr := psql.Quote(commonmodels.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["IsThanosRule"]).EQ(psql.Arg(true)))
-	return svcutils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
+	expr := psql.Quote(models.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["IsThanosRule"]).EQ(psql.Arg(true)))
+	return svcutils.Delete[models.AlarmDefinition](ctx, r.Db, expr)
 }
 
 // GetThanosAlarmDefinitions returns the list of Thanos alarm definitions or an empty list if none exist; otherwise an error
-func (r *ClusterRepository) GetThanosAlarmDefinitions(ctx context.Context) ([]commonmodels.AlarmDefinition, error) {
-	tags := svcutils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "IsThanosRule")
+func (r *ClusterRepository) GetThanosAlarmDefinitions(ctx context.Context) ([]models.AlarmDefinition, error) {
+	tags := svcutils.GetDBTagsFromStructFields(models.AlarmDefinition{}, "IsThanosRule")
 	expr := psql.Quote(tags["IsThanosRule"]).EQ(psql.Arg(true))
-	return svcutils.Search[commonmodels.AlarmDefinition](ctx, r.Db, expr)
+	return svcutils.Search[models.AlarmDefinition](ctx, r.Db, expr)
 }
 
 // GetAlarmDefinitionsByAlarmDictionaryID returns the list of AlarmDefinition records that have a matching "alarm_dictionary_id"
-func (r *ClusterRepository) GetAlarmDefinitionsByAlarmDictionaryID(ctx context.Context, alarmDictionaryID uuid.UUID) ([]commonmodels.AlarmDefinition, error) {
+func (r *ClusterRepository) GetAlarmDefinitionsByAlarmDictionaryID(ctx context.Context, alarmDictionaryID uuid.UUID) ([]models.AlarmDefinition, error) {
 	e := psql.Quote("alarm_dictionary_id").EQ(psql.Arg(alarmDictionaryID))
-	return svcutils.Search[commonmodels.AlarmDefinition](ctx, r.Db, e)
+	return svcutils.Search[models.AlarmDefinition](ctx, r.Db, e)
 }
 
 // FindStaleAlarmDictionaries returns the list of AlarmDictionary records that have a matching "data_source_id" and a "generation_id"
-func (r *ClusterRepository) FindStaleAlarmDictionaries(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]commonmodels.AlarmDictionary, error) {
+func (r *ClusterRepository) FindStaleAlarmDictionaries(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.AlarmDictionary, error) {
 	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
-	return svcutils.Search[commonmodels.AlarmDictionary](ctx, r.Db, e)
+	return svcutils.Search[models.AlarmDictionary](ctx, r.Db, e)
 }
 
 // GetNodeClusterTypeAlarmDictionary returns the list of AlarmDictionary records that have a matching "node_cluster_type_id"
-func (r *ClusterRepository) GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClusterTypeID uuid.UUID) ([]commonmodels.AlarmDictionary, error) {
+func (r *ClusterRepository) GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClusterTypeID uuid.UUID) ([]models.AlarmDictionary, error) {
 	e := psql.Quote("node_cluster_type_id").EQ(psql.Arg(nodeClusterTypeID))
-	return svcutils.Search[commonmodels.AlarmDictionary](ctx, r.Db, e)
+	return svcutils.Search[models.AlarmDictionary](ctx, r.Db, e)
 }
 
 // GetAlarmDictionaries returns the list of AlarmDictionary records or an empty list if none exist; otherwise an error
-func (r *ClusterRepository) GetAlarmDictionaries(ctx context.Context) ([]commonmodels.AlarmDictionary, error) {
-	return svcutils.FindAll[commonmodels.AlarmDictionary](ctx, r.Db)
+func (r *ClusterRepository) GetAlarmDictionaries(ctx context.Context) ([]models.AlarmDictionary, error) {
+	return svcutils.FindAll[models.AlarmDictionary](ctx, r.Db)
 }
 
 // GetAlarmDictionary returns an AlarmDictionary record matching the specified UUID value or ErrNotFound if no record matched;
-func (r *ClusterRepository) GetAlarmDictionary(ctx context.Context, id uuid.UUID) (*commonmodels.AlarmDictionary, error) {
-	return svcutils.Find[commonmodels.AlarmDictionary](ctx, r.Db, id)
+func (r *ClusterRepository) GetAlarmDictionary(ctx context.Context, id uuid.UUID) (*models.AlarmDictionary, error) {
+	return svcutils.Find[models.AlarmDictionary](ctx, r.Db, id)
 }
 
 // SetNodeClusterID sets the nodeClusterID value on cluster resources that may have arrived out of order
