@@ -234,6 +234,37 @@ nodes:
 			Message: "spec.clusterName cannot be empty",
 		})
 	})
+
+	It("should remove bmcCredentialsDetails from rendered ClusterInstance", func() {
+		// Add bmcCredentialsDetails to the clusterInstanceData nodes
+		nodes := task.clusterInput.clusterInstanceData["nodes"].([]any)
+		for _, node := range nodes {
+			nodeMap := node.(map[string]any)
+			nodeMap["bmcCredentialsDetails"] = map[string]any{
+				"username": "YWRtaW4=",     // base64 encoded "admin"
+				"password": "cGFzc3dvcmQ=", // base64 encoded "password"
+			}
+		}
+
+		// Build the ClusterInstance unstructured object
+		renderedCI, err := task.buildClusterInstanceUnstructured()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(renderedCI).ToNot(BeNil())
+
+		// Verify that bmcCredentialsDetails has been removed from all nodes
+		renderedNodes := renderedCI.Object["spec"].(map[string]any)["nodes"].([]any)
+		for i, node := range renderedNodes {
+			nodeMap := node.(map[string]any)
+			_, bmcCredentialsDetailsExists := nodeMap["bmcCredentialsDetails"]
+			Expect(bmcCredentialsDetailsExists).To(BeFalse(),
+				"bmcCredentialsDetails should be removed from node %d", i)
+
+			// Verify that bmcCredentialsName still exists (should be set or preserved)
+			_, bmcCredentialsNameExists := nodeMap["bmcCredentialsName"]
+			Expect(bmcCredentialsNameExists).To(BeTrue(),
+				"bmcCredentialsName should exist in node %d", i)
+		}
+	})
 })
 
 // ptr is a helper function to create pointers

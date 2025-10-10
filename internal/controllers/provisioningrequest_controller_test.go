@@ -2257,6 +2257,222 @@ plan:
 		})
 	})
 
+	Describe("buildClusterInstanceUnstructured without hardware provisioning", func() {
+		It("should remove bmcCredentialsDetails from rendered ClusterInstance", func() {
+			clusterName := "test-no-hw-cluster"
+			testNs := "test-no-hw-ns"
+
+			// Create namespace
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNs,
+				},
+			}
+			Expect(c.Create(ctx, ns)).To(Succeed())
+
+			// Create ClusterTemplate without hardware template (no hardware provisioning)
+			noHwTemplate := &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-no-hw.v1.0.0",
+					Namespace: testNs,
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:    "test-no-hw",
+					Version: "v1.0.0",
+					Templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: "no-hw-defaults-cm",
+						// HwTemplate is empty - indicates no hardware provisioning
+					},
+					TemplateParameterSchema: runtime.RawExtension{
+						Raw: []byte(`{
+							"type": "object",
+							"properties": {
+								"clusterInstanceParameters": {
+									"type": "object",
+									"properties": {
+										"clusterName": {"type": "string"},
+										"nodes": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"hostName": {"type": "string"},
+													"bmcAddress": {"type": "string"},
+													"bootMACAddress": {"type": "string"},
+													"bmcCredentialsDetails": {
+														"type": "object",
+														"properties": {
+															"username": {
+																"type": "string",
+																"pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+															},
+															"password": {
+																"type": "string",
+																"pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+															}
+														},
+														"required": ["username", "password"]
+													},
+													"nodeNetwork": {
+														"type": "object",
+														"properties": {
+															"interfaces": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"properties": {
+																		"name": {"type": "string"},
+																		"macAddress": {"type": "string"}
+																	}
+																}
+															}
+														}
+													}
+												},
+												"required": ["hostName", "bmcAddress", "bootMACAddress", "bmcCredentialsDetails", "nodeNetwork"]
+											}
+										}
+									},
+									"required": ["clusterName", "nodes"]
+								}
+							}
+						}`),
+					},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, noHwTemplate)).To(Succeed())
+
+			// Create ConfigMap with ClusterInstance defaults
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "no-hw-defaults-cm",
+					Namespace: testNs,
+				},
+				Data: map[string]string{
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.16"
+pullSecretRef:
+  name: "pull-secret"
+nodes:
+- role: master
+  ironicInspect: ""`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+
+			// Create ProvisioningRequest with bmcCredentialsDetails
+			cr = &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-no-hw-pr",
+					Namespace: testNs,
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					TemplateName:    "test-no-hw",
+					TemplateVersion: "v1.0.0",
+					TemplateParameters: runtime.RawExtension{
+						Raw: []byte(`{
+							"clusterInstanceParameters": {
+								"clusterName": "` + clusterName + `",
+								"nodes": [{
+									"hostName": "node1",
+									"bmcAddress": "idrac-virtualmedia+https://192.168.1.100/redfish/v1/Systems/1",
+									"bootMACAddress": "AA:BB:CC:DD:EE:FF",
+									"bmcCredentialsDetails": {
+										"username": "YWRtaW4=",
+										"password": "cGFzc3dvcmQ="
+									},
+									"nodeNetwork": {
+										"interfaces": [{
+											"name": "eno1",
+											"macAddress": "00:00:00:01:20:30"
+										}]
+									}
+								}]
+							}
+						}`),
+					},
+				},
+			}
+			Expect(c.Create(ctx, cr)).To(Succeed())
+
+			// Create provisioning request reconciler task with no hardware template (simulates no hardware provisioning)
+			task = &provisioningRequestReconcilerTask{
+				logger: reconciler.Logger,
+				client: c,
+				object: cr,
+				ctDetails: &clusterTemplateDetails{
+					namespace: testNs,
+					templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: "no-hw-defaults-cm",
+						// No HwTemplate - this is key for no-hardware-provisioning
+					},
+				},
+				clusterInput:   &clusterInput{},
+				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
+			}
+
+			// Extract and merge cluster instance parameters
+			clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
+				cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(clusterInstanceInputParams).ToNot(BeNil())
+
+			// Verify bmcCredentialsDetails exists in the input
+			inputNodes := clusterInstanceInputParams.(map[string]any)["nodes"].([]any)
+			inputNode0 := inputNodes[0].(map[string]any)
+			_, hasBmcDetailsInInput := inputNode0["bmcCredentialsDetails"]
+			Expect(hasBmcDetailsInInput).To(BeTrue(),
+				"bmcCredentialsDetails should exist in ProvisioningRequest input")
+
+			mergedData, err := task.getMergedClusterInputData(
+				ctx, "no-hw-defaults-cm", clusterInstanceInputParams.(map[string]any),
+				utils.TemplateParamClusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+			task.clusterInput.clusterInstanceData = mergedData
+
+			// Build the ClusterInstance unstructured object
+			renderedCI, err := task.buildClusterInstanceUnstructured()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(renderedCI).ToNot(BeNil())
+			Expect(renderedCI.GetName()).To(Equal(clusterName))
+			Expect(renderedCI.GetNamespace()).To(Equal(clusterName))
+
+			// Verify thatbmcCredentialsDetails is removed from all nodes
+			renderedSpec := renderedCI.Object["spec"].(map[string]any)
+			renderedNodes := renderedSpec["nodes"].([]any)
+			Expect(renderedNodes).ToNot(BeEmpty())
+
+			for i, node := range renderedNodes {
+				nodeMap := node.(map[string]any)
+
+				// Verify bmcCredentialsDetails has been removed
+				_, hasBmcDetails := nodeMap["bmcCredentialsDetails"]
+				Expect(hasBmcDetails).To(BeFalse(),
+					"bmcCredentialsDetails should be removed from node %d (not part of ClusterInstance CRD schema)", i)
+
+				// Verify that bmcCredentialsName exists
+				bmcCredsName, hasBmcCredsName := nodeMap["bmcCredentialsName"]
+				Expect(hasBmcCredsName).To(BeTrue(),
+					"bmcCredentialsName should exist in node %d (valid ClusterInstance CRD field)", i)
+				Expect(bmcCredsName).ToNot(BeNil())
+
+				// Verify other required BMC fields are present
+				Expect(nodeMap["bmcAddress"]).To(Equal("idrac-virtualmedia+https://192.168.1.100/redfish/v1/Systems/1"))
+				Expect(nodeMap["bootMACAddress"]).To(Equal("AA:BB:CC:DD:EE:FF"))
+				Expect(nodeMap["hostName"]).To(Equal("node1"))
+			}
+		})
+	})
+
 	Describe("Reconcile", func() {
 		var (
 			reconcileReq    ctrl.Request

@@ -200,6 +200,8 @@ var (
 		// Node-level ignored fields
 		{"nodes", "*", "bmcAddress"},
 		{"nodes", "*", "bmcCredentialsName"},
+		// The bmcCredentialsDetails field is not part of the ClusterInstance CRD.
+		{"nodes", "*", "bmcCredentialsDetails"},
 		{"nodes", "*", "bootMACAddress"},
 		{"nodes", "*", "hostRef"},
 		{"nodes", "*", "nodeNetwork", "interfaces", "*", "macAddress"},
