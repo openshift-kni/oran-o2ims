@@ -917,6 +917,16 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 
 // handleRenderClusterInstance handles the ClusterInstance rendering and validation.
 func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx context.Context) (*siteconfig.ClusterInstance, error) {
+	// Skip re-rendering if ClusterInstance was already successfully rendered. This avoids unnecessary validation
+	// attempts that would be blocked by the ClusterInstance admission webhook during active provisioning.
+	if existingCI, canSkip := t.canSkipClusterInstanceRendering(ctx); canSkip {
+		t.logger.InfoContext(ctx,
+			"Skipping ClusterInstance re-rendering: cluster installation already in progress",
+			slog.String("name", t.object.Name))
+
+		return existingCI, nil
+	}
+
 	renderedClusterInstance, err := t.buildClusterInstance(ctx)
 	if err != nil {
 		clusterInstanceFailureMsg := "Failed to render and validate ClusterInstance"
@@ -953,6 +963,69 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 		return nil, fmt.Errorf("failed to handle ClusterInstance rendering and validation: %w", err)
 	}
 	return renderedClusterInstance, nil
+}
+
+// canSkipClusterInstanceRendering determines if ClusterInstance re-rendering can be skipped to avoid unnecessary dry-run
+// validation attempts that would be blocked by the ClusterInstance admission webhook during active cluster provisioning.
+// Returns the existing ClusterInstance and true if skipping is possible, or nil and false if re-rendering is needed.
+// Only skip if all the following conditions are met:
+// - ClusterInstance has been successfully rendered before (condition is True)
+// - ClusterInstance has been applied (ClusterDetails exists)
+// - Cluster provisioning is not yet completed (to allow re-rendering after completion for upgrades, etc)
+// - ClusterInstance resource actually exists in the cluster
+func (t *provisioningRequestReconcilerTask) canSkipClusterInstanceRendering(ctx context.Context) (*siteconfig.ClusterInstance, bool) {
+	ciRenderedCond := meta.FindStatusCondition(t.object.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered))
+
+	// Condition 1: ClusterInstance was successfully rendered
+	if ciRenderedCond == nil || ciRenderedCond.Status != metav1.ConditionTrue {
+		return nil, false
+	}
+
+	// Condition 2: ClusterInstance has been applied
+	if t.object.Status.Extensions.ClusterDetails == nil {
+		return nil, false
+	}
+
+	// Condition 3: Cluster is not yet completed (provisioning is in progress)
+	// Allow re-rendering after completion to support upgrade scenarios
+	if ctlrutils.IsClusterProvisionCompleted(t.object) {
+		return nil, false
+	}
+
+	// Condition 4: ClusterInstance resource actually exists in the cluster
+	// This handles edge cases where ClusterDetails is set but the ClusterInstance was deleted / not found
+	existingCI, err := t.getExistingClusterInstance(ctx)
+	if err != nil {
+		// ClusterInstance doesn't exist - need to render it
+		return nil, false
+	}
+
+	// Prepare the existing ClusterInstance for Server-Side Apply by clearing metadata
+	// that must not be present in SSA requests
+	ctlrutils.PrepareClusterInstanceForServerSideApply(existingCI)
+
+	return existingCI, true
+}
+
+// getExistingClusterInstance retrieves the existing ClusterInstance from the cluster
+func (t *provisioningRequestReconcilerTask) getExistingClusterInstance(ctx context.Context) (*siteconfig.ClusterInstance, error) {
+	if t.object.Status.Extensions.ClusterDetails == nil {
+		return nil, fmt.Errorf("clusterDetails is nil, cannot retrieve ClusterInstance")
+	}
+
+	clusterInstanceName := t.object.Status.Extensions.ClusterDetails.Name
+	clusterInstance := &siteconfig.ClusterInstance{}
+
+	exists, err := ctlrutils.DoesK8SResourceExist(ctx, t.client, clusterInstanceName, clusterInstanceName, clusterInstance)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if ClusterInstance exists: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("clusterInstance %s not found", clusterInstanceName)
+	}
+
+	return clusterInstance, nil
 }
 
 func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.Context, clusterInstance *siteconfig.ClusterInstance) error {

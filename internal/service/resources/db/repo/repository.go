@@ -116,3 +116,25 @@ func (r *ResourcesRepository) FindStaleResourceTypes(ctx context.Context, dataSo
 	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
 	return svcutils.Search[models.ResourceType](ctx, r.Db, e)
 }
+
+// GetAlarmDictionaries returns the list of AlarmDictionary records or an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetAlarmDictionaries(ctx context.Context) ([]models.AlarmDictionary, error) {
+	return svcutils.FindAll[models.AlarmDictionary](ctx, r.Db)
+}
+
+// GetAlarmDictionary returns an AlarmDictionary record matching the specified UUID value or ErrNotFound if no record matched
+func (r *ResourcesRepository) GetAlarmDictionary(ctx context.Context, id uuid.UUID) (*models.AlarmDictionary, error) {
+	return svcutils.Find[models.AlarmDictionary](ctx, r.Db, id)
+}
+
+// GetAlarmDefinitionsByAlarmDictionaryID returns the list of AlarmDefinition records for a given AlarmDictionary ID
+func (r *ResourcesRepository) GetAlarmDefinitionsByAlarmDictionaryID(ctx context.Context, alarmDictionaryID uuid.UUID) ([]models.AlarmDefinition, error) {
+	e := psql.Quote("alarm_dictionary_id").EQ(psql.Arg(alarmDictionaryID))
+	return svcutils.Search[models.AlarmDefinition](ctx, r.Db, e)
+}
+
+// GetResourceTypeAlarmDictionary returns the AlarmDictionary record for a given ResourceType ID
+func (r *ResourcesRepository) GetResourceTypeAlarmDictionary(ctx context.Context, resourceTypeID uuid.UUID) ([]models.AlarmDictionary, error) {
+	e := psql.Quote("resource_type_id").EQ(psql.Arg(resourceTypeID))
+	return svcutils.Search[models.AlarmDictionary](ctx, r.Db, e)
+}

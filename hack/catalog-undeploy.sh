@@ -17,15 +17,24 @@ EOF
 
 function cleanSubscription {
     oc delete subscriptions.operators.coreos.com -n "${NAMESPACE}" "${PACKAGE}"
-    oc get csv -n "${NAMESPACE}" | grep "${PACKAGE}" | awk '{print $1}' \
+
+    oc get csv -n "${NAMESPACE}" --no-headers -o custom-columns=NAME:.metadata.name | grep "${PACKAGE}" \
         | xargs --no-run-if-empty oc delete csv -n "${NAMESPACE}"
-    oc get crd | grep "${CRD_SEARCH}" | awk '{print $1}' \
+
+    oc get crd --no-headers -o custom-columns=NAME:.metadata.name | grep "${CRD_SEARCH}" \
         | xargs --no-run-if-empty oc delete crd
+
     oc delete ns "${NAMESPACE}"
-    oc get clusterrole.rbac.authorization.k8s.io | grep "${PACKAGE}" | awk '{print $1}' \
+
+    oc get clusterrole.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
         | xargs --no-run-if-empty oc delete clusterrole.rbac.authorization.k8s.io
-    oc get clusterrolebinding.rbac.authorization.k8s.io | grep "${PACKAGE}" | awk '{print $1}' \
+    oc get clusterrolebinding.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
         | xargs --no-run-if-empty oc delete clusterrolebinding.rbac.authorization.k8s.io
+
+    oc get rolebindings.rbac.authorization.k8s.io -n kube-system --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
+        | xargs --no-run-if-empty oc delete rolebindings.rbac.authorization.k8s.io -n kube-system
+
+    oc delete operators.operators.coreos.com "${PACKAGE}.${NAMESPACE}"
 
     oc delete catalogsources.operators.coreos.com -n openshift-marketplace "${PACKAGE}"
 }
@@ -37,44 +46,78 @@ declare PACKAGE=
 declare NAMESPACE=
 declare CRD_SEARCH=
 
-longopts=(
-    "help"
-    "namespace:"
-    "package:"
-    "crd-search:"
-)
+function parse_args_macos {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --namespace)
+                NAMESPACE="$2"
+                shift 2
+                ;;
+            --package)
+                PACKAGE="$2"
+                shift 2
+                ;;
+            --crd-search)
+                CRD_SEARCH="$2"
+                shift 2
+                ;;
+            --help)
+                usage
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                usage
+                ;;
+        esac
+    done
+}
 
-longopts_str=$(IFS=,; echo "${longopts[*]}")
+function parse_args_linux {
+    longopts=(
+        "help"
+        "namespace:"
+        "package:"
+        "crd-search:"
+    )
 
-if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
-    usage
+    longopts_str=$(IFS=,; echo "${longopts[*]}")
+
+    if ! OPTS=$(getopt -o "ho:" --long "${longopts_str}" --name "$0" -- "$@"); then
+        usage
+    fi
+
+    eval set -- "${OPTS}"
+
+    while :; do
+        case "$1" in
+            --namespace)
+                NAMESPACE="$2"
+                shift 2
+                ;;
+            --package)
+                PACKAGE="$2"
+                shift 2
+                ;;
+            --crd-search)
+                CRD_SEARCH="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                usage
+                ;;
+        esac
+    done
+}
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    parse_args_macos "$@"
+else
+    parse_args_linux "$@"
 fi
-
-eval set -- "${OPTS}"
-
-while :; do
-    case "$1" in
-        --namespace)
-            NAMESPACE="$2"
-            shift 2
-            ;;
-        --package)
-            PACKAGE="$2"
-            shift 2
-            ;;
-        --crd-search)
-            CRD_SEARCH="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
-            ;;
-        *)
-            usage
-            ;;
-    esac
-done
 
 if [ -z "${NAMESPACE}" ] || [ -z "${PACKAGE}" ] || [ -z "${CRD_SEARCH}" ]; then
     usage

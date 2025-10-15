@@ -16,7 +16,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
+	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
@@ -120,7 +120,7 @@ func NodeClusterTypeToModel(record *NodeClusterType, options *commonapi.FieldOpt
 }
 
 // SubscriptionToModel converts a DB tuple to an API Model
-func SubscriptionToModel(record *models.Subscription) generated.Subscription {
+func SubscriptionToModel(record *commonmodels.Subscription) generated.Subscription {
 	object := generated.Subscription{
 		Callback:               record.Callback,
 		ConsumerSubscriptionId: record.ConsumerSubscriptionID,
@@ -132,10 +132,10 @@ func SubscriptionToModel(record *models.Subscription) generated.Subscription {
 }
 
 // SubscriptionFromModel converts an API model to a DB tuple
-func SubscriptionFromModel(object *generated.Subscription) *models.Subscription {
+func SubscriptionFromModel(object *generated.Subscription) *commonmodels.Subscription {
 	id := uuid.Must(uuid.NewRandom())
 
-	record := models.Subscription{
+	record := commonmodels.Subscription{
 		SubscriptionID:         &id,
 		ConsumerSubscriptionID: object.ConsumerSubscriptionId,
 		Filter:                 object.Filter,
@@ -147,7 +147,7 @@ func SubscriptionFromModel(object *generated.Subscription) *models.Subscription 
 }
 
 // SubscriptionToInfo converts a Subscription to a generic SubscriptionInfo
-func SubscriptionToInfo(record *models.Subscription) *notifier.SubscriptionInfo {
+func SubscriptionToInfo(record *commonmodels.Subscription) *notifier.SubscriptionInfo {
 	return &notifier.SubscriptionInfo{
 		SubscriptionID:         *record.SubscriptionID,
 		ConsumerSubscriptionID: record.ConsumerSubscriptionID,
@@ -192,7 +192,7 @@ func getObjectReference(objectType string, objectID uuid.UUID) *string {
 }
 
 // DataChangeEventToModel converts a DB tuple to an API model
-func DataChangeEventToModel(record *models.DataChangeEvent) generated.ClusterChangeNotification {
+func DataChangeEventToModel(record *commonmodels.DataChangeEvent) generated.ClusterChangeNotification {
 	eventType := getEventType(record.BeforeState, record.AfterState)
 	object := generated.ClusterChangeNotification{
 		NotificationEventType: generated.ClusterChangeNotificationNotificationEventType(eventType),
@@ -212,7 +212,7 @@ func DataChangeEventToModel(record *models.DataChangeEvent) generated.ClusterCha
 }
 
 // DataChangeEventToNotification converts a DataChangeEvent to a generic Notification
-func DataChangeEventToNotification(record *models.DataChangeEvent) *notifier.Notification {
+func DataChangeEventToNotification(record *commonmodels.DataChangeEvent) *notifier.Notification {
 	return &notifier.Notification{
 		NotificationID: *record.DataChangeID,
 		SequenceID:     *record.SequenceID,
@@ -220,7 +220,7 @@ func DataChangeEventToNotification(record *models.DataChangeEvent) *notifier.Not
 	}
 }
 
-func AlarmDictionaryToModel(record *models.AlarmDictionary, alarmDefinitionRecords []models.AlarmDefinition) common.AlarmDictionary {
+func AlarmDictionaryToModel(record *AlarmDictionary, alarmDefinitionRecords []AlarmDefinition) common.AlarmDictionary {
 	alarmDictionary := common.AlarmDictionary{
 		AlarmDictionaryId:            record.AlarmDictionaryID,
 		AlarmDictionaryVersion:       record.AlarmDictionaryVersion,

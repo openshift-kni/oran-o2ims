@@ -1920,6 +1920,559 @@ plan:
 		})
 	})
 
+	Describe("canSkipClusterInstanceRendering", func() {
+		BeforeEach(func() {
+			cr = &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-skip-pr",
+					Namespace: "test-ns",
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					TemplateName:    "test-template",
+					TemplateVersion: "v1.0.0",
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{},
+			}
+
+			task = &provisioningRequestReconcilerTask{
+				logger: reconciler.Logger,
+				client: c,
+				object: cr,
+			}
+		})
+
+		Context("when all skip conditions are met", func() {
+			It("should return existing ClusterInstance and true to skip re-rendering during active provisioning", func() {
+				clusterName := "test-cluster"
+				cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: clusterName,
+				}
+
+				// Create the ClusterInstance
+				ci := &siteconfig.ClusterInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: clusterName,
+					},
+					Spec: siteconfig.ClusterInstanceSpec{
+						ClusterName: clusterName,
+					},
+				}
+				Expect(c.Create(ctx, ci)).To(Succeed())
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+					provisioningv1alpha1.CRconditionReasons.Completed,
+					metav1.ConditionTrue,
+					"ClusterInstance rendered successfully")
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+					provisioningv1alpha1.CRconditionReasons.InProgress,
+					metav1.ConditionFalse,
+					"Provisioning in progress")
+
+				existingCI, canSkip := task.canSkipClusterInstanceRendering(ctx)
+				Expect(canSkip).To(BeTrue())
+				Expect(existingCI).NotTo(BeNil())
+				Expect(existingCI.Name).To(Equal(clusterName))
+			})
+		})
+
+		Context("when ClusterInstanceRendered condition is not True", func() {
+			It("should return nil and false when condition is missing", func() {
+				cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: "test-cluster",
+				}
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+					provisioningv1alpha1.CRconditionReasons.InProgress,
+					metav1.ConditionFalse,
+					"In progress")
+
+				existingCI, canSkip := task.canSkipClusterInstanceRendering(ctx)
+				Expect(canSkip).To(BeFalse())
+				Expect(existingCI).To(BeNil())
+			})
+
+			It("should return nil and false when condition status is False", func() {
+				cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: "test-cluster",
+				}
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+					provisioningv1alpha1.CRconditionReasons.Failed,
+					metav1.ConditionFalse,
+					"Rendering failed")
+
+				existingCI, canSkip := task.canSkipClusterInstanceRendering(ctx)
+				Expect(canSkip).To(BeFalse())
+				Expect(existingCI).To(BeNil())
+			})
+		})
+
+		Context("when ClusterDetails is nil", func() {
+			It("should return nil and false when ClusterInstance not yet applied", func() {
+				cr.Status.Extensions.ClusterDetails = nil
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+					provisioningv1alpha1.CRconditionReasons.Completed,
+					metav1.ConditionTrue,
+					"ClusterInstance rendered successfully")
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+					provisioningv1alpha1.CRconditionReasons.InProgress,
+					metav1.ConditionFalse,
+					"In progress")
+
+				existingCI, canSkip := task.canSkipClusterInstanceRendering(ctx)
+				Expect(canSkip).To(BeFalse())
+				Expect(existingCI).To(BeNil())
+			})
+		})
+
+		Context("when cluster provisioning is completed", func() {
+			It("should return nil and false to allow re-rendering for upgrades", func() {
+				cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: "test-cluster",
+				}
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+					provisioningv1alpha1.CRconditionReasons.Completed,
+					metav1.ConditionTrue,
+					"ClusterInstance rendered successfully")
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+					provisioningv1alpha1.CRconditionReasons.Completed,
+					metav1.ConditionTrue,
+					"Provisioning completed")
+
+				existingCI, canSkip := task.canSkipClusterInstanceRendering(ctx)
+				Expect(canSkip).To(BeFalse())
+				Expect(existingCI).To(BeNil())
+			})
+		})
+
+		Context("when ClusterInstance does not exist despite ClusterDetails being set", func() {
+			It("should return nil and false to trigger re-rendering (edge case)", func() {
+
+				// Note: ClusterInstance is NOT created, simulating the edge case
+				// where it was deleted or never created despite ClusterDetails being set
+
+				cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: "test-cluster",
+				}
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+					provisioningv1alpha1.CRconditionReasons.Completed,
+					metav1.ConditionTrue,
+					"ClusterInstance rendered successfully")
+
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+					provisioningv1alpha1.CRconditionReasons.InProgress,
+					metav1.ConditionFalse,
+					"Provisioning in progress")
+
+				existingCI, canSkip := task.canSkipClusterInstanceRendering(ctx)
+				Expect(canSkip).To(BeFalse(), "should not skip when ClusterInstance doesn't exist")
+				Expect(existingCI).To(BeNil())
+			})
+		})
+	})
+
+	Describe("getExistingClusterInstance", func() {
+		BeforeEach(func() {
+			cr = &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-get-pr",
+					Namespace: "test-ns",
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					TemplateName:    "test-template",
+					TemplateVersion: "v1.0.0",
+				},
+			}
+
+			task = &provisioningRequestReconcilerTask{
+				logger: reconciler.Logger,
+				client: c,
+				object: cr,
+			}
+		})
+
+		Context("when ClusterDetails is nil", func() {
+			It("should return error", func() {
+				cr.Status.Extensions.ClusterDetails = nil
+
+				ci, err := task.getExistingClusterInstance(ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("clusterDetails is nil"))
+				Expect(ci).To(BeNil())
+			})
+		})
+
+		Context("when ClusterInstance exists", func() {
+			It("should successfully retrieve it", func() {
+				clusterInstanceName := "test-existing-cluster"
+				cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: clusterInstanceName,
+				}
+
+				// Create the ClusterInstance
+				ci := &siteconfig.ClusterInstance{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterInstanceName,
+						Namespace: clusterInstanceName,
+					},
+					Spec: siteconfig.ClusterInstanceSpec{
+						ClusterName: clusterInstanceName,
+					},
+				}
+				Expect(c.Create(ctx, ci)).To(Succeed())
+
+				retrievedCI, err := task.getExistingClusterInstance(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(retrievedCI).NotTo(BeNil())
+				Expect(retrievedCI.Name).To(Equal(clusterInstanceName))
+				Expect(retrievedCI.Spec.ClusterName).To(Equal(clusterInstanceName))
+			})
+		})
+
+		Context("when ClusterInstance does not exist", func() {
+			It("should return error", func() {
+				cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: "nonexistent-cluster",
+				}
+
+				ci, err := task.getExistingClusterInstance(ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not found"))
+				Expect(ci).To(BeNil())
+			})
+		})
+	})
+
+	Describe("handleRenderClusterInstance", func() {
+		It("should retrieve existing ClusterInstance when skip conditions are met", func() {
+			clusterName := "test-skip-render-cluster"
+
+			// Create ClusterTemplate
+			renderTemplate := &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-skip-template.v1.0.0",
+					Namespace: "test-ns",
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:    "test-skip-template",
+					Version: "v1.0.0",
+					Templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: "skip-defaults-cm",
+					},
+					TemplateParameterSchema: runtime.RawExtension{
+						Raw: []byte(`{"properties":{"clusterInstanceParameters":{"type":"object"}}}`),
+					},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, renderTemplate)).To(Succeed())
+
+			// Create ProvisioningRequest with all skip conditions met
+			cr = &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-skip-render-pr",
+					Namespace:  "test-ns",
+					Generation: 5,
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					TemplateName:    "test-skip-template",
+					TemplateVersion: "v1.0.0",
+					TemplateParameters: runtime.RawExtension{
+						Raw: []byte(`{"clusterInstanceParameters":{"clusterName":"` + clusterName + `"}}`),
+					},
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					ObservedGeneration: 5,
+				},
+			}
+
+			cr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+				Name: clusterName,
+			}
+
+			utils.SetStatusCondition(&cr.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
+				provisioningv1alpha1.CRconditionReasons.Completed,
+				metav1.ConditionTrue,
+				"ClusterInstance rendered and passed dry-run validation")
+
+			utils.SetStatusCondition(&cr.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
+				metav1.ConditionFalse,
+				"Provisioning in progress")
+
+			// Create the existing ClusterInstance
+			existingCI := &siteconfig.ClusterInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+				},
+				Spec: siteconfig.ClusterInstanceSpec{
+					ClusterName: clusterName,
+				},
+			}
+			Expect(c.Create(ctx, existingCI)).To(Succeed())
+			Expect(c.Create(ctx, cr)).To(Succeed())
+
+			task = &provisioningRequestReconcilerTask{
+				logger: reconciler.Logger,
+				client: c,
+				object: cr,
+			}
+
+			// Execute
+			ci, err := task.handleRenderClusterInstance(ctx)
+
+			// Verify
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ci).NotTo(BeNil())
+			Expect(ci.Name).To(Equal(clusterName))
+			Expect(ci.Spec.ClusterName).To(Equal(clusterName))
+		})
+	})
+
+	Describe("buildClusterInstanceUnstructured without hardware provisioning", func() {
+		It("should remove bmcCredentialsDetails from rendered ClusterInstance", func() {
+			clusterName := "test-no-hw-cluster"
+			testNs := "test-no-hw-ns"
+
+			// Create namespace
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNs,
+				},
+			}
+			Expect(c.Create(ctx, ns)).To(Succeed())
+
+			// Create ClusterTemplate without hardware template (no hardware provisioning)
+			noHwTemplate := &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-no-hw.v1.0.0",
+					Namespace: testNs,
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:    "test-no-hw",
+					Version: "v1.0.0",
+					Templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: "no-hw-defaults-cm",
+						// HwTemplate is empty - indicates no hardware provisioning
+					},
+					TemplateParameterSchema: runtime.RawExtension{
+						Raw: []byte(`{
+							"type": "object",
+							"properties": {
+								"clusterInstanceParameters": {
+									"type": "object",
+									"properties": {
+										"clusterName": {"type": "string"},
+										"nodes": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"hostName": {"type": "string"},
+													"bmcAddress": {"type": "string"},
+													"bootMACAddress": {"type": "string"},
+													"bmcCredentialsDetails": {
+														"type": "object",
+														"properties": {
+															"username": {
+																"type": "string",
+																"pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+															},
+															"password": {
+																"type": "string",
+																"pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+															}
+														},
+														"required": ["username", "password"]
+													},
+													"nodeNetwork": {
+														"type": "object",
+														"properties": {
+															"interfaces": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"properties": {
+																		"name": {"type": "string"},
+																		"macAddress": {"type": "string"}
+																	}
+																}
+															}
+														}
+													}
+												},
+												"required": ["hostName", "bmcAddress", "bootMACAddress", "bmcCredentialsDetails", "nodeNetwork"]
+											}
+										}
+									},
+									"required": ["clusterName", "nodes"]
+								}
+							}
+						}`),
+					},
+				},
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+					},
+				},
+			}
+			Expect(c.Create(ctx, noHwTemplate)).To(Succeed())
+
+			// Create ConfigMap with ClusterInstance defaults
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "no-hw-defaults-cm",
+					Namespace: testNs,
+				},
+				Data: map[string]string{
+					utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.16"
+pullSecretRef:
+  name: "pull-secret"
+nodes:
+- role: master
+  ironicInspect: ""`,
+				},
+			}
+			Expect(c.Create(ctx, cm)).To(Succeed())
+
+			// Create ProvisioningRequest with bmcCredentialsDetails
+			cr = &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-no-hw-pr",
+					Namespace: testNs,
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					TemplateName:    "test-no-hw",
+					TemplateVersion: "v1.0.0",
+					TemplateParameters: runtime.RawExtension{
+						Raw: []byte(`{
+							"clusterInstanceParameters": {
+								"clusterName": "` + clusterName + `",
+								"nodes": [{
+									"hostName": "node1",
+									"bmcAddress": "idrac-virtualmedia+https://192.168.1.100/redfish/v1/Systems/1",
+									"bootMACAddress": "AA:BB:CC:DD:EE:FF",
+									"bmcCredentialsDetails": {
+										"username": "YWRtaW4=",
+										"password": "cGFzc3dvcmQ="
+									},
+									"nodeNetwork": {
+										"interfaces": [{
+											"name": "eno1",
+											"macAddress": "00:00:00:01:20:30"
+										}]
+									}
+								}]
+							}
+						}`),
+					},
+				},
+			}
+			Expect(c.Create(ctx, cr)).To(Succeed())
+
+			// Create provisioning request reconciler task with no hardware template (simulates no hardware provisioning)
+			task = &provisioningRequestReconcilerTask{
+				logger: reconciler.Logger,
+				client: c,
+				object: cr,
+				ctDetails: &clusterTemplateDetails{
+					namespace: testNs,
+					templates: provisioningv1alpha1.Templates{
+						ClusterInstanceDefaults: "no-hw-defaults-cm",
+						// No HwTemplate - this is key for no-hardware-provisioning
+					},
+				},
+				clusterInput:   &clusterInput{},
+				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
+			}
+
+			// Extract and merge cluster instance parameters
+			clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
+				cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(clusterInstanceInputParams).ToNot(BeNil())
+
+			// Verify bmcCredentialsDetails exists in the input
+			inputNodes := clusterInstanceInputParams.(map[string]any)["nodes"].([]any)
+			inputNode0 := inputNodes[0].(map[string]any)
+			_, hasBmcDetailsInInput := inputNode0["bmcCredentialsDetails"]
+			Expect(hasBmcDetailsInInput).To(BeTrue(),
+				"bmcCredentialsDetails should exist in ProvisioningRequest input")
+
+			mergedData, err := task.getMergedClusterInputData(
+				ctx, "no-hw-defaults-cm", clusterInstanceInputParams.(map[string]any),
+				utils.TemplateParamClusterInstance)
+			Expect(err).ToNot(HaveOccurred())
+			task.clusterInput.clusterInstanceData = mergedData
+
+			// Build the ClusterInstance unstructured object
+			renderedCI, err := task.buildClusterInstanceUnstructured()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(renderedCI).ToNot(BeNil())
+			Expect(renderedCI.GetName()).To(Equal(clusterName))
+			Expect(renderedCI.GetNamespace()).To(Equal(clusterName))
+
+			// Verify thatbmcCredentialsDetails is removed from all nodes
+			renderedSpec := renderedCI.Object["spec"].(map[string]any)
+			renderedNodes := renderedSpec["nodes"].([]any)
+			Expect(renderedNodes).ToNot(BeEmpty())
+
+			for i, node := range renderedNodes {
+				nodeMap := node.(map[string]any)
+
+				// Verify bmcCredentialsDetails has been removed
+				_, hasBmcDetails := nodeMap["bmcCredentialsDetails"]
+				Expect(hasBmcDetails).To(BeFalse(),
+					"bmcCredentialsDetails should be removed from node %d (not part of ClusterInstance CRD schema)", i)
+
+				// Verify that bmcCredentialsName exists
+				bmcCredsName, hasBmcCredsName := nodeMap["bmcCredentialsName"]
+				Expect(hasBmcCredsName).To(BeTrue(),
+					"bmcCredentialsName should exist in node %d (valid ClusterInstance CRD field)", i)
+				Expect(bmcCredsName).ToNot(BeNil())
+
+				// Verify other required BMC fields are present
+				Expect(nodeMap["bmcAddress"]).To(Equal("idrac-virtualmedia+https://192.168.1.100/redfish/v1/Systems/1"))
+				Expect(nodeMap["bootMACAddress"]).To(Equal("AA:BB:CC:DD:EE:FF"))
+				Expect(nodeMap["hostName"]).To(Equal("node1"))
+			}
+		})
+	})
+
 	Describe("Reconcile", func() {
 		var (
 			reconcileReq    ctrl.Request

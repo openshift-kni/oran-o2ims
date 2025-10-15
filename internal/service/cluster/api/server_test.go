@@ -17,8 +17,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	apigenerated "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 

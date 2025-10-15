@@ -266,3 +266,47 @@ func SubscriptionToInfo(record *models2.Subscription) *notifier.SubscriptionInfo
 		EventCursor:            record.EventCursor,
 	}
 }
+
+// AlarmDictionaryToModel converts an AlarmDictionary DB record to an API model
+func AlarmDictionaryToModel(record *AlarmDictionary, alarmDefinitionRecords []AlarmDefinition) common.AlarmDictionary {
+	alarmDictionary := common.AlarmDictionary{
+		AlarmDictionaryId:            record.AlarmDictionaryID,
+		AlarmDictionaryVersion:       record.AlarmDictionaryVersion,
+		AlarmDictionarySchemaVersion: record.AlarmDictionarySchemaVersion,
+		EntityType:                   record.EntityType,
+		Vendor:                       record.Vendor,
+		PkNotificationField:          record.PKNotificationField,
+	}
+
+	for _, interfaceID := range record.ManagementInterfaceID {
+		alarmDictionary.ManagementInterfaceId = append(alarmDictionary.ManagementInterfaceId, common.AlarmDictionaryManagementInterfaceId(interfaceID))
+	}
+
+	// If there are no alarm definitions, return the dictionary with an empty slice
+	if len(alarmDefinitionRecords) == 0 {
+		alarmDictionary.AlarmDefinition = []common.AlarmDefinition{}
+		return alarmDictionary
+	}
+
+	for _, alarmDefinitionRecord := range alarmDefinitionRecords {
+		alarmDefinition := common.AlarmDefinition{
+			AlarmDefinitionId:     alarmDefinitionRecord.AlarmDefinitionID,
+			AlarmName:             alarmDefinitionRecord.AlarmName,
+			AlarmLastChange:       alarmDefinitionRecord.AlarmLastChange,
+			AlarmChangeType:       common.AlarmDefinitionAlarmChangeType(alarmDefinitionRecord.AlarmChangeType),
+			AlarmDescription:      alarmDefinitionRecord.AlarmDescription,
+			ProposedRepairActions: alarmDefinitionRecord.ProposedRepairActions,
+			ClearingType:          common.AlarmDefinitionClearingType(alarmDefinitionRecord.ClearingType),
+			PkNotificationField:   alarmDefinitionRecord.PKNotificationField,
+			AlarmAdditionalFields: alarmDefinitionRecord.AlarmAdditionalFields,
+		}
+
+		for _, interfaceID := range alarmDefinitionRecord.ManagementInterfaceID {
+			alarmDefinition.ManagementInterfaceId = append(alarmDefinition.ManagementInterfaceId, common.AlarmDefinitionManagementInterfaceId(interfaceID))
+		}
+
+		alarmDictionary.AlarmDefinition = append(alarmDictionary.AlarmDefinition, alarmDefinition)
+	}
+
+	return alarmDictionary
+}

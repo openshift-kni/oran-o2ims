@@ -1,0 +1,22 @@
+apiVersion: clcm.openshift.io/v1alpha1 
+kind: HardwareProfile
+metadata:
+  name: dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5
+  namespace: oran-o2ims 
+spec:
+  bios:
+    attributes:
+      #BootMode: UEFI
+      MemTest: "Disabled"
+      AcPwrRcvryUserDelay: 60
+  biosFirmware:
+    version: 2.22.2
+    url: https://example.com:8888/firmware/r740/BIOS_F8GPH_WN64_2.22.2.EXE
+  bmcFirmware:
+    version: 7.00.00.173
+    url: https://example.com:8888/firmware/r740/iDRAC-with-Lifecycle-Controller_Firmware_XTFXJ_WN64_7.00.00.173_A00.EXE
+  nicFirmware:
+    - version: 16.35.30.06
+      url: https://example.com:8888/firmware/network/dell/mellanox/ConnectX-5/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE
+    - version: 24.0.5
+      url: https://example.com:8888/firmware/network/dell/intel/X710/Network_Firmware_DC20J_WN64_24.0.5_A00.EXE

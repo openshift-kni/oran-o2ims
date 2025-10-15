@@ -46,6 +46,109 @@ type ResourceServer struct {
 	SubscriptionEventHandler notifier.SubscriptionEventHandler
 }
 
+func (r *ResourceServer) GetAlarmDictionaries(ctx context.Context, request api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
+	records, err := r.Repo.GetAlarmDictionaries(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)
+	}
+
+	objects := make([]generated.AlarmDictionary, len(records))
+	for i, record := range records {
+		definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
+		if err != nil {
+			return api.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{
+				AdditionalAttributes: &map[string]string{
+					"alarmDictionaryId": record.AlarmDictionaryID.String(),
+				},
+				Detail: err.Error(),
+				Status: http.StatusInternalServerError,
+			}, nil
+		}
+
+		objects[i] = models.AlarmDictionaryToModel(&record, definitions)
+	}
+
+	return api.GetAlarmDictionaries200JSONResponse(objects), nil
+}
+
+func (r *ResourceServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
+	record, err := r.Repo.GetAlarmDictionary(ctx, request.AlarmDictionaryId)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.GetAlarmDictionary404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: "requested AlarmDictionary not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+	if err != nil {
+		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
+	if err != nil {
+		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.AlarmDictionaryToModel(record, definitions)
+
+	return api.GetAlarmDictionary200JSONResponse(object), nil
+}
+
+func (r *ResourceServer) GetResourceTypeAlarmDictionary(ctx context.Context, request api.GetResourceTypeAlarmDictionaryRequestObject) (api.GetResourceTypeAlarmDictionaryResponseObject, error) {
+	records, err := r.Repo.GetResourceTypeAlarmDictionary(ctx, request.ResourceTypeId)
+	if err != nil {
+		return api.GetResourceTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourceTypeId": request.ResourceTypeId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	if len(records) == 0 {
+		return api.GetResourceTypeAlarmDictionary404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourceTypeId": request.ResourceTypeId.String(),
+			},
+			Detail: "requested ResourceType not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+
+	// Safe to assume there is a single record since resource_type_id is unique in the db
+	dictionary := records[0]
+
+	// Get alarm definitions
+	definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictionary.AlarmDictionaryID)
+	if err != nil {
+		return api.GetResourceTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourceTypeId": request.ResourceTypeId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.AlarmDictionaryToModel(&dictionary, definitions)
+	return api.GetResourceTypeAlarmDictionary200JSONResponse(object), nil
+}
+
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version

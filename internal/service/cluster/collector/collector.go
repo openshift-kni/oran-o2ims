@@ -707,7 +707,7 @@ func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSou
 			// Persist Alarm Dictionary
 			dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
 				ctx, c.repository.Db, alarmDictionary, alarmDictionary.AlarmDictionaryID, nil, func(object interface{}) any {
-					record, _ := object.(models2.AlarmDictionary)
+					record, _ := object.(models.AlarmDictionary)
 					return models.AlarmDictionaryToModel(&record, alarmDefinitions)
 				})
 			if err != nil {
@@ -766,7 +766,7 @@ func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsD
 			}
 
 			dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, alarmDictionary, alarmDictionary.AlarmDictionaryID, nil, func(object interface{}) any {
-				record, _ := object.(models2.AlarmDictionary)
+				record, _ := object.(models.AlarmDictionary)
 				return models.AlarmDictionaryToModel(&record, alarmDefinitions)
 			})
 			if err != nil {

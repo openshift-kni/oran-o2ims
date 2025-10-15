@@ -55,6 +55,9 @@ spec:
       value: "true"
     - name: additional-tags
       value: ['latest']
+    - name: additional-labels
+      value:
+        - name=openshift4/o-cloud-manager-rhel9-operator
   pipelineRef:
     name: build-pipeline
   taskRunTemplate:

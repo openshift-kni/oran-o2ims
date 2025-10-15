@@ -164,6 +164,10 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 				"name": secretName,
 			}
 		}
+
+		// Remove bmcCredentialsDetails from the ClusterInstance spec as it's not part of the ClusterInstance CRD schema
+		delete(nodeMap, "bmcCredentialsDetails")
+
 		if nodeNetwork, ok := nodeMap["nodeNetwork"]; ok {
 			if interfaces, ok := nodeNetwork.(map[string]interface{})["interfaces"]; ok {
 				if interfaceItems, ok := interfaces.([]interface{}); ok {

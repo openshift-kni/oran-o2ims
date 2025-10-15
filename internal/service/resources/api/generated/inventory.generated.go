@@ -295,6 +295,98 @@ type GetCloudInfoParams struct {
 	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
 }
 
+// GetAlarmDictionariesParams defines parameters for GetAlarmDictionaries.
+type GetAlarmDictionariesParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
+}
+
 // GetDeploymentManagersParams defines parameters for GetDeploymentManagers.
 type GetDeploymentManagersParams struct {
 	// AllFields This URI query parameter requests that all complex attributes are included in the response.
@@ -766,6 +858,12 @@ type ServerInterface interface {
 	// Get O-Cloud info
 	// (GET /o2ims-infrastructureInventory/v1)
 	GetCloudInfo(w http.ResponseWriter, r *http.Request, params GetCloudInfoParams)
+	// Get alarm dictionaries
+	// (GET /o2ims-infrastructureInventory/v1/alarmDictionaries)
+	GetAlarmDictionaries(w http.ResponseWriter, r *http.Request, params GetAlarmDictionariesParams)
+	// Get an alarm dictionary
+	// (GET /o2ims-infrastructureInventory/v1/alarmDictionaries/{alarmDictionaryId})
+	GetAlarmDictionary(w http.ResponseWriter, r *http.Request, alarmDictionaryId externalRef0.AlarmDictionaryId)
 	// Get minor API versions
 	// (GET /o2ims-infrastructureInventory/v1/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request)
@@ -793,6 +891,9 @@ type ServerInterface interface {
 	// Get a resource type
 	// (GET /o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId})
 	GetResourceType(w http.ResponseWriter, r *http.Request, resourceTypeId ResourceTypeId)
+	// Get an alarm dictionary for a resource type
+	// (GET /o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}/alarmDictionary)
+	GetResourceTypeAlarmDictionary(w http.ResponseWriter, r *http.Request, resourceTypeId ResourceTypeId)
 	// Get subscriptions
 	// (GET /o2ims-infrastructureInventory/v1/subscriptions)
 	GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams)
@@ -876,6 +977,94 @@ func (siw *ServerInterfaceWrapper) GetCloudInfo(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCloudInfo(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAlarmDictionaries operation middleware
+func (siw *ServerInterfaceWrapper) GetAlarmDictionaries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAlarmDictionariesParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "exclude_fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "filter" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "filter", r.URL.Query(), &params.Filter)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAlarmDictionaries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAlarmDictionary operation middleware
+func (siw *ServerInterfaceWrapper) GetAlarmDictionary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "alarmDictionaryId" -------------
+	var alarmDictionaryId externalRef0.AlarmDictionaryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "alarmDictionaryId", r.PathValue("alarmDictionaryId"), &alarmDictionaryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "alarmDictionaryId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAlarmDictionary(w, r, alarmDictionaryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1275,6 +1464,37 @@ func (siw *ServerInterfaceWrapper) GetResourceType(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetResourceTypeAlarmDictionary operation middleware
+func (siw *ServerInterfaceWrapper) GetResourceTypeAlarmDictionary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "resourceTypeId" -------------
+	var resourceTypeId ResourceTypeId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "resourceTypeId", r.PathValue("resourceTypeId"), &resourceTypeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceTypeId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, Oauth2Scopes, []string{"role:o2ims-admin", "role:o2ims-reader"})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetResourceTypeAlarmDictionary(w, r, resourceTypeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSubscriptions operation middleware
 func (siw *ServerInterfaceWrapper) GetSubscriptions(w http.ResponseWriter, r *http.Request) {
 
@@ -1536,6 +1756,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/api_versions", wrapper.GetAllVersions)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1", wrapper.GetCloudInfo)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/alarmDictionaries", wrapper.GetAlarmDictionaries)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/alarmDictionaries/{alarmDictionaryId}", wrapper.GetAlarmDictionary)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/api_versions", wrapper.GetMinorVersions)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/deploymentManagers", wrapper.GetDeploymentManagers)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}", wrapper.GetDeploymentManager)
@@ -1545,6 +1767,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}", wrapper.GetResource)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourceTypes", wrapper.GetResourceTypes)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}", wrapper.GetResourceType)
+	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}/alarmDictionary", wrapper.GetResourceTypeAlarmDictionary)
 	m.HandleFunc("GET "+options.BaseURL+"/o2ims-infrastructureInventory/v1/subscriptions", wrapper.GetSubscriptions)
 	m.HandleFunc("POST "+options.BaseURL+"/o2ims-infrastructureInventory/v1/subscriptions", wrapper.CreateSubscription)
 	m.HandleFunc("DELETE "+options.BaseURL+"/o2ims-infrastructureInventory/v1/subscriptions/{subscriptionId}", wrapper.DeleteSubscription)
@@ -1652,6 +1875,121 @@ func (response GetCloudInfo403ApplicationProblemPlusJSONResponse) VisitGetCloudI
 type GetCloudInfo500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetCloudInfo500ApplicationProblemPlusJSONResponse) VisitGetCloudInfoResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionariesRequestObject struct {
+	Params GetAlarmDictionariesParams
+}
+
+type GetAlarmDictionariesResponseObject interface {
+	VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error
+}
+
+type GetAlarmDictionaries200JSONResponse []externalRef0.AlarmDictionary
+
+func (response GetAlarmDictionaries200JSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaries400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionaries400ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaries401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionaries401ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaries403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionaries403ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaries500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionaries500ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionariesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionaryRequestObject struct {
+	AlarmDictionaryId externalRef0.AlarmDictionaryId `json:"alarmDictionaryId"`
+}
+
+type GetAlarmDictionaryResponseObject interface {
+	VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error
+}
+
+type GetAlarmDictionary200JSONResponse externalRef0.AlarmDictionary
+
+func (response GetAlarmDictionary200JSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary400ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary401ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary403ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary404ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAlarmDictionary500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetAlarmDictionary500ApplicationProblemPlusJSONResponse) VisitGetAlarmDictionaryResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(500)
 
@@ -2181,6 +2519,68 @@ func (response GetResourceType500ApplicationProblemPlusJSONResponse) VisitGetRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetResourceTypeAlarmDictionaryRequestObject struct {
+	ResourceTypeId ResourceTypeId `json:"resourceTypeId"`
+}
+
+type GetResourceTypeAlarmDictionaryResponseObject interface {
+	VisitGetResourceTypeAlarmDictionaryResponse(w http.ResponseWriter) error
+}
+
+type GetResourceTypeAlarmDictionary200JSONResponse externalRef0.AlarmDictionary
+
+func (response GetResourceTypeAlarmDictionary200JSONResponse) VisitGetResourceTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceTypeAlarmDictionary400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceTypeAlarmDictionary400ApplicationProblemPlusJSONResponse) VisitGetResourceTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceTypeAlarmDictionary401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceTypeAlarmDictionary401ApplicationProblemPlusJSONResponse) VisitGetResourceTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceTypeAlarmDictionary403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceTypeAlarmDictionary403ApplicationProblemPlusJSONResponse) VisitGetResourceTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceTypeAlarmDictionary404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceTypeAlarmDictionary404ApplicationProblemPlusJSONResponse) VisitGetResourceTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetResourceTypeAlarmDictionary500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetResourceTypeAlarmDictionary500ApplicationProblemPlusJSONResponse) VisitGetResourceTypeAlarmDictionaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetSubscriptionsRequestObject struct {
 	Params GetSubscriptionsParams
 }
@@ -2409,6 +2809,12 @@ type StrictServerInterface interface {
 	// Get O-Cloud info
 	// (GET /o2ims-infrastructureInventory/v1)
 	GetCloudInfo(ctx context.Context, request GetCloudInfoRequestObject) (GetCloudInfoResponseObject, error)
+	// Get alarm dictionaries
+	// (GET /o2ims-infrastructureInventory/v1/alarmDictionaries)
+	GetAlarmDictionaries(ctx context.Context, request GetAlarmDictionariesRequestObject) (GetAlarmDictionariesResponseObject, error)
+	// Get an alarm dictionary
+	// (GET /o2ims-infrastructureInventory/v1/alarmDictionaries/{alarmDictionaryId})
+	GetAlarmDictionary(ctx context.Context, request GetAlarmDictionaryRequestObject) (GetAlarmDictionaryResponseObject, error)
 	// Get minor API versions
 	// (GET /o2ims-infrastructureInventory/v1/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
@@ -2436,6 +2842,9 @@ type StrictServerInterface interface {
 	// Get a resource type
 	// (GET /o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId})
 	GetResourceType(ctx context.Context, request GetResourceTypeRequestObject) (GetResourceTypeResponseObject, error)
+	// Get an alarm dictionary for a resource type
+	// (GET /o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}/alarmDictionary)
+	GetResourceTypeAlarmDictionary(ctx context.Context, request GetResourceTypeAlarmDictionaryRequestObject) (GetResourceTypeAlarmDictionaryResponseObject, error)
 	// Get subscriptions
 	// (GET /o2ims-infrastructureInventory/v1/subscriptions)
 	GetSubscriptions(ctx context.Context, request GetSubscriptionsRequestObject) (GetSubscriptionsResponseObject, error)
@@ -2522,6 +2931,58 @@ func (sh *strictHandler) GetCloudInfo(w http.ResponseWriter, r *http.Request, pa
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCloudInfoResponseObject); ok {
 		if err := validResponse.VisitGetCloudInfoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAlarmDictionaries operation middleware
+func (sh *strictHandler) GetAlarmDictionaries(w http.ResponseWriter, r *http.Request, params GetAlarmDictionariesParams) {
+	var request GetAlarmDictionariesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAlarmDictionaries(ctx, request.(GetAlarmDictionariesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAlarmDictionaries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAlarmDictionariesResponseObject); ok {
+		if err := validResponse.VisitGetAlarmDictionariesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAlarmDictionary operation middleware
+func (sh *strictHandler) GetAlarmDictionary(w http.ResponseWriter, r *http.Request, alarmDictionaryId externalRef0.AlarmDictionaryId) {
+	var request GetAlarmDictionaryRequestObject
+
+	request.AlarmDictionaryId = alarmDictionaryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAlarmDictionary(ctx, request.(GetAlarmDictionaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAlarmDictionary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAlarmDictionaryResponseObject); ok {
+		if err := validResponse.VisitGetAlarmDictionaryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2763,6 +3224,32 @@ func (sh *strictHandler) GetResourceType(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// GetResourceTypeAlarmDictionary operation middleware
+func (sh *strictHandler) GetResourceTypeAlarmDictionary(w http.ResponseWriter, r *http.Request, resourceTypeId ResourceTypeId) {
+	var request GetResourceTypeAlarmDictionaryRequestObject
+
+	request.ResourceTypeId = resourceTypeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetResourceTypeAlarmDictionary(ctx, request.(GetResourceTypeAlarmDictionaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetResourceTypeAlarmDictionary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetResourceTypeAlarmDictionaryResponseObject); ok {
+		if err := validResponse.VisitGetResourceTypeAlarmDictionaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetSubscriptions operation middleware
 func (sh *strictHandler) GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams) {
 	var request GetSubscriptionsRequestObject
@@ -2875,114 +3362,118 @@ func (sh *strictHandler) GetSubscription(w http.ResponseWriter, r *http.Request,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"H4sIAAAAAAAC/+x9+3LbOLL3q6D0fVWb7CfqZlmWvbX1ldd2ZlQTxz6+zJ6tKDUGSdDChgQYALSjzbhq",
+	"H+Scl9snOYUL76BuVpxkj+afiSUS6G40fv1DNwB9aXk0iilBRPDW0ZdWDBmMkEBM/eXRKKLkNxjj32iM",
+	"iPw/DCGLTrEnMCWQzSe+fM5H3GM4lp+1jlq3BH9KEMA+IgIHGDFAAwAJUK8CP3u3MyWtdgt9hlEcotZR",
+	"a2/se+5oz3XcftBzhv7Ac8ZjN3D2R8PhaHTQQ0Gv32q3sOwjhmLWarcIjOSbdaHaLYY+JZghv3UkWILa",
+	"Le7NUASltAFlERSto1aSYPmkmMeyES4YJvetp6e2Xe/wDUahz+v63swwB7dXE/ApQWwOMhMCKQLiggMx",
+	"gwLAMATS2CH6DKAQDLuJQBxAhgAmXpj4yAeYADFDgCEeU8JRZ0qm5O7ubkpgGP4WqP7NB6khVJ9FS6TP",
+	"tYoq+yiASSh1DmDIkXw+CUPoSrtr86xkBPRZydlkiBMaRRBwJC0gkA9CzIUceyUQYChADBEPcSAoME2B",
+	"gNEo1TkJhdL4DHqz6ksAcwDNh1LXNqAMyM4+JerrrBv5JS8I4c4BDyGfId4BbyibEuNw7aIUUoA7jyZE",
+	"sPkd4Imr26KB/gZ9FohwTAm/070cZQNjWjBG/3P+ZNc0Z56bkr/OkBxdzAsegjn5gwAJRz4g1CjwiMMQ",
+	"uCiVzVcm0SbX/oG5tmz1QYAeEAFYyTxXfoU+xyH2sAjnuYslHJN7+ciU3Gmh73KBqlNSWbquU4PzlW1R",
+	"csCV3CvYgl8ZPQsz6eW96h4J7TfyLeMxABL/GW5m3KthPFb1MQlBsifdWuZADImEEeVpzxj9zUc9FIjV",
+	"R/0aQebNgMewQAxDNYYnlAiICQeUIDlUEWUI8PKD7cowoQh7NKSEd4BygcrjygWmRCRxiICn25czBBJA",
+	"Y8SgoKyd+UjuOHI4i0I8wDCRznAzQ9l7wINkSlz58Dwd5ICGIX2UHWircDXGv4OL9J3fwTmCSoJN/vt9",
+	"Sn53sv8K/9zgP9mWdFci7mTL4BwKb4a4QRhjES8dEfmRMkKjXOAOfbrTf9nbwhygTwkM5Rxa0Jxu614s",
+	"a+ueISgngJhB0tRe2ha6W6Mtyqxy6rYwWSaXcpsgf5M32itcqmOIOF+oYKGtZTrmbVUVzNvWbRHjFA1t",
+	"+RRxQKhInaNBNtOWcYpmuWRLy/zCtGWMv7itZfb/Xc7Im+ytUrCQL0m8kw0U2jGAav6i7t+RJ+qxZErS",
+	"V83zjfEEFMNJwi0ExTEqEY59NCXL44cE2T+/Qp8sgN4++4/XWQi5yc0iKYRsGLL7JJIrhExBA1ZVWZUQ",
+	"n+4KAEijGDLEp8SbIe9jNh56BOnSyd9JJVLTSmKuHuO0Aw54EseUCRAlocASwlMgrlpRCZD2n5lySqq2",
+	"bAjFSj4sZoiBu7PrOzm2d7fXdQNjYjXwdfv2+nU5TBsjp3NERkbI26kbyA54DBWrkXSOIORLNVwEeMIY",
+	"TYhv3AaT+xCBTwkViHemZLHeRUZi3FnHIXAXzYEXJlwgdmf1G8UG/pA/9YeKPtkIZJG1IQ4rv5J8pK0I",
+	"ifaCCEQJFyCS8xYElGmGqtdLQgVmH0tiIFVSD1l8L4+titnYNMdy/VTQFPwREv+PlemVDaA0kRztFe3x",
+	"p6bpVR365QxN89blFC0TJJfjdSM/UzxrMT/zURzSuZzs55DAe8RWX+CD/F0Q6Zer0o72B4P+/mjojN3e",
+	"vjPsj6DjBt6e4w32e643GqI+hPYVvk2u563xGeI0YR5aQ8H0le0lLgpCbEebS0rDDTQCMaXh9tUy0mxH",
+	"tZt5vMlgAdliTbU+HB3uH+w7e8Fhzxkid99xxwF0xsEYDfaCw0Mv6C1WzUjzPNV44maarKFa8bWqZhCO",
+	"9/yeCx24j5AzDPqB46Lx0An29obuoN8fjbzArllFmOdo9pQ+rBbzp9W5W1d0QnSTEnOhSxOxAE5iJqO/",
+	"wEinKGEMXRzi9G/o6zgBw8vScxUR20sFkChcbDxlGjqayW9zvYBRTDEULCSxUwmKmgryn1PCEXvAMrK7",
+	"UGI+zVIVyrO4DALUU3HTcKF6T9oURinNN6VSUmAPi/nWLQEfIFb5wnZBOqktQ1Ib5IO0a6n3hXMS0sQH",
+	"V40qTcnKOq0Ukib5FDHkwWY0oFK1hemEi5KZYTXCdzaJXEsmRsXWVSV+TiJIAEPQl5YGhS9TqlyfEyUp",
+	"zzMSYOs7Zyb1rt+alFqEBPShgOAjmjuapccQM67ZiaAAck49DAUCkU5TBEmYv2X8laFQWXTlMdYQtCV7",
+	"1BSnakBXdJtCCsjqCYPRwBsH/QNnf+DuO8NRf+gcov2RM+4PIBr0AziGB6t4ggGBW4ZtFQUEgiQM50Cu",
+	"iKR8viowSPvXjar+qWah1uJi4EccpCDTAddYLj+Va6tvYkYfsI84mJKMs6dPtzU3RZK3ytmRWuULjPEV",
+	"peIJUBLWKjczIWJ+1O1G847xv6PRcLhnVTtF0bdy1i12xvuQujBMH5ycmkLKI2JI+iG+JzlEXmjEucYC",
+	"veKvweMMezOtiwWmjRBc64EFiuzIaD6AjMG54SJpSHzfQEmVJ5fnecEBS8NuNUa7HNEKkP7BMm8m5AER",
+	"Qdn8ZAbJPXpHpTPrplYKsgTgtAXgqSYAKbZRi7aU8CRC7HoJccmSCKmzZeiatpAm6IusQ43G0olTFPBM",
+	"Cn+jnqiKcFHIzmTrQr3mPgI94ABPpfTaoA8cEFEfB/M2GAAH+EiuOLWHkyRqHb3vtfvtQW5+TASSSFOR",
+	"xWaHY5DUKJyggKFYxk0itIcWW1FFHLGaJbQfXKHAPgC3V2/T2aGfTOOfToOlvpyukK12lQ8PwKvTs7dn",
+	"N2evO2Biyk4xxVJ6OiXUZmcdDOYx4sBHASa6tOmFMOEI7HUGnVFWD8nTa6phnQBQSUfZPQ2M7HxK5GwJ",
+	"sW4qZpiyC/XNtZDRCBK/SxmIKReFj0vhJjdc5amGki7mq9uoB16dXJ0d35y9BpSBPnh1fnE6efO315oR",
+	"lnK+ZStNyXIzLTTMImukT0+JsjLTcIkJyDynIR5XG9yChQo2oazgU4ssNCUrOtJyC5VH/JkGqkSCCgo0",
+	"QZQNwHXYksisdl+UwPaZXDEl4ZDXQPj6/AJAATz1/T0iiGPeqTNJmvjLeWT2jowOuj541Dq7brVbs8SV",
+	"3CBxe4VYmquuo7u3AjWrKIQJF1DV4FIOkKtlpfi6p3CegjH0GOU8a29K0hY5+EjoI0lRM29Px7LHFU2Z",
+	"ujQXlOWbOkx3UzI5vwZZ4K5SqbHX9/r7fd8ZjA8PnaF3OHLcg1HgDAN0OOiNhu7+gbtSlFyFUafliIq7",
+	"ZNZbw2GiudPoMCvx74ZB7oAJEYgRNX6yZ51QfsRihokkMLUXvglbl+ycUSoURQ/DjE/X/OVigCMOJIVg",
+	"AdTqpQSsBII85+SdGtc+6nblojWcUS6Oxr1eryFxlkNUgYGW510DYy3oa4OtdGG/WiannDfdKshlTVed",
+	"kVAfWcErVOslbh/GLGkY4fuZAC5SFSyqsjQB4BEMQ7WvK01rUAaoqgllL+ZQonPiOFD0RqgwU1xs/F8m",
+	"eVvr/3TzDXhdkzTrZuatrUG+xSq+aOMGFD/mHIllE5xJj8YwBCSJ3HzGp823JYXI8kyKahb5hVx3piQj",
+	"s/YMcuAiRCSG56DlJ6qihQUHaRIs1clLMU56pVx7KceCUvwUpyXW4SZ4dkfB6MA7GDjjw/6+MzwYuo67",
+	"Nzp0Rv3DMYL94MAdBTa3u2c0iS0j9guaP1LmS3YjSQO5B/rJYgLbRSEl9xwI2lljtbq4wmFJfKROt3aW",
+	"bCl41osThUz8oTfeRwdDZ4AOx84Q7fnOOECeg/bheHjoH44OvNE6fTRVCRYoDG4MXVSLMTui7I/29g78",
+	"HnLGLkLO8MDfc2Dguc6eNxr0vSCAA3elOCLg/WIvkB+70g8okzSXcxzMzYa9OshsnryoFJ5q5ZpKkaM8",
+	"y6vBIsNUo1/m7iW0WhRHZM/rxZJCxeqrBBTd/veRRm2SqYrCWabMb1qvlea0R2OJltkO3JRJTXwbs05R",
+	"tfhkngJbxfdDunpmSvZyj+g9g/EMezAE6cvWcZKA7iOBvGVp/LPbrXDl2oBUeHBjCv67zEQvqx0vgk75",
+	"TmWBU6DuG5db/D13cID6Q2e4Pz50hv7hngPRwcjxfQ/u7x/2D/fQCuWWBszLYK5GigsTyMqLF0GYPQu5",
+	"EMLyynQZwirHGZaxRcue2uNKC8+vPJWF/s5wsSJTPjgR9VG4Kt6oh2v6wjzz5M4VpzRLOlZ22f90+taF",
+	"2HPgJdWrAC/Ix0m0aBafSNJQ7+5NQrQ3hIDR0N5VuqrOiHInz4G3bt+dnr2ZvDs7bbVbJxfnl7c3Z612",
+	"693ZzV8vrn6ZvPup1W5d31xcHf90JqdJLnH+bKPIv2BigZ1flXsUGNG//vlf8WzOZTjAYv6vf/53s70s",
+	"Ml/+/Lfrycnx21a79fbiJ/WvkpyF77dOLp+DhNDb9w6GPWdveNBzhnAUONAbHzpwcHDQ6x8eBqPxYBWQ",
+	"f0DEp5adF5fGmVNbXlnp7zWNEDihLKZMzZo2mBCvY++HcSvE/Kq/kLzWpHFs6LLqbHsY9AbDTr+/Muhn",
+	"VNaa7jDWSQEjV6PipNVptpTgFgtla1fk6vt8qntfwtCF3sc1C8hZCS5m1EN+wpApl3qQ6M+4XH9eUo3Z",
+	"cnymJEtTqXx2sdDYVAzmEe2YTzsejeTf3Yd+lypk+S3T8jfq6tq1zZtWrTfa2ZPWkga6psaBqrj5Ccry",
+	"u0X7rjKJmo6qnKQ7XmXnpjNtUp+qWlth965OOyBfToR0d6duN0eC4sCDKSnVB01mTp00YSigzCROTCNp",
+	"dS/LO4oZIiolaeSCLJehoTzG17d2yZQvvs1GRtELEs6bDzMWISGbNrYJayNTl5Nfm1DNxu8eUqTTc+f4",
+	"cmKbvAWgzPXvd3odezJ3PUH5apKmB+mMLHyJyDDGxfYzsd8XtDEqPH1YMdW52N6WrFbC8CVDAf5ctlyX",
+	"DnDEHUwCBrlgiScShjLQ6j70N7eq4tIyKOE1UNwcds5e69hZ/nG2Sa/pUO1LUGd7EVgJqDeWNC1ufIlK",
+	"+ohCVnQ1+0jUVh3qeYmqqhaSB9oyIeTCPPonAH0f+W2z88Jv6+0YONvtbtjc8empYnK6cCz/pQrKk7PT",
+	"wkzOUQyWx80GZJfpTiho2adh5oIW10VSfAYxR36+jUJ+f8lwBNkc/ILmABNjZuUzIF+Arbafw0i8gDAU",
+	"BA4puUcsX6o9ZONeljw/OQGJr7bV1tZ2MlSaU0opBExJ5e1caUwEUodP0ngGFaYXzkuqM7BSIMlmfARl",
+	"m4/SHWYwjhExO0ehjMdcn4uSUqAgQJ7g7ZI4bX3QUtVYcBRDleGBDMEMq/icCxQ1RDKlxFvIhXbjZS5c",
+	"HTaQklZMijvKah7sL+r+nXX5l40kn1Em9PIvDabqNXuLXoig/HfDhEy9V9IPpIymZcUcqDel8RJBJVh5",
+	"qqJKGYggSeS/K5Pt9ubi/PhmciKn2fG7W71cqsmTb2uepCVN20TLQCzfsJiVQAF9QMyYV0lrDp4xSHiE",
+	"hRxwbRjMwRkRWMz1mmpKrs6ub64mJzeTi3dH6jRQKYt5fg2u0yqsyIv46vR8hM1W5IvB5Py6sg0wNYH6",
+	"zqp1NSbFH4uEWCH5ksHB2Vl0ysrn2XmaTtMjV+J+pcO2sQGej2gOXl3+8jpDnymp+XFmwMzqfwK4gzol",
+	"SUqtmyYy+AST0/V2S+pwRznyr5AMVMdew27PbCbcJ9hX+zqktOnLkqtCzADUr1snWoXf1YG/OBProFCP",
+	"dBYoblKnMiWbZoTdRz6sw0BK+cDVGUh+3UpDnrHEbDbmbJWmLO6wws0xctla3xJS9WZ9yH5SWl6Y8F3b",
+	"FtJZJ/JmPVwrRX9dmsqwywf06xJeakEjHw453aRcfFHsyBvdVJhOHsM40GmOLMPCEyUc1OnPyrKlKCkk",
+	"wJWUIGWYev+NjOAx8qRPV1/mNBCPEsV9FOIHxOZZeTVm1E880aA0UvjesKHXuTp+B/QTmmwiGR5KtPJI",
+	"sxQ+g3phbdwiRizVvZiu7+iMLyT+lJQ+N9rYZfyGIQ+AXdD7zoNeU571V+1+Zn4UBlXDhCrBYl7HEqj2",
+	"PPNO6tg0CX3p2WqWSdKoBxhmFqy5suo3u3Bq5fhZvk2rAY2WIGdpQhezrGvEyNpCbtWoecmoG6LoFAmI",
+	"Q17fXpufjzvObuN6xrm5YzIvbGzKGync9dUuprdlmMrw0yTDmVlI4SjWWypgmjqwnIqTatlOHMySCBIn",
+	"Kyyhz3EIickdpnCt5gzm6frcXHWkJ5iyWjktd0IJQV66j8qHArqQIyBwhHxAE2GDyWyPikVEtVsy2/ev",
+	"IhDOgUK5dipps4RgSiYCRHAO5momBwnTy8QCGcIB8FHWU40NqEM49fSngCJp2CD4883NJdAPAI/6KAeZ",
+	"haasnxwRWIRW26j1YLs6ijyJFO6Vm9bZGzARKTCoS1d0/kVt6ygIJWiziG11jxmKhabeCZNEV62w1TZT",
+	"/A/th2AS6MCLuVrfk8LiXN0bM20p9nnkhpB8nLbMYbJsApi4DEOuMgdpirqBCwgrC6g6D/Q8ynxFAiiY",
+	"nN28AVdvTsDe4XgE3u99sPpWzXjqwJtHEwbvVcLcECLZUXpWbkoqA+JTL8lmaLZyT5t+hTr3HX3V2s83",
+	"529fy+U4KbsiyG+CiJCCjSxzr44GtacEi0L8hpwnUZZ1qVi6qQaTumDBhh2PRksnQSUimBmRoc4H24kI",
+	"jryEYaFDgIZMChMxGzRsRjq+nIBEutnFcSJmYKA5pa49Y0mXPIbUwMGQgyCkj6pEE9JHXftSz5zkj8gP",
+	"uUdj3TOjITrSKWHoR+q0u2I24Fj+Ba5oKANS4Sk5sIhlj12pPy3PmdqIW3j2OvtIPy99l35E5JaFhaH4",
+	"iOZeSOHHUk2MIRhGvEsZJHKsBPVo2JUBDPuOp0G3q9oqZau1VdUxe/RZb44/pR5vosx6y3kWacF1Kegc",
+	"dHrg1YUnqJR/0BsMX7faraQkeilK8Q51GCQdyu67Pn0kIYX+/8f+nw+Ghxr29VGWyqy9nJijqfrwQzFJ",
+	"n++AV04cYg8Rrma+uZjgOIbeDIGBqoyUJXt8fOxA9bWSx7zLu28nJ2fvrs+cQafXmYkoLCBua7EM0i0L",
+	"9d+sntFuGV7ROmrtmSpNDMVMWX1J8UGykYdC4eQeibqJrtQNL9wkZM21NylJlvbLijQZOygUDE1RUFlQ",
+	"p2FNyrv1ExLHYZjVbVQFW10uqkQZ9HrmXKdAROgiTxyaoe7+nesVZ37zw8alHK79tXLFX+J5iHNdqaau",
+	"JOK6Ylm3QKq9VPGp3RoulNvA3v97tvwVDmlR4S/QT+951XL1vw+5bolECcrwP5CvBdv7PgR7Q5mLfR+p",
+	"Ydz/XoYxPWSUnqNHjFHWKcU1VedMI9r7eoSxhZMPTx/aLcPd9FwsTeV0w/TR+1ZaqGt9kH0ur2auAiM6",
+	"WvPGo1V2tMhPJLZL10G/t5s9f6S78Nrkp/Ym75dvHN6sDXMxqRyKr4Z9hXOca+HcCkO0Q7sd2v2waJc7",
+	"tMKTDdGuW84ymYTMUvxLuUMl9Y4RbyRK1W7+zSBww5fVrrdn4+fzakulzeyVs01rAO5in9hh7Q5rXwJr",
+	"vwbU1j26ALh1AN0UebtfavWBp3XZaOOPgSxB5Pl28Lha3viqzHAVQNuQMTaYcQdi/y4gNuwNvw+pbvKS",
+	"DPLTGvwj1AnrgCbE7/wvJbiWObgV2F03ZZjymggTyprzhVm5KoJ/p6xxq3oNh89ls991EnEHfDv29iMD",
+	"SX3iPmO9XLubcj0QqV+r2rRiPq13tFsyv/CSuX6/9lZWyA1OsAPZHcj+sCBr8ekCylpQc2O87X6x3A+8",
+	"/kK58Rb85Ui8NhDbLjT+qktjC3A9o3Zit9QOrnaL4d1i+JvB61bQtXhxz3pEtnRRUxOHvSo1v6OvL0xf",
+	"S3fAbYW51kd9FwV2pPWHRdWyOxcQtYyLm4Bp90v5UrQNCKrlQsaFCLs2wFaubfuqjLSMRc8gozWr7BBo",
+	"x0N3PPSlijLl+fd1ITP7mq8Lnvk94uow2DpIyp8No+0ds30pZrtdVrsjtLtwsgsn34KA23DaElu2Hlfy",
+	"r57H0NeOMi8QZAoX0b8Is98Kq98h8A6Bdwj8bQj914Hgm3mMNkwtq1+nWwKkuvldavkbEXB1/8h2U8vZ",
+	"qO/iwC61/KMeGSh7swVHNW5tgqU5Z9U3rz+Ht+Z31C4E2I3Zqrkb/kX4p4aibWSWU6vsAGhHRHdE9OWJ",
+	"qPlBx68ImV3LDwEthdDaPZMBZRuA6XMPXr0ktn7FI1Y2i+5Adwe6O9D9tmesbKi2jXNXxZ8+WS8fYP/Z",
+	"nqbEwHWpny0kBraxsH9ucuHHSQyUfpZpK4mB2qDvIsQuL/BjIG7T/YYWJOYV2Erxtvz5h6d2K6Zc2H4o",
+	"C6kf22j8mTMrXuq3SnNW30+JuPgL9edbI5JlWCjfgilYgp5q2NT/in0vgCBPWcSv/VjYDnl2yPMjIE8z",
+	"yui5vjLQrE/qul/KP2/3pFEqRMJy2/Cp+pwDaPktxjJG6ScrGLUeq6v87F4TE1oAC+YHtGqwkKHCbvbt",
+	"Vob/TmihZ13J1xeykvUKEMvmfGUd97Um/MvTi0XZMCuu7NjGDu92ePd9rMsWsaU1JNK9KIU0mOU3rx91",
+	"u+p3IWaUi6Nxr6d/7tV0uvy3yRpvFzH3vVsOij61lze7cEFpmi4bpN6q+e2k7GdT2wATL0zU70tk9ylB",
+	"4pfuNTVilDrKLmxZRXLbViLTTrmqtFZjhSOvlcb04Yd1GrO3s1obTbevmsbqqdqnD0//EwAA//9F55WW",
+	"l7QAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
