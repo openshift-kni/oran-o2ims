@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	hwprovisioningapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -297,11 +298,16 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		return fmt.Errorf("the expected Agents were not found in the %s namespace", mcl.Name)
 	}
 
-	// Get AllocatedNodes
-	nodeAllocationRequestID := t.getNodeAllocationRequestID()
-	nodes, err := t.hwpluginClient.GetAllocatedNodesFromNodeAllocationRequest(ctx, nodeAllocationRequestID)
-	if err != nil {
-		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
+	// Get AllocatedNodes if hardware provisioning is not skipped.
+	nodes := &[]hwprovisioningapi.AllocatedNode{}
+	if oranct.Spec.Templates.HwTemplate != "" {
+		nodeAllocationRequestID := t.getNodeAllocationRequestID()
+		if nodeAllocationRequestID != "" {
+			nodes, err = t.hwpluginClient.GetAllocatedNodesFromNodeAllocationRequest(ctx, nodeAllocationRequestID)
+			if err != nil {
+				return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
+			}
+		}
 	}
 
 	// Go through all the obtained agents and apply the above labels.
