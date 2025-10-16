@@ -39,7 +39,7 @@ USER 65532:65532
 
 ENTRYPOINT ["/usr/bin/oran-o2ims"]
 
-FROM registry.access.redhat.com/ubi9/ubi:9.6-1758184894 AS debug
+FROM registry.access.redhat.com/ubi9/ubi:9.6-1760340943 AS debug
 
 COPY --from=dlvbuilder /go/bin/dlv /usr/bin
 COPY --from=builder /workspace/oran-o2ims /usr/bin
