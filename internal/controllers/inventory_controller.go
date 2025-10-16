@@ -1111,6 +1111,20 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 					"watch",
 				},
 			},
+			// We need to read PrometheusRules to sync alarm dictionaries for hardware monitoring
+			{
+				APIGroups: []string{
+					"monitoring.coreos.com",
+				},
+				Resources: []string{
+					"prometheusrules",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
 			{
 				NonResourceURLs: []string{
 					"/hardware-manager/inventory/*",

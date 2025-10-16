@@ -8,10 +8,13 @@ package repo
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
+	"github.com/stephenafamo/bob/dialect/psql/dialect"
+	"github.com/stephenafamo/bob/dialect/psql/im"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -137,4 +140,78 @@ func (r *ResourcesRepository) GetAlarmDefinitionsByAlarmDictionaryID(ctx context
 func (r *ResourcesRepository) GetResourceTypeAlarmDictionary(ctx context.Context, resourceTypeID uuid.UUID) ([]models.AlarmDictionary, error) {
 	e := psql.Quote("resource_type_id").EQ(psql.Arg(resourceTypeID))
 	return svcutils.Search[models.AlarmDictionary](ctx, r.Db, e)
+}
+
+// UpsertAlarmDefinitions inserts or updates alarm definition records
+func (r *ResourcesRepository) UpsertAlarmDefinitions(ctx context.Context, db svcutils.DBQuery, records []models.AlarmDefinition) ([]models.AlarmDefinition, error) {
+	if len(records) == 0 {
+		return []models.AlarmDefinition{}, nil
+	}
+
+	dbModel := models.AlarmDefinition{}
+	columns := svcutils.GetColumns(records[0], []string{
+		"AlarmName", "AlarmLastChange", "AlarmChangeType", "AlarmDescription",
+		"ProposedRepairActions", "ClearingType", "ManagementInterfaceID",
+		"PKNotificationField", "AlarmAdditionalFields", "Severity", "AlarmDictionaryID"},
+	)
+
+	modInsert := []bob.Mod[*dialect.InsertQuery]{
+		im.Into(dbModel.TableName(), columns...),
+		im.OnConflictOnConstraint(dbModel.OnConflict()).DoUpdate(
+			im.SetExcluded(columns...)),
+		im.Returning(dbModel.PrimaryKey()),
+	}
+
+	for _, record := range records {
+		modInsert = append(modInsert, im.Values(psql.Arg(
+			record.AlarmName, record.AlarmLastChange, record.AlarmChangeType,
+			record.AlarmDescription, record.ProposedRepairActions, record.ClearingType,
+			record.ManagementInterfaceID, record.PKNotificationField,
+			record.AlarmAdditionalFields, record.Severity, record.AlarmDictionaryID)))
+	}
+
+	query := psql.Insert(modInsert...)
+	sql, args, err := query.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build UpsertAlarmDefinitions query: %w", err)
+	}
+
+	return svcutils.ExecuteCollectRows[models.AlarmDefinition](ctx, db, sql, args)
+}
+
+// UpsertAlarmDictionary inserts or updates an alarm dictionary record
+func (r *ResourcesRepository) UpsertAlarmDictionary(ctx context.Context, db svcutils.DBQuery, record models.AlarmDictionary) (*models.AlarmDictionary, error) {
+	columns := svcutils.GetColumns(record, []string{
+		"AlarmDictionaryVersion", "AlarmDictionarySchemaVersion",
+		"EntityType", "Vendor", "ManagementInterfaceID", "PKNotificationField", "ResourceTypeID"},
+	)
+
+	modInsert := []bob.Mod[*dialect.InsertQuery]{
+		im.Into(record.TableName(), columns...),
+		im.OnConflict(record.OnConflict()).DoUpdate(
+			im.SetExcluded(columns...)),
+		im.Returning(record.PrimaryKey()),
+	}
+
+	modInsert = append(modInsert, im.Values(psql.Arg(
+		record.AlarmDictionaryVersion, record.AlarmDictionarySchemaVersion,
+		record.EntityType, record.Vendor, record.ManagementInterfaceID,
+		record.PKNotificationField, record.ResourceTypeID)))
+
+	query := psql.Insert(modInsert...)
+	sql, args, err := query.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build UpsertAlarmDictionary query: %w", err)
+	}
+
+	results, err := svcutils.ExecuteCollectRows[models.AlarmDictionary](ctx, db, sql, args)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(results) == 0 {
+		return nil, fmt.Errorf("upsertAlarmDictionary returned no rows")
+	}
+
+	return &results[0], nil
 }
