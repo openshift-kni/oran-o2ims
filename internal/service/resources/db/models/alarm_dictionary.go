@@ -37,5 +37,5 @@ func (r AlarmDictionary) PrimaryKey() string {
 
 // OnConflict returns the column or constraint to be used in the UPSERT operation
 func (r AlarmDictionary) OnConflict() string {
-	return ""
+	return "resource_type_id"
 }

@@ -28,6 +28,7 @@ import (
 
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
+	svccommon "github.com/openshift-kni/oran-o2ims/internal/service/common"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
@@ -267,7 +268,8 @@ func (d *AlarmsDataSource) getRules(ctx context.Context, cl crclient.Client) ([]
 		for _, group := range promRule.Spec.Groups {
 			for _, rule := range group.Rules {
 				// Only alerting rules are of interest (not recording rules)
-				if rule.Alert != "" {
+				// Exclude hardware monitoring alerts (handled by resource server)
+				if rule.Alert != "" && rule.Labels[svccommon.HardwareAlertExporterLabel] != svccommon.HardwareAlertExporterValue {
 					rules = append(rules, rule)
 				}
 			}
@@ -499,7 +501,8 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 
 			for _, group := range spec.Groups {
 				for _, rule := range group.Rules {
-					if rule.Alert != "" {
+					// Exclude hardware monitoring alerts (handled by resource server)
+					if rule.Alert != "" && rule.Labels[svccommon.HardwareAlertExporterLabel] != svccommon.HardwareAlertExporterValue {
 						rules = append(rules, monitoringv1.Rule{
 							Alert:         rule.Alert,
 							Expr:          intstr.IntOrString{Type: intstr.String, StrVal: rule.Expr},
