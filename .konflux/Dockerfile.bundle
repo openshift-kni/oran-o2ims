@@ -1,6 +1,6 @@
 # Overlay stage: overlay bundle manifests
 #
-FROM quay.io/konflux-ci/yq@sha256:af8bfbcf99ade4bb79fd622e9debe7e6bcc955b4c842bc2a002b60928b5dd496 AS overlay
+FROM quay.io/konflux-ci/yq@sha256:53319ea0ba08024abd358a409371d9ab366111d0bfe221bc5bb69cbe1517d171 AS overlay
 
 WORKDIR /tmp
 
