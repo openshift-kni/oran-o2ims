@@ -616,10 +616,14 @@ func extractNodeDetails(existingCI *unstructured.Unstructured) map[string]nodeIn
 			}
 		}
 
-		hostRef, ok := nodeMap["hostRef"].(map[string]string)
+		hostRef, ok := nodeMap["hostRef"].(map[string]any)
 		if ok {
-			extractedNodeInfo.HwMgrNodeId = hostRef["name"]
-			extractedNodeInfo.HwMgrNodeNs = hostRef["namespace"]
+			hwMgrNodeId, okId := hostRef["name"].(string)
+			hwMgrNodeNs, okNs := hostRef["namespace"].(string)
+			if okId && okNs {
+				extractedNodeInfo.HwMgrNodeId = hwMgrNodeId
+				extractedNodeInfo.HwMgrNodeNs = hwMgrNodeNs
+			}
 		}
 
 		// Extract interface macAddress by interface name
@@ -680,7 +684,7 @@ func assignNodeDetails(renderedCI *unstructured.Unstructured, nodesInfo map[stri
 				}
 			}
 			if extractedNode.HwMgrNodeId != "" && extractedNode.HwMgrNodeNs != "" {
-				nodeMap["hostRef"] = map[string]string{
+				nodeMap["hostRef"] = map[string]any{
 					"name":      extractedNode.HwMgrNodeId,
 					"namespace": extractedNode.HwMgrNodeNs,
 				}
