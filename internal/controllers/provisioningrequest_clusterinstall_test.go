@@ -19,7 +19,11 @@ Test Cases Overview for provisioningrequest_clusterinstall_test.go:
    - Tests failure scenarios with invalid input data (empty clusterName)
    - Validates status condition updates for ClusterInstanceRendered
 
-2. TestExtractNodeDetails Tests:
+2. handleClusterInstallation Tests:
+   - Validates that ClusterInstance is applied with correct parameters
+   - Tests that ClusterDetails.Name is set in status when applying ClusterInstance
+
+3. TestExtractNodeDetails Tests:
    - Tests extraction of node details from existing ClusterInstance unstructured data
    - Covers various scenarios:
      * Valid input with complete node information (hostname, BMC, MAC addresses)
@@ -30,7 +34,7 @@ Test Cases Overview for provisioningrequest_clusterinstall_test.go:
      * Invalid interface data (missing name or MAC address fields)
    - Validates proper handling of nodeInfo structure population
 
-3. TestAssignNodeDetails Tests:
+4. TestAssignNodeDetails Tests:
    - Tests assignment of node details to rendered ClusterInstance
    - Covers scenarios:
      * Valid assignment of BMC details, MAC addresses, and credentials
@@ -63,6 +67,41 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
+
+// getClusterInstanceDefaultsConfigMap returns a ConfigMap with ClusterInstance defaults
+func getClusterInstanceDefaultsConfigMap(name, namespace string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+clusterImageSetNameRef: "4.15"
+pullSecretRef:
+  name: "pull-secret"
+holdInstallation: false
+templateRefs:
+  - name: "ai-cluster-templates-v1"
+    namespace: "siteconfig-operator"
+nodes:
+- hostname: "node1"
+  role: master
+  ironicInspect: ""
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: bootable-interface
+    - name: eth0
+      label: base-interface
+    - name: eth1
+      label: data-interface
+  templateRefs:
+    - name: "ai-node-templates-v1"
+      namespace: "siteconfig-operator"`,
+		},
+	}
+}
 
 var _ = Describe("handleRenderClusterInstance", func() {
 	var (
@@ -106,38 +145,8 @@ var _ = Describe("handleRenderClusterInstance", func() {
 				},
 			},
 		}
-		// Configmap for ClusterInstance defaults
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ciDefaultsCm,
-				Namespace: ctNamespace,
-			},
-			Data: map[string]string{
-				utils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-clusterImageSetNameRef: "4.15"
-pullSecretRef:
-  name: "pull-secret"
-holdInstallation: false
-templateRefs:
-  - name: "ai-cluster-templates-v1"
-    namespace: "siteconfig-operator"
-nodes:
-- hostname: "node1"
-  role: master
-  ironicInspect: ""
-  nodeNetwork:
-    interfaces:
-    - name: eno1
-      label: bootable-interface
-    - name: eth0
-      label: base-interface
-    - name: eth1
-      label: data-interface
-  templateRefs:
-    - name: "ai-node-templates-v1"
-      namespace: "siteconfig-operator"`,
-			},
-		}
+		// Use helper function to get ConfigMap with ClusterInstance defaults
+		cm := getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace)
 
 		c = getFakeClientFromObjects([]client.Object{cr, ct, cm}...)
 		reconciler = &ProvisioningRequestReconciler{
@@ -264,6 +273,118 @@ nodes:
 			Expect(bmcCredentialsNameExists).To(BeTrue(),
 				"bmcCredentialsName should exist in node %d", i)
 		}
+	})
+})
+
+var _ = Describe("handleClusterInstallation", func() {
+	var (
+		ctx          context.Context
+		c            client.Client
+		reconciler   *ProvisioningRequestReconciler
+		task         *provisioningRequestReconcilerTask
+		cr           *provisioningv1alpha1.ProvisioningRequest
+		ciDefaultsCm = "clusterinstance-defaults-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
+		ctNamespace  = "clustertemplate-a-v4-16"
+		crName       = "cluster-1"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		// Define the provisioning request.
+		cr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crName,
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testutils.TestFullTemplateParameters),
+				},
+			},
+		}
+
+		// Define the cluster template.
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      GetClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
+					ClusterInstanceDefaults: ciDefaultsCm,
+				},
+			},
+		}
+		// Use helper function to get ConfigMap with ClusterInstance defaults
+		cm := getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace)
+
+		c = getFakeClientFromObjects([]client.Object{cr, ct, cm}...)
+		reconciler = &ProvisioningRequestReconciler{
+			Client: c,
+			Logger: logger,
+		}
+		task = &provisioningRequestReconcilerTask{
+			logger:       reconciler.Logger,
+			client:       reconciler.Client,
+			object:       cr,
+			clusterInput: &clusterInput{},
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+			},
+			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
+		}
+
+		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
+			cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		mergedClusterInstanceData, err := task.getMergedClusterInputData(
+			ctx, ciDefaultsCm, clusterInstanceInputParams.(map[string]any), utils.TemplateParamClusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		task.clusterInput.clusterInstanceData = mergedClusterInstanceData
+	})
+
+	It("should apply ClusterInstance with correct parameters", func() {
+		// Build unstructured ClusterInstance
+		renderedCIUnstructured, err := task.buildClusterInstanceUnstructured()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(renderedCIUnstructured).ToNot(BeNil())
+
+		clusterName := renderedCIUnstructured.GetName()
+
+		// Apply the ClusterInstance
+		_ = task.handleClusterInstallation(ctx, renderedCIUnstructured)
+
+		// Verify ClusterInstance was applied by checking if it exists
+		appliedCI := &unstructured.Unstructured{}
+		appliedCI.SetGroupVersionKind(renderedCIUnstructured.GroupVersionKind())
+		err = c.Get(ctx, client.ObjectKey{Name: clusterName, Namespace: clusterName}, appliedCI)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(appliedCI.GetName()).To(Equal(clusterName))
+	})
+
+	It("should set ClusterDetails.Name in status when applying ClusterInstance", func() {
+		// Build unstructured ClusterInstance
+		renderedCIUnstructured, err := task.buildClusterInstanceUnstructured()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(renderedCIUnstructured).ToNot(BeNil())
+
+		clusterName := task.clusterInput.clusterInstanceData["clusterName"].(string)
+
+		// Verify ClusterDetails is not set before applying
+		Expect(task.object.Status.Extensions.ClusterDetails).To(BeNil())
+
+		// Apply the ClusterInstance (this will set ClusterDetails)
+		_ = task.handleClusterInstallation(ctx, renderedCIUnstructured)
+
+		// Fetch the ProvisioningRequest from the client and verify ClusterDetails.Name is set
+		provisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
+		err = c.Get(ctx, client.ObjectKey{Name: crName}, provisioningRequest)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(provisioningRequest.Status.Extensions.ClusterDetails).ToNot(BeNil())
+		Expect(provisioningRequest.Status.Extensions.ClusterDetails.Name).To(Equal(clusterName))
 	})
 })
 
