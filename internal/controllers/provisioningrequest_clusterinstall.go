@@ -209,6 +209,11 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 			t.object.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 		}
 		t.object.Status.Extensions.ClusterDetails.Name = clusterInstance.GetName()
+
+		// Update the ProvisioningRequest status with the clusterInstance details
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
+		}
 	}
 
 	// Continue checking the existing ClusterInstance provision status
