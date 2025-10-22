@@ -753,7 +753,7 @@ func TestAssignNodeDetails(t *testing.T) {
 							"bmcCredentialsName": map[string]any{
 								"name": "bmc-secret",
 							},
-							"hostRef": map[string]string{
+							"hostRef": map[string]any{
 								"name":      "test",
 								"namespace": "test",
 							},
