@@ -185,6 +185,11 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 		nodeAllocationRequest.Spec.Callback = callback
 	}
 
+	// Set HardwareProvisioningTimeout if provided
+	if request.Body.HardwareProvisioningTimeout != nil {
+		nodeAllocationRequest.Spec.HardwareProvisioningTimeout = *request.Body.HardwareProvisioningTimeout
+	}
+
 	if err := CreateOrUpdateNodeAllocationRequest(ctx, h.HubClient, h.Logger, nodeAllocationRequest); err != nil {
 		return nil, fmt.Errorf("failed to create NodeAllocationRequest resource, err: %w", err)
 	}
@@ -254,6 +259,11 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 			callback.AuthClientConfig = convertToCommonAuthClientConfig(request.Body.Callback.AuthClientConfig)
 		}
 		nodeAllocationRequest.Spec.Callback = callback
+	}
+
+	// Set HardwareProvisioningTimeout if provided
+	if request.Body.HardwareProvisioningTimeout != nil {
+		nodeAllocationRequest.Spec.HardwareProvisioningTimeout = *request.Body.HardwareProvisioningTimeout
 	}
 
 	if err := CreateOrUpdateNodeAllocationRequest(ctx, h.HubClient, h.Logger, nodeAllocationRequest); err != nil {

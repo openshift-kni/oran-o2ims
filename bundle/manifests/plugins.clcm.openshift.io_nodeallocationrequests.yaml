@@ -166,6 +166,11 @@ spec:
               hardwarePluginRef:
                 description: HardwarePluginRef is the name of the HardwarePlugin.
                 type: string
+              hardwareProvisioningTimeout:
+                description: |-
+                  HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+                  If not specified, the default timeout value will be applied.
+                type: string
               location:
                 description: Location
                 type: string
@@ -280,6 +285,12 @@ spec:
                   - type
                   type: object
                 type: array
+              configuringStartTime:
+                description: |-
+                  ConfiguringStartTime tracks when hardware configuration actually started.
+                  This timestamp is used for timeout calculations for Day 2 configuration changes.
+                format: date-time
+                type: string
               hwMgrPlugin:
                 description: GenerationStatus represents the observed generation for
                   an operator.
@@ -299,6 +310,12 @@ spec:
                       type: string
                     type: array
                 type: object
+              provisioningStartTime:
+                description: |-
+                  ProvisioningStartTime tracks when hardware provisioning actually started.
+                  This timestamp is used for timeout calculations for Day 0 provisioning.
+                format: date-time
+                type: string
               selectedGroups:
                 additionalProperties:
                   type: string

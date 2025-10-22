@@ -22,6 +22,56 @@ This guide provides instructions for Day‑2 configuration change use cases, to 
 
 ## Use Cases
 
+Day 2 configuration changes are supported for both hardware configuration updates and policy parameter changes. The system supports retry scenarios even after previous configuration attempts have timed out or failed.
+
+### Hardware Configuration Timeouts and Retry
+
+Hardware configuration timeout detection is handled by the Metal3 hardware plugin. When a configuration operation times out or fails, the system supports retry through spec changes.
+
+#### Retry Mechanism
+
+* **Configuration timeouts/failures**: Can be retried by updating the ProvisioningRequest spec
+* **Provisioning timeouts/failures**: Cannot be retried; the ProvisioningRequest must be deleted and recreated
+* **Retry mechanism**: Uses `ConfigTransactionId` (set to ProvisioningRequest generation) to track
+  configuration changes. When the ProvisioningRequest spec changes, the generation increments, creating
+  a new `ConfigTransactionId`. The system compares this with `ObservedConfigTransactionId` to detect
+  spec changes and trigger new configuration attempts.
+* **Terminal state override**: The system allows clearing terminal states (timeout/failed) when the ProvisioningRequest is in pending state due to spec changes, **except for hardware provisioning timeouts/failures which require deleting and recreating the ProvisioningRequest**.
+
+#### Troubleshooting Configuration Timeouts
+
+When hardware configuration times out, the timeout is detected by the Metal3 plugin and communicated back to the O-Cloud Manager via callbacks. To troubleshoot:
+
+1. **Check configuration status**:
+
+   ```console
+   oc get provisioningrequest <UUID> -o yaml
+   ```
+
+   Look for `HardwareConfigured` condition with `reason: TimedOut`
+
+2. **Check NodeAllocationRequest status**:
+
+   ```console
+   oc get nodeallocationrequest -A
+   ```
+
+   Look for timeout conditions in the Metal3 plugin namespace
+
+3. **Check Metal3 plugin logs**:
+
+   ```console
+   oc logs -n <metal3-plugin-namespace> -l app=metal3-hardwareplugin-server -f
+   ```
+
+4. **Retry configuration**:
+   * Update the ProvisioningRequest spec to trigger a new configuration attempt
+   * The system will clear the terminal state and start a new configuration
+   * **Before retrying, check BareMetalHost (BMH) state**:
+     * If BMH is in `servicing` state, wait for it to complete first before retrying
+     * If BMH is in `servicing error` state, retry might not work, especially for consistent power management errors
+     * Use `oc get bmh -n <namespace>` to check BMH status
+
 ### Updates to the clusterInstanceParameters field under ProvisioningRequest spec.templateParameters
 
 A ProvisioningRequest can be edited to update:

@@ -77,7 +77,6 @@ type timeouts struct {
 const (
 	maxHardwareClientRetries = 3
 	baseRetryDelay           = 5 * time.Second
-	timedOutMessage          = "timed out"
 )
 
 func GetClusterTemplateRefName(name, version string) string {
@@ -183,9 +182,38 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 }
 
 func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, error) {
-	if t.shouldStopReconciliation() {
-		t.logger.InfoContext(ctx, "Stopping reconciliation due to fatal failure")
-		return doNotRequeue(), nil
+	// Reset phase to pending if spec changes are observed (before executing any phases)
+	// This ensures that retry scenarios restart from the beginning regardless of current phase
+	// EXCEPT when hardware provisioning has timed out - in that case, user must delete and recreate the PR
+	if t.object.Status.ObservedGeneration != t.object.Generation {
+		// Check if hardware provisioning has timed out or failed - if so, do NOT allow retry
+		if ctlrutils.IsHardwareProvisionTimedOutOrFailed(t.object) {
+			t.logger.InfoContext(ctx, "Hardware provisioning has timed out or failed. Spec changes are not allowed. User must delete and recreate the ProvisioningRequest to retry.",
+				"generation", t.object.Generation,
+				"observedGeneration", t.object.Status.ObservedGeneration)
+			// Do not reset to pending, keep the failed state
+			// Just update the ObservedGeneration to acknowledge we've seen the spec change
+			t.object.Status.ObservedGeneration = t.object.Generation
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				t.logger.WarnContext(ctx, "Status update failed, will retry", slog.String("error", updateErr.Error()))
+				return requeueWithShortInterval(), fmt.Errorf(
+					"failed to update ObservedGeneration for ProvisioningRequest %s: %w",
+					t.object.Name, updateErr,
+				)
+			}
+			// Return without allowing reconciliation to proceed
+			return doNotRequeue(), nil
+		}
+
+		ctlrutils.SetProvisioningStatePending(t.object, ctlrutils.ValidationMessage)
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			t.logger.WarnContext(ctx, "Status update failed, will retry", slog.String("error", updateErr.Error()))
+			return requeueWithShortInterval(), fmt.Errorf(
+				"failed to update status for ProvisioningRequest %s: %w",
+				t.object.Name, updateErr,
+			)
+		}
+		t.object.Status.ObservedGeneration = t.object.Generation
 	}
 
 	// Execute the main reconciliation phases
@@ -213,9 +241,16 @@ func (t *provisioningRequestReconcilerTask) executeProvisioningPhases(ctx contex
 	}
 
 	// Phase 2: Hardware provisioning
-	result, err = t.executeHardwareProvisioningPhase(ctx, unstructuredClusterInstance)
+	result, timedOutOrFailed, err := t.executeHardwareProvisioningPhase(ctx, unstructuredClusterInstance)
 	if err != nil || result.Requeue || result.RequeueAfter > 0 {
 		return nil, result, err
+	}
+
+	// Check if hardware provisioning has failed or timed out before proceeding to cluster installation
+	if timedOutOrFailed {
+		t.logger.InfoContext(ctx, "Hardware provisioning failed or timed out, skipping cluster installation",
+			slog.String("name", t.object.Name))
+		return unstructuredClusterInstance, ctrl.Result{}, nil
 	}
 
 	// Phase 3: Cluster installation
@@ -263,12 +298,13 @@ func (t *provisioningRequestReconcilerTask) executePreProvisioningPhase(ctx cont
 }
 
 // executeHardwareProvisioningPhase handles hardware provisioning
+// Returns (ctrl.Result, bool, error) where the bool indicates if hardware provisioning timed out or failed
 func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx context.Context,
-	unstructuredClusterInstance *unstructured.Unstructured) (ctrl.Result, error) {
+	unstructuredClusterInstance *unstructured.Unstructured) (ctrl.Result, bool, error) {
 
 	if t.isHardwareProvisionSkipped() {
 		t.logger.InfoContext(ctx, "Hardware provisioning skipped")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, false, nil
 	}
 
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_provisioning")
@@ -276,7 +312,7 @@ func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx
 
 	if t.hwpluginClient == nil {
 		result, _ := requeueWithError(errors.New("hwpluginClient is not initialized"))
-		return result, errors.New("hwpluginClient is not initialized")
+		return result, false, errors.New("hwpluginClient is not initialized")
 	}
 
 	res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
@@ -287,11 +323,13 @@ func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx
 			t.logger.InfoContext(ctx, "Hardware provisioning in progress, requeueing",
 				slog.Duration("requeueAfter", res.RequeueAfter))
 		}
-		return res, err
+		// Check if this is a timeout/failure scenario by examining the PR conditions
+		timedOutOrFailed := ctlrutils.IsHardwareProvisionTimedOutOrFailed(t.object)
+		return res, timedOutOrFailed, err
 	}
 
 	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_provisioning", time.Since(phaseStartTime))
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, false, nil
 }
 
 // executeClusterInstallationPhase handles cluster installation
@@ -395,12 +433,6 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 		}
 	}
 
-	// Check hardware provisioning timeout
-	// Check hardware provisioning timeout (with callback awareness)
-	if result := t.checkHardwareProvisioningTimeout(ctx, now); result.RequeueAfter > 0 {
-		return result
-	}
-
 	// Check cluster installation timeout
 	if t.object.Status.Extensions.ClusterDetails != nil {
 		clusterProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
@@ -488,63 +520,10 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Co
 	return ctrl.Result{}, nil
 }
 
-// shouldStopReconciliation checks if the reconciliation should stop.
-func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
-	// Only stop reconciliation if we've timed out
-	return t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed &&
-		strings.Contains(t.object.Status.ProvisioningStatus.ProvisioningDetails, timedOutMessage) &&
-		t.object.Status.ObservedGeneration == t.object.Generation
-}
-
-// checkHardwareProvisioningTimeout checks for hardware provisioning timeout with callback awareness
-func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout(ctx context.Context, now time.Time) ctrl.Result {
-	if t.isHardwareProvisionSkipped() || t.object.Status.Extensions.NodeAllocationRequestRef == nil {
-		return ctrl.Result{}
-	}
-
-	hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
-	// Skip only on outcomes: succeeded, failed or timed-out
-	if hwProvisionedCond != nil && (hwProvisionedCond.Status == metav1.ConditionTrue ||
-		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
-		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
-		return ctrl.Result{}
-	}
-
-	hwStartTime := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart
-	if hwStartTime.IsZero() || !ctlrutils.TimeoutExceeded(hwStartTime.Time, t.timeouts.hardwareProvisioning) {
-		return ctrl.Result{}
-	}
-
-	// Hardware provisioning timeout detected
-	t.logger.ErrorContext(ctx, "Hardware provisioning timeout exceeded",
-		slog.Duration("elapsed", now.Sub(hwStartTime.Time)),
-		slog.Duration("timeout", t.timeouts.hardwareProvisioning))
-
-	ctlrutils.SetProvisioningStateFailed(t.object,
-		fmt.Sprintf("Hardware provisioning timed out after %v", t.timeouts.hardwareProvisioning))
-
-	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-		t.logger.WarnContext(ctx, "Failed to update status for hardware provisioning timeout", slog.String("error", err.Error()))
-	}
-
-	return requeueWithMediumInterval()
-}
-
 // handlePreProvisioning handles the validation, rendering and creation of required resources.
 // It returns a rendered ClusterInstance for successful pre-provisioning, a ctrl.Result to
 // indicate if/when to requeue, and an error if any issues occur.
 func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Context) (*siteconfig.ClusterInstance, ctrl.Result, error) {
-	// Set the provisioning state to pending if spec changes are observed
-	if t.object.Status.ObservedGeneration != t.object.Generation {
-		ctlrutils.SetProvisioningStatePending(t.object, ctlrutils.ValidationMessage)
-		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-			t.logger.WarnContext(ctx, "Status update failed, will retry", slog.String("error", updateErr.Error()))
-			return nil, requeueWithShortInterval(), fmt.Errorf(
-				"failed to update status for ProvisioningRequest %s: %w",
-				t.object.Name, updateErr,
-			)
-		}
-	}
 
 	// Validate the ProvisioningRequest
 	err := t.handleValidation(ctx)
@@ -639,8 +618,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return requeueWithMediumInterval(), false, err
 	}
 	if timedOutOrFailed {
-		err = t.resetHardwareTimersAndPersist(ctx)
-		return requeueWithMediumInterval(), false, err
+		return doNotRequeue(), false, nil
 	}
 	if !provisioned {
 
@@ -649,28 +627,37 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return requeueWithMediumInterval(), false, nil
 	}
 
-	// Provisioning is done. Evaluate configuration succinctly.
-	configStart := t.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart
+	// Provisioning is done. Check if hardware provisioning completed successfully.
+	hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
+	hardwareProvisioningCompleted := hwProvisionedCond != nil &&
+		hwProvisionedCond.Status == metav1.ConditionTrue &&
+		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Completed)
+
+	if hardwareProvisioningCompleted {
+		// Hardware provisioning completed successfully → proceed to cluster installation
+		// Configuration is a Day 2 operation and will be handled separately
+		t.logger.InfoContext(ctx, "Hardware provisioning completed, proceeding to cluster installation",
+			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
+		return doNotRequeue(), true, nil
+	}
+
+	// If provisioning is not yet complete, evaluate configuration status.
 	switch {
 	case configured != nil && *configured:
-		// Config completed → clear timers and proceed
-		err = t.resetHardwareTimersAndPersist(ctx)
-		if err != nil {
-			return requeueWithShortInterval(), false, err
-		}
+		// Config completed → proceed
 		return doNotRequeue(), true, nil
 	case configured != nil && !*configured:
 		// Config explicitly not done yet → wait
 		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be configured",
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
-	case !configStart.IsZero() && configured == nil:
-		// Config has started but not reported yet → wait
-		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be configured",
+	case configured == nil:
+		// Config not reported yet → wait
+		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest configuration to start",
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
 	default:
-		// configured == nil and configStart.IsZero() → no configuration needed; proceed
+		// No configuration needed; proceed
 		return doNotRequeue(), true, nil
 	}
 }
@@ -1476,30 +1463,4 @@ func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx
 	}
 
 	return nodeAllocationRequestResponse, true, nil
-}
-
-func (t *provisioningRequestReconcilerTask) resetHardwareTimers() bool {
-	ref := t.object.Status.Extensions.NodeAllocationRequestRef
-	if ref == nil {
-		return false
-	}
-	changed := false
-	if !ref.HardwareProvisioningCheckStart.IsZero() {
-		ref.HardwareProvisioningCheckStart = &metav1.Time{}
-		changed = true
-	}
-	if !ref.HardwareConfiguringCheckStart.IsZero() {
-		ref.HardwareConfiguringCheckStart = &metav1.Time{}
-		changed = true
-	}
-	return changed
-}
-
-func (t *provisioningRequestReconcilerTask) resetHardwareTimersAndPersist(ctx context.Context) error {
-	if t.resetHardwareTimers() {
-		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-			return fmt.Errorf("failed to persist NAR timer reset: %w", err)
-		}
-	}
-	return nil
 }
