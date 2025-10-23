@@ -602,3 +602,82 @@ func TestExtractSchemaRequired(t *testing.T) {
 		})
 	}
 }
+
+func TestRootPolicyMatchesClusterTemplate(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		ctRef       string
+		want        bool
+	}{
+		{
+			name:        "nil annotations returns false",
+			annotations: nil,
+			ctRef:       "cluster-template.v4.20.0-1",
+			want:        false,
+		},
+		{
+			name:        "empty annotations returns false",
+			annotations: map[string]string{},
+			ctRef:       "cluster-template.v4.20.0-1",
+			want:        false,
+		},
+		{
+			name:        "missing key returns false",
+			annotations: map[string]string{"other": "cluster-template.v4.20.0-1"},
+			ctRef:       "cluster-template.v4.20.0-1",
+			want:        false,
+		},
+		{
+			name:        "empty value for key returns false",
+			annotations: map[string]string{CTPolicyTemplatesAnnotation: ""},
+			ctRef:       "cluster-template.v4.20.0-1",
+			want:        false,
+		},
+		{
+			name:        "ctRef empty returns false",
+			annotations: map[string]string{CTPolicyTemplatesAnnotation: "cluster-template.v4.20.0-1"},
+			ctRef:       "",
+			want:        false,
+		},
+		{
+			name:        "single exact match returns true",
+			annotations: map[string]string{CTPolicyTemplatesAnnotation: "cluster-template.v4.20.0-1"},
+			ctRef:       "cluster-template.v4.20.0-1",
+			want:        true,
+		},
+		{
+			name:        "single non-match returns false",
+			annotations: map[string]string{CTPolicyTemplatesAnnotation: "cluster-template.v4.20.0-1"},
+			ctRef:       "cluster-template.v4.20.0-2",
+			want:        false,
+		},
+		{
+			name:        "multiple values with spaces match returns true",
+			annotations: map[string]string{CTPolicyTemplatesAnnotation: "cluster-template.v4.20.0-1, cluster-template.v4.20.0-2 , cluster-template.v4.20.0-3"},
+			ctRef:       "cluster-template.v4.20.0-2",
+			want:        true,
+		},
+		{
+			name:        "multiple values without spaces match returns true",
+			annotations: map[string]string{CTPolicyTemplatesAnnotation: "cluster-template.v4.20.0-1,cluster-template.v4.20.0-2,cluster-template.v4.20.0-3"},
+			ctRef:       "cluster-template.v4.20.0-2",
+			want:        true,
+		},
+		{
+			name:        "case-insensitive match returns true",
+			annotations: map[string]string{CTPolicyTemplatesAnnotation: "Cluster-Template.V4.20.0-2"},
+			ctRef:       "cluster-template.v4.20.0-2",
+			want:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RootPolicyMatchesClusterTemplate(tt.annotations, tt.ctRef)
+			if got != tt.want {
+				t.Errorf("RootPolicyMatchesClusterTemplate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
