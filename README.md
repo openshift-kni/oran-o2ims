@@ -34,11 +34,6 @@ SPDX-License-Identifier: Apache-2.0
 This project is an implementation of the O-RAN O2 IMS API on top of
 OpenShift and ACM.
 
-Note that at this point this is just experimental and at its very beginnings,
-so don't try to use it for anything close to a production environment.
-
-***Note: this README is only for development purposes.***
-
 ## Submodules
 
 This repo uses submodules to pull in konflux scripts from another repo. The `hack/update_deps.sh` script, which is called from various Makefile targets,
