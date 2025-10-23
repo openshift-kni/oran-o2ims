@@ -315,6 +315,26 @@ func IsParentPolicyInZtpClusterTemplateNs(policyNamespace, ctNamespace string) b
 	return policyNamespace == fmt.Sprintf("ztp-%s", ctNamespace)
 }
 
+// RootPolicyMatchesClusterTemplate returns true if the root policy annotations include the given
+// ClusterTemplate reference string. The annotation value is a comma-separated list
+// of ClusterTemplate refs using metadata.name (name.version).
+func RootPolicyMatchesClusterTemplate(annotations map[string]string, ctRef string) bool {
+	if annotations == nil || ctRef == "" {
+		return false
+	}
+	raw, ok := annotations[CTPolicyTemplatesAnnotation]
+	if !ok || raw == "" {
+		return false
+	}
+	// Split comma-separated list and match exact ref after trimming spaces
+	for _, item := range strings.Split(raw, ",") {
+		if strings.EqualFold(strings.TrimSpace(item), ctRef) {
+			return true
+		}
+	}
+	return false
+}
+
 func ConvertToUnstructured(ci siteconfig.ClusterInstance) (*unstructured.Unstructured, error) {
 	objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&ci)
 	if err != nil {

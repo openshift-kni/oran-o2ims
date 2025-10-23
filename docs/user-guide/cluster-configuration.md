@@ -242,6 +242,7 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
     * Create a new version of the ACM PG - [sno-ran-du-pg-v4-Y-Z-v2](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml):
         * The name is updated to `sno-ran-du-pg-v4-Y-Z-v2` (the `ztp-sno-ran-du-v4-Y-Z` namespace is kept).
         * `policyDefaults.placement.labelSelector.sno-ran-du-policy` is updated from `v1` to `v2` such that the policy binding is updated.
+        * The annotation `clustertemplates.clcm.openshift.io/templates` under `policyAnnotations` is updated to `sno-ran-du.v4-Y-Z-3`, which is the name of new ClusterTemplate that will be created in the following step.
         * All policy names are updated from `v1` to `v2` (example: `v1-subscriptions-policy` -> `v2-subscriptions-policy`).
         * The desired manifest section is updated. The current [sno-ran-du-pg-v4-Y-Z-v2](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v2.yaml) sample adds a `sysctl` section to the `TunedPerformancePatch` section under the `v2-tuned-configuration-policy` policy.
     * Create a new version of the [clusterinstance-defaults-v2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v2.yaml) `ConfigMap` - [clusterinstance-defaults-v3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v3.yaml):
@@ -406,6 +407,7 @@ The following steps need to be taken:
     * A new ACM PG is created - [sno-ran-du-pg-v4-Y-Z-v3](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v3.yaml):
         * `metadata.name` is updated from `sno-ran-du-pg-v4-Y-Z-v2` to `sno-ran-du-pg-v4-Y-Z-v3` (the `ztp-sno-ran-du-v4-Y-Z` namespace is kept).
         * `policyDefaults.placement.labelSelector.sno-ran-du-policy` is updated from `v2` to `v3` such that the policy binding is updated.
+        * The annotation `clustertemplates.clcm.openshift.io/templates` under `policyAnnotations` is updated to `sno-ran-du.v4-Y-Z-4`, which is the name of new ClusterTemplate that will be created in the following step.
         * All policy names are updated from `v2` to `v3` (example: `v2-subscriptions-policy` -> `v3-subscriptions-policy`).
         * The following manifests are added under the `v3-subscriptions-policy`:
 
