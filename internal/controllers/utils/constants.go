@@ -251,6 +251,15 @@ const (
 	ChildPolicyClusterNamespaceLabel = "policy.open-cluster-management.io/cluster-namespace"
 )
 
+// Policy annotation keys
+const (
+	// CTPolicyTemplatesAnnotation is an optional annotation on root Policy objects.
+	// It contains a comma-separated list of ClusterTemplate refs (metadata.name = spec.name + "." + spec.version)
+	// that this root policy is associated with. When present, the controller will use it to
+	// determine the expected set of child policies for a ProvisioningRequest using that template.
+	CTPolicyTemplatesAnnotation = "clustertemplates.clcm.openshift.io/templates"
+)
+
 // Hardware Manager plugin constants
 const (
 	UnitTestHwPluginRef    = "hwmgr"
