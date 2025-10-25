@@ -339,11 +339,50 @@ func processHwProfileWithHandledError(
 	return updateRequired, nil
 }
 
+// clearBMHUpdateAnnotations removes BIOS and firmware update annotations from BMH
+// This ensures clean state before starting new operations
+func clearBMHUpdateAnnotations(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	var errors []error
+
+	// Remove BIOS update annotation if it exists
+	if _, exists := bmh.Annotations[BiosUpdateNeededAnnotation]; exists {
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, "", OpRemove); err != nil {
+			logger.WarnContext(ctx, "Failed to remove BIOS update annotation",
+				slog.String("bmh", bmh.Name),
+				slog.String("error", err.Error()))
+			errors = append(errors, fmt.Errorf("bios annotation removal failed: %w", err))
+		}
+	}
+
+	// Remove firmware update annotation if it exists
+	if _, exists := bmh.Annotations[FirmwareUpdateNeededAnnotation]; exists {
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, "", OpRemove); err != nil {
+			logger.WarnContext(ctx, "Failed to remove firmware update annotation",
+				slog.String("bmh", bmh.Name),
+				slog.String("error", err.Error()))
+			errors = append(errors, fmt.Errorf("firmware annotation removal failed: %w", err))
+		}
+	}
+
+	// Return combined errors if any occurred
+	if len(errors) > 0 {
+		return fmt.Errorf("failed to remove some BMH update annotations from BMH %s: %v", bmh.Name, errors)
+	}
+
+	return nil
+}
+
 func processHwProfile(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
 	pluginNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost, profileName string, postInstall bool) (bool, error) {
+
+	// Clear any existing update annotations to ensure clean state
+	if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+		return false, fmt.Errorf("failed to clear existing update annotations from BMH %s: %w", bmh.Name, err)
+	}
 
 	var err error
 	name := types.NamespacedName{

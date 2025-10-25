@@ -364,39 +364,6 @@ OuterLoop:
 	return nil
 }
 
-// HandleHardwareTimeout checks for provisioning or configuration timeout
-func HandleHardwareTimeout(
-	condition hwmgmtv1alpha1.ConditionType,
-	provisioningStartTime *metav1.Time,
-	configurationStartTime *metav1.Time,
-	timeout time.Duration,
-	currentReason string,
-	currentMessage string) (bool, string, string) {
-
-	reason := currentReason
-	message := currentMessage
-	timedOutOrFailed := false
-
-	// Handle timeout for Provisioned condition
-	if condition == hwmgmtv1alpha1.Provisioned && TimeoutExceeded(provisioningStartTime.Time, timeout) {
-		reason = string(hwmgmtv1alpha1.TimedOut)
-		message = "Hardware provisioning timed out"
-		timedOutOrFailed = true
-		return timedOutOrFailed, reason, message
-	}
-
-	// Handle timeout for Configured condition
-	if condition == hwmgmtv1alpha1.Configured && TimeoutExceeded(configurationStartTime.Time, timeout) {
-		reason = string(hwmgmtv1alpha1.TimedOut)
-		message = "Hardware configuration timed out"
-		timedOutOrFailed = true
-		return timedOutOrFailed, reason, message
-	}
-
-	// Return the current reason and message when no timeout occurred
-	return timedOutOrFailed, reason, message
-}
-
 // GetStatusMessage returns a status message based on the given condition typ
 func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
 	if condition == hwmgmtv1alpha1.Configured {

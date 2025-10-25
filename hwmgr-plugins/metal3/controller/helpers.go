@@ -62,13 +62,22 @@ func getConfigAnnotation(object client.Object) string {
 
 func removeConfigAnnotation(object client.Object) {
 	annotations := object.GetAnnotations()
-	delete(annotations, ConfigAnnotation)
+	if annotations != nil {
+		delete(annotations, ConfigAnnotation)
+		object.SetAnnotations(annotations)
+	}
 }
 
 // clearConfigAnnotationWithPatch removes the config-in-progress annotation from an AllocatedNode and patches it
 func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+	// Create a patch to remove the annotation
+	patch := client.MergeFrom(node.DeepCopy())
+
+	// Remove the annotation from the local copy
 	removeConfigAnnotation(node)
-	if err := ctlrutils.CreateK8sCR(ctx, c, node, nil, ctlrutils.PATCH); err != nil {
+
+	// Apply the patch
+	if err := c.Patch(ctx, node, patch); err != nil {
 		return fmt.Errorf("failed to clear config annotation from AllocatedNode %s: %w", node.Name, err)
 	}
 	return nil
@@ -177,9 +186,18 @@ func deriveNodeAllocationRequestStatusFromNodes(
 				fmt.Sprintf("Node %s missing Configured condition", node.Name)
 		}
 
-		// If not successfully applied, return this node’s current condition
+		// If not successfully applied, return this node's current condition
 		if cond.Reason != string(hwmgmtv1alpha1.ConfigApplied) {
-			return cond.Status, cond.Reason, fmt.Sprintf("AllocatedNode %s: %s", node.Name, cond.Message)
+			// For TimedOut, use the message directly to avoid cascading since timeout
+			// messages are propagated back to AllocatedNodes, creating a circular loop.
+			// For other states (including Failed), prepend the node name for context.
+			var message string
+			if cond.Reason == string(hwmgmtv1alpha1.TimedOut) {
+				message = cond.Message
+			} else {
+				message = fmt.Sprintf("AllocatedNode %s: %s", node.Name, cond.Message)
+			}
+			return cond.Status, cond.Reason, message
 		}
 	}
 
@@ -1190,4 +1208,138 @@ func validateNodeConfiguration(
 
 	logger.InfoContext(ctx, "Firmware versions and BIOS settings validated successfully", slog.String("BMH", bmh.Name))
 	return true, nil
+}
+
+// propagateTimeoutToAllocatedNodes propagates timeout state from NodeAllocationRequest to all associated AllocatedNodes
+func propagateTimeoutToAllocatedNodes(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	conditionType hwmgmtv1alpha1.ConditionType,
+	timeoutMessage string,
+) error {
+	logger.InfoContext(ctx, "Propagating timeout state to AllocatedNodes",
+		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+		slog.String("conditionType", string(conditionType)))
+
+	// Get all AllocatedNodes associated with this NodeAllocationRequest
+	nodeList, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	if len(nodeList.Items) == 0 {
+		logger.InfoContext(ctx, "No AllocatedNodes found for NodeAllocationRequest",
+			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+		return nil
+	}
+
+	// Update each AllocatedNode with timeout state
+	// Use the timeout message directly without prepending NAR name to avoid message nesting
+	for _, node := range nodeList.Items {
+		if err := hwmgrutils.SetNodeConditionStatus(
+			ctx, c, noncachedClient,
+			node.Name, node.Namespace,
+			string(conditionType),
+			metav1.ConditionFalse,
+			string(hwmgmtv1alpha1.TimedOut),
+			timeoutMessage, // Use message directly without prepending NAR name
+		); err != nil {
+			logger.ErrorContext(ctx, "Failed to propagate timeout to AllocatedNode",
+				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+				slog.String("allocatedNode", node.Name),
+				slog.String("error", err.Error()))
+			// Continue with other nodes even if one fails
+		} else {
+			logger.InfoContext(ctx, "Successfully propagated timeout to AllocatedNode",
+				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+				slog.String("allocatedNode", node.Name))
+		}
+	}
+
+	logger.InfoContext(ctx, "Completed timeout propagation to AllocatedNodes",
+		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+		slog.Int("nodeCount", len(nodeList.Items)))
+	return nil
+}
+
+// clearBMHUpdateAnnotationsForNAR removes BIOS and firmware update annotations from all BMHs
+// associated with the provided NodeAllocationRequest. This is intended for cleanup on configuration timeout
+// so that subsequent retries can proceed cleanly.
+func clearBMHUpdateAnnotationsForNAR(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) error {
+	logger.InfoContext(ctx, "Clearing BMH update annotations for NodeAllocationRequest",
+		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+
+	nodeList, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	for _, node := range nodeList.Items {
+		// Get BMH for this node
+		bmh, err := getBMHForNode(ctx, c, &node)
+		if err != nil {
+			logger.ErrorContext(ctx, "Failed to get BMH for annotation clear",
+				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+			continue
+		}
+
+		// Clear update annotations from BMH
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear BMH update annotations",
+				slog.String("bmh", bmh.Name), slog.String("error", err.Error()))
+			// continue to other nodes
+		} else {
+			logger.InfoContext(ctx, "Cleared BMH update annotations",
+				slog.String("bmh", bmh.Name))
+		}
+	}
+
+	return nil
+}
+
+// clearConfigAnnotationForAllocatedNodes removes the config-in-progress annotation from all AllocatedNodes
+// associated with the provided NodeAllocationRequest. This is intended for cleanup on configuration timeout/failure
+// so that subsequent retries can proceed cleanly.
+func clearConfigAnnotationForAllocatedNodes(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) error {
+	logger.InfoContext(ctx, "Clearing config-in-progress annotations for AllocatedNodes",
+		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+
+	nodeList, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	for _, node := range nodeList.Items {
+		// Fetch latest to avoid conflicts
+		updatedNode := &pluginsv1alpha1.AllocatedNode{}
+		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
+			logger.ErrorContext(ctx, "Failed to fetch AllocatedNode for annotation clear",
+				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+			continue
+		}
+		if err := clearConfigAnnotationWithPatch(ctx, c, updatedNode); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear config-in-progress annotation",
+				slog.String("allocatedNode", updatedNode.Name), slog.String("error", err.Error()))
+			// continue to other nodes
+		} else {
+			logger.InfoContext(ctx, "Cleared config-in-progress annotation",
+				slog.String("allocatedNode", updatedNode.Name))
+		}
+	}
+
+	return nil
 }

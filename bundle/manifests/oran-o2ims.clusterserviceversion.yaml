@@ -1226,6 +1226,13 @@ spec:
         path: hardwarePluginRef
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+          If not specified, the default timeout value will be applied.
+        displayName: Hardware Provisioning Timeout
+        path: hardwareProvisioningTimeout
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: Location
         displayName: Location
         path: location
@@ -1243,6 +1250,11 @@ spec:
           NodeAllocationRequest's state.
         displayName: Conditions
         path: conditions
+      - description: |-
+          ConfiguringStartTime tracks when hardware configuration actually started.
+          This timestamp is used for timeout calculations for Day 2 configuration changes.
+        displayName: Configuring Start Time
+        path: configuringStartTime
       - displayName: Hw Mgr Plugin
         path: hwMgrPlugin
       - displayName: Observed Config Transaction Id
@@ -1250,6 +1262,11 @@ spec:
       - description: Properties represent the node properties in the pool
         displayName: Properties
         path: properties
+      - description: |-
+          ProvisioningStartTime tracks when hardware provisioning actually started.
+          This timestamp is used for timeout calculations for Day 0 provisioning.
+        displayName: Provisioning Start Time
+        path: provisioningStartTime
       - displayName: Selected Groups
         path: selectedGroups
       version: v1alpha1
