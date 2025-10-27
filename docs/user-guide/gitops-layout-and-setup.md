@@ -48,6 +48,11 @@ or extracted from the [ztp-site-generate](https://catalog.redhat.com/software/co
   * The ACM PGs will reference the source CRs to generate the ACM Policies that will be applied on the spoke cluster(s).
 * Make sure to bring over the `extra-manifest` and `source-crs` corresponding to the OCP release provided in the ClusterTemplate CR.
 * ACM policies must be created under the namespace `ztp-<cluster-template-namespace>`. See the [example](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/ns.yaml).
+* In the ACM PGs, set `policyAnnotations` to include the annotation `clustertemplates.clcm.openshift.io/templates` with a comma-separated
+  list of ClusterTemplates that PG is associated with. Use the ClusterTemplate metadata.name for each entry. This annotation is propagated to
+  each generated root Policy. It enables the O‑Cloud Manager to identify which root policies are associated with the
+  ClusterTemplate used by a ProvisioningRequest, determine the expected child policies, and accurately detect when configuration
+  is complete - ensuring correct provisioning status reporting during Day-2 policy configuration changes. See the [example](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml).
 
 ## Full DU profile
 

@@ -13,6 +13,10 @@ policyDefaults:
     labelSelector:
       cluster-version: "v4-Y-Z"
       sno-ran-full-du-policy: "v1"
+  policyAnnotations:
+    # This annotation contains a comma-separated list of ClusterTemplates (metadata.name) this PG is associated with.
+    # This is used for linking the generated root policies to the ClusterTemplate used by the ProvisioningRequest.
+    clustertemplates.clcm.openshift.io/templates: "sno-ran-full-du.v4-Y-Z-1"
   remediationAction: enforce
   severity: low
   namespaceSelector:
