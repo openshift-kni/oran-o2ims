@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -182,10 +183,10 @@ func DownloadFile(rawUrl, filename, dirpath string) error {
 }
 
 func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
-	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", ctlrutils.UnitTestHwmgrNamespace, npName, nil)
+	node := CreateNode(MasterNodeName, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1", "bmc-secret", "controller", constants.DefaultNamespace, npName, nil)
 	// Create both the standard secret and the mock server expected secrets
 	secretNames := []string{BmcSecretName, "test-node-1-bmc-secret", "master-node-2-bmc-secret"}
-	secrets := CreateSecrets(secretNames, ctlrutils.UnitTestHwmgrNamespace)
+	secrets := CreateSecrets(secretNames, constants.DefaultNamespace)
 	CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 }
 

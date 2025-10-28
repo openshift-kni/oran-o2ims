@@ -47,7 +47,6 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 )
 
-const testHwMgrPluginNameSpace = "hwmgr"
 const testHardwarePluginRef = "hwmgr"
 
 var (
@@ -85,8 +84,8 @@ var _ = BeforeSuite(func() {
 	ctrl.SetLogger(adapter)
 	klog.SetLogger(adapter)
 
-	// Set the hardware manager plugin details.
-	os.Setenv(ctlrutils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
+	// Set the operator namespace for tests
+	os.Setenv(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 
 	// Set the scheme.
 	testScheme := runtime.NewScheme()
@@ -171,13 +170,7 @@ var _ = BeforeSuite(func() {
 	mockServer := provisioningcontrollers.NewMockHardwarePluginServerWithClient(K8SClient)
 
 	suiteCrs := []client.Object{
-		// HW plugin test namespace
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ctlrutils.UnitTestHwmgrNamespace,
-			},
-		},
-		// oran-o2ims
+		// oran-o2ims operator namespace
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: constants.DefaultNamespace,
@@ -187,7 +180,7 @@ var _ = BeforeSuite(func() {
 		&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-hwmgr-auth-secret",
-				Namespace: testHwMgrPluginNameSpace,
+				Namespace: constants.DefaultNamespace,
 			},
 			Type: corev1.SecretTypeOpaque,
 			Data: map[string][]byte{
@@ -198,7 +191,7 @@ var _ = BeforeSuite(func() {
 		// HardwarePlugin CRs
 		&hwmgmtv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: testHwMgrPluginNameSpace,
+				Namespace: constants.DefaultNamespace,
 				Name:      testHardwarePluginRef,
 			},
 			Spec: hwmgmtv1alpha1.HardwarePluginSpec{
@@ -219,7 +212,7 @@ var _ = BeforeSuite(func() {
 	// Update HardwarePlugin status to mark it as registered
 	mockHwPlugin := &hwmgmtv1alpha1.HardwarePlugin{}
 	err = K8SClient.Get(context.Background(), types.NamespacedName{
-		Namespace: testHwMgrPluginNameSpace,
+		Namespace: constants.DefaultNamespace,
 		Name:      testHardwarePluginRef,
 	}, mockHwPlugin)
 	Expect(err).ToNot(HaveOccurred())
@@ -631,7 +624,7 @@ defaultHugepagesSize: "1G"`,
 
 			// Now provision the NodeAllocationRequest to complete hardware provisioning
 			currentNp := &pluginsv1alpha1.NodeAllocationRequest{}
-			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: ctlrutils.UnitTestHwmgrNamespace}, currentNp)).To(Succeed())
+			Expect(K8SClient.Get(ctx, types.NamespacedName{Name: crName, Namespace: constants.DefaultNamespace}, currentNp)).To(Succeed())
 			currentNp.Status.Conditions = []metav1.Condition{
 				{
 					Status:             metav1.ConditionTrue,

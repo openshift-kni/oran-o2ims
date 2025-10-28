@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -24,6 +23,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 const (
@@ -31,9 +31,7 @@ const (
 )
 
 var (
-	oranHwUtilsLog       = ctrl.Log.WithName("oranHwUtilsLog")
-	hwMgrPluginNameSpace string
-	once                 sync.Once
+	oranHwUtilsLog = ctrl.Log.WithName("oranHwUtilsLog")
 )
 
 // ConditionDoesNotExistsErr represents an error when a specific condition is missing
@@ -137,11 +135,12 @@ func copyHwMgrPluginBMCSecret(ctx context.Context, c client.Client, name, source
 	return nil
 }
 
-// CopyBMCSecrets copies BMC secrets from the plugin namespace to the cluster namespace.
+// CopyBMCSecrets copies BMC secrets from the operator namespace to the cluster namespace.
 func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]NodeInfo,
 	clusterNamespace string) error {
 
-	sourceNamespace := GetHwMgrPluginNS()
+	// BMC secrets are in the operator's namespace (same as HardwarePlugins)
+	sourceNamespace := GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	for _, nodeInfos := range hwNodes {
 		for _, node := range nodeInfos {
 
@@ -149,7 +148,7 @@ func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]N
 
 			err := copyHwMgrPluginBMCSecret(ctx, c, node.BmcCredentials, sourceNamespace, clusterNamespace)
 			if err != nil {
-				return fmt.Errorf("copy BMC secret %s from the plugin namespace %s to the cluster namespace %s failed: %w",
+				return fmt.Errorf("copy BMC secret %s from the operator namespace %s to the cluster namespace %s failed: %w",
 					node.BmcCredentials, sourceNamespace, clusterNamespace, err)
 			}
 		}
@@ -209,48 +208,6 @@ func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Obj
 	}
 
 	return nil
-}
-
-// CreateHwMgrPluginNamespace creates the namespace of the hardware manager plugin
-// where the node allocation requests resource resides
-func CreateHwMgrPluginNamespace(ctx context.Context, c client.Client, name string) error {
-
-	// Create the namespace.
-	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-	}
-	if err := CreateK8sCR(ctx, c, namespace, nil, ""); err != nil {
-		return fmt.Errorf("failed to create Kubernetes CR for namespace %s: %w", namespace, err)
-	}
-
-	return nil
-}
-
-// HwMgrPluginNamespaceExists checks if the namespace of the hardware manager plugin exists
-func HwMgrPluginNamespaceExists(ctx context.Context, c client.Client, name string) (bool, error) {
-
-	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-	}
-	exists, err := DoesK8SResourceExist(ctx, c, name, "", namespace)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if namespace exists %s: %w", name, err)
-	}
-
-	return exists, nil
-}
-
-// GetHwMgrPluginNS returns the value of environment variable HWMGR_PLUGIN_NAMESPACE
-func GetHwMgrPluginNS() string {
-	// Ensure that this code only runs once
-	once.Do(func() {
-		hwMgrPluginNameSpace = GetEnvOrDefault(HwMgrPluginNameSpace, DefaultPluginNamespace)
-	})
-	return hwMgrPluginNameSpace
 }
 
 // getInterfaces extracts the interfaces from the node map.
@@ -405,11 +362,13 @@ func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
 	return "provisioning"
 }
 
-// GetHardwareTemplate retrieves the hardware template resource for a given name
+// GetHardwareTemplate retrieves the hardware template resource for a given name.
+// HardwareTemplates are expected to be in the operator's namespace (OCLOUD_MANAGER_NAMESPACE).
 func GetHardwareTemplate(ctx context.Context, c client.Client, hwTemplateName string) (*hwmgmtv1alpha1.HardwareTemplate, error) {
 	hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{}
 
-	exists, err := DoesK8SResourceExist(ctx, c, hwTemplateName, InventoryNamespace, hwTemplate)
+	hwTemplateNS := GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	exists, err := DoesK8SResourceExist(ctx, c, hwTemplateName, hwTemplateNS, hwTemplate)
 	if err != nil {
 		return hwTemplate, fmt.Errorf("failed to retrieve hardware template resource %s: %w", hwTemplateName, err)
 	}
@@ -444,11 +403,13 @@ func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.C
 	return hwTemplate.Spec.HardwarePluginRef, nil
 }
 
-// GetHardwarePlugin retrieves the HardwarePlugin resource for a given name
+// GetHardwarePlugin retrieves the HardwarePlugin resource for a given name.
+// HardwarePlugins are always expected to be in the operator's namespace (OCLOUD_MANAGER_NAMESPACE).
 func GetHardwarePlugin(ctx context.Context, c client.Client, hwPluginName string) (*hwmgmtv1alpha1.HardwarePlugin, error) {
 	hwPlugin := &hwmgmtv1alpha1.HardwarePlugin{}
 
-	exists, err := DoesK8SResourceExist(ctx, c, hwPluginName, GetHwMgrPluginNS(), hwPlugin)
+	namespace := GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	exists, err := DoesK8SResourceExist(ctx, c, hwPluginName, namespace, hwPlugin)
 	if err != nil {
 		return hwPlugin, fmt.Errorf("failed to retrieve HardwarePlugin resource %s: %w", hwPluginName, err)
 	}

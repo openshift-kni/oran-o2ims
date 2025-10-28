@@ -30,16 +30,6 @@ replacements:
       kind: Deployment
       name: controller-manager
 - source:
-    fieldPath: data.HWMGR_PLUGIN_NAMESPACE
-    kind: ConfigMap
-    name: env-config
-  targets:
-  - fieldPaths:
-    - spec.template.spec.containers.[name=manager].env.[name=HWMGR_PLUGIN_NAMESPACE].value
-    select:
-      kind: Deployment
-      name: controller-manager
-- source:
     fieldPath: data.imagePullPolicy
     kind: ConfigMap
     name: env-config
