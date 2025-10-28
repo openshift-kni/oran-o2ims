@@ -126,7 +126,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -137,7 +137,7 @@ func TestControllers(t *testing.T) {
 	RunSpecs(t, "Controllers")
 }
 
-const testHwMgrPluginNameSpace = "hwmgr"
+const testHwMgrPluginNameSpace = constants.DefaultNamespace
 const testMetal3HardwarePluginRef = "hwmgr"
 
 // SSACompatibleClient wraps a fake client and converts Server-Side Apply operations
@@ -307,7 +307,7 @@ var _ = BeforeSuite(func() {
 	ctrl.SetLogger(adapter)
 	klog.SetLogger(adapter)
 
-	os.Setenv(ctlrutils.HwMgrPluginNameSpace, testHwMgrPluginNameSpace)
+	os.Setenv(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 
 	// Add all the required types to the scheme used by the tests:
 	scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion, &inventoryv1alpha1.Inventory{})

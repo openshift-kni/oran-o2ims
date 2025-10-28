@@ -262,20 +262,13 @@ const (
 
 // Hardware Manager plugin constants
 const (
-	UnitTestHwPluginRef    = "hwmgr"
-	UnitTestHwmgrNamespace = "hwmgr"
-	DefaultPluginNamespace = constants.DefaultNamespace
+	UnitTestHwPluginRef = "hwmgr"
 )
 
 // POD Port Values
 const (
 	DefaultServiceTargetPort = "https"
 	DatabaseTargetPort       = "database"
-)
-
-// Environment values
-const (
-	HwMgrPluginNameSpace = "HWMGR_PLUGIN_NAMESPACE"
 )
 
 // ClusterVersionName is the name given to the default ClusterVersion object
