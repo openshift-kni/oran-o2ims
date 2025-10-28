@@ -1754,8 +1754,6 @@ spec:
                   value: quay.io/openshift-kni/oran-o2ims-operator:4.20.0
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
-                - name: HWMGR_PLUGIN_NAMESPACE
-                  value: oran-o2ims
                 - name: OCLOUD_MANAGER_NAMESPACE
                   valueFrom:
                     fieldRef:

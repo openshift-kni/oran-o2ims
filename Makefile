@@ -130,9 +130,6 @@ ENVTEST_VERSION = release-0.21
 # OCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
 
-# HWMGR_PLUGIN_NAMESPACE refers to the namespace of the hardware manager plugin.
-HWMGR_PLUGIN_NAMESPACE ?= oran-o2ims
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -265,7 +262,6 @@ uninstall: manifests kustomize kubectl ## Uninstall CRDs from the K8s cluster sp
 .PHONY: deploy
 deploy: install manifests kustomize kubectl ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	@$(KUBECTL) create configmap env-config \
-		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
 		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
 		--dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager \
@@ -352,7 +348,6 @@ endif
 bundle: operator-sdk manifests kustomize kubectl ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK) generate kustomize manifests --apis-dir api/ -q
 	@$(KUBECTL) create configmap env-config \
-		--from-literal=HWMGR_PLUGIN_NAMESPACE=$(HWMGR_PLUGIN_NAMESPACE) \
 		--from-literal=imagePullPolicy=$(IMAGE_PULL_POLICY) \
 		--dry-run=client -o yaml > config/manager/env-config.yaml
 	cd config/manager \
@@ -601,7 +596,7 @@ go-generate:
 .PHONY: test tests
 test tests:
 	@echo "Run ginkgo"
-	HWMGR_PLUGIN_NAMESPACE=hwmgr ginkgo run -r ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
+	ginkgo run -r ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
 
 .PHONY: test-e2e
 test-e2e: envtest kubectl
